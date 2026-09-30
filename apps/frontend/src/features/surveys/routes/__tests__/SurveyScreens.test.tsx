@@ -725,19 +725,19 @@ describe('Survey screens', () => {
   it('keeps real builder title and question edits after opening and closing preview', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Survey title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
       target: { value: '저장 전 제목' },
     });
     fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
       target: { value: '저장 전 질문' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     await screen.findByRole('dialog', { name: 'Respondent preview' });
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.getByRole('textbox', { name: 'Survey title' })).toHaveValue('저장 전 제목');
+    expect(screen.getByRole('textbox', { name: 'Survey 제목' })).toHaveValue('저장 전 제목');
     expect(screen.getByDisplayValue('저장 전 질문')).toBeInTheDocument();
     expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
     expect(apiClient).not.toHaveBeenCalled();

@@ -73,7 +73,7 @@ describe('survey respondent preview modal', () => {
   it('opens an accessible modal and makes the editor behind it inert', async () => {
     renderPreview();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
 
     expect(await screen.findByRole('dialog', { name: 'Respondent preview' })).toBeInTheDocument();
     expect(
@@ -90,7 +90,7 @@ describe('survey respondent preview modal', () => {
     ],
   ])('closes with %s and returns focus to Preview', async (_label, close) => {
     renderPreview();
-    const trigger = screen.getByRole('button', { name: 'Preview' });
+    const trigger = screen.getByRole('button', { name: '미리보기' });
     fireEvent.click(trigger);
     await screen.findByRole('dialog', { name: 'Respondent preview' });
 
@@ -103,7 +103,7 @@ describe('survey respondent preview modal', () => {
   it('keeps Tab and Shift+Tab inside the preview dialog', async () => {
     const user = userEvent.setup();
     renderPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Respondent preview' });
     const firstFocusable = within(dialog).getByRole('radio', { name: '예' });
@@ -124,7 +124,7 @@ describe('survey respondent preview modal', () => {
     vi.stubGlobal('fetch', request);
     renderPreview(draft);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     await screen.findByRole('dialog', { name: 'Respondent preview' });
     fireEvent.click(screen.getByRole('radio', { name: '예' }));
     fireEvent.click(screen.getByRole('button', { name: '제출 (미리보기)' }));

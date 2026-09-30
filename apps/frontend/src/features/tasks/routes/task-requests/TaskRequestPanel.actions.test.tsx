@@ -25,7 +25,7 @@ vi.mock('./useTaskRequestConversion', async (importOriginal) => ({
 vi.mock('./useTaskRequestLink', () => ({ useTaskRequestLink: useLink }));
 
 import { TaskRequestPanel } from './TaskRequestPanel';
-import { STATUS_LABELS } from './TaskRequestRow';
+import { TASK_REQUEST_STATUS_LABELS as STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { formatDate } from './predicates';
 
 const request: TaskRequestDto = {
@@ -52,7 +52,7 @@ const decidedNames = {
   actorsById: { [reviewerId]: { id: reviewerId, display_name: '김지원' } },
   managedSystemsById: {},
 };
-const actions = ['Approve', 'Need evidence', 'Reject', 'Convert to Task', 'Link existing'];
+const actions = ['승인', '근거 추가 요청', '반려', 'Task로 전환', '기존 Task 연결'];
 const decidedAt = '2026-07-10T12:30:00.000Z';
 const resultingTask: TaskDto = {
   id: '10000000-0000-0000-0000-000000000099',
@@ -131,8 +131,8 @@ beforeEach(() => {
 
 describe('TaskRequestPanel next actions', () => {
   it.each([
-    ['pending', 'pending_review', ['Approve', 'Need evidence', 'Reject']],
-    ['approved', 'approved', ['Convert to Task', 'Link existing']],
+    ['pending', 'pending_review', ['승인', '근거 추가 요청', '반려']],
+    ['approved', 'approved', ['Task로 전환', '기존 Task 연결']],
     ['converted', 'converted', []],
     ['rejected', 'rejected', []],
   ] as const)(
@@ -168,15 +168,15 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    const decisionSection = screen.getByText('Review decision').closest('section');
+    const decisionSection = screen.getByText('검토 결정').closest('section');
     expect(decisionSection).not.toBeNull();
     const buttons = within(decisionSection as HTMLElement).getAllByRole('button');
-    const convert = screen.getByRole('button', { name: 'Convert to Task' });
-    const linkExisting = screen.getByRole('button', { name: 'Link existing' });
+    const convert = screen.getByRole('button', { name: 'Task로 전환' });
+    const linkExisting = screen.getByRole('button', { name: '기존 Task 연결' });
 
     expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      'Convert to Task',
-      'Link existing',
+      'Task로 전환',
+      '기존 Task 연결',
     ]);
     expect(convert).toHaveClass('bg-accent-primary', 'w-full');
     expect(linkExisting).toHaveClass('bg-surface-raised', 'w-full');
@@ -221,7 +221,7 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    const decisionSection = screen.getByText('Review decision').closest('section') as HTMLElement;
+    const decisionSection = screen.getByText('검토 결정').closest('section') as HTMLElement;
     const submit = within(decisionSection).getByTestId('task-request-convert-submit');
     const primaryActions = within(decisionSection)
       .getAllByRole('button')
@@ -229,7 +229,7 @@ describe('TaskRequestPanel next actions', () => {
 
     expect(primaryActions).toEqual([submit]);
     expect(
-      within(decisionSection).getAllByRole('button', { name: 'Convert to Task' })[0],
+      within(decisionSection).getAllByRole('button', { name: 'Task로 전환' })[0],
     ).toHaveClass('bg-surface-raised');
   });
 
@@ -263,7 +263,7 @@ describe('TaskRequestPanel next actions', () => {
       expect(summary).toHaveTextContent(formatDate(decidedAt));
       expect(screen.getByRole('button', { name: '결정 요약' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Decision' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Review decision')).not.toBeInTheDocument();
+      expect(screen.queryByText('검토 결정')).not.toBeInTheDocument();
 
       if (reason) {
         expect(within(summary as HTMLElement).getByText(reason)).toBeInTheDocument();
@@ -304,7 +304,7 @@ describe('TaskRequestPanel next actions', () => {
         expect.stringContaining(`param=${resultingTask.id}`),
       );
       expect(screen.getByText('연결된 Task')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Convert to Task' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Task로 전환' })).not.toBeInTheDocument();
     },
   );
 });
