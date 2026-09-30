@@ -311,28 +311,43 @@ describe('<VocDetailPanel>', () => {
     expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
   });
 
-  it.each(['voc.read', 'voc.triage'] as const)(
-    'keeps the internal conversation tab for an operator with approved %s capability',
-    (approvedCapability) => {
-      vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
-      permissionStates.set(approvedCapability, 'approved');
-      vi.mocked(useMe).mockReturnValue(
-        makeMeQuery({
-          data: {
-            ...ME_RESPONSE,
-            actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
-          },
-        }),
-      );
+  it('does not show the internal conversation tab for a viewer with voc.read only', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    permissionStates.set('voc.read', 'approved');
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
 
-      renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
-      expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
-      expect(usePermissionCheck).toHaveBeenCalledWith({
-        capability: approvedCapability,
-        managedSystemId: DETAIL_ENVELOPE.primary_managed_system_id,
-      });
-    },
-  );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the internal conversation tab for a viewer with approved voc.triage', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    permissionStates.set('voc.triage', 'approved');
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
+    expect(usePermissionCheck).toHaveBeenCalledWith({
+      capability: 'voc.triage',
+      managedSystemId: DETAIL_ENVELOPE.primary_managed_system_id,
+    });
+  });
 
   it('closes a mounted detail when the Managed System scope changes outside its envelope', async () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());

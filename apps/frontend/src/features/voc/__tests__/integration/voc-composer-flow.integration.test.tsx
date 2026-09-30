@@ -3,7 +3,7 @@
 // Exercises the full composer user flow:
 //   1. Open detail panel → ComposerSection renders for an admin-in-MS actor
 //   2. Switch tabs → each tab's composer body renders
-//   3. Admin sees all 3 tabs; Reporter on own VOC sees only Reply tab
+//   3. Admin with triage sees all 3 tabs; Reporter on own VOC sees only Reply tab
 //   4. Submit Public Update → POST /vocs/:id/public-updates fires with correct body
 //   5. On 200 success: ['voc', id] invalidated (refetch triggered), toast fired
 //   6. DirtyConfirmation: close with dirty draft shows confirmation dialog
@@ -74,7 +74,7 @@ import { ComposerSection } from '../../components/detail/ComposerSection';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-/** Admin actor — role_level 'admin' sees all 3 tabs (useComposerVisibility: non-user role) */
+/** Admin actor — the test supplies the approved triage capability for Internal. */
 const ME_ADMIN: MeResponse = {
   actor: {
     id: '00000000-0000-0000-0000-000000000099',
@@ -99,7 +99,7 @@ const ME_REPORTER: MeResponse = {
   workspace_id: '00000000-0000-0000-0000-000000000001',
 };
 
-/** VOC owned by a different reporter — admin should see public+reply+internal */
+/** VOC owned by a different reporter — admin with triage sees all three surfaces. */
 const VOC_ADMIN_VIEW: VocDetailEnvelope = {
   id: '00000000-0000-0000-0000-000000000100',
   display_id: 'VOC-C-001',
@@ -253,7 +253,7 @@ describe('Composer flow — integration (C6.3)', () => {
 
     render(
       <Wrapper>
-        <ComposerSection voc={VOC_ADMIN_VIEW} me={ME_ADMIN} />
+        <ComposerSection voc={VOC_ADMIN_VIEW} me={ME_ADMIN} canTriage={true} />
       </Wrapper>,
     );
 
@@ -285,7 +285,7 @@ describe('Composer flow — integration (C6.3)', () => {
 
     render(
       <Wrapper>
-        <ComposerSection voc={VOC_ADMIN_VIEW} me={ME_ADMIN} />
+        <ComposerSection voc={VOC_ADMIN_VIEW} me={ME_ADMIN} canTriage={true} />
       </Wrapper>,
     );
 

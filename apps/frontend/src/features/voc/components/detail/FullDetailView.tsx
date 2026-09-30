@@ -64,7 +64,6 @@ export function FullDetailView({
     actorNamesById,
     analyticsAreasById,
     canTriage,
-    canSeeInternalOps,
     linkedTask,
     requestTaskIsPending,
     pendingReviewCount,
@@ -193,12 +192,17 @@ export function FullDetailView({
           <div data-anchor="conversation">
             <ConversationTimeline
               voc={voc}
-              canSeeInternalOps={canSeeInternalOps}
+              canTriage={canTriage}
               actorNamesById={actorNamesById}
             />
           </div>
           <div data-anchor="compose">
-            <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+            <ComposerSection
+              voc={voc}
+              me={me}
+              canTriage={canTriage}
+              onDirtyChange={setComposerDirty}
+            />
             {canCreateFinding && pendingReviewCount > 0 && (
               <div className="mt-2 flex justify-end">
                 <Button

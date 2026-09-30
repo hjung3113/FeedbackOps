@@ -1,9 +1,5 @@
 // useComposerVisibility — unit tests (C5.1 RED, slice3 #21)
-// 4 test cases:
-//   1. reporter on own VOC → { showPublic: false, showReply: true, showInternal: false }
-//   2. admin → all 3 true
-//   3. developer outside MS → null
-//   4. no-tabs scenario (null result when no composer visible)
+// Covers reporter ownership, role-based public/reply tabs, and canTriage-gated Internal.
 
 import { describe, it, expect } from 'vitest';
 import { renderHook } from '@testing-library/react';
@@ -58,10 +54,10 @@ function makeMe(role_level: 'admin' | 'developer' | 'user', id: string): MeRespo
 }
 
 describe('useComposerVisibility', () => {
-  it('reporter on own VOC → showReply only', () => {
+  it('reporter on own VOC without triage → showReply only', () => {
     const voc = makeVoc({ reporter_id: REPORTER_ID });
     const me = makeMe('user', REPORTER_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me));
+    const { result } = renderHook(() => useComposerVisibility(voc, me, false));
     expect(result.current).toEqual({
       showPublic: false,
       showReply: true,
@@ -69,10 +65,10 @@ describe('useComposerVisibility', () => {
     });
   });
 
-  it('admin in MS → all three tabs visible', () => {
+  it('admin with triage → all three tabs visible', () => {
     const voc = makeVoc();
     const me = makeMe('admin', ADMIN_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me));
+    const { result } = renderHook(() => useComposerVisibility(voc, me, true));
     expect(result.current).toEqual({
       showPublic: true,
       showReply: true,
@@ -80,12 +76,11 @@ describe('useComposerVisibility', () => {
     });
   });
 
-  it('developer in MS → all three tabs visible', () => {
-    // Developer inside the MS has read/write scope — same as admin for composer visibility
+  it('developer with triage → all three tabs visible', () => {
+    // The detail controller supplies this approved VOC triage capability.
     const voc = makeVoc();
-    // Simulate dev who IS in scope (permission_decisions includes a grant for this voc)
     const me = makeMe('developer', DEVELOPER_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me));
+    const { result } = renderHook(() => useComposerVisibility(voc, me, true));
     // Developer in MS gets all 3
     expect(result.current).toEqual({
       showPublic: true,
@@ -98,7 +93,43 @@ describe('useComposerVisibility', () => {
     // Reporter on someone else's VOC → no visible tabs → null
     const voc = makeVoc({ reporter_id: 'different-reporter-id' });
     const me = makeMe('user', REPORTER_ID);
-    const { result } = renderHook(() => useComposerVisibility(voc, me));
+    const { result } = renderHook(() => useComposerVisibility(voc, me, false));
     expect(result.current).toBeNull();
+  });
+
+  it('gives a triage-granted User only the Internal composer on someone else VOC', () => {
+    const voc = makeVoc({ reporter_id: 'different-reporter-id' });
+    const me = makeMe('user', REPORTER_ID);
+    const { result } = renderHook(() => useComposerVisibility(voc, me, true));
+
+    expect(result.current).toEqual({
+      showPublic: false,
+      showReply: false,
+      showInternal: true,
+    });
+  });
+
+  it.each([false, true])('uses canTriage for the reporter internal composer (%s)', (canTriage) => {
+    const voc = makeVoc({ reporter_id: REPORTER_ID });
+    const me = makeMe('user', REPORTER_ID);
+    const { result } = renderHook(() => useComposerVisibility(voc, me, canTriage));
+
+    expect(result.current).toEqual({
+      showPublic: false,
+      showReply: true,
+      showInternal: canTriage,
+    });
+  });
+
+  it('hides the internal composer for an operator without triage capability', () => {
+    const voc = makeVoc();
+    const me = makeMe('developer', DEVELOPER_ID);
+    const { result } = renderHook(() => useComposerVisibility(voc, me, false));
+
+    expect(result.current).toEqual({
+      showPublic: true,
+      showReply: true,
+      showInternal: false,
+    });
   });
 });

@@ -12,8 +12,8 @@
 // Spec: PLAN-21-SUBCHUNKS.md C5.1 / C5.2 / C5.5
 // Prototype ref: docs/design-prototype/screen-voc.jsx:400-470
 //
-// Mount point: VocDetailPanel renders <ComposerSection voc={voc} me={me} />
-// between <ConversationTimeline> and <NextActionFooter>.
+// Mount point: FullDetailView renders this with voc, me, and canTriage between
+// <ConversationTimeline> and <NextActionFooter>.
 //
 // DirtyConfirmation: when onCloseRequest fires and any composer has a dirty (non-empty)
 // draft, show DirtyConfirmation before completing the close. Draft dirtiness is tracked
@@ -36,6 +36,7 @@ import { ReporterReplyComposer } from './ReporterReplyComposer';
 export interface ComposerSectionProps {
   voc: VocDetailEnvelope;
   me: MeResponse | null | undefined;
+  canTriage?: boolean;
   /**
    * Optional close handler provided by the parent panel. When present, a close
    * button (닫기) is rendered and dirty-draft confirmation is gated before the
@@ -55,10 +56,11 @@ export interface ComposerSectionProps {
 export function ComposerSection({
   voc,
   me,
+  canTriage = false,
   onCloseRequest,
   onDirtyChange,
 }: ComposerSectionProps): React.ReactElement | null {
-  const visibility = useComposerVisibility(voc, me);
+  const visibility = useComposerVisibility(voc, me, canTriage);
   // REV-1 #7: draft state is now wired into all three composers as controlled props.
   const draft = useComposerDraft(voc.id);
 

@@ -49,12 +49,7 @@ export function useVocDetailPanelController({
     capability: 'voc.triage',
     managedSystemId: permissionManagedSystemId,
   });
-  const readCheck = usePermissionCheck({
-    capability: 'voc.read',
-    managedSystemId: permissionManagedSystemId,
-  });
   const canTriage = capCheck.data?.state === 'approved';
-  const canSeeInternalOps = canTriage || readCheck.data?.state === 'approved';
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
@@ -180,7 +175,6 @@ export function useVocDetailPanelController({
     actorNamesById,
     analyticsAreasById,
     canTriage,
-    canSeeInternalOps,
     linkedTask,
     requestTaskIsPending: requestTaskMutation.isPending,
     pendingReviewCount,

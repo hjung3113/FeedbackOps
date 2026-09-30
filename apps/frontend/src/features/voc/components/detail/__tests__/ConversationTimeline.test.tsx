@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -136,7 +136,7 @@ beforeEach(() => {
 
 describe('<ConversationTimeline>', () => {
   it('renders both tabs for a viewer with operator capability', () => {
-    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canSeeInternalOps={true} />);
+    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} />);
     expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
   });
@@ -144,12 +144,34 @@ describe('<ConversationTimeline>', () => {
   it('hides the internal tab for a reporter-only viewer', () => {
     const vocWithInternalEntry = {
       ...DETAIL_ENVELOPE,
-      conversation_timeline: [INTERNAL_ENTRY],
+      conversation_timeline: [PUBLIC_ENTRY, INTERNAL_ENTRY],
     };
-    render(<ConversationTimeline voc={vocWithInternalEntry} canSeeInternalOps={false} />);
+    render(<ConversationTimeline voc={vocWithInternalEntry} canTriage={false} />);
     expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '공개' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
-    expect(screen.queryByText('내부 코멘트')).not.toBeInTheDocument();
+    expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
+  });
+
+  it('falls back to public and restores focus when triage access is removed', () => {
+    const vocWithEntries = {
+      ...DETAIL_ENVELOPE,
+      conversation_timeline: [PUBLIC_ENTRY, INTERNAL_ENTRY],
+    };
+    const { rerender } = render(<ConversationTimeline voc={vocWithEntries} canTriage={true} />);
+    const internalTab = screen.getByRole('tab', { name: '내부' });
+
+    fireEvent.mouseDown(internalTab);
+    internalTab.focus();
+    expect(internalTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('내부 코멘트')).toBeInTheDocument();
+
+    rerender(<ConversationTimeline voc={vocWithEntries} canTriage={false} />);
+
+    const publicTab = screen.getByRole('tab', { name: '공개' });
+    expect(publicTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
+    expect(document.activeElement).toBe(publicTab);
   });
 
   it('public tab shows public_update entries', () => {
@@ -157,16 +179,14 @@ describe('<ConversationTimeline>', () => {
       ...DETAIL_ENVELOPE,
       conversation_timeline: [PUBLIC_ENTRY, REPORTER_REPLY_ENTRY, INTERNAL_ENTRY],
     };
-    render(<ConversationTimeline voc={vocWithEntries} canSeeInternalOps={true} />);
+    render(<ConversationTimeline voc={vocWithEntries} canTriage={true} />);
     // public tab is default; public + reporter_reply should appear
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
     expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
-    // internal comment should NOT be in public tab
-    expect(screen.queryByText('내부 코멘트')).not.toBeInTheDocument();
   });
 
   it('shows empty state when no entries in public tab', () => {
-    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canSeeInternalOps={true} />);
+    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canTriage={true} />);
     expect(screen.getByText('아직 대화가 없습니다.')).toBeInTheDocument();
   });
 });
