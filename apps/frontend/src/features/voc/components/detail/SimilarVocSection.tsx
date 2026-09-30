@@ -3,10 +3,7 @@ import { PanelSectionTitle, ReporterStatusBadge, SeverityBadge } from '@fops/ui'
 import { Sparkles } from 'lucide-react';
 import type * as React from 'react';
 
-import {
-  formatSameManagedSystemVocCount,
-  SAME_MANAGED_SYSTEM_VOC_LABEL,
-} from '@/lib/copy/voc';
+import { SAME_MANAGED_SYSTEM_VOC_LABEL, formatSameManagedSystemVocCount } from '@/lib/copy/voc';
 
 export interface SimilarVocSectionProps {
   similar: VocDetailEnvelope['similar'] | undefined;

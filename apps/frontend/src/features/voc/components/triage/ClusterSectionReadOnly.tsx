@@ -23,8 +23,8 @@ import * as React from 'react';
 
 import type { ApiError } from '@/lib/api';
 import {
-  formatSameManagedSystemVocCount,
   SEMANTIC_VOC_RECOMMENDATIONS_LABEL,
+  formatSameManagedSystemVocCount,
 } from '@/lib/copy/voc';
 
 import {
@@ -137,9 +137,7 @@ export function ClusterSectionReadOnly({
   return (
     <div className="mb-8" data-anchor="similar" data-testid="cluster-recommendation-section">
       <div className="flex items-center justify-between">
-        <PanelSectionTitle className="mb-0">
-          {SEMANTIC_VOC_RECOMMENDATIONS_LABEL}
-        </PanelSectionTitle>
+        <PanelSectionTitle className="mb-0">{SEMANTIC_VOC_RECOMMENDATIONS_LABEL}</PanelSectionTitle>
         {similarCount > 0 && (
           <span
             data-testid="cluster-similarity-badge"
