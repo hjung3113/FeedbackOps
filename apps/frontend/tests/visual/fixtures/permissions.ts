@@ -22,6 +22,9 @@ export const PERMISSION_IDS = {
   deny: '77777777-7777-4777-8777-777777777777',
 } as const;
 
+// This fixed future date stays after the visual harness clock (2026-07-21).
+export const PERMISSION_EXPIRATION_VISUAL_DATE = '2026-12-31T23:59:59.000Z';
+
 export const workspaceActorsFixture = listActorsResponseSchema.parse({
   actors: [
     {
@@ -136,6 +139,7 @@ export type PermissionScenarioName =
   | 'populated'
   | 'empty'
   | 'permission-request-detail-named'
+  | 'requested-expiration'
   | 'blocked-contact-admin';
 
 export const permissionVisualScenarios = z
@@ -145,5 +149,12 @@ export const permissionVisualScenarios = z
 export function createPermissionRequestsScenario(
   name: PermissionScenarioName = 'populated',
 ): AdminPermissionRequestRow[] {
-  return structuredClone(name === 'empty' ? emptyPermissionRequests : permissionRequests);
+  const requests = structuredClone(name === 'empty' ? emptyPermissionRequests : permissionRequests);
+  if (name === 'requested-expiration') {
+    const request = requests.find((candidate) => candidate.id === PERMISSION_IDS.pendingRead);
+    if (!request) throw new Error('Requested-expiration visual fixture is missing its request');
+    request.requester_actor_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    request.requested_expiration = PERMISSION_EXPIRATION_VISUAL_DATE;
+  }
+  return requests;
 }
