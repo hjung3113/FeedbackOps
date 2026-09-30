@@ -8,12 +8,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
 import { AppSidebar } from '../../lib/layout/AppSidebar';
-import {
-  NAV_TREE,
-  SIDEBAR_ENTRIES,
-  getSidebarEntryStates,
-  isSidebarEntryActive,
-} from '../_authed';
+import { NAV_TREE, SIDEBAR_ENTRIES, getSidebarEntryStates, isSidebarEntryActive } from '../_authed';
 
 // Re-implement only the redirect/error branch expectations in isolation.
 async function beforeLoad({ location }: { location: { href: string } }) {
@@ -180,11 +175,7 @@ describe('_authed VOC sidebar current destination', () => {
     },
   ])('marks only $expectedId current for $route', ({ pathname, searchStr, expectedId }) => {
     localStorage.removeItem('appSidebarCollapsed');
-    render(
-      <AppSidebar
-        entries={getSidebarEntryStates(NAV_TREE.voc, pathname, searchStr)}
-      />,
-    );
+    render(<AppSidebar entries={getSidebarEntryStates(NAV_TREE.voc, pathname, searchStr)} />);
 
     const navLinks = NAV_TREE.voc.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
     const currentLinks = navLinks.filter((entry) => entry.getAttribute('aria-current') === 'page');
