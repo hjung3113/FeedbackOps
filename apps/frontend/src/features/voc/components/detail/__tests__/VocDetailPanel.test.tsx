@@ -79,8 +79,8 @@ import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
-import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { VocDetailPanel } from '../VocDetailPanel';
@@ -132,9 +132,12 @@ beforeEach(() => {
   } as ReturnType<typeof useWorkspaceActors>);
   vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(useMe).mockReturnValue(makeMeQuery());
-  vi.mocked(usePermissionCheck).mockImplementation(({ capability }) => ({
-    data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
-  }) as unknown as ReturnType<typeof usePermissionCheck>);
+  vi.mocked(usePermissionCheck).mockImplementation(
+    ({ capability }) =>
+      ({
+        data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
+      }) as unknown as ReturnType<typeof usePermissionCheck>,
+  );
 });
 
 describe('<VocDetailPanel>', () => {

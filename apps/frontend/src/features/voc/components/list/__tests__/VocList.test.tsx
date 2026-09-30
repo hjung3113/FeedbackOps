@@ -1,9 +1,9 @@
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { VocListItem } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { VocList } from '../VocList';
 
 const permissionStates = new Map<string, string>();
@@ -101,9 +101,12 @@ describe('<VocList>', () => {
   beforeEach(() => {
     onSelect = vi.fn();
     permissionStates.clear();
-    vi.mocked(usePermissionCheck).mockImplementation(({ capability }) => ({
-      data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
-    }) as unknown as ReturnType<typeof usePermissionCheck>);
+    vi.mocked(usePermissionCheck).mockImplementation(
+      ({ capability }) =>
+        ({
+          data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
+        }) as unknown as ReturnType<typeof usePermissionCheck>,
+    );
   });
 
   it('shows 10 skeletons when loading with no items', () => {
@@ -182,13 +185,7 @@ describe('<VocList>', () => {
 
   it('hides the Owner need chip on My VOCs rows for a reporter-only viewer', () => {
     render(
-      <VocList
-        items={[makeVoc()]}
-        loading={false}
-        error={null}
-        onSelect={onSelect}
-        view="my"
-      />,
+      <VocList items={[makeVoc()]} loading={false} error={null} onSelect={onSelect} view="my" />,
       { wrapper: makeWrapper() },
     );
 
@@ -200,13 +197,7 @@ describe('<VocList>', () => {
     (approvedCapability) => {
       permissionStates.set(approvedCapability, 'approved');
       render(
-        <VocList
-          items={[makeVoc()]}
-          loading={false}
-          error={null}
-          onSelect={onSelect}
-          view="my"
-        />,
+        <VocList items={[makeVoc()]} loading={false} error={null} onSelect={onSelect} view="my" />,
         { wrapper: makeWrapper() },
       );
 

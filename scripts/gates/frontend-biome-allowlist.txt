@@ -285,3 +285,7 @@ packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx format -- 
 packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx lint/complexity/noForEach -- pre-existing on develop (measured 2026-09-30)
 packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-09-30)
 packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30)
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx format -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/list/__tests__/VocList.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-09-30); #591 adds reporter/operator cases below it
