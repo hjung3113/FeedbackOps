@@ -54,3 +54,10 @@ are intentionally deferred.
   the Finding.
 - Link Existing Task, approval, conversion, and VOC/VOC Cluster Task Request
   sources remain out of scope.
+
+## Amendment 2026-09-30 (#594)
+
+Issue #133 implemented the review decisions deferred here; ADR-0026 records
+them. Issue #134 implemented the conversion and link-existing-Task paths
+deferred here; ADR-0027 records them. ADR-0043 later amends ADR-0027's
+Finding-source conversion consequences.

@@ -1,5 +1,12 @@
 # Research 3 — Permission request cancel / edit
 
+## Status
+
+The `needs_more_info` supplement shipped in Issue #511 at
+`POST /permission-requests/:id/submit-more-info`. The 2026-09-26 research below
+predates that route. ADR-0044 still governs request-creation UX; requester
+cancellation and edits to a `pending` request remain undecided.
+
 Read-only survey of ADR-0044, the permissions module, and the permission-request lifecycle. No code was changed. There is no `service.ts` or `repo.ts` in this module. Requester commands live in `request-service.ts`, admin decisions in `decision-service.ts`, and both talk to Drizzle directly.
 
 ## Verdict

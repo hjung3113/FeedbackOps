@@ -163,3 +163,13 @@ failure is rethrown as a fixed-message error that keeps only bounded diagnostic
 codes, because pg-boss persists thrown errors and a rejected recipient's address
 would otherwise land in the job failure record. Delivery remains at-least-once
 through the held-open email claim.
+
+## Amendment 2026-09-30 (#594)
+
+The in-app Inbox shipped as the `Inbox` tab (`tab=inbox`) beside the
+`Dashboard` tab on Home (issue #509, PRs #552 and #573). The "Dashboard
+surface" above is Home's Dashboard tab. The notification catalogue is
+implemented in `apps/backend/src/modules/notifications/catalogue.ts`; the
+earlier sentence "This notification catalogue itself is not implemented"
+records the pre-implementation state. Dispatch rules remain code-driven, as
+decided above; there is no DB-configured rule UI.

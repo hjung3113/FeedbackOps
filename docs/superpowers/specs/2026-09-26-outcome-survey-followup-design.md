@@ -1,5 +1,11 @@
 # RESEARCH-2 — Outcome Survey follow-up workflow
 
+## Status
+
+Superseded by ADR-0055 (implemented). Issue #510 shipped the follow-up
+decisions and dashboard-gap behavior; this 2026-09-26 note is their historical
+research input.
+
 Read-only pre-issue research. No repo files other than this note were edited. No tests, builds, or dev servers were run. Nothing here is an implementation decision; the product questions in [Decisions required before an issue](#decisions-required-before-an-issue) are unresolved on purpose.
 
 Date: 2026-09-26.

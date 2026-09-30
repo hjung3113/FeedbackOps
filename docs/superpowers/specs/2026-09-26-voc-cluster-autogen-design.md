@@ -1,5 +1,11 @@
 # RESEARCH-4 — VOC Cluster candidate auto-generation
 
+## Status
+
+Superseded by ADR-0054 (implemented by Issue #512) for shadow measurement only.
+The choice of a user-facing proposal surface and unattended cluster writes
+remains open.
+
 Read-only pre-issue research. No implementation, no contract change. Sources are the ADRs, the VOC Cluster and recommendation services, the API contract, and `CONTEXT.md`. Line numbers are from the tree as read on 2026-09-26. Revised in place after `.review/RESEARCH-4-voc-cluster-autogen-OPUS-REVIEW.md`; the citations that review challenged were rechecked the same day.
 
 **Do not implement an unattended cluster writer on the current contracts.** ADR-0031, ADR-0034 D3, FR-VOC-004, and `CONTEXT.md` agree that a cluster is created only by an authorized person. They do not disagree with each other, so there is no tiebreak to apply. A cron that inserts `voc_clusters` rows is a reopen of those decisions, not a job that can be dropped in beside them.
