@@ -23,10 +23,7 @@ export function useIdempotencyKey(ifMatchEtag?: string, payloadFingerprint?: str
   });
 
   // Synchronous derivation: if either input changed, mint a new key before returning.
-  if (
-    ref.current.etag !== ifMatchEtag ||
-    ref.current.payloadFingerprint !== payloadFingerprint
-  ) {
+  if (ref.current.etag !== ifMatchEtag || ref.current.payloadFingerprint !== payloadFingerprint) {
     ref.current = { etag: ifMatchEtag, payloadFingerprint, key: mintKey() };
   }
 

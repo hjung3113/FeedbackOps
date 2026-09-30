@@ -1,7 +1,6 @@
 import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import type { MilestoneDetailDto } from '@fops/shared';
 import {
   DetailPanelHeader,
   DetailPanelHeaderActions,

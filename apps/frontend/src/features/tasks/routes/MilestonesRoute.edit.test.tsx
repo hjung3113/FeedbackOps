@@ -1,4 +1,5 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import {
   createMilestone,
@@ -15,7 +16,6 @@ import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
-import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 
 // #514 B2e — create and edit. Create is the same property block in a create
 // state, opened by the New milestone toolbar control; the body carries the

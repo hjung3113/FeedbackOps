@@ -21,14 +21,14 @@ import {
   MilestonePanelSectionTitle,
 } from '../MilestoneIdentity';
 import { MilestoneStatusBadge } from '../MilestoneStatusBadge';
+import { MilestoneSourceSection } from './MilestoneSourceSection';
+import { MilestoneTaskRow } from './MilestoneTaskRow';
 import {
   SECTIONS,
   STATUS_OPTIONS,
   milestonePropertyFieldClassName,
   selectClassName,
 } from './constants';
-import { MilestoneSourceSection } from './MilestoneSourceSection';
-import { MilestoneTaskRow } from './MilestoneTaskRow';
 import { useMilestoneStatusEdit } from './useMilestoneStatusEdit';
 import { useMilestoneTitleEdit } from './useMilestoneTitleEdit';
 
