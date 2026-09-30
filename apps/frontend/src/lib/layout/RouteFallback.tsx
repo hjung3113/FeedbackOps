@@ -2,7 +2,9 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { homeSidebarEntries } from '@/features/home/homeNavigation';
 import { MeRequestError, UnauthenticatedError } from '@/lib/api/auth';
 import { ME_QUERY_KEY, useMe } from '@/lib/auth/useMe';
+import { DOCUMENT_TITLE_COPY } from '@/lib/copy/document-titles';
 import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
+import { useDocumentTitle } from '@/lib/router/document-title';
 import { Button, PageShell } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
@@ -82,6 +84,11 @@ function MeRateLimitedRouteErrorFallback({ error }: { error: MeRequestError }) {
 }
 
 export function RouteErrorFallback({ error, withShell = false }: RouterErrorFallbackProps) {
+  useDocumentTitle(
+    error instanceof MeRequestError && error.status === 429
+      ? ROUTER_FALLBACK_COPY.error.meRateLimitedTitle
+      : DOCUMENT_TITLE_COPY.error,
+  );
   if (error instanceof MeRequestError && error.status === 429) {
     return <MeRateLimitedRouteErrorFallback error={error} />;
   }
@@ -196,5 +203,16 @@ export function RouteNotFoundFallback() {
     </CenteredPage>
   );
 
-  return isInAuthenticatedLayout ? message : <FallbackFrame>{message}</FallbackFrame>;
+  return isInAuthenticatedLayout ? (
+    <NotFoundDocumentTitle>{message}</NotFoundDocumentTitle>
+  ) : (
+    <FallbackFrame>
+      <NotFoundDocumentTitle>{message}</NotFoundDocumentTitle>
+    </FallbackFrame>
+  );
+}
+
+function NotFoundDocumentTitle({ children }: { children: ReactNode }) {
+  useDocumentTitle(DOCUMENT_TITLE_COPY.notFound);
+  return children;
 }

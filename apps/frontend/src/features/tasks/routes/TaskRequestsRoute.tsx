@@ -1,5 +1,6 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { ListShell, ListToolbar, PermissionBlockedPanel } from '@fops/ui';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
@@ -22,6 +23,17 @@ export function TaskRequestsRoute({
   managedSystem?: string;
 }) {
   const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const selectedDocumentTitle =
+    !queue.isLoading &&
+    !queue.hasError &&
+    queue.selected !== null &&
+    queue.selectedId === queue.selected.id
+      ? formatRecordDocumentTitle({
+          displayId: queue.selected.display_id,
+          title: queue.selected.requested_outcome,
+        })
+      : null;
+  useDocumentTitle(selectedDocumentTitle);
 
   if (queue.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Loading Task Requests…</div>;

@@ -13,6 +13,7 @@
  *   .panel-footer handled by TriageActions component
  */
 
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { type VocListItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
@@ -102,6 +103,18 @@ export function TriagePanel({
     ...(onOptimisticRemove !== undefined ? { onOptimisticRemove } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });
+  const documentTitleRecord =
+    vocDetailQuery.isSuccess &&
+    !vocDetailQuery.isFetching &&
+    vocDetailQuery.data?.id === voc.id &&
+    vocDetailQuery.data !== undefined &&
+    'title' in vocDetailQuery.data
+      ? formatRecordDocumentTitle({
+          displayId: vocDetailQuery.data.display_id,
+          title: vocDetailQuery.data.title,
+        })
+      : null;
+  useDocumentTitle(documentTitleRecord);
 
   // ── render ─────────────────────────────────────────────────────────────────
 

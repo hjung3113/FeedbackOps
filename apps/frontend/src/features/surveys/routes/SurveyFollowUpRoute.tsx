@@ -6,6 +6,7 @@ import { SurveyResultHeader } from '@/features/surveys/components/results/Survey
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { Button, EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import { useSurveyReadGate } from './SurveyPermissionGate';
 
@@ -18,6 +19,14 @@ export function SurveyFollowUpRouteView({ surveyId }: { surveyId: string }) {
   const canReadResults =
     gate.canRead && followUp.data?.classifiable === true && followUp.data.personal_access === true;
   const results = useSurveyResults(surveyId, canReadResults);
+  useDocumentTitle(
+    surveyQuery.isSuccess && !surveyQuery.isFetching && gate.canRead
+      ? formatRecordDocumentTitle({
+          displayId: surveyQuery.data.display_id,
+          title: surveyQuery.data.title,
+        })
+      : null,
+  );
 
   if (surveyQuery.isLoading || gate.gateState === 'loading') {
     return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;

@@ -6,6 +6,7 @@ import type { SurveyType } from '@/features/surveys/types';
 import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
 import {
   Button,
@@ -76,6 +77,14 @@ export function SurveysIndexRoute() {
   const selected = useSurvey(selectedId ?? '');
   const selectedGate = useSurveyManageGate(selected.data?.primary_managed_system_id);
   const surveys = query.data ?? [];
+  useDocumentTitle(
+    selected.isSuccess && !selected.isFetching && selected.data?.id === selectedId
+      ? formatRecordDocumentTitle({
+          displayId: selected.data.display_id,
+          title: selected.data.title,
+        })
+      : null,
+  );
 
   const handleSelect = React.useCallback(
     (id: string): void => {
