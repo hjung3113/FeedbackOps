@@ -81,8 +81,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
   async function cleanupEntityLinkFixtures(): Promise<void> {
     if (!migrateHandle) return;
-    const managedSystems =
-      `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
+    const managedSystems = `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
     const surveys = `select id from survey.surveys
       where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
     const responses = `select id from survey.survey_responses
