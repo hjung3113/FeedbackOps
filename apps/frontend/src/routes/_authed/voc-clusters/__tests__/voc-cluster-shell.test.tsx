@@ -815,7 +815,7 @@ describe('VOC cluster route shells', () => {
     expect(screen.getByTestId('cluster-detail-rationale')).toHaveTextContent(
       '같은 결제 실패 패턴입니다.',
     );
-    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('high');
+    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('높음');
     expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('owner-1');
     expect(screen.getAllByTestId('reporter-status-reviewing')).toHaveLength(4);
     expect(screen.getByTestId('cluster-members-more')).toHaveTextContent('+1 더보기');

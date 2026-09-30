@@ -2,10 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FindingDetailPanel } from './FindingDetailPanel';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
+const findingSourceType = vi.hoisted(() => ({
+  value: 'manual' as 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual',
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -41,7 +44,7 @@ vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
       primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
       title: '리포트 속도 저하',
       summary: '쿼리 플랜 개선 필요',
-      source_type: 'manual',
+      source_type: findingSourceType.value,
       source_id: null,
       evidence_count: 0,
       severity: 'high',
@@ -109,6 +112,26 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('FindingDetailPanel', () => {
+  beforeEach(() => {
+    findingSourceType.value = 'manual';
+  });
+
+  it.each([
+    ['voc', 'VOC'],
+    ['voc_cluster', 'VOC Cluster'],
+    ['survey', 'Survey'],
+    ['survey_response', 'Survey Response'],
+    ['manual', 'Manual'],
+  ] as const)('renders source type %s as %s without raw enum values', (sourceType, label) => {
+    findingSourceType.value = sourceType;
+    renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
+
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(sourceType, { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText('중간')).toBeInTheDocument();
+    expect(screen.queryByText('medium', { exact: true })).not.toBeInTheDocument();
+  });
+
   it('renders finding display_id in the detail header and linked task display_id in the link chip', async () => {
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 

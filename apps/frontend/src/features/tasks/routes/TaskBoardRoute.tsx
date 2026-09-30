@@ -4,7 +4,8 @@ import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import { taskPrioritySchema, type TaskDto, type TaskStatus } from '@fops/shared';
+import { DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { type TaskDto, type TaskStatus, taskPrioritySchema } from '@fops/shared';
 import {
   Button,
   InternalTaskBadge,
@@ -15,9 +16,8 @@ import {
   UserAvatar,
   WorkbenchShell,
 } from '@fops/ui';
-import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { Layers, Plus } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assign
       aria-label={`${task.display_id}: ${task.title}`}
       className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
     >
-      <div className="flex items-center gap-1.5"><span className="font-mono text-xs text-text-muted">{task.display_id}</span><SeverityBadge severity={severity(task.priority)} /></div>
+      <div className="flex items-center gap-1.5"><span className="font-mono text-xs text-text-muted">{task.display_id}</span><SeverityBadge severity={severity(task.priority)} label={TASK_PRIORITY_LABELS[task.priority]} /></div>
       {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}
       <div className="mt-2 text-sm font-medium text-text-primary">{task.title}</div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <span className="rounded border border-border-subtle px-1.5 py-0.5">미배정</span>}</div>
@@ -207,11 +207,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">보드 <OutlineBadge>{filtered.length}건</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task 생성 기능을 사용할 수 없습니다."><Plus className="h-4 w-4" />Task 생성</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: boardSearch() }); }} /> : null}>
     <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
-      <StatBlock label="Total tasks" value={items.length} />
+      <StatBlock label="전체 Task" value={items.length} />
       <StatDivider />
       <StatBlock label="미배정" value={items.filter((task) => task.assignee_actor_id === null).length} valueClassName="text-accent-warn" />
       <StatDivider />
-      <StatBlock label="In progress" value={items.filter((task) => task.status === 'doing').length} valueClassName="text-accent-success" />
+      <StatBlock label="진행 중" value={items.filter((task) => task.status === 'doing').length} valueClassName="text-accent-success" />
     </div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="flex h-full gap-3 overflow-x-auto p-4">{columns.map((column) => <BoardColumn key={column.key} id={column.key} label={column.label} tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)} groupBy={groupBy} selectedId={selectedId} selectTask={selectTask} names={{ systems: systemNames, actors: actorNames }} enabled={groupBy === 'status'} />)}</div></DndContext>
   </WorkbenchShell>;

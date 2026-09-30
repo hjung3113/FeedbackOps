@@ -131,8 +131,8 @@ export function TaskListRoute({
                   {dot()}
                   <span>
                     {task.assignee_actor_id
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? 'Assigned')
-                      : 'Unassigned'}
+                      ? (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                      : '미배정'}
                   </span>
                   {dot()}
                   <span>

@@ -41,7 +41,7 @@ describe('SurveyStatusConfirmationDialog error copy (#561)', () => {
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Launch하려면 질문을 하나 이상 추가해야 합니다.',
+      'Survey 시작 전에 질문을 하나 이상 추가해야 합니다.',
     );
   });
 });

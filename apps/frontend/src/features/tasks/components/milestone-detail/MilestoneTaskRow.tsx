@@ -30,7 +30,7 @@ export function MilestoneTaskRow({
       {assigneeName !== undefined ? (
         <UserAvatar user={{ display_name: assigneeName }} size="sm" />
       ) : task.assignee_actor_id === null ? (
-        <span className="rounded border border-border-subtle px-1.5 py-0.5">Unassigned</span>
+        <span className="rounded border border-border-subtle px-1.5 py-0.5">미배정</span>
       ) : null}
     </div>
   );

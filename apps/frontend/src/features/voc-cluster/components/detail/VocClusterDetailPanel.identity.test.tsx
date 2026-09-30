@@ -1,4 +1,10 @@
-import type { VocClusterDto } from '@fops/shared';
+import {
+  type FindingConfidence,
+  type FindingSeverity,
+  type VocClusterDto,
+  findingConfidenceSchema,
+  findingSeveritySchema,
+} from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -67,6 +73,19 @@ import { VocClusterDetailPanel } from './VocClusterDetailPanel';
 
 const cluster = clusterState.data as unknown as VocClusterDto;
 
+const severityLabels: Record<FindingSeverity, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+  critical: '심각',
+};
+
+const confidenceLabels: Record<FindingConfidence, string> = {
+  low: '낮음',
+  medium: '중간',
+  high: '높음',
+};
+
 describe('VocClusterDetailPanel identity', () => {
   beforeEach(() => {
     clusterState.data.owner_user_id = '20000000-0000-0000-0000-000000000002';
@@ -96,6 +115,16 @@ describe('VocClusterDetailPanel identity', () => {
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
   });
 
+  it('uses Korean properties navigation and field labels', () => {
+    render(<VocClusterDetailPanel clusterId={cluster.id} />);
+
+    expect(screen.getByRole('button', { name: '속성' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '속성' })).toBeInTheDocument();
+    for (const label of ['심각도', '신뢰도', '담당자']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
   it('uses a safe owner label when the actor name is unavailable', () => {
     clusterState.actors = [];
 
@@ -103,5 +132,28 @@ describe('VocClusterDetailPanel identity', () => {
 
     expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('알 수 없는 사용자');
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
+  });
+
+  it.each(findingSeveritySchema.options)('renders the %s severity label', (severity) => {
+    clusterState.data.severity = severity;
+
+    render(<VocClusterDetailPanel clusterId={cluster.id} />);
+
+    const value = screen.getByTestId('cluster-detail-severity');
+    expect(value).toHaveTextContent(severityLabels[severity]);
+    expect(value).not.toHaveTextContent(severity);
+  });
+
+  it.each(findingConfidenceSchema.options)('renders the %s confidence label', (confidence) => {
+    clusterState.data.confidence = confidence;
+
+    render(<VocClusterDetailPanel clusterId={cluster.id} />);
+
+    const value = screen.getByTestId('cluster-detail-confidence');
+    expect(value).toHaveTextContent(confidenceLabels[confidence]);
+    expect(value).not.toHaveTextContent(confidence);
+    expect(screen.getByTestId('cluster-detail-confidence-badge')).toHaveTextContent(
+      `신뢰도 · ${confidenceLabels[confidence]}`,
+    );
   });
 });

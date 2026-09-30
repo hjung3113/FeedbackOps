@@ -65,7 +65,7 @@ export function SurveyDetail({
           {canManage && survey.status === 'open' && (
             <div className="mt-3 px-5">
               <Button variant="secondary" size="sm" onClick={() => setCloseOpen(true)}>
-                Close survey
+                Survey 종료
               </Button>
             </div>
           )}
@@ -79,7 +79,7 @@ export function SurveyDetail({
               search={{ builder: true }}
               className="inline-flex rounded-md bg-accent-primary px-3 py-2 text-sm font-medium text-white"
             >
-              Continue building
+              이어서 편집
             </Link>
           ) : (
             <p className="text-sm text-text-muted">
@@ -96,7 +96,7 @@ export function SurveyDetail({
               <Button asChild variant="subtle" size="sm">
                 <Link to="/surveys/$surveyId/results" params={{ surveyId: survey.id }}>
                   <ArrowRight className="h-4 w-4" aria-hidden />
-                  Open result summary
+                  결과 요약 보기
                 </Link>
               </Button>
             )}
@@ -106,7 +106,7 @@ export function SurveyDetail({
           </p>
         </section>
         <section className="mt-6 px-5">
-          <h2 className="mb-2 text-sm font-medium">Questions</h2>
+          <h2 className="mb-2 text-sm font-medium">질문</h2>
           {questions.length ? (
             <ol className="space-y-2">
               {questions.map((question, index) => (

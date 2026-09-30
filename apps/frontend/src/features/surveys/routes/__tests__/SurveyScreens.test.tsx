@@ -181,6 +181,37 @@ describe('Survey screens', () => {
     expect(screen.getByTestId('survey-list-error')).toBeInTheDocument();
   });
 
+  it('uses localized status tabs, survey creation action, and builder labels', () => {
+    const onCreate = vi.fn();
+    render(
+      <SurveyList
+        surveys={[survey]}
+        isLoading={false}
+        error={null}
+        canCreate
+        onCreate={onCreate}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: /진행 중/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /초안/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /종료됨/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '설문 생성' }));
+    expect(onCreate).toHaveBeenCalledOnce();
+  });
+
+  it('uses localized builder actions, option label, title field, and sync label', () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: '뒤로' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Survey 시작' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Survey 제목' })).toBeInTheDocument();
+    expect(screen.getByText('선택지')).toBeInTheDocument();
+    expect(screen.getByText('동기화됨')).toBeInTheDocument();
+    expect(screen.getByText('질문 1')).toBeInTheDocument();
+  });
+
   it('resolves list row names and removes response placeholders and UUIDs', () => {
     const managedSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
     const operatorId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -253,9 +284,9 @@ describe('Survey screens', () => {
   });
 
   it.each([
-    ['draft', 'Draft'],
-    ['open', 'Open'],
-    ['closed', 'Closed'],
+    ['draft', '초안'],
+    ['open', '진행 중'],
+    ['closed', '종료됨'],
   ] as const)('presents survey status %s as %s', (status, label) => {
     render(<SurveyStatusBadge status={status} />);
     expect(screen.getByText(label)).toBeInTheDocument();
@@ -358,12 +389,12 @@ describe('Survey screens', () => {
       // negative assertions below have nothing to beat.
       expect(screen.getByTestId('survey-builder')).toBeInTheDocument();
       expect(screen.getAllByText('도움이 되었나요?')).toHaveLength(2);
-      const label = status === 'open' ? 'Open' : 'Closed';
+      const label = status === 'open' ? '진행 중' : '종료됨';
       expect(screen.getByText(`${label} 상태 — 질문 변경은 잠겨 있습니다.`)).toBeInTheDocument();
       expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '초안 저장' })).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Survey title')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Survey 제목')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('질문 드래그 핸들')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Q1 위로 이동' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Q1 아래로 이동' })).not.toBeInTheDocument();
@@ -375,14 +406,14 @@ describe('Survey screens', () => {
     const builderView = renderWithQuery(
       <SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />,
     );
-    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.getByText('종료됨')).toBeInTheDocument();
     expect(screen.queryByText('closed · discovery')).not.toBeInTheDocument();
-    expect(screen.getByText('Closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(screen.getByText('종료됨 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
     expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
     builderView.unmount();
     renderDetailWithRouter(closedSurvey, true);
-    expect(await screen.findByText('Closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
-    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(await screen.findByText('종료됨 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(screen.getByText('종료됨')).toBeInTheDocument();
     expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
   });
 
@@ -391,7 +422,7 @@ describe('Survey screens', () => {
       <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
     );
 
-    expect(screen.queryByText('Questions 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('질문 0')).not.toBeInTheDocument();
     expect(screen.getByText('첫 질문을 추가하세요')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -405,7 +436,7 @@ describe('Survey screens', () => {
     ).toEqual(['single_choice', 'multiple_choice', 'rating', 'text']);
     fireEvent.click(screen.getByRole('button', { name: /^척도/ }));
 
-    expect(screen.getByText('Questions 1')).toBeInTheDocument();
+    expect(screen.getByText('질문 1')).toBeInTheDocument();
     expect(screen.getByLabelText('최소 점수')).toBeInTheDocument();
     expect(screen.queryByText('첫 질문을 추가하세요')).not.toBeInTheDocument();
   });
@@ -457,7 +488,7 @@ describe('Survey screens', () => {
       />,
     );
 
-    expect(screen.queryByText('Questions 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('질문 0')).not.toBeInTheDocument();
     expect(screen.getByText('질문이 없습니다.')).toHaveClass('text-text-muted');
     expect(screen.queryByRole('button', { name: /^단일 선택/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^복수 선택/ })).not.toBeInTheDocument();
@@ -472,9 +503,10 @@ describe('Survey screens', () => {
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
     expect(screen.getByText('SRV-1')).toBeInTheDocument();
     expect(screen.getByText('탐색')).toBeInTheDocument();
-    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByText('초안')).toBeInTheDocument();
     expect(screen.getByText('담당자 · 담당자 미지정')).toBeInTheDocument();
     expect(screen.getByText('Q1. 도움이 되었나요?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '질문' })).toBeInTheDocument();
   });
 
   it('launches a manageable draft survey and returns to detail after success', async () => {
@@ -482,7 +514,7 @@ describe('Survey screens', () => {
     apiClient.mockResolvedValue({ data: { ...survey, status: 'open' } });
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={onBack} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
     expect(await screen.findByTestId('survey-open-confirmation')).toBeInTheDocument();
     fireEvent.click(
       within(screen.getByTestId('survey-open-confirmation')).getByTestId('survey-status-confirm'),
@@ -498,14 +530,14 @@ describe('Survey screens', () => {
     );
 
     await screen.findByTestId('survey-builder');
-    expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Survey 시작' })).not.toBeInTheDocument();
   });
 
   it('hides Launch without survey.manage even for a draft survey', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage={false} onBack={vi.fn()} />);
 
     await screen.findByTestId('survey-builder');
-    expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Survey 시작' })).not.toBeInTheDocument();
   });
 
   it('keeps the Launch confirmation open when a survey has no questions', async () => {
@@ -522,7 +554,7 @@ describe('Survey screens', () => {
       <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
     fireEvent.click(
       within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
         'survey-status-confirm',
@@ -530,7 +562,7 @@ describe('Survey screens', () => {
     );
 
     expect(
-      await screen.findByText('Launch하려면 질문을 하나 이상 추가해야 합니다.'),
+      await screen.findByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
@@ -547,7 +579,7 @@ describe('Survey screens', () => {
     });
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
     fireEvent.click(
       within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
         'survey-status-confirm',
@@ -555,10 +587,10 @@ describe('Survey screens', () => {
     );
 
     expect(
-      await screen.findByText('이 설문은 더 이상 Launch할 수 없는 상태입니다.'),
+      await screen.findByText('이 설문은 더 이상 시작할 수 없는 상태입니다.'),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('Launch하려면 질문을 하나 이상 추가해야 합니다.'),
+      screen.queryByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
     ).not.toBeInTheDocument();
   });
 
@@ -575,14 +607,14 @@ describe('Survey screens', () => {
       .mockResolvedValueOnce({ data: { ...survey, status: 'closed' } });
     renderDetailWithRouter({ ...survey, status: 'open' }, true);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Close survey' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Survey 종료' }));
     fireEvent.click(
       within(await screen.findByTestId('survey-close-confirmation')).getByTestId(
         'survey-status-confirm',
       ),
     );
     expect(
-      await screen.findByText('이 설문은 더 이상 Close할 수 없는 상태입니다.'),
+      await screen.findByText('이 설문은 더 이상 종료할 수 없는 상태입니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-close-confirmation')).toBeInTheDocument();
     fireEvent.click(
@@ -595,19 +627,19 @@ describe('Survey screens', () => {
   it('hides Close survey for a manageable draft survey', async () => {
     renderDetailWithRouter(survey, true);
     await screen.findByTestId('survey-detail');
-    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Survey 종료' })).not.toBeInTheDocument();
   });
 
   it('hides Close survey for a manageable closed survey', async () => {
     renderDetailWithRouter({ ...survey, status: 'closed' }, true);
     await screen.findByTestId('survey-detail');
-    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Survey 종료' })).not.toBeInTheDocument();
   });
 
   it('hides Close survey for an open survey without management permission', async () => {
     renderDetailWithRouter({ ...survey, status: 'open' }, false);
     await screen.findByTestId('survey-detail');
-    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Survey 종료' })).not.toBeInTheDocument();
   });
 
   it('invalidates and refetches the survey list after Launch', async () => {
@@ -640,7 +672,7 @@ describe('Survey screens', () => {
     renderWithQuery(<LaunchWithList />);
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
     fireEvent.click(
       within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
         'survey-status-confirm',
@@ -652,7 +684,7 @@ describe('Survey screens', () => {
         apiRequest.mock.calls.filter((call) => call[0] === 'GET' && call[1] === '/surveys'),
       ).toHaveLength(2),
     );
-    expect(screen.getByTestId('survey-row-survey-1')).toHaveTextContent('Open');
+    expect(screen.getByTestId('survey-row-survey-1')).toHaveTextContent('진행 중');
   });
 
   it.each(['open', 'closed'] as const)(
@@ -660,7 +692,7 @@ describe('Survey screens', () => {
     async (status) => {
       renderDetailWithRouter({ ...survey, status }, true);
 
-      const link = await screen.findByRole('link', { name: 'Open result summary' });
+      const link = await screen.findByRole('link', { name: '결과 요약 보기' });
       expect(link).toHaveAttribute('href', '/surveys/survey-1/results');
     },
   );
@@ -669,7 +701,7 @@ describe('Survey screens', () => {
     renderDetailWithRouter(survey, true);
 
     await screen.findByTestId('survey-detail');
-    expect(screen.queryByRole('link', { name: 'Open result summary' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '결과 요약 보기' })).not.toBeInTheDocument();
   });
 
   it('AC-1 keeps a prompt edit local until Save draft', async () => {
@@ -704,13 +736,13 @@ describe('Survey screens', () => {
     expect(calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body).toMatchObject({
       prompt: '저장된 질문 프롬프트',
     });
-    await waitFor(() => expect(screen.getByText(/^Saved at /)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
   });
 
   it('AC-3 saves the distinct survey title with one scalar PATCH', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Survey title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
       target: { value: '제목 전용 픽스처' },
     });
 

@@ -1,6 +1,7 @@
 import { fetchTaskRequests, resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -12,10 +13,10 @@ import { isPermissionDenied } from './predicates';
 export type TaskRequestTab = TaskRequestStatus | 'all';
 
 const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
-  { value: 'pending_review', label: 'Pending' },
-  { value: 'needs_more_evidence', label: 'Needs evidence' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'pending_review', label: TASK_REQUEST_STATUS_LABELS.pending_review },
+  { value: 'needs_more_evidence', label: TASK_REQUEST_STATUS_LABELS.needs_more_evidence },
+  { value: 'approved', label: TASK_REQUEST_STATUS_LABELS.approved },
+  { value: 'rejected', label: TASK_REQUEST_STATUS_LABELS.rejected },
   { value: 'all', label: 'All' },
 ];
 

@@ -92,6 +92,18 @@ describe('TaskBoardRoute', () => {
     expect(screen.getAllByText('비어있음').length).toBe(6);
   });
 
+  it('renders localized task count labels in board stats', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+
+    await screen.findByText('TASK-1000');
+    expect(screen.getByText('전체 Task')).toBeInTheDocument();
+    expect(screen.getAllByText('미배정').length).toBeGreaterThan(0);
+    expect(screen.getByText('진행 중')).toBeInTheDocument();
+    expect(screen.queryByText('Total tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('In progress')).not.toBeInTheDocument();
+  });
+
   it.each(taskPrioritySchema.options)(
     'shows a display label for priority %s in filters',
     async (priority) => {
@@ -103,6 +115,20 @@ describe('TaskBoardRoute', () => {
       expect(screen.getByText('우선순위')).toBeInTheDocument();
       expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority]).length).toBeGreaterThan(0);
       expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(taskPrioritySchema.options)(
+    'renders priority %s with its Task label on the board card',
+    async (priority) => {
+      api.listTasks.mockResolvedValue({ items: [{ ...task, priority }] });
+      renderBoard();
+
+      const card = await screen.findByRole('button', {
+        name: `${task.display_id}: ${task.title}`,
+      });
+      expect(card).toHaveTextContent(TASK_PRIORITY_LABELS[priority]);
+      expect(card).not.toHaveTextContent(priority);
     },
   );
 

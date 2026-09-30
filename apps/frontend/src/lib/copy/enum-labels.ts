@@ -1,9 +1,13 @@
 import type {
   EntityLinkRelationType,
+  FindingConfidence,
+  FindingDto,
   FindingSeverity,
   FindingStatus,
+  RatingBand,
   SurveyQuestionKind,
   SurveyQuestionResult,
+  SurveyStatus,
   SurveyType,
   TaskPriority,
   TaskRequestStatus,
@@ -23,6 +27,12 @@ export const SURVEY_TYPE_LABELS: Record<SurveyType, string> = {
   discovery: '탐색',
   validation: '검증',
   outcome: '결과',
+};
+
+export const SURVEY_STATUS_LABELS: Record<SurveyStatus, string> = {
+  draft: '초안',
+  open: '진행 중',
+  closed: '종료됨',
 };
 
 export const SURVEY_QUESTION_KIND_LABELS: Record<SurveyQuestionKind, string> = {
@@ -46,6 +56,26 @@ export const FINDING_SEVERITY_LABELS: Record<FindingSeverity, string> = {
   critical: '심각',
 };
 
+export const FINDING_CONFIDENCE_LABELS: Record<FindingConfidence, string> = {
+  low: '낮음',
+  medium: '중간',
+  high: '높음',
+};
+
+export const FINDING_SOURCE_TYPE_LABELS: Record<FindingDto['source_type'], string> = {
+  voc: 'VOC',
+  voc_cluster: 'VOC Cluster',
+  survey: 'Survey',
+  survey_response: 'Survey Response',
+  manual: 'Manual',
+};
+
+export const RATING_BAND_LABELS: Record<RatingBand, string> = {
+  low: '낮은 점수',
+  mid: '중간 점수',
+  high: '높은 점수',
+};
+
 export const FINDING_STATUS_LABELS: Record<FindingStatus, string> = {
   draft: '초안',
   active: '진행 중',
@@ -65,11 +95,11 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const TASK_REQUEST_STATUS_LABELS: Record<TaskRequestStatus, string> = {
-  pending_review: 'Pending',
-  needs_more_evidence: 'Needs evidence',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  converted: 'Converted',
+  pending_review: '검토 대기',
+  needs_more_evidence: '근거 추가 필요',
+  approved: '승인됨',
+  rejected: '반려됨',
+  converted: 'Task 전환됨',
 };
 
 export const ENTITY_LINK_RELATION_LABELS: Record<EntityLinkRelationType, string> = {

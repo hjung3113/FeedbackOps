@@ -1,8 +1,12 @@
 import {
   entityLinkRelationTypeSchema,
+  findingConfidenceSchema,
+  findingDtoSchema,
   findingSeveritySchema,
   findingStatusSchema,
+  ratingBandSchema,
   surveyQuestionKindSchema,
+  surveyStatusSchema,
   surveyTypeSchema,
   taskPrioritySchema,
   taskRequestStatusSchema,
@@ -12,10 +16,14 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   ENTITY_LINK_RELATION_LABELS,
+  FINDING_CONFIDENCE_LABELS,
   FINDING_SEVERITY_LABELS,
+  FINDING_SOURCE_TYPE_LABELS,
   FINDING_STATUS_LABELS,
+  RATING_BAND_LABELS,
   SURVEY_QUESTION_KIND_LABELS,
   SURVEY_RESULT_KIND_LABELS,
+  SURVEY_STATUS_LABELS,
   SURVEY_TYPE_LABELS,
   TASK_PRIORITY_LABELS,
   TASK_REQUEST_STATUS_LABELS,
@@ -44,12 +52,29 @@ describe('enum display labels', () => {
     expectCompleteLabels(surveyQuestionKindSchema.options, SURVEY_QUESTION_KIND_LABELS);
   });
 
+  it('covers every survey status', () => {
+    expectCompleteLabels(surveyStatusSchema.options, SURVEY_STATUS_LABELS);
+  });
+
   it('covers every task priority', () => {
     expectCompleteLabels(taskPrioritySchema.options, TASK_PRIORITY_LABELS);
   });
 
   it('covers every Finding severity', () => {
     expectCompleteLabels(findingSeveritySchema.options, FINDING_SEVERITY_LABELS);
+  });
+
+  it('covers every Finding confidence', () => {
+    expectCompleteLabels(findingConfidenceSchema.options, FINDING_CONFIDENCE_LABELS);
+  });
+
+  it('covers every Finding source type', () => {
+    const sourceTypes = findingDtoSchema.options.map((option) => option.shape.source_type.value);
+    expectCompleteLabels(sourceTypes, FINDING_SOURCE_TYPE_LABELS);
+  });
+
+  it('covers every rating band', () => {
+    expectCompleteLabels(ratingBandSchema.options, RATING_BAND_LABELS);
   });
 
   it('covers every Finding status', () => {

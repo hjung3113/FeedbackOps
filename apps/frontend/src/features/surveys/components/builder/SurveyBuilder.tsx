@@ -94,12 +94,12 @@ export function SurveyBuilder({
     <main className="flex h-full flex-col bg-surface-canvas" data-testid="survey-builder">
       <header className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-4">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          Back
+          뒤로
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {editable ? (
             <Input
-              aria-label="Survey title"
+              aria-label="Survey 제목"
               className="w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold"
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
@@ -122,8 +122,8 @@ export function SurveyBuilder({
               {dirty
                 ? '저장되지 않은 변경 사항'
                 : savedAt
-                  ? `Saved at ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                  : 'Synced'}
+                  ? `저장 시각 ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : '동기화됨'}
             </span>
             <Button
               variant="secondary"
@@ -143,7 +143,7 @@ export function SurveyBuilder({
         {editable && (
           <Button variant="default" size="sm" onClick={() => setLaunchOpen(true)}>
             <Megaphone className="h-4 w-4" />
-            Launch
+            Survey 시작
           </Button>
         )}
       </header>

@@ -63,7 +63,7 @@ describe('<PermissionGate>', () => {
       </PermissionGate>,
     );
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '권한 요청' })).toBeInTheDocument();
     });
     expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
   });

@@ -108,6 +108,18 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('TaskRequestsRoute display ids', () => {
+  it('uses Korean Task Request statuses on the queue tabs', async () => {
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByText('REQ-42');
+    for (const label of ['검토 대기', '근거 추가 필요', '승인됨', '반려됨']) {
+      expect(screen.getByRole('tab', { name: new RegExp(label) })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole('tab', { name: /Pending|Needs evidence|Approved|Rejected/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders task request display_id in the row and detail header, and finding display_id in the source card', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
@@ -165,13 +177,16 @@ describe('TaskRequestsRoute display ids', () => {
     renderWithClient(<TaskRequestsRoute />);
 
     await screen.findByText('REQ-42');
-    await userEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+    await userEvent.click(screen.getByRole('tab', { name: '승인됨' }));
 
     expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('선택한 상태: Approved')).toBeInTheDocument();
+    expect(screen.getByText('선택한 상태: 승인됨')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
-    expect(screen.getByRole('tab', { name: /^Pending/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
   });

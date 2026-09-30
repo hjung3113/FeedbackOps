@@ -28,7 +28,11 @@ import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useReque
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
-import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import {
+  FINDING_CONFIDENCE_LABELS,
+  FINDING_SEVERITY_LABELS,
+  FINDING_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
@@ -189,7 +193,7 @@ export function VocClusterDetailPanel({
           { id: 'why', label: 'Why' },
           { id: 'execution', label: 'Execution' },
           { id: 'members', label: 'Members', count: data.member_count },
-          { id: 'properties', label: 'Properties' },
+          { id: 'properties', label: '속성' },
         ]}
       />
       <div ref={sectionScrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
@@ -199,10 +203,15 @@ export function VocClusterDetailPanel({
               <div className="flex items-center gap-2 mb-1">
                 <OutlineBadge>VOC Cluster</OutlineBadge>
                 <ClusterStatusBadge status={data.status} surface="detail" />
-                {data.severity && <SeverityBadge severity={data.severity} />}
+                {data.severity && (
+                  <SeverityBadge
+                    severity={data.severity}
+                    label={FINDING_SEVERITY_LABELS[data.severity]}
+                  />
+                )}
                 {data.confidence && (
                   <OutlineBadge data-testid="cluster-detail-confidence-badge">
-                    Confidence · {data.confidence}
+                    신뢰도 · {FINDING_CONFIDENCE_LABELS[data.confidence]}
                   </OutlineBadge>
                 )}
               </div>
@@ -390,7 +399,7 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <section className="flex flex-col gap-2" data-anchor="properties">
-            <PanelSectionTitle>Properties</PanelSectionTitle>
+            <PanelSectionTitle>속성</PanelSectionTitle>
             <FieldRow label="Managed System" className="px-0">
               <span data-testid="cluster-detail-managed-system">
                 <ManagedSystemPill
@@ -400,13 +409,17 @@ export function VocClusterDetailPanel({
                 />
               </span>
             </FieldRow>
-            <FieldRow label="Severity" className="px-0">
-              <span data-testid="cluster-detail-severity">{data.severity ?? '미지정'}</span>
+            <FieldRow label="심각도" className="px-0">
+              <span data-testid="cluster-detail-severity">
+                {data.severity ? FINDING_SEVERITY_LABELS[data.severity] : '미지정'}
+              </span>
             </FieldRow>
-            <FieldRow label="Confidence" className="px-0">
-              <span data-testid="cluster-detail-confidence">{data.confidence ?? '미지정'}</span>
+            <FieldRow label="신뢰도" className="px-0">
+              <span data-testid="cluster-detail-confidence">
+                {data.confidence ? FINDING_CONFIDENCE_LABELS[data.confidence] : '미지정'}
+              </span>
             </FieldRow>
-            <FieldRow label="Owner" className="px-0">
+            <FieldRow label="담당자" className="px-0">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
                 <span>
                   {data.owner_user_id ? (ownerName ?? '알 수 없는 사용자') : '담당자 없음'}

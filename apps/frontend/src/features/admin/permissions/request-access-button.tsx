@@ -27,6 +27,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useMemo, useState } from 'react';
 
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import {
   permissionCheckQueryKey,
   permissionRequestsMineKey,
@@ -158,7 +159,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
         props.renderTrigger(() => setOpen(true))
       ) : (
         <Button variant="primary" size="md" onClick={() => setOpen(true)}>
-          Request access
+          권한 요청
         </Button>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -166,7 +167,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
           {submitted ? (
             <>
               <DialogHeader>
-                <DialogTitle>Request submitted</DialogTitle>
+                <DialogTitle>권한 요청 완료</DialogTitle>
                 <DialogDescription>
                   Your request is ready for administrator review.
                 </DialogDescription>
@@ -176,23 +177,23 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 <dd className="font-mono text-text-primary" data-testid="permission-request-id">
                   {submitted.id}
                 </dd>
-                <dt className="text-text-muted">Capability</dt>
-                <dd className="font-mono text-text-primary">{props.capability}</dd>
+                <dt className="text-text-muted">권한</dt>
+                <dd className="text-text-primary">{getCapabilityDisplayLabel(props.capability)}</dd>
                 <dt className="text-text-muted">Managed System</dt>
                 <dd className="font-mono text-text-primary">
-                  {props.managedSystemId ?? 'Workspace-wide'}
+                  {props.managedSystemId ?? '워크스페이스 전체'}
                 </dd>
-                <dt className="text-text-muted">Reason</dt>
+                <dt className="text-text-muted">사유</dt>
                 <dd className="text-text-primary">{submitted.reason}</dd>
-                <dt className="text-text-muted">Status</dt>
+                <dt className="text-text-muted">상태</dt>
                 <dd className="text-text-primary">
                   {permissionRequestStatusLabel[submitted.status]}
                 </dd>
-                <dt className="text-text-muted">Created</dt>
+                <dt className="text-text-muted">요청일</dt>
                 <dd className="text-text-primary">{submitted.createdAt}</dd>
                 {submitted.expiration ? (
                   <>
-                    <dt className="text-text-muted">Expires</dt>
+                    <dt className="text-text-muted">만료일</dt>
                     <dd className="text-text-primary">{submitted.expiration}</dd>
                   </>
                 ) : null}
@@ -208,17 +209,17 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                     setExpiration('');
                   }}
                 >
-                  Request another access
+                  다른 권한 요청
                 </Button>
                 <Button type="button" onClick={() => setOpen(false)}>
-                  Done
+                  확인
                 </Button>
               </DialogFooter>
             </>
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>Request access</DialogTitle>
+                <DialogTitle>권한 요청</DialogTitle>
                 <DialogDescription>
                   Confirm the permission and explain why you need the least access required.
                 </DialogDescription>
@@ -229,7 +230,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!reason.trim()) {
-                    setErrorMessage('Reason is required.');
+                    setErrorMessage('사유는 필수입니다.');
                     return;
                   }
                   setErrorMessage(null);
@@ -237,15 +238,17 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 }}
               >
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 rounded-md border border-border-subtle bg-surface-card p-3 text-sm">
-                  <dt className="text-text-muted">Capability</dt>
-                  <dd className="font-mono text-text-primary">{props.capability}</dd>
+                  <dt className="text-text-muted">권한</dt>
+                  <dd className="text-text-primary">
+                    {getCapabilityDisplayLabel(props.capability)}
+                  </dd>
                   <dt className="text-text-muted">Managed System</dt>
                   <dd className="font-mono text-text-primary">
-                    {props.managedSystemId ?? 'Workspace-wide'}
+                    {props.managedSystemId ?? '워크스페이스 전체'}
                   </dd>
                 </dl>
                 <div className="space-y-1">
-                  <Label htmlFor="permission-request-reason">Reason · required</Label>
+                  <Label htmlFor="permission-request-reason">사유 · 필수</Label>
                   <Textarea
                     id="permission-request-reason"
                     maxLength={2000}
@@ -255,7 +258,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="permission-request-expiration">Expiration · optional</Label>
+                  <Label htmlFor="permission-request-expiration">만료일 · 선택</Label>
                   <Input
                     id="permission-request-expiration"
                     type="date"

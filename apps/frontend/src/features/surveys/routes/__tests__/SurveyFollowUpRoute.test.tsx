@@ -77,7 +77,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: ({ capability }: { capability: string }) => (
     <button data-testid={`request-access-${capability}`} type="button">
-      Request access
+      권한 요청
     </button>
   ),
 }));
@@ -535,14 +535,14 @@ describe('/surveys/:surveyId/follow-up route', () => {
     const user = userEvent.setup();
     await screen.findByTestId('follow-up-row-4');
     await user.click(screen.getByTestId('follow-up-row-5'));
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
 
-    expect(screen.queryByText('Choose a response')).not.toBeInTheDocument();
+    expect(screen.queryByText('응답 선택')).not.toBeInTheDocument();
     await user.click(screen.getByTestId(`survey-finding-excerpt-${secondExcerptId}`));
     apiClient.mockResolvedValue({
       data: { id: '99999999-9999-4999-8999-999999999999', display_id: 'FND-424' },
     });
-    await user.click(screen.getByRole('button', { name: 'Create selected Finding' }));
+    await user.click(screen.getByRole('button', { name: '선택한 응답으로 Finding 생성' }));
 
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
@@ -565,7 +565,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
       items: [item(responseOpenSecond, 5, 'open')],
     });
 
-    const createFinding = await screen.findByRole('button', { name: 'Create Finding' });
+    const createFinding = await screen.findByRole('button', { name: 'Finding 생성' });
     expect(createFinding).toBeDisabled();
     expect(
       screen.getByText('No approved excerpts are available for a response you can access.'),

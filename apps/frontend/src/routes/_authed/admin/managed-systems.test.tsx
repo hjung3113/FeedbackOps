@@ -203,7 +203,7 @@ describe('/admin/managed-systems route', () => {
     installFetch({ permissionState: 'request_access', managedSystems: [] });
     renderRoute();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '권한 요청' })).toBeInTheDocument();
     });
     expect(screen.queryByTestId('managed-systems-registry')).not.toBeInTheDocument();
   });

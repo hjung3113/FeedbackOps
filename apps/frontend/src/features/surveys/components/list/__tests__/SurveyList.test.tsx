@@ -18,7 +18,7 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
       data-return-route-intent={returnRouteIntent}
       data-testid={`request-access-${capability}`}
     >
-      Request access
+      권한 요청
     </button>
   ),
 }));
@@ -83,11 +83,11 @@ describe('SurveyList empty state', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /Open/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /진행 중/ }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Survey 검색' }), '찾을 수 없음');
 
     expect(await screen.findByText('현재 조건에 맞는 설문이 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('상태: Open · 검색어: 찾을 수 없음')).toBeInTheDocument();
+    expect(screen.getByText('상태: 진행 중 · 검색어: 찾을 수 없음')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();

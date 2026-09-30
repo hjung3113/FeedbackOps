@@ -5,7 +5,11 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
-import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import {
+  FINDING_CONFIDENCE_LABELS,
+  FINDING_SOURCE_TYPE_LABELS,
+  FINDING_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
@@ -27,21 +31,6 @@ import { LinkEvidenceModal } from './LinkEvidenceModal';
 import { LinkTaskModal } from './LinkTaskModal';
 import { FitBadge, SectionDivider } from './detail-primitives';
 import { useFindingDetailController } from './useFindingDetailController';
-
-// ── Source type label map ────────────────────────────────────────────────────
-
-const SOURCE_TYPE_LABEL: Record<string, string> = {
-  voc: 'VOC',
-  voc_cluster: 'VOC Cluster',
-  survey: 'Survey',
-  manual: 'Manual',
-};
-
-const CONFIDENCE_LABEL: Record<NonNullable<FindingDto['confidence']>, string> = {
-  low: '낮음',
-  medium: '중간',
-  high: '높음',
-};
 
 function FindingRequestTaskDraft({
   finding,
@@ -143,14 +132,14 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           <div data-anchor="metadata" className="flex flex-col gap-2">
             <PanelSectionTitle>소스 / 심각도 / 신뢰도</PanelSectionTitle>
             <FieldRow label="소스 유형" className="px-0">
-              <FitBadge>{SOURCE_TYPE_LABEL[finding.source_type] ?? finding.source_type}</FitBadge>
+              <FitBadge>{FINDING_SOURCE_TYPE_LABELS[finding.source_type]}</FitBadge>
             </FieldRow>
             <FieldRow label="심각도" className="px-0">
               <SeverityBadge severity={finding.severity as SeverityEnum} />
             </FieldRow>
             <FieldRow label="신뢰도" className="px-0">
               {finding.confidence !== null ? (
-                CONFIDENCE_LABEL[finding.confidence]
+                FINDING_CONFIDENCE_LABELS[finding.confidence]
               ) : (
                 <span className="text-text-muted">—</span>
               )}
