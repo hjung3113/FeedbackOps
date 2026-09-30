@@ -26,7 +26,7 @@ test.describe('/surveys visual harness', () => {
         await expect(promptField).toHaveValue('리포트를 얼마나 자주 사용하시나요?');
         await promptField.fill('저장 전 수정한 질문입니다.');
         await expect(page.getByText('저장되지 않은 변경 사항')).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+        await expect(page.getByRole('button', { name: '초안 저장' })).toBeEnabled();
       }
       if (scenario === 'builder-drag-over') {
         const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
