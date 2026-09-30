@@ -1,3 +1,5 @@
+import { HttpError } from '../errors.js';
+
 interface RichContentNode {
   type?: unknown;
   attrs?: unknown;
@@ -9,8 +11,20 @@ export interface MentionValidationErrors {
   bodyRequestMismatch: () => Error;
 }
 
-const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const commentMentionErrors: MentionValidationErrors = {
+  invalidActorId: () =>
+    new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
+      fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
+    }),
+  bodyRequestMismatch: () =>
+    new HttpError(
+      'validation.failed',
+      'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
+      { fields: [{ path: ['mentions'], code: 'invalid' }] },
+    ),
+};
+
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export function findRichContentNodes(doc: unknown, type: string): RichContentNode[] {
   const results: RichContentNode[] = [];

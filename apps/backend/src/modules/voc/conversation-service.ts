@@ -23,7 +23,10 @@ import type {
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { validateRichContentMentions } from '../../lib/rich-content/mentions.js';
+import {
+  commentMentionErrors,
+  validateRichContentMentions,
+} from '../../lib/rich-content/mentions.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
@@ -444,18 +447,11 @@ export function createConversationService(deps: {
     const sanitizedBody = sanitizeOrThrow('internal-comment', input.body_rich_content);
 
     // 4. Validate mentions[] against the sanitized body, then verify workspace membership.
-    const mentionIds = validateRichContentMentions(sanitizedBody, input.mentions, {
-      invalidActorId: () =>
-        new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
-          fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
-        }),
-      bodyRequestMismatch: () =>
-        new HttpError(
-          'validation.failed',
-          'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-          { fields: [{ path: ['mentions'], code: 'invalid' }] },
-        ),
-    });
+    const mentionIds = validateRichContentMentions(
+      sanitizedBody,
+      input.mentions,
+      commentMentionErrors,
+    );
 
     // 5. Verify every mentioned actor_id resolves to an actor in the same workspace.
     if (mentionIds.length > 0) {
@@ -508,7 +504,7 @@ export function createConversationService(deps: {
         voc_id: vocId,
         internal_comment_id: inserted.id,
         actor_id: actor.actor_id,
-            mentions: mentionIds,
+        mentions: mentionIds,
         attachment_ids: input.attachment_ids ?? [],
       },
     });

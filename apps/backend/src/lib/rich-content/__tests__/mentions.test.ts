@@ -40,6 +40,12 @@ const cases: MentionCase[] = [
     expectedError: invalidActorIdError,
   },
   {
+    name: 'array attrs',
+    body: doc([{ type: 'mention', attrs: [] }]),
+    mentions: [],
+    expectedError: invalidActorIdError,
+  },
+  {
     name: 'non-UUID actor id',
     body: doc([mention('not-a-uuid')]),
     mentions: ['not-a-uuid'],

@@ -9,6 +9,7 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
 import {
+  commentMentionErrors,
   findRichContentNodes,
   validateRichContentMentions,
 } from '../../lib/rich-content/mentions.js';
@@ -67,18 +68,7 @@ async function validateCommentMentions(
   sanitizedBody: unknown,
   mentions: string[] | undefined,
 ): Promise<string[]> {
-  const mentionIds = validateRichContentMentions(sanitizedBody, mentions, {
-    invalidActorId: () =>
-      new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
-        fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
-      }),
-    bodyRequestMismatch: () =>
-      new HttpError(
-        'validation.failed',
-        'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-        { fields: [{ path: ['mentions'], code: 'invalid' }] },
-      ),
-  });
+  const mentionIds = validateRichContentMentions(sanitizedBody, mentions, commentMentionErrors);
 
   if (mentionIds.length > 0) {
     const foundActorIds = await findWorkspaceActorIds(tx, workspaceId, mentionIds);
