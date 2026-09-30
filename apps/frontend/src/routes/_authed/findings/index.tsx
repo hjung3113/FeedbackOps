@@ -17,20 +17,24 @@ import {
   UserAvatar,
 } from '@fops/ui';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { ChevronLeft } from 'lucide-react';
 import * as React from 'react';
 import { z } from 'zod';
+import { vocSearchSchema } from '../vocs';
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
 // §URL State Rules): /findings?managedSystem=:managedSystemId|all&selected=:findingId.
 // Defaults (scope union / nothing selected) are omitted from the URL. `all` and an
 // absent managedSystem both query WITHOUT managed_system_id (the backend applies the
 // caller's effective scope union); a uuid is passed through.
-// execution=none is the coverage gap hop. Absent execution stays unfiltered.
+// execution=none is the coverage gap hop. `returnTo` carries a same-origin VOC list URL.
+// Absent execution stays unfiltered.
 export const findingsSearchSchema = z
   .object({
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
     execution: z.literal('none').optional(),
+    returnTo: z.string().max(2048).optional(),
   })
   .strict();
 
@@ -56,8 +60,9 @@ export function FindingsListPage(): React.ReactElement {
   );
 
   // Stale/invalid `selected` (deleted, or filtered away): once the list has
-  // loaded, replace-drop it so Back is not trapped in the invalid URL. While
-  // loading — or when the list failed — the deep-linked selection is kept.
+  // settled (loaded, no refetch in flight), replace-drop it so Back is not trapped
+  // in the invalid URL. While loading or refetching, or when the list failed, the
+  // deep-linked selection is kept.
   const reconcileSelection = React.useCallback((): void => {
     void navigate({
       to: '/findings',
@@ -78,6 +83,7 @@ export function FindingsListPage(): React.ReactElement {
       managedSystemId={managedSystemId}
       execution={execution}
       selectedId={selectedId}
+      returnTo={search.returnTo}
       onSelect={selectFinding}
       onSelectionReconciled={reconcileSelection}
       onResetFilters={resetFilters}
@@ -89,6 +95,7 @@ function FindingsListShell({
   managedSystemId,
   execution,
   selectedId,
+  returnTo,
   onSelect,
   onSelectionReconciled,
   onResetFilters,
@@ -96,10 +103,13 @@ function FindingsListShell({
   managedSystemId: string | undefined;
   execution: 'none' | undefined;
   selectedId: string | null;
+  returnTo: string | undefined;
   onSelect: (id: string) => void;
   onSelectionReconciled: () => void;
   onResetFilters: () => void;
 }): React.ReactElement {
+  const navigate = useNavigate({ from: '/findings/' });
+  const safeReturnTo = getSafeVocReturnTo(returnTo);
   const listQuery = useFindingsList(managedSystemId, execution);
   const findings = listQuery.data?.items ?? [];
   const checkUnfiltered = execution === 'none' && listQuery.isSuccess && findings.length === 0;
@@ -126,11 +136,11 @@ function FindingsListShell({
   }, [actors]);
 
   React.useEffect(() => {
-    if (!listQuery.isSuccess) return;
+    if (!listQuery.isSuccess || listQuery.isFetching) return;
     if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
       onSelectionReconciled();
     }
-  }, [findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
+  }, [findings, listQuery.isFetching, listQuery.isSuccess, onSelectionReconciled, selectedId]);
 
   return (
     <ListShell
@@ -154,10 +164,61 @@ function FindingsListShell({
         />
       }
       detailPanel={
-        selectedId ? <FindingDetailPanel findingId={selectedId} /> : <FindingEmptyDetail />
+        selectedId ? (
+          <div className="flex h-full min-h-0 flex-col">
+            {safeReturnTo !== null && (
+              <div className="flex h-10 shrink-0 items-center border-b border-border-subtle px-4">
+                <a
+                  href={safeReturnTo}
+                  onClick={(event) => {
+                    if (
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.button !== 0
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    void navigate({ href: safeReturnTo });
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                  <span>원래 VOC로 돌아가기</span>
+                </a>
+              </div>
+            )}
+            <div className="min-h-0 flex-1">
+              <FindingDetailPanel findingId={selectedId} />
+            </div>
+          </div>
+        ) : (
+          <FindingEmptyDetail />
+        )
       }
     />
   );
+}
+
+function getSafeVocReturnTo(value: string | undefined): string | null {
+  if (value === undefined || !value.startsWith('/vocs')) return null;
+
+  try {
+    const url = new URL(value, 'http://feedbackops.local');
+    if (url.origin !== 'http://feedbackops.local' || url.pathname !== '/vocs' || url.hash) {
+      return null;
+    }
+
+    const searchEntries = [...url.searchParams.entries()];
+    if (new Set(searchEntries.map(([key]) => key)).size !== searchEntries.length) return null;
+    if (!vocSearchSchema.safeParse(Object.fromEntries(searchEntries)).success) return null;
+
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
 }
 
 function FindingsListBody({

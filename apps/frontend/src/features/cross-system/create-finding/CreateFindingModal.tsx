@@ -1,6 +1,6 @@
 // CreateFindingModal — small modal form for creating a Finding from a VOC.
 // Fields: title, summary, severity. Mirrors EditDescriptionModal pattern.
-// On success: navigates to /findings/:newId.
+// On success: selects the new Finding in /findings and keeps the VOC origin.
 
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -28,7 +28,7 @@ import {
 } from '@fops/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -53,6 +53,14 @@ const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
   { value: 'critical', label: 'Critical' },
 ];
 
+type TextFieldName = 'title' | 'summary';
+type TextFieldInteraction = 'untouched' | 'edited' | 'edited-blurred';
+
+const INITIAL_TEXT_FIELD_INTERACTION: Record<TextFieldName, TextFieldInteraction> = {
+  title: 'untouched',
+  summary: 'untouched',
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function CreateFindingModal({
@@ -63,6 +71,8 @@ export function CreateFindingModal({
   onClose,
 }: CreateFindingModalProps): React.ReactElement {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [editedFields, setEditedFields] = React.useState(INITIAL_TEXT_FIELD_INTERACTION);
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const mutation = useCreateFindingFromVocMutation({ idempotencyKey });
@@ -77,6 +87,33 @@ export function CreateFindingModal({
     },
     mode: 'onBlur',
   });
+  const showTitleError = Boolean(
+    editedFields.title === 'edited-blurred' || form.formState.isSubmitted,
+  );
+  const showSummaryError = Boolean(
+    editedFields.summary === 'edited-blurred' || form.formState.isSubmitted,
+  );
+  const showSeverityError = Boolean(
+    form.formState.touchedFields.severity || form.formState.isSubmitted,
+  );
+  const showAnalyticsAreaError = Boolean(
+    form.formState.touchedFields.analytics_area_id || form.formState.isSubmitted,
+  );
+  const titleError = showTitleError
+    ? form.formState.errors.title?.type === 'too_big'
+      ? '제목은 200자 이내로 입력해 주세요.'
+      : form.formState.errors.title
+        ? '제목을 입력해 주세요.'
+        : undefined
+    : undefined;
+  const summaryError =
+    showSummaryError && form.formState.errors.summary ? '요약을 입력해 주세요.' : undefined;
+  const severityError =
+    showSeverityError && form.formState.errors.severity ? '심각도를 선택해 주세요.' : undefined;
+  const analyticsAreaError =
+    showAnalyticsAreaError && form.formState.errors.analytics_area_id
+      ? '올바른 Analytics Area를 선택해 주세요.'
+      : undefined;
 
   const analyticsAreasQuery = useQuery({
     queryKey: ['analytics-areas', managedSystemId] as const,
@@ -100,9 +137,12 @@ export function CreateFindingModal({
         })),
     [analyticsAreasQuery.data?.items, managedSystemId, sourceAnalyticsAreaId],
   );
+  const titleRegistration = form.register('title');
+  const summaryRegistration = form.register('summary');
 
   function closeAndReset(): void {
     form.reset();
+    setEditedFields(INITIAL_TEXT_FIELD_INTERACTION);
     mutation.reset();
     onClose();
   }
@@ -114,9 +154,17 @@ export function CreateFindingModal({
         onSuccess: (finding) => {
           markConsumed();
           form.reset();
+          setEditedFields(INITIAL_TEXT_FIELD_INTERACTION);
           mutation.reset();
           onClose();
-          void navigate({ to: '/findings/$findingId', params: { findingId: finding.id } });
+          const returnTo = location.pathname === '/vocs' ? location.href : undefined;
+          void navigate({
+            to: '/findings',
+            search: {
+              selected: finding.id,
+              ...(returnTo !== undefined ? { returnTo } : {}),
+            },
+          });
         },
         onError: (err: ApiError) => {
           toast.error(errorMapper(err.envelope).message);
@@ -153,12 +201,23 @@ export function CreateFindingModal({
             <Input
               id="finding-title"
               placeholder="Finding을 한 줄로 요약하세요."
-              {...form.register('title')}
-              aria-invalid={Boolean(form.formState.errors.title)}
+              {...titleRegistration}
+              onChange={(event) => {
+                void titleRegistration.onChange(event);
+                setEditedFields((current) => ({ ...current, title: 'edited' }));
+              }}
+              onBlur={(event) => {
+                void titleRegistration.onBlur(event);
+                setEditedFields((current) => ({
+                  ...current,
+                  title: current.title === 'edited' ? 'edited-blurred' : current.title,
+                }));
+              }}
+              aria-invalid={titleError !== undefined}
             />
-            {form.formState.errors.title?.message && (
+            {titleError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.title.message}
+                {titleError}
               </p>
             )}
           </div>
@@ -172,12 +231,23 @@ export function CreateFindingModal({
               id="finding-summary"
               placeholder="어떤 문제가 있고 왜 실행해야 하는지 설명하세요."
               rows={4}
-              {...form.register('summary')}
-              aria-invalid={Boolean(form.formState.errors.summary)}
+              {...summaryRegistration}
+              onChange={(event) => {
+                void summaryRegistration.onChange(event);
+                setEditedFields((current) => ({ ...current, summary: 'edited' }));
+              }}
+              onBlur={(event) => {
+                void summaryRegistration.onBlur(event);
+                setEditedFields((current) => ({
+                  ...current,
+                  summary: current.summary === 'edited' ? 'edited-blurred' : current.summary,
+                }));
+              }}
+              aria-invalid={summaryError !== undefined}
             />
-            {form.formState.errors.summary?.message && (
+            {summaryError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.summary.message}
+                {summaryError}
               </p>
             )}
           </div>
@@ -193,7 +263,7 @@ export function CreateFindingModal({
                 form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
               }
             >
-              <SelectTrigger id="finding-severity">
+              <SelectTrigger id="finding-severity" aria-invalid={severityError !== undefined}>
                 <SelectValue placeholder="심각도 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -204,9 +274,9 @@ export function CreateFindingModal({
                 ))}
               </SelectContent>
             </Select>
-            {form.formState.errors.severity?.message && (
+            {severityError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.severity.message}
+                {severityError}
               </p>
             )}
           </div>
@@ -240,6 +310,11 @@ export function CreateFindingModal({
             <p className="text-xs text-text-muted">
               소스 VOC의 Analytics Area를 승계하며 생성 전에 변경할 수 있습니다.
             </p>
+            {analyticsAreaError && (
+              <p className="text-xs text-text-danger" role="alert">
+                {analyticsAreaError}
+              </p>
+            )}
           </div>
         </form>
 

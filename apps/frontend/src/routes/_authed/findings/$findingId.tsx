@@ -14,12 +14,12 @@ function FindingDetailRoute() {
       <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-6 py-3">
         <div className="flex flex-col gap-1">
           <Link
-            to="/vocs"
-            search={{ view: 'inbox' }}
+            to="/findings"
+            search={{ selected: findingId }}
             className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
           >
             <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-            <span>VOC Inbox</span>
+            <span>Findings 목록</span>
           </Link>
           <h1 className="text-lg font-semibold text-text-primary">
             Finding 상세

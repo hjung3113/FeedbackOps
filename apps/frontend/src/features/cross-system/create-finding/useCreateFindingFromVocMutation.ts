@@ -34,6 +34,7 @@ export function useCreateFindingFromVocMutation(
       return res.data;
     },
     onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
       invalidateNavCounts(queryClient);
       onSuccess?.(data);
     },

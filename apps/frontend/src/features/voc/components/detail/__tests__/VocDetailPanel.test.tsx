@@ -18,7 +18,12 @@ vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
-  return { ...actual, useNavigate: () => navigate };
+  // #587: CreateFindingModal reads the router location to build its return link.
+  return {
+    ...actual,
+    useNavigate: () => navigate,
+    useLocation: () => ({ pathname: '/vocs', href: '/vocs?view=inbox' }),
+  };
 });
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();

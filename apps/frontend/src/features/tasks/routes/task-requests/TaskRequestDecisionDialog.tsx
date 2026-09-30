@@ -80,7 +80,9 @@ export function TaskRequestDecisionDialog({
               disabled={isSubmitting}
               aria-invalid={dialog.error !== null}
             />
-            {details.required && <span className="text-xs text-text-muted">Required.</span>}
+            {details.required && (
+              <span className="text-xs text-text-muted">필수 입력 항목입니다.</span>
+            )}
           </div>
           {dialog.error && (
             <p className="text-sm text-accent-danger" role="alert">
