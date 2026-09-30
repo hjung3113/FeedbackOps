@@ -39,7 +39,9 @@ confirm the status bar shows the model/effort. A codex terminal refuses a second
 1. **Brief** (`$WAVE_BRIEFS/<n>-task.md`): re-verify every fact on current `origin/develop` (paths, line numbers,
    existing helpers, the owning seam) — issue text goes stale. Sections: *Facts (verified on develop)* / *Do* /
    *Acceptance (tests)* / sentinel line. Name the approved surfaces to reuse, the exact error envelopes to keep, what
-   is out of scope, and conductor decisions as "final — do not re-litigate". For "use the shared X" refactors say
+   is out of scope, and conductor decisions as "final — do not re-litigate". End the brief with
+   `Sentinel (last line of .review/W-<n>-REPORT.md): <!-- W-<n>-DONE -->` — the launcher registers exactly that. Check
+   `ls docs/adr` before a brief assigns an ADR number (parallel issues collide). For "use the shared X" refactors say
    "replace only whole-set declarations; keep literals; never touch `db/schema`".
 2. **Launch**: `scripts/launch-worker.sh <n> <slug> [be]` (≈5–7 in flight is the sustainable ceiling for one conductor).
 3. **Watch**: `scripts/watch-any.sh` with the Bash tool's `run_in_background`; it exits on the first new sentinel —
@@ -85,6 +87,8 @@ confirm the status bar shows the model/effort. A codex terminal refuses a second
 - A split into a subfolder breaks relative imports (`../shared` vs `./shared`, `../scenarios` vs `../../scenarios`).
 - `insertVocDirectly(…, reporterActorId, …)` — a recipient who is the reporter keeps reading after a grant revoke.
 - TanStack Router merges the root's raw search into child matches; dropped keys must be overwritten with `undefined`.
-- zsh: never name a loop variable `path` (it is tied to `PATH`).
+- zsh: never name a variable `path` (tied to `PATH`) or `status` (read-only).
+- Rebase conflicts between parallel issues are mostly import lists and the biome allowlist: keep both sides. A later
+  merge can add a required DTO field that an earlier branch's new test fixture lacks — typecheck after every rebase.
 - The worktree's own `.review/` is gitignored — copy briefs/rules in; `orca worktree create` may fail to return a
   terminal handle (retry `terminal create`).
