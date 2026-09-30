@@ -100,7 +100,7 @@ task_request
 survey
 - surveys
 - survey_responses
-- survey_results
+- survey_results (computed read projection; not a table)
 - outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
 
 permission
@@ -188,7 +188,7 @@ The archive-over-delete invariant is enforced in `apps/backend/src/modules/attac
   - workspace_id, target_type, target_id
   - workspace_id, relation_type
   - workspace_id, source_type, source_id, relation_type
-- audit_logs index workspace_id, actor_id, event_type, created_at.
+- core.audit_log indexes: (workspace_id, created_at), (workspace_id, subject_type, subject_id, created_at), (workspace_id, actor_id, created_at), and (workspace_id, event_type, created_at).
 - notifications index workspace_id, actor_id, read_at, created_at DESC.
 ```
 

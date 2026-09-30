@@ -315,6 +315,8 @@ Reporter-facing status is public progress; triage state is internal workflow.
 
 ### VOC Triage
 
+The current triage-panel grouping is defined by [ADR-0051](../adr/0051-triage-panel-grouped-sections-and-diff-summary.md).
+
 Purpose:
 
 ```text

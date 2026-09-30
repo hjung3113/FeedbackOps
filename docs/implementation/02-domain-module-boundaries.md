@@ -21,6 +21,7 @@ The following directories are the server-registered module surfaces (with
 | Entity Linking | `apps/backend/src/modules/entity-links` |
 | Finding | `apps/backend/src/modules/findings` |
 | Managed System Registry | `apps/backend/src/modules/managed-systems` |
+| Milestones | `apps/backend/src/modules/milestones` |
 | Navigation | `apps/backend/src/modules/nav` |
 | Notifications | `apps/backend/src/modules/notifications` |
 | Permission | `apps/backend/src/modules/permissions` |

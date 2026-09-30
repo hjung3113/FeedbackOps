@@ -335,18 +335,17 @@ Owner: Task
 task_requests
 - id: uuid, required
 - workspace_id: uuid, required
+- display_id: text, required; unique per workspace
+- source_type: enum(finding, voc, voc_cluster), required
+- source_id: uuid, required
 - primary_managed_system_id: uuid, required
-- title: text, required
-- summary: text, required
-- source_type: enum(voc, voc_cluster, finding, survey_finding, manual), required
-- source_id: uuid, nullable when source_type=manual
+- evidence_summary: text, required
+- requested_outcome: text, required
+- requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- priority: enum(low, medium, high, urgent), nullable
-- analytics_area_id: uuid, nullable
-- requested_by: uuid, required
-- reviewer_id: uuid, nullable
+- reviewer_actor_id: uuid, nullable
+- decision_reason: text, nullable
 - decided_at: timestamp, nullable
-- converted_task_id: uuid, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -527,14 +526,14 @@ Owner: VOC
 
 ```text
 enum:
-- 접수됨
-- 검토 중
-- 담당자 배정됨
-- 처리 중
-- 해결 준비 중
-- 해결됨
-- 다시 처리 중
-- 종료됨
+- received
+- reviewing
+- assigned
+- progress
+- prep
+- resolved
+- reopened
+- closed
 ```
 
 Rules:
@@ -551,13 +550,13 @@ Owner: Task
 
 ```text
 enum:
-- Backlog
-- Todo
-- Doing
-- Review
-- Done
-- Released
-- Reopened
+- backlog
+- todo
+- doing
+- review
+- done
+- released
+- reopened
 ```
 
 Rules:
