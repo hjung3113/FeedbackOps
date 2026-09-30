@@ -34,11 +34,7 @@ This document only groups release scope. It is not an execution queue and it doe
 ## Phase 1
 
 ```text
-- VOC Cluster Candidate 자동 생성
-- 권한 요청 고도화
-- Notification Rule
-- Outcome Survey workflow
-- Dashboard coverage / unlinked data 고도화
+- VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
 - Analytics Area별 리포트
 ```
 

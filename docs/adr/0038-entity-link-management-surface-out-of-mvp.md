@@ -30,3 +30,11 @@ A disabled control that points at an unbuilt feature is a promise, not a state. 
 - Home and the sidebar lose the `My Work` entry; the Home action row no longer advertises a route that cannot resolve. This is a deviation from the Home prototype and is recorded here.
 - The execution chain remains readable but not manageable: an incorrect link cannot be detached through the product in MVP.
 - A future slice that implements either surface starts from this ADR, not from the black-box issues, which describe symptoms rather than the boundary.
+
+## Amendment 2026-09-30 (#594)
+
+Issues #113 and #114 (PRs #117 and #118) shipped the entity-link detach
+lifecycle and Integration Links inventory. The no-lifecycle statements above
+describe the earlier scope:
+`PATCH /entity-links/:id` now detaches a link, and the Integration Links route
+lists the inventory. The `My Work` exclusion remains in force.

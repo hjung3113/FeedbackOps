@@ -84,3 +84,10 @@ but standalone `POST /tasks` is not introduced by this issue.
   `(finding, task, requested_task)` tuple plus `findings.linked_task_id`; no new
   entity-link tuple or migration is introduced.
 - Future standalone Task creation must use the same Task table and status enum.
+
+## Amendment 2026-09-30 (#594)
+
+The Milestone deferral above is historical: issue #514 shipped `task.milestones`
+and added the Task and Finding Milestone foreign keys in migration 0049.
+ADR-0050 records the implemented Milestone status contract. ADR-0043 amends
+this ADR's Finding-source conversion consequences.

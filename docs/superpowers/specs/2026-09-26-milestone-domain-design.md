@@ -1,5 +1,11 @@
 # RESEARCH-6 — Milestone domain (pre-issue)
 
+## Status
+
+Superseded by ADR-0050 (implemented) for Milestone status. Issue #514 shipped
+the Milestone domain; this 2026-09-26 research remains historical context for
+follow-on questions.
+
 Read-only survey of the design docs, the two prototype screens, and the dangling `milestone_id` / `linked_milestone_id` columns. No schema, module, or UI was added. Nothing here was verified by tests or a running app.
 
 Status of the requirement, quoted from `docs/design/02-requirements-matrix.md`:
