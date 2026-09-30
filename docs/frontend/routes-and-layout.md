@@ -110,6 +110,13 @@ Count badges and global Managed System scope selection shipped in #143 (GlobalRa
 
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
 
+### Unknown routes and route errors
+
+- Authenticated unknown paths render a centered `PageShell` inside `AppFrame`, with a localized not-found message, Home link, and back action.
+- Unknown paths check the current identity before showing AppShell; a 401 still redirects to `/login` and preserves the requested URL.
+- Route errors render a localized `ListStateMessage` inside AppShell, offer retry, and keep raw error details in the console only. A `/me` rate-limit error uses the existing "잠시 후 다시 시도하세요." message.
+- Search validation drops invalid and unrecognized fields independently, preserving valid fields so each route uses its omitted defaults.
+
 ## Home Queue Contract
 
 Home uses one shared route and container. It must not fork into separate

@@ -38,15 +38,31 @@ const links = [
 
 function assertResolvable(link: string): void {
   const url = new URL(link, 'http://localhost');
-  expect(
-    router.getMatchedRoutes(url.pathname).foundRoute,
-    `No registered route for ${link}`,
-  ).toBeDefined();
+  const parsedSearch = router.options.parseSearch(url.search);
+  const { foundRoute, matchedRoutes } = router.getMatchedRoutes(url.pathname);
+  expect(foundRoute, `No registered route for ${link}`).toBeDefined();
   try {
-    router.matchRoutes(url.pathname, Object.fromEntries(url.searchParams), { throwOnError: true });
+    router.matchRoutes(url.pathname, parsedSearch, { throwOnError: true });
   } catch (error) {
     throw new Error(`Route search validation failed for ${link}: ${String(error)}`);
   }
+
+  const searchRoute = [...matchedRoutes]
+    .reverse()
+    .find((route) => route.options.validateSearch !== undefined);
+  const validateSearch = searchRoute?.options.validateSearch;
+  if (validateSearch === undefined) {
+    expect(Object.keys(parsedSearch), `No search validator found for ${link}`).toHaveLength(0);
+    return;
+  }
+  if (typeof validateSearch !== 'function') {
+    throw new Error(`Search validator for ${link} is not a function`);
+  }
+
+  expect(
+    validateSearch(parsedSearch),
+    `Route search validation dropped or changed a parameter from ${link}`,
+  ).toEqual(expect.objectContaining(parsedSearch));
 }
 
 describe('shipped deep-link contract', () => {
@@ -55,22 +71,23 @@ describe('shipped deep-link contract', () => {
     links.forEach(assertResolvable);
   });
 
-  test('rejects a missing route and an invalid VOC tab', () => {
+  test('leaves missing routes unmatched and tolerates an invalid VOC tab', () => {
     const missingRoute = '/missing-deep-link-route';
-    const invalidVocTab = '/vocs?view=inbox&tab=not-a-voc-tab';
 
     expect(
       router.getMatchedRoutes(missingRoute).foundRoute,
       `Expected ${missingRoute} to have no route`,
     ).toBeUndefined();
-    expect(
-      () =>
-        router.matchRoutes(
-          '/vocs',
-          { view: 'inbox', tab: 'not-a-voc-tab' },
-          { throwOnError: true },
-        ),
-      `Expected ${invalidVocTab} to fail route search validation`,
-    ).toThrow();
+    expect(() =>
+      router.matchRoutes(
+        '/vocs',
+        { view: 'inbox', tab: 'not-a-voc-tab' },
+        { throwOnError: true },
+      ),
+    ).not.toThrow();
+  });
+
+  test('rejects a link when route validation drops one of its parameters', () => {
+    expect(() => assertResolvable('/vocs?view=inbox&tab=not-a-voc-tab')).toThrow();
   });
 });

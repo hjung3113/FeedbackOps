@@ -3,6 +3,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError } from './lib/api/types';
+import { RouteErrorFallback, RouteNotFoundFallback } from './lib/layout/RouteFallback';
 import './styles.css';
 import { routeTree } from './routeTree.gen';
 
@@ -19,7 +20,12 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 }
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } });
-const router = createRouter({ routeTree, context: { queryClient } });
+const router = createRouter({
+  routeTree,
+  context: { queryClient },
+  defaultErrorComponent: RouteErrorFallback,
+  defaultNotFoundComponent: RouteNotFoundFallback,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {

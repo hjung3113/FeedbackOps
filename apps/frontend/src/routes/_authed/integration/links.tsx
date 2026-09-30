@@ -1,5 +1,6 @@
 import { LinksRoute } from '@/features/integration/routes/LinksRoute';
 import { ListShell } from '@fops/ui';
+import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -11,8 +12,12 @@ export const integrationLinksSearchSchema = z
   })
   .strict();
 
+export function validateIntegrationLinksSearch(raw: unknown) {
+  return parseRouteSearch(integrationLinksSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/integration/links')({
-  validateSearch: (raw) => integrationLinksSearchSchema.parse(raw),
+  validateSearch: validateIntegrationLinksSearch,
   component: IntegrationLinksRouteShell,
 });
 

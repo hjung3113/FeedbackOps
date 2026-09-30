@@ -1,4 +1,5 @@
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
 // Tab + selection are URL state (docs/frontend/routes-and-layout.md §URL State
@@ -12,6 +13,10 @@ export const permissionRequestsSearchSchema = z
   .strict();
 
 export type PermissionRequestsSearch = z.infer<typeof permissionRequestsSearchSchema>;
+
+export function validatePermissionRequestsSearch(raw: unknown) {
+  return parseRouteSearch(permissionRequestsSearchSchema, raw);
+}
 
 export type ReviewTab = AdminPermissionRequestRow['status'] | 'all';
 

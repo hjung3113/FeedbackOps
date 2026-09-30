@@ -1,4 +1,5 @@
 import { CoverageRoute } from '@/features/integration/routes/CoverageRoute';
+import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -9,8 +10,12 @@ export const integrationCoverageSearchSchema = z
   })
   .strict();
 
+export function validateIntegrationCoverageSearch(raw: unknown) {
+  return parseRouteSearch(integrationCoverageSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/integration/coverage')({
-  validateSearch: (raw) => integrationCoverageSearchSchema.parse(raw),
+  validateSearch: validateIntegrationCoverageSearch,
   component: IntegrationCoverageRouteShell,
 });
 
