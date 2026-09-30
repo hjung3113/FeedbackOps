@@ -45,7 +45,11 @@ export const notificationRoutes: FastifyPluginAsync<{
       const session = req.session;
       if (!session) throw new Error('session missing after middleware');
       const response = await opts.notificationService.list(
-        { actor_id: session.actor_id, workspace_id: session.workspace_id },
+        {
+          actor_id: session.actor_id,
+          workspace_id: session.workspace_id,
+          role_level: session.role_level,
+        },
         {
           include_archived: parsed.data.include_archived,
           limit: parsed.data.limit,
@@ -76,7 +80,11 @@ export const notificationRoutes: FastifyPluginAsync<{
       if (!session) throw new Error('session missing after middleware');
       return reply.send(
         await opts.notificationService.markRead(
-          { actor_id: session.actor_id, workspace_id: session.workspace_id },
+          {
+            actor_id: session.actor_id,
+            workspace_id: session.workspace_id,
+            role_level: session.role_level,
+          },
           parsed.data.id,
         ),
       );
@@ -102,7 +110,11 @@ export const notificationRoutes: FastifyPluginAsync<{
       if (!session) throw new Error('session missing after middleware');
       return reply.send(
         await opts.notificationService.archive(
-          { actor_id: session.actor_id, workspace_id: session.workspace_id },
+          {
+            actor_id: session.actor_id,
+            workspace_id: session.workspace_id,
+            role_level: session.role_level,
+          },
           parsed.data.id,
         ),
       );

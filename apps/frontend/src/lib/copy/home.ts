@@ -126,6 +126,7 @@ export const HOME_INBOX_COPY = {
   loadingMore: 'Loading…',
   markAsRead: 'Mark as read',
   archive: 'Archive',
+  subjectUnavailable: '접근할 수 없는 항목',
   railNotificationsLabel: (unreadCount: number | undefined) =>
     unreadCount !== undefined && unreadCount > 0
       ? `Notifications, ${unreadCount} unread`

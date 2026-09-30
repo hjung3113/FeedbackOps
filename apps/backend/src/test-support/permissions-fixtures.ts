@@ -50,3 +50,35 @@ export async function revokeDeny(
     [denyId, revokedByActorId],
   );
 }
+
+export async function insertPermissionRequestRow(
+  dbHandle: DbHandle,
+  input: {
+    workspaceId: string;
+    requesterActorId: string;
+    requestedCapability: string;
+    requestedManagedSystemId?: string | null;
+    reason: string;
+    status?: 'pending' | 'needs_more_info' | 'approved' | 'rejected' | 'expired' | 'revoked';
+  },
+): Promise<{ id: string }> {
+  const result = await dbHandle.pool.query<{ id: string }>(
+    `insert into permission.permission_requests (
+        workspace_id, requester_actor_id, requested_capability,
+        requested_managed_system_id, reason, status
+      )
+     values ($1, $2, $3, $4, $5, $6)
+     returning id`,
+    [
+      input.workspaceId,
+      input.requesterActorId,
+      input.requestedCapability,
+      input.requestedManagedSystemId ?? null,
+      input.reason,
+      input.status ?? 'pending',
+    ],
+  );
+  const id = result.rows[0]?.id;
+  if (!id) throw new Error('insertPermissionRequestRow failed');
+  return { id };
+}

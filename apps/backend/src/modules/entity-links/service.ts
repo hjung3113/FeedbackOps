@@ -469,6 +469,17 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return provider.canRead(deps, actor, focus);
   }
 
+  async function resolveReadableEndpointSummary(args: {
+    actor: EntityLinksActor;
+    endpoint: EntityLinkRef;
+  }): Promise<EntityLinkTargetSummary | null> {
+    const { actor, endpoint } = args;
+    const provider = providerFor(deps.providers, endpoint.type);
+    const subject = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
+    if (!subject || !(await provider.canRead(deps, actor, subject))) return null;
+    return provider.getInternalSummary(deps.db, actor.workspace_id, endpoint.id);
+  }
+
   async function listLinks(args: {
     actor: EntityLinksActor;
     endpoint: EntityLinkRef;
@@ -661,7 +672,14 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return toDetachedResponse(detached);
   }
 
-  return { createLink, canReadEndpoint, listLinks, listInventoryLinks, detachLink };
+  return {
+    createLink,
+    canReadEndpoint,
+    resolveReadableEndpointSummary,
+    listLinks,
+    listInventoryLinks,
+    detachLink,
+  };
 }
 
 export type EntityLinksService = ReturnType<typeof createEntityLinksService>;

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { NotificationDto, NotificationEventType } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -7,6 +8,16 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import {
+  grantCapability,
+  insertPermissionRequestRow,
+} from '../../../test-support/permissions-fixtures.js';
+import { insertTaskRequestRow, insertTaskRow } from '../../../test-support/task-fixtures.js';
+import {
+  insertPublicUpdateReviewCandidateDirectly,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -14,10 +25,21 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const TEST_PREFIX = `notification-routes-${randomUUID()}`;
 
+const SUBJECT_REFERENCE_CASES: Array<{
+  subjectType: NotificationDto['subject_type'];
+  eventType: NotificationEventType;
+}> = [
+  { subjectType: 'voc', eventType: 'voc.reporter_replied' },
+  { subjectType: 'task', eventType: 'task.assigned_to_me' },
+  { subjectType: 'task_request', eventType: 'task_request.approved' },
+  { subjectType: 'public_update_review_candidate', eventType: 'task.released' },
+];
+
 interface ActorSession {
   id: string;
   cookie: string;
   workspaceId: string;
+  roleLevel: 'admin' | 'developer' | 'user';
 }
 
 interface NotificationSeed {
@@ -31,11 +53,20 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
   let actorA: ActorSession;
   let actorB: ActorSession;
   let actorC: ActorSession;
+  let actorD: ActorSession;
+  let subjectManagedSystemId = '';
   const actorIds: string[] = [];
   const sessionIds: string[] = [];
   const rateLimitKeys: string[] = [];
   const workspaceIds: string[] = [];
   const notificationIds: string[] = [];
+  const permissionRequestIds: string[] = [];
+  const taskRequestIds: string[] = [];
+  const taskIds: string[] = [];
+  const vocIds: string[] = [];
+  const reviewCandidateIds: string[] = [];
+  const entityLinkIds: string[] = [];
+  const permissionGrantIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -58,11 +89,71 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     }
   }
 
-  afterEach(cleanupNotifications);
+  async function cleanupNotificationSubjects(): Promise<void> {
+    if (reviewCandidateIds.length > 0) {
+      await migrateDb.pool.query(
+        'delete from voc.public_update_review_candidates where id = any($1::uuid[])',
+        [reviewCandidateIds],
+      );
+      reviewCandidateIds.length = 0;
+    }
+    if (entityLinkIds.length > 0) {
+      await migrateDb.pool.query('delete from core.entity_links where id = any($1::uuid[])', [
+        entityLinkIds,
+      ]);
+      entityLinkIds.length = 0;
+    }
+    if (permissionRequestIds.length > 0) {
+      await migrateDb.pool.query(
+        'delete from permission.permission_requests where id = any($1::uuid[])',
+        [permissionRequestIds],
+      );
+      permissionRequestIds.length = 0;
+    }
+    if (taskRequestIds.length > 0) {
+      await migrateDb.pool.query(
+        'delete from task_request.task_requests where id = any($1::uuid[])',
+        [taskRequestIds],
+      );
+      taskRequestIds.length = 0;
+    }
+    if (taskIds.length > 0) {
+      await migrateDb.pool.query('delete from task.tasks where id = any($1::uuid[])', [taskIds]);
+      taskIds.length = 0;
+    }
+    if (vocIds.length > 0) {
+      await migrateDb.pool.query('delete from voc.vocs where id = any($1::uuid[])', [vocIds]);
+      vocIds.length = 0;
+    }
+    if (permissionGrantIds.length > 0) {
+      await migrateDb.pool.query(
+        'delete from permission.permission_grants where id = any($1::uuid[])',
+        [permissionGrantIds],
+      );
+      permissionGrantIds.length = 0;
+    }
+  }
+
+  afterEach(async () => {
+    await cleanupNotifications();
+    await cleanupNotificationSubjects();
+    if (subjectManagedSystemId) {
+      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+        subjectManagedSystemId,
+      ]);
+      subjectManagedSystemId = '';
+    }
+  });
 
   afterAll(async () => {
     await cleanupNotifications();
+    await cleanupNotificationSubjects();
     await app?.close();
+    if (subjectManagedSystemId) {
+      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+        subjectManagedSystemId,
+      ]);
+    }
     if (actorIds.length > 0) {
       await migrateDb.pool.query('delete from core.sessions where id = any($1::text[])', [
         sessionIds,
@@ -94,16 +185,20 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     return id;
   }
 
-  async function createActorSession(workspaceId: string, suffix: string): Promise<ActorSession> {
+  async function createActorSession(
+    workspaceId: string,
+    suffix: string,
+    roleLevel: ActorSession['roleLevel'] = 'user',
+  ): Promise<ActorSession> {
     const idSuffix = randomUUID();
     const externalId = `${TEST_PREFIX}-${suffix}-${idSuffix}`;
     const email = `${idSuffix}@example.test`;
     const actor = await migrateDb.pool.query<{ id: string }>(
       `insert into core.actors
          (workspace_id, external_id, email, display_name, role_level, actor_type)
-       values ($1, $2, $3, $2, 'user', 'internal_member')
+       values ($1, $2, $3, $2, $4, 'internal_member')
        returning id`,
-      [workspaceId, externalId, email],
+      [workspaceId, externalId, email, roleLevel],
     );
     const actorId = actor.rows[0]?.id;
     if (!actorId) throw new Error('notification test actor insert returned no id');
@@ -118,26 +213,41 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     );
     sessionIds.push(sessionId);
     rateLimitKeys.push(`${workspaceId}:${actorId}`);
-    return { id: actorId, cookie: sessionId, workspaceId };
+    return { id: actorId, cookie: sessionId, workspaceId, roleLevel };
   }
 
   async function insertNotification(
     actor: ActorSession,
-    input: { createdAt: string; readAt?: string | null; archivedAt?: string | null },
+    input: {
+      createdAt: string;
+      readAt?: string | null;
+      archivedAt?: string | null;
+      eventType?: NotificationEventType;
+      subjectType?: NotificationDto['subject_type'];
+      subjectId?: string;
+      summary?: string;
+      detail?: Record<string, unknown>;
+    },
   ): Promise<NotificationSeed> {
     const id = randomUUID();
+    const eventType = input.eventType ?? 'voc.reporter_replied';
+    const subjectType = input.subjectType ?? 'voc';
+    const subjectId = input.subjectId ?? randomUUID();
     const result = await migrateDb.pool.query<NotificationSeed>(
       `insert into core.notifications
          (id, workspace_id, actor_id, event_type, subject_type, subject_id, summary,
           detail, correlation_id, created_at, read_at, archived_at)
-       values ($1, $2, $3, 'voc.reporter_replied', 'voc', $4, 'VOC에 작성자 답변이 등록되었습니다.',
-               '{}'::jsonb, $5, $6, $7, $8)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
        returning id, actor_id, workspace_id, created_at::text, read_at, archived_at`,
       [
         id,
         actor.workspaceId,
         actor.id,
-        randomUUID(),
+        eventType,
+        subjectType,
+        subjectId,
+        input.summary ?? '알림 테스트 요약',
+        JSON.stringify(input.detail ?? {}),
         randomUUID(),
         input.createdAt,
         input.readAt ?? null,
@@ -149,6 +259,211 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     notificationIds.push(id);
     return row;
   }
+
+  async function seedNotificationSubject(
+    subjectType: NotificationDto['subject_type'],
+  ): Promise<{ id: string; displayId: string; title: string; grantId: string }> {
+    if (subjectType === 'task' || subjectType === 'task_request') {
+      const grantId = await grantCapability(
+        migrateDb,
+        WORKSPACE_ID,
+        actorD.id,
+        'finding.read',
+        subjectManagedSystemId,
+        actorD.id,
+      );
+      permissionGrantIds.push(grantId);
+      if (subjectType === 'task') {
+        const title = 'Task notification subject';
+        const task = await insertTaskRow(migrateDb, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: subjectManagedSystemId,
+          title,
+          createdBy: actorD.id,
+        });
+        taskIds.push(task.id);
+        return { id: task.id, displayId: task.display_id, title, grantId };
+      }
+      const title = 'Task Request notification subject';
+      const taskRequest = await insertTaskRequestRow(migrateDb, {
+        workspaceId: WORKSPACE_ID,
+        sourceId: randomUUID(),
+        primaryManagedSystemId: subjectManagedSystemId,
+        requestedOutcome: title,
+        requesterActorId: actorD.id,
+      });
+      taskRequestIds.push(taskRequest.id);
+      return { id: taskRequest.id, displayId: taskRequest.display_id, title, grantId };
+    }
+    if (subjectType !== 'voc' && subjectType !== 'public_update_review_candidate') {
+      throw new Error(`unsupported notification subject fixture: ${subjectType}`);
+    }
+
+    const grantId = await grantCapability(
+      migrateDb,
+      WORKSPACE_ID,
+      actorD.id,
+      'voc.read',
+      subjectManagedSystemId,
+      actorD.id,
+    );
+    permissionGrantIds.push(grantId);
+    const title = 'VOC notification subject';
+    // The recipient must not be the reporter: a reporter keeps reading their own VOC after a grant is revoked.
+    const reporter = await createActorSession(WORKSPACE_ID, 'r', 'user');
+    const voc = await insertVocDirectly(
+      migrateDb,
+      WORKSPACE_ID,
+      subjectManagedSystemId,
+      reporter.id,
+      title,
+    );
+    vocIds.push(voc.id);
+    const vocRows = await migrateDb.pool.query<{ display_id: string; title: string }>(
+      'select display_id, title from voc.vocs where id = $1',
+      [voc.id],
+    );
+    const vocRow = vocRows.rows[0];
+    if (!vocRow) throw new Error('notification VOC fixture missing');
+    if (subjectType === 'voc') {
+      return { id: voc.id, displayId: vocRow.display_id, title: vocRow.title, grantId };
+    }
+
+    const task = await insertTaskRow(migrateDb, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: subjectManagedSystemId,
+      status: 'released',
+      createdBy: actorD.id,
+    });
+    taskIds.push(task.id);
+    const candidate = await insertPublicUpdateReviewCandidateDirectly(migrateDb, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: subjectManagedSystemId,
+      vocId: voc.id,
+      taskId: task.id,
+      triggeredByActorId: actorD.id,
+    });
+    reviewCandidateIds.push(candidate.id);
+    entityLinkIds.push(candidate.sourceEntityLinkId);
+    return {
+      id: candidate.id,
+      displayId: vocRow.display_id,
+      title: vocRow.title,
+      grantId,
+    };
+  }
+
+  it.each(SUBJECT_REFERENCE_CASES)(
+    'resolves $subjectType notification subjects using current read access',
+    async ({ subjectType, eventType }) => {
+      actorD = await createActorSession(WORKSPACE_ID, 'd', 'developer');
+      subjectManagedSystemId = await insertMsDirectly(
+        migrateDb,
+        WORKSPACE_ID,
+        `${TEST_PREFIX}-subject`,
+        'Notification subject test system',
+      );
+      const subject = await seedNotificationSubject(subjectType);
+      const notification = await insertNotification(actorD, {
+        createdAt: new Date().toISOString(),
+        eventType,
+        subjectType,
+        subjectId: subject.id,
+      });
+
+      const allowedResponse = await app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: cookieHeader(actorD),
+      });
+      const allowedItem = allowedResponse
+        .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+        .items.find((item) => item.id === notification.id);
+      expect(allowedItem?.subject_ref).toEqual({
+        visibility_state: 'allowed',
+        display_id: subject.displayId,
+        title: subject.title,
+      });
+
+      await migrateDb.pool.query(
+        `update permission.permission_grants
+            set revoked_at = now(), revoked_by_actor_id = $2
+          where id = $1`,
+        [subject.grantId, actorD.id],
+      );
+      const unavailableResponse = await app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: cookieHeader(actorD),
+      });
+      const unavailableItem = unavailableResponse
+        .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+        .items.find((item) => item.id === notification.id);
+      expect(unavailableItem?.subject_ref).toEqual({ visibility_state: 'unavailable' });
+      expect(JSON.stringify(unavailableItem?.subject_ref)).not.toContain(subject.displayId);
+      expect(JSON.stringify(unavailableItem?.subject_ref)).not.toContain(subject.title);
+    },
+  );
+
+  it('resolves Permission Request subjects for requesters and admins only', async () => {
+    const adminActor = await createActorSession(WORKSPACE_ID, 'e', 'admin');
+    const request = await insertPermissionRequestRow(migrateDb, {
+      workspaceId: WORKSPACE_ID,
+      requesterActorId: actorA.id,
+      requestedCapability: 'workspace.admin',
+      reason: 'Notification subject fixture',
+    });
+    permissionRequestIds.push(request.id);
+    const requesterNotification = await insertNotification(actorA, {
+      createdAt: new Date().toISOString(),
+      eventType: 'permission_request.decided',
+      subjectType: 'permission_request',
+      subjectId: request.id,
+    });
+    const adminNotification = await insertNotification(adminActor, {
+      createdAt: new Date().toISOString(),
+      eventType: 'permission_request.submitted',
+      subjectType: 'permission_request',
+      subjectId: request.id,
+    });
+    const unrelatedNotification = await insertNotification(actorB, {
+      createdAt: new Date().toISOString(),
+      eventType: 'permission_request.submitted',
+      subjectType: 'permission_request',
+      subjectId: request.id,
+    });
+
+    for (const [actor, notification] of [
+      [actorA, requesterNotification],
+      [adminActor, adminNotification],
+    ] as const) {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: cookieHeader(actor),
+      });
+      const item = response
+        .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+        .items.find((row) => row.id === notification.id);
+      expect(item?.subject_ref).toEqual({
+        visibility_state: 'allowed',
+        display_id: request.id.slice(0, 8),
+        title: 'workspace.admin',
+      });
+    }
+
+    const unrelatedResponse = await app.inject({
+      method: 'GET',
+      url: '/notifications',
+      headers: cookieHeader(actorB),
+    });
+    const unrelatedItem = unrelatedResponse
+      .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+      .items.find((row) => row.id === unrelatedNotification.id);
+    expect(unrelatedItem?.subject_ref).toEqual({ visibility_state: 'unavailable' });
+    expect(JSON.stringify(unrelatedItem?.subject_ref)).not.toContain(request.id);
+    expect(JSON.stringify(unrelatedItem?.subject_ref)).not.toContain('workspace.admin');
+  });
 
   function cookieHeader(actor: ActorSession): { cookie: string } {
     return { cookie: `${SESSION_COOKIE_NAME}=${actor.cookie}` };

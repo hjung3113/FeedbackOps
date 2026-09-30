@@ -19,6 +19,8 @@ import { InboxPanel, notificationTarget } from '../InboxPanel';
 
 const VOC_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const NOTIFICATION_ID = '11111111-1111-4111-8111-111111111111';
+const REFERENCED_NOTIFICATION_ID = '22222222-2222-4222-8222-222222222222';
+const UNAVAILABLE_NOTIFICATION_ID = '33333333-3333-4333-8333-333333333333';
 
 function makeNotification(overrides: Partial<NotificationDto> = {}): NotificationDto {
   return notificationDtoSchema.parse({
@@ -232,6 +234,32 @@ describe('notificationTarget', () => {
 });
 
 describe('InboxPanel', () => {
+  it('shows allowed subject references and hides unavailable subject text', async () => {
+    const allowed = makeNotification({
+      id: REFERENCED_NOTIFICATION_ID,
+      subject_ref: {
+        visibility_state: 'allowed',
+        display_id: 'VOC-0123',
+        title: 'Could not submit the form',
+      },
+    });
+    const unavailable = makeNotification({
+      id: UNAVAILABLE_NOTIFICATION_ID,
+      subject_ref: { visibility_state: 'unavailable' },
+    });
+    installNotificationFetch([allowed, unavailable]);
+    renderInbox();
+
+    const allowedRow = await screen.findByTestId(`home-inbox-row-${REFERENCED_NOTIFICATION_ID}`);
+    const unavailableRow = await screen.findByTestId(
+      `home-inbox-row-${UNAVAILABLE_NOTIFICATION_ID}`,
+    );
+    expect(within(allowedRow).getByText('VOC-0123')).toBeInTheDocument();
+    expect(within(allowedRow).getByText('Could not submit the form')).toBeInTheDocument();
+    expect(within(unavailableRow).getByText('접근할 수 없는 항목')).toBeInTheDocument();
+    expect(within(unavailableRow).queryByText('Could not submit the form')).not.toBeInTheDocument();
+  });
+
   it('requests unread by default and omits the unread filter for All', async () => {
     const { calls } = installNotificationFetch([makeNotification()]);
     renderInbox();

@@ -14,6 +14,18 @@ export const notificationEventTypeSchema = z.enum([
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
+export const notificationSubjectReferenceSchema = z.discriminatedUnion('visibility_state', [
+  z
+    .object({
+      visibility_state: z.literal('allowed'),
+      display_id: z.string().min(1),
+      title: z.string().min(1),
+    })
+    .strict(),
+  z.object({ visibility_state: z.literal('unavailable') }).strict(),
+]);
+export type NotificationSubjectReference = z.infer<typeof notificationSubjectReferenceSchema>;
+
 export const notificationDtoSchema = z
   .object({
     id: z.string().uuid(),
@@ -26,6 +38,7 @@ export const notificationDtoSchema = z
       'public_update_review_candidate',
     ]),
     subject_id: z.string().uuid(),
+    subject_ref: notificationSubjectReferenceSchema.optional(),
     summary: z.string(),
     detail: z.record(z.string(), z.unknown()),
     created_at: z.string().datetime(),

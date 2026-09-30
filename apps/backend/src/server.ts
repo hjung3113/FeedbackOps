@@ -1,3 +1,5 @@
+import type { NotificationSubjectReference } from '@fops/shared';
+
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -10,7 +12,6 @@ import {
 } from 'fastify-type-provider-zod';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
-
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { buildEntityLinkProviders } from './entity-link-providers.js';
@@ -556,11 +557,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  const notificationService = createNotificationService({
-    db: dbHandle.db,
-    notificationDispatcher,
-  });
-
   // VOC conversation command is constructed here so cluster candidate apply can
   // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
@@ -590,6 +586,73 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     conversationService,
+    vocReadService,
+  });
+
+  const subjectReferenceForAllowedRecord = (
+    displayId: string,
+    title: string,
+  ): NotificationSubjectReference => {
+    const safeDisplayId = displayId.trim();
+    const safeTitle = title.trim();
+    return safeDisplayId && safeTitle
+      ? { visibility_state: 'allowed', display_id: safeDisplayId, title: safeTitle }
+      : { visibility_state: 'unavailable' };
+  };
+
+  const notificationService = createNotificationService({
+    db: dbHandle.db,
+    notificationDispatcher,
+    resolveSubjectReference: async ({
+      actor,
+      subject_type: subjectType,
+      subject_id: subjectId,
+    }): Promise<NotificationSubjectReference> => {
+      switch (subjectType) {
+        case 'voc': {
+          const reference = await vocReadService.resolveVocReference({ actor, vocId: subjectId });
+          return reference.visibility_state === 'allowed'
+            ? subjectReferenceForAllowedRecord(reference.display_id, reference.title)
+            : { visibility_state: 'unavailable' };
+        }
+        case 'task':
+        case 'task_request': {
+          const summary = await entityLinksService.resolveReadableEndpointSummary({
+            actor,
+            endpoint: { type: subjectType, id: subjectId },
+          });
+          if (!summary) return { visibility_state: 'unavailable' };
+          if (subjectType === 'task') {
+            if (summary.type !== 'task') return { visibility_state: 'unavailable' };
+            return subjectReferenceForAllowedRecord(summary.display_id, summary.title);
+          }
+          if (summary.type !== 'task_request') return { visibility_state: 'unavailable' };
+          const title =
+            summary.requested_outcome.trim() || summary.evidence_summary.trim();
+          return subjectReferenceForAllowedRecord(summary.display_id, title);
+        }
+        case 'permission_request': {
+          const request = await requestService.resolveNotificationReference(actor, subjectId);
+          return request
+            ? subjectReferenceForAllowedRecord(
+                request.id.slice(0, 8),
+                request.requested_capability,
+              )
+            : { visibility_state: 'unavailable' };
+        }
+        case 'public_update_review_candidate': {
+          const reference = await publicUpdateReviewCandidateService.resolveNotificationReference(
+            actor,
+            subjectId,
+          );
+          return reference?.visibility_state === 'allowed'
+            ? subjectReferenceForAllowedRecord(reference.display_id, reference.title)
+            : { visibility_state: 'unavailable' };
+        }
+        default:
+          return { visibility_state: 'unavailable' };
+      }
+    },
   });
 
   // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
