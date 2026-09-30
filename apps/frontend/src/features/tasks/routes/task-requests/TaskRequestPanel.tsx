@@ -1,4 +1,5 @@
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
+import { shortId } from '@/lib/identity';
 import type { TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
   Button,
@@ -18,7 +19,7 @@ import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
 import * as React from 'react';
 
 import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
-import { type NameMaps, STATUS_LABELS, TaskRequestBadge, dot, shortId } from './TaskRequestRow';
+import { type NameMaps, STATUS_LABELS, TaskRequestBadge, dot } from './TaskRequestRow';
 import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
@@ -84,7 +85,7 @@ export function TaskRequestPanel({
                 <span className="text-xs text-text-muted">
                   · Requested by{' '}
                   <strong className="text-text-secondary">
-                    {requester?.display_name ?? 'Unknown'}
+                    {requester?.display_name ?? '알 수 없는 사용자'}
                   </strong>
                 </span>
                 <span className="text-xs text-text-muted">· {formatDate(item.created_at)}</span>
@@ -362,8 +363,13 @@ export function TaskRequestPanel({
                 <div className="flex items-center gap-2">
                   <OutlineBadge>{sourceFindingQuery.data?.status ?? 'finding'}</OutlineBadge>
                   <span className="font-mono text-xs text-text-muted">
-                    {sourceFindingQuery.data?.display_id ?? shortId(item.source_id)}
+                    {sourceFindingQuery.data?.display_id ?? 'Finding'}
                   </span>
+                  {!sourceFindingQuery.data?.display_id && (
+                    <span className="font-mono text-xs text-text-muted">
+                      {shortId(item.source_id)}
+                    </span>
+                  )}
                 </div>
               </div>
               <p className="text-sm leading-6 text-text-muted">{item.evidence_summary}</p>
@@ -374,12 +380,18 @@ export function TaskRequestPanel({
         <section data-anchor="properties" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Managed System">
-            <ManagedSystemPill
-              name={
-                names.managedSystemsById[item.primary_managed_system_id]?.name ??
-                shortId(item.primary_managed_system_id)
-              }
-            />
+            <span className="flex flex-col gap-1">
+              <ManagedSystemPill
+                name={
+                  names.managedSystemsById[item.primary_managed_system_id]?.name ?? 'Managed System'
+                }
+              />
+              {!names.managedSystemsById[item.primary_managed_system_id] && (
+                <span className="font-mono text-xs text-text-muted">
+                  {shortId(item.primary_managed_system_id)}
+                </span>
+              )}
+            </span>
           </FieldRow>
           <FieldRow label="Reviewer">
             {reviewer ? (
@@ -403,7 +415,7 @@ export function TaskRequestPanel({
           <div className="flex flex-col gap-2 border-l border-border-subtle pl-3">
             <div className="text-xs text-text-muted">
               <strong className="text-text-secondary">
-                {requester?.display_name ?? 'Unknown'}
+                {requester?.display_name ?? '알 수 없는 사용자'}
               </strong>
               {' · 요청 작성 · '}
               {formatDate(item.created_at)}

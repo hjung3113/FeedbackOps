@@ -322,3 +322,4 @@ apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.
 apps/frontend/src/features/voc/components/detail/__tests__/SimilarVocSection.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
 apps/frontend/src/features/voc/components/triage/__tests__/ClusterSectionReadOnly.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
 apps/frontend/tests/visual/voc-create.visual.spec.ts format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/integration/components/EntityRelationRow.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #589 adds identity cases

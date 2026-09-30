@@ -257,6 +257,7 @@ export const allowedEntityLinkSchema = z.object({
   id: z.string().uuid(),
   source_type: entityLinkEntityTypeSchema,
   source_id: z.string().uuid(),
+  source_summary: entityLinkTargetSummarySchema.optional(),
   target_type: entityLinkEntityTypeSchema,
   target_id: z.string().uuid(),
   target_summary: entityLinkTargetSummarySchema.optional(),

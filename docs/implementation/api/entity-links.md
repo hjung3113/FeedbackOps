@@ -26,3 +26,10 @@ link. Only Finding-domain commands may write these tuples; the shipped
 `POST /survey-responses/:id/create-finding` command writes
 `generated_finding`. `created_finding` is not a Survey Response lineage
 relation.
+
+Allowed entity-link DTOs may include optional `source_summary` and
+`target_summary` internal summaries. Each summary is resolved through its
+endpoint provider only after the row is authorized as `visibility_state=allowed`;
+providers that do not supply an internal summary leave the field absent. Hidden
+and denied DTOs never include endpoint IDs or internal summaries. A
+`summary_visible` DTO continues to expose only its reporter-safe `summary`.

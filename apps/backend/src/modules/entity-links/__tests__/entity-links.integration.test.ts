@@ -1487,6 +1487,93 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     ).toBe(true);
   });
 
+  it('GET inventory includes a source summary only when both endpoints are readable', async () => {
+    const msA = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-source-summary-a`,
+      'Source Summary MS-A',
+    );
+    const msB = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-source-summary-b`,
+      'Source Summary MS-B',
+    );
+    const sourceVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Source summary seed VOC',
+    );
+    const sourceTitle = 'Internal source cluster name';
+    const sourceCluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: sourceTitle,
+      status: 'confirmed',
+      createdBy: adminActorId,
+    });
+    const readableFinding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Readable target Finding',
+    });
+    const unreadableFinding = await seedFindingDirectly({
+      managedSystemId: msB,
+      sourceVocId: sourceVoc.id,
+      title: 'Unreadable target Finding',
+    });
+    const allowedId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: sourceCluster.id,
+      targetType: 'finding',
+      targetId: readableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const hiddenId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: sourceCluster.id,
+      targetType: 'finding',
+      targetId: unreadableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    const { id: developerId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('srcsum'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'voc.read', msA, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'finding.read', msA, adminActorId);
+    const developerCookie = await loginAs(app, externalId);
+    const developer = await getEntityLinks(developerCookie, '?scope=workspace');
+    expect(developer.statusCode).toBe(200);
+    const rows = developer.json<{ items: Array<Record<string, unknown>> }>().items;
+    const allowedRow = rows.find((item) => item.id === allowedId);
+    expect(allowedRow).toMatchObject({
+      visibility_state: 'allowed',
+      source_summary: {
+        type: 'voc_cluster',
+        id: sourceCluster.id,
+        display_id: sourceCluster.display_id,
+        title: sourceTitle,
+      },
+    });
+
+    const hiddenRow = rows.find((item) => item.id === hiddenId);
+    expect(hiddenRow).toMatchObject({ visibility_state: 'hidden' });
+    expect(hiddenRow?.source_id).toBeUndefined();
+    expect(hiddenRow?.target_id).toBeUndefined();
+    expect(hiddenRow?.source_summary).toBeUndefined();
+    expect(JSON.stringify(hiddenRow)).not.toContain(sourceTitle);
+  });
+
   it('GET a VOC Task link projects only the reporter-safe Task summary', async () => {
     const ms = await insertMsDirectly(
       dbHandle,

@@ -1,5 +1,8 @@
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import { ObjectRow } from '@fops/ui';
+
+import { shortId } from '@/lib/identity';
+
 import { formatDate } from './predicates';
 
 export const STATUS_LABELS: Record<TaskRequestStatus, string> = {
@@ -30,10 +33,6 @@ export function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
 }
 
-export function shortId(id: string): string {
-  return id.slice(0, 8);
-}
-
 export interface NameMaps {
   actorsById: Record<string, { id: string; display_name: string; email?: string }>;
   managedSystemsById: Record<string, { name: string }>;
@@ -53,7 +52,7 @@ interface TaskRequestRowProps {
 }
 
 function sourceDisplayId(item: TaskRequestListItem): string {
-  return item.source?.display_id?.trim() ? item.source.display_id : shortId(item.source_id);
+  return item.source?.display_id?.trim() ? item.source.display_id : 'Finding';
 }
 
 export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestRowProps) {
@@ -72,19 +71,36 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
       meta={
         <>
           {item.source_type === 'finding' && (
-            <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
+              {!item.source?.display_id?.trim() && (
+                <span className="font-mono text-text-muted">{shortId(item.source_id)}</span>
+              )}
+            </span>
           )}
           {dot()}
           <span>Evidence 1</span>
           {dot()}
-          <span>{ms?.name ?? shortId(item.primary_managed_system_id)}</span>
+          <span>{ms?.name ?? 'Managed System'}</span>
+          {!ms && (
+            <span className="font-mono text-text-muted">
+              {shortId(item.primary_managed_system_id)}
+            </span>
+          )}
           {dot()}
           <span>{formatDate(item.created_at)}</span>
         </>
       }
       trailing={
         <>
-          <span className="text-xs text-text-muted">by {requester?.display_name ?? 'Unknown'}</span>
+          <span className="text-xs text-text-muted">
+            by <span>{requester?.display_name ?? '알 수 없는 사용자'}</span>
+            {!requester && (
+              <span className="block font-mono text-text-muted">
+                {shortId(item.requester_actor_id)}
+              </span>
+            )}
+          </span>
           {reviewer ? (
             <span className="rounded border border-border-subtle px-2 py-1 text-xs text-text-muted">
               {reviewer.display_name}

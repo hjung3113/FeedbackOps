@@ -20,8 +20,8 @@ import { toast } from 'sonner';
 import { useAddClusterMember } from '@/features/voc-cluster/hooks/useAddClusterMember';
 import { useCandidatePeers } from '@/features/voc-cluster/hooks/useCandidatePeers';
 import { type ApiError, errorMapper } from '@/lib/api';
+import { shortId } from '@/lib/identity';
 
-import { shortId } from '../../lib/presentation';
 import type { VocClusterMemberPresentation } from '../types';
 
 export function AddVocModal({
@@ -42,7 +42,7 @@ export function AddVocModal({
   const candidates = [
     ...members.map((member) => ({
       voc_id: member.voc_id,
-      display_id: member.display_id ?? shortId(member.voc_id),
+      display_id: member.display_id ?? null,
       title: member.title ?? 'VOC',
       severity: member.severity,
       reporter_facing_status: member.reporter_facing_status,
@@ -117,10 +117,19 @@ export function AddVocModal({
                     disabled={candidate.included}
                     onClick={() => setVocId(candidate.voc_id)}
                     data-testid={`add-voc-candidate-${candidate.voc_id}`}
-                    className="justify-start"
+                    className="h-auto min-h-8 justify-start py-1 whitespace-normal"
                   >
-                    {candidate.display_id} · {candidate.title} · {candidate.severity ?? '미지정'} ·{' '}
-                    {candidate.reporter_facing_status}
+                    <span className="flex flex-col items-start">
+                      <span>
+                        {candidate.display_id ?? 'VOC'} · {candidate.title} ·{' '}
+                        {candidate.severity ?? '미지정'} · {candidate.reporter_facing_status}
+                      </span>
+                      {!candidate.display_id && (
+                        <span className="font-mono text-xs text-text-muted">
+                          {shortId(candidate.voc_id)}
+                        </span>
+                      )}
+                    </span>
                     {candidate.included && (
                       <OutlineBadge data-testid={`add-voc-included-${candidate.voc_id}`}>
                         이미 포함됨

@@ -1,0 +1,19 @@
+import { type Capability, isCapability } from '@fops/shared';
+
+export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
+  'workspace.read': 'Workspace-wide read',
+  'workspace.admin': '워크스페이스 관리자 권한',
+  'voc.triage': 'VOC Triage',
+  'voc.read': 'VOC 조회',
+  'finding.read': 'Finding 조회',
+  'finding.manage': 'Finding 관리',
+  'task_request.self_approve': 'Self-approval of own Task Request',
+  'survey.read': '설문 조회',
+  'survey.manage': '설문 관리',
+  'survey.read_personal_responses': '개인 응답 조회',
+  'survey.export': '설문 데이터 내보내기',
+};
+
+export function getCapabilityDisplayLabel(capability: string): string {
+  return isCapability(capability) ? CAPABILITY_LABELS[capability] : '권한 요청';
+}

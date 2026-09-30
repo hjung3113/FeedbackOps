@@ -1,9 +1,10 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { shortId } from '@/lib/identity';
 import type { EntityLinkDto } from '@fops/shared';
 import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
-import { EntityRelationRow } from './EntityRelationRow';
+import { EntityRelationRow, entityLinkEndpointPrimaryLabels } from './EntityRelationRow';
 import { LinkStatusBadge } from './LinkStatusBadge';
 
 export interface ManagedSystemPresentation {
@@ -26,10 +27,6 @@ export interface EntityLinksInventoryTableProps {
   unfilteredItemsCount?: number;
   filterDescription?: string | undefined;
   onResetFilters?: (() => void) | undefined;
-}
-
-function shortId(id: string): string {
-  return id.slice(0, 8);
 }
 
 function formatTimestamp(raw: string | null): string {
@@ -124,6 +121,7 @@ export function EntityLinksInventoryTable({
       {items.map((link) => {
         const managedSystem = managedSystemsById[link.managed_system_id];
         const actor = actorsById[link.created_by];
+        const [sourceLabel, targetLabel] = entityLinkEndpointPrimaryLabels(link);
         return (
           <div
             key={link.id}
@@ -132,7 +130,7 @@ export function EntityLinksInventoryTable({
               'grid min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
               link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
             )}
-            style={{ gridTemplateColumns: 'var(--entity-link-object-row-grid)' }}
+            style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}
           >
             <div
               className="flex items-center"
@@ -140,20 +138,17 @@ export function EntityLinksInventoryTable({
                 e.stopPropagation();
               }}
             >
-              <Checkbox aria-label={`${shortId(link.id)} 선택`} />
+              <Checkbox aria-label={`${sourceLabel} → ${targetLabel} 선택`} />
             </div>
-            <span
-              className="font-mono text-xs text-text-muted"
-              style={{ minWidth: 'var(--entity-link-object-id-min-width)' }}
-            >
-              {shortId(link.id)}
-            </span>
             <div className="flex min-w-0 flex-col justify-center gap-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
+                {/* #589: endpoint identities lead this row; the link id stays secondary metadata. */}
                 <EntityRelationRow link={link} compact />
                 <LinkStatusBadge status={link.status} />
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
+                <span className="font-mono text-xs text-text-muted">Link {shortId(link.id)}</span>
+                <RowDot />
                 {managedSystem !== undefined ? (
                   <ManagedSystemPill
                     name={managedSystem.name}
@@ -163,17 +158,26 @@ export function EntityLinksInventoryTable({
                       : {})}
                   />
                 ) : (
-                  <span className="font-mono text-xs text-text-muted">
-                    {shortId(link.managed_system_id)}
+                  <span className="inline-flex items-center gap-1">
+                    <span>Managed System</span>
+                    <span className="font-mono text-xs text-text-muted">
+                      {shortId(link.managed_system_id)}
+                    </span>
                   </span>
                 )}
                 <RowDot />
-                <span>by {actor?.display_name ?? shortId(link.created_by)}</span>
+                <span>
+                  by <span>{actor?.display_name ?? '알 수 없는 사용자'}</span>
+                  {!actor && (
+                    <span className="ml-1 font-mono text-text-muted">
+                      {shortId(link.created_by)}
+                    </span>
+                  )}
+                </span>
                 <RowDot />
                 <span>updated {formatTimestamp(link.updated_at)}</span>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2" aria-hidden="true" />
           </div>
         );
       })}

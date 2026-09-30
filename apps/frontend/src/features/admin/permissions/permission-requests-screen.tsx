@@ -1,6 +1,8 @@
 import { Button, ListShell, ObjectRow, OutlineBadge } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDetail } from './permission-request-detail.js';
 import {
@@ -18,6 +20,7 @@ export function PermissionRequestsScreen() {
     selected,
     selectedId,
     actorNames,
+    managedSystemNames,
     isPending,
     isError,
     handleTabChange,
@@ -75,6 +78,11 @@ export function PermissionRequestsScreen() {
               key={request.id}
               request={request}
               actorName={actorNames[request.requester_actor_id]}
+              managedSystemName={
+                request.requested_managed_system_id
+                  ? managedSystemNames[request.requested_managed_system_id]
+                  : undefined
+              }
               selected={selectedId === request.id}
               onSelect={() => handleSelect(request.id)}
             />
@@ -86,6 +94,11 @@ export function PermissionRequestsScreen() {
           <PermissionRequestDetail
             request={selected}
             actorName={actorNames[selected.requester_actor_id]}
+            managedSystemName={
+              selected.requested_managed_system_id
+                ? managedSystemNames[selected.requested_managed_system_id]
+                : undefined
+            }
             onClose={handleClose}
           />
         ) : undefined
@@ -97,33 +110,49 @@ export function PermissionRequestsScreen() {
 function PermissionRequestRow({
   request,
   actorName,
+  managedSystemName,
   selected,
   onSelect,
 }: {
   request: AdminPermissionRequestRow;
   actorName?: string | undefined;
+  managedSystemName?: string | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
   return (
     <ObjectRow
-      id={request.id.slice(0, 8)}
-      title={request.requested_capability}
+      id="권한 요청"
+      title={`${actorName ?? '알 수 없는 사용자'} · ${getCapabilityDisplayLabel(request.requested_capability)}`}
       selected={selected}
       onClick={onSelect}
       badges={<OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>}
       meta={
         <>
-          <span>{request.requested_managed_system_id ?? '워크스페이스 전체'}</span>
+          <span className="font-mono text-text-muted">{request.requested_capability}</span>
+          <span>·</span>
+          <span>
+            {request.requested_managed_system_id
+              ? (managedSystemName ?? 'Managed System')
+              : '워크스페이스 전체'}
+          </span>
+          {request.requested_managed_system_id && !managedSystemName && (
+            <span className="font-mono text-text-muted">
+              {shortId(request.requested_managed_system_id)}
+            </span>
+          )}
           <span>·</span>
           <span>{formatPermissionRequestDate(request.created_at)}</span>
+          <span>·</span>
+          <span className="font-mono text-text-muted">{shortId(request.id)}</span>
         </>
       }
       trailing={
-        <span className="text-right text-xs text-text-muted">
-          <span className="block text-text-primary">{actorName ?? 'Unknown requester'}</span>
-          <span className="font-mono">{request.requester_actor_id.slice(0, 8)}</span>
-        </span>
+        !actorName && (
+          <span className="text-right text-xs text-text-muted">
+            <span className="font-mono">{shortId(request.requester_actor_id)}</span>
+          </span>
+        )
       }
     />
   );
