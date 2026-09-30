@@ -27,7 +27,7 @@ export function TaskRequestsRoute({
     !queue.isLoading &&
     !queue.hasError &&
     queue.selected !== null &&
-    (selectedParam === undefined || queue.selected.id === selectedParam)
+    queue.selectedId === queue.selected.id
       ? formatRecordDocumentTitle({
           displayId: queue.selected.display_id,
           title: queue.selected.requested_outcome,

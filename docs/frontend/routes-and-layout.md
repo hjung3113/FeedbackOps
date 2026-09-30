@@ -61,6 +61,14 @@ Route naming rules:
 - `/my-work` is not an MVP route (ADR-0038, ADR-0040). No route is registered. `apps/frontend/src/features/my-work/` is the future implementation location only.
 ```
 
+## Document Titles
+
+The root `DocumentTitleProvider` synchronizes `document.title` once, combining
+the active screen title with `FeedbackOps`. A detail may replace the screen
+title with `<display_id> · <title>` only after its matching read succeeds for
+the current viewer. Loading, blocked, failed, not-found, and cleared selections
+restore the screen title; unmounting the provider restores `FeedbackOps`.
+
 VOC route views:
 
 ```text
