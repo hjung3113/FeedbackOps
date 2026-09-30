@@ -26,7 +26,9 @@ export interface SidebarNavEntry {
   href: string;
   section?: string;
   icon?: React.ReactNode;
+  parentId?: string;
   active?: boolean;
+  contextActive?: boolean;
   countKey?: NavCountKey;
   /** Explicit, route-owned count. Undefined is deliberately not rendered. */
   count?: number;
@@ -196,13 +198,13 @@ export function AppSidebar({
             return <React.Fragment key={entry.id}>
               {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
               {entry.disabled ? (
-                <button type="button" disabled className={cn(navItemClass(collapsed, entry.active), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                <button type="button" disabled className={cn(navItemClass(collapsed, entry.active, entry.contextActive), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
                   {!collapsed && entry.trailing}
                 </button>
               ) : (
-                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active, entry.contextActive)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
                   {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
@@ -276,7 +278,7 @@ function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; colla
   return <button type="button" disabled={item.disabled} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</button>;
 }
 
-function navItemClass(collapsed: boolean, active = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary'); }
+function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }
 function sectionTestId(section: string) { return section.toLowerCase().replace(/\s+/g, '-'); }
 function scopedHref(href: string, managedSystemId: string | undefined) {
   if (managedSystemId === undefined || !href.startsWith('/vocs')) return href;
