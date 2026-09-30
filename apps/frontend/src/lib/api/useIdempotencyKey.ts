@@ -4,7 +4,8 @@ import { mintIdempotencyKey as mintKey } from './idempotency';
 /**
  * Stable Idempotency-Key per call site. Re-mints automatically when `ifMatchEtag` changes
  * (BE rule: idempotency hash includes If-Match; same key + new etag → conflict.idempotency_key_reuse).
- * Call `markConsumed()` after a successful mutation to force a fresh key for the next call.
+ * Call `markConsumed()` after a successful mutation to force a fresh key for the next call;
+ * it returns that newly minted key.
  *
  * Key is derived SYNCHRONOUSLY in the same render where ifMatchEtag changes, so callers
  * that immediately trigger a mutation see the fresh key (not the stale one).
@@ -26,8 +27,10 @@ export function useIdempotencyKey(ifMatchEtag?: string) {
   const [, setForceTick] = useState(0);
 
   const markConsumed = useCallback(() => {
-    ref.current = { etag: ref.current.etag, key: mintKey() };
+    const key = mintKey();
+    ref.current = { etag: ref.current.etag, key };
     setForceTick((t) => t + 1);
+    return key;
   }, []);
 
   return { key: ref.current.key, markConsumed };

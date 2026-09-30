@@ -38,7 +38,10 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - `apps/frontend/src/features/tasks/routes/task-requests/TaskRequestPanel.tsx` — Task Request detail and conversion actions.
 - `apps/frontend/src/features/tasks/components/TaskDetailPanel.tsx` — Task detail and status actions.
 - `apps/frontend/src/features/tasks/components/MilestoneRow.tsx` — Milestone list row.
-- `apps/frontend/src/features/tasks/components/MilestoneDetailPanel.tsx` — Milestone detail and editing panels.
+- `apps/frontend/src/features/tasks/components/MilestoneDetailPanel.tsx` —
+  compatibility exports for the Milestone panels.
+- `apps/frontend/src/features/tasks/components/milestone-detail/` — Milestone
+  panels, detail content, task row, and title/status edit hooks.
 - `apps/frontend/src/features/tasks/components/MilestoneStatusBadge.tsx` — Milestone status labels and badge styles.
 - `packages/ui/src/badges/InternalTaskBadge.tsx` — shared internal Task status labels and badge styles.
 - `apps/frontend/src/lib/copy/permission-reasons.ts` — shared blocked copy for Task and Milestone views.
