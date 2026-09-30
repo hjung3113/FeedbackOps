@@ -1,11 +1,11 @@
 // Workspace-scoped actor-by-id lookup (#514 A7).
 //
 // Auth owns the actor identity surface (see list-actors-routes.ts header), so
-// the core.actors SELECT lives here. Modules that must validate an
-// owner/assignee id import this through '../auth/index.js' — never a repo,
-// and never their own copy of the SQL.
+// the core.actors SELECT lives here. Modules that validate a workspace-scoped
+// actor id import through '../auth/index.js' — never a repo, and never their
+// own copy of the SQL.
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { actors } from '../../db/schema/core.js';
@@ -39,4 +39,18 @@ export async function listWorkspaceAdminActorIds(tx: Tx, workspaceId: string): P
     .from(actors)
     .where(and(eq(actors.workspaceId, workspaceId), eq(actors.roleLevel, 'admin')));
   return rows.map((row) => row.id);
+}
+
+export async function findWorkspaceActorIds(
+  tx: Tx,
+  workspaceId: string,
+  actorIds: readonly string[],
+): Promise<Set<string>> {
+  if (actorIds.length === 0) return new Set();
+
+  const rows = await tx
+    .select({ id: actors.id })
+    .from(actors)
+    .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, [...actorIds])));
+  return new Set(rows.map((row) => row.id));
 }

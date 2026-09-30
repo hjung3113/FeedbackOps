@@ -314,6 +314,31 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
     expect(invalidCursor.statusCode).toBe(422);
   });
 
+  it.each([{ actorId: randomUUID() }])(
+    'rejects a mention actor outside the workspace',
+    async ({ actorId }) => {
+      const task = await seedTask();
+      const response = await commentsRequest(manageCookie, 'POST', task.id, {
+        body_rich_content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'mention', attrs: { actor_id: actorId } }],
+            },
+          ],
+        },
+        mentions: [actorId],
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['mentions'], code: 'cross_workspace' }] },
+      });
+    },
+  );
+
   it('review follow-up: cursor pagination does not skip a row sharing the same millisecond as the cursor boundary', async () => {
     // Regression for astra medium's review of PR #449 — see the matching
     // Finding test for the full rationale (millisecond-truncated cursors
