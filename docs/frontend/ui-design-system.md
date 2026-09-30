@@ -722,12 +722,12 @@ Required field components:
 - Textarea
 - RichContentEditor
 - Select
+- DatePicker
 - Combobox
 - MultiSelect
 - Checkbox
 - RadioGroup
 - SegmentedControl
-- DateInput
 - UserPicker
 - AnalyticsAreaPicker
 ```
@@ -740,6 +740,7 @@ Form rules:
 - Validation appears after blur or submit.
 - Save failure preserves user input.
 - Dirty forms warn before close.
+- Feature code uses the shared `Select` and `DatePicker`; do not use native `<select>` or `type="date"` controls.
 ```
 
 ### Modal / Drawer / InlineCreatePanel

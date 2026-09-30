@@ -4,7 +4,7 @@
 //
 // Prototype ref: docs/design-prototype/screen-voc.jsx:537-655
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ReporterStatusChangeBlock } from '../ReporterStatusChangeBlock';
 import type { VocDetailEnvelope } from '@fops/shared';
@@ -51,7 +51,7 @@ const OWNER = {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('ReporterStatusChangeBlock', () => {
-  it('renders picker with current status first, then allowed, then forbidden (차단됨 suffix)', () => {
+  it('renders picker with current status first, then allowed, then forbidden (차단됨 suffix)', async () => {
     render(
       <ReporterStatusChangeBlock
         voc={BASE_VOC}
@@ -62,34 +62,34 @@ describe('ReporterStatusChangeBlock', () => {
       />,
     );
 
-    const select = screen.getByRole('combobox');
-    const options = Array.from(select.querySelectorAll('option')) as HTMLOptionElement[];
+    fireEvent.click(screen.getByRole('combobox'));
+    const options = await screen.findAllByRole('option');
 
     // First option is current status
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    expect(options[0]!.value).toBe('received');
+    expect(options[0]!.textContent).toContain('접수됨');
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(options[0]!.textContent).toContain('(현재)');
 
     // Allowed statuses come next (before forbidden)
-    const allowedValues = ['reviewing', 'assigned'];
-    for (const v of allowedValues) {
-      const opt = options.find((o) => o.value === v);
+    const allowedLabels = ['검토 중', '담당자 배정됨'];
+    for (const label of allowedLabels) {
+      const opt = options.find((option) => option.textContent?.trim() === label);
       expect(opt).toBeTruthy();
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      expect(opt!.disabled).toBe(false);
+      expect(opt).not.toHaveAttribute('aria-disabled', 'true');
     }
 
     // Forbidden statuses have DOM disabled=true and '차단됨' suffix
-    const resolvedOpt = options.find((o) => o.value === 'resolved');
+    const resolvedOpt = options.find((option) => option.textContent?.includes('해결됨'));
     expect(resolvedOpt).toBeTruthy();
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    expect(resolvedOpt!.disabled).toBe(true);
+    expect(resolvedOpt).toHaveAttribute('aria-disabled', 'true');
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(resolvedOpt!.textContent).toContain('차단됨');
   });
 
-  it('forbidden statuses have DOM disabled attribute', () => {
+  it('forbidden statuses remain disabled options', async () => {
     render(
       <ReporterStatusChangeBlock
         voc={BASE_VOC}
@@ -100,16 +100,33 @@ describe('ReporterStatusChangeBlock', () => {
       />,
     );
 
-    const select = screen.getByRole('combobox');
-    const options = Array.from(select.querySelectorAll('option')) as HTMLOptionElement[];
+    fireEvent.click(screen.getByRole('combobox'));
+    const options = await screen.findAllByRole('option');
 
     // All statuses not in allowed and not current are disabled
-    const ALLOWED_SET = new Set(['received', 'reviewing', 'assigned']);
-    for (const opt of options) {
-      if (!ALLOWED_SET.has(opt.value)) {
-        expect(opt.disabled).toBe(true);
-      }
+    const forbidden = options.filter((option) => option.textContent?.includes('차단됨'));
+    expect(forbidden).toHaveLength(5);
+    for (const option of forbidden) {
+      expect(option).toHaveAttribute('aria-disabled', 'true');
     }
+  });
+
+  it('emits the selected allowed status through the shared picker', async () => {
+    const onChangeStatus = vi.fn();
+    render(
+      <ReporterStatusChangeBlock
+        voc={BASE_VOC}
+        nextStatus="received"
+        onChangeStatus={onChangeStatus}
+        draftDoc={null}
+        owner={OWNER}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(await screen.findByRole('option', { name: '검토 중' }));
+
+    expect(onChangeStatus).toHaveBeenCalledWith('reviewing');
   });
 
   it('shows red Callout when forbidden status is selected (via onChangeStatus)', () => {

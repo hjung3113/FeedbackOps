@@ -72,7 +72,10 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-vi.mock('@fops/ui', () => ({
+vi.mock('@fops/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@fops/ui')>();
+  return {
+  ...actual,
   cn: (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' '),
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
@@ -185,14 +188,10 @@ vi.mock('@fops/ui', () => ({
   PageShell: ({ children }: { children: React.ReactNode }) => (
     <div data-shell="page">{children}</div>
   ),
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-  SelectValue: () => <span />,
   Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
   Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} />,
-}));
+  };
+});
 
 type ClusterFixture = {
   id: string;
@@ -853,9 +852,8 @@ describe('VOC cluster route shells', () => {
     );
     render(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />);
     fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
-    fireEvent.change(screen.getByTestId('link-existing-finding-picker'), {
-      target: { value: '55555555-5555-5555-5555-555555555555' },
-    });
+    fireEvent.click(screen.getByTestId('link-existing-finding-picker'));
+    fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
     fireEvent.submit(document.getElementById('link-existing-finding-form')!);
     expect(linkFindingMutate).toHaveBeenCalledWith(
       {
@@ -885,9 +883,8 @@ describe('VOC cluster route shells', () => {
       );
       render(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />);
       fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
-      fireEvent.change(screen.getByTestId('link-existing-finding-picker'), {
-        target: { value: '55555555-5555-5555-5555-555555555555' },
-      });
+      fireEvent.click(screen.getByTestId('link-existing-finding-picker'));
+      fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
       fireEvent.submit(document.getElementById('link-existing-finding-form')!);
       expect(linkFindingMutate).toHaveBeenCalledWith(
         {

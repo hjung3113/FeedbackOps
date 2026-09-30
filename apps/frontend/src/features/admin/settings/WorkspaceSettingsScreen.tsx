@@ -1,4 +1,15 @@
-import { Button, Callout, Input, PageShell, PanelSectionTitle } from '@fops/ui';
+import {
+  Button,
+  Callout,
+  Input,
+  PageShell,
+  PanelSectionTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@fops/ui';
 import { AlertTriangle, Check, LockKeyhole } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 
@@ -343,15 +354,18 @@ function EditableOptionRow({
     >
       <div className="flex items-center justify-end">
         {editing ? (
-          <select
-            aria-label="Self-approval"
-            className="h-10 w-full rounded-md border border-border-subtle bg-surface-field px-3 text-sm text-text-primary"
+          <Select
             value={value}
-            onChange={(event) => onChange(event.target.value as PermissionSelfApproval)}
+            onValueChange={(nextValue) => onChange(nextValue as PermissionSelfApproval)}
           >
-            <option value="allowed">Allowed</option>
-            <option value="forbidden">Forbidden</option>
-          </select>
+            <SelectTrigger aria-label="Self-approval">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="allowed">Allowed</SelectItem>
+              <SelectItem value="forbidden">Forbidden</SelectItem>
+            </SelectContent>
+          </Select>
         ) : (
           <span className="text-sm font-medium text-text-primary">
             {value === 'allowed' ? 'Allowed' : 'Forbidden'}

@@ -329,9 +329,8 @@ describe('Composer flow — integration (C6.3)', () => {
     // Type into the public-update rich editor (mocked as textarea)
     const editor = screen.getByTestId('rich-editor-public-update');
     fireEvent.change(editor, { target: { value: '공개 업데이트 내용입니다.' } });
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'resolved' },
-    });
+    fireEvent.click(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }));
+    fireEvent.click(await screen.findByRole('option', { name: '해결됨' }));
 
     // Find the Publish button on the ComposerFooter and click it
     const publishBtn = screen.getByRole('button', { name: /publish update/i });

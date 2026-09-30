@@ -1,0 +1,70 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import type { SurveyQuestion } from '../../types';
+import { BranchEditor } from './BranchEditor';
+
+const parentQuestion: SurveyQuestion = {
+  id: '10000000-0000-4000-8000-000000000001',
+  survey_id: '20000000-0000-4000-8000-000000000001',
+  kind: 'single_choice',
+  prompt: 'Q1: 서비스 만족도',
+  is_required: false,
+  options: [
+    { key: 'satisfied', label: '만족' },
+    { key: 'unsatisfied', label: '불만족' },
+  ],
+  rating_min: null,
+  rating_max: null,
+  rating_low_label: null,
+  rating_high_label: null,
+  sort_order: 0,
+  branch_depth: 0,
+  branch_parent_question_id: null,
+  branch_trigger_option_key: null,
+};
+
+const childQuestion: SurveyQuestion = {
+  ...parentQuestion,
+  id: '10000000-0000-4000-8000-000000000002',
+  prompt: 'Q2: 추가 의견',
+  sort_order: 1,
+};
+
+describe('BranchEditor', () => {
+  it('keeps the selected branch parent and its default option key in the form state', async () => {
+    const onChange = vi.fn();
+    render(
+      <BranchEditor question={childQuestion} parents={[parentQuestion]} onChange={onChange} />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Q1: 서비스 만족도' }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      branch_parent_question_id: parentQuestion.id,
+      branch_trigger_option_key: 'satisfied',
+    });
+  });
+
+  it('keeps the selected option key in the form state', async () => {
+    const onChange = vi.fn();
+    const question = {
+      ...childQuestion,
+      branch_parent_question_id: parentQuestion.id,
+      branch_trigger_option_key: 'satisfied',
+    };
+    render(
+      <BranchEditor
+        question={question}
+        parent={parentQuestion}
+        parents={[parentQuestion]}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+    fireEvent.click(await screen.findByRole('option', { name: '불만족' }));
+
+    expect(onChange).toHaveBeenCalledWith({ branch_trigger_option_key: 'unsatisfied' });
+  });
+});

@@ -65,6 +65,7 @@ export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPa
 
 // Form primitives (Slice 3 #19)
 export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
+export { DatePicker, type DatePickerProps } from './forms/DatePicker.js';
 // Feedback primitives (Slice 3 #19)
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
 // Feedback primitives (Slice 3 #21 C3.1)

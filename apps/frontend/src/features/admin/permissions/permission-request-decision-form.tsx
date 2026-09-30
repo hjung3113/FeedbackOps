@@ -1,6 +1,7 @@
 import { isCapability, isSensitiveCapability } from '@fops/shared';
 import {
   Button,
+  DatePicker,
   Input,
   OutlineBadge,
   PanelSectionTitle,
@@ -261,13 +262,13 @@ export function PermissionRequestDecisionForm({
               htmlFor="permission-approval-expiration-date"
             >
               새 만료일
-              <Input
+              <DatePicker
                 id="permission-approval-expiration-date"
-                type="date"
                 min={minExpirationDate}
+                aria-label="새 만료일"
                 value={expirationDate}
-                onChange={(event) => {
-                  setExpirationDate(event.target.value);
+                onChange={(value) => {
+                  setExpirationDate(value ?? '');
                   setExpirationValidationAttempted(false);
                   mutation.reset();
                 }}

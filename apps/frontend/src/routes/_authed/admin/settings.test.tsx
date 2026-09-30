@@ -182,9 +182,8 @@ describe('/admin/settings route', () => {
     const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
     fireEvent.click(selfApprovalEditButton);
-    fireEvent.change(screen.getByLabelText('Self-approval'), {
-      target: { value: 'allowed' },
-    });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Self-approval' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Allowed' }));
 
     expect(
       screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
@@ -256,9 +255,8 @@ describe('/admin/settings route', () => {
     const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
     fireEvent.click(selfApprovalEditButton);
-    fireEvent.change(screen.getByLabelText('Self-approval'), {
-      target: { value: 'allowed' },
-    });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Self-approval' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Allowed' }));
     expect(saveBar).toHaveTextContent('2 unsaved changes');
     expect(saveBar).toHaveTextContent('Self-approval of Permission Request · Anonymity threshold');
 

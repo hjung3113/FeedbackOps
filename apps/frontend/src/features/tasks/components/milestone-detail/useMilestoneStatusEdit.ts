@@ -56,11 +56,8 @@ export function useMilestoneStatusEdit({
     },
   });
 
-  function handleStatusChange(
-    event: React.ChangeEvent<HTMLSelectElement>,
-    titleMutationPending: boolean,
-  ): void {
-    const status = event.target.value as MilestoneStatusFilter;
+  function handleStatusChange(value: string, titleMutationPending: boolean): void {
+    const status = value as MilestoneStatusFilter;
     if (status === milestone.status) return;
     // R3 — serialized with the title mutation: a status change issued while
     // a title save is in flight would commit from the same version and

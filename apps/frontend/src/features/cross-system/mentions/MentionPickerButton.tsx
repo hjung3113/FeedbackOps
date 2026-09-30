@@ -113,7 +113,7 @@ export function MentionPickerButton({
               // biome-ignore lint/a11y/useKeyWithClickEvents: pointer selection; keyboard handled by search input
               <li
                 key={actor.id}
-                // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <li role="option">; native <option> only works inside <select>
+                // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <li role="option">; native option elements are limited to native pickers.
                 // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <li role="option"> is canonical ARIA listbox option per APG §combobox
                 role="option"
                 aria-selected={false}

@@ -11,6 +11,11 @@ import {
   DialogTitle,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from "@fops/ui";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
@@ -261,21 +266,24 @@ function CreateClusterModal({
             >
               Managed System <span aria-hidden>*</span>
             </Label>
-            <select
-              id="cluster-managed-system"
-              required
-              value={managedSystemId}
-              onChange={(e) => setManagedSystemId(e.target.value)}
-              data-testid="cluster-managed-system-select"
-              className="h-9 w-full rounded-md border border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">시스템 선택…</option>
-              {(systemsQuery.data?.items ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <Select value={managedSystemId} onValueChange={setManagedSystemId}>
+              <SelectTrigger
+                id="cluster-managed-system"
+                aria-label="Managed System"
+                aria-required="true"
+                data-testid="cluster-managed-system-select"
+                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <SelectValue placeholder="시스템 선택…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(systemsQuery.data?.items ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {error && (

@@ -13,6 +13,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@fops/ui';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -27,6 +32,8 @@ const STATUSES: ReporterFacingStatusEnum[] = [
   'reopened',
   'closed',
 ];
+
+const NO_STATUS = '__none__';
 
 export function PublicUpdateReviewModal({
   voc,
@@ -126,20 +133,25 @@ export function PublicUpdateReviewModal({
           <p className="text-sm text-text-muted">후보를 불러오는 중…</p>
         ) : (
           <div className="grid gap-3">
-            <label className="text-sm">
-              후보
-              <select
-                className="mt-1 w-full"
-                value={candidateId}
-                onChange={(e) => setCandidateId(e.target.value)}
-              >
-                {(candidates.data?.items ?? []).map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    Released Task 후보 · {new Date(candidate.created_at).toLocaleDateString()}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="text-sm">
+              <label htmlFor="public-update-candidate">후보</label>
+              <Select value={candidateId} onValueChange={setCandidateId}>
+                <SelectTrigger
+                  id="public-update-candidate"
+                  aria-label="후보"
+                  className="mt-1 w-full"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(candidates.data?.items ?? []).map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      Released Task 후보 · {new Date(candidate.created_at).toLocaleDateString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <label className="text-sm">
               공개 업데이트
               <textarea
@@ -148,21 +160,31 @@ export function PublicUpdateReviewModal({
                 onChange={(e) => setMessage(e.target.value)}
               />
             </label>
-            <label className="text-sm">
-              Reporter-facing status
-              <select
-                className="mt-1 w-full"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ReporterFacingStatusEnum)}
+            <div className="text-sm">
+              <label htmlFor="public-update-reporter-status">Reporter-facing status</label>
+              <Select
+                value={status || NO_STATUS}
+                onValueChange={(value) =>
+                  setStatus(value === NO_STATUS ? '' : (value as ReporterFacingStatusEnum))
+                }
               >
-                <option value="">상태 선택</option>
-                {STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {REPORTER_STATUS_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger
+                  id="public-update-reporter-status"
+                  aria-label="Reporter-facing status"
+                  className="mt-1 w-full"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_STATUS}>상태 선택</SelectItem>
+                  {STATUSES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {REPORTER_STATUS_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <label className="text-sm">
               Dismiss reason
               <input

@@ -3,7 +3,7 @@ import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, MilestoneDto, TaskDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestoneDetailPanel } from './MilestoneDetailPanel';
@@ -843,7 +843,8 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
         await user.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
         await user.click(screen.getByRole('button', { name: 'Save' }));
       } else {
-        await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'released');
+        fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+        fireEvent.click(await screen.findByRole('option', { name: 'Released' }));
       }
       await waitFor(() =>
         expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBefore + 1),

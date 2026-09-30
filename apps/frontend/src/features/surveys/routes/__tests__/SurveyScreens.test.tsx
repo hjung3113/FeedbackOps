@@ -1025,7 +1025,8 @@ describe('Survey screens', () => {
       />,
     );
     fireEvent.click(screen.getByText('Q2'));
-    fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
     fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
@@ -1077,7 +1078,8 @@ describe('Survey screens', () => {
       />,
     );
     fireEvent.click(screen.getByText('Q2'));
-    fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
     fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() => expect(resolvePatch).toBeDefined());
     // The busyQuestionIds lock existed only because the in-flight recreate
@@ -1117,9 +1119,8 @@ describe('Survey screens', () => {
       />,
     );
     fireEvent.click(screen.getByText('Q2'));
-    fireEvent.change(screen.getByLabelText('분기 조건 옵션'), {
-      target: { value: 'yes' },
-    });
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+    fireEvent.click(await screen.findByRole('option', { name: '예' }));
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     const preview = screen.getByRole('dialog');
     expect(within(preview).queryByText(/Q2\. 추가 질문/)).not.toBeInTheDocument();
