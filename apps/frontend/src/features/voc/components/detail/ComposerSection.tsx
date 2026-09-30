@@ -31,6 +31,20 @@ import { InternalCommentComposer } from './InternalCommentComposer';
 import { PublicUpdateComposer } from './PublicUpdateComposer';
 import { ReporterReplyComposer } from './ReporterReplyComposer';
 
+function isFocusInActiveComposer(
+  section: HTMLDivElement | null,
+  target: EventTarget | null,
+  surface: ComposerSurface,
+): boolean {
+  if (!(target instanceof Node) || !section) return false;
+
+  const selectedTab = section.querySelector<HTMLButtonElement>(
+    '[role="tab"][aria-selected="true"]',
+  );
+  const activeComposer = section.querySelector<HTMLElement>(`[data-composer-surface="${surface}"]`);
+  return selectedTab?.contains(target) === true || activeComposer?.contains(target) === true;
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface ComposerSectionProps {
@@ -71,8 +85,38 @@ export function ComposerSection({
     return 'internal';
   }
 
+  function isSurfaceVisible(surface: ComposerSurface): boolean {
+    if (surface === 'public') return visibility?.showPublic === true;
+    if (surface === 'reply') return visibility?.showReply === true;
+    return visibility?.showInternal === true;
+  }
+
   const [activeTab, setActiveTab] = React.useState<ComposerSurface>(getDefaultTab);
+  const effectiveActiveTab = isSurfaceVisible(activeTab) ? activeTab : getDefaultTab();
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
+  const sectionRef = React.useRef<HTMLDivElement>(null);
+  const focusWasInActiveSurfaceRef = React.useRef(false);
+
+  React.useLayoutEffect(() => {
+    if (!visibility) return;
+
+    if (activeTab !== effectiveActiveTab) {
+      setActiveTab(effectiveActiveTab);
+      if (focusWasInActiveSurfaceRef.current) {
+        sectionRef.current
+          ?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')
+          ?.focus();
+      }
+      focusWasInActiveSurfaceRef.current = false;
+      return;
+    }
+
+    focusWasInActiveSurfaceRef.current = isFocusInActiveComposer(
+      sectionRef.current,
+      sectionRef.current?.ownerDocument.activeElement ?? null,
+      activeTab,
+    );
+  }, [activeTab, effectiveActiveTab, visibility]);
 
   // REV-2 #6: dirty is derived from the controlled draft state (the same
   // TipTapDoc each composer passes through onDraftChange), not from a
@@ -122,7 +166,26 @@ export function ComposerSection({
   }
 
   return (
-    <div className="border-t border-border-subtle" data-testid="composer-section">
+    <div
+      ref={sectionRef}
+      className="border-t border-border-subtle"
+      data-testid="composer-section"
+      onFocusCapture={(event) => {
+        focusWasInActiveSurfaceRef.current = isFocusInActiveComposer(
+          sectionRef.current,
+          event.target,
+          effectiveActiveTab,
+        );
+      }}
+      onBlurCapture={(event) => {
+        if (activeTab !== effectiveActiveTab) return;
+        focusWasInActiveSurfaceRef.current = isFocusInActiveComposer(
+          sectionRef.current,
+          event.relatedTarget,
+          effectiveActiveTab,
+        );
+      }}
+    >
       {/* Section header with optional close button */}
       {onCloseRequest && (
         <div className="flex items-center justify-end px-4 pt-2">
@@ -137,14 +200,21 @@ export function ComposerSection({
         </div>
       )}
 
-      <ComposerTabs visibility={visibility} activeTab={activeTab} onTabChange={setActiveTab} />
+      <ComposerTabs
+        visibility={visibility}
+        activeTab={effectiveActiveTab}
+        onTabChange={setActiveTab}
+      />
 
       {/* Composer bodies — all three kept mounted (display toggled) so drafts survive tab
           switches. REV-1 #7: draft state controlled by parent via useComposerDraft.
           REV-2 #6: no onClick dirty handler — dirty is derived from draft state above. */}
       <div className="p-4">
         {visibility.showPublic && (
-          <div style={{ display: activeTab === 'public' ? undefined : 'none' }}>
+          <div
+            data-composer-surface="public"
+            style={{ display: effectiveActiveTab === 'public' ? undefined : 'none' }}
+          >
             <PublicUpdateComposer
               voc={voc}
               me={me}
@@ -154,7 +224,10 @@ export function ComposerSection({
           </div>
         )}
         {visibility.showReply && (
-          <div style={{ display: activeTab === 'reply' ? undefined : 'none' }}>
+          <div
+            data-composer-surface="reply"
+            style={{ display: effectiveActiveTab === 'reply' ? undefined : 'none' }}
+          >
             <ReporterReplyComposer
               voc={voc}
               me={me}
@@ -164,7 +237,10 @@ export function ComposerSection({
           </div>
         )}
         {visibility.showInternal && (
-          <div style={{ display: activeTab === 'internal' ? undefined : 'none' }}>
+          <div
+            data-composer-surface="internal"
+            style={{ display: effectiveActiveTab === 'internal' ? undefined : 'none' }}
+          >
             <InternalCommentComposer
               voc={voc}
               me={me}
