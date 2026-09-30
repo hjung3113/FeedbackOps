@@ -465,7 +465,12 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     'returns $expected for a VOC subject with $scenario',
     async ({ scenario, expected }) => {
       const isReporter = scenario === 'reporter without a grant';
-      actorD = await createActorSession(WORKSPACE_ID, 'd', isReporter ? 'user' : 'developer');
+      const roleLevel = isReporter
+        ? 'user'
+        : scenario === 'subject in another workspace'
+          ? 'admin'
+          : 'developer';
+      actorD = await createActorSession(WORKSPACE_ID, 'd', roleLevel);
       subjectManagedSystemId = await insertMsDirectly(
         migrateDb,
         WORKSPACE_ID,
@@ -496,6 +501,15 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
         reporterId,
         `${TEST_PREFIX} VOC subject ${scenario}`,
       );
+      const sameWorkspaceAdminControl =
+        scenario === 'subject in another workspace'
+          ? await seedVocSubject(
+              WORKSPACE_ID,
+              subjectManagedSystemId,
+              actorA.id,
+              `${TEST_PREFIX} VOC subject same-workspace admin control`,
+            )
+          : null;
 
       if (scenario === 'effective-scope summary-only access') {
         permissionGrantIds.push(
@@ -545,7 +559,7 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
         ]);
       }
 
-      if (isReporter) {
+      if (isReporter || scenario === 'subject in another workspace') {
         const grantCount = await migrateDb.pool.query<{ count: string }>(
           'select count(*)::text as count from permission.permission_grants where actor_id = $1 and capability in ($2, $3)',
           [actorD.id, 'voc.read', 'voc.triage'],
@@ -559,6 +573,15 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
         subjectType: 'voc',
         subjectId: subject.id,
       });
+      const controlNotification =
+        sameWorkspaceAdminControl === null
+          ? null
+          : await insertNotification(actorD, {
+              createdAt: new Date().toISOString(),
+              eventType: 'voc.reporter_replied',
+              subjectType: 'voc',
+              subjectId: sameWorkspaceAdminControl.id,
+            });
       const response = await app.inject({
         method: 'GET',
         url: '/notifications',
@@ -568,6 +591,17 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
       const item = response
         .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
         .items.find((row) => row.id === notification.id);
+
+      if (controlNotification !== null && sameWorkspaceAdminControl !== null) {
+        const controlItem = response
+          .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+          .items.find((row) => row.id === controlNotification.id);
+        expect(controlItem?.subject_ref).toEqual({
+          visibility_state: 'allowed',
+          display_id: sameWorkspaceAdminControl.displayId,
+          title: sameWorkspaceAdminControl.title,
+        });
+      }
 
       if (expected === 'allowed') {
         expect(item?.subject_ref).toEqual({

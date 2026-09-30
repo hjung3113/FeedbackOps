@@ -13,6 +13,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InboxPanel, notificationTarget } from '../InboxPanel';
@@ -296,6 +297,66 @@ describe('InboxPanel', () => {
         fireEvent.pointerMove(link, { pointerType: 'mouse' });
       } else {
         fireEvent.focus(link);
+      }
+
+      if (shouldShowTooltip) {
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG_SUBJECT_TITLE);
+      } else {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        });
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it.each([
+    { subjectState: 'allowed', interaction: 'hover', shouldShowTooltip: true },
+    { subjectState: 'allowed', interaction: 'focus', shouldShowTooltip: true },
+    { subjectState: 'unavailable', interaction: 'hover', shouldShowTooltip: false },
+    { subjectState: 'unavailable', interaction: 'focus', shouldShowTooltip: false },
+  ] as const)(
+    'keeps the read/no-target Archive tab stop for a $subjectState subject on $interaction',
+    async ({ subjectState, interaction, shouldShowTooltip }) => {
+      const user = userEvent.setup();
+      const readPermissionDecision = makeNotification({
+        id: REFERENCED_NOTIFICATION_ID,
+        event_type: 'permission_request.decided',
+        subject_type: 'permission_request',
+        summary: '권한 요청이 처리되었습니다.',
+        detail: {},
+        read_at: '2026-07-27T01:00:00.000Z',
+        subject_ref:
+          subjectState === 'allowed'
+            ? {
+                visibility_state: 'allowed',
+                display_id: 'PR-0123',
+                title: LONG_SUBJECT_TITLE,
+              }
+            : { visibility_state: 'unavailable' },
+      });
+      installNotificationFetch([makeNotification(), readPermissionDecision]);
+      renderInbox();
+
+      await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+      fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+      const row = await screen.findByTestId(`home-inbox-row-${REFERENCED_NOTIFICATION_ID}`);
+      const archive = within(row).getByRole('button', { name: 'Archive' });
+
+      expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+      expect(within(row).getAllByRole('button')).toEqual([archive]);
+      expect(
+        Array.from(
+          row.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+        ),
+      ).toEqual([archive]);
+
+      if (interaction === 'hover') {
+        fireEvent.pointerMove(archive, { pointerType: 'mouse' });
+      } else {
+        screen.getByRole('radio', { name: 'All' }).focus();
+        for (let tab = 0; tab < 4; tab += 1) await user.tab();
+        expect(archive).toHaveFocus();
       }
 
       if (shouldShowTooltip) {

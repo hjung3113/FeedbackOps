@@ -205,6 +205,8 @@ function NotificationRow({
     notification.subject_ref?.visibility_state === 'allowed'
       ? notification.subject_ref.title
       : null;
+  const titleTooltipOnArchive =
+    subjectTitle !== null && targetLocation === null && notification.read_at !== null;
   const mainClassName = [
     'flex min-w-0 flex-1 items-center gap-3 pl-4 pr-2 text-left',
     notification.subject_ref ? 'py-1' : 'py-3',
@@ -269,13 +271,26 @@ function NotificationRow({
     ) : (
       <div className={mainClassName}>{mainContent}</div>
     );
+  const archiveButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      aria-label={HOME_INBOX_COPY.archive}
+      disabled={actionsDisabled}
+      onClick={onArchive}
+    >
+      <Archive className="h-4 w-4" />
+    </Button>
+  );
 
   return (
     <li
       className="flex min-h-row-default items-center border-b border-border-subtle last:border-b-0"
       data-testid={`home-inbox-row-${notification.id}`}
     >
-      {subjectTitle === null ? (
+      {subjectTitle === null || titleTooltipOnArchive ? (
         mainControl
       ) : (
         <Tooltip>
@@ -297,17 +312,14 @@ function NotificationRow({
             <Check className="h-4 w-4" />
           </Button>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          aria-label={HOME_INBOX_COPY.archive}
-          disabled={actionsDisabled}
-          onClick={onArchive}
-        >
-          <Archive className="h-4 w-4" />
-        </Button>
+        {titleTooltipOnArchive && subjectTitle !== null ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{archiveButton}</TooltipTrigger>
+            <TooltipContent>{subjectTitle}</TooltipContent>
+          </Tooltip>
+        ) : (
+          archiveButton
+        )}
       </span>
     </li>
   );
