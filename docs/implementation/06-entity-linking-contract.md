@@ -111,8 +111,11 @@ GET /entity-links?scope=workspace
 - endpoint mode and workspace inventory mode are mutually exclusive.
 - optional filters: status=active|stale|detached|revoked, relation_type=related_to,
   managed_system_id=<uuid>
+- cursor pagination: limit defaults to 50 and is capped at 100; cursor is opaque
+  and continues the created_at DESC, id DESC order.
 - order: created_at DESC, id DESC
-- response: { items: EntityLinkDto[] }
+- response: { items: EntityLinkDto[], page: { has_more: boolean, cursor?: string, status_counts?: { active, stale, detached, revoked } } }; first page without a status filter includes counts across its other filters.
+- endpoint relation reads keep their { items: EntityLinkDto[] } response.
 - authz: every row checks voc.read on both endpoints' Managed Systems.
   Rows are visibility_state=allowed only when both endpoints are readable;
   otherwise they are visibility_state=hidden.

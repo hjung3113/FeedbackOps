@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type EntityLinkEntityType,
@@ -26,6 +26,7 @@ import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import { vocEntityLinkProvider } from '../../voc/entity-link-provider.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -1111,6 +1112,130 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(fixtureItems.map((item) => item.id)).toEqual([newerDetachedId, oldActiveId]);
     expect(fixtureItems.map((item) => item.status).sort()).toEqual(['active', 'detached']);
     expect(fixtureItems.every((item) => item.visibility_state === 'allowed')).toBe(true);
+  });
+
+  it('GET workspace inventory paginates in a stable order and enforces the page-size bounds', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const targetTwo = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged target two',
+    );
+    const targetThree = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged target three',
+    );
+    const fixtureIds = await Promise.all(
+      [targetVoc, targetTwo, targetThree].map((target) =>
+        seedEntityLinkDirectly({
+          sourceId: sourceVoc.id,
+          targetId: target.id,
+          managedSystemId: msA,
+          visibility: 'internal_only',
+        }),
+      ),
+    );
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = '2026-09-01T00:00:00.000000+00:00'::timestamptz
+        where id = any($1::uuid[])`,
+      [fixtureIds],
+    );
+    const expectedRows = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.entity_links
+        where workspace_id = $1 and id = any($2::uuid[])
+        order by created_at desc, id desc`,
+      [WORKSPACE_ID, fixtureIds],
+    );
+    const expectedIds = expectedRows.rows.map((row) => row.id);
+
+    const first = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=2`,
+    );
+    expect(first.statusCode).toBe(200);
+    const firstBody = first.json<{
+      items: Array<{ id: string }>;
+      page: {
+        has_more: boolean;
+        cursor?: string;
+        status_counts?: { active: number; stale: number; detached: number; revoked: number };
+      };
+    }>();
+    expect(firstBody.items.map((item) => item.id)).toEqual(expectedIds.slice(0, 2));
+    expect(firstBody.page.has_more).toBe(true);
+    expect(firstBody.page.cursor).toBeDefined();
+    expect(firstBody.page.status_counts).toEqual({
+      active: expect.any(Number),
+      stale: expect.any(Number),
+      detached: expect.any(Number),
+      revoked: expect.any(Number),
+    });
+    const pageCursor = firstBody.page.cursor;
+    if (pageCursor === undefined)
+      throw new Error('expected a cursor for the second inventory page');
+
+    const second = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=2&cursor=${encodeURIComponent(pageCursor)}`,
+    );
+    expect(second.statusCode).toBe(200);
+    const secondBody = second.json<{
+      items: Array<{ id: string }>;
+      page: { has_more: boolean; cursor?: string };
+    }>();
+    expect(secondBody.items.map((item) => item.id)).toEqual(expectedIds.slice(2));
+    expect(secondBody.page.has_more).toBe(false);
+    expect(secondBody.page.cursor).toBeUndefined();
+    expect([...firstBody.items, ...secondBody.items].map((item) => item.id)).toEqual(expectedIds);
+
+    const one = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=1`,
+    );
+    expect(one.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id)).toEqual([
+      expectedIds[0],
+    ]);
+    const invalidLimit = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=101`,
+    );
+    expect(invalidLimit.statusCode).toBe(422);
+  });
+
+  it('GET workspace inventory resolves repeated endpoint subjects and summaries once per page', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const targetTwo = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Repeated endpoint target two',
+    );
+    await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    await postEntityLink(adminCookie, sourceVoc.id, targetTwo.id);
+
+    const permissionSubjectSpy = vi.spyOn(vocEntityLinkProvider, 'getPermissionSubject');
+    const internalSummarySpy = vi.spyOn(vocEntityLinkProvider, 'getInternalSummary');
+    try {
+      const res = await getEntityLinks(adminCookie, `?scope=workspace&managed_system_id=${msA}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ items: unknown[] }>().items).toHaveLength(2);
+      expect(permissionSubjectSpy.mock.calls.map((call) => call[2]).sort()).toEqual(
+        [sourceVoc.id, targetVoc.id, targetTwo.id].sort(),
+      );
+      expect(internalSummarySpy.mock.calls.map((call) => call[2]).sort()).toEqual(
+        [sourceVoc.id, targetVoc.id, targetTwo.id].sort(),
+      );
+    } finally {
+      permissionSubjectSpy.mockRestore();
+      internalSummarySpy.mockRestore();
+    }
   });
 
   it('GET workspace inventory status filter narrows to detached rows', async () => {

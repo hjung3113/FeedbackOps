@@ -2,9 +2,50 @@ import { describe, expect, it } from 'vitest';
 
 import {
   entityLinkRelationTypeSchema,
+  listEntityLinksQuerySchema,
+  listEntityLinksResponseSchema,
   registeredEntityLinkPairSchema,
   taskReporterSummarySchema,
 } from '../entity-links.js';
+
+describe('listEntityLinksQuerySchema pagination', () => {
+  it('defaults inventory pagination to 50 and accepts the maximum page size with a cursor', () => {
+    expect(listEntityLinksQuerySchema.parse({ scope: 'workspace' }).limit).toBe(50);
+    expect(
+      listEntityLinksQuerySchema.parse({ scope: 'workspace', limit: '100', cursor: 'opaque' }),
+    ).toMatchObject({ limit: 100, cursor: 'opaque' });
+  });
+
+  it.each(['0', '101', '1.5'])('rejects invalid page size %s', (limit) => {
+    expect(listEntityLinksQuerySchema.safeParse({ scope: 'workspace', limit }).success).toBe(false);
+  });
+
+  it('keeps pagination out of endpoint relation reads', () => {
+    expect(
+      listEntityLinksQuerySchema.safeParse({
+        source_type: 'voc',
+        source_id: '11111111-1111-4111-8111-111111111111',
+        limit: '10',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('listEntityLinksResponseSchema pagination', () => {
+  it('accepts first-page status counts while keeping endpoint relation responses compatible', () => {
+    expect(
+      listEntityLinksResponseSchema.parse({
+        items: [],
+        page: {
+          has_more: true,
+          cursor: 'opaque',
+          status_counts: { active: 3, stale: 1, detached: 0, revoked: 0 },
+        },
+      }).page?.status_counts,
+    ).toEqual({ active: 3, stale: 1, detached: 0, revoked: 0 });
+    expect(listEntityLinksResponseSchema.parse({ items: [] })).toEqual({ items: [] });
+  });
+});
 
 describe('taskReporterSummarySchema', () => {
   it('accepts a Task reporter summary without a public update timestamp', () => {

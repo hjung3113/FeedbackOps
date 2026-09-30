@@ -3,7 +3,7 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { shortId } from '@/lib/identity';
 import type { EntityLinkDto } from '@fops/shared';
-import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
+import { Button, Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
 import { EntityRelationRow, entityLinkEndpointPrimaryLabels } from './EntityRelationRow';
 import { LinkStatusBadge } from './LinkStatusBadge';
 
@@ -27,6 +27,10 @@ export interface EntityLinksInventoryTableProps {
   unfilteredItemsCount?: number;
   filterDescription?: string | undefined;
   onResetFilters?: (() => void) | undefined;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  loadMoreError?: Error | null;
+  onLoadMore?: (() => void) | undefined;
 }
 
 function formatTimestamp(raw: string | null): string {
@@ -51,6 +55,10 @@ export function EntityLinksInventoryTable({
   unfilteredItemsCount = 0,
   filterDescription,
   onResetFilters,
+  hasMore,
+  loadingMore,
+  loadMoreError,
+  onLoadMore,
 }: EntityLinksInventoryTableProps) {
   if (loading === true) {
     return <div className="p-6 text-sm text-text-muted">Loading entity_links…</div>;
@@ -89,7 +97,16 @@ export function EntityLinksInventoryTable({
     );
   }
 
+  const loadMoreControl = hasMore === true && onLoadMore !== undefined && (
+    <div className="flex justify-center border-t border-border-subtle py-2">
+      <Button variant="ghost" size="sm" onClick={onLoadMore} disabled={loadingMore === true}>
+        {loadingMore === true ? '불러오는 중…' : loadMoreError != null ? '다시 시도' : '더 보기'}
+      </Button>
+    </div>
+  );
+
   if (items.length === 0) {
+    if (hasMore === true) return <div>{loadMoreControl}</div>;
     if (filterDescription !== undefined && unfilteredItemsCount > 0) {
       return (
         <div className="p-4">
@@ -117,71 +134,74 @@ export function EntityLinksInventoryTable({
   }
 
   return (
-    <div aria-label="Entity link inventory" role="list" className="min-w-full">
-      {items.map((link) => {
-        const managedSystem = managedSystemsById[link.managed_system_id];
-        const actor = actorsById[link.created_by];
-        const [sourceLabel, targetLabel] = entityLinkEndpointPrimaryLabels(link);
-        return (
-          <div
-            key={link.id}
-            role="listitem"
-            className={cn(
-              'grid min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
-              link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
-            )}
-            style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}
-          >
+    <>
+      <div aria-label="Entity link inventory" role="list" className="min-w-full">
+        {items.map((link) => {
+          const managedSystem = managedSystemsById[link.managed_system_id];
+          const actor = actorsById[link.created_by];
+          const [sourceLabel, targetLabel] = entityLinkEndpointPrimaryLabels(link);
+          return (
             <div
-              className="flex items-center"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
+              key={link.id}
+              role="listitem"
+              className={cn(
+                'grid min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
+                link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
+              )}
+              style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}
             >
-              <Checkbox aria-label={`${sourceLabel} → ${targetLabel} 선택`} />
-            </div>
-            <div className="flex min-w-0 flex-col justify-center gap-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                {/* #589: endpoint identities lead this row; the link id stays secondary metadata. */}
-                <EntityRelationRow link={link} compact />
-                <LinkStatusBadge status={link.status} />
+              <div
+                className="flex items-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                <Checkbox aria-label={`${sourceLabel} → ${targetLabel} 선택`} />
               </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-                <span className="font-mono text-xs text-text-muted">Link {shortId(link.id)}</span>
-                <RowDot />
-                {managedSystem !== undefined ? (
-                  <ManagedSystemPill
-                    name={managedSystem.name}
-                    {...(managedSystem.mark !== undefined ? { mark: managedSystem.mark } : {})}
-                    {...(managedSystem.archived !== undefined
-                      ? { archived: managedSystem.archived }
-                      : {})}
-                  />
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <span>Managed System</span>
-                    <span className="font-mono text-xs text-text-muted">
-                      {shortId(link.managed_system_id)}
-                    </span>
-                  </span>
-                )}
-                <RowDot />
-                <span>
-                  by <span>{actor?.display_name ?? '알 수 없는 사용자'}</span>
-                  {!actor && (
-                    <span className="ml-1 font-mono text-text-muted">
-                      {shortId(link.created_by)}
+              <div className="flex min-w-0 flex-col justify-center gap-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {/* #589: endpoint identities lead this row; the link id stays secondary metadata. */}
+                  <EntityRelationRow link={link} compact />
+                  <LinkStatusBadge status={link.status} />
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
+                  <span className="font-mono text-xs text-text-muted">Link {shortId(link.id)}</span>
+                  <RowDot />
+                  {managedSystem !== undefined ? (
+                    <ManagedSystemPill
+                      name={managedSystem.name}
+                      {...(managedSystem.mark !== undefined ? { mark: managedSystem.mark } : {})}
+                      {...(managedSystem.archived !== undefined
+                        ? { archived: managedSystem.archived }
+                        : {})}
+                    />
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <span>Managed System</span>
+                      <span className="font-mono text-xs text-text-muted">
+                        {shortId(link.managed_system_id)}
+                      </span>
                     </span>
                   )}
-                </span>
-                <RowDot />
-                <span>updated {formatTimestamp(link.updated_at)}</span>
+                  <RowDot />
+                  <span>
+                    by <span>{actor?.display_name ?? '알 수 없는 사용자'}</span>
+                    {!actor && (
+                      <span className="ml-1 font-mono text-text-muted">
+                        {shortId(link.created_by)}
+                      </span>
+                    )}
+                  </span>
+                  <RowDot />
+                  <span>updated {formatTimestamp(link.updated_at)}</span>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+      {loadMoreControl}
+    </>
   );
 }
 

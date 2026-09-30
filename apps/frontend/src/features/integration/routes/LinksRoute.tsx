@@ -72,6 +72,10 @@ export function LinksRoute() {
     ...(search.type !== undefined ? { relationType: search.type } : {}),
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
+  const inventoryItems = React.useMemo(
+    () => inventory.data?.pages.flatMap((page) => page.items) ?? [],
+    [inventory.data],
+  );
 
   const activeFilterDescription = React.useMemo(() => {
     const conditions: string[] = [];
@@ -85,17 +89,33 @@ export function LinksRoute() {
   const needsUnfilteredCheck =
     activeFilterDescription !== undefined &&
     inventory.isSuccess &&
-    inventory.data.items.length === 0;
+    inventoryItems.length === 0 &&
+    inventory.hasNextPage !== true;
   const unfilteredInventory = useEntityLinkInventory(
     {
       ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     },
     needsUnfilteredCheck,
   );
-  const tableError = inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null);
+  const tableError =
+    inventoryItems.length === 0
+      ? (inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null))
+      : null;
   const retryTable = React.useCallback((): void => {
-    void (inventory.error ? inventory.refetch() : unfilteredInventory.refetch());
-  }, [inventory.error, inventory.refetch, unfilteredInventory.refetch]);
+    if (inventory.isFetchNextPageError) {
+      void inventory.fetchNextPage();
+    } else if (inventory.error) {
+      void inventory.refetch();
+    } else {
+      void unfilteredInventory.refetch();
+    }
+  }, [
+    inventory.error,
+    inventory.fetchNextPage,
+    inventory.isFetchNextPageError,
+    inventory.refetch,
+    unfilteredInventory.refetch,
+  ]);
 
   const countInventory = useEntityLinkInventory({
     ...(search.type !== undefined ? { relationType: search.type } : {}),
@@ -111,12 +131,12 @@ export function LinksRoute() {
   const actorIds = React.useMemo(
     () => [
       ...new Set(
-        (inventory.data?.items ?? [])
+        inventoryItems
           .map((item) => item.created_by)
           .filter((id): id is string => typeof id === 'string'),
       ),
     ],
-    [inventory.data?.items],
+    [inventoryItems],
   );
   const actorsQuery = useQuery({
     queryKey: ['actors-resolve', actorIds, []] as const,
@@ -145,16 +165,29 @@ export function LinksRoute() {
   }, [actorsQuery.data]);
 
   const statusTabs = React.useMemo<ListToolbarTab[]>(() => {
-    const items = countInventory.data?.items ?? [];
-    const counts = new Map<string, number>([['all', items.length]]);
+    const items = countInventory.data?.pages.flatMap((page) => page.items) ?? [];
+    const statusCounts = countInventory.data?.pages[0]?.page?.status_counts;
+    const counts = new Map<string, number>([
+      [
+        'all',
+        statusCounts !== undefined
+          ? statusCounts.active + statusCounts.stale + statusCounts.detached + statusCounts.revoked
+          : items.length,
+      ],
+    ]);
     for (const status of STATUS_TAB_VALUES) {
-      counts.set(status, items.filter((link) => link.status === status).length);
+      counts.set(
+        status,
+        statusCounts !== undefined
+          ? statusCounts[status]
+          : items.filter((link) => link.status === status).length,
+      );
     }
     return STATUS_TABS.map((tab) => ({
       ...tab,
       badgeCount: counts.get(tab.value) ?? 0,
     }));
-  }, [countInventory.data?.items]);
+  }, [countInventory.data]);
 
   function handleStatusChange(next: string): void {
     void navigate({
@@ -240,15 +273,23 @@ export function LinksRoute() {
         }
       />
       <EntityLinksInventoryTable
-        items={inventory.data?.items ?? []}
+        items={inventoryItems}
         loading={inventory.isLoading || (needsUnfilteredCheck && unfilteredInventory.isPending)}
         error={tableError ?? null}
         managedSystemsById={managedSystemsById}
         actorsById={actorsById}
         onRetry={retryTable}
-        unfilteredItemsCount={unfilteredInventory.data?.items.length ?? 0}
+        unfilteredItemsCount={
+          unfilteredInventory.data?.pages.flatMap((page) => page.items).length ?? 0
+        }
         filterDescription={activeFilterDescription}
         onResetFilters={handleResetFilters}
+        hasMore={inventory.hasNextPage === true}
+        loadingMore={inventory.isFetchingNextPage}
+        loadMoreError={inventory.isFetchNextPageError ? inventory.error : null}
+        onLoadMore={() => {
+          void inventory.fetchNextPage();
+        }}
       />
     </>
   );
