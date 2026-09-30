@@ -6,7 +6,6 @@ import { ApiError } from './lib/api/types';
 import './styles.css';
 import { routeTree } from './routeTree.gen';
 
-const router = createRouter({ routeTree });
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (
     error instanceof ApiError &&
@@ -20,6 +19,7 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 }
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } });
+const router = createRouter({ routeTree, context: { queryClient } });
 
 declare module '@tanstack/react-router' {
   interface Register {

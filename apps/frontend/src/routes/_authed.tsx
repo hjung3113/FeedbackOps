@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { QueryClient, useQuery } from '@tanstack/react-query';
 import {
   Outlet,
   createFileRoute,
@@ -23,11 +23,13 @@ import {
 } from 'lucide-react';
 import * as React from 'react';
 import { homeSidebarEntries } from '../features/home/homeNavigation';
-import { UnauthenticatedError, fetchDashboardSummary, fetchMe } from '../lib/api';
+import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
+import { ensureMe } from '../lib/auth/useMe';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
+import type { AppRouterContext } from './__root';
 
 export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = {
   voc: [
@@ -213,17 +215,25 @@ export function isSidebarEntryActive(
 }
 
 export const Route = createFileRoute('/_authed')({
-  beforeLoad: async ({ location }) => {
-    try {
-      await fetchMe();
-    } catch (err) {
-      if (err instanceof UnauthenticatedError)
-        throw redirect({ to: '/login', search: { redirectTo: location.href } });
-      throw err;
-    }
-  },
+  beforeLoad: authenticatedBeforeLoad,
   component: AuthedLayout,
 });
+
+export async function authenticatedBeforeLoad({
+  context,
+  location,
+}: {
+  context: AppRouterContext;
+  location: { href: string };
+}): Promise<void> {
+  try {
+    await ensureMe(context.queryClient ?? new QueryClient());
+  } catch (err) {
+    if (err instanceof UnauthenticatedError)
+      throw redirect({ to: '/login', search: { redirectTo: location.href } });
+    throw err;
+  }
+}
 
 function AuthedLayout() {
   const location = useRouterState({ select: (state) => state.location });

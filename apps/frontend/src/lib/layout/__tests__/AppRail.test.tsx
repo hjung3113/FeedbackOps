@@ -158,6 +158,18 @@ describe('AppRail account menu', () => {
     expect(calls).toEqual(['logout', 'clear', 'navigate']);
   });
 
+  it('removes the me identity from the query cache on logout', async () => {
+    logout.mockResolvedValue(undefined);
+    const queryClient = renderRail();
+    queryClient.setQueryData(['me'], ACTOR);
+
+    openAccountMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
+    expect(queryClient.getQueryData(['me'])).toBeUndefined();
+  });
+
   it('clears cached data and routes to login when revocation fails', async () => {
     logout.mockRejectedValue(new Error('network failed'));
     const queryClient = renderRail();

@@ -1,8 +1,14 @@
-import { Outlet, createRootRoute } from '@tanstack/react-router';
+import type { QueryClient } from '@tanstack/react-query';
+import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
 import { OctagonAlert, TriangleAlert, Info, Loader2, CircleCheck } from 'lucide-react';
 import { Toaster } from 'sonner';
 
-export const Route = createRootRoute({
+export interface AppRouterContext {
+  // The app always supplies this; optional for standalone routeTree test routers.
+  queryClient?: QueryClient;
+}
+
+export const Route = createRootRouteWithContext<AppRouterContext>()({
   component: RootLayout,
 });
 

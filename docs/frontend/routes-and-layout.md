@@ -99,7 +99,7 @@ Admin:
 
 Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which is authoritative. Its section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including Milestones), `INTEGRATION`, `SURVEYS`, and `ADMIN`. Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries` (`apps/frontend/src/features/home/homeNavigation.tsx`).
 
-The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
+The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login clears prior Actor data and seeds the `['me']` identity from the login response before routing so a new Actor never sees prior Actor data.
 
 In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
 

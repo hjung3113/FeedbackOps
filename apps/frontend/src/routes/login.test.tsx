@@ -16,6 +16,7 @@ import {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { ME_QUERY_KEY } from '../lib/auth/useMe';
 import { sanitizeLoginReturnTo } from '../lib/login-return-to';
 import { LoginPage } from './login';
 
@@ -120,6 +121,42 @@ describe('/login dev (mock auth)', () => {
     expect(qc.clear).toHaveBeenCalledOnce();
     expect(calls).toEqual(['clear', 'navigate']);
     expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  test('refreshes the me cache from the successful login response', async () => {
+    const authenticatedMe = {
+      actor: {
+        id: 'new-actor',
+        external_id: 'mock-user-1',
+        email: 'user@example.test',
+        display_name: 'Mock User',
+        role_level: 'user',
+      },
+      workspace_id: 'workspace-1',
+    };
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify(authenticatedMe), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as typeof globalThis.fetch;
+    const { router, qc } = buildHarness({ initialPath: '/login' });
+    qc.setQueryData(ME_QUERY_KEY, {
+      ...authenticatedMe,
+      actor: { ...authenticatedMe.actor, id: 'previous-actor' },
+    });
+    qc.setQueryData(['actor-private-data'], 'previous actor data');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock User (User)' }));
+
+    await waitFor(() => expect(qc.getQueryData(ME_QUERY_KEY)).toEqual(authenticatedMe));
+    expect(qc.getQueryData(['actor-private-data'])).toBeUndefined();
   });
 });
 
