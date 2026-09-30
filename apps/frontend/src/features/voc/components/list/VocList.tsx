@@ -19,7 +19,7 @@ import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem'
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
-import { type AvatarUser, Button, EmptyState } from '@fops/ui';
+import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { FileText, Flag, Layers, User } from 'lucide-react';
@@ -31,29 +31,6 @@ import { VocRowSkeleton } from './VocRowSkeleton';
 // ---------------------------------------------------------------------------
 // useManagedSystemMap — lifted map hook
 // ---------------------------------------------------------------------------
-
-const COLOR_PALETTE = [
-  '#5e6ad2',
-  '#27a644',
-  '#f2c46d',
-  '#8b5cf6',
-  '#02b8cc',
-  '#ef4444',
-  '#e4f222',
-  '#7c3aed',
-] as const;
-
-function djb2Hash(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-function colorFromId(id: string): string {
-  return COLOR_PALETTE[djb2Hash(id) % COLOR_PALETTE.length] as string;
-}
 
 function useManagedSystemMap(): Record<string, ResolvedManagedSystem> {
   const { data } = useQuery({
@@ -69,7 +46,7 @@ function useManagedSystemMap(): Record<string, ResolvedManagedSystem> {
       map[ms.id] = {
         id: ms.id,
         name: ms.name,
-        mark: colorFromId(ms.id),
+        mark: managedSystemMarkColor(ms.slug),
         archived: ms.archived_at !== null,
       };
     }

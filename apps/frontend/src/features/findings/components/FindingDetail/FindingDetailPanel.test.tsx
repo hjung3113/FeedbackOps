@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,6 +140,22 @@ describe('FindingDetailPanel', () => {
       expect(screen.getByText('TASK-901')).toBeInTheDocument();
     });
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('keeps one primary execution action and groups the remaining actions as secondary', () => {
+    renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
+
+    const primaryGroup = screen.getByRole('group', { name: '주요 실행' });
+    const secondaryGroup = screen.getByRole('group', { name: '보조 작업' });
+    expect(within(primaryGroup).getAllByRole('button')).toHaveLength(1);
+    expect(within(primaryGroup).getByRole('button', { name: 'Task 요청' })).toBeVisible();
+    expect(within(secondaryGroup).getByRole('button', { name: 'Evidence 추가' })).toBeVisible();
+    expect(
+      within(secondaryGroup).getByRole('button', { name: '기존 Evidence 연결' }),
+    ).toBeVisible();
+    expect(
+      within(secondaryGroup).getByRole('button', { name: '조치 불필요 표시' }),
+    ).toBeVisible();
   });
 
   it('submits a Task Request from the inline draft card with the Finding contract fields', async () => {

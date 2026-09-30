@@ -45,11 +45,11 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 
 | Name | Value | Token | Role |
 |------|-------|-------|------|
-| Tableau Scope | `#5e6ad2` | `--managed-system-tableau` | Compact `TB` scope mark background. |
-| Power BI Scope | `#f2c46d` | `--managed-system-power-bi` | Compact `PB` scope mark background. |
-| Looker Scope | `#02b8cc` | `--managed-system-looker` | Compact `LK` scope mark background. |
-| Metabase Scope | `#27a644` | `--managed-system-metabase` | Compact `MB` scope mark background. |
-| Default Scope | `#1428a0` | `--managed-system-default` | Fallback compact Managed System mark background. |
+| Tableau Scope | `#5e6ad2` | `--managed-system-tableau` | Tableau identity mark background; show its name beside the mark. |
+| Power BI Scope | `#f2c46d` | `--managed-system-power-bi` | Power BI identity mark background; show its name beside the mark. |
+| Looker Scope | `#02b8cc` | `--managed-system-looker` | Looker identity mark background; show its name beside the mark. |
+| Metabase Scope | `#27a644` | `--managed-system-metabase` | Metabase identity mark background; show its name beside the mark. |
+| Default Scope | `#667083` | `--managed-system-default` | Neutral fallback for unknown Managed System slugs. |
 
 ## Tokens — Typography
 

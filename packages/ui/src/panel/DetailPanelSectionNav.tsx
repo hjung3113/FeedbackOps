@@ -20,7 +20,7 @@
  * 440px panel). With no flagged section the output is identical to the prototype strip.
  */
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 import {
   DropdownMenu,
@@ -53,6 +53,11 @@ export function DetailPanelSectionNav({
 }: DetailPanelSectionNavProps): React.ReactElement | null {
   const firstSection = sections[0]?.id ?? '';
   const [activeSection, setActiveSection] = React.useState(firstSection);
+  const [overflowState, setOverflowState] = React.useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+  const navRef = React.useRef<HTMLDivElement>(null);
   const programmaticRef = React.useRef(false);
   const sectionKey = sections.map((s) => s.id).join('|');
 
@@ -60,6 +65,35 @@ export function DetailPanelSectionNav({
   React.useEffect(() => {
     setActiveSection(firstSection);
   }, [firstSection, sectionKey]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Rebind when section IDs replace tab elements.
+  React.useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const updateOverflow = () => {
+      const maxScroll = nav.scrollWidth - nav.clientWidth;
+      setOverflowState({
+        canScrollLeft: nav.scrollLeft > 1,
+        canScrollRight: maxScroll - nav.scrollLeft > 1,
+      });
+    };
+
+    updateOverflow();
+    nav.addEventListener('scroll', updateOverflow, { passive: true });
+    window.addEventListener('resize', updateOverflow);
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateOverflow);
+    resizeObserver?.observe(nav);
+    for (const tab of nav.children) {
+      resizeObserver?.observe(tab);
+    }
+    return () => {
+      nav.removeEventListener('scroll', updateOverflow);
+      window.removeEventListener('resize', updateOverflow);
+      resizeObserver?.disconnect();
+    };
+  }, [sectionKey]);
 
   // Observe intersections to track active section during scroll
   React.useEffect(() => {
@@ -116,6 +150,10 @@ export function DetailPanelSectionNav({
 
   const scrollTo = React.useCallback(
     (id: string) => {
+      const tab = navRef.current?.querySelector<HTMLButtonElement>(`[data-section-id="${id}"]`);
+      if (typeof tab?.scrollIntoView === 'function') {
+        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      }
       const root = scrollRef?.current;
       const el = root?.querySelector<HTMLElement>(`[data-anchor="${id}"]`);
       if (!root || !el) return;
@@ -138,6 +176,17 @@ export function DetailPanelSectionNav({
 
   const pinned = sections.filter((s) => !s.overflow);
   const overflowed = sections.filter((s) => s.overflow);
+  const scrollTabs = (direction: 'left' | 'right') => {
+    const nav = navRef.current;
+    if (!nav) return;
+    nav.scrollBy({
+      left:
+        direction === 'right'
+          ? Math.max(nav.clientWidth * 0.75, 120)
+          : -Math.max(nav.clientWidth * 0.75, 120),
+      behavior: 'smooth',
+    });
+  };
 
   return (
     <div
@@ -146,45 +195,75 @@ export function DetailPanelSectionNav({
         'sticky top-0 z-10 flex items-center gap-0',
         'px-6 pt-1.5 pb-0',
         'bg-surface-detail border-b border-border-subtle',
-        'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
       )}
     >
-      {pinned.map((s) => {
-        const isActive = activeSection === s.id;
-        return (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => {
-              scrollTo(s.id);
-            }}
-            className={cn(
-              // .panel-section-nav-button
-              'inline-flex items-center gap-1.5 px-2.5 py-1.5',
-              'border-0 border-b-2 bg-transparent cursor-pointer',
-              'text-xs font-medium whitespace-nowrap leading-none',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-              isActive
-                ? 'border-accent-primary text-text-primary'
-                : 'border-transparent text-text-muted hover:text-text-secondary',
-            )}
-          >
-            {s.label}
-            {s.count !== undefined && (
-              <span
+      {overflowState.canScrollLeft && (
+        <button
+          type="button"
+          aria-label="Scroll tabs left"
+          className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          onClick={() => scrollTabs('left')}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
+      <div className="relative min-w-0 flex-1">
+        {overflowState.canScrollLeft && (
+          <span
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-surface-detail to-transparent"
+            aria-hidden="true"
+          />
+        )}
+        <div
+          ref={navRef}
+          data-testid="detail-panel-section-nav-track"
+          className="flex min-w-0 items-center gap-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {pinned.map((s) => {
+            const isActive = activeSection === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                data-section-id={s.id}
+                onClick={() => {
+                  scrollTo(s.id);
+                }}
                 className={cn(
-                  // .panel-section-nav-count
-                  'px-1 rounded-full bg-surface-canvas text-text-muted font-mono',
-                  'text-[10px] leading-[1.4]',
+                  // .panel-section-nav-button
+                  'inline-flex items-center gap-1.5 px-2.5 py-1.5',
+                  'border-0 border-b-2 bg-transparent cursor-pointer',
+                  'text-xs font-medium whitespace-nowrap leading-none',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                  isActive
+                    ? 'border-accent-primary text-text-primary'
+                    : 'border-transparent text-text-muted hover:text-text-secondary',
                 )}
               >
-                {s.count}
-              </span>
-            )}
-          </button>
-        );
-      })}
+                {s.label}
+                {s.count !== undefined && (
+                  <span
+                    className={cn(
+                      // .panel-section-nav-count
+                      'px-1 rounded-full bg-surface-canvas text-text-muted font-mono',
+                      'text-[10px] leading-[1.4]',
+                    )}
+                  >
+                    {s.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {overflowState.canScrollRight && (
+          <span
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-surface-detail to-transparent"
+            aria-hidden="true"
+          />
+        )}
+      </div>
       {overflowed.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -222,6 +301,16 @@ export function DetailPanelSectionNav({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+      {overflowState.canScrollRight && (
+        <button
+          type="button"
+          aria-label="Scroll tabs right"
+          className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          onClick={() => scrollTabs('right')}
+        >
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
       )}
     </div>
   );

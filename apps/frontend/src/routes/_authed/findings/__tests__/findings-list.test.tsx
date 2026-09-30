@@ -269,6 +269,7 @@ describe('FindingsListPage', () => {
     expect(screen.queryByText('finding.read capability required')).not.toBeInTheDocument();
     expect(screen.queryByTestId('finding-list-error')).not.toBeInTheDocument();
     expect(screen.queryByText('0개')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('finding-detail-empty-state')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission failure as the existing failed-load state', async () => {

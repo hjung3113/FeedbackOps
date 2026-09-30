@@ -125,7 +125,7 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--managed-system-power-bi', hex: '#f2c46d', rgb: '242 196 109' },
   { tokenName: '--managed-system-looker', hex: '#02b8cc', rgb: '2 184 204' },
   { tokenName: '--managed-system-metabase', hex: '#27a644', rgb: '39 166 68' },
-  { tokenName: '--managed-system-default', raw: 'var(--color-aether-blue)' },
+  { tokenName: '--managed-system-default', raw: 'var(--color-storm-cloud)' },
 
   // --- Layout tokens ---
   { tokenName: '--sidebar-width', raw: '240px' },

@@ -129,6 +129,7 @@ export function useVocCreateController({
   const msOptions = (msQuery.data?.items ?? []).map((ms) => ({
     id: ms.id,
     label: ms.name,
+    slug: ms.slug,
     archived: ms.archived_at !== null,
   }));
 

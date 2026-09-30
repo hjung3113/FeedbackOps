@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DetailPanelSectionNav } from '../DetailPanelSectionNav';
 
@@ -112,5 +112,35 @@ describe('DetailPanelSectionNav', () => {
   it('does not render the overflow trigger when no section is overflowed', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
     expect(screen.queryByRole('button', { name: /더보기/ })).toBeNull();
+  });
+
+  it('shows an overflow affordance and scrolls a clipped tab into view', () => {
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'decision', label: 'Decision' },
+          { id: 'source', label: 'Source' },
+          { id: 'properties', label: 'Properties' },
+        ]}
+      />,
+    );
+    const track = screen.getByTestId('detail-panel-section-nav-track');
+    Object.defineProperties(track, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 300 },
+    });
+
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(screen.getByRole('button', { name: 'Scroll tabs right' })).toBeVisible();
+    const clippedTab = screen.getByRole('button', { name: 'Properties' });
+    const scrollIntoView = vi.fn();
+    clippedTab.scrollIntoView = scrollIntoView;
+    fireEvent.click(clippedTab);
+
+    expect(scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'nearest', inline: 'nearest' }),
+    );
   });
 });
