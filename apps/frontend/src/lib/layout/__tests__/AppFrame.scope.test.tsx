@@ -1,5 +1,5 @@
-import { NAV_TREE } from '@/routes/_authed';
 import { permissionCheckQueryKey } from '@/lib/cross-system/usePermissionCheck';
+import { NAV_TREE } from '@/routes/_authed';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -340,9 +340,8 @@ describe('AppFrame capability navigation', () => {
         );
         await waitFor(() =>
           expect(
-            client.getQueryState(
-              permissionCheckQueryKey({ capability: 'workspace.admin' }),
-            )?.status,
+            client.getQueryState(permissionCheckQueryKey({ capability: 'workspace.admin' }))
+              ?.status,
           ).toBe('success'),
         );
 
