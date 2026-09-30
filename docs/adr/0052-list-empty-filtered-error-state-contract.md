@@ -30,6 +30,7 @@ but the application owns the copy and actions for its list surfaces.
    `PermissionBlockedPanel` path.
 5. Existing loading states and `ListShell` stay unchanged. The contract applies
    to Findings, Tasks backlog, Task Requests, Entity Links, and Surveys.
+   On 2026-09-30 (#609), it was extended to Milestones and VOC Clusters.
 
 ## Consequences
 

@@ -1,3 +1,4 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listMilestones } from '@/lib/api/milestones';
@@ -210,6 +211,16 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       ),
     );
   }, [items, search]);
+  const filterDescription = [
+    ...(activeTab !== 'all'
+      ? [STATUS_TABS.find((tab) => tab.value === activeTab)?.label ?? activeTab]
+      : []),
+    ...(search.trim() !== '' ? [`검색: ${search.trim()}`] : []),
+  ].join(' · ');
+  const countsConfirmEmpty =
+    countQuery.isSuccess && !countQuery.isFetching && countQuery.data?.items.length === 0;
+  const filteredEmpty =
+    shown.length === 0 && filterDescription !== '' && (items.length > 0 || !countsConfirmEmpty);
 
   const summary = React.useMemo(
     () => ({
@@ -435,7 +446,12 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                   className="m-4"
                 />
               ) : listQuery.error ? (
-                <div className="p-4 text-sm text-accent-danger">Milestone list unavailable.</div>
+                <ListStateMessage
+                  variant="error"
+                  title="Milestone 목록을 불러오지 못했습니다"
+                  body="잠시 후 다시 시도하세요."
+                  action={{ label: '다시 시도', onClick: () => void listQuery.refetch() }}
+                />
               ) : (
                 <>
                   {shown.map((milestone) => {
@@ -459,11 +475,28 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       />
                     );
                   })}
-                  {shown.length === 0 && (
-                    <div className="px-5 py-10 text-center text-sm text-text-muted">
-                      표시할 milestone 이 없습니다.
-                    </div>
-                  )}
+                  {shown.length === 0 &&
+                    (filteredEmpty ? (
+                      <ListStateMessage
+                        variant="filtered"
+                        title="현재 조건에 맞는 Milestone이 없습니다"
+                        body={`선택한 조건: ${filterDescription}`}
+                        action={{
+                          label: '필터 초기화',
+                          onClick: () => {
+                            setActiveTab('all');
+                            setSearch('');
+                          },
+                        }}
+                      />
+                    ) : (
+                      // Prototype-verbatim copy retains this surface's lowercase spelling.
+                      <ListStateMessage
+                        variant="empty"
+                        title="표시할 milestone 이 없습니다."
+                        body="생성된 Milestone이 여기에 표시됩니다."
+                      />
+                    ))}
                 </>
               )}
             </div>

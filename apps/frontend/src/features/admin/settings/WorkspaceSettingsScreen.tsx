@@ -93,9 +93,19 @@ export function WorkspaceSettingsScreen() {
           Loading…
         </p>
       ) : settingsQuery.isError || !settingsQuery.data ? (
-        <p className="text-sm text-accent-danger" data-testid="workspace-settings-error">
-          Workspace settings를 불러오지 못했습니다.
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-accent-danger" data-testid="workspace-settings-error">
+            Workspace settings를 불러오지 못했습니다.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void settingsQuery.refetch()}
+          >
+            다시 시도
+          </Button>
+        </div>
       ) : (
         <WorkspaceSettingsForm initialSettings={settingsQuery.data} />
       )}
