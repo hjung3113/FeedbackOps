@@ -1,3 +1,4 @@
+import type { SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Tx } from '../../db/tx.js';
 
@@ -5,7 +6,7 @@ export type SurveyResponseEvidenceSubject = {
   response_id: string;
   survey_id: string;
   survey_display_id: string;
-  survey_type: 'discovery' | 'validation' | 'outcome';
+  survey_type: SurveyType;
   survey_status: 'draft' | 'open' | 'closed';
   primary_managed_system_id: string;
   analytics_area_id: string | null;

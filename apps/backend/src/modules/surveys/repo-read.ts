@@ -1,3 +1,4 @@
+import type { SurveyQuestionKind, SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.js';
@@ -33,12 +34,12 @@ export function decodeSurveyResponseHistoryCursor(raw: string): SurveyResponseHi
 }
 
 export type SurveyStatus = 'draft' | 'open' | 'closed';
-export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
+export type QuestionKind = SurveyQuestionKind;
 export interface SurveyRow {
   id: string;
   workspace_id: string;
   display_id: string;
-  type: 'discovery' | 'validation' | 'outcome';
+  type: SurveyType;
   status: SurveyStatus;
   title: string;
   description: string | null;

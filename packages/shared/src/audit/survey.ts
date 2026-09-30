@@ -7,11 +7,9 @@
 // data; `.strict()` rejects such fields at write time.
 
 import { z } from 'zod';
+import { surveyQuestionKindSchema, surveyTypeSchema } from '../surveys/dto.js';
 
 const uuid = () => z.string().uuid();
-
-const surveyTypeSchema = z.enum(['discovery', 'validation', 'outcome']);
-const questionKindSchema = z.enum(['single_choice', 'multiple_choice', 'rating', 'text']);
 const branchDepthSchema = z.union([z.literal(0), z.literal(1)]);
 
 // Field names only. Audit detail records which mutable question fields changed,
@@ -59,7 +57,7 @@ export const surveyQuestionCreatedDetailSchema = z
   .object({
     survey_id: uuid(),
     question_id: uuid(),
-    kind: questionKindSchema,
+    kind: surveyQuestionKindSchema,
     branch_depth: branchDepthSchema,
     branch_parent_question_id: uuid().optional(),
     sort_order: z.number().int().nonnegative(),
@@ -83,7 +81,7 @@ export const surveyQuestionDeletedDetailSchema = z
   .object({
     survey_id: uuid(),
     question_id: uuid(),
-    kind: questionKindSchema,
+    kind: surveyQuestionKindSchema,
     branch_depth: branchDepthSchema,
   })
   .strict();
