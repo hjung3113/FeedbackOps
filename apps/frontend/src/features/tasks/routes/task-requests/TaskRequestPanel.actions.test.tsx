@@ -225,12 +225,18 @@ describe('TaskRequestPanel next actions', () => {
     const primaryGroup = within(decisionSection).getByRole('group', { name: '주요 결정' });
     const secondaryGroup = within(decisionSection).getByRole('group', { name: '보조 결정' });
     expect(within(primaryGroup).getAllByRole('button')).toHaveLength(1);
-    expect(within(primaryGroup).getByRole('button', { name: '승인' })).toBeVisible();
+    const approve = within(primaryGroup).getByRole('button', { name: '승인' });
+    expect(approve).toBeVisible();
+    expect(approve).toHaveClass('bg-accent-primary', 'text-text-on-accent');
     const reject = within(secondaryGroup).getByRole('button', { name: '반려' });
     expect(reject).toBeVisible();
-    expect(reject).toHaveClass('border-accent-danger', 'text-accent-danger');
+    expect(reject).toHaveClass('bg-transparent', 'border-accent-danger', 'text-accent-danger');
     expect(reject).not.toHaveClass('bg-accent-danger');
-    expect(within(secondaryGroup).getByRole('button', { name: '근거 추가 요청' })).toBeVisible();
+    expect(reject).not.toHaveClass('bg-accent-primary');
+    const requestEvidence = within(secondaryGroup).getByRole('button', { name: '근거 추가 요청' });
+    expect(requestEvidence).toBeVisible();
+    expect(requestEvidence).toHaveClass('bg-surface-raised', 'border-border-subtle');
+    expect(requestEvidence).not.toHaveClass('bg-accent-primary');
 
     await user.click(reject);
     expect(await screen.findByRole('dialog')).toHaveTextContent('반려 사유');

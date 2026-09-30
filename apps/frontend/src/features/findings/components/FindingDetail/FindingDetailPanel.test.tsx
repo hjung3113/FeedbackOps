@@ -148,12 +148,20 @@ describe('FindingDetailPanel', () => {
     const primaryGroup = screen.getByRole('group', { name: '주요 실행' });
     const secondaryGroup = screen.getByRole('group', { name: '보조 작업' });
     expect(within(primaryGroup).getAllByRole('button')).toHaveLength(1);
-    expect(within(primaryGroup).getByRole('button', { name: 'Task 요청' })).toBeVisible();
-    expect(within(secondaryGroup).getByRole('button', { name: 'Evidence 추가' })).toBeVisible();
-    expect(
+    const taskRequest = within(primaryGroup).getByRole('button', { name: 'Task 요청' });
+    expect(taskRequest).toBeVisible();
+    expect(taskRequest).toHaveClass('bg-accent-primary', 'text-text-on-accent');
+
+    const secondaryActions = [
+      within(secondaryGroup).getByRole('button', { name: 'Evidence 추가' }),
       within(secondaryGroup).getByRole('button', { name: '기존 Evidence 연결' }),
-    ).toBeVisible();
-    expect(within(secondaryGroup).getByRole('button', { name: '조치 불필요 표시' })).toBeVisible();
+      within(secondaryGroup).getByRole('button', { name: '조치 불필요 표시' }),
+    ];
+    for (const action of secondaryActions) {
+      expect(action).toBeVisible();
+      expect(action).toHaveClass('bg-transparent');
+      expect(action).not.toHaveClass('bg-accent-primary');
+    }
   });
 
   it('submits a Task Request from the inline draft card with the Finding contract fields', async () => {

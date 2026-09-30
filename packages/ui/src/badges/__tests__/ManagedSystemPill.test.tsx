@@ -26,9 +26,13 @@ describe('ManagedSystemPill', () => {
     expect(managedSystemMarkToken(slug)).toBe(token);
   });
 
-  it.each(['salesforce', undefined])('uses a neutral token for unknown slug %s', (slug) => {
-    expect(managedSystemMarkToken(slug)).toBe('--managed-system-default');
-  });
+  it.each(['salesforce', undefined, 'constructor', 'toString', '__proto__'])(
+    'uses a neutral token and CSS color for unknown slug %s',
+    (slug) => {
+      expect(managedSystemMarkToken(slug)).toBe('--managed-system-default');
+      expect(managedSystemMarkColor(slug)).toBe('rgb(var(--managed-system-default) / 1)');
+    },
+  );
 
   it('renders the system name beside a mark using its slug token', () => {
     const { container } = render(

@@ -12,8 +12,9 @@ export type ManagedSystemMarkToken =
 /** Resolve a Managed System slug to its stable identity token. */
 export function managedSystemMarkToken(slug: string | null | undefined): ManagedSystemMarkToken {
   const normalizedSlug = typeof slug === 'string' ? slug.toLowerCase() : '';
-  const knownToken =
-    MANAGED_SYSTEM_MARK_TOKENS[normalizedSlug as keyof typeof MANAGED_SYSTEM_MARK_TOKENS];
+  const knownToken = Object.hasOwn(MANAGED_SYSTEM_MARK_TOKENS, normalizedSlug)
+    ? MANAGED_SYSTEM_MARK_TOKENS[normalizedSlug as keyof typeof MANAGED_SYSTEM_MARK_TOKENS]
+    : undefined;
   return knownToken ?? '--managed-system-default';
 }
 

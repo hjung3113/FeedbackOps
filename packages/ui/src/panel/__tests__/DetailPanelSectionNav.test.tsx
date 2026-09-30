@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DetailPanelSectionNav } from '../DetailPanelSectionNav';
 
 const SECTIONS = [
@@ -8,6 +9,23 @@ const SECTIONS = [
   { id: 'severity', label: 'Severity' },
   { id: 'summary', label: 'Summary', count: 3 },
 ];
+
+const rect = (left: number, right: number, top = 0): DOMRect =>
+  ({
+    x: left,
+    y: top,
+    left,
+    right,
+    top,
+    bottom: top + 24,
+    width: right - left,
+    height: 24,
+    toJSON: () => ({}),
+  }) as DOMRect;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('DetailPanelSectionNav', () => {
   it('renders section buttons', () => {
@@ -126,21 +144,134 @@ describe('DetailPanelSectionNav', () => {
       />,
     );
     const track = screen.getByTestId('detail-panel-section-nav-track');
+    track.scrollBy = vi.fn();
     Object.defineProperties(track, {
       clientWidth: { configurable: true, value: 100 },
       scrollWidth: { configurable: true, value: 300 },
     });
+    track.getBoundingClientRect = vi.fn(() => rect(0, 100));
 
     act(() => window.dispatchEvent(new Event('resize')));
 
-    expect(screen.getByRole('button', { name: 'Scroll tabs right' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
     const clippedTab = screen.getByRole('button', { name: 'Properties' });
-    const scrollIntoView = vi.fn();
-    clippedTab.scrollIntoView = scrollIntoView;
+    clippedTab.getBoundingClientRect = vi.fn(() => rect(200, 260));
     fireEvent.click(clippedTab);
 
-    expect(scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ block: 'nearest', inline: 'nearest' }),
+    expect(track.scrollBy).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 160, behavior: 'smooth' }),
     );
+  });
+
+  it('keeps a body-activated section visible and reveals it again when the track resizes', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    const scrollEl = document.createElement('div');
+    const anchorTop = new Map([
+      ['overview', 100],
+      ['decision', 200],
+      ['source', 300],
+      ['properties', 400],
+    ]);
+    const anchors = new Map<string, HTMLDivElement>();
+    for (const section of [
+      { id: 'overview', label: 'Overview' },
+      { id: 'decision', label: 'Decision' },
+      { id: 'source', label: 'Source' },
+      { id: 'properties', label: 'Properties' },
+    ]) {
+      const anchor = document.createElement('div');
+      anchor.setAttribute('data-anchor', section.id);
+      anchor.getBoundingClientRect = vi.fn(() => rect(0, 100, anchorTop.get(section.id) ?? 0));
+      anchors.set(section.id, anchor);
+      scrollEl.append(anchor);
+    }
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+    document.body.append(scrollEl);
+
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'decision', label: 'Decision' },
+          { id: 'source', label: 'Source' },
+          { id: 'properties', label: 'Properties' },
+        ]}
+        scrollRef={{ current: scrollEl }}
+      />,
+    );
+
+    const track = screen.getByTestId('detail-panel-section-nav-track');
+    track.scrollBy = vi.fn();
+    Object.defineProperties(track, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 300 },
+    });
+    track.getBoundingClientRect = vi.fn(() => rect(0, 100));
+    const tabPositions = new Map([
+      ['overview', rect(0, 50)],
+      ['decision', rect(50, 100)],
+      ['source', rect(100, 150)],
+      ['properties', rect(150, 200)],
+    ]);
+    for (const [id, position] of tabPositions) {
+      screen.getByRole('button', {
+        name: id === 'properties' ? 'Properties' : id[0].toUpperCase() + id.slice(1),
+      }).getBoundingClientRect = vi.fn(() => position);
+    }
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    anchorTop.set('overview', -200);
+    anchorTop.set('decision', -100);
+    anchorTop.set('source', 0);
+    anchorTop.set('properties', 100);
+    act(() => fireEvent.scroll(scrollEl));
+
+    expect(screen.getByRole('button', { name: 'Properties' })).toHaveClass('border-accent-primary');
+    expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 100, behavior: 'smooth' });
+
+    track.scrollBy.mockClear();
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect(track.scrollBy).toHaveBeenCalledWith({ left: 100, behavior: 'smooth' });
+    scrollEl.remove();
+  });
+
+  it('labels both scroll controls in Korean and scrolls the track in both directions', async () => {
+    const user = userEvent.setup();
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'decision', label: 'Decision' },
+          { id: 'source', label: 'Source' },
+          { id: 'properties', label: 'Properties' },
+        ]}
+      />,
+    );
+
+    const track = screen.getByTestId('detail-panel-section-nav-track');
+    Object.defineProperties(track, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 300 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+    });
+    track.scrollBy = vi.fn((options: ScrollToOptions) => {
+      track.scrollLeft += options.left ?? 0;
+      track.dispatchEvent(new Event('scroll'));
+    });
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    const right = screen.getByRole('button', { name: '다음 탭 보기' });
+    expect(right.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    await user.hover(right);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('다음 탭 보기');
+    await user.click(right);
+    expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 120, behavior: 'smooth' });
+
+    const left = screen.getByRole('button', { name: '이전 탭 보기' });
+    expect(left.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    await user.hover(left);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('이전 탭 보기');
+    await user.click(left);
+    expect(track.scrollBy).toHaveBeenLastCalledWith({ left: -120, behavior: 'smooth' });
   });
 });
