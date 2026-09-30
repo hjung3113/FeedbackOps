@@ -1,3 +1,4 @@
+import type { EntityLinkDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -7,7 +8,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -18,6 +19,7 @@ import {
 
 const LINK_A = '11111111-0000-0000-0000-0000000000a1';
 const LINK_B = '22222222-0000-0000-0000-0000000000b1';
+const LINK_C = '33333333-0000-0000-0000-0000000000c1';
 const VOC_A = '33333333-0000-0000-0000-0000000000a1';
 const VOC_B = '44444444-0000-0000-0000-0000000000b1';
 const VOC_C = '55555555-0000-0000-0000-0000000000c1';
@@ -57,6 +59,13 @@ const ALL_LINKS = [
   },
 ] as const;
 
+const LINK_C_DATA = {
+  ...ALL_LINKS[0],
+  id: LINK_C,
+  target_id: VOC_D,
+  created_at: '2026-06-17T23:00:00.000Z',
+} as const;
+
 function buildHarness(initialPath: string) {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const route = createRoute({
@@ -75,8 +84,16 @@ function buildHarness(initialPath: string) {
 
 function stubFetch(
   capturedUrls: string[],
-  links: readonly (typeof ALL_LINKS)[number][] = ALL_LINKS,
+  links: readonly EntityLinkDto[] = ALL_LINKS,
   linkResponses?: Array<{ status: number; body: unknown }>,
+  pagedInventory?: (url: URL) => {
+    items: readonly EntityLinkDto[];
+    page: {
+      has_more: boolean;
+      cursor?: string;
+      status_counts?: { active: number; stale: number; detached: number; revoked: number };
+    };
+  },
 ) {
   let linkAttempt = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -92,6 +109,12 @@ function stubFetch(
         });
       }
       const parsed = new URL(url, 'http://localhost');
+      if (pagedInventory !== undefined) {
+        return new Response(JSON.stringify(pagedInventory(parsed)), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
       const status = parsed.searchParams.get('status');
       const items = status === null ? links : links.filter((link) => link.status === status);
       return new Response(JSON.stringify({ items }), {
@@ -133,6 +156,24 @@ function stubFetch(
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
+}
+
+function pagedInventoryForRoute(url: URL) {
+  const cursor = url.searchParams.get('cursor');
+  if (cursor === 'page-2') {
+    return { items: [LINK_C_DATA], page: { has_more: false } };
+  }
+  if (url.searchParams.get('status') === 'active') {
+    return { items: [ALL_LINKS[0]], page: { has_more: true, cursor: 'active-page-2' } };
+  }
+  return {
+    items: [ALL_LINKS[0]],
+    page: {
+      has_more: true,
+      cursor: 'page-2',
+      status_counts: { active: 2, stale: 0, detached: 1, revoked: 0 },
+    },
+  };
 }
 
 describe('integration links route', () => {
@@ -313,5 +354,124 @@ describe('integration links route', () => {
     await waitFor(() => {
       expect(urls.some((url) => url.includes('relation_type=related_to'))).toBe(true);
     });
+  });
+
+  test('loads the next inventory page and appends its rows', async () => {
+    const urls: string[] = [];
+    stubFetch(urls, ALL_LINKS, undefined, pagedInventoryForRoute);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Active 2' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByRole('tab', { name: 'Active 2' })).toBeInTheDocument();
+    expect(
+      urls.some(
+        (rawUrl) => new URL(rawUrl, 'http://localhost').searchParams.get('cursor') === 'page-2',
+      ),
+    ).toBe(true);
+  });
+
+  test('filter changes discard loaded pages and request the first filtered page', async () => {
+    const urls: string[] = [];
+    stubFetch(urls, ALL_LINKS, undefined, pagedInventoryForRoute);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Active/ }));
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ status: 'active' });
+      expect(screen.queryByText(`Link ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
+      expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    });
+    expect(
+      urls.some((rawUrl) => {
+        const url = new URL(rawUrl, 'http://localhost');
+        return url.searchParams.get('status') === 'active' && !url.searchParams.has('cursor');
+      }),
+    ).toBe(true);
+  });
+
+  test('returning to a cached inventory filter refetches only its first page', async () => {
+    const urls: string[] = [];
+    stubFetch(urls, ALL_LINKS, undefined, pagedInventoryForRoute);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const loadSecondPage = async () => {
+      await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
+      expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    };
+    const allFirstPageRequests = () =>
+      urls.filter((rawUrl) => {
+        const url = new URL(rawUrl, 'http://localhost');
+        return (
+          url.pathname.endsWith('/entity-links') &&
+          url.searchParams.get('scope') === 'workspace' &&
+          !url.searchParams.has('status') &&
+          !url.searchParams.has('relation_type') &&
+          !url.searchParams.has('managed_system_id') &&
+          !url.searchParams.has('cursor')
+        );
+      });
+    const navigateToSearch = async (search: { type?: 'related_to'; managedSystem?: string }) => {
+      await act(async () => {
+        await router.navigate({ to: '/integration/links', search });
+      });
+    };
+    const expectAllFirstPageReloaded = async (previousRequestCount: number) => {
+      await waitFor(() => {
+        expect(router.state.location.search).toEqual({});
+        expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+        expect(screen.queryByText(`Link ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
+        expect(allFirstPageRequests()).toHaveLength(previousRequestCount + 1);
+      });
+    };
+
+    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    await loadSecondPage();
+    const afterInitialLoad = allFirstPageRequests().length;
+    await userEvent.click(screen.getByRole('tab', { name: /^Active/ }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ status: 'active' }));
+    await userEvent.click(screen.getByRole('tab', { name: /^All/ }));
+    await expectAllFirstPageReloaded(afterInitialLoad);
+
+    await loadSecondPage();
+    const afterSecondLoad = allFirstPageRequests().length;
+    await navigateToSearch({ type: 'related_to' });
+    await waitFor(() => expect(router.state.location.search).toEqual({ type: 'related_to' }));
+    await navigateToSearch({});
+    await expectAllFirstPageReloaded(afterSecondLoad);
+
+    await loadSecondPage();
+    const afterThirdLoad = allFirstPageRequests().length;
+    await navigateToSearch({ managedSystem: MS_A });
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_A }));
+    await navigateToSearch({});
+    await expectAllFirstPageReloaded(afterThirdLoad);
   });
 });

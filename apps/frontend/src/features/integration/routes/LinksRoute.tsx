@@ -2,12 +2,15 @@ import { resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { EntityLinksInventoryTable } from '../components/EntityLinksInventoryTable';
-import { useEntityLinkInventory } from '../hooks/useEntityLinkInventory';
+import {
+  entityLinkInventoryQueryKey,
+  useEntityLinkInventory,
+} from '../hooks/useEntityLinkInventory';
 
 type StatusFilter = EntityLinkStatus;
 
@@ -54,6 +57,7 @@ const FILTER_CATEGORIES = [
 
 export function LinksRoute() {
   const search = useSearch({ strict: false }) as LinksSearch;
+  const queryClient = useQueryClient();
   // `from` is what types the search reducer. Without it useNavigate() hands the
   // reducer the router-wide search union (12 keys), which is not assignable to
   // this route's 3-key reducer signature — that mismatch was the long-standing
@@ -67,11 +71,38 @@ export function LinksRoute() {
     [search.type],
   );
 
-  const inventory = useEntityLinkInventory({
-    ...(search.status !== undefined ? { status: search.status } : {}),
-    ...(search.type !== undefined ? { relationType: search.type } : {}),
-    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-  });
+  const inventoryParams = React.useMemo(
+    () => ({
+      ...(search.status !== undefined ? { status: search.status } : {}),
+      ...(search.type !== undefined ? { relationType: search.type } : {}),
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    }),
+    [search.managedSystem, search.status, search.type],
+  );
+  const previousInventoryParams = React.useRef(inventoryParams);
+  React.useEffect(() => {
+    const previous = previousInventoryParams.current;
+    previousInventoryParams.current = inventoryParams;
+    if (
+      previous.status === inventoryParams.status &&
+      previous.relationType === inventoryParams.relationType &&
+      previous.managedSystemId === inventoryParams.managedSystemId
+    ) {
+      return;
+    }
+
+    const queryKey = entityLinkInventoryQueryKey(inventoryParams);
+    const cachedPages = queryClient.getQueryData<{ pages: unknown[] }>(queryKey)?.pages;
+    if (cachedPages && cachedPages.length > 1) {
+      void queryClient.resetQueries({ queryKey, exact: true });
+    }
+  }, [inventoryParams, queryClient]);
+
+  const inventory = useEntityLinkInventory(inventoryParams);
+  const inventoryItems = React.useMemo(
+    () => inventory.data?.pages.flatMap((page) => page.items) ?? [],
+    [inventory.data],
+  );
 
   const activeFilterDescription = React.useMemo(() => {
     const conditions: string[] = [];
@@ -85,17 +116,33 @@ export function LinksRoute() {
   const needsUnfilteredCheck =
     activeFilterDescription !== undefined &&
     inventory.isSuccess &&
-    inventory.data.items.length === 0;
+    inventoryItems.length === 0 &&
+    inventory.hasNextPage !== true;
   const unfilteredInventory = useEntityLinkInventory(
     {
       ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     },
     needsUnfilteredCheck,
   );
-  const tableError = inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null);
+  const tableError =
+    inventoryItems.length === 0
+      ? (inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null))
+      : null;
   const retryTable = React.useCallback((): void => {
-    void (inventory.error ? inventory.refetch() : unfilteredInventory.refetch());
-  }, [inventory.error, inventory.refetch, unfilteredInventory.refetch]);
+    if (inventory.isFetchNextPageError) {
+      void inventory.fetchNextPage();
+    } else if (inventory.error) {
+      void inventory.refetch();
+    } else {
+      void unfilteredInventory.refetch();
+    }
+  }, [
+    inventory.error,
+    inventory.fetchNextPage,
+    inventory.isFetchNextPageError,
+    inventory.refetch,
+    unfilteredInventory.refetch,
+  ]);
 
   const countInventory = useEntityLinkInventory({
     ...(search.type !== undefined ? { relationType: search.type } : {}),
@@ -111,12 +158,12 @@ export function LinksRoute() {
   const actorIds = React.useMemo(
     () => [
       ...new Set(
-        (inventory.data?.items ?? [])
+        inventoryItems
           .map((item) => item.created_by)
           .filter((id): id is string => typeof id === 'string'),
       ),
     ],
-    [inventory.data?.items],
+    [inventoryItems],
   );
   const actorsQuery = useQuery({
     queryKey: ['actors-resolve', actorIds, []] as const,
@@ -145,16 +192,29 @@ export function LinksRoute() {
   }, [actorsQuery.data]);
 
   const statusTabs = React.useMemo<ListToolbarTab[]>(() => {
-    const items = countInventory.data?.items ?? [];
-    const counts = new Map<string, number>([['all', items.length]]);
+    const items = countInventory.data?.pages.flatMap((page) => page.items) ?? [];
+    const statusCounts = countInventory.data?.pages[0]?.page?.status_counts;
+    const counts = new Map<string, number>([
+      [
+        'all',
+        statusCounts !== undefined
+          ? statusCounts.active + statusCounts.stale + statusCounts.detached + statusCounts.revoked
+          : items.length,
+      ],
+    ]);
     for (const status of STATUS_TAB_VALUES) {
-      counts.set(status, items.filter((link) => link.status === status).length);
+      counts.set(
+        status,
+        statusCounts !== undefined
+          ? statusCounts[status]
+          : items.filter((link) => link.status === status).length,
+      );
     }
     return STATUS_TABS.map((tab) => ({
       ...tab,
       badgeCount: counts.get(tab.value) ?? 0,
     }));
-  }, [countInventory.data?.items]);
+  }, [countInventory.data]);
 
   function handleStatusChange(next: string): void {
     void navigate({
@@ -240,15 +300,23 @@ export function LinksRoute() {
         }
       />
       <EntityLinksInventoryTable
-        items={inventory.data?.items ?? []}
+        items={inventoryItems}
         loading={inventory.isLoading || (needsUnfilteredCheck && unfilteredInventory.isPending)}
         error={tableError ?? null}
         managedSystemsById={managedSystemsById}
         actorsById={actorsById}
         onRetry={retryTable}
-        unfilteredItemsCount={unfilteredInventory.data?.items.length ?? 0}
+        unfilteredItemsCount={
+          unfilteredInventory.data?.pages.flatMap((page) => page.items).length ?? 0
+        }
         filterDescription={activeFilterDescription}
         onResetFilters={handleResetFilters}
+        hasMore={inventory.hasNextPage === true}
+        loadingMore={inventory.isFetchingNextPage}
+        loadMoreError={inventory.isFetchNextPageError ? inventory.error : null}
+        onLoadMore={() => {
+          void inventory.fetchNextPage();
+        }}
       />
     </>
   );

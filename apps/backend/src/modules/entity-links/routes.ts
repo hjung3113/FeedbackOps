@@ -2,9 +2,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import {
+  type EntityLinkRef,
   createEntityLinkRequestSchema,
   detachEntityLinkRequestSchema,
-  type EntityLinkRef,
   listEntityLinksQuerySchema,
 } from '@fops/shared';
 
@@ -87,19 +87,21 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
       const hasTarget = data.target_type !== undefined && data.target_id !== undefined;
       const isInventoryMode = data.scope === 'workspace' || (!hasSource && !hasTarget);
       if (isInventoryMode) {
-        const items = await entityLinksService.listInventoryLinks({
+        const result = await entityLinksService.listInventoryLinks({
           actor: {
             actor_id: sess.actor_id,
             workspace_id: sess.workspace_id,
             role_level: sess.role_level,
           },
+          limit: data.limit,
+          ...(data.cursor !== undefined ? { cursor: data.cursor } : {}),
           ...(data.status !== undefined ? { statuses: data.status } : {}),
           ...(data.relation_type !== undefined ? { relationType: data.relation_type } : {}),
           ...(data.managed_system_id !== undefined
             ? { managedSystemId: data.managed_system_id }
             : {}),
         });
-        return reply.code(200).send({ items });
+        return reply.code(200).send(result);
       }
 
       let endpoint: EntityLinkRef;

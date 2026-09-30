@@ -1,6 +1,10 @@
 import { sql } from 'drizzle-orm';
 
-import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
+import type {
+  EntityLinkEntityType,
+  EntityLinkRelationType,
+  EntityLinkStatusCounts,
+} from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { vocs } from '../../db/schema/voc.js';
@@ -252,32 +256,94 @@ export async function selectLinksByWorkspace(
   db: Db | Tx,
   input: {
     workspaceId: string;
+    limit: number;
+    cursor?: { createdAt: string; id: string };
     statuses?: EntityLinkRow['status'][];
     relationType?: EntityLinkRow['relation_type'];
     managedSystemId?: string;
   },
-): Promise<EntityLinkRow[]> {
-  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+): Promise<{
+  items: EntityLinkRow[];
+  hasMore: boolean;
+  nextCursor?: { createdAtRaw: string; id: string };
+  statusCounts?: EntityLinkStatusCounts;
+}> {
+  const summaryPredicates = [sql`workspace_id = ${input.workspaceId}`];
+  if (input.relationType !== undefined) {
+    summaryPredicates.push(sql`relation_type = ${input.relationType}`);
+  }
+  if (input.managedSystemId !== undefined) {
+    summaryPredicates.push(sql`managed_system_id = ${input.managedSystemId}`);
+  }
+
+  const listVisiblePredicates = [
+    sql`source_type <> 'survey_response'`,
+    sql`NOT (
+      source_type = 'voc_cluster'
+      AND target_type = 'finding'
+      AND relation_type = 'evidence_of'
+    )`,
+  ];
+  const predicates = [...summaryPredicates, ...listVisiblePredicates];
   if (input.statuses !== undefined && input.statuses.length > 0) {
     predicates.push(sql`status::text = ANY(${sqlTextArray(input.statuses)})`);
   }
-  if (input.relationType !== undefined) {
-    predicates.push(sql`relation_type = ${input.relationType}`);
-  }
-  if (input.managedSystemId !== undefined) {
-    predicates.push(sql`managed_system_id = ${input.managedSystemId}`);
+  if (input.cursor !== undefined) {
+    predicates.push(sql`(created_at, id) < (
+      ${input.cursor.createdAt}::timestamptz, ${input.cursor.id}::uuid
+    )`);
   }
 
-  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+  const pageQuery = (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
-      created_at, updated_at, detached_by, detach_reason, detached_at
+      created_at, created_at::text AS cursor_created_at,
+      updated_at, detached_by, detach_reason, detached_at
     FROM core.entity_links
     WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY created_at DESC, id DESC
+    LIMIT ${input.limit + 1}
   `);
-  return result.rows.map(mapEntityLinkRow);
+  const statusCountPredicates = [...summaryPredicates, ...listVisiblePredicates];
+  const statusCountsQuery =
+    input.cursor === undefined && input.statuses === undefined
+      ? (db as Db).execute<Record<string, unknown>>(sql`
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'active') AS active,
+            COUNT(*) FILTER (WHERE status = 'stale') AS stale,
+            COUNT(*) FILTER (WHERE status = 'detached') AS detached,
+            COUNT(*) FILTER (WHERE status = 'revoked') AS revoked
+          FROM core.entity_links
+          WHERE ${sql.join(statusCountPredicates, sql` AND `)}
+        `)
+      : undefined;
+  const [result, statusCountsResult] = await Promise.all([
+    pageQuery,
+    statusCountsQuery ?? Promise.resolve(undefined),
+  ]);
+  const hasMore = result.rows.length > input.limit;
+  const pageRows = result.rows.slice(0, input.limit);
+  const last = pageRows.at(-1);
+  const nextCursor =
+    hasMore && last
+      ? { createdAtRaw: last.cursor_created_at as string, id: last.id as string }
+      : undefined;
+  const statusCountsRow = statusCountsResult?.rows[0];
+  const statusCounts = statusCountsRow
+    ? {
+        active: Number(statusCountsRow.active),
+        stale: Number(statusCountsRow.stale),
+        detached: Number(statusCountsRow.detached),
+        revoked: Number(statusCountsRow.revoked),
+      }
+    : undefined;
+  return {
+    items: pageRows.map(mapEntityLinkRow),
+    hasMore,
+    ...(nextCursor !== undefined ? { nextCursor } : {}),
+    ...(statusCounts !== undefined ? { statusCounts } : {}),
+  };
 }
 
 export async function selectEntityLinkById(
