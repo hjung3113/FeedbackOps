@@ -1,6 +1,6 @@
 import { LinksRoute } from '@/features/integration/routes/LinksRoute';
-import { ListShell } from '@fops/ui';
 import { parseRouteSearch } from '@/lib/router/search';
+import { ListShell } from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 

@@ -5,14 +5,14 @@ import { validateAnalyticsAreasSearch } from '../../features/admin/analytics-are
 import { validatePermissionRequestsSearch } from '../../features/admin/permissions/permission-requests-search';
 import { validateFindingsSearch } from '../_authed/findings';
 import { validateHomeSearch } from '../_authed/home';
-import { validateIntegrationCoverageSearch } from '../_authed/integration/coverage';
 import { validateIntegrationDashboardSearch } from '../_authed/integration';
+import { validateIntegrationCoverageSearch } from '../_authed/integration/coverage';
 import { validateIntegrationLinksSearch } from '../_authed/integration/links';
-import { validateSurveyDetailSearch } from '../_authed/surveys/$surveyId';
 import { validateSurveysSearch } from '../_authed/surveys';
-import { validateTasksSearch, TasksRouteView } from '../_authed/tasks';
-import { validateVocSearch } from '../_authed/vocs';
+import { validateSurveyDetailSearch } from '../_authed/surveys/$surveyId';
+import { TasksRouteView, validateTasksSearch } from '../_authed/tasks';
 import { validateVocClustersSearch } from '../_authed/voc-clusters';
+import { validateVocSearch } from '../_authed/vocs';
 
 vi.mock('@/features/tasks/routes/MilestonesRoute', () => ({
   MilestonesRoute: () => <div>Milestones view</div>,

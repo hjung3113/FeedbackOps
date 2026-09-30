@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 
 /** Keeps valid route-search fields and drops invalid or unrecognized URL values. */
 export function parseRouteSearch<Schema extends z.AnyZodObject>(

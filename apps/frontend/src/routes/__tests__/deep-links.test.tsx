@@ -79,11 +79,7 @@ describe('shipped deep-link contract', () => {
       `Expected ${missingRoute} to have no route`,
     ).toBeUndefined();
     expect(() =>
-      router.matchRoutes(
-        '/vocs',
-        { view: 'inbox', tab: 'not-a-voc-tab' },
-        { throwOnError: true },
-      ),
+      router.matchRoutes('/vocs', { view: 'inbox', tab: 'not-a-voc-tab' }, { throwOnError: true }),
     ).not.toThrow();
   });
 

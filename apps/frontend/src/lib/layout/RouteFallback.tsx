@@ -1,11 +1,11 @@
-import { Button, PageShell } from '@fops/ui';
-import { Link, useRouter, useRouterState } from '@tanstack/react-router';
-import { useEffect, useRef, type ReactNode } from 'react';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { homeSidebarEntries } from '@/features/home/homeNavigation';
 import { MeRequestError, UnauthenticatedError } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
 import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
+import { Button, PageShell } from '@fops/ui';
+import { Link, useRouter, useRouterState } from '@tanstack/react-router';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { AppFrame } from './AppFrame';
 
 interface RouterErrorFallbackProps {
@@ -115,11 +115,7 @@ export function RouteNotFoundFallback() {
     });
   }, [isKnownRoute, location.href, me.error, router]);
 
-  if (
-    isKnownRoute ||
-    me.error instanceof UnauthenticatedError ||
-    (!me.data && me.isPending)
-  ) {
+  if (isKnownRoute || me.error instanceof UnauthenticatedError || (!me.data && me.isPending)) {
     return null;
   }
   if (!me.data && me.error) return <AuthenticatedRouteErrorFallback error={me.error} />;
