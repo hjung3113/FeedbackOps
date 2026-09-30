@@ -10,6 +10,7 @@ import {
   convertTaskRequestRequestSchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -162,6 +163,7 @@ export function useTaskRequestConversion({
       );
     },
     onSuccess: (task) => {
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast(`Converted to Task ${task.display_id}.`);

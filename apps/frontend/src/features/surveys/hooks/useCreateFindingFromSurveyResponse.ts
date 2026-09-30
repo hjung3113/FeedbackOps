@@ -2,6 +2,7 @@ import { type ApiError, apiClient } from '@/lib/api';
 import type { CreateFindingFromSurveyResponseRequest, FindingDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 import { surveyKeys } from './useSurveys';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface CreateFindingFromSurveyResponseVariables {
   responseId: string;
@@ -27,6 +28,7 @@ export function useCreateFindingFromSurveyResponse(
         })
       ).data,
     onSuccess: (finding, variables) => {
+      invalidateNavCounts(queryClient);
       onSuccess?.(finding, variables);
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),

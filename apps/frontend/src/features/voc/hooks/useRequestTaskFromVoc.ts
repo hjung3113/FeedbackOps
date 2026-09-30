@@ -1,6 +1,7 @@
 import { type ApiError, apiClient } from '@/lib/api';
 import type { CreateTaskRequestFromVocRequest, TaskRequestDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface UseRequestTaskFromVocArgs {
   vocId: string;
@@ -24,6 +25,7 @@ export function useRequestTaskFromVoc(
       return res.data;
     },
     onSuccess: (data) => {
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['voc', vocId] });
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['entity-links'] });

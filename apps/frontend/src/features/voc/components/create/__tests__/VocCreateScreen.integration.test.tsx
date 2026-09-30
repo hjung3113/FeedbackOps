@@ -292,6 +292,32 @@ describe('VocCreateScreen integration', () => {
     });
   });
 
+  test('happy path shows a success receipt with the returned display id', async () => {
+    installFetch({
+      postVocsResponse: {
+        status: 201,
+        body: { id: VOC_ID, display_id: 'V-1', created_at: '2026-05-20T00:00:00Z' },
+      },
+    });
+
+    renderHarness({ onCancel: vi.fn() });
+
+    await waitFor(() => expect(screen.getByTestId('ms-picker')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
+    fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), {
+      target: { value: '접수 확인용 VOC' },
+    });
+    fireEvent.blur(screen.getByRole('textbox', { name: /제목/i }));
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('V-1을 접수했습니다.'));
+  });
+
   test('AC-E14 renders help and submits independent source and Analytics Area values without a warning dialog', async () => {
     const { postBodies } = installFetch({
       postVocsResponse: {

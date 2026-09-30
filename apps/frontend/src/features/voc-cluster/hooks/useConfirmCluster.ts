@@ -4,6 +4,7 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { apiClient, type ApiError } from '@/lib/api';
 import type { VocClusterDto } from '@fops/shared';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export function useConfirmCluster(): UseMutationResult<VocClusterDto, ApiError, string> {
   const qc = useQueryClient();
@@ -15,6 +16,7 @@ export function useConfirmCluster(): UseMutationResult<VocClusterDto, ApiError, 
       return res.data;
     },
     onSuccess: async (_data, clusterId) => {
+      invalidateNavCounts(qc);
       await qc.invalidateQueries({ queryKey: ['voc-cluster', clusterId] });
       await qc.invalidateQueries({ queryKey: ['voc-clusters'] });
     },

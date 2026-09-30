@@ -7,6 +7,7 @@ import {
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export const surveyKeys = {
   list: ['surveys'] as const,
@@ -65,7 +66,10 @@ export function useCreateSurvey() {
   const queryClient = useQueryClient();
   return useMutation<Survey, ApiError, CreateSurveyInput>({
     mutationFn: async (body) => (await apiClient<Survey>('POST', '/surveys', { body })).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.list }),
+    onSuccess: () => {
+      invalidateNavCounts(queryClient);
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.list });
+    },
   });
 }
 

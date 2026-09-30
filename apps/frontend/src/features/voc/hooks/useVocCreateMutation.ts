@@ -1,13 +1,14 @@
-import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { apiClient, ApiError } from '@/lib/api';
 import type { CreateVocRequest } from '@fops/shared';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 // POST /vocs success shape — backend returns the created row's id + minimal
 // envelope. Slice 3 #13 BE returns at least { id, display_id, created_at };
-// only `id` is consumed by the FE here (used to navigate to the inbox row).
+// `id` navigates to the inbox row and `display_id` appears in the success receipt.
 export interface VocCreateSuccess {
   id: string;
-  display_id?: string;
+  display_id: string;
   created_at?: string;
 }
 
@@ -21,6 +22,7 @@ export type VocCreateMutationResult = UseMutationResult<VocCreateSuccess, ApiErr
 
 export function useVocCreateMutation(args: UseVocCreateMutationArgs): VocCreateMutationResult {
   const { idempotencyKey, onSuccess, onError } = args;
+  const queryClient = useQueryClient();
   return useMutation<VocCreateSuccess, ApiError, CreateVocRequest>({
     mutationFn: async (body) => {
       const res = await apiClient<VocCreateSuccess>('POST', '/vocs', {
@@ -29,7 +31,10 @@ export function useVocCreateMutation(args: UseVocCreateMutationArgs): VocCreateM
       });
       return res.data;
     },
-    ...(onSuccess ? { onSuccess } : {}),
+    onSuccess: (data) => {
+      invalidateNavCounts(queryClient);
+      onSuccess?.(data);
+    },
     ...(onError ? { onError } : {}),
   });
 }

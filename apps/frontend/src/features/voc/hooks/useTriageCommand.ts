@@ -27,6 +27,7 @@ import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
 import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;
@@ -66,8 +67,11 @@ export function useTriageCommand({
     // compensating PATCH (issue #481 risk 2: an in-flight undo has already
     // aborted the controller, so a late resolve would otherwise fail the
     // compensation path).
-    mutationFn: (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> =>
-      patchVocTriage(input, { ...(signal !== undefined && { signal }) }),
+    mutationFn: async (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> => {
+      const output = await patchVocTriage(input, { ...(signal !== undefined && { signal }) });
+      invalidateNavCounts(queryClient);
+      return output;
+    },
     // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
     // restore the VOC to), NOT from staged panelState (the new values the
     // user just chose). If we snapshot staged values, the compensating
@@ -90,6 +94,7 @@ export function useTriageCommand({
             onOptimisticRestoreRef.current?.(vocId);
           },
         });
+        invalidateNavCounts(queryClient);
       } catch (err) {
         // REV-4 case 1: the refetch-failure toast fires exactly once, here —
         // BEFORE the rethrow; onCompensateError sees the __refetchFailure tag

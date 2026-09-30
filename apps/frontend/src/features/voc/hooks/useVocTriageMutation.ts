@@ -16,7 +16,8 @@
 //
 // Prototype ref: docs/design-prototype/screen-voc-create.jsx:612-642
 
-import { type UseMutationResult, useMutation } from '@tanstack/react-query';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import { patchVocTriage } from '../lib/triage-transport';
 import type { TriageInput, TriageOutput } from '../lib/triage-types';
 
@@ -43,9 +44,11 @@ export { executeCompensatingPatch } from '../lib/triage-transport';
  *   - Handling error codes for the queue side-effects
  */
 export function useVocTriageMutation(): UseMutationResult<TriageOutput, Error, TriageInput> {
+  const queryClient = useQueryClient();
   return useMutation<TriageOutput, Error, TriageInput>({
     // No AbortSignal: the react-query mutation's request lifetime is unchanged
     // (issue #481 §2) — the signal seam belongs to useTriageCommand only.
     mutationFn: (input: TriageInput) => patchVocTriage(input),
+    onSuccess: () => invalidateNavCounts(queryClient),
   });
 }

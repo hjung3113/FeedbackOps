@@ -20,7 +20,8 @@ import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
-import { type UseMutationResult, useMutation } from '@tanstack/react-query';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export function useVocPublicUpdateMutation(
   args: UseVocPublicUpdateMutationArgs = {},
 ): VocPublicUpdateMutationResult {
   const { onSuccess, onError } = args;
+  const queryClient = useQueryClient();
 
   return useMutation<PublicUpdateSuccess, ApiError, PublicUpdateVars>({
     mutationFn: async ({ vocId, ifMatch, body }) => {
@@ -83,7 +85,10 @@ export function useVocPublicUpdateMutation(
       });
       return res.data;
     },
-    ...(onSuccess ? { onSuccess } : {}),
+    onSuccess: (data, variables) => {
+      invalidateNavCounts(queryClient);
+      onSuccess?.(data, variables);
+    },
     ...(onError ? { onError } : {}),
   });
 }
