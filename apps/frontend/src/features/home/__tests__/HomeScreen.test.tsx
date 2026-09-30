@@ -342,6 +342,33 @@ describe('HomeScreen route content', () => {
     );
   });
 
+  it('keeps the secondary queue link before the primary link in keyboard order', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: response.action_queues.map((queue) =>
+        queue.id === 'unassigned-voc'
+          ? {
+              ...queue,
+              count: 1,
+              secondary_action: {
+                label: 'Bulk assign',
+                route: '/vocs?view=inbox&tab=unassigned',
+                intent: 'bulk_assign',
+              },
+            }
+          : queue,
+      ),
+    });
+    installFetch(summary);
+    renderHome();
+
+    const card = await screen.findByTestId('home-queue-unassigned-voc');
+    expect(within(card).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
+      'Bulk assign',
+      'Review VOCs',
+    ]);
+  });
+
   it('refetches the strict summary when the scope selector changes', async () => {
     const fetchMock = installFetch();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
