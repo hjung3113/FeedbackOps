@@ -17,6 +17,10 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -57,11 +61,16 @@ export function railForPathname(pathname: string): RailDomain {
 
 export interface AppRailProps {
   activeDomain?: RailDomain;
+  canAccessWorkspaceAdmin?: boolean;
   className?: string;
 }
 
 /** 52px global domain selector. The sidebar owns the selected domain's tree. */
-export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
+export function AppRail({
+  activeDomain = 'voc',
+  canAccessWorkspaceAdmin = false,
+  className,
+}: AppRailProps) {
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
@@ -112,11 +121,17 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       >
         F
       </div>
-      {head.map((item) => (
-        <RailButton key={item.key} item={item} active={activeDomain === item.key} />
-      ))}
-      {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
-      {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
+      <TooltipProvider delayDuration={400}>
+        {head.map((item) => (
+          <RailButton key={item.key} item={item} active={activeDomain === item.key} />
+        ))}
+        {canAccessWorkspaceAdmin && admin && (
+          <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />
+        )}
+        {canAccessWorkspaceAdmin && admin && (
+          <RailButton item={admin} active={activeDomain === admin.key} />
+        )}
+      </TooltipProvider>
       <div className="flex-1" />
       {/* Plain anchor like the RailButton entries above (the rail renders outside routes in tests too). */}
       <a
@@ -172,18 +187,25 @@ function RailButton({
 }) {
   const Icon = item.icon;
   return (
-    <a
-      href={item.href}
-      className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
-        active && 'bg-surface-row-selected text-accent-primary',
-      )}
-      aria-label={item.label}
-      aria-current={active ? 'page' : undefined}
-      data-testid={`rail-${item.key}`}
-      title={item.label}
-    >
-      <Icon className="h-4 w-4" />
-    </a>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={item.href}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            active && 'bg-surface-row-selected text-accent-primary',
+          )}
+          aria-label={item.label}
+          aria-current={active ? 'page' : undefined}
+          data-testid={`rail-${item.key}`}
+        >
+          <Icon className="h-4 w-4" />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">
+        {item.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

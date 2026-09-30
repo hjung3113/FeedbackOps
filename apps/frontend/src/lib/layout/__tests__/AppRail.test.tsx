@@ -24,7 +24,7 @@ vi.mock('@/lib/api/notifications', async (importOriginal) => ({
   fetchUnreadNotificationCount,
 }));
 
-import { AppRail, railForPathname } from '../AppRail';
+import { AppRail, RAIL_ITEMS, railForPathname } from '../AppRail';
 
 const ACTOR = {
   actor: {
@@ -76,8 +76,21 @@ describe('AppRail', () => {
     ['/surveys', 'surveys'],
     ['/admin/settings', 'admin'],
   ] as const)('marks %s as the active %s rail', (pathname, domain) => {
-    renderRail({ activeDomain: railForPathname(pathname) });
+    renderRail({
+      activeDomain: railForPathname(pathname),
+      ...(domain === 'admin' ? { canAccessWorkspaceAdmin: true } : {}),
+    });
     expect(screen.getByTestId(`rail-${domain}`)).toHaveAttribute('aria-current', 'page');
+  });
+
+  it.each(RAIL_ITEMS)('names the $label rail link and shows its label on focus', async (item) => {
+    renderRail({ activeDomain: item.key, canAccessWorkspaceAdmin: true });
+
+    const link = screen.getByRole('link', { name: item.label });
+    expect(link).toHaveAttribute('href', item.href);
+    fireEvent.focus(link);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(item.label);
   });
 
   it('keeps Home as the first rail entry', () => {

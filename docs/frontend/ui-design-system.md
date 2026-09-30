@@ -72,7 +72,7 @@ The persistent application frame for all internal FeedbackOps screens.
 Anatomy:
 
 ```text
-- RoleLevelAwareSidebar
+- AppRail + AppSidebar
 - ManagedSystemScopeSwitcher when applicable
 - MainRegion
 - RightDetailPanel optional
@@ -98,7 +98,8 @@ Rules:
 - Opening a detail panel should not navigate away from the list context.
 - Object creation from a selected object should prefer inline panel or drawer over full-page redirect.
 - Avoid full-screen modals for routine workflow actions.
-- RoleLevelAwareSidebar renders backend-provided navigation items only.
+- AppSidebar renders route-owned navigation entries. Admin discovery entries use the approved
+  `workspace.admin` capability as a display hint; Admin route `PermissionGate`s remain authoritative.
 - ManagedSystemScopeSwitcher appears on scoped operational views when the actor has access to more than one Managed System.
 - Switching Managed System scope updates URL state and list queries; it must not navigate to a duplicated per-Managed-System app tree.
 - `All` in ManagedSystemScopeSwitcher means the actor's effective Managed System scope union; only Admin sees true workspace-wide all.

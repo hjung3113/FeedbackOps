@@ -1,11 +1,34 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { NAV_TREE } from '@/routes/_authed';
 import { AppFrame } from '../AppFrame';
 
 const MS_ONE = '11111111-1111-4111-8111-111111111111';
 const MS_TWO = '22222222-2222-4222-8222-222222222222';
 const MS_THREE = '33333333-3333-4333-8333-333333333333';
+
+const NAV_ACTORS = [
+  {
+    name: 'reporter without grants',
+    roleLevel: 'user',
+    managedSystemIds: [],
+    canUseWorkspaceAdmin: false,
+  },
+  {
+    name: 'developer with per-system grants',
+    roleLevel: 'developer',
+    managedSystemIds: [MS_ONE, MS_TWO],
+    canUseWorkspaceAdmin: false,
+  },
+  {
+    name: 'partial-scope operator',
+    roleLevel: 'developer',
+    managedSystemIds: [MS_ONE],
+    canUseWorkspaceAdmin: false,
+  },
+  { name: 'admin', roleLevel: 'admin', managedSystemIds: [], canUseWorkspaceAdmin: true },
+] as const;
 
 describe('AppFrame managed-system scope', () => {
   it('re-fetches nav counts with managed_system_id after scope selection', async () => {
@@ -181,9 +204,14 @@ describe('AppFrame managed-system scope', () => {
           requestedUrls.filter((url) => url === '/me/permissions/scope?capability=voc.read'),
         ).toHaveLength(1),
       );
-      expect(requestedUrls.filter((url) => url.startsWith('/me/permissions/check'))).toHaveLength(
-        0,
-      );
+      // #612 adds one workspace.admin check for the Admin navigation; the scope selector
+      // itself still makes no per-system permission checks.
+      expect(
+        requestedUrls.filter(
+          (url) =>
+            url.startsWith('/me/permissions/check') && !url.includes('capability=workspace.admin'),
+        ),
+      ).toHaveLength(0);
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByLabelText('Outside your grants')).toHaveLength(2);
       expect(
@@ -243,6 +271,152 @@ describe('AppFrame managed-system scope', () => {
         expect(screen.queryByLabelText('Outside your grants')).not.toBeInTheDocument(),
       );
     } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('AppFrame capability navigation', () => {
+  it.each(NAV_ACTORS)(
+    'keeps domain destinations visible and gates Admin navigation for $name',
+    async (actor) => {
+      const requestedUrls: string[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/me')
+          return json({
+            actor: {
+              id: actor.name,
+              external_id: actor.name,
+              email: 'actor@test',
+              display_name: 'Actor',
+              role_level: actor.roleLevel,
+            },
+            workspace_id: 'workspace',
+          });
+        if (url === '/me/permissions/check?capability=workspace.admin')
+          return json({
+            state: actor.canUseWorkspaceAdmin ? 'approved' : 'request_access',
+            decision: { allow: actor.canUseWorkspaceAdmin },
+          });
+        if (url === '/me/permissions/scope?capability=voc.read')
+          return json({ scope: { kind: 'scoped', managed_system_ids: actor.managedSystemIds } });
+        if (url === '/managed-systems')
+          return json({
+            items: [managedSystem(MS_ONE, 'Identity'), managedSystem(MS_TWO, 'Finance')],
+            total: 2,
+          });
+        if (url.startsWith('/nav/counts')) return json({ counts: {} });
+        if (url.startsWith('/saved-views')) return json({ items: [] });
+        if (url.startsWith('/notifications?'))
+          return json({ items: [], page: { has_more: false }, unread_count: 0 });
+        throw new Error(`unexpected request ${url}`);
+      });
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { unmount } = render(
+        <QueryClientProvider client={client}>
+          <AppFrame
+            activeDomain="voc"
+            sidebarEntries={[
+              { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', section: 'VOC' },
+              ...NAV_TREE.admin,
+            ]}
+          >
+            content
+          </AppFrame>
+        </QueryClientProvider>,
+      );
+
+      try {
+        await waitFor(() =>
+          expect(requestedUrls).toContain('/me/permissions/check?capability=workspace.admin'),
+        );
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        for (const label of ['Home', 'VOC', 'Findings', 'Tasks', 'Integration', 'Surveys']) {
+          expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+        }
+        expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
+
+        if (actor.canUseWorkspaceAdmin) {
+          expect(screen.getByRole('link', { name: 'Admin' })).toBeInTheDocument();
+          expect(screen.getByTestId('sidebar-section-admin')).toBeInTheDocument();
+          for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
+            expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
+          }
+          expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+          expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
+          for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
+            expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();
+          }
+          expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+        }
+      } finally {
+        unmount();
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+
+  it('does not show Admin navigation while the workspace capability check is loading', async () => {
+    let resolveAdminCheck: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/me')
+        return json({
+          actor: {
+            id: 'admin',
+            external_id: 'admin',
+            email: 'admin@test',
+            display_name: 'Admin',
+            role_level: 'admin',
+          },
+          workspace_id: 'workspace',
+        });
+      if (url === '/me/permissions/check?capability=workspace.admin')
+        return new Promise<Response>((resolve) => {
+          resolveAdminCheck = resolve;
+        });
+      if (url === '/managed-systems') return json({ items: [], total: 0 });
+      if (url.startsWith('/nav/counts')) return json({ counts: {} });
+      if (url.startsWith('/saved-views')) return json({ items: [] });
+      if (url.startsWith('/notifications?'))
+        return json({ items: [], page: { has_more: false }, unread_count: 0 });
+      throw new Error(`unexpected request ${url}`);
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { unmount } = render(
+      <QueryClientProvider client={client}>
+        <AppFrame activeDomain="admin" sidebarEntries={NAV_TREE.admin}>
+          content
+        </AppFrame>
+      </QueryClientProvider>,
+    );
+
+    try {
+      await waitFor(() => expect(resolveAdminCheck).toBeTypeOf('function'));
+      expect(screen.queryByTestId('rail-admin')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('sidebar-nav-admin-ms')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();
+
+      await act(async () => {
+        resolveAdminCheck?.(json({ state: 'approved', decision: { allow: true } }));
+      });
+
+      expect(await screen.findByTestId('rail-admin')).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-nav-admin-ms')).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
+    } finally {
+      unmount();
       globalThis.fetch = originalFetch;
     }
   });

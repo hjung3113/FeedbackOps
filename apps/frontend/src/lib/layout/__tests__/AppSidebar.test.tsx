@@ -202,6 +202,7 @@ describe('AppSidebar', () => {
       <AppSidebar
         entries={entries}
         defaultCollapsed={true}
+        canAccessWorkspaceAdmin={true}
         footerItems={[
           {
             id: 'workspace-settings',

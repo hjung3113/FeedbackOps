@@ -64,6 +64,7 @@ export interface AppSidebarProps {
   /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
   scopeControlEnabled?: boolean;
   isAdmin?: boolean;
+  canAccessWorkspaceAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
   canSaveView?: boolean;
@@ -99,6 +100,7 @@ export function AppSidebar({
   selectedManagedSystemId,
   scopeControlEnabled = true,
   isAdmin = true,
+  canAccessWorkspaceAdmin = false,
   onManagedSystemChange,
   savedViews = [],
   canSaveView = false,
@@ -111,6 +113,9 @@ export function AppSidebar({
   const selectedSystem = managedSystems.find((system) => system.id === selectedManagedSystemId);
   const grantedSystems = managedSystems.filter((system) => system.granted);
   const isUnion = !isAdmin && selectedManagedSystemId === undefined;
+  const visibleFooterItems = footerItems.filter(
+    (item) => item.id !== 'workspace-settings' || canAccessWorkspaceAdmin,
+  );
 
   const toggle = React.useCallback(() => {
     setCollapsed((prev) => {
@@ -224,7 +229,13 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      <div className="border-t border-border-subtle p-2"><div className="flex flex-col gap-0.5">{footerItems.map((item) => <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />)}</div></div>
+      <div className="border-t border-border-subtle p-2">
+        <div className="flex flex-col gap-0.5">
+          {visibleFooterItems.map((item) => (
+            <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
+          ))}
+        </div>
+      </div>
     </aside>
   );
 }
