@@ -217,8 +217,12 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       : []),
     ...(search.trim() !== '' ? [`검색: ${search.trim()}`] : []),
   ].join(' · ');
+  const countsConfirmEmpty =
+    countQuery.isSuccess && !countQuery.isFetching && countQuery.data?.items.length === 0;
   const filteredEmpty =
-    shown.length === 0 && filterDescription !== '' && (countQuery.data?.items.length ?? 0) > 0;
+    shown.length === 0 &&
+    filterDescription !== '' &&
+    (items.length > 0 || !countsConfirmEmpty);
 
   const summary = React.useMemo(
     () => ({
@@ -488,9 +492,10 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                         }}
                       />
                     ) : (
+                      // Prototype-verbatim copy retains this surface's lowercase spelling.
                       <ListStateMessage
                         variant="empty"
-                        title="표시할 Milestone이 없습니다."
+                        title="표시할 milestone 이 없습니다."
                         body="생성된 Milestone이 여기에 표시됩니다."
                       />
                     ))}

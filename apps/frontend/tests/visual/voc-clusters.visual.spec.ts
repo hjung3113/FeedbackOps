@@ -22,7 +22,10 @@ test.describe('/voc-clusters visual harness', () => {
     await page.goto('/voc-clusters');
 
     const emptyState = page.getByTestId('cluster-empty-state');
-    await expect(emptyState).toHaveText('생성된 클러스터가 없습니다.');
+    await expect(emptyState).toContainText('생성된 VOC Cluster가 없습니다.');
+    await expect(emptyState).toContainText(
+      'VOC를 묶어 만든 Cluster가 여기에 표시됩니다.',
+    );
     await expectVisual(page, emptyState, 'voc-clusters-empty.png');
   });
 
@@ -31,9 +34,11 @@ test.describe('/voc-clusters visual harness', () => {
 
     await page.goto('/voc-clusters');
 
-    await expect(page.getByTestId('cluster-list-error')).toHaveText(
-      '데이터를 불러오지 못했습니다.',
+    await expect(page.getByTestId('cluster-list-error')).toContainText(
+      'VOC Cluster 목록을 불러오지 못했습니다',
     );
+    const errorState = page.getByTestId('cluster-list-error');
+    await expect(errorState).toContainText('잠시 후 다시 시도하세요.');
   });
 
   test('filters the list through one real Confirmed tab click', async ({ page }) => {

@@ -204,7 +204,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     renderWithClient(<MilestonesRoute />);
 
-    expect(await screen.findByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('표시할 milestone 이 없습니다.')).toBeInTheDocument();
   });
 
   it('renders display id, title, In progress label, and why excerpt without raw UUIDs', async () => {
@@ -530,7 +530,7 @@ describe('MilestonesRoute list states (#609)', () => {
     }));
   });
 
-  it.each(['empty', 'filtered', 'error'] as const)(
+  it.each(['empty', 'filtered', 'error', 'counts-failed'] as const)(
     'shows the %s state and recovers from retryable or filtered reads',
     async (state) => {
       let shouldFailReleasedRead = state === 'error';
@@ -542,32 +542,53 @@ describe('MilestonesRoute list states (#609)', () => {
             throw new Error('temporary read failure');
           }
           return {
-            items: state === 'filtered' ? [] : releasedMilestone ? [releasedMilestone] : [],
+            items:
+              state === 'filtered' || state === 'counts-failed'
+                ? []
+                : releasedMilestone
+                  ? [releasedMilestone]
+                  : [],
           };
         }
+        if (state === 'counts-failed') throw new Error('temporary counts read failure');
         return { items: state === 'empty' ? [] : MILESTONES };
       });
 
       const user = userEvent.setup();
-      renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      if (state === 'counts-failed') {
+        queryClient.setQueryData(['milestones', 'list', IDS.msPowerBi, 'all'], {
+          items: MILESTONES,
+        });
+      }
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MilestonesRoute managedSystem={IDS.msPowerBi} />
+        </QueryClientProvider>,
+      );
 
       if (state === 'empty') {
         expect(await screen.findByTestId('list-state-message')).toHaveAttribute(
           'data-variant',
           'empty',
         );
-        expect(screen.getByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
+        expect(screen.getByText('표시할 milestone 이 없습니다.')).toBeInTheDocument();
         return;
       }
 
       await screen.findByText('MLS-1021');
+      if (state === 'counts-failed') {
+        await waitFor(() => {
+          expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—');
+        });
+      }
       await user.click(screen.getByRole('tab', { name: /^Released/ }));
       expect(await screen.findByTestId('list-state-message')).toHaveAttribute(
         'data-variant',
-        state,
+        state === 'counts-failed' ? 'filtered' : state,
       );
 
-      if (state === 'filtered') {
+      if (state === 'filtered' || state === 'counts-failed') {
         await user.type(screen.getByRole('textbox', { name: 'Milestone 검색' }), 'SSO');
         expect(screen.getByText('선택한 조건: Released · 검색: SSO')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: '필터 초기화' }));

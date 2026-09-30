@@ -34,7 +34,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await installMockApi(page, { milestones: 'empty' });
     await page.goto('/tasks?view=milestones');
 
-    await expect(page.getByText('표시할 Milestone이 없습니다.')).toBeVisible();
+    await expect(page.getByText('표시할 milestone 이 없습니다.')).toBeVisible();
     for (const label of ['All', 'In progress', 'Planning', 'Released']) {
       await expect(page.getByRole('tab', { name: new RegExp(`^${label}`) })).toBeVisible();
     }

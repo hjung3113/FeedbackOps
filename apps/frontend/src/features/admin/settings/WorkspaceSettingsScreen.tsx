@@ -99,7 +99,7 @@ export function WorkspaceSettingsScreen() {
           </p>
           <Button
             type="button"
-            variant="subtle"
+            variant="secondary"
             size="sm"
             onClick={() => void settingsQuery.refetch()}
           >

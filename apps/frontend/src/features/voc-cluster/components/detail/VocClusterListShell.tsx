@@ -8,7 +8,6 @@ import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterLis
 import { isPermissionDenied } from '@/lib/api';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { Button, ListShell, ObjectRow, PermissionBlockedPanel, Skeleton } from '@fops/ui';
-import { RotateCw } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -181,31 +180,24 @@ function ClusterListBody({
           <div data-testid="cluster-list-error">
             <ListStateMessage
               variant="error"
-              title="데이터를 불러오지 못했습니다."
-              body=""
-              actionContent={
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  aria-label="다시 시도"
-                  title="다시 시도"
-                  onClick={onRetry}
-                >
-                  <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
-                </Button>
-              }
+              title="VOC Cluster 목록을 불러오지 못했습니다"
+              body="잠시 후 다시 시도하세요."
+              action={{ label: '다시 시도', onClick: onRetry }}
             />
           </div>
         ) : allClusters.length === 0 ? (
           <div data-testid="cluster-empty-state">
-            <ListStateMessage variant="empty" title="생성된 클러스터가 없습니다." body="" />
+            <ListStateMessage
+              variant="empty"
+              title="생성된 VOC Cluster가 없습니다."
+              body="VOC를 묶어 만든 Cluster가 여기에 표시됩니다."
+            />
           </div>
         ) : clusters.length === 0 ? (
-          // #609's filter reset follows the contract; the prototype suggests changing scope instead.
+          // Prototype title casing is surface-specific; the reset action follows ADR-0052.
           <ListStateMessage
             variant="filtered"
-            title="현재 조건에 맞는 VOC Cluster가 없습니다"
+            title="이 필터에 해당하는 cluster가 없습니다"
             body={`선택한 조건: ${activeTab === 'confirmed' ? '확정' : 'Finding 없음'}`}
             action={{
               label: '필터 초기화',
