@@ -6,7 +6,7 @@ import type {
 } from '@fops/shared';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import { resolveVocEndpoint } from '../entity-links/index.js';
 import { resolveSurveyResponseHighlightAccess } from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
@@ -125,20 +125,12 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
       }
 
       if (input.analytics_area_id) {
-        const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
-        if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-        if (aa.managed_system_id !== finding.primary_managed_system_id) {
-          throw new HttpError(
-            'validation.failed',
-            'analytics_area does not belong to managed_system',
-            { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
-          );
-        }
-        if (aa.archived_at !== null) {
-          throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-            fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-          });
-        }
+        await assertActiveAnalyticsAreaForManagedSystem(
+          tx,
+          actor.workspace_id,
+          finding.primary_managed_system_id,
+          input.analytics_area_id,
+        );
       }
 
       await assertHighlightSourceReadableForWrite({

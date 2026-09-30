@@ -37,13 +37,13 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { managedSystems } from '../../db/schema/core.js';
 import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError } from '../../lib/errors.js';
 import { listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import { managedSystemExists } from '../managed-systems/read-projections.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import type { ActorContext, CheckScope, CheckService } from './check-service.js';
 import type { OpenRequestSummary } from './state-mapper.js';
@@ -354,17 +354,12 @@ export function createRequestService(deps: RequestServiceDeps) {
               : new Date(body.requested_expiration);
 
         if (requestedManagedSystemId !== null) {
-          const managedSystemRows = await tx
-            .select({ id: managedSystems.id })
-            .from(managedSystems)
-            .where(
-              and(
-                eq(managedSystems.id, requestedManagedSystemId),
-                eq(managedSystems.workspaceId, actor.workspace_id),
-              ),
-            )
-            .limit(1);
-          if (!managedSystemRows[0]) {
+          const managedSystemFound = await managedSystemExists(
+            tx,
+            actor.workspace_id,
+            requestedManagedSystemId,
+          );
+          if (!managedSystemFound) {
             throw new HttpError('validation.failed', 'managed system is outside this workspace', {
               fields: [{ path: ['requested_managed_system_id'], code: 'custom' }],
             });

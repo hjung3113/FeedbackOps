@@ -233,6 +233,42 @@ runCase(
   'boundaries: OK',
 );
 
+const ownerTableSql = {
+  ...zero,
+  [join(MODULES, 'managed-systems', 'repo.ts')]:
+    'const result = await tx.execute(sql`select * from core.managed_systems`);\n',
+  [join(MODULES, 'analytics-areas', 'repo.ts')]:
+    'const result = await tx.execute(sql`select * from core.analytics_areas`);\n',
+  [join(MODULES, 'tasks', '__tests__', 'fixture.integration.test.ts')]:
+    'const result = await tx.execute(sql`select * from core.managed_systems`);\n',
+};
+
+runCase(
+  'rule 10 allows owner-table SQL in owner modules and skips tests',
+  ownerTableSql,
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 10 rejects raw Core owner-table SQL outside the owner modules',
+  {
+    ...ownerTableSql,
+    [join(MODULES, 'findings', 'creation.ts')]:
+      'const result = await tx.execute(sql`select * from core.analytics_areas`);\n',
+    [join(MODULES, 'tasks', 'service.ts')]: [
+      'const rows = await tx.execute(sql`select * from core.managed_systems`);',
+      'await tx.execute(sql`update core.managed_systems set archived_at = now()`);',
+    ].join('\n'),
+  },
+  false,
+  [
+    'apps/backend/src/modules/findings/creation.ts:1',
+    'apps/backend/src/modules/tasks/service.ts:1',
+    'apps/backend/src/modules/tasks/service.ts:2',
+  ],
+);
+
 if (failures > 0) {
   console.error(`\n${failures} test case(s) failed`);
   process.exit(1);

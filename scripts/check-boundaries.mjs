@@ -10,6 +10,7 @@
 //   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
 //   8. Non-VOC frontend features and src/lib MUST NOT import VOC hooks/lib internals.
 //   9. Backend modules MUST NOT import another module's __tests__/_seed-helpers.
+//  10. Backend modules outside Core owners MUST NOT name Core owner tables in raw SQL.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -63,6 +64,11 @@ const RULES = [
     scope: 'apps/backend/src/modules',
     kind: 'foreign-test-seed-helpers',
     msg: "backend modules must not import another module's __tests__/_seed-helpers; shared helpers live in src/test-support",
+  },
+  {
+    scope: 'apps/backend/src/modules',
+    kind: 'foreign-core-owner-table-sql',
+    msg: 'backend modules must access Managed Systems and Analytics Areas through their owner surfaces',
   },
 ];
 
@@ -247,6 +253,33 @@ for (const rule of RULES) {
             `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${displayTarget})`,
           );
         }
+      }
+      continue;
+    }
+    if (rule.kind === 'foreign-core-owner-table-sql') {
+      const srcSegment = moduleSegment(file);
+      const relativeParts = relative(join(ROOT, rule.scope), file).split(sep);
+      if (
+        !srcSegment ||
+        srcSegment === 'managed-systems' ||
+        srcSegment === 'analytics-areas' ||
+        relativeParts.includes('__tests__') ||
+        /\.test\./.test(basename(file))
+      ) {
+        continue;
+      }
+      const tableReference =
+        new RegExp(
+          String.raw`\b(?:from|join|update|into|delete\s+from|truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+` +
+            String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)["']?`,
+          'gi',
+        );
+      for (const match of content.matchAll(tableReference)) {
+        const line = content.slice(0, match.index).split('\n').length;
+        violations++;
+        console.error(
+          `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (references core.${match[1]})`,
+        );
       }
       continue;
     }

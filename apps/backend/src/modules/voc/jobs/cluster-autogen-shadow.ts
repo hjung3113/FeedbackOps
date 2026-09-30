@@ -7,6 +7,7 @@ import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
 import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
+import { allManagedSystemWorkspacePairs } from '../../managed-systems/read-projections.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../recommendations/constants.js';
 
 /** Queue name. Format: `<module>.<action>` per ADR-0009. */
@@ -107,11 +108,24 @@ export async function runVocClusterAutogenShadow(
   try {
     const queryResult = await deps.db.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL statement_timeout = ${statementTimeoutMs}`));
+      const managedSystemPairs = await allManagedSystemWorkspacePairs(tx);
+      const managedSystemScope =
+        managedSystemPairs.length === 0
+          ? sql`SELECT NULL::uuid AS id, NULL::uuid AS workspace_id WHERE FALSE`
+          : sql`VALUES ${sql.join(
+              managedSystemPairs.map(
+                ({ id, workspace_id }) => sql`(${id}::uuid, ${workspace_id}::uuid)`,
+              ),
+              sql`, `,
+            )}`;
       return tx.execute<SummaryDbRow>(sql`
-    WITH scoped_systems AS (
+    WITH managed_system_scope (id, workspace_id) AS (
+      ${managedSystemScope}
+    ),
+    scoped_systems AS (
       SELECT DISTINCT v.workspace_id, v.primary_managed_system_id
         FROM voc.vocs v
-        JOIN core.managed_systems ms
+        JOIN managed_system_scope ms
           ON ms.id = v.primary_managed_system_id
          AND ms.workspace_id = v.workspace_id
         JOIN voc.voc_embeddings e
@@ -132,7 +146,7 @@ export async function runVocClusterAutogenShadow(
           ON low_voc.id = low_embedding.voc_id
          AND low_voc.workspace_id = low_embedding.workspace_id
          AND low_voc.archived_at IS NULL
-        JOIN core.managed_systems ms
+        JOIN managed_system_scope ms
           ON ms.id = low_voc.primary_managed_system_id
          AND ms.workspace_id = low_voc.workspace_id
         JOIN voc.voc_embeddings high_embedding

@@ -257,6 +257,60 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
 
+  it.each(['create', 'update'] as const)(
+    'rejects an archived analytics area on survey %s with the established validation detail',
+    async (operation) => {
+      const managedSystemId = await seedManagedSystem('Survey archived-area MS');
+      const area = await appHandle.pool.query<{ id: string }>(
+        `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+         values ($1, $2, $3, $4) returning id`,
+        [WORKSPACE_ID, managedSystemId, uid(SLUG_PREFIX), 'Archived survey area'],
+      );
+      const analyticsAreaId = area.rows[0]?.id;
+      if (!analyticsAreaId) throw new Error('analytics area seed failed');
+      await migrateHandle.pool.query(
+        'update core.analytics_areas set archived_at = now() where id = $1',
+        [analyticsAreaId],
+      );
+
+      let response: Awaited<ReturnType<typeof postSurvey>>;
+      if (operation === 'create') {
+        response = await postSurvey(
+          adminCookie,
+          surveyBody(managedSystemId, { analytics_area_id: analyticsAreaId }),
+        );
+      } else {
+        const created = await postSurvey(adminCookie, surveyBody(managedSystemId));
+        expect(created.statusCode).toBe(201);
+        const surveyId = created.json<{ id: string }>().id;
+        response = await app.inject({
+          method: 'PATCH',
+          url: `/surveys/${surveyId}`,
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+            'content-type': 'application/json',
+            'idempotency-key': randomUUID(),
+          },
+          payload: { analytics_area_id: analyticsAreaId },
+        });
+      }
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.failed',
+        message: 'analytics area must be active and belong to managed system',
+        detail: { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+      });
+      const surveys = await appHandle.pool.query<{ analytics_area_id: string | null }>(
+        'select analytics_area_id from survey.surveys where workspace_id = $1 and primary_managed_system_id = $2',
+        [WORKSPACE_ID, managedSystemId],
+      );
+      expect(surveys.rows).toEqual(
+        operation === 'create' ? [] : [{ analytics_area_id: null }],
+      );
+    },
+  );
+
   it('replays an idempotent create without a second row, audit, display id, or counter increment', async () => {
     const managedSystemId = await seedManagedSystem();
     const idempotencyKey = randomUUID();

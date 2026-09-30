@@ -5,7 +5,7 @@ import type { CreateVocRequest } from '@fops/shared';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import { sanitizeRichContentOrThrow } from '../../../lib/rich-content/sanitize-or-throw.js';
-import { lockAnalyticsArea } from '../../analytics-areas/index.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../../analytics-areas/index.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
@@ -35,22 +35,12 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
 
     // 2. FOR UPDATE on AA (if supplied) — verify MS match + not archived.
     if (input.analytics_area_id) {
-      const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
-      if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-      if (aa.managed_system_id !== ms.id) {
-        throw new HttpError(
-          'validation.failed',
-          'analytics_area does not belong to managed_system',
-          {
-            fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-          },
-        );
-      }
-      if (aa.archived_at) {
-        throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-          fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-        });
-      }
+      await assertActiveAnalyticsAreaForManagedSystem(
+        tx,
+        actor.workspace_id,
+        ms.id,
+        input.analytics_area_id,
+      );
     }
 
     // 3. Sanitize rich content.
