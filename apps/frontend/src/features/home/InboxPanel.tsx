@@ -1,5 +1,14 @@
 import type { NotificationDto } from '@fops/shared';
-import { Button, Skeleton, ToggleGroup, ToggleGroupItem } from '@fops/ui';
+import {
+  Button,
+  Skeleton,
+  ToggleGroup,
+  ToggleGroupItem,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@fops/ui';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Archive, Check } from 'lucide-react';
@@ -148,17 +157,19 @@ export function InboxPanel(): React.ReactElement {
       ) : null}
 
       {!list.isPending && !list.isError && items.length > 0 ? (
-        <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
-          {items.map((notification) => (
-            <NotificationRow
-              key={notification.id}
-              notification={notification}
-              actionsDisabled={rowActionPending(notification.id)}
-              onMarkRead={() => markRead.mutate(notification.id)}
-              onArchive={() => archive.mutate(notification.id)}
-            />
-          ))}
-        </ul>
+        <TooltipProvider delayDuration={400}>
+          <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
+            {items.map((notification) => (
+              <NotificationRow
+                key={notification.id}
+                notification={notification}
+                actionsDisabled={rowActionPending(notification.id)}
+                onMarkRead={() => markRead.mutate(notification.id)}
+                onArchive={() => archive.mutate(notification.id)}
+              />
+            ))}
+          </ul>
+        </TooltipProvider>
       ) : null}
 
       {list.hasNextPage && (
@@ -190,6 +201,12 @@ function NotificationRow({
 }): React.ReactElement {
   const target = notificationTarget(notification);
   const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
+  const subjectTitle =
+    notification.subject_ref?.visibility_state === 'allowed'
+      ? notification.subject_ref.title
+      : null;
+  const titleTooltipOnArchive =
+    subjectTitle !== null && targetLocation === null && notification.read_at !== null;
   const mainClassName = [
     'flex min-w-0 flex-1 items-center gap-3 pl-4 pr-2 text-left',
     notification.subject_ref ? 'py-1' : 'py-3',
@@ -237,27 +254,49 @@ function NotificationRow({
   const onMainClick = (): void => {
     if (notification.read_at === null) onMarkRead();
   };
+  const mainControl: React.ReactElement =
+    targetLocation !== null ? (
+      <Link
+        to={targetLocation.pathname as never}
+        search={Object.fromEntries(targetLocation.searchParams) as never}
+        className={interactiveClassName}
+        onClick={onMainClick}
+      >
+        {mainContent}
+      </Link>
+    ) : notification.read_at === null ? (
+      <button type="button" className={interactiveClassName} onClick={onMainClick}>
+        {mainContent}
+      </button>
+    ) : (
+      <div className={mainClassName}>{mainContent}</div>
+    );
+  const archiveButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      aria-label={HOME_INBOX_COPY.archive}
+      disabled={actionsDisabled}
+      onClick={onArchive}
+    >
+      <Archive className="h-4 w-4" />
+    </Button>
+  );
 
   return (
     <li
       className="flex min-h-row-default items-center border-b border-border-subtle last:border-b-0"
       data-testid={`home-inbox-row-${notification.id}`}
     >
-      {targetLocation !== null ? (
-        <Link
-          to={targetLocation.pathname as never}
-          search={Object.fromEntries(targetLocation.searchParams) as never}
-          className={interactiveClassName}
-          onClick={onMainClick}
-        >
-          {mainContent}
-        </Link>
-      ) : notification.read_at === null ? (
-        <button type="button" className={interactiveClassName} onClick={onMainClick}>
-          {mainContent}
-        </button>
+      {subjectTitle === null || titleTooltipOnArchive ? (
+        mainControl
       ) : (
-        <div className={mainClassName}>{mainContent}</div>
+        <Tooltip>
+          <TooltipTrigger asChild>{mainControl}</TooltipTrigger>
+          <TooltipContent>{subjectTitle}</TooltipContent>
+        </Tooltip>
       )}
       <span className="flex shrink-0 items-center gap-1 px-2">
         {notification.read_at === null && (
@@ -273,17 +312,14 @@ function NotificationRow({
             <Check className="h-4 w-4" />
           </Button>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          aria-label={HOME_INBOX_COPY.archive}
-          disabled={actionsDisabled}
-          onClick={onArchive}
-        >
-          <Archive className="h-4 w-4" />
-        </Button>
+        {titleTooltipOnArchive && subjectTitle !== null ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{archiveButton}</TooltipTrigger>
+            <TooltipContent>{subjectTitle}</TooltipContent>
+          </Tooltip>
+        ) : (
+          archiveButton
+        )}
       </span>
     </li>
   );

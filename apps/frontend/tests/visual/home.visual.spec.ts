@@ -1,6 +1,7 @@
 import {
   homeEmptyVisualSnapshot,
   homeInboxPopulatedVisualSnapshot,
+  homeInboxSubjectReferencesVisualSnapshot,
   homeUnscopedVisualSnapshot,
   homeVisualSnapshot,
   homeZeroQueuesVisualSnapshot,
@@ -26,6 +27,38 @@ test.describe('/home visual harness', () => {
       page.getByTestId('home-inbox-row-11111111-1111-4111-8111-111111111111'),
     ).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), homeInboxPopulatedVisualSnapshot);
+  });
+
+  test('renders subject references with allowed and unavailable titles at 1440 px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await installMockApi(page, { home: 'populated', notifications: 'subject-references' });
+    await page.goto('/home?tab=inbox');
+    await page.getByRole('radio', { name: 'All' }).click();
+
+    const allowedRow = page.getByTestId('home-inbox-row-77777777-7777-4777-8777-777777777777');
+    const unavailableRow = page.getByTestId('home-inbox-row-dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    await expect(allowedRow.getByText('VOC-2842')).toBeVisible();
+    await expect(
+      allowedRow.getByText(
+        'The export report takes several minutes to load when a saved filter contains many linked analytics areas',
+      ),
+    ).toBeVisible();
+    await expect(unavailableRow).toContainText('접근할 수 없는 항목');
+    await expect(unavailableRow).not.toContainText('VOC-2842');
+    await expect(unavailableRow).not.toContainText('Task Request');
+    await expect(
+      page.getByTestId('home-inbox-row-99999999-9999-4999-8999-999999999999'),
+    ).toContainText('REQ-42');
+    await expect(
+      page.getByTestId('home-inbox-row-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+    ).toContainText('TASK-901');
+    await expectVisual(
+      page,
+      page.locator('[data-app-frame]'),
+      homeInboxSubjectReferencesVisualSnapshot,
+    );
   });
 
   // #280 removed the dead My Work entry point, not the panel — the panel still

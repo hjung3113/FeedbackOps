@@ -61,3 +61,71 @@ export const populatedInboxNotifications = listNotificationsResponseSchema.parse
   page: { has_more: false },
   unread_count: 3,
 });
+
+export const subjectReferenceInboxNotifications = listNotificationsResponseSchema.parse({
+  items: [
+    notificationDtoSchema.parse({
+      id: '77777777-7777-4777-8777-777777777777',
+      event_type: 'voc.reporter_replied',
+      subject_type: 'voc',
+      subject_id: '88888888-8888-4888-8888-888888888888',
+      summary: '새 Reporter Reply가 등록되었습니다.',
+      detail: { voc_id: '88888888-8888-4888-8888-888888888888' },
+      created_at: '2026-07-21T08:00:00.000Z',
+      read_at: null,
+      archived_at: null,
+      subject_ref: {
+        visibility_state: 'allowed',
+        display_id: 'VOC-2842',
+        title:
+          'The export report takes several minutes to load when a saved filter contains many linked analytics areas',
+      },
+    }),
+    notificationDtoSchema.parse({
+      id: '99999999-9999-4999-8999-999999999999',
+      event_type: 'task_request.approved',
+      subject_type: 'task_request',
+      subject_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      summary: 'Task Request가 승인되었습니다.',
+      detail: {},
+      created_at: '2026-07-21T07:30:00.000Z',
+      read_at: '2026-07-21T08:00:00.000Z',
+      archived_at: null,
+      subject_ref: {
+        visibility_state: 'allowed',
+        display_id: 'REQ-42',
+        title: '검토 결과를 Task로 변환',
+      },
+    }),
+    notificationDtoSchema.parse({
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      event_type: 'task.assigned_to_me',
+      subject_type: 'task',
+      subject_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      summary: 'Task 담당자로 지정되었습니다.',
+      detail: {},
+      created_at: '2026-07-21T07:00:00.000Z',
+      read_at: '2026-07-21T07:15:00.000Z',
+      archived_at: null,
+      subject_ref: {
+        visibility_state: 'allowed',
+        display_id: 'TASK-901',
+        title: '매출 리포트 쿼리 플랜 개선',
+      },
+    }),
+    notificationDtoSchema.parse({
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      event_type: 'permission_request.decided',
+      subject_type: 'permission_request',
+      subject_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      summary: '권한 요청이 처리되었습니다.',
+      detail: {},
+      created_at: '2026-07-21T06:30:00.000Z',
+      read_at: null,
+      archived_at: null,
+      subject_ref: { visibility_state: 'unavailable' },
+    }),
+  ],
+  page: { has_more: false },
+  unread_count: 2,
+});

@@ -13,6 +13,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InboxPanel, notificationTarget } from '../InboxPanel';
@@ -21,6 +22,8 @@ const VOC_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const NOTIFICATION_ID = '11111111-1111-4111-8111-111111111111';
 const REFERENCED_NOTIFICATION_ID = '22222222-2222-4222-8222-222222222222';
 const UNAVAILABLE_NOTIFICATION_ID = '33333333-3333-4333-8333-333333333333';
+const LONG_SUBJECT_TITLE =
+  'A long VOC title that should remain available to people who need the complete subject text';
 
 function makeNotification(overrides: Partial<NotificationDto> = {}): NotificationDto {
   return notificationDtoSchema.parse({
@@ -259,6 +262,113 @@ describe('InboxPanel', () => {
     expect(within(unavailableRow).getByText('접근할 수 없는 항목')).toBeInTheDocument();
     expect(within(unavailableRow).queryByText('Could not submit the form')).not.toBeInTheDocument();
   });
+
+  it.each([
+    { subjectState: 'allowed', interaction: 'hover', shouldShowTooltip: true },
+    { subjectState: 'allowed', interaction: 'focus', shouldShowTooltip: true },
+    { subjectState: 'unavailable', interaction: 'hover', shouldShowTooltip: false },
+    { subjectState: 'unavailable', interaction: 'focus', shouldShowTooltip: false },
+  ] as const)(
+    'handles $subjectState subject title on row $interaction',
+    async ({ subjectState, interaction, shouldShowTooltip }) => {
+      const allowed = makeNotification({
+        id: REFERENCED_NOTIFICATION_ID,
+        subject_ref: {
+          visibility_state: 'allowed',
+          display_id: 'VOC-0123',
+          title: LONG_SUBJECT_TITLE,
+        },
+      });
+      const unavailable = makeNotification({
+        id: UNAVAILABLE_NOTIFICATION_ID,
+        subject_ref: { visibility_state: 'unavailable' },
+      });
+      installNotificationFetch([allowed, unavailable]);
+      renderInbox();
+
+      const rowId =
+        subjectState === 'allowed' ? REFERENCED_NOTIFICATION_ID : UNAVAILABLE_NOTIFICATION_ID;
+      const row = await screen.findByTestId(`home-inbox-row-${rowId}`);
+      const link = within(row).getByRole('link');
+      expect(within(row).getAllByRole('link')).toHaveLength(1);
+      expect(within(row).getAllByRole('button')).toHaveLength(2);
+
+      if (interaction === 'hover') {
+        fireEvent.pointerMove(link, { pointerType: 'mouse' });
+      } else {
+        fireEvent.focus(link);
+      }
+
+      if (shouldShowTooltip) {
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG_SUBJECT_TITLE);
+      } else {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        });
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it.each([
+    { subjectState: 'allowed', interaction: 'hover', shouldShowTooltip: true },
+    { subjectState: 'allowed', interaction: 'focus', shouldShowTooltip: true },
+    { subjectState: 'unavailable', interaction: 'hover', shouldShowTooltip: false },
+    { subjectState: 'unavailable', interaction: 'focus', shouldShowTooltip: false },
+  ] as const)(
+    'keeps the read/no-target Archive tab stop for a $subjectState subject on $interaction',
+    async ({ subjectState, interaction, shouldShowTooltip }) => {
+      const user = userEvent.setup();
+      const readPermissionDecision = makeNotification({
+        id: REFERENCED_NOTIFICATION_ID,
+        event_type: 'permission_request.decided',
+        subject_type: 'permission_request',
+        summary: '권한 요청이 처리되었습니다.',
+        detail: {},
+        read_at: '2026-07-27T01:00:00.000Z',
+        subject_ref:
+          subjectState === 'allowed'
+            ? {
+                visibility_state: 'allowed',
+                display_id: 'PR-0123',
+                title: LONG_SUBJECT_TITLE,
+              }
+            : { visibility_state: 'unavailable' },
+      });
+      installNotificationFetch([makeNotification(), readPermissionDecision]);
+      renderInbox();
+
+      await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+      fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+      const row = await screen.findByTestId(`home-inbox-row-${REFERENCED_NOTIFICATION_ID}`);
+      const archive = within(row).getByRole('button', { name: 'Archive' });
+
+      expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+      expect(within(row).getAllByRole('button')).toEqual([archive]);
+      expect(
+        Array.from(
+          row.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+        ),
+      ).toEqual([archive]);
+
+      if (interaction === 'hover') {
+        fireEvent.pointerMove(archive, { pointerType: 'mouse' });
+      } else {
+        screen.getByRole('radio', { name: 'All' }).focus();
+        for (let tab = 0; tab < 4; tab += 1) await user.tab();
+        expect(archive).toHaveFocus();
+      }
+
+      if (shouldShowTooltip) {
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG_SUBJECT_TITLE);
+      } else {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        });
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      }
+    },
+  );
 
   it('requests unread by default and omits the unread filter for All', async () => {
     const { calls } = installNotificationFetch([makeNotification()]);
