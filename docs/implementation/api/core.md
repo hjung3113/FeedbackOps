@@ -1,10 +1,13 @@
-# Core / Managed System / Analytics Area
+# Core / Health / Managed System / Analytics Area
 
 Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file is the normative contract for the sections below.
 
-## Core / Managed System / Analytics Area
+## Core / Health / Managed System / Analytics Area
 
 ```text
+GET /health
+GET /health/live
+GET /health/ready
 GET /managed-systems
 POST /managed-systems
 PATCH /managed-systems/:id

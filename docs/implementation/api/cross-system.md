@@ -43,8 +43,8 @@ events, and dashboard repair signals.
 | `POST /findings/:id/request-task` | FOP-TASK-001 | Finding, including Survey-derived Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
 | `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
-| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved (미구현 as of Slice 6) | may restore blocked object visibility | bypassing explicit deny checks |
-| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected (미구현 as of Slice 6) | keeps or creates permission-blocked state | exposing full restricted object |
+| `POST /permissions/requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_approved | may restore blocked object visibility | bypassing explicit deny checks |
+| `POST /permissions/requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Request (rejected) | none | permission_rejected | keeps permission-blocked state | exposing full restricted object |
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve

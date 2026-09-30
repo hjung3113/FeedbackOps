@@ -40,3 +40,8 @@ link to a non-archived VOC; its value is the subset with at least one linked
 VOC that has a non-skipped `voc.voc_public_updates` row. A skipped update is a
 recorded status transition without reporter-visible content and does not count
 as coverage.
+
+`dashboardSummarySchema` in `packages/shared/src/dashboard.ts` defines the
+closed coverage ID set (`coverage[].id`) and per-Managed-System coverage shape
+(`by_managed_system[].coverage`); `DASHBOARD_HOP_ROUTES` in the same file defines
+dashboard hop IDs and destinations.

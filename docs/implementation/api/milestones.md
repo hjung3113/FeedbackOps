@@ -182,6 +182,8 @@ immutable after create.
 ## Status
 
 ADR-0050. The persisted set is `planning | in_progress | blocked | released`.
+The shared closed status schema is `milestoneStatusFilterSchema` in
+`packages/shared/src/milestones/index.ts`.
 Create and PATCH accept `status` only inside that set. PATCH may move freely
 among the four values. Release does not depend on child Tasks: `planning` to
 `released` with zero child Tasks succeeds. Assign and convert do not consult
