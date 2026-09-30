@@ -12,7 +12,7 @@ import type {
   IntegrationDashboardVisualScenario,
   ScenarioName,
   VisualScenario,
-} from '../scenarios';
+} from '../../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
