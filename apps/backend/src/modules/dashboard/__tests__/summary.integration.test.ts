@@ -701,6 +701,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       },
       action_queues: { 'unassigned-voc': 2, 'high-severity-unlinked': 2 },
     });
+    expect(rowA?.analytics_areas?.map((area) => area.analytics_area_id)).toEqual(
+      [areaA1, areaA2].sort(),
+    );
+    expect(rowB?.analytics_areas?.map((area) => area.analytics_area_id)).toEqual(
+      [areaB1, areaB2].sort(),
+    );
 
     const expectArea = (
       row: SystemRow | undefined,

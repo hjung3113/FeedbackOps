@@ -31,6 +31,10 @@ export type VocGroupedCountArgs = {
     workspace_id: string;
     role_level: 'admin' | 'developer' | 'user';
   };
+  /**
+   * Must be the actor's `voc.read` scope from `actorScopeForCapability(…, 'voc.read')` /
+   * `actorReadScope`; VOC does not re-resolve it.
+   */
   readScope: Scope;
   managedSystemId?: string;
 };

@@ -343,12 +343,10 @@ export function createDashboardService(deps: DashboardDeps) {
       vocScope !== undefined &&
       (vocScope.kind === 'all' || vocScope.managedSystemIds.length > 0)
     ) {
-      const vocTaskValue = sumGroupedVocCounts((row) => row.with_task) ?? 0;
-      const analyticsAreaValue =
-        groupedVocCounts?.reduce(
-          (total, row) => total + (row.analytics_area_id !== null ? row.total : 0),
-          0,
-        ) ?? 0;
+      const vocTaskValue = sumGroupedVocCounts((row) => row.with_task)!;
+      const analyticsAreaValue = sumGroupedVocCounts(
+        (row) => (row.analytics_area_id !== null ? row.total : 0),
+      )!;
       const vocTaskPercent = percent(vocTaskValue, openVoc);
       coverage.push({
         id: 'voc-task',

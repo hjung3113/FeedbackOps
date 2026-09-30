@@ -155,6 +155,7 @@ export async function countGroupedVocsForRead(
   const baseWheres = buildVocListPredicate(baseArgs);
   if (baseWheres === null) return [];
 
+  // buildVocListPredicate emits workspace/archived/scope before tab/filter; slice relies on ordering.
   // Derive each FILTER clause from the canonical list predicate to keep tab semantics aligned.
   const additionalPredicate = (query: Pick<VocListPredicateArgs, 'tab' | 'filterSeverity'>) => {
     const wheres = buildVocListPredicate({ ...baseArgs, ...query });
