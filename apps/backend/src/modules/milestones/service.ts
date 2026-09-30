@@ -10,7 +10,10 @@ import type {
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { type LockedAnalyticsArea, lockAnalyticsArea } from '../analytics-areas/index.js';
+import {
+  assertActiveAnalyticsAreaForManagedSystem,
+  lockAnalyticsArea,
+} from '../analytics-areas/index.js';
 import { findWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -91,28 +94,10 @@ async function lockMilestoneAnalyticsArea(args: {
   workspaceId: string;
   analyticsAreaId: string | null | undefined;
   managedSystemId: string;
-}): Promise<LockedAnalyticsArea | null> {
-  if (!args.analyticsAreaId) return null;
+}): Promise<void> {
+  if (!args.analyticsAreaId) return;
   await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
-  return lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
-}
-
-function assertMilestoneAnalyticsAreaLock(args: {
-  analyticsArea: LockedAnalyticsArea | null;
-  managedSystemId: string;
-}): void {
-  const aa = args.analyticsArea;
-  if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-  if (aa.managed_system_id !== args.managedSystemId) {
-    throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-      fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-    });
-  }
-  if (aa.archived_at !== null) {
-    throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-      fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-    });
-  }
+  await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
 }
 
 async function assertMilestoneAnalyticsArea(args: {
@@ -122,11 +107,13 @@ async function assertMilestoneAnalyticsArea(args: {
   managedSystemId: string;
 }): Promise<void> {
   if (!args.analyticsAreaId) return;
-  const analyticsArea = await lockMilestoneAnalyticsArea(args);
-  assertMilestoneAnalyticsAreaLock({
-    analyticsArea,
-    managedSystemId: args.managedSystemId,
-  });
+  await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
+  await assertActiveAnalyticsAreaForManagedSystem(
+    args.tx,
+    args.workspaceId,
+    args.managedSystemId,
+    args.analyticsAreaId,
+  );
 }
 
 async function assertMilestoneOwner(args: {
@@ -353,7 +340,6 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
-          let analyticsArea: LockedAnalyticsArea | null = null;
           if (args.input.analytics_area_id) {
             // The Managed System is immutable, so this unlocked read supplies
             // its id before acquiring parent locks in Task conversion order.
@@ -362,7 +348,7 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
               milestoneId: args.milestoneId,
             });
             if (!current) throw new HttpError('not_found.record', 'milestone not found');
-            analyticsArea = await lockMilestoneAnalyticsArea({
+            await lockMilestoneAnalyticsArea({
               tx,
               workspaceId: args.actor.workspace_id,
               analyticsAreaId: args.input.analytics_area_id,
@@ -408,10 +394,12 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
           }
 
           if (args.input.analytics_area_id) {
-            assertMilestoneAnalyticsAreaLock({
-              analyticsArea,
-              managedSystemId: milestone.primary_managed_system_id,
-            });
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              args.actor.workspace_id,
+              milestone.primary_managed_system_id,
+              args.input.analytics_area_id,
+            );
           }
 
           const fields = Object.keys(args.input);

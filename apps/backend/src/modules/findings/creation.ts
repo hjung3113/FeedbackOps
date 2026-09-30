@@ -5,7 +5,7 @@ import {
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
-import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
@@ -77,20 +77,12 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
           );
 
           if (input.analytics_area_id) {
-            const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
-            if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-            if (aa.managed_system_id !== targetManagedSystemId) {
-              throw new HttpError(
-                'validation.failed',
-                'analytics_area does not belong to managed_system',
-                { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
-              );
-            }
-            if (aa.archived_at !== null) {
-              throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-                fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-              });
-            }
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              actor.workspace_id,
+              targetManagedSystemId,
+              input.analytics_area_id,
+            );
           }
 
           const finding = await insertFinding(tx, {
@@ -205,20 +197,12 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
           if (!(await canManageFinding(deps, actor, targetManagedSystemId, { tx })))
             throw new HttpError('permission.denied', 'finding.manage capability required');
           if (input.analytics_area_id) {
-            const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
-            if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-            if (aa.managed_system_id !== targetManagedSystemId)
-              throw new HttpError(
-                'validation.failed',
-                'analytics_area does not belong to managed_system',
-                {
-                  fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-                },
-              );
-            if (aa.archived_at !== null)
-              throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-                fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-              });
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              actor.workspace_id,
+              targetManagedSystemId,
+              input.analytics_area_id,
+            );
           }
           const safeExcerpts = await resolveApprovedSurveyResponseExcerpts(
             tx,

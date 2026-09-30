@@ -129,9 +129,12 @@ and actor-scoped in-app read model; it does not own domain event production.
 - Dashboard must not mutate source records directly.
 - A row-lock helper is exported by the module that owns the row, from that module's public barrel (`index.ts`). Callers do not import another module's `repo.ts` to lock its rows.
 - `lockManagedSystem` is exported from `managed-systems/index.ts`. `lockAnalyticsArea` is exported from `analytics-areas/index.ts`. VOC keeps `selectVocForUpdate` for its own rows.
+- `assertActiveAnalyticsAreaForManagedSystem` (lock + exists/scope/archived check) is exported from `analytics-areas/index.ts`; callers do not repeat the check.
 ```
 
 M7 (cycle-1 review) rejected selecting `core.managed_systems` from inside the VOC repo. The approved read of non-archived Managed System ids for a workspace is `allManagedSystemIds`. That function moved from `core/managed-systems/read-projections.ts` to `managed-systems/read-projections.ts` (#462); the core file is gone. Foreign modules still must not select the table themselves. Callers import `managed-systems/read-projections.ts` directly. The function is not on the `managed-systems` barrel: that barrel loads `managed-system-service.ts`, and `permissions/check-service.ts` importing the barrel cycles. Do not re-export it from the barrel unless that cycle is removed first.
+
+The same read-projections file owns the approved `managedSystemExists` and `allManagedSystemWorkspacePairs` reads. Foreign modules import these reads directly rather than selecting `core.managed_systems`; they are not re-exported from the barrel.
 
 ### Approved cross-module surfaces
 
@@ -148,7 +151,7 @@ These imports are read surfaces, not repo bypasses, and the repo-import lint mus
 
 Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone. Rule 7 (`outside-voc-imports-voc-jobs`, #517) rejects imports of `modules/voc/jobs/*` from outside VOC; reach job behavior through the VOC barrel (`enqueueReleasedTaskReviewCandidates`, `registerVocJobs`). Rule 9 (`foreign-test-seed-helpers`, #517, widened in #574) rejects any import of another module's `__tests__/_seed-helpers`; helpers shared across modules live in `src/test-support`.
 
-When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker.
+When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas` outside their owner modules; tests and migrations are excluded.
 
 ## Core Boundary
 

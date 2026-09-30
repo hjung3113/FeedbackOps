@@ -8,7 +8,7 @@ import {
 
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import {
   createEntityLink,
   detachEntityLink,
@@ -41,18 +41,12 @@ export function createVocClusterConversion(
     managedSystemId: string;
   }): Promise<void> {
     if (!args.analyticsAreaId) return;
-    const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
-    if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-    if (aa.managed_system_id !== args.managedSystemId) {
-      throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-        fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-      });
-    }
-    if (aa.archived_at !== null) {
-      throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-        fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-      });
-    }
+    await assertActiveAnalyticsAreaForManagedSystem(
+      args.tx,
+      args.workspaceId,
+      args.managedSystemId,
+      args.analyticsAreaId,
+    );
   }
 
   async function createFindingFromCluster(args: {

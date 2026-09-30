@@ -7,7 +7,7 @@ import type { PatchVocRequest } from '@fops/shared';
 import { vocs } from '../../../db/schema/voc.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
-import { lockAnalyticsArea } from '../../analytics-areas/index.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../../analytics-areas/index.js';
 import { listWorkspaceAdminActorIds } from '../../auth/index.js';
 import type { RoleLevel } from '../../auth/session-service.js';
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
@@ -95,22 +95,12 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       input.analytics_area_id !== null &&
       input.analytics_area_id !== row.analyticsAreaId
     ) {
-      const aa = await lockAnalyticsArea(tx, workspaceId, input.analytics_area_id);
-      if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-      if (aa.managed_system_id !== row.primaryManagedSystemId) {
-        throw new HttpError(
-          'validation.failed',
-          'analytics_area does not belong to managed_system',
-          {
-            fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-          },
-        );
-      }
-      if (aa.archived_at !== null) {
-        throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-          fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-        });
-      }
+      await assertActiveAnalyticsAreaForManagedSystem(
+        tx,
+        workspaceId,
+        row.primaryManagedSystemId,
+        input.analytics_area_id,
+      );
     }
 
     // 6. Mutex: both owner fields non-null simultaneously (belt-and-suspenders;
