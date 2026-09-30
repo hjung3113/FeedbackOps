@@ -42,6 +42,8 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   let adminCookie: string;
   let adminActorId: string;
   let reporterId: string;
+  const convertedRequestIds = new Set<string>();
+  const conversionIdempotencyKeys = new Set<string>();
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -81,6 +83,23 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
   async function cleanupEntityLinkFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    if (convertedRequestIds.size > 0) {
+      await migrateHandle.pool.query(
+        `delete from core.audit_log
+          where workspace_id = $1
+            and event_type = 'task_created_from_request'
+            and detail ->> 'source_task_request_id' = any($2::text[])`,
+        [WORKSPACE_ID, [...convertedRequestIds]],
+      );
+      convertedRequestIds.clear();
+    }
+    if (conversionIdempotencyKeys.size > 0) {
+      await migrateHandle.pool.query(
+        'delete from core.idempotency_keys where key = any($1::uuid[])',
+        [[...conversionIdempotencyKeys]],
+      );
+      conversionIdempotencyKeys.clear();
+    }
     const managedSystems = `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
     const surveys = `select id from survey.surveys
       where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
@@ -370,6 +389,20 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       method: 'GET',
       url: `/entity-links${query}`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+
+  function convertTaskRequest(taskRequestId: string, key: string) {
+    conversionIdempotencyKeys.add(key);
+    return app.inject({
+      method: 'POST',
+      url: `/task-requests/${taskRequestId}/convert`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: { title: 'Converted Task link summary' },
     });
   }
 
@@ -2289,6 +2322,94 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const second = await patchEntityLink(adminCookie, linkId, { reason: 'Again' });
     expect(second.statusCode).toBe(409);
     expect(second.json<{ code: string }>().code).toBe('conflict.stale_write');
+  });
+
+  it('GET returns the allowed Task summary for a freshly converted Task Request', async () => {
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Converted Task request source',
+    });
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'finding',
+      sourceId: finding.id,
+      primaryManagedSystemId: msA,
+      requesterActorId: adminActorId,
+      status: 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Approved in seed',
+      decided: true,
+    });
+    convertedRequestIds.add(request.id);
+    await seedEntityLinkDirectly({
+      sourceType: 'finding',
+      sourceId: finding.id,
+      targetType: 'task_request',
+      targetId: request.id,
+      relationType: 'requested_task',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    const key = randomUUID();
+    const conversion = await convertTaskRequest(request.id, key);
+    expect(conversion.statusCode).toBe(201);
+    const task = conversion.json<{ id: string; display_id: string; title: string }>();
+
+    const response = await getEntityLinks(
+      adminCookie,
+      `?source_type=task_request&source_id=${request.id}`,
+    );
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      items: Array<{
+        source_id?: string;
+        target_id?: string;
+        target_summary?: { type: string; id: string; display_id: string; title: string };
+        relation_type: string;
+        status: string;
+        visibility_state: string;
+      }>;
+    }>();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      source_id: request.id,
+      target_id: task.id,
+      relation_type: 'converted_to',
+      status: 'active',
+      visibility_state: 'allowed',
+      target_summary: {
+        type: 'task',
+        id: task.id,
+        display_id: task.display_id,
+        title: task.title,
+      },
+    });
+
+    const persisted = await dbHandle.pool.query<{
+      status: string;
+      task_status: string;
+      link_count: number;
+    }>(
+      `select tr.status,
+              t.status as task_status,
+              (select count(*)::int from core.entity_links el
+                where el.source_type = 'task_request'
+                  and el.source_id = tr.id
+                  and el.target_type = 'task'
+                  and el.target_id = t.id
+                  and el.relation_type = 'converted_to'
+                  and el.status = 'active') as link_count
+         from task_request.task_requests tr
+         join task.tasks t on t.source_task_request_id = tr.id
+        where tr.id = $1`,
+      [request.id],
+    );
+    expect(persisted.rows).toEqual([
+      { status: 'converted', task_status: 'backlog', link_count: 1 },
+    ]);
   });
 
   it('PATCH returns 404 when actor lacks scope on the target endpoint', async () => {

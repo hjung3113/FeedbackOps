@@ -23,6 +23,9 @@ vi.mock('./useTaskRequestConversion', async (importOriginal) => ({
   useTaskRequestConversion: useConversion,
 }));
 vi.mock('./useTaskRequestLink', () => ({ useTaskRequestLink: useLink }));
+vi.mock('./useTaskRequestConvertedTaskLink', () => ({
+  useTaskRequestConvertedTaskLink: () => ({ isSuccess: false, data: undefined }),
+}));
 
 import { TASK_REQUEST_STATUS_LABELS as STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { TaskRequestPanel } from './TaskRequestPanel';
