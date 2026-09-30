@@ -190,11 +190,7 @@ export function FullDetailView({
             </div>
           )}
           <div data-anchor="conversation">
-            <ConversationTimeline
-              voc={voc}
-              canTriage={canTriage}
-              actorNamesById={actorNamesById}
-            />
+            <ConversationTimeline voc={voc} canTriage={canTriage} actorNamesById={actorNamesById} />
           </div>
           <div data-anchor="compose">
             <ComposerSection

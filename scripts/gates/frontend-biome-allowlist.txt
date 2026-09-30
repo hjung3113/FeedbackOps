@@ -289,3 +289,5 @@ apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx lint/s
 apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
 apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx format -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
 apps/frontend/src/features/voc/components/list/__tests__/VocList.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-09-30); #591 adds reporter/operator cases below it
+apps/frontend/src/features/voc/hooks/useComposerVisibility.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #591 only switches the internal composer to the triage capability
+apps/frontend/src/features/voc/hooks/__tests__/useComposerVisibility.test.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #591 adds capability cases
