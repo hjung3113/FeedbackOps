@@ -76,9 +76,10 @@ envelope is lower risk than a stale 304 until a projection-aware validator is
 introduced.
 
 No migration is added: the existing `(workspace_id, primary_managed_system_id,
-created_at DESC)` index supports the peer lookup and ordering. The prototype's
-Similar sidebar tab remains deferred, so a badge does not imply that the tab is
-already populated.
+created_at DESC)` index supports the peer lookup and ordering. The inbox
+`tab=similar` predicate remains deferred and currently returns no rows; the
+dated presentation amendment below keeps its URL key while naming the intended
+same-Managed-System peer view.
 
 ## Consequences
 
@@ -90,3 +91,18 @@ already populated.
   projection is peer-derived.
 - The VOC create surface consumes this heuristic through its pre-submit peers
   panel, before a source VOC exists.
+
+## Presentation
+
+> **Amended 2026-09-30 (#582).** `similar_count` remains the authorized count
+> of active peers in the same primary Managed System; it is not a per-row
+> similarity signal. Remove it from VOC inbox rows. In detail, triage, and the
+> pre-submit panel, label peer counts as `같은 Managed System의 VOC N건` (or
+> the same phrase with the count shown separately). The inbox `tab=similar`
+> URL key remains stable and labels this same-Managed-System peer view; the
+> current backend predicate still returns no rows for that tab, so this
+> amendment does not claim the predicate is implemented.
+>
+> ADR-0034 embedding recommendations remain a separate semantic surface named
+> `유사 VOC 추천`. Their query, availability states, confirm action, and
+> dismiss action are unchanged.

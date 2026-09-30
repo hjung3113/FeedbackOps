@@ -357,7 +357,7 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     await waitFor(() => {
-      // Tab labels mirror the prototype (English): Untriaged / High / Unassigned / Similar / No link.
+      // The same-Managed-System peer tab keeps its URL value `similar`.
       expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
   });
@@ -380,7 +380,7 @@ describe('useInboxRoute', () => {
       'Untriaged',
       'High',
       'Unassigned',
-      'Similar',
+      '같은 Managed System의 VOC',
       'No link',
       'High · no link',
       'No task',

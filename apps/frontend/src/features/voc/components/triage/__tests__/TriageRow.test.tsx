@@ -52,7 +52,7 @@ describe('TriageRow', () => {
       <TriageRow voc={{ ...BASE_VOC, similar_count: 3 }} selected={false} onSelect={vi.fn()} />,
     );
 
-    for (const text of ['Owner 없음', 'Area 미지정', '↔ similar 3']) {
+    for (const text of ['Owner 없음', 'Area 미지정', '같은 Managed System의 VOC 3건']) {
       const item = screen.getByText(text);
       expect(item).toHaveClass('text-text-muted');
       expect(item).not.toHaveClass('text-text-danger');

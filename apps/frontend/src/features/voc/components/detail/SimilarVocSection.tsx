@@ -3,6 +3,11 @@ import { PanelSectionTitle, ReporterStatusBadge, SeverityBadge } from '@fops/ui'
 import { Sparkles } from 'lucide-react';
 import type * as React from 'react';
 
+import {
+  formatSameManagedSystemVocCount,
+  SAME_MANAGED_SYSTEM_VOC_LABEL,
+} from '@/lib/copy/voc';
+
 export interface SimilarVocSectionProps {
   similar: VocDetailEnvelope['similar'] | undefined;
   similarCount: number | undefined;
@@ -38,12 +43,12 @@ export function SimilarVocSection({
   }
 
   return (
-    <section className="mb-8" aria-label="유사 VOC">
+    <section className="mb-8" aria-label={formatSameManagedSystemVocCount(similarCount)}>
       <div className="flex items-start justify-between gap-3">
-        <PanelSectionTitle className="mb-3.5">유사 VOC</PanelSectionTitle>
+        <PanelSectionTitle className="mb-3.5">{SAME_MANAGED_SYSTEM_VOC_LABEL}</PanelSectionTitle>
         <span className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-2 py-0.5 text-xs font-medium text-accent-primary">
           <Sparkles className="h-3 w-3" aria-hidden="true" />
-          Similarity {similarCount}
+          {similarCount}건
         </span>
       </div>
       <div className="overflow-hidden rounded-md bg-surface-canvas">

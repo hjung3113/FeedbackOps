@@ -3,6 +3,7 @@ import { Card, CardContent } from '@fops/ui';
 import type * as React from 'react';
 
 import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
+import { SAME_MANAGED_SYSTEM_VOC_LABEL } from '@/lib/copy/voc';
 import { useVocPreSubmitPeers } from '../../hooks/useVocPreSubmitPeers';
 
 export interface SimilarVocPanelProps {
@@ -18,7 +19,9 @@ export function SimilarVocPanel({ managedSystemId }: SimilarVocPanelProps): Reac
     <Card className="p-3.5" data-testid="similar-voc-panel">
       <CardContent className="p-0">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-normal text-text-muted">유사 VOC</span>
+          <span className="text-xs font-semibold uppercase tracking-normal text-text-muted">
+            {SAME_MANAGED_SYSTEM_VOC_LABEL}
+          </span>
           <span className="text-xs text-text-muted">{data.items.length}건</span>
         </div>
         <div className="flex flex-col gap-1">

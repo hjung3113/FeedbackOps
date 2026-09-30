@@ -560,13 +560,15 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByText('대화')).toBeInTheDocument();
   });
 
-  it('only renders the Similar section navigation entry and anchor when similar VOCs render', () => {
+  it('only renders the same-Managed-System section navigation entry and anchor when peers render', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     const { container, rerender } = renderWithClient(
       <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).toBeNull();
 
     vi.mocked(useVocDetail).mockReturnValue(
@@ -594,7 +596,7 @@ describe('<VocDetailPanel>', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '같은 Managed System의 VOC' })).toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
@@ -693,9 +695,11 @@ describe('<VocDetailPanel>', () => {
 
     await screen.findByText('테스트 VOC 제목');
     expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('유사 VOC')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/같은 Managed System의 VOC/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
   });
 
   it('#337: treats a half-redacted envelope as the reporter arm', async () => {
@@ -737,9 +741,9 @@ describe('<VocDetailPanel>', () => {
 
     await screen.findByText('테스트 VOC 제목');
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
-    expect(screen.getByLabelText('유사 VOC')).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '같은 Managed System의 VOC' })).toBeInTheDocument();
   });
 
   it('renders me.display_name when me matches reporter', () => {

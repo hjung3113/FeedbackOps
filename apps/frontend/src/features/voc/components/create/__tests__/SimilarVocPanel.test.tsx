@@ -77,7 +77,7 @@ describe('<SimilarVocPanel>', () => {
   test('0건은 정상 카드이며 unavailable/provider 경로를 렌더하지 않는다', async () => {
     mockPeers.mockReturnValue(peersResult({ items: [] }));
     await renderPanelMounted();
-    expect(screen.getByText('유사 VOC')).toBeInTheDocument();
+    expect(screen.getByText('같은 Managed System의 VOC')).toBeInTheDocument();
     expect(screen.getByText('0건')).toBeInTheDocument();
     expect(screen.queryAllByRole('link')).toHaveLength(0);
     expect(screen.queryByText(/available|provider/i)).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('<SimilarVocPanel>', () => {
   test('MS 미선택이면 카드를 렌더하지 않는다', async () => {
     mockPeers.mockReturnValue(peersResult(undefined));
     await renderPanelMounted(undefined);
-    expect(screen.queryByText('유사 VOC')).not.toBeInTheDocument();
+    expect(screen.queryByText('같은 Managed System의 VOC')).not.toBeInTheDocument();
   });
 
   test('응답 항목 수 2를 카운트로 쓴다', async () => {

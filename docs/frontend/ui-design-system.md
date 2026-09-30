@@ -228,7 +228,7 @@ Required row fields:
 - owner
 - analytics area
 - created time
-- similar VOC indicator
+- no per-row same-Managed-System peer indicator; show that count in detail and triage copy instead
 - linked Finding / Task indicator
 - next action
 ```

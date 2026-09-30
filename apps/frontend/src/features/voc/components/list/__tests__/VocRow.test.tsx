@@ -97,13 +97,8 @@ describe('<VocRow>', () => {
     expect(screen.queryByText('높음')).not.toBeInTheDocument();
   });
 
-  it('renders the "N similar" badge only when similar_count > 0', () => {
-    const { rerender } = render(
-      <VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />,
-    );
-    expect(screen.queryByText(/similar/)).not.toBeInTheDocument();
-
-    rerender(
+  it('does not render a same-Managed-System peer count in list rows', () => {
+    render(
       <VocRow
         voc={{ ...BASE_VOC, similar_count: 4 }}
         selected={false}
@@ -111,7 +106,8 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByText('4 similar')).toBeInTheDocument();
+
+    expect(screen.queryByText(/similar|같은 Managed System의 VOC/i)).not.toBeInTheDocument();
   });
 
   it('renders the attachment count chip when attachment_count > 0', () => {
@@ -131,7 +127,7 @@ describe('<VocRow>', () => {
     expect(screen.queryByLabelText('0 attachments')).not.toBeInTheDocument();
   });
 
-  it('renders distinct attachment and similar count chips', () => {
+  it('keeps the attachment count chip without a same-Managed-System peer chip', () => {
     render(
       <VocRow
         voc={{ ...BASE_VOC, attachment_count: 2, similar_count: 5 }}
@@ -141,7 +137,7 @@ describe('<VocRow>', () => {
       />,
     );
     expect(screen.getByLabelText('2 attachments')).toHaveTextContent('2');
-    expect(screen.getByLabelText('5 similar')).toHaveTextContent('5 similar');
+    expect(screen.queryByText(/similar|같은 Managed System의 VOC/i)).not.toBeInTheDocument();
   });
 
   it('renders amber "No area" when analytics_area_id is null', () => {

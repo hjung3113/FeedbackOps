@@ -24,6 +24,8 @@ import type { VocListItem } from '@fops/shared';
 import { ReporterStatusBadge, SeverityIndicator, cn } from '@fops/ui';
 import type * as React from 'react';
 
+import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -130,7 +132,9 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-text-muted">↔ similar {voc.similar_count}</span>
+              <span className="text-text-muted">
+                {formatSameManagedSystemVocCount(voc.similar_count)}
+              </span>
             </>
           )}
         </div>

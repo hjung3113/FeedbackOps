@@ -10,7 +10,7 @@ test.describe('VOC create pre-submit similar VOC visual harness (#293)', () => {
     await page.goto(`/vocs?action=create&managedSystem=${VOC_CREATE_IDS.managedSystem}`);
 
     const panel = page.getByTestId('similar-voc-panel');
-    await expect(panel).toContainText('유사 VOC');
+    await expect(panel).toContainText('같은 Managed System의 VOC');
     await expect(panel).toContainText('2건');
     await expect(panel).toContainText('Tableau 새로고침 실패');
     await expect(panel).toContainText('VOC-2931');
