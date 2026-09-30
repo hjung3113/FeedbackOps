@@ -214,39 +214,42 @@ describe('_authed sidebar current destination', () => {
   ])(
     'renders the expected current destination for $route',
     ({ pathname, searchStr, expectedId }) => {
-    localStorage.removeItem('appSidebarCollapsed');
-    const entries = pathname === '/tasks' ? NAV_TREE.tasks : NAV_TREE.voc;
-    render(<AppSidebar entries={getSidebarEntryStates(entries, pathname, searchStr)} />);
+      localStorage.removeItem('appSidebarCollapsed');
+      const entries = pathname === '/tasks' ? NAV_TREE.tasks : NAV_TREE.voc;
+      render(<AppSidebar entries={getSidebarEntryStates(entries, pathname, searchStr)} />);
 
-    const navLinks = entries.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
-    const currentLinks = navLinks.filter((entry) => entry.getAttribute('aria-current') === 'page');
-    if (expectedId === null) {
-      expect(currentLinks).toHaveLength(0);
-    } else {
-      expect(currentLinks).toHaveLength(1);
-      expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
-      expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
-    }
-
-    for (const entry of navLinks) {
-      expect(entry.classList.contains('bg-surface-row-selected')).toBe(
-        entry.getAttribute('aria-current') === 'page',
+      const navLinks = entries.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
+      const currentLinks = navLinks.filter(
+        (entry) => entry.getAttribute('aria-current') === 'page',
       );
-    }
+      if (expectedId === null) {
+        expect(currentLinks).toHaveLength(0);
+      } else {
+        expect(currentLinks).toHaveLength(1);
+        expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
+        expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
+      }
 
-    const createEntry = screen.queryByTestId('sidebar-nav-create');
-    if (createEntry !== null) {
-      expect(createEntry).not.toHaveAttribute('aria-current', 'page');
-      expect(createEntry).not.toHaveClass('bg-surface-row-selected');
-    }
+      for (const entry of navLinks) {
+        expect(entry.classList.contains('bg-surface-row-selected')).toBe(
+          entry.getAttribute('aria-current') === 'page',
+        );
+      }
 
-    if (expectedId !== null && ['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
-      const triageEntry = screen.getByTestId('sidebar-nav-triage');
-      expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
-      expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
-      expect(triageEntry).toHaveClass('text-text-primary');
-    } else if (expectedId !== 'triage' && entries.some((entry) => entry.id === 'triage')) {
-      expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('font-medium');
-    }
-  });
+      const createEntry = screen.queryByTestId('sidebar-nav-create');
+      if (createEntry !== null) {
+        expect(createEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(createEntry).not.toHaveClass('bg-surface-row-selected');
+      }
+
+      if (expectedId !== null && ['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
+        const triageEntry = screen.getByTestId('sidebar-nav-triage');
+        expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
+        expect(triageEntry).toHaveClass('text-text-primary');
+      } else if (expectedId !== 'triage' && entries.some((entry) => entry.id === 'triage')) {
+        expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('font-medium');
+      }
+    },
+  );
 });
