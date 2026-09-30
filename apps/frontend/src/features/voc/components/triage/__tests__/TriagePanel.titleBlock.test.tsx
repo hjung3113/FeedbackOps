@@ -111,14 +111,15 @@ describe('TriagePanel Overview and grouped navigation', () => {
   });
 
   it('renders exactly the four grouped section nav items in order without overflow', () => {
-    renderPanel({ ...TRIAGE_VOC, similar_count: 4 });
+    renderPanel();
     const overview = screen.getByRole('button', { name: 'Overview' });
     const nav = overview.parentElement;
     expect(nav).not.toBeNull();
     const labels = within(nav as HTMLElement)
       .getAllByRole('button')
       .map((button) => button.textContent?.replace(/\s/g, ''));
-    expect(labels).toEqual(['Overview', 'Assignment', 'Similar4', 'Summary']);
+    // #592: the recommendation section is named for the ADR-0034 surface, without the peer count.
+    expect(labels).toEqual(['Overview', 'Assignment', '유사VOC추천', 'Summary']);
     expect(within(nav as HTMLElement).queryByText('더보기')).not.toBeInTheDocument();
     for (const removed of ['Body', 'Severity', 'Owner', 'Area', 'Cluster']) {
       expect(

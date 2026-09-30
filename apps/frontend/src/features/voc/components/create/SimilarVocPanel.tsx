@@ -3,6 +3,7 @@ import { Card, CardContent } from '@fops/ui';
 import type * as React from 'react';
 
 import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
+import { SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL } from '@/lib/copy/voc';
 import { useVocPreSubmitPeers } from '../../hooks/useVocPreSubmitPeers';
 
 export interface SimilarVocPanelProps {
@@ -17,9 +18,11 @@ export function SimilarVocPanel({ managedSystemId }: SimilarVocPanelProps): Reac
   return (
     <Card className="p-3.5" data-testid="similar-voc-panel">
       <CardContent className="p-0">
+        {/* ADR-0031: this capped pre-submit projection exposes no peer count or total. */}
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-normal text-text-muted">유사 VOC</span>
-          <span className="text-xs text-text-muted">{data.items.length}건</span>
+          <span className="text-xs font-semibold uppercase tracking-normal text-text-muted">
+            {SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL}
+          </span>
         </div>
         <div className="flex flex-col gap-1">
           {data.items.map((item) => (

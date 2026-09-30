@@ -1,8 +1,8 @@
 // TriagePanel.clusterRecommendation.test.tsx — #168 step 6 chunk 6b.
 //
 // The recommendation surface is mounted inside the triage panel and receives
-// the source VOC id. ADR-0031 coexistence: `similar_count` keeps driving the
-// section-nav count badge and the Similarity badge exactly as before.
+// the source VOC id. ADR-0031 coexistence: `similar_count` remains the peer
+// count, separate from the semantic recommendation section label.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -42,7 +42,7 @@ const VOC: VocListItem = {
   source_context: 'direct_use',
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
-  similar_count: 4,
+  similar_count: 0,
   attachment_count: 0,
 };
 
@@ -62,7 +62,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-describe('TriagePanel — Cluster 추천 section', () => {
+describe('TriagePanel — 유사 VOC 추천 section', () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -108,8 +108,7 @@ describe('TriagePanel — Cluster 추천 section', () => {
     expect(urls).toContain(`/vocs/${VOC.id}/recommendations`);
   });
 
-  // ADR-0031: the same-Managed-System heuristic is untouched by this chunk.
-  it('still renders similar_count in the section nav and the Similarity badge', async () => {
+  it('keeps the recommendation nav visible when there are no same-Managed-System peers', async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.endsWith('/recommendations')) {
@@ -131,19 +130,12 @@ describe('TriagePanel — Cluster 추천 section', () => {
       </Wrapper>,
     );
 
-    // Section-nav entry with the heuristic count (prototype behaviour, unchanged).
-    const navEntry = screen.getByRole('button', { name: /similar/i });
-    expect(navEntry).toHaveTextContent('4');
+    const navEntry = screen.getByRole('button', { name: '유사 VOC 추천' });
+    expect(navEntry).not.toHaveTextContent('0');
+    expect(screen.queryByTestId('cluster-similarity-badge')).toBeNull();
 
-    // The heuristic badge shows even when recommendations are unavailable —
-    // that is exactly the case where it is the only related-VOC signal left.
-    const badge = await screen.findByTestId('cluster-similarity-badge');
-    expect(badge).toHaveTextContent('Similarity 4');
-
-    // The badge is driven by `similar_count` alone, so it is present before the
-    // recommendation query settles — awaiting it proves nothing about the query.
     // The state line testid is likewise present during loading, so wait for the
-    // settled COPY rather than for either element.
+    // settled COPY to prove the recommendation query reached its unavailable state.
     await waitFor(() => {
       expect(screen.getByTestId('cluster-recommendation-state')).toHaveTextContent(
         '임베딩 제공자가 설정되어 있지 않아',

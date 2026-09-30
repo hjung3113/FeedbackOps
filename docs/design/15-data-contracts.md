@@ -583,10 +583,11 @@ Rules:
 - Large spreadsheet-like data should be attachments.
 ```
 
-## VOC Similarity Projection
+## VOC Same-Managed-System Peer Projection
 
-`similar_count` on every VOC list/detail item is the authorized total of active
-same-workspace, same-primary-Managed-System peers, excluding the source VOC.
+`similar_count` (the retained DTO field name) on every VOC list/detail item is
+the authorized total of active same-workspace, same-primary-Managed-System
+peers, excluding the source VOC.
 Detail additionally includes `similar.items`, capped at three and ordered by
 `created_at DESC, id DESC`, with `id`, `display_id`, `title`,
 `reporter_facing_status`, and nullable `severity`. It is not a second count.

@@ -2,7 +2,7 @@
  * VocRow — single-select row for the VOC inbox list.
  *
  * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a checkbox + severity
- * indicator lead, a title line (id · title · "N similar"), a meta line
+ * indicator lead, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
  * "Owner 필요" badge + reporter avatar).
@@ -33,7 +33,7 @@ import {
   UserAvatar,
 } from '@fops/ui';
 import { cn } from '@fops/ui';
-import { Layers, Paperclip } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import type * as React from 'react';
 
 import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
@@ -187,15 +187,6 @@ export function VocRow({
                 {voc.display_id}
               </span>
               <span className="font-medium text-text-primary truncate">{voc.title}</span>
-              {voc.similar_count > 0 && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-status-reporter-reviewing/10 px-1.5 py-0.5 text-xs font-medium text-status-reporter-reviewing shrink-0"
-                  aria-label={`${voc.similar_count} similar`}
-                >
-                  <Layers className="h-2.5 w-2.5" aria-hidden="true" />
-                  {voc.similar_count} similar
-                </span>
-              )}
               {voc.attachment_count > 0 && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-text-muted/10 px-1.5 py-0.5 text-xs font-medium text-text-muted shrink-0"

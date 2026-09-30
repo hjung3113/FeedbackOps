@@ -60,9 +60,10 @@ interface InboxSearch {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Tab labels mirror docs/design-prototype/screen-voc.jsx (VOC_TABS) verbatim —
-// prototype uses English labels for the inbox tabs. The `urgent` flag flips the
-// Unassigned tab to the danger token (red) per prototype.
+// Tab labels mirror screen-voc.jsx `VOC_TABS` verbatim except `similar` (#592 / ADR-0031):
+// its URL key stays accepted for old links and saved views, but the tab is hidden until its
+// predicate exists (see 04-voc-system, “Similar VOC Suggested”).
+// The `urgent` flag flips the Unassigned tab to the danger token (red) per prototype.
 //
 // badgeCount is intentionally absent: the prototype's counts (9/7/12/4/5) are
 // synthetic local-data aggregates. GET /vocs returns no per-tab count facet, so
@@ -72,7 +73,6 @@ const INBOX_TABS: ListToolbarTab[] = [
   { value: 'untriaged', label: 'Untriaged' },
   { value: 'high', label: 'High' },
   { value: 'unassigned', label: 'Unassigned', urgent: true },
-  { value: 'similar', label: 'Similar' },
   { value: 'no-link', label: 'No link' },
   { value: 'high-no-link', label: 'High · no link' },
   { value: 'no-task', label: 'No task' },

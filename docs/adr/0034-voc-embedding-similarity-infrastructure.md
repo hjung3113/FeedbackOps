@@ -133,7 +133,7 @@ justifies a cache.
 > /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
 > /vocs/:id/recommendations/:candidate_id/confirm`.
 >
-> The frontend surface landed in the same step: the triage panel's Cluster 추천
+> The frontend surface landed in the same step: the triage panel's `유사 VOC 추천`
 > section reads that resource and renders each candidate with confirm and
 > dismiss actions. `available: false` is rendered as two distinct reasons —
 > `provider_disabled` and `source_not_embedded` — each with its own copy, never

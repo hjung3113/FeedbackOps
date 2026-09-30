@@ -26,6 +26,8 @@ import {
 } from '@fops/ui';
 import { Maximize2, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
+
+import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -59,12 +61,13 @@ export interface TriagePanelProps {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// ADR-0051 groups the prototype's seven sections into four; Similar remains conditional on count.
-function buildTriageSections(similarCount: number) {
+// ADR-0051 groups the prototype's seven sections into four. The recommendation
+// section is always present because ADR-0034 candidates are workspace-wide.
+function buildTriageSections() {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'assignment', label: 'Assignment' },
-    ...(similarCount > 0 ? [{ id: 'similar', label: 'Similar', count: similarCount }] : []),
+    { id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL },
     { id: 'summary', label: 'Summary' },
   ];
 }
@@ -102,7 +105,7 @@ export function TriagePanel({
 
   // ── render ─────────────────────────────────────────────────────────────────
 
-  const triageSections = buildTriageSections(voc.similar_count);
+  const triageSections = buildTriageSections();
 
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">
@@ -230,7 +233,7 @@ export function TriagePanel({
           </div>
         </div>
 
-        {/* Similar is the same recommendation content, grouped under a clearer nav label. */}
+        {/* Semantic recommendations remain separate from the same-MS peer count. */}
         <ClusterSectionReadOnly vocId={voc.id} similarCount={voc.similar_count} />
 
         {/* Compact changed-fields summary */}

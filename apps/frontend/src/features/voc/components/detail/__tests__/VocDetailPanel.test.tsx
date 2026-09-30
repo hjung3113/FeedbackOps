@@ -1,6 +1,7 @@
 import type { TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -560,13 +561,15 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByText('대화')).toBeInTheDocument();
   });
 
-  it('only renders the Similar section navigation entry and anchor when similar VOCs render', () => {
+  it('only renders the same-Managed-System section navigation entry and anchor when peers render', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     const { container, rerender } = renderWithClient(
       <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).toBeNull();
 
     vi.mocked(useVocDetail).mockReturnValue(
@@ -594,7 +597,9 @@ describe('<VocDetailPanel>', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' })).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
@@ -693,9 +698,11 @@ describe('<VocDetailPanel>', () => {
 
     await screen.findByText('테스트 VOC 제목');
     expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('유사 VOC')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/같은 Managed System의 VOC/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
   });
 
   it('#337: treats a half-redacted envelope as the reporter arm', async () => {
@@ -713,6 +720,7 @@ describe('<VocDetailPanel>', () => {
   });
 
   it('#337: scoped envelope renders Triage and Similar with their navigation entries', async () => {
+    const user = userEvent.setup();
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({
         data: {
@@ -733,13 +741,37 @@ describe('<VocDetailPanel>', () => {
       }),
     );
 
-    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
 
     await screen.findByText('테스트 VOC 제목');
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
-    expect(screen.getByLabelText('유사 VOC')).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    for (const label of ['Overview', 'Triage', 'Trail', 'Compose']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
+    const moreButton = screen.getByRole('button', { name: /더보기/ });
+    expect(moreButton).toBeInTheDocument();
+    const scrollContainer = container.querySelector<HTMLElement>(
+      '[data-testid="voc-detail-panel"] .overflow-y-auto',
+    );
+    if (!scrollContainer) throw new Error('detail scroll container not found');
+    const scrollTo = vi.fn();
+    Object.defineProperty(scrollContainer, 'scrollTo', { configurable: true, value: scrollTo });
+
+    fireEvent.keyDown(moreButton, { key: 'Enter' });
+    const descriptionItem = screen.getByRole('menuitem', { name: 'Description' });
+    const similarItem = screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' });
+    expect(descriptionItem).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(similarItem).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(scrollTo).toHaveBeenCalledOnce();
   });
 
   it('renders me.display_name when me matches reporter', () => {

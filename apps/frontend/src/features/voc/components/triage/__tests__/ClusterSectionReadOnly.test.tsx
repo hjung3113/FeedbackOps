@@ -4,7 +4,7 @@
 // section now renders the real recommendation surface. Covers all four
 // response states, per-candidate dismiss/confirm, and the two error paths.
 //
-// Prototype ref: screen-voc-create.jsx:512-541 (title, Similarity badge, card).
+// Prototype ref: screen-voc-create.jsx:512-541 (recommendation title, peer count, card).
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -89,18 +89,18 @@ describe('ClusterSectionReadOnly — recommendation surface', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the prototype section title and the ADR-0031 Similarity badge', async () => {
+  it('names semantic recommendations separately from the same-Managed-System peer count', async () => {
     globalThis.fetch = mockApi({
       gets: [{ available: true, embedding_version: 1, items: [ITEM_A], total: 1 }],
     });
     renderSection(3);
 
-    expect(screen.getByText('Cluster 추천')).toBeInTheDocument();
+    expect(screen.getByText('유사 VOC 추천')).toBeInTheDocument();
     const badge = await screen.findByTestId('cluster-similarity-badge');
-    expect(badge).toHaveTextContent('Similarity 3');
+    expect(badge).toHaveTextContent('같은 Managed System의 VOC 3건');
   });
 
-  it('hides the Similarity badge when similar_count is zero (ADR-0031 heuristic unchanged)', async () => {
+  it('hides the peer count when similar_count is zero (ADR-0031 heuristic unchanged)', async () => {
     globalThis.fetch = mockApi({
       gets: [{ available: true, embedding_version: 1, items: [], total: 0 }],
     });

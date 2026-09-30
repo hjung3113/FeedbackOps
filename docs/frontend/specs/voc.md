@@ -11,9 +11,9 @@
 ### What this spec covers (Slice 3 VOC)
 
 - **Create VOC** — `/vocs?action=create` form, including attachments dropzone, MS / AA pickers, `voc-description` rich editor surface.
-- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / Similar / No-link), `<ListFilterButton>`, `<ListSortButton>`, bulk-select toolbar.
+- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / No-link); `tab=similar` remains accepted but its tab is hidden until a predicate exists (see `04-voc-system.md`, “Similar VOC Suggested”). Includes `<ListFilterButton>`, `<ListSortButton>`, and bulk-select toolbar.
 - **My VOCs** — `/vocs?view=my` reuses Inbox list mechanics filtered by `reporter_id = me`.
-- **Triage Console** — `/vocs?view=triage`, expanded-row queue, severity-decide / owner-assign / AA-link / cluster confirm, optimistic mutation + 4-second undo toast.
+- **Triage Console** — `/vocs?view=triage`, expanded-row queue, severity-decide / owner-assign / AA-link / cluster confirm, optimistic mutation + 4-second undo toast. Its right-panel navigation always includes `유사 VOC 추천`, independent of the same-Managed-System peer count, because ADR-0034 candidates are workspace-wide.
 - **VOC Detail Panel** — identity, triage block, description (TipTap read render), linked-execution section, linked-entity trail, public timeline, internal timeline, three-tab composer (Public Update / Reporter Reply / Internal Comment), Reporter-facing status change block, composer preview modal, sticky next-action footer.
 
 ### What this spec does NOT cover
@@ -116,7 +116,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 ### 3.4 Create form
 
-- **Pre-submit Similar VOC panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers as title plus `display_id · relative time`. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal and renders `0건`. There is no dismiss or confirm action.
+- **Pre-submit same-Managed-System peer panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers under `같은 Managed System의 최근 VOC`, as title plus `display_id · relative time`. The panel exposes no count or total. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal. There is no dismiss or confirm action.
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
@@ -209,7 +209,7 @@ Prototype mock entity → production DTO. **snake_case at HTTP boundary, camelCa
 | n/a | `owner_team_id: uuid \| null` | `ownerTeamId: string \| null` | Teams are read-only in MVP per ADR-0018 / ADR-0019 Section C; the picker shows teams but cannot create them. |
 | `createdAt` (`'2시간 전'`) | `created_at: timestamp` (ISO 8601) | `createdAt: string` | Format via `formatRelative(createdAt, locale)` from `@/lib/datetime`. |
 | n/a | `updated_at: timestamp` | `updatedAt: string` | Used as `If-Match`-equivalent for optimistic concurrency (see §5 Triage flow + ADR-0019). |
-| `similarCount` | `similar_count: integer` (from `GET /vocs/:id?include=similar_count`) | `similarCount: number` | **GAP:** API contract does not yet specify whether `similar_count` is inlined on list rows or fetched via `GET /vocs/:id/similar`. Spec assumes inline for inbox row scanning; flag as S3-002 contract decision. |
+| `similarCount` | `similar_count: integer` (from VOC list/detail responses) | `similarCount: number` | Authorized active peer total in the same workspace and primary Managed System. Retain the DTO field, but do not render it as a per-row list signal; detail and triage copy names the same-Managed-System peers. |
 | `linkedFindingId`, `linkedTaskId` | derived from `entity_links` per `docs/implementation/06-entity-linking-contract.md` | `links?: EntityLinkDto[]` on `GET /vocs/:id` | VOC detail consumes the backend-projected `links` read DTO already included in its detail response; it does not issue a separate entity-links request. Reporter-facing Task UI must never synthesize a summary from an `allowed` DTO. |
 | `sourceContext` (display string) | `source_context: enum(direct_use\|proxy_report\|operational_discovery\|stakeholder_request)` | `sourceContext: SourceContext` | Prototype uses display strings (`'Direct Use'`); production stores the enum and renders the inline `LABELS` map in `apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx`. |
 | `nextAction` (single string) | `next_actions: NextAction[]` per `docs/implementation/api/next-actions.md` §Next Action Contract | `nextActions: NextAction[]` | Render the highest-priority `available` action in the sticky footer; surface the rest in `<DetailPanelHeaderActions>` More menu. Frontend MUST NOT infer eligibility. |
@@ -615,6 +615,12 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Errors | `permission.denied` (403 if actor lacks any VOC read scope) · `validation.failed` (bad cursor) |
 | Caching | Stale-while-revalidate on TanStack Query, key `[ 'vocs', view, managedSystem, tab, filters, sort, cursor, pinVocId ]` — `pinVocId` is part of the key so two deep links differing only by target cannot share a cached queue |
 
+The inbox `tab=similar` URL key remains accepted for existing deep links and
+saved views, but its tab is hidden until a predicate exists (see `04-voc-system.md`,
+“Similar VOC Suggested”). The current `buildVocListPredicate` returns no predicate
+for this key and the repository returns an empty list; this spec does not claim a
+new backend filter.
+
 ### 8.3 `GET /vocs/:id` — Detail
 
 | Property | Value |
@@ -693,7 +699,7 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 |---|---|---|---|
 | `/vocs?view=inbox&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png` (full-page: `voc-inbox-detail-full.png`) | Reporter pill vs internal squared badge separation; 60px default row height; sticky `+ New VOC` action in toolbar; 3-tab composer; sticky next-action footer; entity trail action panel | Detail panel rhythm matches screenshot; Linked execution section sits above abstract trail; Compose tabs are visually distinct (megaphone icon for public) |
 | `/vocs?view=triage&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-triage-console.png` | Expanded 96px rows; severity color bar; "Owner 없음" / "Area 미지정" red/amber meta tags; out-of-scope summary peek banner; 4-second undo toast bottom-center; "큐가 비었습니다" empty state | Severity picker uses 4 chips with helper tooltips; Triage 결과 미리보기 card mirrors the screenshot's labels |
-| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + Similar VOC card + severity-disclaimer card in sidebar; Source segmented control; Proxy Report expands proxy_for + observed_situation row |
+| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + same-Managed-System peer card + severity-disclaimer card in sidebar; Source segmented control; Proxy Report expands proxy_for + observed_situation row |
 | `/vocs?view=my&selected=<id>` | reuse inbox baseline | Same as inbox but with `reporter_id=me` filter applied | Empty state copy differs ("내가 제출한 VOC가 없습니다") |
 
 **Acceptance use** (per HANDOFF §5): for clean-room implementation, compare against the screenshots only after the source docs are followed; never let the implementation regress from the contract because the screenshot is missing.
@@ -710,7 +716,7 @@ These block specific routes/components and must be resolved before the correspon
 | Q2 (rich content format) | Confirm TipTap JSON in `jsonb` is locked for Slice 3 (ADR-0011 says yes; verify no downstream blocker). Frontend assumes TipTap throughout; if the decision flips to Lexical or sanitized HTML, every `<RichEditor>` and `<RichContentRenderer>` site has to migrate. | All four rich-content surfaces | Frontend + backend lead | Before S3-006 component scaffold |
 | Q3 (Public Update + status change paired or separate) | The prototype always pairs them in one request. The API contract allows a `skip_public_update: true` path (status change without composing a public update body). Slice 3 UI: should the composer offer a `Skip update with reason` toggle, or restrict reporter-status changes to always require a public update? | `<ReporterStatusChangeBlock>` + `<PublicUpdateComposer>`; `POST /vocs/:id/public-updates` request shape | PM + Design (review Slice 3 prologue) | Before S3-007 starts |
 | Q4 (AA owner vs MS default owner precedence) | ~~When the actor creates a VOC, multiple default-owner rules may apply…~~ **RESOLVED 2026-05-17 (Slice 3 #13):** `POST /vocs` does NOT resolve any default owner. `owner_user_id` and `owner_team_id` are NULL on the created VOC; ownership is assigned during manual triage in #14 (`PATCH /vocs/:id`). Triage "Owner 없음" wording stays accurate. Revisit if/when default-owner policy ships in a later slice. | Triage row meta; Triage panel Owner picker initial value | Backend (precedence rule lives in service code) | ✅ RESOLVED (Slice 3 #13) |
-| Q5 (VOC Cluster scope in Slice 3) | Cluster confirm / dismiss is in the Triage panel mockup, but cluster CRUD lives in Slice 3+. Slice 3 VOC must either render the cluster section read-only (showing `similar_count` and an out-of-scope CTA) or commit cluster_decision through `PATCH /vocs/:id`. | Triage panel `Cluster 추천` section | PM (Slice 3 vs Slice 3+ scoping) | Before S3-002 |
+| Q5 (VOC Cluster scope in Slice 3) | Cluster confirm / dismiss is in the Triage panel mockup, but cluster CRUD lives in Slice 3+. Slice 3 VOC must either render the cluster section read-only (showing `similar_count` and an out-of-scope CTA) or commit cluster_decision through `PATCH /vocs/:id`. | Triage panel `유사 VOC 추천` section | PM (Slice 3 vs Slice 3+ scoping) | Before S3-002 |
 | Q6 (dev/test seed) | Production needs deterministic VOC seed data for E2E + integration tests. The prototype's `Vocs` fixture is the design intent; backend issue S3-001 must commit a parallel seed (or fixture loader) that hydrates `permission_decisions` envelopes in the same shape the frontend consumes. | E2E (Playwright?) tests in S3-008; integration tests in S3-001..S3-005 | Backend test lead | Before S3-008 |
 | Q-DISPLAYID | ~~The prototype renders `VOC-2814` as the human id. Production uses UUID v7. Who renders the display slug — backend (`display_id` column) or frontend (formatter that hashes UUID prefix)?~~ **RESOLVED 2026-05-24 (Issue #34):** backend owns `display_id`, generated by `next_voc_display_id(workspace_id)` from a per-workspace counter. URLs still select by canonical UUID; command palette and visible labels render `display_id`. | All routes (URL shape) + command palette + copy-link | Backend + Frontend lead | ✅ RESOLVED |
 | Q-SEVRETRIAGE (newly surfaced) | Can severity change after triage commits, or is it locked? `docs/design/04-voc-system.md:117` says "severity is assigned during triage" but does not forbid retriage. Affects `PATCH /vocs/:id` allowed-fields list and the Detail panel "변경" button next to Severity. | Detail panel Triage block | PM | Before S3-002 |

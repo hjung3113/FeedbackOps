@@ -5,6 +5,7 @@ import type * as React from 'react';
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { SAME_MANAGED_SYSTEM_VOC_LABEL } from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
@@ -93,7 +94,7 @@ export function FullDetailView({
     : showsSimilarVocSection
       ? [
           ...STATIC_DETAIL_SECTIONS.slice(0, 4),
-          { id: 'similar', label: 'Similar' },
+          { id: 'similar', label: SAME_MANAGED_SYSTEM_VOC_LABEL, overflow: true },
           ...STATIC_DETAIL_SECTIONS.slice(4),
         ]
       : STATIC_DETAIL_SECTIONS;

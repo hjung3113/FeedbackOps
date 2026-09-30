@@ -314,3 +314,11 @@ apps/frontend/src/lib/auth/useMe.ts organizeImports -- pre-existing on develop (
 apps/frontend/src/routes/__root.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #583 switches to createRootRouteWithContext
 apps/frontend/src/routes/_authed/findings/$findingId.tsx format -- pre-existing on develop (measured 2026-09-30); #587 only changes the back link target
 apps/frontend/src/routes/_authed/findings/$findingId.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #587 only changes the back link target
+apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/detail/__tests__/SimilarVocSection.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/triage/__tests__/ClusterSectionReadOnly.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/tests/visual/voc-create.visual.spec.ts format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
