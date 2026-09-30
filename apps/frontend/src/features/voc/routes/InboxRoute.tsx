@@ -6,7 +6,6 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { SAME_MANAGED_SYSTEM_VOC_LABEL } from '@/lib/copy/voc';
 import {
   Button,
   type FilterCategory,
@@ -61,7 +60,9 @@ interface InboxSearch {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// `similar` remains the URL value for same-Managed-System peers.
+// Tab labels mirror screen-voc.jsx `VOC_TABS` verbatim except `similar` (#592 / ADR-0031):
+// its URL key stays accepted for old links and saved views, but the tab is hidden until its
+// predicate exists (see 04-voc-system, “Similar VOC Suggested”).
 // The `urgent` flag flips the Unassigned tab to the danger token (red) per prototype.
 //
 // badgeCount is intentionally absent: the prototype's counts (9/7/12/4/5) are
@@ -72,7 +73,6 @@ const INBOX_TABS: ListToolbarTab[] = [
   { value: 'untriaged', label: 'Untriaged' },
   { value: 'high', label: 'High' },
   { value: 'unassigned', label: 'Unassigned', urgent: true },
-  { value: 'similar', label: SAME_MANAGED_SYSTEM_VOC_LABEL },
   { value: 'no-link', label: 'No link' },
   { value: 'high-no-link', label: 'High · no link' },
   { value: 'no-task', label: 'No task' },

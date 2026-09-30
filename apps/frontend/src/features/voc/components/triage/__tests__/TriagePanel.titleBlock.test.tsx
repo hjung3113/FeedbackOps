@@ -111,7 +111,7 @@ describe('TriagePanel Overview and grouped navigation', () => {
   });
 
   it('renders exactly the four grouped section nav items in order without overflow', () => {
-    renderPanel({ ...TRIAGE_VOC, similar_count: 4 });
+    renderPanel();
     const overview = screen.getByRole('button', { name: 'Overview' });
     const nav = overview.parentElement;
     expect(nav).not.toBeNull();

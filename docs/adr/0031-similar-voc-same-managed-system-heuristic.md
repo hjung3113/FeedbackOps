@@ -78,8 +78,8 @@ introduced.
 No migration is added: the existing `(workspace_id, primary_managed_system_id,
 created_at DESC)` index supports the peer lookup and ordering. The inbox
 `tab=similar` predicate remains deferred and currently returns no rows; the
-dated presentation amendment below keeps its URL key while naming the intended
-same-Managed-System peer view.
+dated presentation amendment below keeps its URL key accepted while hiding the
+tab until that predicate exists.
 
 ## Consequences
 
@@ -94,14 +94,16 @@ same-Managed-System peer view.
 
 ## Presentation
 
-> **Amended 2026-09-30 (#582).** `similar_count` remains the authorized count
+> **Amended 2026-09-30 (#582, #592 fix round 1).** `similar_count` remains the authorized count
 > of active peers in the same primary Managed System; it is not a per-row
-> similarity signal. Remove it from VOC inbox rows. In detail, triage, and the
-> pre-submit panel, label peer counts as `같은 Managed System의 VOC N건` (or
-> the same phrase with the count shown separately). The inbox `tab=similar`
-> URL key remains stable and labels this same-Managed-System peer view; the
-> current backend predicate still returns no rows for that tab, so this
-> amendment does not claim the predicate is implemented.
+> similarity signal. Remove it from VOC inbox rows. In detail and triage, label
+> peer counts as `같은 Managed System의 VOC N건`. The pre-submit panel shows at
+> most three peers under `같은 Managed System의 최근 VOC` and exposes no count
+> or total. Use a neutral `Layers` icon for heuristic count badges, distinct
+> from ADR-0034 recommendation iconography. Keep the inbox `tab=similar` URL key accepted for old links and saved
+> views, but hide its tab until a predicate exists (see `04-voc-system.md`,
+> “Similar VOC Suggested”). The current backend predicate returns no rows for
+> that key, so this amendment does not claim the predicate is implemented.
 >
 > ADR-0034 embedding recommendations remain a separate semantic surface named
 > `유사 VOC 추천`. Their query, availability states, confirm action, and

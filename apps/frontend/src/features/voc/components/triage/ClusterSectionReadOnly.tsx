@@ -18,7 +18,7 @@
 
 import type { VocRecommendationItem } from '@fops/shared';
 import { Button, PanelSectionTitle, ReporterStatusBadge } from '@fops/ui';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Layers } from 'lucide-react';
 import * as React from 'react';
 
 import type { ApiError } from '@/lib/api';
@@ -143,7 +143,7 @@ export function ClusterSectionReadOnly({
             data-testid="cluster-similarity-badge"
             className="inline-flex items-center gap-1 rounded-md bg-accent-primary/[0.12] px-2 py-0.5 text-[11px] font-medium text-accent-primary"
           >
-            <Sparkles size={9} aria-hidden="true" />
+            <Layers size={9} aria-hidden="true" />
             {formatSameManagedSystemVocCount(similarCount)}
           </span>
         )}

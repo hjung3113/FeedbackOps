@@ -62,12 +62,12 @@ export interface TriagePanelProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 // ADR-0051 groups the prototype's seven sections into four. The recommendation
-// section remains conditional on peer count.
-function buildTriageSections(similarCount: number) {
+// section is always present because ADR-0034 candidates are workspace-wide.
+function buildTriageSections() {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'assignment', label: 'Assignment' },
-    ...(similarCount > 0 ? [{ id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL }] : []),
+    { id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL },
     { id: 'summary', label: 'Summary' },
   ];
 }
@@ -105,7 +105,7 @@ export function TriagePanel({
 
   // ── render ─────────────────────────────────────────────────────────────────
 
-  const triageSections = buildTriageSections(voc.similar_count);
+  const triageSections = buildTriageSections();
 
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">

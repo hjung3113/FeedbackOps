@@ -11,9 +11,9 @@
 ### What this spec covers (Slice 3 VOC)
 
 - **Create VOC** — `/vocs?action=create` form, including attachments dropzone, MS / AA pickers, `voc-description` rich editor surface.
-- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / 같은 Managed System의 VOC / No-link), `<ListFilterButton>`, `<ListSortButton>`, bulk-select toolbar.
+- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / No-link); `tab=similar` remains accepted but its tab is hidden until a predicate exists (see `04-voc-system.md`, “Similar VOC Suggested”). Includes `<ListFilterButton>`, `<ListSortButton>`, and bulk-select toolbar.
 - **My VOCs** — `/vocs?view=my` reuses Inbox list mechanics filtered by `reporter_id = me`.
-- **Triage Console** — `/vocs?view=triage`, expanded-row queue, severity-decide / owner-assign / AA-link / cluster confirm, optimistic mutation + 4-second undo toast.
+- **Triage Console** — `/vocs?view=triage`, expanded-row queue, severity-decide / owner-assign / AA-link / cluster confirm, optimistic mutation + 4-second undo toast. Its right-panel navigation always includes `유사 VOC 추천`, independent of the same-Managed-System peer count, because ADR-0034 candidates are workspace-wide.
 - **VOC Detail Panel** — identity, triage block, description (TipTap read render), linked-execution section, linked-entity trail, public timeline, internal timeline, three-tab composer (Public Update / Reporter Reply / Internal Comment), Reporter-facing status change block, composer preview modal, sticky next-action footer.
 
 ### What this spec does NOT cover
@@ -116,7 +116,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 ### 3.4 Create form
 
-- **Pre-submit same-Managed-System peer panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers under `같은 Managed System의 VOC`, as title plus `display_id · relative time`. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal and renders `0건`. There is no dismiss or confirm action.
+- **Pre-submit same-Managed-System peer panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers under `같은 Managed System의 최근 VOC`, as title plus `display_id · relative time`. The panel exposes no count or total. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal. There is no dismiss or confirm action.
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
@@ -615,10 +615,11 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Errors | `permission.denied` (403 if actor lacks any VOC read scope) · `validation.failed` (bad cursor) |
 | Caching | Stale-while-revalidate on TanStack Query, key `[ 'vocs', view, managedSystem, tab, filters, sort, cursor, pinVocId ]` — `pinVocId` is part of the key so two deep links differing only by target cannot share a cached queue |
 
-The inbox label for `tab=similar` is `같은 Managed System의 VOC`; keep the URL
-value stable. The current `buildVocListPredicate` returns no predicate for this
-tab and the repository returns an empty list. #592 changes its label only and
-does not implement a new backend filter.
+The inbox `tab=similar` URL key remains accepted for existing deep links and
+saved views, but its tab is hidden until a predicate exists (see `04-voc-system.md`,
+“Similar VOC Suggested”). The current `buildVocListPredicate` returns no predicate
+for this key and the repository returns an empty list; this spec does not claim a
+new backend filter.
 
 ### 8.3 `GET /vocs/:id` — Detail
 
