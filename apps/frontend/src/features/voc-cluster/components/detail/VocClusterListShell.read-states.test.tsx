@@ -79,9 +79,7 @@ describe('VocClusterListShell list states (#609)', () => {
           'data-variant',
           'filtered',
         );
-        expect(
-          screen.getByText('이 필터에 해당하는 cluster가 없습니다'),
-        ).toBeInTheDocument();
+        expect(screen.getByText('이 필터에 해당하는 cluster가 없습니다')).toBeInTheDocument();
         expect(screen.getByText('선택한 조건: 확정')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: '필터 초기화' }));
         expect(await screen.findByText(draftNoFinding.title)).toBeInTheDocument();
@@ -96,9 +94,7 @@ describe('VocClusterListShell list states (#609)', () => {
       expect(
         await screen.findByTestId('list-state-message', {}, { timeout: 5000 }),
       ).toHaveAttribute('data-variant', 'error');
-      expect(
-        screen.getByText('VOC Cluster 목록을 불러오지 못했습니다'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('VOC Cluster 목록을 불러오지 못했습니다')).toBeInTheDocument();
       expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: '다시 시도' }));
       expect(await screen.findByText(draftNoFinding.title)).toBeInTheDocument();

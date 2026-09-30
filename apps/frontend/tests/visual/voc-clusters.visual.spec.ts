@@ -23,9 +23,7 @@ test.describe('/voc-clusters visual harness', () => {
 
     const emptyState = page.getByTestId('cluster-empty-state');
     await expect(emptyState).toContainText('생성된 VOC Cluster가 없습니다.');
-    await expect(emptyState).toContainText(
-      'VOC를 묶어 만든 Cluster가 여기에 표시됩니다.',
-    );
+    await expect(emptyState).toContainText('VOC를 묶어 만든 Cluster가 여기에 표시됩니다.');
     await expectVisual(page, emptyState, 'voc-clusters-empty.png');
   });
 

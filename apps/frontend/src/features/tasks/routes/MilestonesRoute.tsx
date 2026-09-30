@@ -220,9 +220,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   const countsConfirmEmpty =
     countQuery.isSuccess && !countQuery.isFetching && countQuery.data?.items.length === 0;
   const filteredEmpty =
-    shown.length === 0 &&
-    filterDescription !== '' &&
-    (items.length > 0 || !countsConfirmEmpty);
+    shown.length === 0 && filterDescription !== '' && (items.length > 0 || !countsConfirmEmpty);
 
   const summary = React.useMemo(
     () => ({
