@@ -56,6 +56,7 @@ type SelfApprovalEnvelope = {
 type DecisionBody = {
   reason?: string;
   note?: string;
+  expiration?: string | null;
   self_approval?: SelfApprovalEnvelope;
 };
 type DecidableStatus = 'pending' | 'needs_more_info';
@@ -164,6 +165,24 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           });
         }
 
+        let grantedExpiration = request.requestedExpiration;
+        if (action === 'approve' && body.expiration !== undefined) {
+          if (body.expiration === null) {
+            grantedExpiration = null;
+          } else {
+            grantedExpiration = new Date(body.expiration);
+            if (grantedExpiration.getTime() <= Date.now()) {
+              throw new HttpError(
+                'validation.failed',
+                'approval expiration must be in the future',
+                {
+                  fields: [{ path: ['expiration'], code: 'custom' }],
+                },
+              );
+            }
+          }
+        }
+
         let grantId: string | undefined;
         let denyId: string | undefined;
         const status =
@@ -183,7 +202,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
                 capability,
                 managedSystemId: request.requestedManagedSystemId,
                 grantedByActorId: actor.actor_id,
-                expiresAt: request.requestedExpiration,
+                expiresAt: grantedExpiration,
                 sensitiveReason: reason || null,
               })
               .returning({ id: permissionGrants.id });
@@ -241,6 +260,12 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           requester_actor_id: request.requesterActorId,
           ...(action === 'need_more_info' ? { note: note as string } : { reason: reason || null }),
           ...(grantId ? { grant_id: grantId } : {}),
+          ...(action === 'approve'
+            ? {
+                requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                granted_expiration: grantedExpiration?.toISOString() ?? null,
+              }
+            : {}),
           ...(denyId ? { deny_id: denyId } : {}),
           ...(isSelfApproval ? { self_approval: body.self_approval as SelfApprovalEnvelope } : {}),
         };

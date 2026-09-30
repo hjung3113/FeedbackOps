@@ -41,3 +41,7 @@ export function formatPermissionRequestDate(value: string): string {
     timeStyle: 'short',
   }).format(new Date(value));
 }
+
+export function formatPermissionRequestExpiration(value: string): string {
+  return value.slice(0, 10);
+}

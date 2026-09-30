@@ -24,6 +24,7 @@ export interface DecidePermissionRequestArgs {
   reason: string;
   idempotencyKey: string;
   selfApproval?: ApprovePermissionRequest["self_approval"];
+  expiration?: ApprovePermissionRequest["expiration"];
 }
 
 export function useDecidePermissionRequest(): UseMutationResult<
@@ -40,8 +41,9 @@ export function useDecidePermissionRequest(): UseMutationResult<
       reason,
       idempotencyKey,
       selfApproval,
+      expiration,
     }: DecidePermissionRequestArgs) =>
-      decidePermissionRequest(id, action, reason, idempotencyKey, selfApproval),
+      decidePermissionRequest(id, action, reason, idempotencyKey, selfApproval, expiration),
     onSuccess: async () => {
       toast.success("권한 요청이 처리되었습니다.");
       await queryClient.invalidateQueries({

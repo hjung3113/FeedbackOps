@@ -1,6 +1,7 @@
 import {
   approvePermissionRequestSchema,
   denyPermissionRequestSchema,
+  permissionApprovedDetailSchema,
   rejectPermissionRequestSchema,
 } from '@fops/shared';
 import { describe, expect, test } from 'vitest';
@@ -50,5 +51,26 @@ describe('permission decision schema contracts', () => {
 
   test('AC-2 uses the shared approve schema in the permission route', () => {
     expect(approvePermissionRequestBodySchema).toBe(approvePermissionRequestSchema);
+  });
+
+  test('AC-3 accepts an optional nullable approval expiration and audits requested and granted values', () => {
+    expect(
+      approvePermissionRequestSchema.safeParse({ expiration: '2027-01-31T23:59:59.000Z' }).success,
+    ).toBe(true);
+    expect(approvePermissionRequestSchema.safeParse({ expiration: null }).success).toBe(true);
+    expect(approvePermissionRequestSchema.safeParse({ expiration: '2027-01-31' }).success).toBe(
+      false,
+    );
+    expect(
+      permissionApprovedDetailSchema.safeParse({
+        capability: 'workspace.read',
+        managed_system_id: null,
+        requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        reason: null,
+        grant_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        requested_expiration: '2026-12-31T23:59:59.000Z',
+        granted_expiration: null,
+      }).success,
+    ).toBe(true);
   });
 });

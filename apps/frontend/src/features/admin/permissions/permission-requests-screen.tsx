@@ -7,6 +7,7 @@ import { shortId } from '@/lib/identity';
 import { PermissionRequestDetail } from './permission-request-detail.js';
 import {
   formatPermissionRequestDate,
+  formatPermissionRequestExpiration,
   permissionRequestStatusLabel,
   permissionRequestTabs,
 } from './permission-requests-search.js';
@@ -143,6 +144,13 @@ function PermissionRequestRow({
           )}
           <span>·</span>
           <span>{formatPermissionRequestDate(request.created_at)}</span>
+          {request.requested_expiration ? (
+            <>
+              <span>·</span>
+              {/* #590 adds a compact row hint; the prototype shows the full date in detail. */}
+              <span>만료 {formatPermissionRequestExpiration(request.requested_expiration)}</span>
+            </>
+          ) : null}
           <span>·</span>
           <span className="font-mono text-text-muted">{shortId(request.id)}</span>
         </>

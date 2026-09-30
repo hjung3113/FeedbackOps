@@ -7,6 +7,7 @@ import { shortId } from '@/lib/identity';
 import { PermissionRequestDecisionForm } from './permission-request-decision-form.js';
 import {
   formatPermissionRequestDate,
+  formatPermissionRequestExpiration,
   permissionRequestStatusLabel,
 } from './permission-requests-search.js';
 
@@ -77,6 +78,13 @@ export function PermissionRequestDetail({
                 )}
               </span>
             </FieldRow>
+            <FieldRow label="요청 만료일" className="px-0">
+              <span>
+                {request.requested_expiration
+                  ? formatPermissionRequestExpiration(request.requested_expiration)
+                  : '만료 없음'}
+              </span>
+            </FieldRow>
             <FieldRow label="상태" className="px-0">
               <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
             </FieldRow>
@@ -88,7 +96,11 @@ export function PermissionRequestDetail({
             <PanelSectionTitle>요청 사유</PanelSectionTitle>
             <p className="whitespace-pre-wrap text-sm text-text-primary">{request.reason}</p>
           </section>
-          <PermissionRequestDecisionForm request={request} managedSystemName={managedSystemName} />
+          <PermissionRequestDecisionForm
+            key={request.id}
+            request={request}
+            managedSystemName={managedSystemName}
+          />
         </div>
       </div>
     </aside>

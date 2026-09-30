@@ -5,6 +5,7 @@ const optionalReasonSchema = z.object({ reason: z.string().max(2000).optional() 
 export const approvePermissionRequestSchema = z
   .object({
     reason: z.string().max(2000).optional(),
+    expiration: z.string().datetime().nullable().optional(),
     self_approval: z
       .object({
         policy_citation: z.string().min(1),

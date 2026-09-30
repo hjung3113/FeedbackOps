@@ -1,5 +1,13 @@
 import { isCapability, isSensitiveCapability } from '@fops/shared';
-import { Button, Input, OutlineBadge, PanelSectionTitle, Textarea } from '@fops/ui';
+import {
+  Button,
+  Input,
+  OutlineBadge,
+  PanelSectionTitle,
+  RadioGroup,
+  RadioGroupItem,
+  Textarea,
+} from '@fops/ui';
 import * as React from 'react';
 
 import { type PermissionRequestDecisionAction, useIdempotencyKey } from '@/lib/api';
@@ -21,6 +29,8 @@ const ACTIONS: Array<{
   { value: 'deny', label: '명시적 거부', needsReason: true },
 ];
 
+type ApprovalExpirationMode = 'keep' | 'change' | 'clear';
+
 export function PermissionRequestDecisionForm({
   request,
   managedSystemName,
@@ -32,6 +42,10 @@ export function PermissionRequestDecisionForm({
   const [reason, setReason] = React.useState('');
   const [policyCitation, setPolicyCitation] = React.useState('');
   const [peerReviewerAbsence, setPeerReviewerAbsence] = React.useState('');
+  const [expirationMode, setExpirationMode] = React.useState<ApprovalExpirationMode>('keep');
+  const [expirationDate, setExpirationDate] = React.useState(
+    request.requested_expiration?.slice(0, 10) ?? '',
+  );
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
   const mutation = useDecidePermissionRequest();
   const me = useMe();
@@ -51,15 +65,27 @@ export function PermissionRequestDecisionForm({
     !showSelfApprovalCapture ||
     (policyCitation.trim().length >= 8 && peerReviewerAbsence.trim().length >= 8);
   const selfApprovalForbidden = showSelfApprovalCapture && selfApprovalBlockedByPolicy;
+  const approvalExpirationChanged =
+    action === 'approve' &&
+    (expirationMode === 'clear'
+      ? request.requested_expiration !== null
+      : expirationMode === 'change' &&
+        `${expirationDate}T23:59:59.000Z` !== request.requested_expiration);
   const submitDisabled =
-    !decidable || action === null || !selfApprovalReady || selfApprovalForbidden;
+    !decidable ||
+    action === null ||
+    !selfApprovalReady ||
+    selfApprovalForbidden ||
+    (action === 'approve' && expirationMode === 'change' && expirationDate === '');
 
   React.useEffect(() => {
     setAction(null);
     setReason('');
     setPolicyCitation('');
     setPeerReviewerAbsence('');
-  }, [request.id]);
+    setExpirationMode('keep');
+    setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
+  }, [request.requested_expiration]);
 
   function submit() {
     if (action === null || submitDisabled || (needsReason && !reason.trim())) return;
@@ -69,6 +95,11 @@ export function PermissionRequestDecisionForm({
         action,
         reason: reason.trim(),
         idempotencyKey,
+        ...(approvalExpirationChanged
+          ? {
+              expiration: expirationMode === 'clear' ? null : `${expirationDate}T23:59:59.000Z`,
+            }
+          : {}),
         ...(showSelfApprovalCapture
           ? {
               selfApproval: {
@@ -126,6 +157,48 @@ export function PermissionRequestDecisionForm({
           placeholder="검토 사유 또는 요청할 정보를 입력하세요."
         />
       </label>
+      {action === 'approve' ? (
+        <fieldset className="flex flex-col gap-2" data-testid="permission-approval-expiration">
+          <legend className="text-sm font-medium text-text-secondary">승인 만료일</legend>
+          <RadioGroup
+            aria-label="승인 만료일"
+            value={expirationMode}
+            onValueChange={(value) => setExpirationMode(value as ApprovalExpirationMode)}
+            className="gap-2"
+          >
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <RadioGroupItem value="keep" aria-label="요청 만료일 유지" />
+              <span>
+                요청 만료일 유지 ·{' '}
+                {request.requested_expiration
+                  ? request.requested_expiration.slice(0, 10)
+                  : '만료 없음'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <RadioGroupItem value="change" aria-label="만료일 변경" />
+              <span>만료일 변경</span>
+            </div>
+            <label
+              className="flex flex-col gap-2 pl-6 text-sm text-text-secondary"
+              htmlFor="permission-approval-expiration-date"
+            >
+              새 만료일
+              <Input
+                id="permission-approval-expiration-date"
+                type="date"
+                value={expirationDate}
+                onChange={(event) => setExpirationDate(event.target.value)}
+                disabled={expirationMode !== 'change'}
+              />
+            </label>
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <RadioGroupItem value="clear" aria-label="만료 없음" />
+              <span>만료 없음</span>
+            </div>
+          </RadioGroup>
+        </fieldset>
+      ) : null}
       {showSelfApprovalCapture ? (
         <section
           className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3"

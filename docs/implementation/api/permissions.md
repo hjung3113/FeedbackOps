@@ -22,6 +22,28 @@ POST /permissions/requests/:id/deny
 POST /permission-requests/:id/submit-more-info
 ```
 
+### `POST /permission-requests`
+
+The create body accepts `requested_expiration?: iso8601`. When present, the
+service stores that requested end time on the Permission Request.
+
+```ts
+{
+  requested_capability: string;
+  requested_managed_system_id?: uuid;
+  requested_object_type?: string;
+  requested_object_id?: uuid;
+  reason: string;
+  requested_expiration?: iso8601;
+  source_object_type?: string;
+  source_object_id?: uuid;
+  source_action_id?: string;
+  return_route_intent?: string;
+}
+```
+
+The response remains `{ id: uuid, status: "pending", created_at: iso8601 }`.
+
 ### `POST /permission-requests/:id/submit-more-info`
 
 Any authenticated member may resubmit a request only when the request belongs
@@ -96,6 +118,7 @@ non-admin caller receives `permission.denied` → `403`. Response:
       "requester_actor_id": "uuid",
       "requested_capability": "string",
       "requested_managed_system_id": "uuid | null",
+      "requested_expiration": "iso8601 | null",
       "reason": "string",
       "status": "pending | needs_more_info",
       "created_at": "iso8601"
@@ -104,3 +127,31 @@ non-admin caller receives `permission.denied` → `403`. Response:
   "count": 0
 }
 ```
+
+`GET /permissions/requests` is the canonical Admin review-console list and
+accepts `status=pending|needs_more_info|approved|rejected|all`; without a
+status it returns open requests. It uses the same review item shape, including
+`requested_expiration`. The detail panel is populated from that item and shows
+the same requested value; no separate detail endpoint is used.
+
+### `POST /permissions/requests/:id/approve`
+
+The strict approve body accepts:
+
+```ts
+{
+  reason?: string;
+  expiration?: iso8601 | null;
+  self_approval?: {
+    policy_citation: string;
+    peer_reviewer_absence: string;
+  };
+}
+```
+
+Omitting `expiration` keeps the request's `requested_expiration`; `null` grants
+permanent access; an ISO datetime overrides the requested value. A datetime at
+or before the current time returns `422 validation.failed` with
+`fields: [{ path: ['expiration'], code: 'custom' }]`. The grant's `expires_at`
+is the resolved value. The `permission_approved` audit detail records both
+`requested_expiration` and `granted_expiration`, each as `iso8601 | null`.
