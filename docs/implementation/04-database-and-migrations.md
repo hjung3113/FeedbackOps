@@ -158,6 +158,10 @@ VOC status.
 - Work Initiative / Project tables must not be required for VOC, Finding, Task Request, Task, Survey, Dashboard, or permission MVP scope.
 ```
 
+## Adding a Field to an Owned Entity
+
+Update the owning shared TypeScript schema, add a numbered SQL migration and its `apps/backend/migrations/meta/_journal.json` entry, then update the owning service and required audit detail, the consuming UI, and the affected design/API docs in the same change. For example, `apps/backend/src/db/schema/core.ts` defines `core.managed_systems`, `apps/backend/migrations/0005_slice2_registry.sql` creates it, `apps/backend/src/modules/managed-systems/managed-system-service.ts` persists and audits it, and `apps/frontend/src/features/admin/managed-systems/ManagedSystemsScreen.tsx` exposes it. If a field changes a decision locked by an ADR, add a dated amendment to that ADR; changing Managed System identifier columns requires reopening `docs/adr/0017-managed-system-registry-shape.md`.
+
 ## Rich Content And Attachments
 
 ```text

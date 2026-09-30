@@ -35,6 +35,21 @@ It does not own Task status, Survey Response conversion, Finding persistence, or
 - Use list/detail layout and URL-selected detail state.
 - Linked Findings, Tasks, and Evidence render through backend-approved summaries and `LinkedEntityTrail`.
 
+## Key files
+
+- `apps/frontend/src/routes/_authed/vocs.tsx` — VOC view branch for inbox, triage, and create.
+- `apps/frontend/src/features/voc/routes/InboxRoute.tsx` — inbox/My VOC list state, filters, and detail selection.
+- `apps/frontend/src/features/voc/routes/TriageRoute.tsx` — triage permission gate and queue state.
+- `apps/frontend/src/features/voc/routes/CreateRoute.tsx` — VOC creation route composition.
+- `apps/frontend/src/features/voc/components/list/VocList.tsx` — VOC list rows and loading/empty/error states.
+- `apps/frontend/src/features/voc/components/triage/VocTriageScreen.tsx` — triage queue screen and selected panel.
+- `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx` — triage detail and actions.
+- `apps/frontend/src/features/voc/components/detail/VocDetailPanel.tsx` — VOC detail and communication states.
+- `apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx` — reporter-facing status change copy and actions.
+- `apps/frontend/src/features/voc/lib/triage-types.ts` — triage inputs and state types.
+- `apps/frontend/src/features/voc/lib/triage-error-policy.ts` — triage mutation error classification.
+- `apps/frontend/src/lib/copy/reporter-status-labels.ts` — reporter-facing status labels.
+
 ## Verification
 
 - Test route restore, selected detail panels, triage filters, public update flows, forbidden Survey Response-to-VOC affordances, and reporter/internal status separation when touched.

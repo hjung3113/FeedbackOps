@@ -24,6 +24,21 @@ It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Tas
 - Use list/detail layout and URL-selected detail state, consistent with VOC.
 - Managed System is an optional list filter (`managed_system_id` query param on `useVocClusterList`), not a separate navigation tree.
 
+## Key files
+
+- `apps/frontend/src/routes/_authed/voc-clusters/index.tsx` — cluster list route, URL state, and create dialog.
+- `apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx` — selected cluster route.
+- `apps/frontend/src/features/voc-cluster/components/detail/VocClusterListShell.tsx` — cluster list and selected-detail shell.
+- `apps/frontend/src/features/voc-cluster/components/detail/VocClusterDetailPanel.tsx` — cluster detail and actions.
+- `apps/frontend/src/features/voc-cluster/lib/presentation.tsx` — cluster status labels and badges.
+- `apps/frontend/src/features/voc-cluster/hooks/useVocClusterList.ts` — cluster list query.
+- `apps/frontend/src/features/voc-cluster/hooks/useVocClusterDetail.ts` — selected cluster query.
+- `apps/frontend/src/features/voc-cluster/components/modals/AddVocModal.tsx` — add-member dialog.
+- `apps/frontend/src/features/voc-cluster/components/modals/LinkExistingFindingModal.tsx` — link-Finding dialog.
+- `apps/frontend/src/features/voc-cluster/components/modals/CreateFindingFromClusterModal.tsx` — create-Finding dialog.
+- `apps/frontend/src/features/voc-cluster/hooks/useCreateFindingFromCluster.ts` — cluster-originated Finding command.
+- `apps/frontend/src/features/voc-cluster/hooks/useRequestTaskFromCluster.ts` — cluster-originated Task Request command.
+
 ## Verification
 
 - Test cluster list/detail route restore, member add/remove invalidation, confirm-cluster status transition, and cluster-to-Finding/Task creation flows when touched.

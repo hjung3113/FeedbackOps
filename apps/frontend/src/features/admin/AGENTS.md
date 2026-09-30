@@ -27,6 +27,21 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Managed System defaults prefill responsibility; they do not remove explicit owner/reviewer fields from records.
 - Do not expose complex permission matrix builders in MVP.
 
+## Key files
+
+- `apps/frontend/src/routes/_authed/admin/managed-systems.tsx` — mounts the Managed System registry.
+- `apps/frontend/src/routes/_authed/admin/analytics-areas.tsx` — mounts Analytics Areas and parses its search state.
+- `apps/frontend/src/routes/_authed/admin/permissions/requests.tsx` — mounts Permission Request review and validates URL state.
+- `apps/frontend/src/routes/_authed/admin/settings.tsx` — mounts workspace settings.
+- `apps/frontend/src/features/admin/managed-systems/ManagedSystemsScreen.tsx` — registry list and defaults.
+- `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreasScreen.tsx` — Analytics Area page composition.
+- `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreasList.tsx` — Analytics Area tree list.
+- `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreaDetail.tsx` — selected Analytics Area detail.
+- `apps/frontend/src/features/admin/permissions/permission-requests-screen.tsx` — request tabs, list, and status badges.
+- `apps/frontend/src/features/admin/permissions/permission-request-detail.tsx` — request detail and decision actions.
+- `apps/frontend/src/features/admin/permissions/permission-requests-search.ts` — request URL tabs and status labels.
+- `apps/frontend/src/features/admin/settings/WorkspaceSettingsScreen.tsx` — editable workspace settings.
+
 ## Verification
 
 - Test Analytics Area tree restore, Managed System default editing, permission approval/rejection/revocation states, explicit deny display, and blocked-state return paths when touched.

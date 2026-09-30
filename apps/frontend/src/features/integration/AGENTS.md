@@ -32,6 +32,21 @@ Code ownership and URL mount are not the same thing here:
 - Link views must not imply arbitrary graph editing beyond approved relation types.
 - Cross-system creation flows must preserve source context and return users to the original work surface when appropriate.
 
+## Key files
+
+- `apps/frontend/src/routes/_authed/integration/index.tsx` — Integration dashboard route.
+- `apps/frontend/src/routes/_authed/integration/coverage.tsx` — Coverage route and URL search validation.
+- `apps/frontend/src/routes/_authed/integration/links.tsx` — Links route and URL filters.
+- `apps/frontend/src/features/integration/routes/IntegrationDashboardRoute.tsx` — Integration action dashboard.
+- `apps/frontend/src/features/integration/routes/CoverageRoute.tsx` — coverage columns, labels, and coverage states.
+- `apps/frontend/src/features/integration/routes/LinksRoute.tsx` — Links list filters, tabs, and selected state.
+- `apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx` — Entity Link inventory rows and permission state.
+- `apps/frontend/src/features/integration/components/EntityRelationRow.tsx` — relation summary within an inventory row.
+- `apps/frontend/src/features/integration/components/LinkStatusBadge.tsx` — Entity Link status labels and badge styles.
+- `apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts` — Entity Link inventory query.
+- `apps/frontend/src/lib/copy/home.ts` — shared wording used by Coverage.
+- `apps/frontend/src/lib/copy/permission-reasons.ts` — shared blocked copy used by the link inventory.
+
 ## Verification
 
 - Test missing-link queue behavior, coverage labels, link visibility states, and deep-link action restore when touched.
