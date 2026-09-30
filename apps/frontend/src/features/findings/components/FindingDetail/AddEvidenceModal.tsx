@@ -1,4 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { EVIDENCE_IMPORTANCE_LABELS } from '@/lib/copy/enum-labels';
 import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
@@ -58,9 +59,9 @@ const IMPORTANCE_OPTIONS: {
   value: EvidenceHighlightImportance;
   label: string;
 }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
+  { value: 'low', label: EVIDENCE_IMPORTANCE_LABELS.low },
+  { value: 'medium', label: EVIDENCE_IMPORTANCE_LABELS.medium },
+  { value: 'high', label: EVIDENCE_IMPORTANCE_LABELS.high },
 ];
 
 export function AddEvidenceModal({

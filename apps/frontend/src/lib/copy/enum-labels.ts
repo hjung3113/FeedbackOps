@@ -1,5 +1,8 @@
 import type {
   EntityLinkRelationType,
+  EvidenceHighlightImportance,
+  EvidenceHighlightSentiment,
+  EvidenceHighlightSourceType,
   FindingConfidence,
   FindingDto,
   FindingSeverity,
@@ -68,6 +71,24 @@ export const FINDING_SOURCE_TYPE_LABELS: Record<FindingDto['source_type'], strin
   survey: 'Survey',
   survey_response: 'Survey Response',
   manual: 'Manual',
+};
+
+export const EVIDENCE_SOURCE_TYPE_LABELS: Record<EvidenceHighlightSourceType, string> = {
+  voc: 'VOC',
+  survey_response: 'Survey',
+  note: 'Manual note',
+};
+
+export const EVIDENCE_SENTIMENT_LABELS: Record<EvidenceHighlightSentiment, string> = {
+  negative: '부정',
+  neutral: '중립',
+  positive: '긍정',
+};
+
+export const EVIDENCE_IMPORTANCE_LABELS: Record<EvidenceHighlightImportance, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
 };
 
 export const RATING_BAND_LABELS: Record<RatingBand, string> = {

@@ -1,4 +1,15 @@
 import { ApiError } from '@/lib/api/types';
+import {
+  FINDING_CONFIDENCE_LABELS,
+  FINDING_SEVERITY_LABELS,
+  FINDING_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
+import {
+  type FindingDto,
+  findingConfidenceSchema,
+  findingSeveritySchema,
+  findingStatusSchema,
+} from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -211,6 +222,19 @@ describe('FindingsListPage', () => {
     );
   }
 
+  async function renderFindingRow(overrides: Partial<FindingDto> = {}) {
+    const finding = { ...findings[0], ...overrides } as FindingDto;
+    useFindingsListMock.mockReturnValue({
+      data: { items: [finding] },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+    });
+    await renderFindingsPage();
+    return screen.getByTestId(`finding-row-${finding.display_id}`);
+  }
+
   it('renders finding rows from the list hook', async () => {
     await renderFindingsPage();
 
@@ -238,7 +262,7 @@ describe('FindingsListPage', () => {
     const richRow = screen.getByTestId('finding-row-FND-101');
     expect(richRow.querySelector('[data-token="--severity-high"]')).toBeInTheDocument();
     expect(screen.getByTestId('finding-confidence-badge-FND-101')).toHaveTextContent(
-      'Confidence · 중간',
+      '신뢰도 · 중간',
     );
     expect(within(richRow).getByTestId('owner-avatar-박서연')).toHaveAttribute('data-size', 'sm');
 
@@ -246,6 +270,37 @@ describe('FindingsListPage', () => {
     expect(nullConfidenceRow.querySelector('[data-token="--severity-medium"]')).toBeInTheDocument();
     expect(screen.queryByTestId('finding-confidence-badge-FND-102')).not.toBeInTheDocument();
   });
+
+  it.each(findingStatusSchema.options)(
+    'renders Finding status %s with its shared label',
+    async (status) => {
+      const row = await renderFindingRow({ status });
+      const badge = within(row).getByTestId(`finding-status-badge-${status}`);
+
+      expect(badge.textContent).toBe(FINDING_STATUS_LABELS[status]);
+    },
+  );
+
+  it.each(findingSeveritySchema.options)(
+    'renders Finding severity %s with its shared label',
+    async (severity) => {
+      const row = await renderFindingRow({ severity });
+      const label = within(row).getByText(FINDING_SEVERITY_LABELS[severity]);
+
+      expect(label.textContent).toBe(FINDING_SEVERITY_LABELS[severity]);
+    },
+  );
+
+  it.each(findingConfidenceSchema.options)(
+    'renders Finding confidence %s with its shared label',
+    async (confidence) => {
+      const row = await renderFindingRow({ confidence });
+      const badge = within(row).getByTestId('finding-confidence-badge-FND-101');
+
+      expect(badge).toHaveTextContent(`신뢰도 · ${FINDING_CONFIDENCE_LABELS[confidence]}`);
+      expect(badge).not.toHaveTextContent(/Confidence/);
+    },
+  );
 
   it('renders permission denied without the failed-load copy or an authoritative count', async () => {
     useFindingsListMock.mockReturnValue({
