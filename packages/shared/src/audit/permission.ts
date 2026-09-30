@@ -37,6 +37,8 @@ export const permissionApprovedDetailSchema = z
     requester_actor_id: z.string().uuid(),
     reason: z.string().min(1).nullable(),
     grant_id: z.string().uuid(),
+    requested_expiration: z.string().datetime().nullable(),
+    granted_expiration: z.string().datetime().nullable(),
     self_approval: z
       .object({
         policy_citation: z.string().min(1),

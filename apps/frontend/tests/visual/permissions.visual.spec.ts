@@ -1,6 +1,10 @@
 import { expect, test } from './support/visual-test';
 
-import { PERMISSION_IDS, permissionVisualScenarios } from './fixtures/permissions';
+import {
+  PERMISSION_EXPIRATION_VISUAL_DATE,
+  PERMISSION_IDS,
+  permissionVisualScenarios,
+} from './fixtures/permissions';
 import { installMockApi, parsePermissionDecisionBody } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
 
@@ -49,6 +53,47 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect(detail).toContainText('workspace.admin');
     await expect(detail.getByTestId('permission-decision-section')).toBeVisible();
     await expectVisual(page, detail, 'permission-requests-console-populated.png');
+  });
+
+  test('shows a requested expiration in the list and detail and captures all approval choices', async ({
+    page,
+  }) => {
+    await installMockApi(page, { permissionScenario: 'requested-expiration' });
+
+    await page.goto('/admin/permissions/requests');
+
+    const list = page.getByTestId('permission-requests-list');
+    const detail = page.getByTestId('permission-request-detail-panel');
+    const requestedDate = PERMISSION_EXPIRATION_VISUAL_DATE.slice(0, 10);
+    await list.getByText('workspace.read', { exact: true }).click();
+    await expect(list.getByText(`만료 ${requestedDate}`, { exact: true })).toBeVisible();
+    await expect(detail.getByText(requestedDate, { exact: true })).toBeVisible();
+    // #589: an unknown Managed System scope shows a type label + short id, never the full UUID.
+    await expect(detail).toContainText('Managed System');
+    await expect(detail).not.toContainText('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    await detail.getByRole('button', { name: '승인', exact: true }).click();
+
+    const keepOption = detail.getByRole('radio', {
+      name: `요청 만료일 유지 · ${requestedDate}`,
+    });
+    await expect(keepOption).toHaveAttribute('aria-checked', 'true');
+    await expect(detail.getByLabel('새 만료일')).toHaveValue(requestedDate);
+    await expectVisual(page, list, 'permission-request-expiration-keep.png');
+
+    await detail.getByText('만료일 변경', { exact: true }).click();
+    await detail.getByLabel('새 만료일').fill('2027-01-31');
+    await expect(detail.getByRole('radio', { name: '만료일 변경' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expectVisual(page, detail, 'permission-request-expiration-change.png');
+
+    await detail.getByText('만료 없음', { exact: true }).click();
+    await expect(detail.getByRole('radio', { name: '만료 없음' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expectVisual(page, detail, 'permission-request-expiration-clear.png');
   });
 
   test('gates required reasons and leaves non-sensitive approval optional', async ({ page }) => {

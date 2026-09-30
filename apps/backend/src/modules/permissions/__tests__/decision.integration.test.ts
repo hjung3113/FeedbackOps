@@ -192,6 +192,18 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     return inserted.rows[0]?.id ?? '';
   }
 
+  async function seedRequestWithExpiration(requestedExpiration: string): Promise<string> {
+    const inserted = await db.pool.query<{ id: string }>(
+      `insert into permission.permission_requests
+        (workspace_id, requester_actor_id, requested_capability, requested_managed_system_id,
+         reason, status, requested_expiration)
+       values ($1, $2, 'voc.read', null, $3, 'pending', $4)
+       returning id`,
+      [WORKSPACE_ID, requesterId, `${TEST_REASON}${randomUUID()}`, requestedExpiration],
+    );
+    return inserted.rows[0]?.id ?? '';
+  }
+
   function decide(
     id: string,
     action: 'approve' | 'reject' | 'need-more-info' | 'deny',
@@ -299,6 +311,68 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         { workspace_id: WORKSPACE_ID, managed_system_id: msId },
       ),
     ).toMatchObject({ allow: true, via: 'managed_system_scope' });
+  });
+
+  // Relative to the run so the cases never age into the past-expiration (422) branch.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const REQUESTED_EXPIRATION = new Date(Date.now() + 90 * DAY_MS).toISOString();
+  const CHANGED_EXPIRATION = new Date(Date.now() + 120 * DAY_MS).toISOString();
+
+  it.each([
+    {
+      label: 'keeps the requested expiration when the body omits expiration',
+      body: {},
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: REQUESTED_EXPIRATION,
+    },
+    {
+      label: 'uses the changed expiration on the grant',
+      body: { expiration: CHANGED_EXPIRATION },
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: CHANGED_EXPIRATION,
+    },
+    {
+      label: 'clears the grant expiration when the body sends null',
+      body: { expiration: null },
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: null,
+    },
+  ])(
+    'approval $label and audits both expiration values',
+    async ({ body, requestedExpiration, grantedExpiration }) => {
+      const request = await seedRequestWithExpiration(requestedExpiration);
+      const response = await decide(request, 'approve', body);
+      expect(response.statusCode).toBe(200);
+
+      const { grant_id: grantId } = response.json<{ grant_id: string }>();
+      const grant = await db.pool.query<{ expires_at: Date | null }>(
+        'select expires_at from permission.permission_grants where id = $1',
+        [grantId],
+      );
+      expect(grant.rows[0]?.expires_at?.toISOString() ?? null).toBe(grantedExpiration);
+      const audit = await db.pool.query<{
+        detail: { requested_expiration: string | null; granted_expiration: string | null };
+      }>(
+        `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
+        [request],
+      );
+      expect(audit.rows[0]?.detail).toMatchObject({
+        requested_expiration: requestedExpiration,
+        granted_expiration: grantedExpiration,
+      });
+    },
+  );
+
+  it('returns a field validation error for an explicitly past approval expiration', async () => {
+    const request = await seedRequest();
+    const response = await decide(request, 'approve', { expiration: '2000-01-01T00:00:00.000Z' });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['expiration'] }] },
+    });
+    expect(await requestStatus(request)).toBe('pending');
   });
 
   it('deny overrides an existing grant, transitions rejected, and is audited once', async () => {

@@ -15,6 +15,7 @@ const REQUEST: AdminPermissionRequestRow = {
   requested_managed_system_id: '30000000-0000-0000-0000-000000000003',
   reason: 'Finding access needed for review.',
   status: 'pending',
+  requested_expiration: null,
   created_at: '2026-07-10T00:00:00.000Z',
 };
 

@@ -372,6 +372,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
           id,
           body as {
             reason?: string;
+            expiration?: string | null;
             self_approval?: {
               policy_citation: string;
               peer_reviewer_absence: string;

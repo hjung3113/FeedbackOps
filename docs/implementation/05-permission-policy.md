@@ -201,15 +201,19 @@ administrator endpoints all require `workspace.admin`, lock the request row,
 and write the request change plus its audit row in one transaction:
 
 ```text
-POST /permissions/requests/:id/approve         { reason?: string }
+POST /permissions/requests/:id/approve         { reason?: string, expiration?: string | null }
 POST /permissions/requests/:id/reject          { reason: string }
 POST /permissions/requests/:id/need-more-info  { note: string }
 POST /permissions/requests/:id/deny            { reason: string }
 ```
 
-- Approve copies the requested capability, Managed System scope, and expiration
-  verbatim into a real `permission_grants` row, then sets the request to
-  `approved`. It never auto-runs the blocked action.
+- Approve copies the requested capability and Managed System scope into a real
+  `permission_grants` row, then sets the request to `approved`. It never
+  auto-runs the blocked action. The grant's expiration is the requested
+  expiration unless the approver changes it (`expiration`: a future datetime
+  overrides it, `null` clears it, omitted keeps it; a past datetime is
+  `validation.failed`). The `permission_approved` audit detail records both the
+  requested and the granted expiration (#590, per `docs/design/09-permission-access.md`).
 - Reject sets the request to `rejected`; it does not mint a grant.
 - Need-more-info sets it to `needs_more_info`; the note is kept in audit detail.
 - Explicit deny copies the requested capability and Managed System scope into a
