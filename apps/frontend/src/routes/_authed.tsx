@@ -30,12 +30,10 @@ import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import type { AppRouterContext } from './__root';
-import { TASKS_DEFAULT_VIEW } from './_authed/tasks';
 import { VOC_DEFAULT_VIEW } from './_authed/vocs';
 
 const SIDEBAR_ROUTE_DEFAULT_VIEWS: Record<string, string> = {
   '/vocs': VOC_DEFAULT_VIEW,
-  '/tasks': TASKS_DEFAULT_VIEW,
 };
 
 export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = {
@@ -354,7 +352,7 @@ export function AuthedLayout() {
   const savedViewFilter = React.useMemo<Record<string, unknown> | undefined>(() => {
     if (activeDomain !== 'voc' || location.pathname !== '/vocs') return undefined;
     const current = new URLSearchParams(location.searchStr);
-    const view = current.get('view') ?? 'inbox';
+    const view = current.get('view') ?? VOC_DEFAULT_VIEW;
     const filter: Record<string, unknown> = { view };
     const managedSystem = current.get('managedSystem');
     if (managedSystem) filter.managed_system_id = managedSystem;

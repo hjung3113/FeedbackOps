@@ -5,7 +5,7 @@
 
 import { redirect } from '@tanstack/react-router';
 import { render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
 import { AppSidebar } from '../../lib/layout/AppSidebar';
 import { NAV_TREE, SIDEBAR_ENTRIES, getSidebarEntryStates, isSidebarEntryActive } from '../_authed';
@@ -139,6 +139,24 @@ describe('_authed sidebar navigation tree', () => {
 });
 
 describe('_authed sidebar current destination', () => {
+  function createMemoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
+    const values = new Map<string, string>();
+
+    return {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, String(value)),
+      removeItem: (key) => values.delete(key),
+    };
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', createMemoryStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it.each([
     { route: 'Default Inbox', pathname: '/vocs', searchStr: '', expectedId: 'inbox' },
     {
@@ -180,22 +198,35 @@ describe('_authed sidebar current destination', () => {
       searchStr: '?action=create',
       expectedId: 'inbox',
     },
+    { route: 'Default Task list', pathname: '/tasks', searchStr: '', expectedId: null },
     {
-      route: 'Default Task list',
+      route: 'Task list with selected task',
       pathname: '/tasks',
-      searchStr: '',
+      searchStr: '?param=11111111-1111-4111-8111-111111111111',
+      expectedId: null,
+    },
+    {
+      route: 'Explicit My Tasks link',
+      pathname: '/tasks',
+      searchStr: '?view=my',
       expectedId: 'my-tasks',
     },
-  ])('marks only $expectedId current for $route', ({ pathname, searchStr, expectedId }) => {
+  ])(
+    'renders the expected current destination for $route',
+    ({ pathname, searchStr, expectedId }) => {
     localStorage.removeItem('appSidebarCollapsed');
     const entries = pathname === '/tasks' ? NAV_TREE.tasks : NAV_TREE.voc;
     render(<AppSidebar entries={getSidebarEntryStates(entries, pathname, searchStr)} />);
 
     const navLinks = entries.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
     const currentLinks = navLinks.filter((entry) => entry.getAttribute('aria-current') === 'page');
-    expect(currentLinks).toHaveLength(1);
-    expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
-    expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
+    if (expectedId === null) {
+      expect(currentLinks).toHaveLength(0);
+    } else {
+      expect(currentLinks).toHaveLength(1);
+      expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
+      expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
+    }
 
     for (const entry of navLinks) {
       expect(entry.classList.contains('bg-surface-row-selected')).toBe(
@@ -209,7 +240,7 @@ describe('_authed sidebar current destination', () => {
       expect(createEntry).not.toHaveClass('bg-surface-row-selected');
     }
 
-    if (['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
+    if (expectedId !== null && ['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
       const triageEntry = screen.getByTestId('sidebar-nav-triage');
       expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
       expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
