@@ -1,6 +1,7 @@
+import { ApiError } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { listTasks } from '@/lib/api/tasks';
-import { ApiError } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type {
   CreateMilestoneRequest,
@@ -1096,13 +1097,5 @@ function MilestoneDetailContent({
         onCancel={() => setPendingFindingId(null)}
       />
     </>
-  );
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

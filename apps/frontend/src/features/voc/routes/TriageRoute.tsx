@@ -20,6 +20,7 @@
 // a queue query.
 
 import { useMe } from '@/lib/auth/useMe';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { PermissionBlockedPanel } from '@fops/ui';
 import { useNavigate, useSearch } from '@tanstack/react-router';
@@ -104,7 +105,7 @@ export function TriageRoute(): React.ReactElement {
         <PermissionBlockedPanel
           state={mapToPanelState(capCheck.data?.state)}
           category="Triage"
-          reason="VOC triage 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요."
+          reason={PERMISSION_BLOCKED_REASONS.vocTriage}
         />
       </div>
     );

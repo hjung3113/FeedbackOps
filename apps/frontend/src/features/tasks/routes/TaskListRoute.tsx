@@ -1,7 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { ApiError } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { TaskDto } from '@fops/shared';
@@ -167,13 +167,5 @@ export function TaskListRoute({
         ) : null
       }
     />
-  );
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

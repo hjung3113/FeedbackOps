@@ -5,6 +5,7 @@ import {
 import { SurveyResultHeader } from '@/features/surveys/components/results/SurveyResultHeader';
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { Button, EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import { useSurveyReadGate } from './SurveyPermissionGate';
 
@@ -31,7 +32,7 @@ export function SurveyFollowUpRouteView({ surveyId }: { surveyId: string }) {
       <div className="p-6">
         <PermissionBlockedPanel
           category="Survey Result"
-          reason="설문 결과를 볼 권한이 없습니다."
+          reason={PERMISSION_BLOCKED_REASONS.surveyResult}
           state="denied"
         />
       </div>

@@ -5,6 +5,7 @@ import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';
@@ -61,7 +62,7 @@ export function SurveyDetailRoute() {
           <PermissionBlockedPanel
             state="blocked_not_requestable"
             category="Survey Builder"
-            reason="설문 관리 권한이 없습니다."
+            reason={PERMISSION_BLOCKED_REASONS.surveyBuilder}
           />
         </div>
       );

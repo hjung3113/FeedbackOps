@@ -1,5 +1,6 @@
-import { ApiError } from '@/lib/api/types';
 import { type TaskRequestStatus, convertTaskRequestRequestSchema } from '@fops/shared';
+
+export { isPermissionDenied } from '@/lib/api/types';
 
 export const REVIEW_DECISION_STATUSES = ['pending_review', 'needs_more_evidence'] as const;
 const TASK_TITLE_TRUNCATION_MARKER = '…';
@@ -50,12 +51,4 @@ export function formatDate(raw: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(raw));
-}
-
-export function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
-  );
 }

@@ -1,7 +1,7 @@
 import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
 import { getTask } from '@/lib/api';
+import { isPermissionDenied } from '@/lib/api/types';
 import { getMilestone } from '@/lib/api/milestones';
-import { ApiError } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
@@ -299,13 +299,5 @@ export function TaskDetailPanel({
         </div>
       )}
     </aside>
-  );
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }
