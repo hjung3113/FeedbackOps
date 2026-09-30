@@ -1,4 +1,10 @@
-import type { FindingDto, FindingSeverity, SurveyResultDto } from '@fops/shared';
+import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import {
+  type FindingDto,
+  type FindingSeverity,
+  type SurveyResultDto,
+  findingSeveritySchema,
+} from '@fops/shared';
 import {
   Button,
   Checkbox,
@@ -88,7 +94,7 @@ export function CreateFindingDraftPanel({
       ) : (
         <fieldset className="space-y-2">
           <legend className="text-sm text-text-secondary" id="survey-finding-response-label">
-            Choose a response
+            응답 선택
           </legend>
           <RadioGroup
             aria-labelledby="survey-finding-response-label"
@@ -109,7 +115,7 @@ export function CreateFindingDraftPanel({
                     id={`survey-finding-response-${first.response_id}`}
                     value={first.response_id}
                   />
-                  Response {index + 1}
+                  응답 {index + 1}
                 </label>
               );
             })}
@@ -123,7 +129,7 @@ export function CreateFindingDraftPanel({
       ) : (
         selectedGroup && (
           <fieldset className="space-y-2">
-            <legend className="text-sm text-text-secondary">Approved excerpts</legend>
+            <legend className="text-sm text-text-secondary">승인된 발췌</legend>
             {selectedGroup.map((excerpt) => (
               <label
                 className="flex gap-2 text-sm text-text-secondary"
@@ -147,7 +153,7 @@ export function CreateFindingDraftPanel({
         htmlFor="survey-finding-severity"
         id="survey-finding-severity-label"
       >
-        Severity
+        심각도
       </FieldLabel>
       <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
         <SelectTrigger
@@ -159,10 +165,11 @@ export function CreateFindingDraftPanel({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="critical">Critical</SelectItem>
+          {findingSeveritySchema.options.map((value) => (
+            <SelectItem key={value} value={value}>
+              {FINDING_SEVERITY_LABELS[value]}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       {mutation.error && (
@@ -177,7 +184,7 @@ export function CreateFindingDraftPanel({
         onClick={submit}
         type="button"
       >
-        Create selected Finding
+        선택한 응답으로 Finding 생성
       </Button>
     </section>
   );

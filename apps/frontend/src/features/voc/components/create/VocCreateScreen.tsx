@@ -124,7 +124,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 className={SECTION_LABEL_CLASS}
                 tip="기본은 Direct Use. 다른 팀원·고객사 경험을 대신 등록할 때는 Proxy Report."
               >
-                SOURCE
+                출처
               </FieldLabel>
               <Controller
                 control={form.control}
@@ -150,7 +150,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 className={SECTION_LABEL_CLASS}
                 tip="제출 후 변경할 수 없습니다. 어느 시스템에 대한 VOC인지 정확히 골라주세요."
               >
-                MANAGED SYSTEM
+                Managed System
               </FieldLabel>
               {msQuery.isLoading ? (
                 <div className="flex flex-wrap gap-2">

@@ -486,18 +486,18 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(within(row as HTMLElement).getByText('정')).toBeInTheDocument();
   });
 
-  it('renders the Unassigned chip when a child row has no assignee', async () => {
+  it('renders the 미배정 chip when a child row has no assignee', async () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [{ ...childTask, assignee_actor_id: null }] });
     renderPanel(linkedDetail);
 
-    expect(await screen.findByText('Unassigned')).toBeInTheDocument();
+    expect(await screen.findByText('미배정')).toBeInTheDocument();
   });
 
   // B2d fixup F2 — a non-null assignee id missing from the actor directory
   // (lookup pending or failed) still shows an explicit assigned indication:
-  // the Task list/detail fallback 'Assigned' (TaskListRoute:124), never a
+  // the Task list/detail fallback '담당자 지정됨' (TaskListRoute), never a
   // bare row. Resolving the map replaces the fallback with the avatar.
-  it('falls back to Assigned while the actor name is unresolved, then the avatar once resolved', async () => {
+  it('uses the localized fallback while the actor name is unresolved, then the avatar once resolved', async () => {
     vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
     vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -515,10 +515,10 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
     if (!row) throw new Error('tasks section not found');
-    // The avatar renders the fallback name's initial; Unassigned stays
+    // The avatar renders the Korean assigned fallback; 미배정 stays
     // specific to a genuinely null assignment.
-    expect(within(row as HTMLElement).getByText('A')).toBeInTheDocument();
-    expect(within(row as HTMLElement).queryByText('Unassigned')).not.toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText('담')).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText('미배정')).not.toBeInTheDocument();
 
     view.rerender(
       <QueryClientProvider client={queryClient}>
@@ -532,7 +532,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       </QueryClientProvider>,
     );
     expect(within(row as HTMLElement).getByText('정')).toBeInTheDocument();
-    expect(within(row as HTMLElement).queryByText('A')).not.toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText('담')).not.toBeInTheDocument();
   });
 
   // G-columns (ADR-0050, choice a): the slot where the prototype shows

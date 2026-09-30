@@ -4,10 +4,12 @@ import { useCreateSurvey, useSurvey, useSurveys } from '@/features/surveys/hooks
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import type { SurveyType } from '@/features/surveys/types';
 import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
+import { surveyTypeSchema } from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -259,15 +261,17 @@ export function CreateSurveyDialog({
             />
           </label>
           <div className="block text-sm">
-            Survey type
+            설문 유형
             <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
-              <SelectTrigger aria-label="Survey type">
+              <SelectTrigger aria-label="설문 유형">
                 <SelectValue placeholder="유형 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="discovery">discovery</SelectItem>
-                <SelectItem value="validation">validation</SelectItem>
-                <SelectItem value="outcome">outcome</SelectItem>
+                {surveyTypeSchema.options.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {SURVEY_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

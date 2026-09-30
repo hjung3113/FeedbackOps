@@ -25,7 +25,7 @@ export function QuestionList({
   return (
     <section className="border-r border-border-subtle p-3">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium">Questions {questions.length}</span>
+        <span className="text-sm font-medium">질문 {questions.length}</span>
         {editable && (
           <Button size="sm" onClick={onAdd}>
             <Plus className="h-4 w-4" />새 질문 추가

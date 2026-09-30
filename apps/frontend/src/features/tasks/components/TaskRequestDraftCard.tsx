@@ -79,7 +79,7 @@ export function TaskRequestDraftCard({
 
   return (
     <section
-      aria-label="Task Request draft"
+      aria-label="Task Request 초안"
       className="mt-3 flex flex-col gap-3 rounded-md border border-[color-mix(in_oklch,rgb(var(--border-selected))_52%,rgb(var(--border-subtle)))] bg-[linear-gradient(180deg,color-mix(in_oklch,rgb(var(--border-selected))_8%,rgb(var(--surface-card))),rgb(var(--surface-card)))] p-3"
       data-testid="request-task-draft"
       onKeyDown={handleKeyDown}
@@ -88,20 +88,20 @@ export function TaskRequestDraftCard({
         <div className="flex min-w-0 flex-col gap-1">
           <OutlineBadge>
             <ClipboardList aria-hidden className="h-3.5 w-3.5" />
-            Task Request draft
+            Task Request 초안
           </OutlineBadge>
-          <h3 className="text-sm font-semibold text-text-primary">Draft task request</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Task Request 초안 작성</h3>
           <p className="text-xs text-text-muted">
-            From <span className="font-mono">{sourceDisplayId}</span> · {sourceKind}
+            출처 <span className="font-mono">{sourceDisplayId}</span> · {sourceKind}
           </p>
         </div>
         <Button
-          aria-label="Close draft"
+          aria-label="초안 닫기"
           className="shrink-0 px-2"
           disabled={isSubmitting}
           onClick={onClose}
           size="sm"
-          title="Close draft"
+          title="초안 닫기"
           type="button"
           variant="ghost"
         >
@@ -114,7 +114,7 @@ export function TaskRequestDraftCard({
           className="rounded-md border border-border-subtle bg-surface-card px-3 py-2 text-sm text-text-primary"
           data-testid="request-task-pending-notice"
         >
-          이 소스에 Pending Task Request가 있습니다.{' '}
+          이 소스에 검토 대기 중인 Task Request가 있습니다.{' '}
           <a
             className="text-accent-primary underline underline-offset-2"
             href={`/tasks?view=requests&param=${pendingRequest.id}`}
@@ -127,7 +127,7 @@ export function TaskRequestDraftCard({
       <form className="flex flex-col gap-3" noValidate onSubmit={form.handleSubmit(onSubmit)}>
         <div className="flex flex-col gap-1.5">
           <FieldLabel required htmlFor={summaryId}>
-            Evidence Summary
+            근거 요약
           </FieldLabel>
           <Textarea
             id={summaryId}
@@ -154,7 +154,7 @@ export function TaskRequestDraftCard({
 
         <div className="flex flex-col gap-1.5">
           <FieldLabel required htmlFor={outcomeId}>
-            Requested Outcome
+            요청 결과
           </FieldLabel>
           <Textarea
             id={outcomeId}
@@ -189,12 +189,12 @@ export function TaskRequestDraftCard({
             variant="primary"
           >
             <Check aria-hidden className="h-3.5 w-3.5" />
-            Stage request
+            요청 등록
           </Button>
           <Button asChild size="sm" variant="secondary">
             <a href="/tasks?view=requests">
               <ArrowRight aria-hidden className="h-3.5 w-3.5" />
-              Review in Task Requests
+              Task Requests에서 검토
             </a>
           </Button>
           <Button
@@ -204,7 +204,7 @@ export function TaskRequestDraftCard({
             type="button"
             variant="subtle"
           >
-            Reset
+            초기화
           </Button>
         </div>
         <p className="text-xs text-text-muted">제출 후 Task Requests에서 리뷰됩니다.</p>

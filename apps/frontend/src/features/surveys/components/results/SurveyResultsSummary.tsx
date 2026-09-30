@@ -3,6 +3,7 @@ import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { RATING_BAND_LABELS, SURVEY_RESULT_KIND_LABELS } from '@/lib/copy/enum-labels';
 import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
 import { Button, EmptyState } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
@@ -48,7 +49,7 @@ function QuestionResult({
       <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
         <span>Q{index + 1}</span>
         <span className="rounded border border-border-subtle px-1.5 py-0.5 text-xs capitalize">
-          {result.kind}
+          {SURVEY_RESULT_KIND_LABELS[result.kind]}
         </span>
         <span>{result.answer_count} responses</span>
       </div>
@@ -69,7 +70,7 @@ function QuestionResult({
         <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="Rating distribution">
           {(['low', 'mid', 'high'] as const).map((band) => (
             <div className="rounded bg-surface-card p-3" key={band}>
-              <dt className="text-xs capitalize text-text-muted">{band}</dt>
+              <dt className="text-xs text-text-muted">{RATING_BAND_LABELS[band]}</dt>
               <dd className="mt-1 font-medium tabular-nums text-text-primary">
                 {result.distribution[band]}
               </dd>
@@ -190,7 +191,7 @@ function NextActions({
       </h2>
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
-          const label = action.id === 'create_finding' ? 'Create Finding' : 'Request Task';
+          const label = action.id === 'create_finding' ? 'Finding 생성' : 'Task 요청';
           const actionKey =
             action.id === 'request_task'
               ? `${action.id}:${action.source_finding_id ?? ''}`
@@ -200,7 +201,7 @@ function NextActions({
               return (
                 <div className="space-y-1" data-action-id={action.id} key={actionKey}>
                   <Button disabled type="button" variant="secondary">
-                    Request access
+                    권한 요청
                   </Button>
                   <p className="text-sm text-text-muted">
                     Access details are unavailable, so this request cannot be submitted.

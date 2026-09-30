@@ -1,7 +1,13 @@
 import { getTask, listTasks } from '@/lib/api';
 import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto, TaskDetailDto } from '@fops/shared';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import {
+  type MilestoneDetailDto,
+  type TaskDetailDto,
+  type TaskDto,
+  taskPrioritySchema,
+} from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -98,7 +104,96 @@ function renderWithClient(ui: React.ReactElement, queryClient?: QueryClient) {
   return client;
 }
 
+function priorityTask(priority: TaskDto['priority']): TaskDto {
+  return {
+    id: '10000000-0000-0000-0000-000000000001',
+    workspace_id: '90000000-0000-0000-0000-000000000009',
+    display_id: 'TASK-1000',
+    primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+    title: '매출 리포트 쿼리 플랜 개선',
+    status: 'backlog',
+    priority,
+    assignee_actor_id: null,
+    due_date: null,
+    milestone_id: null,
+    analytics_area_id: null,
+    source_task_request_id: null,
+    created_by: '20000000-0000-0000-0000-000000000002',
+    created_at: '2026-07-10T00:00:00.000Z',
+    updated_at: '2026-07-10T00:00:00.000Z',
+  };
+}
+
+function priorityTaskDetail(priority: TaskDetailDto['priority']): TaskDetailDto {
+  return { ...priorityTask(priority), source: null };
+}
+
 describe('TaskListRoute display ids', () => {
+  it('renders Korean assignment fallbacks for unresolved and empty assignees', async () => {
+    const unassigned = priorityTask('low');
+    const unresolved = {
+      ...priorityTask('high'),
+      id: '10000000-0000-0000-0000-000000000002',
+      display_id: 'TASK-1001',
+      assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+    };
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [unassigned, unresolved] });
+    renderWithClient(<TaskListRoute />);
+
+    await screen.findByText('TASK-1000');
+    expect(screen.getByText('미배정')).toBeInTheDocument();
+    expect(screen.getByText('담당자 지정됨')).toBeInTheDocument();
+    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+    expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
+  });
+
+  it('uses Korean Task detail navigation labels that match section headings', async () => {
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    for (const label of ['요약', '속성', '출처', '맥락', '진행 메모']) {
+      expect(await screen.findByRole('button', { name: label })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it.each(taskPrioritySchema.options)(
+    'renders priority %s as a label in the task list',
+    async (priority) => {
+      vi.mocked(listTasks).mockResolvedValueOnce({ items: [priorityTask(priority)] });
+      renderWithClient(<TaskListRoute />);
+
+      await screen.findByText('TASK-1000');
+      expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority]).length).toBeGreaterThan(0);
+      expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(taskPrioritySchema.options)(
+    'renders priority %s as a label in Task detail',
+    async (priority) => {
+      vi.mocked(getTask).mockResolvedValueOnce(priorityTaskDetail(priority));
+      renderWithClient(
+        <TaskDetailPanel
+          taskId="10000000-0000-0000-0000-000000000001"
+          actorNamesById={new Map()}
+          managedSystemNamesById={new Map()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      await screen.findByRole('heading', { name: '속성' });
+      expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority], { exact: true })).toHaveLength(2);
+      expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
   it('renders task display_id in the list row, detail header, and link trail', async () => {
     renderWithClient(<TaskListRoute />);
 
@@ -299,7 +394,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     const vocBadge = trail.querySelector('[data-entity-type="voc"]');
     const findingBadge = trail.querySelector('[data-entity-type="finding"]');
@@ -347,7 +442,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     // Positive control for the negatives: the blocked panel really renders.
     expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
@@ -378,7 +473,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
@@ -404,7 +499,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     expect(trail.querySelector('[data-state]')).toBeNull();
     expect(screen.queryByText('Source VOC')).not.toBeInTheDocument();

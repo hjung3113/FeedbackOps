@@ -21,7 +21,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
         await expect(target).toBeVisible();
         await expect(target).toContainText('담당 관리자에게 문의하세요.');
         await expect(target).toContainText('Admin One');
-        await expect(target.getByRole('button', { name: 'Request access' })).toHaveCount(0);
+        await expect(target.getByRole('button', { name: '권한 요청' })).toHaveCount(0);
         await expectVisual(page, target, 'blocked-contact-admin.png');
         return;
       }

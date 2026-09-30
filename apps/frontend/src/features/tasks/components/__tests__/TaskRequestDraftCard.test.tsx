@@ -42,9 +42,10 @@ describe('TaskRequestDraftCard', () => {
   ])('shows the source display id and kind for $sourceKind', ({ sourceKind, sourceDisplayId }) => {
     renderCard({ sourceKind, sourceDisplayId });
 
-    const region = screen.getByRole('region', { name: 'Task Request draft' });
-    expect(region).toHaveTextContent(`From ${sourceDisplayId} · ${sourceKind}`);
-    expect(region).toHaveTextContent('Draft task request');
+    const region = screen.getByRole('region', { name: 'Task Request 초안' });
+    expect(region).toHaveTextContent(`출처 ${sourceDisplayId} · ${sourceKind}`);
+    expect(region).toHaveTextContent('Task Request 초안');
+    expect(within(region).getByRole('button', { name: '요청 등록' })).toBeInTheDocument();
     expect(region).toHaveAttribute('data-testid', 'request-task-draft');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -111,7 +112,7 @@ describe('TaskRequestDraftCard', () => {
     });
     renderCard();
 
-    const card = screen.getByRole('region', { name: 'Task Request draft' });
+    const card = screen.getByRole('region', { name: 'Task Request 초안' });
     expect(within(card).getByTestId('request-task-pending-notice')).toHaveTextContent('REQ-1000');
     expect(within(card).getByRole('link', { name: 'REQ-1000' })).toHaveAttribute(
       'href',
@@ -129,21 +130,21 @@ describe('TaskRequestDraftCard', () => {
     await user.type(evidence, 'Changed evidence');
     await user.type(outcome, 'Changed outcome');
 
-    expect(screen.getByRole('link', { name: 'Review in Task Requests' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Task Requests에서 검토' })).toHaveAttribute(
       'href',
       '/tasks?view=requests',
     );
-    await user.click(screen.getByRole('button', { name: 'Reset' }));
+    await user.click(screen.getByRole('button', { name: '초기화' }));
 
     expect(evidence).toHaveValue('Prefilled evidence summary');
     expect(outcome).toHaveValue('');
   });
 
-  it('closes from the Close draft button or Escape', async () => {
+  it('closes from the localized close button or Escape', async () => {
     const user = userEvent.setup();
     const { onClose } = renderCard();
 
-    await user.click(screen.getByRole('button', { name: 'Close draft' }));
+    await user.click(screen.getByRole('button', { name: '초안 닫기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
     await user.keyboard('{Escape}');
@@ -185,7 +186,7 @@ describe('TaskRequestDraftCard', () => {
   it('does not render Convert to Task fields and disables submit while submitting', () => {
     renderCard({ isSubmitting: true });
 
-    expect(screen.queryByLabelText('Priority')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('우선순위')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Execution owner')).not.toBeInTheDocument();
     expect(screen.getByTestId('request-task-submit')).toBeDisabled();
   });

@@ -1,10 +1,5 @@
+import { SURVEY_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import type { SurveyStatus } from '../types';
-
-const LABELS: Record<SurveyStatus, string> = {
-  draft: 'Draft',
-  open: 'Open',
-  closed: 'Closed',
-};
 
 const TONE_CLASSES: Record<SurveyStatus, string> = {
   draft: 'border-border-subtle bg-surface-canvas text-text-muted',
@@ -13,7 +8,7 @@ const TONE_CLASSES: Record<SurveyStatus, string> = {
 };
 
 export function surveyStatusLabel(status: SurveyStatus): string {
-  return LABELS[status];
+  return SURVEY_STATUS_LABELS[status];
 }
 
 export function SurveyStatusBadge({ status }: { status: SurveyStatus }) {
@@ -22,7 +17,7 @@ export function SurveyStatusBadge({ status }: { status: SurveyStatus }) {
       className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${TONE_CLASSES[status]}`}
       data-testid={`survey-status-${status}`}
     >
-      {LABELS[status]}
+      {SURVEY_STATUS_LABELS[status]}
     </span>
   );
 }

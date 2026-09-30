@@ -273,7 +273,7 @@ function OutcomeFollowUpDetailPanel({
             ) : (
               <div className="space-y-1" key={action.id}>
                 <Button disabled type="button" variant="secondary">
-                  Request access
+                  권한 요청
                 </Button>
                 <p className="text-sm text-text-muted">
                   Access details are unavailable, so this request cannot be submitted.
@@ -293,7 +293,7 @@ function OutcomeFollowUpDetailPanel({
                   type="button"
                   variant="primary"
                 >
-                  Create Finding
+                  Finding 생성
                 </Button>
                 {resultsLoading ? (
                   <p className="text-sm text-text-muted">승인된 발췌를 불러오는 중…</p>

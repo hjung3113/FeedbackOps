@@ -1,4 +1,5 @@
-import type { TaskRequestDto } from '@fops/shared';
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { type TaskRequestDto, taskRequestStatusSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -42,4 +43,21 @@ describe('TaskRequestRow identity', () => {
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
     expect(screen.queryByText('10000000')).not.toBeInTheDocument();
   });
+
+  it.each(taskRequestStatusSchema.options)(
+    'renders a display label for Task Request status %s',
+    (status) => {
+      render(
+        <TaskRequestRow
+          item={{ ...REQUEST, status }}
+          selected={false}
+          names={{ actorsById: {}, managedSystemsById: {} }}
+          onSelect={() => undefined}
+        />,
+      );
+
+      expect(screen.getByText(TASK_REQUEST_STATUS_LABELS[status])).toBeInTheDocument();
+      expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
+    },
+  );
 });

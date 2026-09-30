@@ -1,8 +1,9 @@
+import { ApiError } from '@/lib/api';
+import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { findingStatusSchema } from '@fops/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { ApiError } from '@/lib/api';
 
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
@@ -375,9 +376,9 @@ vi.mock('@/features/tasks/components/TaskRequestDraftCard', () => ({
   }) => {
     let requestedOutcome = '';
     return (
-      <section aria-label="Task Request draft" data-testid="request-task-draft">
+      <section aria-label="Task Request 초안" data-testid="request-task-draft">
         <p>
-          From {sourceDisplayId} · {sourceKind}
+          출처 {sourceDisplayId} · {sourceKind}
         </p>
         <textarea
           data-testid="request-task-requested-outcome-input"
@@ -395,7 +396,7 @@ vi.mock('@/features/tasks/components/TaskRequestDraftCard', () => ({
             })
           }
         >
-          Stage request
+          요청 등록
         </button>
       </section>
     );
@@ -682,7 +683,7 @@ describe('VOC cluster route shells', () => {
       {
         id: '88888888-8888-8888-8888-888888888888',
         display_id: 'FIN-888',
-        status: 'validated',
+        status: 'draft',
         title: '결제 안내 개선',
       },
     ];
@@ -697,15 +698,43 @@ describe('VOC cluster route shells', () => {
     expect(screen.getByTestId('cluster-linked-findings-list')).toBeInTheDocument();
     expect(screen.getByText('FIN-777')).toBeInTheDocument();
     expect(screen.getByText('결제 오류 개선')).toBeInTheDocument();
-    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.getByText('FIN-888')).toBeInTheDocument();
-    expect(screen.getByText('validated')).toBeInTheDocument();
+    expect(screen.getByTestId('finding-status-badge-draft')).toHaveTextContent('초안');
     expect(screen.getAllByRole('link', { name: 'Finding 열기' })[0]).toHaveAttribute(
       'href',
       '/findings/77777777-7777-7777-7777-777777777777',
     );
     expect(screen.queryByTestId('cluster-execution-empty')).not.toBeInTheDocument();
   });
+
+  it.each(findingStatusSchema.options)(
+    'renders a display label for linked Finding status %s',
+    async (status) => {
+      clusters[0]!.linked_findings = [
+        {
+          id: '77777777-7777-7777-7777-777777777777',
+          display_id: 'FIN-777',
+          status,
+          title: '결제 오류 개선',
+        },
+      ];
+      const { VocClusterDetailPanel } = await import(
+        '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+      );
+
+      render(
+        <VocClusterDetailPanel
+          clusterId="11111111-1111-1111-1111-111111111111"
+          onClose={vi.fn()}
+        />,
+      );
+
+      const badge = screen.getByTestId(`finding-status-badge-${status}`);
+      expect(badge).toHaveTextContent(FINDING_STATUS_LABELS[status]);
+      expect(badge).not.toHaveTextContent(status);
+    },
+  );
 
   it('shows Execution create and link CTAs when no Finding is linked', async () => {
     const { VocClusterDetailPanel } = await import(
@@ -734,7 +763,7 @@ describe('VOC cluster route shells', () => {
 
     fireEvent.click(screen.getByTestId('cluster-request-task-button'));
     const draft = screen.getByTestId('request-task-draft');
-    expect(draft).toHaveTextContent('From CLU-31 · VOC Cluster');
+    expect(draft).toHaveTextContent('출처 CLU-31 · VOC Cluster');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
       target: { value: 'Reduce repeated payment failures' },
@@ -786,7 +815,7 @@ describe('VOC cluster route shells', () => {
     expect(screen.getByTestId('cluster-detail-rationale')).toHaveTextContent(
       '같은 결제 실패 패턴입니다.',
     );
-    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('high');
+    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('높음');
     expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('owner-1');
     expect(screen.getAllByTestId('reporter-status-reviewing')).toHaveLength(4);
     expect(screen.getByTestId('cluster-members-more')).toHaveTextContent('+1 더보기');

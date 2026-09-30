@@ -1,6 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
+import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { Button, Input, Skeleton, UserAvatar } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
@@ -9,9 +10,9 @@ import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
 import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
 const tabs: Array<{ label: string; value: SurveyStatus | 'all' }> = [
   { label: 'All', value: 'all' },
-  { label: 'Open', value: 'open' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Closed', value: 'closed' },
+  { label: SURVEY_STATUS_LABELS.open, value: 'open' },
+  { label: SURVEY_STATUS_LABELS.draft, value: 'draft' },
+  { label: SURVEY_STATUS_LABELS.closed, value: 'closed' },
 ];
 
 export interface SurveyListProps {
@@ -124,7 +125,7 @@ export function SurveyList({
         {canCreate && onCreate && (
           <Button variant="primary" size="sm" onClick={onCreate} data-testid="survey-create-button">
             <Plus className="h-4 w-4" />
-            New survey
+            설문 생성
           </Button>
         )}
       </div>
@@ -161,7 +162,7 @@ export function SurveyList({
                     data-testid="survey-empty-create-button"
                   >
                     <Plus className="h-4 w-4" />
-                    New survey
+                    설문 생성
                   </Button>
                 )
               ) : permissionState === 'request_access' ? (
@@ -206,7 +207,7 @@ export function SurveyList({
                     <span aria-hidden="true">·</span>
                     <SurveyStatusBadge status={survey.status} />
                     <span aria-hidden="true">·</span>
-                    <span>{survey.type}</span>
+                    <span>{SURVEY_TYPE_LABELS[survey.type]}</span>
                     <span aria-hidden="true">·</span>
                     <SurveyManagedSystemPill
                       name={managedSystemNamesById?.get(survey.primary_managed_system_id)}

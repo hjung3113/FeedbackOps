@@ -360,7 +360,7 @@ describe('/admin/analytics-areas route', () => {
       analyticsAreas: [],
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '권한 요청' })).toBeInTheDocument();
     });
     expect(screen.queryByTestId('analytics-areas-catalog')).not.toBeInTheDocument();
   });

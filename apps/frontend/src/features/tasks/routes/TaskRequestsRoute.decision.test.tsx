@@ -101,7 +101,7 @@ function renderRoute() {
 
 async function mountRoute() {
   renderRoute();
-  await screen.findByText('Review decision');
+  await screen.findByText('검토 결정');
 }
 
 async function openDialog(buttonName: string, dialogName: string) {
@@ -140,29 +140,29 @@ describe('TaskRequestsRoute decision dialogs', () => {
 
   it('opens approval without invoking window.prompt', async () => {
     const prompt = vi.spyOn(window, 'prompt');
-    await openDialog('Approve', 'Approve Task Request');
+    await openDialog('승인', 'Task Request 승인');
     expect(prompt).not.toHaveBeenCalled();
   });
 
   it('shows a Korean required marker in the decision dialog', async () => {
-    await openDialog('Reject', 'Reject Task Request');
+    await openDialog('반려', 'Task Request 반려');
 
     expect(screen.getByText('필수 입력 항목입니다.')).toBeInTheDocument();
     expect(screen.queryByText('Required.')).not.toBeInTheDocument();
   });
 
   it('approves another actor request without an optional reason', async () => {
-    await openDialog('Approve', 'Approve Task Request');
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Task Request' }));
+    await openDialog('승인', 'Task Request 승인');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
     await waitFor(() => expectDecisionCall(api.approveTaskRequest, {}));
   });
 
   it('trims an approval reason for another actor request', async () => {
-    await openDialog('Approve', 'Approve Task Request');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Approval reason' }), {
+    await openDialog('승인', 'Task Request 승인');
+    fireEvent.change(screen.getByRole('textbox', { name: '승인 사유' }), {
       target: { value: '  Ready for execution.  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Task Request' }));
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
     await waitFor(() =>
       expectDecisionCall(api.approveTaskRequest, { reason: 'Ready for execution.' }),
     );
@@ -170,48 +170,46 @@ describe('TaskRequestsRoute decision dialogs', () => {
 
   it('keeps a self-approval dialog open when its reason is blank', async () => {
     setActor(requesterId);
-    await openDialog('Approve', 'Approve Task Request');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Self-approval reason' }), {
+    await openDialog('승인', 'Task Request 승인');
+    fireEvent.change(screen.getByRole('textbox', { name: '본인 승인 사유' }), {
       target: { value: '   ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Task Request' }));
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Self-approval requires a reason.');
-    expect(screen.getByRole('dialog', { name: 'Approve Task Request' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
   });
 
   it('cancels without dispatching a mutation', async () => {
-    await openDialog('Approve', 'Approve Task Request');
+    await openDialog('승인', 'Task Request 승인');
     fireEvent.click(screen.getByTestId('task-request-decision-cancel'));
     await waitFor(() =>
-      expect(
-        screen.queryByRole('dialog', { name: 'Approve Task Request' }),
-      ).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog', { name: 'Task Request 승인' })).not.toBeInTheDocument(),
     );
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
   });
 
   it('validates and trims rejection reasons', async () => {
-    await openDialog('Reject', 'Reject Task Request');
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Task Request' }));
+    await openDialog('반려', 'Task Request 반려');
+    fireEvent.click(screen.getByRole('button', { name: '반려' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Reason is required.');
     expect(api.rejectTaskRequest).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Reject reason' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: '반려 사유' }), {
       target: { value: '  Out of scope.  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Task Request' }));
+    fireEvent.click(screen.getByRole('button', { name: '반려' }));
     await waitFor(() => expectDecisionCall(api.rejectTaskRequest, { reason: 'Out of scope.' }));
   });
 
   it('validates and trims evidence notes', async () => {
-    await openDialog('Need evidence', 'Request more evidence');
-    fireEvent.click(screen.getByRole('button', { name: 'Request evidence' }));
+    await openDialog('근거 추가 요청', '근거 추가 요청');
+    fireEvent.click(screen.getByRole('button', { name: '요청' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Note is required.');
     expect(api.requestMoreEvidenceForTaskRequest).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Evidence note' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: '근거 메모' }), {
       target: { value: '  Add source metrics.  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Request evidence' }));
+    fireEvent.click(screen.getByRole('button', { name: '요청' }));
     await waitFor(() =>
       expectDecisionCall(api.requestMoreEvidenceForTaskRequest, { note: 'Add source metrics.' }),
     );
@@ -225,8 +223,8 @@ describe('TaskRequestsRoute decision dialogs', () => {
           resolveApproval = resolve;
         }),
     );
-    await openDialog('Approve', 'Approve Task Request');
-    const submit = screen.getByRole('button', { name: 'Approve Task Request' });
+    await openDialog('승인', 'Task Request 승인');
+    const submit = screen.getByRole('button', { name: '승인' });
     // Both clicks land in one batch, so the pending state has not re-rendered the
     // button as disabled yet. The synchronous in-flight guard is the only defense
     // under test here — clicking with a flush in between would be caught by
@@ -243,11 +241,11 @@ describe('TaskRequestsRoute decision dialogs', () => {
     api.approveTaskRequest.mockRejectedValueOnce({
       envelope: { message: 'Approval was rejected by the server.' },
     });
-    await openDialog('Approve', 'Approve Task Request');
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Task Request' }));
+    await openDialog('승인', 'Task Request 승인');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Approval was rejected by the server.',
     );
-    expect(screen.getByRole('dialog', { name: 'Approve Task Request' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
   });
 });

@@ -293,7 +293,7 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
 
     expect(screen.getByText('캐시된 내부 Task 제목')).toBeInTheDocument();
-    expect(screen.getByText('done')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
     expect(getTask).not.toHaveBeenCalled();
   });
 
@@ -638,8 +638,8 @@ describe('<VocDetailPanel>', () => {
     // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
     fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
-    const draft = await screen.findByRole('region', { name: 'Task Request draft' });
-    expect(draft).toHaveTextContent('From VOC-0001 · VOC');
+    const draft = await screen.findByRole('region', { name: 'Task Request 초안' });
+    expect(draft).toHaveTextContent('출처 VOC-0001 · VOC');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
       target: { value: 'Reduce repeated support contacts' },

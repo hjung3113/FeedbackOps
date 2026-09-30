@@ -3,6 +3,7 @@ import { cn } from '../utils/cn.js';
 
 export interface SeverityBadgeProps {
   severity: SeverityEnum;
+  label?: string;
   className?: string;
 }
 
@@ -23,7 +24,7 @@ const LABELS: Record<SeverityEnum, string> = {
  * fails WCAG AA 4.5:1 as text at 12% tint even once the syntax is fixed, so
  * the fix is the `-label` token, not just wrapping `token` in `rgb()`).
  */
-export function SeverityBadge({ severity, className }: SeverityBadgeProps) {
+export function SeverityBadge({ severity, label, className }: SeverityBadgeProps) {
   const token = `--severity-${severity}`;
 
   return (
@@ -39,7 +40,7 @@ export function SeverityBadge({ severity, className }: SeverityBadgeProps) {
       data-token={token}
     >
       <SeverityIndicator severity={severity} />
-      {LABELS[severity]}
+      {label ?? LABELS[severity]}
     </span>
   );
 }

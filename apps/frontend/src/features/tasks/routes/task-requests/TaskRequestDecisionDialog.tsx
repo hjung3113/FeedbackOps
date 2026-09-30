@@ -39,25 +39,25 @@ export function TaskRequestDecisionDialog({
   const details =
     dialog.action === 'approve'
       ? {
-          title: 'Approve Task Request',
-          description: 'Record the rationale for accepting this execution candidate.',
-          label: isSelfApproval ? 'Self-approval reason' : 'Approval reason',
-          submitLabel: 'Approve Task Request',
+          title: 'Task Request 승인',
+          description: '실행 후보를 승인하는 이유를 기록하세요.',
+          label: isSelfApproval ? '본인 승인 사유' : '승인 사유',
+          submitLabel: '승인',
           required: isSelfApproval,
         }
       : dialog.action === 'request-more-evidence'
         ? {
-            title: 'Request more evidence',
-            description: 'Record the evidence needed before this request can be reviewed.',
-            label: 'Evidence note',
-            submitLabel: 'Request evidence',
+            title: '근거 추가 요청',
+            description: '요청을 검토하기 전에 필요한 근거를 기록하세요.',
+            label: '근거 메모',
+            submitLabel: '요청',
             required: true,
           }
         : {
-            title: 'Reject Task Request',
-            description: 'Record why this execution candidate cannot be accepted.',
-            label: 'Reject reason',
-            submitLabel: 'Reject Task Request',
+            title: 'Task Request 반려',
+            description: '실행 후보를 반려하는 이유를 기록하세요.',
+            label: '반려 사유',
+            submitLabel: '반려',
             required: true,
           };
   const inputId = `task-request-${dialog.action}-reason`;
@@ -97,7 +97,7 @@ export function TaskRequestDecisionDialog({
               onClick={onClose}
               data-testid="task-request-decision-cancel"
             >
-              Cancel
+              취소
             </Button>
             <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
               {details.submitLabel}

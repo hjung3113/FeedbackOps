@@ -1,3 +1,5 @@
+import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { taskStatusSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,15 +22,16 @@ describe('<LinkedExecutionSection>', () => {
     expect(screen.queryByText('(Slice 4/5에서 활성화)')).not.toBeInTheDocument();
   });
 
-  it('renders linked task title and status when a linked task exists', () => {
+  it.each(taskStatusSchema.options)('renders a display label for Task status %s', (status) => {
     render(
       <LinkedExecutionSection
         voc={DETAIL_ENVELOPE}
-        linkedTask={{ title: '결제 오류 수정', status: 'doing' }}
+        linkedTask={{ title: '결제 오류 수정', status }}
       />,
     );
     expect(screen.getByText('결제 오류 수정')).toBeInTheDocument();
-    expect(screen.getByText('doing')).toBeInTheDocument();
+    expect(screen.getByText(TASK_STATUS_LABELS[status])).toBeInTheDocument();
+    expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
   });
 
   it('renders PermissionBlockedPanel when linkedFinding decision is present', () => {

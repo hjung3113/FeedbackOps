@@ -1,4 +1,9 @@
-import type { EntityLinkDto } from '@fops/shared';
+import { ENTITY_LINK_RELATION_LABELS, FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import {
+  entityLinkRelationTypeSchema,
+  findingSeveritySchema,
+  type EntityLinkDto,
+} from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { EntityRelationRow } from './EntityRelationRow';
@@ -39,6 +44,26 @@ const LINK: EntityLinkDto = {
 };
 
 describe('EntityRelationRow', () => {
+  it.each(entityLinkRelationTypeSchema.options)(
+    'renders a display label for relation type %s',
+    (relation_type) => {
+      render(<EntityRelationRow link={{ ...LINK, relation_type }} />);
+
+      expect(screen.getByText(ENTITY_LINK_RELATION_LABELS[relation_type])).toBeInTheDocument();
+      expect(screen.queryByText(relation_type, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(findingSeveritySchema.options)(
+    'renders a display label for member severity %s',
+    (severity) => {
+      render(<EntityRelationRow member={{ vocId: 'voc-1', severity }} />);
+
+      expect(screen.getByText(new RegExp(FINDING_SEVERITY_LABELS[severity]))).toBeInTheDocument();
+      expect(screen.queryByText(severity, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
   it('renders the target summary display_id for allowed entity link chips', () => {
     render(<EntityRelationRow link={LINK} />);
 

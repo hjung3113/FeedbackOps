@@ -1,17 +1,10 @@
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import { ObjectRow } from '@fops/ui';
 
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 
 import { formatDate } from './predicates';
-
-export const STATUS_LABELS: Record<TaskRequestStatus, string> = {
-  pending_review: 'Pending',
-  needs_more_evidence: 'Needs evidence',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  converted: 'Converted',
-};
 
 const STATUS_CLASS: Record<TaskRequestStatus, string> = {
   pending_review: 'border-accent-warn/30 bg-accent-warn/10 text-accent-warn',
@@ -24,7 +17,7 @@ const STATUS_CLASS: Record<TaskRequestStatus, string> = {
 export function TaskRequestBadge({ status }: { status: TaskRequestStatus }) {
   return (
     <span className={`rounded-sm border px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[status]}`}>
-      {STATUS_LABELS[status]}
+      {TASK_REQUEST_STATUS_LABELS[status]}
     </span>
   );
 }

@@ -52,7 +52,9 @@ not look that wording up in a catalog.
   text, Internal Comment bodies, Reporter Reply content, Task titles.
 
 Korean and English may sit in the same screen. Do not translate one side
-into the other to make a file consistent. `PRODUCT.md` states the same rule.
+into the other to make a file consistent. This was the former `PRODUCT.md`
+rule. Issue #580 and ADR-0057 refine it for field labels and action buttons on
+Korean-language surfaces; the prototype remains the authority for other copy.
 
 ## Backend
 

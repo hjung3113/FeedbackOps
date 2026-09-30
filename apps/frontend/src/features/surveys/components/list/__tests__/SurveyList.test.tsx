@@ -1,4 +1,6 @@
 import type { FrontendPermissionState } from '@/lib/api';
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { surveyTypeSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,7 +18,7 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
       data-return-route-intent={returnRouteIntent}
       data-testid={`request-access-${capability}`}
     >
-      Request access
+      권한 요청
     </button>
   ),
 }));
@@ -81,11 +83,11 @@ describe('SurveyList empty state', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /Open/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /진행 중/ }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Survey 검색' }), '찾을 수 없음');
 
     expect(await screen.findByText('현재 조건에 맞는 설문이 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('상태: Open · 검색어: 찾을 수 없음')).toBeInTheDocument();
+    expect(screen.getByText('상태: 진행 중 · 검색어: 찾을 수 없음')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
@@ -129,5 +131,23 @@ describe('SurveyList empty state', () => {
       '담당 관리자에게 문의하세요.',
     );
     expect(screen.queryByTestId('request-access-survey.manage')).not.toBeInTheDocument();
+  });
+});
+
+describe('SurveyList type labels', () => {
+  it.each(surveyTypeSchema.options)('renders a display label for survey type %s', (type) => {
+    render(
+      <SurveyList
+        surveys={[{ ...survey, type }]}
+        isLoading={false}
+        error={null}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        canCreate
+      />,
+    );
+
+    expect(screen.getByText(SURVEY_TYPE_LABELS[type])).toBeInTheDocument();
+    expect(screen.queryByText(type, { exact: true })).not.toBeInTheDocument();
   });
 });

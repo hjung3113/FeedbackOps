@@ -26,7 +26,7 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
       data-testid={`request-access-${capability}`}
       type="button"
     >
-      Request access
+      권한 요청
     </button>
   ),
 }));
@@ -224,7 +224,12 @@ describe('SurveyResultsSummary', () => {
     render(<SurveyResultsSummary survey={survey} results={results} />);
 
     expect(screen.getByText('느린 로딩')).toBeInTheDocument();
-    expect(screen.getByText('low')).toBeInTheDocument();
+    for (const label of ['낮은 점수', '중간 점수', '높은 점수', '선택형', '평점', '서술형']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    for (const rawLabel of ['low', 'mid', 'high', 'choice', 'rating', 'text']) {
+      expect(screen.queryByText(rawLabel, { exact: true })).not.toBeInTheDocument();
+    }
     expect(screen.getByText('내보내기가 너무 느립니다.')).toBeInTheDocument();
     expect(screen.getByText('Identity protected responses')).toBeInTheDocument();
     expect(screen.getByText('Outcome follow-up is available')).toBeInTheDocument();
@@ -252,9 +257,49 @@ describe('SurveyResultsSummary', () => {
     );
 
     expect(screen.getByText(excerptText)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     expect(screen.getByTestId('survey-create-finding-draft')).toBeInTheDocument();
+    expect(screen.getByText('응답 선택')).toBeInTheDocument();
+    expect(screen.getByText('응답 1')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio'));
+    expect(screen.getByText('승인된 발췌')).toBeInTheDocument();
+    expect(screen.getByText('심각도')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '선택한 응답으로 Finding 생성' }),
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain(responseId);
+  });
+
+  it.each([
+    ['low', '낮음'],
+    ['medium', '보통'],
+    ['high', '높음'],
+    ['critical', '심각'],
+  ] as const)('renders the Korean Finding severity option for %s', async (_severity, label) => {
+    const user = userEvent.setup();
+    const responseId = ids.responseOne;
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [{ id: ids.finding, text: '승인된 발췌', response_id: responseId }],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
+    await user.click(screen.getByTestId('survey-finding-severity'));
+
+    expect(await screen.findByRole('option', { name: label })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: _severity })).not.toBeInTheDocument();
   });
 
   it('renders a suppressed row exactly without deriving a count', () => {
@@ -374,13 +419,13 @@ describe('SurveyResultsSummary', () => {
     );
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     expect(screen.getByText('Create or link Finding')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Create Finding' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Finding 생성' })).toHaveLength(1);
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-finding-severity'));
-    await user.click(await screen.findByRole('option', { name: 'High' }));
+    await user.click(await screen.findByRole('option', { name: '높음' }));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
 
     await waitFor(() =>
@@ -421,7 +466,7 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-finding-response-1'));
@@ -460,7 +505,7 @@ describe('SurveyResultsSummary', () => {
       <SurveyResultsSummary survey={survey} results={holderResults} />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
 
@@ -525,7 +570,7 @@ describe('SurveyResultsSummary', () => {
       <SurveyResultsSummary survey={survey} results={holderResults} />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.movedExcerpt}`));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`));
@@ -615,7 +660,7 @@ describe('SurveyResultsSummary', () => {
       <SurveyResultsSummary survey={survey} results={holderResults} />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.movedExcerpt}`));
 
@@ -689,7 +734,7 @@ describe('SurveyResultsSummary', () => {
       { body: { severity: 'medium', approved_excerpt_ids: [refetchIds.retainedExcerpt] } },
     ] as const;
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
@@ -739,7 +784,7 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
@@ -768,7 +813,7 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
@@ -782,7 +827,7 @@ describe('SurveyResultsSummary', () => {
     const user = userEvent.setup();
     renderWithClient(<SurveyResultsSummary survey={survey} results={results} />);
 
-    const button = screen.getByRole('button', { name: 'Create Finding' });
+    const button = screen.getByRole('button', { name: 'Finding 생성' });
     expect(button).toBeDisabled();
     expect(
       screen.getByText('No approved excerpts are available for a response you can access.'),
@@ -810,7 +855,7 @@ describe('SurveyResultsSummary', () => {
     );
 
     expect(screen.getByTestId('survey-result-next-actions')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Request access' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '권한 요청' })).toBeDisabled();
     expect(
       screen.getByText('Access details are unavailable, so this request cannot be submitted.'),
     ).toBeInTheDocument();
@@ -847,9 +892,9 @@ describe('SurveyResultsSummary', () => {
     );
 
     expect(apiRequest).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Request Task' }));
+    await user.click(screen.getByRole('button', { name: 'Task 요청' }));
     const draft = await screen.findByTestId('request-task-draft');
-    expect(draft).toHaveTextContent('From FND-510 · Finding');
+    expect(draft).toHaveTextContent('출처 FND-510 · Finding');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(
       apiRequest.mock.calls.some(
@@ -916,8 +961,8 @@ describe('SurveyResultsSummary', () => {
     );
     expect(keyWarnings).toEqual([]);
     consoleError.mockRestore();
-    const [firstButton, secondButton] = screen.getAllByRole('button', { name: 'Request Task' });
-    expect(screen.getAllByRole('button', { name: 'Request Task' })).toHaveLength(2);
+    const [firstButton, secondButton] = screen.getAllByRole('button', { name: 'Task 요청' });
+    expect(screen.getAllByRole('button', { name: 'Task 요청' })).toHaveLength(2);
     if (!firstButton || !secondButton) throw new Error('expected two Request Task buttons');
     await user.click(firstButton);
     const firstDraft = await screen.findByTestId('request-task-draft');
@@ -925,7 +970,7 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       firstFinding.summary,
     );
-    await user.click(within(firstDraft).getByRole('button', { name: 'Close draft' }));
+    await user.click(within(firstDraft).getByRole('button', { name: '초안 닫기' }));
 
     await user.click(secondButton);
     await waitFor(() =>
@@ -977,7 +1022,7 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    const [firstButton, secondButton] = screen.getAllByRole('button', { name: 'Request Task' });
+    const [firstButton, secondButton] = screen.getAllByRole('button', { name: 'Task 요청' });
     if (!firstButton || !secondButton) throw new Error('expected two Request Task buttons');
     await user.click(firstButton);
     await waitFor(() =>
@@ -1003,14 +1048,14 @@ describe('SurveyResultsSummary', () => {
       firstLoad.resolve({ data: firstFinding });
       await firstLoad.promise;
     });
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await act(async () => {
       secondLoad.resolve({ data: secondFinding });
       await secondLoad.promise;
     });
-    await screen.findByRole('region', { name: 'Task Request draft' });
-    expect(screen.getAllByRole('region', { name: 'Task Request draft' })).toHaveLength(1);
+    await screen.findByRole('region', { name: 'Task Request 초안' });
+    expect(screen.getAllByRole('region', { name: 'Task Request 초안' })).toHaveLength(1);
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       secondFinding.summary,
     );
@@ -1058,13 +1103,13 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: 'Request Task' });
+    const button = screen.getByRole('button', { name: 'Task 요청' });
     await user.click(button);
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await user.click(button);
-    await screen.findByRole('region', { name: 'Task Request draft' });
+    await screen.findByRole('region', { name: 'Task Request 초안' });
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(finding.summary);
     expect(
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
@@ -1094,9 +1139,9 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Request Task' }));
+    await user.click(screen.getByRole('button', { name: 'Task 요청' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ['finding', ids.finding], type: 'all' });
@@ -1105,7 +1150,7 @@ describe('SurveyResultsSummary', () => {
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
     ).toHaveLength(2);
     expect(queryClient.getQueryData(['finding', ids.finding])).toEqual(finding);
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Finding could not be loaded.');
   });
 });

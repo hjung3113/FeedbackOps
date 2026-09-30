@@ -30,7 +30,7 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
         .filter({ hasText: '높음' }),
     ).toBeVisible();
     await expect(detail.getByTestId('cluster-detail-confidence-badge')).toContainText(
-      'Confidence · high',
+      '신뢰도 · 높음',
     );
     await expect(detail.locator('[data-token="--status-reporter-reviewing"]')).toBeVisible();
     await expect(detail.getByTestId('cluster-members-list')).toBeVisible();

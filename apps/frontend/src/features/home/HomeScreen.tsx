@@ -17,6 +17,8 @@ import {
   listTasks,
 } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import {
   HOME_COPY,
   HOME_COVERAGE_COPY,
@@ -33,6 +35,11 @@ import {
 import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';
+
+const MY_PERMISSION_REQUEST_STATUS_LABELS: Record<MinePermissionRequestRow['status'], string> = {
+  pending: '대기 중',
+  needs_more_info: '추가 정보 필요',
+};
 
 export type HomeTab = 'dashboard' | 'inbox';
 
@@ -185,10 +192,11 @@ function OpenRequestsPanel({
               className="border-b border-border-subtle px-4 py-3 last:border-b-0"
             >
               <p className="text-sm font-medium text-text-primary">
-                {request.requested_capability}
+                {getCapabilityDisplayLabel(request.requested_capability)}
               </p>
               <p className="text-xs text-text-muted">
-                {request.status} · {new Date(request.created_at).toLocaleString()}
+                {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]} ·{' '}
+                {new Date(request.created_at).toLocaleString()}
               </p>
               <p className="text-xs text-text-muted">id: {request.id}</p>
             </li>
@@ -344,13 +352,13 @@ function MyWorkPanel({
     ...tasks.map((task) => ({
       id: task.id,
       label: `${task.display_id} — ${task.title}`,
-      meta: task.status,
+      meta: TASK_STATUS_LABELS[task.status],
       href: `/tasks?view=board&param=${task.id}`,
     })),
     ...requests.map((request) => ({
       id: request.id,
       label: `${request.display_id} — ${request.requested_outcome}`,
-      meta: request.status,
+      meta: TASK_REQUEST_STATUS_LABELS[request.status],
       href: `/tasks?view=requests&param=${request.id}`,
     })),
   ].slice(0, 4);

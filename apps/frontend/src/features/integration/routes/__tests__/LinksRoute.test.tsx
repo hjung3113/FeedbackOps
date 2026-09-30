@@ -349,7 +349,7 @@ describe('integration links route', () => {
 
     await screen.findByText('권한 제한');
     await userEvent.click(screen.getByRole('button', { name: '필터' }));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'related_to' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: '관련 항목' }));
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('relation_type=related_to'))).toBe(true);

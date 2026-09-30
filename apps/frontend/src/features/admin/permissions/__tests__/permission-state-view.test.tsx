@@ -28,9 +28,9 @@ describe('<PermissionStateView>', () => {
     expect(screen.getByText('Access granted')).toBeInTheDocument();
   });
 
-  test('request_access → renders Request access button (Slice 1: noop click)', () => {
+  test('request_access → renders 권한 요청 button (Slice 1: noop click)', () => {
     render(<PermissionStateView state="request_access" capability="workspace.admin" />);
-    const btn = screen.getByRole('button', { name: 'Request access' });
+    const btn = screen.getByRole('button', { name: '권한 요청' });
     expect(btn).toBeInTheDocument();
     // ADR-0021 shadcn CVA Button: h-10 px-4 for size=md (default).
     expect(btn).toHaveClass('h-10');
@@ -40,7 +40,7 @@ describe('<PermissionStateView>', () => {
     render(<PermissionStateView state="pending_request" capability="workspace.admin" />);
     expect(screen.getByText('Request pending')).toBeInTheDocument();
     // No request button when the request is already in flight.
-    expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '권한 요청' })).not.toBeInTheDocument();
   });
 
   test('blocked_non_requestable → "Access blocked"', () => {

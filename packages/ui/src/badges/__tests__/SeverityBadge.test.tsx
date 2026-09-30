@@ -10,7 +10,15 @@ const cases: Array<{ severity: SeverityEnum; label: string }> = [
 ];
 
 describe('SeverityBadge', () => {
-  cases.forEach(({ severity, label }) => {
+  it('uses a caller-provided label without changing the severity token', () => {
+    const { container } = render(<SeverityBadge severity="critical" label="긴급" />);
+
+    expect(screen.getByText('긴급')).toBeInTheDocument();
+    expect(screen.queryByText('심각')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-token="--severity-critical"]')).not.toBeNull();
+  });
+
+  for (const { severity, label } of cases) {
     it(`renders Korean label "${label}" for severity="${severity}"`, () => {
       render(<SeverityBadge severity={severity} />);
       expect(screen.getByText(label)).toBeInTheDocument();
@@ -31,5 +39,5 @@ describe('SeverityBadge', () => {
       const badge = container.querySelector(`[data-token="--severity-${severity}"]`) as HTMLElement;
       expect(badge.style.color).toBe(`rgb(var(--severity-${severity}-label) / 1)`);
     });
-  });
+  }
 });

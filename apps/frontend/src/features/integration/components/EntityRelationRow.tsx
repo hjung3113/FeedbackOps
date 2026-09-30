@@ -1,4 +1,4 @@
-import type { EntityLinkDto } from '@fops/shared';
+import type { EntityLinkDto, FindingSeverity } from '@fops/shared';
 import {
   EntityIconBadge,
   type EntityIconType,
@@ -9,6 +9,7 @@ import {
 import { ArrowRight, Lock } from 'lucide-react';
 import type * as React from 'react';
 
+import { ENTITY_LINK_RELATION_LABELS, FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 
 type AllowedEntityLinkDto = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
@@ -65,7 +66,7 @@ export function EntityRelationRow({
     vocId: string;
     displayId?: string | null;
     title?: React.ReactNode;
-    severity?: string | null;
+    severity?: FindingSeverity | null;
     reporterStatus?: ReporterFacingStatusEnum | null;
     trailing?: React.ReactNode;
   };
@@ -82,7 +83,7 @@ export function EntityRelationRow({
           </div>
           <p className="text-xs text-text-muted">
             {member.displayId ?? shortId(member.vocId)}
-            {member.severity ? ` · ${member.severity}` : ''}
+            {member.severity ? ` · ${FINDING_SEVERITY_LABELS[member.severity]}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -104,7 +105,9 @@ export function EntityRelationRow({
           권한 제한
         </span>
         <span className="text-xs text-text-muted">접근할 수 없는 항목</span>
-        <span className="font-mono text-xs text-text-muted">{link.relation_type}</span>
+        <span className="font-mono text-xs text-text-muted">
+          {ENTITY_LINK_RELATION_LABELS[link.relation_type]}
+        </span>
       </div>
     );
   }
@@ -138,7 +141,7 @@ export function EntityRelationRow({
       </span>
       <span className="inline-flex items-center gap-1 text-xs text-text-muted">
         <ArrowRight className="h-3 w-3" aria-hidden="true" />
-        {link.relation_type}
+        {ENTITY_LINK_RELATION_LABELS[link.relation_type]}
         <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
       <span className="inline-flex min-w-0 items-center gap-1.5">

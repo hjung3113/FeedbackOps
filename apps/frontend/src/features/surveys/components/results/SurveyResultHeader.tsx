@@ -1,3 +1,4 @@
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import type { OutcomeFollowUpReadDto } from '@fops/shared';
 import { Link } from '@tanstack/react-router';
 import type { Survey } from '../../types';
@@ -45,7 +46,7 @@ export function SurveyResultHeader({
             'text-xs capitalize text-text-secondary',
           ].join(' ')}
         >
-          {survey.type}
+          {SURVEY_TYPE_LABELS[survey.type]}
         </span>
         <SurveyStatusBadge status={survey.status} />
       </div>

@@ -3,6 +3,7 @@ import { getTask } from '@/lib/api';
 import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
+import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { shortId } from '@/lib/identity';
@@ -38,11 +39,11 @@ const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'h
   };
 
 const SECTIONS: PanelSection[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'properties', label: 'Properties' },
-  { id: 'source', label: 'Source' },
-  { id: 'context', label: 'Context' },
-  { id: 'notes', label: 'Progress notes' },
+  { id: 'overview', label: '요약' },
+  { id: 'properties', label: '속성' },
+  { id: 'source', label: '출처' },
+  { id: 'context', label: '맥락' },
+  { id: 'notes', label: '진행 메모' },
 ];
 
 function optionalDisplayId(value: { id: string; display_id?: string | null }): string {
@@ -146,35 +147,42 @@ export function TaskDetailPanel({
       <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
+          <PanelSectionTitle className="px-4">요약</PanelSectionTitle>
           <PanelTitleBlock
             title={task.title}
             badges={
               <>
                 <InternalTaskBadge status={task.status} />
-                <SeverityBadge severity={PRIORITY_SEVERITY[task.priority]} />
+                <SeverityBadge
+                  severity={PRIORITY_SEVERITY[task.priority]}
+                  label={TASK_PRIORITY_LABELS[task.priority]}
+                />
               </>
             }
           />
         </div>
 
         <div data-anchor="properties" className="border-t border-border-subtle py-2">
-          <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
-          <FieldRow label="Status">
+          <PanelSectionTitle className="px-4">속성</PanelSectionTitle>
+          <FieldRow label="상태">
             <InternalTaskBadge status={task.status} />
           </FieldRow>
-          <FieldRow label="Priority">
-            <SeverityBadge severity={PRIORITY_SEVERITY[task.priority]} />
+          <FieldRow label="우선순위">
+            <SeverityBadge
+              severity={PRIORITY_SEVERITY[task.priority]}
+              label={TASK_PRIORITY_LABELS[task.priority]}
+            />
           </FieldRow>
-          <FieldRow label="Assignee">
+          <FieldRow label="담당자">
             {task.assignee_actor_id ? (
               <span className="text-sm text-text-primary">
-                {actorNamesById.get(task.assignee_actor_id) ?? 'Assigned'}
+                {actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨'}
               </span>
             ) : (
-              <span className="text-accent-danger">Unassigned</span>
+              <span className="text-accent-danger">미배정</span>
             )}
           </FieldRow>
-          <FieldRow label="Due">
+          <FieldRow label="마감일">
             {task.due_date ?? <span className="text-text-muted">-</span>}
           </FieldRow>
           <FieldRow label="Managed System">
@@ -194,7 +202,7 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="source" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Source evidence</PanelSectionTitle>
+          <PanelSectionTitle>출처</PanelSectionTitle>
           {sourceFinding ? (
             <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
               <span className="text-xs text-text-muted">From finding</span>
@@ -208,7 +216,9 @@ export function TaskDetailPanel({
               <div className="flex flex-wrap gap-2">
                 <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
                 {source?.task_request && (
-                  <OutlineBadge>Task Request · {source.task_request.status}</OutlineBadge>
+                  <OutlineBadge>
+                    Task Request · {TASK_REQUEST_STATUS_LABELS[source.task_request.status]}
+                  </OutlineBadge>
                 )}
               </div>
             </div>
@@ -218,7 +228,7 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="context" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Linked context</PanelSectionTitle>
+          <PanelSectionTitle>맥락</PanelSectionTitle>
           {/* #378: the source VOC is rendered ONLY from the backend payload's
               visibility verdict. `allowed` leads the trail; summary_visible /
               denied render a blocked panel without identifiers (ADR-0023);
@@ -280,7 +290,7 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="notes" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Progress notes</PanelSectionTitle>
+          <PanelSectionTitle>진행 메모</PanelSectionTitle>
           <div className="mt-2">
             <ProgressNotesSection
               resource={{ kind: 'task', id: task.id }}
