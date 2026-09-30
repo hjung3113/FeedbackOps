@@ -14,7 +14,8 @@ GET /me
 ```
 
 `GET /auth/login` starts the configured provider's login flow and accepts an
-optional `return_to`. `GET /auth/callback` completes the OIDC login flow.
+optional `return_to`. `GET /auth/callback` completes the OIDC login flow; it
+returns `404 not_found.record` when the configured provider is `mock`.
 `GET /auth/mock-login` and `POST /auth/mock-login` return `404 not_found.record`
 when `NODE_ENV` is `production` or the configured provider is not `mock`.
 `POST /auth/mock-login` accepts `{ external_id }` and issues a session cookie.

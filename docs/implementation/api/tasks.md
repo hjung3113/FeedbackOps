@@ -182,8 +182,8 @@ errors:
   - User or Developer outside Managed System scope: 403 permission.denied
 ```
 
-There is no standalone Task create route; Task creation is through conversion of
-an approved Task Request.
+Standalone `POST /tasks` is not yet implemented even though standalone Tasks are
+a valid nullable-source data shape.
 
 ## Task Request Create From VOC / VOC Cluster Contract
 

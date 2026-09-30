@@ -41,6 +41,7 @@ VOC that has a non-skipped `voc.voc_public_updates` row. A skipped update is a
 recorded status transition without reporter-visible content and does not count
 as coverage.
 
-The closed coverage ID set is defined by `DashboardSummary.coverage[].id` and
-the per-Managed-System coverage shape; dashboard hop IDs and destinations are
-defined by `DASHBOARD_HOP_ROUTES` in `packages/shared/src/dashboard.ts`.
+`dashboardSummarySchema` in `packages/shared/src/dashboard.ts` defines the
+closed coverage ID set (`coverage[].id`) and per-Managed-System coverage shape
+(`by_managed_system[].coverage`); `DASHBOARD_HOP_ROUTES` in the same file defines
+dashboard hop IDs and destinations.
