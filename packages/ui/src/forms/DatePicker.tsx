@@ -1,6 +1,12 @@
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import * as React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/shadcn/popover.js';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/shadcn/tooltip.js';
 import { cn } from '../utils/cn.js';
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -27,6 +33,8 @@ export interface DatePickerProps
   min?: string;
   max?: string;
   emptyValue?: '' | null;
+  showValidation?: boolean;
+  onValidityChange?: (valid: boolean) => void;
 }
 
 export function DatePicker({
@@ -35,12 +43,18 @@ export function DatePicker({
   min,
   max,
   emptyValue = '',
+  showValidation = false,
+  onValidityChange,
   className,
   disabled = false,
   'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  onBlur,
+  placeholder = 'YYYY-MM-DD',
   ...inputProps
 }: DatePickerProps) {
   const [draft, setDraft] = React.useState(value ?? '');
+  const [hasBlurred, setHasBlurred] = React.useState(false);
   const initialDate = parseDate(value) ?? clampToRange(today(), min, max);
   const [visibleMonth, setVisibleMonth] = React.useState(() => startOfMonth(initialDate));
   const [activeDate, setActiveDate] = React.useState(() => formatDate(initialDate));
@@ -48,6 +62,19 @@ export function DatePicker({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const calendarRef = React.useRef<HTMLDivElement>(null);
+  const restoreTriggerFocusRef = React.useRef(false);
+  const errorId = `datepicker-error-${React.useId()}`;
+  const validationMessage = getValidationMessage(draft, min, max);
+  const isInvalid = validationMessage !== '' || ariaInvalid === true || ariaInvalid === 'true';
+  const callerHasError = ariaInvalid === true || ariaInvalid === 'true';
+  const showError =
+    validationMessage !== '' &&
+    (hasBlurred || showValidation) &&
+    !(callerHasError && ariaDescribedBy !== undefined);
+  const showDanger = showError || (callerHasError && (hasBlurred || showValidation));
+  const describedBy = [ariaDescribedBy, showError ? errorId : undefined]
+    .filter((id): id is string => id !== undefined)
+    .join(' ');
 
   React.useEffect(() => {
     setDraft(value ?? '');
@@ -59,8 +86,12 @@ export function DatePicker({
   }, [value]);
 
   React.useEffect(() => {
-    inputRef.current?.setCustomValidity(getValidationMessage(draft, min, max));
-  }, [draft, min, max]);
+    inputRef.current?.setCustomValidity(validationMessage);
+  }, [validationMessage]);
+
+  React.useEffect(() => {
+    onValidityChange?.(validationMessage === '');
+  }, [onValidityChange, validationMessage]);
 
   React.useEffect(() => {
     if (open) {
@@ -70,7 +101,10 @@ export function DatePicker({
 
   const wasOpenRef = React.useRef(open);
   React.useEffect(() => {
-    if (wasOpenRef.current && !open) triggerRef.current?.focus();
+    if (wasOpenRef.current && !open && restoreTriggerFocusRef.current) {
+      triggerRef.current?.focus();
+    }
+    if (!open) restoreTriggerFocusRef.current = false;
     wasOpenRef.current = open;
   }, [open]);
 
@@ -93,6 +127,7 @@ export function DatePicker({
     setActiveDate(nextValue);
     setVisibleMonth(startOfMonth(date));
     onChange(nextValue);
+    restoreTriggerFocusRef.current = true;
     setOpen(false);
   }
 
@@ -130,6 +165,7 @@ export function DatePicker({
         return;
       case 'Escape':
         event.preventDefault();
+        restoreTriggerFocusRef.current = true;
         setOpen(false);
         return;
       default:
@@ -148,172 +184,215 @@ export function DatePicker({
     const day = index - firstWeekday + 1;
     return day < 1 || day > daysInMonth ? null : makeUtcDate(monthYear, month + 1, day);
   });
-  const validationMessage = getValidationMessage(draft, min, max);
-
   return (
-    <div
-      className={cn(
-        'flex h-10 w-full items-center rounded-md border border-border-subtle bg-surface-field px-3 py-2 text-sm text-text-primary',
-        'focus-within:outline-none focus-within:ring-2 focus-within:ring-focus-ring focus-within:ring-offset-2',
-        disabled && 'cursor-not-allowed opacity-50',
-        validationMessage && 'border-accent-danger',
-        className,
-      )}
-      data-invalid={validationMessage ? 'true' : undefined}
-    >
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="numeric"
-        value={draft}
-        onChange={handleChange}
-        pattern="\d{4}-\d{2}-\d{2}"
-        disabled={disabled}
-        min={min}
-        max={max}
-        aria-invalid={ariaInvalid ?? (validationMessage ? true : undefined)}
-        className="h-full min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-muted"
-        {...inputProps}
-      />
-      {draft !== '' ? (
-        <button
-          type="button"
-          aria-label="날짜 지우기"
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-          disabled={disabled}
-          onClick={() => {
-            setDraft('');
-            onChange(emptyValue);
-            inputRef.current?.focus();
-          }}
+    <TooltipProvider>
+      <div className="flex flex-col gap-1">
+        <div
+          className={cn(
+            'flex h-10 w-full items-center rounded-md border border-border-subtle bg-surface-field px-3 py-2 text-sm text-text-primary',
+            'focus-within:outline-none focus-within:ring-2 focus-within:ring-focus-ring focus-within:ring-offset-2',
+            disabled && 'cursor-not-allowed opacity-50',
+            showDanger && 'border-accent-danger',
+            className,
+          )}
+          data-invalid={isInvalid ? 'true' : undefined}
         >
-          <X aria-hidden="true" className="h-4 w-4" />
-        </button>
-      ) : null}
-      <Popover
-        open={open}
-        onOpenChange={(nextOpen) => {
-          if (nextOpen) {
-            const nextDate = clampToRange(parseDate(value) ?? today(), min, max);
-            setVisibleMonth(startOfMonth(nextDate));
-            setActiveDate(formatDate(nextDate));
-          }
-          setOpen(nextOpen);
-        }}
-      >
-        <PopoverTrigger asChild>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-label="달력 열기"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            value={draft}
+            onChange={handleChange}
+            onBlur={(event) => {
+              setHasBlurred(true);
+              onBlur?.(event);
+            }}
+            pattern="\d{4}-\d{2}-\d{2}"
+            placeholder={placeholder}
             disabled={disabled}
+            min={min}
+            max={max}
+            aria-invalid={isInvalid ? true : ariaInvalid}
+            aria-describedby={describedBy || undefined}
+            className="h-full min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-muted"
+            {...inputProps}
+          />
+          {draft !== '' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="날짜 지우기"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  disabled={disabled}
+                  onClick={() => {
+                    setDraft('');
+                    onChange(emptyValue);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>날짜 지우기</TooltipContent>
+            </Tooltip>
+          ) : null}
+          <Popover
+            open={open}
+            onOpenChange={(nextOpen) => {
+              if (nextOpen) {
+                const nextDate = clampToRange(parseDate(value) ?? today(), min, max);
+                setVisibleMonth(startOfMonth(nextDate));
+                setActiveDate(formatDate(nextDate));
+              }
+              setOpen(nextOpen);
+            }}
           >
-            <CalendarDays aria-hidden="true" className="h-4 w-4" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          className="w-72 p-3"
-          onOpenAutoFocus={(event) => {
-            // Radix mounts the content before this fires; focus the active day
-            // here so arrow keys work right after the calendar opens.
-            event.preventDefault();
-            calendarRef.current
-              ?.querySelector<HTMLButtonElement>(`[data-date="${activeDate}"]`)
-              ?.focus();
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            triggerRef.current?.focus();
-          }}
-        >
-          <div ref={calendarRef}>
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                type="button"
-                aria-label="이전 달"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                onClick={() => focusDate(addMonths(visibleMonth, -1))}
-              >
-                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-              </button>
-              <span aria-live="polite" className="text-sm font-medium text-text-primary">
-                {monthFormatter.format(visibleMonth)}
-              </span>
-              <button
-                type="button"
-                aria-label="다음 달"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                onClick={() => focusDate(addMonths(visibleMonth, 1))}
-              >
-                <ChevronRight aria-hidden="true" className="h-4 w-4" />
-              </button>
-            </div>
-            <table
-              className="w-full border-collapse"
-              aria-label={monthFormatter.format(visibleMonth)}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <button
+                    ref={triggerRef}
+                    type="button"
+                    aria-label="달력 열기"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    disabled={disabled}
+                  >
+                    <CalendarDays aria-hidden="true" className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>달력 열기</TooltipContent>
+            </Tooltip>
+            <PopoverContent
+              align="end"
+              className="w-72 p-3"
+              onOpenAutoFocus={(event) => {
+                // Radix mounts the content before this fires; focus the active day
+                // here so arrow keys work right after the calendar opens.
+                event.preventDefault();
+                calendarRef.current
+                  ?.querySelector<HTMLButtonElement>(`[data-date="${activeDate}"]`)
+                  ?.focus();
+              }}
+              onEscapeKeyDown={() => {
+                restoreTriggerFocusRef.current = true;
+              }}
+              onInteractOutside={() => {
+                restoreTriggerFocusRef.current = false;
+              }}
+              onCloseAutoFocus={(event) => {
+                if (restoreTriggerFocusRef.current) {
+                  event.preventDefault();
+                  triggerRef.current?.focus();
+                }
+              }}
             >
-              <thead>
-                <tr className="text-center">
-                  {weekdays.map((weekday) => (
-                    <th
-                      key={weekday}
-                      scope="col"
-                      className="py-1 text-xs font-normal text-text-muted"
-                    >
-                      {weekday}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: cellCount / 7 }, (_, weekIndex) => {
-                  const week = days.slice(weekIndex * 7, weekIndex * 7 + 7);
-                  const firstDate = week.find((date): date is Date => date !== null);
-                  if (!firstDate) return null;
-                  return (
-                    <tr key={formatDate(firstDate)} className="text-center">
-                      {week.map((date, dayIndex) => {
-                        if (!date) {
-                          return (
-                            <td
-                              key={`empty-${weekdays[dayIndex]}`}
-                              aria-hidden="true"
-                              className="py-0.5"
-                            />
-                          );
-                        }
-                        const dateValue = formatDate(date);
-                        const isDisabled = !isInRange(dateValue, min, max);
-                        return (
-                          <td key={dateValue} className="py-0.5">
-                            <button
-                              type="button"
-                              data-date={dateValue}
-                              aria-label={formatDateLabel(date)}
-                              aria-current={dateValue === formatDate(today()) ? 'date' : undefined}
-                              tabIndex={dateValue === activeDate ? 0 : -1}
-                              disabled={isDisabled}
-                              aria-pressed={dateValue === value}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-[pressed=true]:bg-surface-selected aria-[pressed=true]:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                              onClick={() => selectDate(date)}
-                              onKeyDown={(event) => handleDayKeyDown(event, date)}
-                            >
-                              {date.getUTCDate()}
-                            </button>
-                          </td>
-                        );
-                      })}
+              <div ref={calendarRef}>
+                <div className="mb-2 flex items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="이전 달"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        onClick={() => focusDate(addMonths(visibleMonth, -1))}
+                      >
+                        <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>이전 달</TooltipContent>
+                  </Tooltip>
+                  <span aria-live="polite" className="text-sm font-medium text-text-primary">
+                    {monthFormatter.format(visibleMonth)}
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="다음 달"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        onClick={() => focusDate(addMonths(visibleMonth, 1))}
+                      >
+                        <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>다음 달</TooltipContent>
+                  </Tooltip>
+                </div>
+                <table
+                  className="w-full border-collapse"
+                  aria-label={monthFormatter.format(visibleMonth)}
+                >
+                  <thead>
+                    <tr className="text-center">
+                      {weekdays.map((weekday) => (
+                        <th
+                          key={weekday}
+                          scope="col"
+                          className="py-1 text-xs font-normal text-text-muted"
+                        >
+                          {weekday}
+                        </th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: cellCount / 7 }, (_, weekIndex) => {
+                      const week = days.slice(weekIndex * 7, weekIndex * 7 + 7);
+                      const firstDate = week.find((date): date is Date => date !== null);
+                      if (!firstDate) return null;
+                      return (
+                        <tr key={formatDate(firstDate)} className="text-center">
+                          {week.map((date, dayIndex) => {
+                            if (!date) {
+                              return (
+                                <td
+                                  key={`empty-${weekdays[dayIndex]}`}
+                                  aria-hidden="true"
+                                  className="py-0.5"
+                                />
+                              );
+                            }
+                            const dateValue = formatDate(date);
+                            const isDisabled = !isInRange(dateValue, min, max);
+                            return (
+                              <td key={dateValue} className="py-0.5">
+                                <button
+                                  type="button"
+                                  data-date={dateValue}
+                                  aria-label={formatDateLabel(date)}
+                                  aria-current={
+                                    dateValue === formatDate(today()) ? 'date' : undefined
+                                  }
+                                  tabIndex={dateValue === activeDate ? 0 : -1}
+                                  disabled={isDisabled}
+                                  aria-pressed={dateValue === value}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-[pressed=true]:bg-surface-selected aria-[pressed=true]:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                                  onClick={() => selectDate(date)}
+                                  onKeyDown={(event) => handleDayKeyDown(event, date)}
+                                >
+                                  {date.getUTCDate()}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        {showError ? (
+          <p id={errorId} role="alert" className="text-xs text-accent-danger">
+            {validationMessage}
+          </p>
+        ) : null}
+      </div>
+    </TooltipProvider>
   );
 }
 

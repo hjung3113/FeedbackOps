@@ -27,7 +27,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
 | RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi | focus, disabled, invalid, loading | keyboard navigable |
-| DatePicker | typed date, calendar | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; calendar is keyboard accessible |
+| DatePicker | typed date, calendar | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented | focus, selected, disabled | group label required |

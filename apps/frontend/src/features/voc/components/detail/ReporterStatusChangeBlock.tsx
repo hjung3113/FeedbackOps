@@ -179,7 +179,7 @@ export function ReporterStatusChangeBlock({
         >
           <SelectTrigger
             value={nextStatus}
-            className="h-8 rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-none focus:ring-1 focus:ring-focus-ring"
+            className="h-8 w-auto min-w-[9rem] max-w-[10rem] rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-none focus:ring-1 focus:ring-focus-ring"
             aria-label="다음 reporter-facing status 선택"
           >
             <SelectValue />

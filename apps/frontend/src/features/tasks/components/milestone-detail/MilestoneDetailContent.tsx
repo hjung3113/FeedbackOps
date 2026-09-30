@@ -275,7 +275,7 @@ export function MilestoneDetailContent({
                   <SelectTrigger
                     aria-label="Status"
                     value={milestone.status}
-                    className={selectClassName}
+                    className={`${selectClassName} h-8 px-2 py-1`}
                   >
                     <SelectValue />
                   </SelectTrigger>

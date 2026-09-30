@@ -865,6 +865,27 @@ describe('VOC cluster route shells', () => {
     expect(screen.queryByTestId('link-existing-finding-modal')).not.toBeInTheDocument();
   });
 
+  it('allows the Finding picker to return to its original empty option', async () => {
+    const { VocClusterDetailPanel } = await import(
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+    );
+    const cluster = clusters[0];
+    if (!cluster) throw new Error('Expected the cluster fixture to exist.');
+    render(<VocClusterDetailPanel clusterId={cluster.id} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
+    const picker = screen.getByTestId('link-existing-finding-picker');
+
+    expect(picker).toHaveTextContent('연결할 Finding을 선택하세요.');
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('option', { name: '연결할 Finding을 선택하세요.' }));
+
+    expect(picker).toHaveTextContent('연결할 Finding을 선택하세요.');
+    expect(screen.getByTestId('link-existing-finding-submit')).toBeDisabled();
+    expect(linkFindingMutate).not.toHaveBeenCalled();
+  });
+
   it.each([
     [403, 'permission.scope_required', '해당 Managed System에 대한 권한이 없습니다.'],
     [404, 'not_found.record', '존재하지 않거나 접근할 수 없는 항목입니다.'],

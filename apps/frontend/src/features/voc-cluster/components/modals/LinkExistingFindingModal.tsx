@@ -26,6 +26,8 @@ import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { useLinkExistingFindingToVocCluster } from '@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 
+const NO_FINDING = '__none__';
+
 export function LinkExistingFindingModal({
   open,
   clusterId,
@@ -87,7 +89,10 @@ export function LinkExistingFindingModal({
           ) : findings.isError ? (
             <p className="text-sm text-accent-danger">연결 가능한 Finding을 불러오지 못했습니다.</p>
           ) : (
-            <Select value={findingId} onValueChange={setFindingId}>
+            <Select
+              value={findingId || NO_FINDING}
+              onValueChange={(value) => setFindingId(value === NO_FINDING ? '' : value)}
+            >
               <SelectTrigger
                 id="cluster-finding-picker"
                 aria-label="Finding"
@@ -95,9 +100,10 @@ export function LinkExistingFindingModal({
                 data-testid="link-existing-finding-picker"
                 className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary"
               >
-                <SelectValue placeholder="연결할 Finding을 선택하세요." />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_FINDING}>연결할 Finding을 선택하세요.</SelectItem>
                 {(findings.data?.items ?? []).map((finding) => (
                   <SelectItem key={finding.id} value={finding.id}>
                     {finding.display_id} · {finding.title}

@@ -738,6 +738,7 @@ Form rules:
 - Labels appear above fields in forms and as compact inline labels in detail panels.
 - Required fields use text marker and validation, not color alone.
 - Validation appears after blur or submit.
+- DatePicker validity remains live for submit gating; non-native submit handlers use `onValidityChange` to block invalid drafts.
 - Save failure preserves user input.
 - Dirty forms warn before close.
 - Feature code uses the shared `Select` and `DatePicker`; do not use native `<select>` or `type="date"` controls.

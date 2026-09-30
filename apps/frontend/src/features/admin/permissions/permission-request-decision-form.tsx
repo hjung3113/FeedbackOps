@@ -92,6 +92,8 @@ export function PermissionRequestDecisionForm({
   const [peerReviewerAbsence, setPeerReviewerAbsence] = React.useState('');
   const [expirationMode, setExpirationMode] = React.useState<ApprovalExpirationMode>('keep');
   const [expirationValidationAttempted, setExpirationValidationAttempted] = React.useState(false);
+  const [expirationFieldTouched, setExpirationFieldTouched] = React.useState(false);
+  const [expirationDraftValid, setExpirationDraftValid] = React.useState(true);
   const [expirationDate, setExpirationDate] = React.useState(
     request.requested_expiration?.slice(0, 10) ?? '',
   );
@@ -124,12 +126,15 @@ export function PermissionRequestDecisionForm({
   const expirationNeedsValidation =
     action === 'approve' &&
     expirationMode === 'change' &&
-    !isFutureApprovalExpiration(expirationDate);
+    (!expirationDraftValid || !isFutureApprovalExpiration(expirationDate));
   const expirationDateError =
-    expirationNeedsValidation && (expirationValidationAttempted || expirationDate !== '')
+    expirationNeedsValidation &&
+    !isFutureApprovalExpiration(expirationDate) &&
+    (expirationValidationAttempted || expirationFieldTouched)
       ? APPROVAL_EXPIRATION_ERROR
       : action === 'approve' &&
           expirationMode === 'change' &&
+          expirationDraftValid &&
           hasExpirationFieldError(mutation.error)
         ? APPROVAL_EXPIRATION_ERROR
         : null;
@@ -143,6 +148,8 @@ export function PermissionRequestDecisionForm({
     setPeerReviewerAbsence('');
     setExpirationMode('keep');
     setExpirationValidationAttempted(false);
+    setExpirationFieldTouched(false);
+    setExpirationDraftValid(true);
     setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
   }, [request.requested_expiration]);
 
@@ -151,7 +158,7 @@ export function PermissionRequestDecisionForm({
     if (
       action === 'approve' &&
       expirationMode === 'change' &&
-      !isFutureApprovalExpiration(expirationDate)
+      (!expirationDraftValid || !isFutureApprovalExpiration(expirationDate))
     ) {
       setExpirationValidationAttempted(true);
       return;
@@ -238,6 +245,7 @@ export function PermissionRequestDecisionForm({
             onValueChange={(value) => {
               setExpirationMode(value as ApprovalExpirationMode);
               setExpirationValidationAttempted(false);
+              setExpirationFieldTouched(false);
               mutation.reset();
             }}
             className="gap-2"
@@ -267,6 +275,9 @@ export function PermissionRequestDecisionForm({
                 min={minExpirationDate}
                 aria-label="새 만료일"
                 value={expirationDate}
+                showValidation={expirationValidationAttempted || expirationFieldTouched}
+                onBlur={() => setExpirationFieldTouched(true)}
+                onValidityChange={setExpirationDraftValid}
                 onChange={(value) => {
                   setExpirationDate(value ?? '');
                   setExpirationValidationAttempted(false);
