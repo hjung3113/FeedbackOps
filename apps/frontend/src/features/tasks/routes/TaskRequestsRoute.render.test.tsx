@@ -118,6 +118,20 @@ describe('TaskRequestsRoute display ids', () => {
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });
 
+  it('does not render a severity stripe derived from Task Request status', async () => {
+    renderWithClient(<TaskRequestsRoute />);
+
+    const row = await screen.findByRole('button', { name: /REQ-42/ });
+    expect(row.querySelector('[data-token^="--severity-"]')).not.toBeInTheDocument();
+  });
+
+  it('omits the unsupported Impact property from Task Request detail', async () => {
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByText('Self-approval');
+    expect(screen.queryByText('Impact')).not.toBeInTheDocument();
+  });
+
   it('shows the default empty queue without a filter-reset action', async () => {
     vi.mocked(fetchTaskRequests).mockResolvedValueOnce({ items: [] });
     renderWithClient(<TaskRequestsRoute />);

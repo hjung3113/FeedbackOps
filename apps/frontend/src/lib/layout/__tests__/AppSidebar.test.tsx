@@ -236,6 +236,13 @@ describe('AppSidebar', () => {
     expect(invite.textContent).toBe('');
   });
 
+  it.each([true, false])('hides Invite member for isAdmin=%s', (isAdmin) => {
+    render(<AppSidebar entries={entries} isAdmin={isAdmin} />);
+
+    expect(screen.queryByTestId('sidebar-footer-invite-member')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invite member')).not.toBeInTheDocument();
+  });
+
   it('renders Milestones without a badge when nav counts have no milestone key', () => {
     const counts = {
       'voc.inbox': 5,
