@@ -3,7 +3,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
-import { ApiError } from '@/lib/api/types';
+import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { FindingDto } from '@fops/shared';
@@ -249,14 +249,6 @@ function FindingsListBody({
         </div>
       )}
     </section>
-  );
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }
 

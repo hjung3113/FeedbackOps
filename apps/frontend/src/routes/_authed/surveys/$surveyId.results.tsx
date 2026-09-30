@@ -3,6 +3,7 @@ import { SurveyResultsSummary } from '@/features/surveys/components/results/Surv
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -33,7 +34,7 @@ export function SurveyResultsRoute() {
       <div className="p-6">
         <PermissionBlockedPanel
           category="Survey Result"
-          reason="설문 결과를 볼 권한이 없습니다."
+          reason={PERMISSION_BLOCKED_REASONS.surveyResult}
           state="denied"
         />
       </div>

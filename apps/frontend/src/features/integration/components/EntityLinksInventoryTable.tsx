@@ -1,5 +1,5 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { ApiError } from '@/lib/api/types';
+import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type { EntityLinkDto } from '@fops/shared';
 import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
@@ -178,14 +178,6 @@ export function EntityLinksInventoryTable({
         );
       })}
     </div>
-  );
-}
-
-function isPermissionDenied(error: Error): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }
 

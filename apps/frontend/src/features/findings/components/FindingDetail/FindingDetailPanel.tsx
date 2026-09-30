@@ -2,6 +2,7 @@
 // States: loading skeleton → not-found → permission-blocked → full detail.
 // Mirrors VocDetailPanel structure per domain-module-boundaries §Frontend Boundary Rules.
 
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { Button, EmptyState, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import type * as React from 'react';
@@ -83,7 +84,7 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
             <PermissionBlockedPanel
               state="denied"
               category="Finding 상세"
-              reason="finding.read 권한이 없습니다. 해당 Managed System의 Developer 이상 권한이 필요합니다."
+              reason={PERMISSION_BLOCKED_REASONS.findingDetail}
             />
           </div>
         </div>

@@ -30,6 +30,14 @@ export class ApiError extends Error {
   }
 }
 
+export function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
+  );
+}
+
 export type Tone = 'error' | 'warning' | 'info';
 export interface MappedError {
   tone: Tone;

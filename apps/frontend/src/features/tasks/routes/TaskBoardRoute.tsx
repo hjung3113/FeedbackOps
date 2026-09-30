@@ -2,7 +2,7 @@ import { TaskDetailPanel } from '../components/TaskDetailPanel';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { updateTaskStatus, listTasks } from '@/lib/api/tasks';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { ApiError } from '@/lib/api/types';
+import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type { TaskDto, TaskStatus } from '@fops/shared';
 import {
@@ -184,14 +184,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     </div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="flex h-full gap-3 overflow-x-auto p-4">{columns.map((column) => <BoardColumn key={column.key} id={column.key} label={column.label} tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)} groupBy={groupBy} selectedId={selectedId} selectTask={selectTask} names={{ systems: systemNames, actors: actorNames }} enabled={groupBy === 'status'} />)}</div></DndContext>
   </WorkbenchShell>;
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
-  );
 }
 
 function StatBlock({ label, value, valueClassName = '' }: { label: string; value: number; valueClassName?: string }) {
