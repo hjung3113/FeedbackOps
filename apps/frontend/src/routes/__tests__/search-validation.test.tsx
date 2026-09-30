@@ -1,6 +1,9 @@
+import { QueryClient } from '@tanstack/react-query';
+import { createRouter } from '@tanstack/react-router';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { routeTree } from '@/routeTree.gen';
 import { validateAnalyticsAreasSearch } from '../../features/admin/analytics-areas/search';
 import { validatePermissionRequestsSearch } from '../../features/admin/permissions/permission-requests-search';
 import { validateFindingsSearch } from '../_authed/findings';
@@ -31,78 +34,92 @@ const ID = '11111111-1111-4111-8111-111111111111';
 
 const routeCases: Array<{
   name: string;
+  pathname: string;
   validateSearch: (raw: unknown) => unknown;
   raw: Record<string, unknown>;
   expected: Record<string, unknown>;
 }> = [
   {
     name: 'Tasks',
+    pathname: '/tasks',
     validateSearch: validateTasksSearch,
     raw: { view: 'list', param: 'task-1', unknown: 'ignored' },
     expected: { param: 'task-1' },
   },
   {
     name: 'VOC',
+    pathname: '/vocs',
     validateSearch: validateVocSearch,
     raw: { view: 'list', selected: ID, tab: 'not-a-tab' },
     expected: { selected: ID },
   },
   {
     name: 'Home',
+    pathname: '/home',
     validateSearch: validateHomeSearch,
     raw: { managedSystem: ID, tab: 'not-a-tab' },
     expected: { managedSystem: ID },
   },
   {
     name: 'Integration dashboard',
+    pathname: '/integration',
     validateSearch: validateIntegrationDashboardSearch,
     raw: { managedSystem: 'not-a-uuid' },
     expected: {},
   },
   {
     name: 'Integration coverage',
+    pathname: '/integration/coverage',
     validateSearch: validateIntegrationCoverageSearch,
     raw: { managedSystem: 'not-a-uuid' },
     expected: {},
   },
   {
     name: 'Integration links',
+    pathname: '/integration/links',
     validateSearch: validateIntegrationLinksSearch,
     raw: { status: 'deleted', type: 'related_to' },
     expected: { type: 'related_to' },
   },
   {
     name: 'VOC Clusters',
+    pathname: '/voc-clusters',
     validateSearch: validateVocClustersSearch,
     raw: { managedSystem: 'all', selected: 'not-a-uuid' },
     expected: { managedSystem: 'all' },
   },
   {
     name: 'Analytics Areas',
+    pathname: '/admin/analytics-areas',
     validateSearch: validateAnalyticsAreasSearch,
-    raw: { selected: ID, includeArchived: 'true' },
+    // 'yes' is invalid both as a raw string and after the router's JSON search parsing.
+    raw: { selected: ID, includeArchived: 'yes' },
     expected: { selected: ID },
   },
   {
     name: 'Permission Requests',
+    pathname: '/admin/permissions/requests',
     validateSearch: validatePermissionRequestsSearch,
     raw: { selected: ID, tab: 'pending' },
     expected: { selected: ID },
   },
   {
     name: 'Findings',
+    pathname: '/findings',
     validateSearch: validateFindingsSearch,
     raw: { selected: 'not-a-uuid', execution: 'none' },
     expected: { execution: 'none' },
   },
   {
     name: 'Surveys',
+    pathname: '/surveys',
     validateSearch: validateSurveysSearch,
     raw: { managedSystem: 'all', selected: 'not-a-uuid' },
     expected: { managedSystem: 'all' },
   },
   {
     name: 'Survey detail',
+    pathname: `/surveys/${ID}`,
     validateSearch: validateSurveyDetailSearch,
     raw: { builder: 'yes' },
     expected: {},
@@ -112,6 +129,20 @@ const routeCases: Array<{
 describe('route search validation', () => {
   it.each(routeCases)('$name drops invalid values and keeps valid search state', (routeCase) => {
     expect(routeCase.validateSearch(routeCase.raw)).toEqual(routeCase.expected);
+  });
+
+  it.each(routeCases)('$name clears dropped values after router search merging', (routeCase) => {
+    const queryClient = new QueryClient();
+    const router = createRouter({ routeTree, context: { queryClient } });
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(routeCase.raw)) search.set(key, String(value));
+
+    const matches = router.matchRoutes(
+      routeCase.pathname,
+      router.options.parseSearch(`?${search.toString()}`),
+    );
+
+    expect(matches.at(-1)!.search).toEqual(routeCase.expected);
   });
 
   it('renders the default Tasks view after an invalid view value', () => {

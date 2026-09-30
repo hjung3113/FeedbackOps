@@ -1,7 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { homeSidebarEntries } from '@/features/home/homeNavigation';
 import { MeRequestError, UnauthenticatedError } from '@/lib/api/auth';
-import { useMe } from '@/lib/auth/useMe';
+import { ME_QUERY_KEY, useMe } from '@/lib/auth/useMe';
 import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
 import { Button, PageShell } from '@fops/ui';
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
@@ -25,9 +26,17 @@ function FallbackFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function CenteredPage({ children }: { children: ReactNode }) {
+function CenteredPage({
+  children,
+  standalone = false,
+}: {
+  children: ReactNode;
+  standalone?: boolean;
+}) {
   return (
-    <PageShell contentClassName="flex min-h-full items-center justify-center">
+    <PageShell
+      contentClassName={`flex ${standalone ? 'min-h-screen' : 'min-h-full'} items-center justify-center`}
+    >
       <div className="w-full max-w-2xl" role="alert">
         {children}
       </div>
@@ -38,31 +47,35 @@ function CenteredPage({ children }: { children: ReactNode }) {
 export function AuthenticatedRoutePendingFallback() {
   return (
     <PageShell contentClassName="flex min-h-screen items-center justify-center">
-      <output className="text-sm text-text-muted">불러오는 중…</output>
+      <output className="text-sm text-text-muted">{ROUTER_FALLBACK_COPY.pending}</output>
     </PageShell>
   );
 }
 
 function MeRateLimitedRouteErrorFallback({ error }: { error: MeRequestError }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     console.error('FeedbackOps route error', error);
   }, [error]);
 
-  const retry = () => {
-    void router.invalidate().catch((retryError: unknown) => {
+  const retry = async () => {
+    try {
+      await queryClient.resetQueries({ queryKey: ME_QUERY_KEY });
+      await router.invalidate();
+    } catch (retryError: unknown) {
       console.error('FeedbackOps route retry failed', retryError);
-    });
+    }
   };
 
   return (
-    <CenteredPage>
+    <CenteredPage standalone>
       <ListStateMessage
         variant="error"
         title={ROUTER_FALLBACK_COPY.error.meRateLimitedTitle}
         body={ROUTER_FALLBACK_COPY.error.meRateLimitedBody}
-        action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: retry }}
+        action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: () => void retry() }}
       />
     </CenteredPage>
   );
@@ -126,20 +139,24 @@ function RouteErrorFallbackWithIdentity({ error, withShell }: Required<RouterErr
   };
 
   const message = (
-    <CenteredPage>
-      <ListStateMessage
-        variant="error"
-        title={ROUTER_FALLBACK_COPY.error.title}
-        body={ROUTER_FALLBACK_COPY.error.body}
-        action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: retry }}
-      />
-    </CenteredPage>
+    <ListStateMessage
+      variant="error"
+      title={ROUTER_FALLBACK_COPY.error.title}
+      body={ROUTER_FALLBACK_COPY.error.body}
+      action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: retry }}
+    />
   );
 
-  if (isLoginRoute) return message;
+  if (isLoginRoute) return <CenteredPage standalone>{message}</CenteredPage>;
   if (isUnauthenticated && redirectInFlight) return null;
-  if (!me.data) return message;
-  return withShell ? <FallbackFrame>{message}</FallbackFrame> : message;
+  if (!me.data) return <CenteredPage standalone>{message}</CenteredPage>;
+  return withShell ? (
+    <FallbackFrame>
+      <CenteredPage>{message}</CenteredPage>
+    </FallbackFrame>
+  ) : (
+    <CenteredPage standalone>{message}</CenteredPage>
+  );
 }
 
 export function AuthenticatedRouteErrorFallback({ error }: RouterErrorFallbackProps) {
@@ -149,36 +166,40 @@ export function AuthenticatedRouteErrorFallback({ error }: RouterErrorFallbackPr
 export function RouteNotFoundFallback() {
   const router = useRouter();
   const location = useRouterState({ select: (state) => state.location });
+  const isInAuthenticatedLayout = useRouterState({
+    select: (state) => state.matches.some((match) => match.routeId === '/_authed'),
+  });
   const me = useMe();
-  const isKnownRoute = router.getMatchedRoutes(location.pathname).foundRoute !== undefined;
+  const { foundRoute, routeParams } = router.getMatchedRoutes(location.pathname);
+  const isKnownRoute = foundRoute !== undefined && routeParams['**'] === undefined;
 
   if (isKnownRoute || (!me.data && me.isPending)) return <AuthenticatedRoutePendingFallback />;
   if (!me.data && me.error) return <AuthenticatedRouteErrorFallback error={me.error} />;
 
-  return (
-    <FallbackFrame>
-      <CenteredPage>
-        <ListStateMessage
-          variant="error"
-          title={ROUTER_FALLBACK_COPY.notFound.title}
-          body={ROUTER_FALLBACK_COPY.notFound.body}
-          actionContent={
-            <div className="flex items-center justify-center gap-2">
-              <Button asChild variant="primary" size="sm">
-                <Link to="/home">{ROUTER_FALLBACK_COPY.notFound.home}</Link>
-              </Button>
-              <Button
-                type="button"
-                variant="subtle"
-                size="sm"
-                onClick={() => router.history.back()}
-              >
-                {ROUTER_FALLBACK_COPY.notFound.back}
-              </Button>
-            </div>
-          }
-        />
-      </CenteredPage>
-    </FallbackFrame>
+  const message = (
+    <CenteredPage>
+      <ListStateMessage
+        variant="error"
+        title={ROUTER_FALLBACK_COPY.notFound.title}
+        body={ROUTER_FALLBACK_COPY.notFound.body}
+        actionContent={
+          <div className="flex items-center justify-center gap-2">
+            <Button asChild variant="primary" size="sm">
+              <Link to="/home">{ROUTER_FALLBACK_COPY.notFound.home}</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="subtle"
+              size="sm"
+              onClick={() => router.history.back()}
+            >
+              {ROUTER_FALLBACK_COPY.notFound.back}
+            </Button>
+          </div>
+        }
+      />
+    </CenteredPage>
   );
+
+  return isInAuthenticatedLayout ? message : <FallbackFrame>{message}</FallbackFrame>;
 }

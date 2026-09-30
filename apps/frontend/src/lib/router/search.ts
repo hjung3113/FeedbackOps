@@ -19,7 +19,12 @@ export function parseRouteSearch<Schema extends z.AnyZodObject>(
 
   while (true) {
     const result = schema.safeParse(candidate);
-    if (result.success) return result.data;
+    if (result.success) {
+      return {
+        ...Object.fromEntries(Object.keys(source).map((key) => [key, undefined])),
+        ...result.data,
+      };
+    }
 
     const fieldsToDrop = new Set(
       result.error.issues.flatMap((issue) => {

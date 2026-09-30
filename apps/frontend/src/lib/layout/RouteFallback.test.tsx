@@ -12,6 +12,7 @@ import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ME_QUERY_KEY, ensureMe } from '@/lib/auth/useMe';
+import { createAppRouter } from '@/lib/router/app-router';
 import type { AppRouterContext } from '@/routes/__root';
 import {
   AuthenticatedRouteErrorFallback,
@@ -126,6 +127,35 @@ describe('router fallback screens', () => {
     expect(screen.getByRole('button', { name: '뒤로' })).toBeInTheDocument();
   });
 
+  it('renders a nested unknown path as a 404 inside the existing app frame', async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(ME_QUERY_KEY, ME);
+    const router = buildRouter(queryClient, '/home/extra');
+
+    renderRouter(router, queryClient);
+
+    expect(await screen.findByText('페이지를 찾을 수 없습니다')).toBeInTheDocument();
+    expect(screen.getAllByTestId('app-frame')).toHaveLength(1);
+  });
+
+  it('uses production route wiring for an unknown path', async () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(ME_QUERY_KEY, ME);
+    const router = createAppRouter(
+      queryClient,
+      createMemoryHistory({ initialEntries: ['/missing-page'] }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('페이지를 찾을 수 없습니다')).toBeInTheDocument();
+    expect(screen.getAllByTestId('app-frame')).toHaveLength(1);
+  });
+
   it('sends an unauthenticated unknown path to login without rendering an app frame', async () => {
     const queryClient = createQueryClient();
     globalThis.fetch = vi.fn(
@@ -183,7 +213,7 @@ describe('router fallback screens', () => {
     renderRouter(router, queryClient);
 
     expect(await screen.findByText('화면을 불러오지 못했습니다')).toBeInTheDocument();
-    expect(screen.getByText('화면을 표시하는 중 문제가 발생했습니다.')).toBeInTheDocument();
+    expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     expect(screen.queryByText('private loader details')).not.toBeInTheDocument();
     expect(screen.getByTestId('app-frame')).toBeInTheDocument();
 
@@ -234,6 +264,34 @@ describe('router fallback screens', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
     expect(await screen.findByText('Home route')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('retries a /me rate limit from an unknown path', async () => {
+    const queryClient = createQueryClient();
+    let fetchCount = 0;
+    const fetchMock = vi.fn(async () => {
+      fetchCount += 1;
+      if (fetchCount <= 3) {
+        return new Response('{}', { status: 429, headers: { 'retry-after': '0' } });
+      }
+      return new Response(JSON.stringify(ME), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    const router = buildRouter(queryClient, '/missing-page');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    renderRouter(router, queryClient);
+
+    expect(await screen.findByText('로그인 상태를 확인할 수 없습니다')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText('페이지를 찾을 수 없습니다')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
