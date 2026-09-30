@@ -6,9 +6,9 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  IDS,
   draftNoFinding,
   emptyList,
-  IDS,
   populatedList,
 } from '../../../../../tests/visual/fixtures/voc-clusters';
 import { VocClusterListShell } from './VocClusterListShell';

@@ -199,11 +199,7 @@ function ClusterListBody({
           </div>
         ) : allClusters.length === 0 ? (
           <div data-testid="cluster-empty-state">
-            <ListStateMessage
-              variant="empty"
-              title="생성된 클러스터가 없습니다."
-              body=""
-            />
+            <ListStateMessage variant="empty" title="생성된 클러스터가 없습니다." body="" />
           </div>
         ) : clusters.length === 0 ? (
           // #609's filter reset follows the contract; the prototype suggests changing scope instead.

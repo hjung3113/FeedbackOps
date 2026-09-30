@@ -218,9 +218,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     ...(search.trim() !== '' ? [`검색: ${search.trim()}`] : []),
   ].join(' · ');
   const filteredEmpty =
-    shown.length === 0 &&
-    filterDescription !== '' &&
-    (countQuery.data?.items.length ?? 0) > 0;
+    shown.length === 0 && filterDescription !== '' && (countQuery.data?.items.length ?? 0) > 0;
 
   const summary = React.useMemo(
     () => ({
@@ -475,8 +473,8 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       />
                     );
                   })}
-                  {shown.length === 0 && (
-                    filteredEmpty ? (
+                  {shown.length === 0 &&
+                    (filteredEmpty ? (
                       <ListStateMessage
                         variant="filtered"
                         title="현재 조건에 맞는 Milestone이 없습니다"
@@ -495,8 +493,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                         title="표시할 Milestone이 없습니다."
                         body="생성된 Milestone이 여기에 표시됩니다."
                       />
-                    )
-                  )}
+                    ))}
                 </>
               )}
             </div>
