@@ -110,6 +110,18 @@ Count badges and global Managed System scope selection shipped in #143 (GlobalRa
 
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
 
+### Unknown routes and route errors
+
+- Authenticated unknown paths, including an unmatched suffix under a known route, render a centered `PageShell` inside the existing `AppFrame`, with a localized not-found message, Home link, and back action.
+- Unknown paths check the current identity before showing AppShell; a 401 still redirects to `/login` and preserves the requested URL.
+- Route errors render a localized `ListStateMessage` inside AppShell when identity is available, offer
+  retry, and keep raw error details in the console only. Standalone error content keeps the viewport-height
+  centering of the pending state; in-shell errors center within `AppFrame`. A `/me` rate-limit error uses the
+  existing "잠시 후 다시 시도하세요." message in a standalone state, and retry resets the identity query
+  before invalidating the router.
+- While the authenticated guard is resolving, the route shows a centered "불러오는 중…" state after the router's pending delay.
+- Search validation drops invalid and unrecognized fields independently, preserves valid fields, and clears dropped values from TanStack's merged search and the URL so each route uses its omitted defaults.
+
 ## Home Queue Contract
 
 Home uses one shared route and container. It must not fork into separate

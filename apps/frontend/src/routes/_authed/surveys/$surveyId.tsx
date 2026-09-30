@@ -6,14 +6,20 @@ import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionG
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { parseRouteSearch } from '@/lib/router/search';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { z } from 'zod';
 
 const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
+
+export function validateSurveyDetailSearch(raw: unknown) {
+  return parseRouteSearch(searchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/surveys/$surveyId')({
-  validateSearch: (raw) => searchSchema.parse(raw),
+  validateSearch: validateSurveyDetailSearch,
   component: SurveyDetailRoute,
 });
 

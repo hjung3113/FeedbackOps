@@ -1,4 +1,5 @@
 import { IntegrationDashboardRoute } from '@/features/integration/routes/IntegrationDashboardRoute';
+import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -8,8 +9,12 @@ export const integrationDashboardSearchSchema = z
   })
   .strict();
 
+export function validateIntegrationDashboardSearch(raw: unknown) {
+  return parseRouteSearch(integrationDashboardSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/integration/')({
-  validateSearch: (raw) => integrationDashboardSearchSchema.parse(raw),
+  validateSearch: validateIntegrationDashboardSearch,
   component: IntegrationDashboardRouteShell,
 });
 

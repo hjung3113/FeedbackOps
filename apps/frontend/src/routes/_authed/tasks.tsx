@@ -2,6 +2,7 @@ import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
+import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -16,8 +17,12 @@ export const tasksSearchSchema = z
 
 type TasksSearch = z.infer<typeof tasksSearchSchema>;
 
+export function validateTasksSearch(raw: unknown) {
+  return parseRouteSearch(tasksSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/tasks')({
-  validateSearch: (raw) => tasksSearchSchema.parse(raw),
+  validateSearch: validateTasksSearch,
   component: TasksRouteShell,
 });
 

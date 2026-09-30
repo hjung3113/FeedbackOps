@@ -6,6 +6,7 @@ import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { parseRouteSearch } from '@/lib/router/search';
 import type { FindingDto } from '@fops/shared';
 import {
   type AvatarUser,
@@ -40,8 +41,12 @@ export const findingsSearchSchema = z
 
 type FindingsSearch = z.infer<typeof findingsSearchSchema>;
 
+export function validateFindingsSearch(raw: unknown) {
+  return parseRouteSearch(findingsSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/findings/')({
-  validateSearch: (raw) => findingsSearchSchema.parse(raw),
+  validateSearch: validateFindingsSearch,
   component: FindingsListPage,
 });
 

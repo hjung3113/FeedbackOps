@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError } from './lib/api/types';
+import { createAppRouter } from './lib/router/app-router';
 import './styles.css';
-import { routeTree } from './routeTree.gen';
+
+export { createAppRouter };
 
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (
@@ -19,7 +21,7 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 }
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: shouldRetryQuery } } });
-const router = createRouter({ routeTree, context: { queryClient } });
+const router = createAppRouter(queryClient);
 
 declare module '@tanstack/react-router' {
   interface Register {

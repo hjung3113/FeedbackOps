@@ -6,6 +6,7 @@ import type { SurveyType } from '@/features/surveys/types';
 import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { parseRouteSearch } from '@/lib/router/search';
 import {
   Button,
   Dialog,
@@ -43,8 +44,12 @@ export const surveysSearchSchema = z
 
 type SurveysSearch = z.infer<typeof surveysSearchSchema>;
 
+export function validateSurveysSearch(raw: unknown) {
+  return parseRouteSearch(surveysSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/surveys/')({
-  validateSearch: (raw) => surveysSearchSchema.parse(raw),
+  validateSearch: validateSurveysSearch,
   component: SurveysIndexRoute,
 });
 

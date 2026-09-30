@@ -22,6 +22,7 @@ import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCl
 import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
 import { useMe } from "@/lib/auth/useMe";
 import { fetchManagedSystems, errorMapper, type ApiError } from "@/lib/api";
+import { parseRouteSearch } from '@/lib/router/search';
 import { useQuery } from "@tanstack/react-query";
 import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
 import { z } from "zod";
@@ -41,8 +42,12 @@ export const vocClustersSearchSchema = z
 
 type VocClustersSearch = z.infer<typeof vocClustersSearchSchema>;
 
+export function validateVocClustersSearch(raw: unknown) {
+  return parseRouteSearch(vocClustersSearchSchema, raw);
+}
+
 export const Route = createFileRoute("/_authed/voc-clusters/")({
-  validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
+  validateSearch: validateVocClustersSearch,
   component: VocClusterListPage,
 });
 

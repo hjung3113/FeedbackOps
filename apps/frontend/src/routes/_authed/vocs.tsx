@@ -11,6 +11,7 @@ import { ChevronLeft } from 'lucide-react';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
+import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
 export const vocSearchSchema = z
@@ -41,8 +42,12 @@ type VocSearch = z.infer<typeof vocSearchSchema>;
 
 export const VOC_DEFAULT_VIEW = 'inbox' as const;
 
+export function validateVocSearch(raw: unknown) {
+  return parseRouteSearch(vocSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/vocs')({
-  validateSearch: (raw) => vocSearchSchema.parse(raw),
+  validateSearch: validateVocSearch,
   component: VocRouteShell,
 });
 

@@ -3,6 +3,7 @@ import type * as React from 'react';
 import { z } from 'zod';
 
 import { HomeScreen, type HomeTab } from '@/features/home/HomeScreen';
+import { parseRouteSearch } from '@/lib/router/search';
 
 const homeSearchSchema = z
   .object({
@@ -11,8 +12,12 @@ const homeSearchSchema = z
   })
   .strict();
 
+export function validateHomeSearch(raw: unknown) {
+  return parseRouteSearch(homeSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/home')({
-  validateSearch: (raw) => homeSearchSchema.parse(raw),
+  validateSearch: validateHomeSearch,
   component: HomeRoute,
 });
 
