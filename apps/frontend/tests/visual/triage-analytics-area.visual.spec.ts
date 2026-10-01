@@ -20,8 +20,11 @@ test.describe('Triage Analytics Area visual states', () => {
   test('create-finding-area-inherited', async ({ page }) => {
     await installMockApi(page, { triageAreaScenario: 'create-finding-area-inherited' });
     await page.goto(`/vocs?view=inbox&selected=${TRIAGE_AREA_IDS.voc}`);
-    await page.getByRole('button', { name: '추가 작업' }).click();
-    await page.getByRole('menuitem', { name: 'Finding 생성' }).click();
+    // #669 made Finding 생성 the VOC footer's primary button (no overflow menu).
+    await page
+      .getByRole('complementary', { name: 'Detail panel' })
+      .getByRole('button', { name: 'Finding 생성' })
+      .click();
 
     const dialog = page.getByRole('dialog', { name: 'Finding 생성' });
     await expect(dialog.getByRole('radio', { name: 'Marketing Attribution' })).toHaveAttribute(
