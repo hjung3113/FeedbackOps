@@ -38,6 +38,12 @@ test.describe('VOC public-update review visual harness (#180)', () => {
     const dialog = page.getByTestId('public-update-review-modal');
     await dialog.getByLabel('Dismiss reason').fill('릴리스 공지는 별도 검토가 필요합니다.');
     await expect(dialog.getByRole('button', { name: 'Dismiss' })).toBeEnabled();
+    await page.evaluate(() => document.fonts.ready);
+    await page
+      .locator('[data-testid="voc-detail-panel"] > .overflow-y-auto')
+      .evaluate((container) => {
+        container.scrollTop = 0;
+      });
     await expectVisual(page, dialog, 'voc-public-update-review-dismiss-reason.png');
   });
 });
