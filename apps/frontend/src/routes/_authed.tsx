@@ -107,6 +107,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       label: VOC_INBOX_NO_LINK_TAB_LABEL,
       href: '/vocs?view=inbox&tab=no-link',
       section: '보기',
+      parentId: 'inbox',
       icon: <Link2 className="h-4 w-4" />,
       countKey: 'voc.inbox.no-link',
     },

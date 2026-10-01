@@ -61,7 +61,7 @@ describe('AppSidebar', () => {
       section: '보기',
       countKey: 'voc.inbox.no-link',
     });
-    expect(noLink?.parentId).toBeUndefined();
+    expect(noLink?.parentId).toBe('inbox');
   });
 
   it('uses the neutral tone for an urgent zero count', () => {

@@ -242,11 +242,17 @@ describe('_authed sidebar current destination', () => {
         expect(createEntry).not.toHaveClass('bg-surface-row-selected');
       }
 
-      if (expectedId !== null && ['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
+      if (expectedId !== null && ['high-severity', 'unassigned'].includes(expectedId)) {
         const triageEntry = screen.getByTestId('sidebar-nav-triage');
         expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
         expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
         expect(triageEntry).toHaveClass('text-text-primary');
+      } else if (expectedId === 'no-link') {
+        const inboxEntry = screen.getByTestId('sidebar-nav-inbox');
+        expect(inboxEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(inboxEntry).not.toHaveClass('bg-surface-row-selected');
+        expect(inboxEntry).toHaveClass('text-text-primary');
+        expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('text-text-primary');
       } else if (expectedId !== 'triage' && entries.some((entry) => entry.id === 'triage')) {
         expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('font-medium');
       }
