@@ -14,6 +14,11 @@ export const surveyKeys = {
   listScoped: (managedSystemId: string) => ['surveys', { managedSystemId }] as const,
   detail: (id: string) => ['surveys', id] as const,
   results: (id: string) => ['surveys', id, 'results'] as const,
+  // Sticky results-read denial marker written by the results route when an
+  // authoritative denial (403 / denial-shaped 404 on results or Follow-up) is
+  // observed; see $surveyId.results.tsx. Carries only `{ at, blocked }` —
+  // never response data.
+  resultsReadDenial: (id: string) => ['surveys', id, 'results-read-denial'] as const,
   outcomeFollowUp: (id: string) => ['surveys', id, 'outcome-follow-up'] as const,
 };
 

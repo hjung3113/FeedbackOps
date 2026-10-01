@@ -29,6 +29,8 @@ const {
       isError: boolean;
       isSuccess?: boolean;
       error?: unknown;
+      dataUpdatedAt?: number;
+      errorUpdatedAt?: number;
     } => ({
       data: undefined,
       isLoading: false,
@@ -37,7 +39,8 @@ const {
   ),
 }));
 
-vi.mock('@/features/surveys/hooks/useSurveys', () => ({
+vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
+  ...(await importOriginal()),
   useCloseSurvey,
   useOpenSurvey,
   useSurvey,
@@ -133,6 +136,42 @@ describe('/surveys/:surveyId/results route', () => {
       next_actions: [
         { id: 'create_finding', availability: 'allowed', intent: 'open_finding_draft' },
       ],
+    };
+  }
+
+  function holderFollowUpData() {
+    return {
+      survey_id: surveyId,
+      classifiable: true,
+      follow_up_needed: true,
+      personal_access: true,
+      items: [{ resolution: 'open' }],
+    };
+  }
+
+  // Transition tests replace the mocked hook results between renders. The
+  // memoized router match re-renders only on a real navigation, so each
+  // transition walks through the parent route and back; the sticky denial
+  // record must live in the shared query client, not in component state.
+  function mountResultsRouteForTransition() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createRouter({
+      routeTree,
+      context: { queryClient },
+      history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}`] }),
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    return {
+      navigateToResults: () =>
+        router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } }),
+      remountResultsRoute: async () => {
+        await router.navigate({ to: '/surveys/$surveyId', params: { surveyId } });
+        await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+      },
     };
   }
 
@@ -787,5 +826,244 @@ describe('/surveys/:surveyId/results route', () => {
       timeout: 5000,
     });
     expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      '403 permission denial',
+      new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      'Survey Result',
+    ],
+    [
+      '404 denial-shaped not-found',
+      new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+      '설문 결과를 찾을 수 없습니다.',
+    ],
+  ] as const)(
+    'keeps the %s body when a later Follow-up refetch fails with 500 while results hold pre-denial data',
+    async (_denialType, denialError, bodyText) => {
+      useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+      mockParentRoute();
+      useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+      useSurveyResults.mockReturnValue({
+        data: retainedResults(),
+        isLoading: false,
+        isError: false,
+        isSuccess: true,
+        dataUpdatedAt: 1000,
+      });
+      useOutcomeFollowUp.mockReturnValue({
+        data: holderFollowUpData(),
+        isLoading: false,
+        isError: true,
+        isSuccess: false,
+        error: denialError,
+        errorUpdatedAt: 2000,
+      });
+
+      const { navigateToResults, remountResultsRoute } = mountResultsRouteForTransition();
+      await navigateToResults();
+
+      expect(await screen.findByText(bodyText)).toBeInTheDocument();
+      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+
+      useOutcomeFollowUp.mockReturnValue({
+        data: holderFollowUpData(),
+        isLoading: false,
+        isError: true,
+        isSuccess: false,
+        error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+        errorUpdatedAt: 3000,
+      });
+      await remountResultsRoute();
+
+      expect(await screen.findByText(bodyText)).toBeInTheDocument();
+      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      expect(screen.queryByText('12 responses')).not.toBeInTheDocument();
+      expect(screen.queryByText('Retained distribution')).not.toBeInTheDocument();
+      expect(screen.queryByText('Retained approved excerpt')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('survey-result-next-actions')).not.toBeInTheDocument();
+      const header = screen.getByTestId('survey-result-header');
+      expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+      expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    [
+      '403 permission denial',
+      new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      'Survey Result',
+    ],
+    [
+      '404 denial-shaped not-found',
+      new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+      '설문 결과를 찾을 수 없습니다.',
+    ],
+  ] as const)(
+    'keeps the %s body when a later results refetch fails with 500 while Follow-up holds pre-denial data',
+    async (_denialType, denialError, bodyText) => {
+      useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+      mockParentRoute();
+      useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+      useSurveyResults.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        isSuccess: false,
+        error: denialError,
+        errorUpdatedAt: 2000,
+      });
+      useOutcomeFollowUp.mockReturnValue({
+        data: holderFollowUpData(),
+        isLoading: false,
+        isError: false,
+        isSuccess: true,
+        dataUpdatedAt: 1000,
+      });
+
+      const { navigateToResults, remountResultsRoute } = mountResultsRouteForTransition();
+      await navigateToResults();
+
+      expect(await screen.findByText(bodyText)).toBeInTheDocument();
+
+      useSurveyResults.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        isSuccess: false,
+        error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+        errorUpdatedAt: 3000,
+      });
+      await remountResultsRoute();
+
+      expect(await screen.findByText(bodyText)).toBeInTheDocument();
+      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      const header = screen.getByTestId('survey-result-header');
+      expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+      expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+    },
+  );
+
+  it('renders the summary again only after results and Follow-up successes settle after a Follow-up denial', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    });
+
+    const { navigateToResults, remountResultsRoute } = mountResultsRouteForTransition();
+    await navigateToResults();
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 3000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      errorUpdatedAt: 3000,
+    });
+    await remountResultsRoute();
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 3000,
+    });
+    await remountResultsRoute();
+
+    expect(await screen.findByTestId('survey-results-summary')).toBeInTheDocument();
+    expect(screen.getByText('12 responses')).toBeInTheDocument();
+  });
+
+  it('keeps a Follow-up denial sticky across a route remount on the same query client', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function mountRoute() {
+      const router = createRouter({
+        routeTree,
+        context: { queryClient },
+        history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}`] }),
+      });
+      const view = render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      return { router, unmount: view.unmount };
+    }
+
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    });
+
+    const first = mountRoute();
+    await first.router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    first.unmount();
+
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 3000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      errorUpdatedAt: 3000,
+    });
+
+    const second = mountRoute();
+    await second.router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+    second.unmount();
   });
 });

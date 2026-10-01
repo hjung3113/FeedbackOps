@@ -2,13 +2,14 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { SurveyResultHeader } from '@/features/surveys/components/results/SurveyResultHeader';
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
-import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
+import { surveyKeys, useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { EmptyState, PermissionBlockedPanel, WorkbenchShell } from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
@@ -16,8 +17,32 @@ export const Route = createFileRoute('/_authed/surveys/$surveyId/results')({
   component: SurveyResultsRoute,
 });
 
+/**
+ * An authoritative read denial for one Survey: a results 403 or denial-shaped
+ * 404, or an outcome Follow-up 403 or denial-shaped 404. Stored under
+ * `surveyKeys.resultsReadDenial(surveyId)` so it survives route remounts:
+ * TanStack replaces a denial error with any later error (500 / network / 409)
+ * while keeping cached data, and the sticky marker keeps pre-denial results
+ * hidden until newer successful reads settle.
+ */
+interface SurveyReadDenial {
+  at: number;
+  blocked: boolean;
+}
+
+function observedReadDenial(error: unknown): { blocked: boolean } | undefined {
+  if (isPermissionDenied(error)) {
+    return { blocked: true };
+  }
+  if (error instanceof ApiError && error.status === 404 && error.code === 'not_found.record') {
+    return { blocked: false };
+  }
+  return undefined;
+}
+
 export function SurveyResultsRoute() {
   const { surveyId } = Route.useParams();
+  const queryClient = useQueryClient();
   const survey = useSurvey(surveyId);
   const gate = useSurveyReadGate(survey.data?.primary_managed_system_id);
   const results = useSurveyResults(surveyId, gate.canRead);
@@ -88,6 +113,51 @@ export function SurveyResultsRoute() {
       </ResultsWorkbench>
     );
   }
+  // Authoritative denials are sticky: once observed, response-derived data
+  // stays hidden until a newer successful results read settles (and, for an
+  // outcome Survey, a newer successful Follow-up read) — an ordinary later
+  // error replaces the denial error in TanStack state and must not reveal
+  // pre-denial data.
+  const denialKey = surveyKeys.resultsReadDenial(surveyId);
+  const storedDenial = queryClient.getQueryData<SurveyReadDenial>(denialKey) ?? null;
+  let denial = storedDenial;
+  const observedDenials: SurveyReadDenial[] = [];
+  const resultsDenial = observedReadDenial(results.error);
+  if (resultsDenial) {
+    // `?? 0` also covers mocked hook results without timestamps in tests.
+    observedDenials.push({ at: results.errorUpdatedAt ?? 0, blocked: resultsDenial.blocked });
+  }
+  if (survey.data.type === 'outcome') {
+    const followUpDenial = observedReadDenial(followUpRead.error);
+    if (followUpDenial) {
+      observedDenials.push({
+        at: followUpRead.errorUpdatedAt ?? 0,
+        blocked: followUpDenial.blocked,
+      });
+    }
+  }
+  for (const observed of observedDenials) {
+    if (denial === null || observed.at > denial.at || (observed.blocked && !denial.blocked)) {
+      denial = {
+        at: Math.max(denial?.at ?? observed.at, observed.at),
+        blocked: (denial?.blocked ?? false) || observed.blocked,
+      };
+    }
+  }
+  if (
+    denial !== null &&
+    (storedDenial === null ||
+      denial.at !== storedDenial.at ||
+      denial.blocked !== storedDenial.blocked)
+  ) {
+    // Persisted in the query cache so the denial also survives route remounts.
+    queryClient.setQueryData(denialKey, denial);
+  }
+  const denialRecovered =
+    denial !== null &&
+    results.dataUpdatedAt > denial.at &&
+    (survey.data.type !== 'outcome' || followUpRead.dataUpdatedAt > denial.at);
+  const activeDenial = denial !== null && !denialRecovered ? denial : null;
   const followUpReadDenied =
     survey.data.type === 'outcome' &&
     (isPermissionDenied(followUpRead.error) ||
@@ -99,10 +169,13 @@ export function SurveyResultsRoute() {
     followUpRead.error instanceof ApiError &&
     followUpRead.error.status === 404;
   const resultsPermissionDenied =
+    activeDenial?.blocked === true ||
     isPermissionDenied(results.error) ||
     (followUpReadDenied && isPermissionDenied(followUpRead.error));
   const resultsNotFound =
-    (results.error instanceof ApiError && results.error.status === 404) || followUpReadNotFound;
+    (activeDenial !== null && !activeDenial.blocked) ||
+    (results.error instanceof ApiError && results.error.status === 404) ||
+    followUpReadNotFound;
   const resultsReadUnavailable = resultsPermissionDenied || resultsNotFound;
   const followUp =
     survey.data.type === 'outcome' && followUpRead.isSuccess && !resultsReadUnavailable
