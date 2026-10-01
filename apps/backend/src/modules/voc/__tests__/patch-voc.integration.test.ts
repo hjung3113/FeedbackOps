@@ -1372,4 +1372,81 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(res2.statusCode).toBe(409);
     expect(res2.json().code).toBe('conflict.idempotency_key_reuse');
   });
+
+  it('allows more than 10 triage PATCHes and limits requests only past 60 per minute', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-rate-limit', 'Rate Limit MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    const rateLimitKey = `${WORKSPACE_ID}:${adminActorId}`;
+    await dbHandle.pool.query(
+      `delete from core.rate_limits
+        where key = $1 and route_group in ('mutation', 'triage')`,
+      [rateLimitKey],
+    );
+
+    const successfulTriages = [];
+    let ifMatch = voc.updated_at;
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await patchVoc(
+        app,
+        admin,
+        voc.id,
+        {
+          severity: attempt % 2 === 0 ? 'low' : 'medium',
+          ...(attempt === 0 ? { triage_state: 'triaged' } : {}),
+        },
+        { idempotencyKey: randomUUID(), ifMatch },
+      );
+      successfulTriages.push(response);
+      ifMatch = (response.json() as { updated_at: string }).updated_at;
+    }
+    expect(successfulTriages.every((response) => response.statusCode === 200)).toBe(true);
+
+    // Keep 11 real commits; invalid calls fill the remaining route quota without more DB writes.
+    const remainingTriageResponses = [];
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      remainingTriageResponses.push(
+        await patchVoc(
+          app,
+          admin,
+          voc.id,
+          { unexpected_field: true },
+          { idempotencyKey: randomUUID(), ifMatch },
+        ),
+      );
+    }
+    expect(
+      remainingTriageResponses.slice(0, 49).every((response) => response.statusCode === 422),
+    ).toBe(true);
+    const limitedTriage = remainingTriageResponses[49];
+    expect(limitedTriage?.statusCode).toBe(429);
+    expect(limitedTriage?.json<{ code: string }>().code).toBe('rate_limited.actor');
+    expect(limitedTriage?.headers['retry-after']).toBeDefined();
+
+    const mutationResponses = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      mutationResponses.push(
+        await app.inject({
+          method: 'POST',
+          url: '/vocs',
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${admin}`,
+            'content-type': 'application/json',
+            'idempotency-key': randomUUID(),
+          },
+          payload: { unexpected_field: true },
+        }),
+      );
+    }
+    expect(mutationResponses.map((response) => response.statusCode)).toEqual([
+      ...Array(10).fill(422),
+      429,
+    ]);
+  });
 });

@@ -30,6 +30,7 @@ declare module 'fastify' {
       sensitive: Record<string, unknown>;
       read: Record<string, unknown>;
       notificationState: Record<string, unknown>;
+      triage: Record<string, unknown>;
       reporterEdit: Record<string, unknown>;
       attachmentMutation: Record<string, unknown>;
     };

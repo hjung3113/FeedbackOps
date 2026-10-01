@@ -761,6 +761,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
+      triage: app.rateLimitConfig.triage,
       reporterEdit: app.rateLimitConfig.reporterEdit,
     },
   });
