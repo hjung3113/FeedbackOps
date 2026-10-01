@@ -328,6 +328,7 @@ export function TaskRequestPanel({
                     />
                     <span
                       id="task-request-convert-title-count"
+                      className="text-xs text-text-muted"
                       data-testid="task-request-convert-title-count"
                     >
                       {conversion.title.length}/{conversion.titleMaxLength}

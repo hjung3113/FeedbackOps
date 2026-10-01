@@ -1,11 +1,11 @@
-import * as React from 'react';
 import { HelpCircle } from 'lucide-react';
+import type * as React from 'react';
 import { Label } from '../components/shadcn/label.js';
 import {
   Tooltip,
-  TooltipTrigger,
   TooltipContent,
   TooltipProvider,
+  TooltipTrigger,
 } from '../components/shadcn/tooltip.js';
 
 export interface FieldLabelProps extends React.ComponentPropsWithoutRef<typeof Label> {
@@ -27,13 +27,15 @@ export function FieldLabel({ required, tip, children, className, ...props }: Fie
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span
-                className="ml-1 inline-flex cursor-default items-center"
+              <button
+                type="button"
+                aria-label={`도움말: ${tip}`}
+                className="ml-1 inline-flex cursor-default items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 data-testid="field-label-tip-trigger"
               >
                 <HelpCircle size={12} className="text-text-muted" aria-hidden="true" />
                 <span className="sr-only">{tip}</span>
-              </span>
+              </button>
             </TooltipTrigger>
             <TooltipContent>{tip}</TooltipContent>
           </Tooltip>
