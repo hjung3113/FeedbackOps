@@ -92,7 +92,9 @@ export function NextActionFooter({
           variant="secondary"
           size="sm"
           onClick={secondaryAction.onClick}
-          {...(secondaryAction.testId !== undefined ? { 'data-testid': secondaryAction.testId } : {})}
+          {...(secondaryAction.testId !== undefined
+            ? { 'data-testid': secondaryAction.testId }
+            : {})}
         >
           {secondaryAction.label}
         </Button>
