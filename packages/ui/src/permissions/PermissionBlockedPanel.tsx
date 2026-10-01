@@ -73,14 +73,11 @@ export function PermissionBlockedPanel({
           {requiredScope !== undefined && requiredScope.length > 0 && (
             <p className="text-xs text-text-muted">{requiredScope.join(' · ')}</p>
           )}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onRequestAccess}
-            disabled={onRequestAccess === undefined}
-          >
-            권한 요청하기
-          </Button>
+          {onRequestAccess !== undefined && (
+            <Button variant="default" size="sm" onClick={onRequestAccess}>
+              권한 요청하기
+            </Button>
+          )}
         </div>
       )}
 

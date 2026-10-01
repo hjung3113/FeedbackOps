@@ -525,7 +525,7 @@ describe('<VocDetailPanel>', () => {
 
     expect(container.querySelector('[data-state="request_access"]')).not.toBeNull();
     expect(screen.getByText('이 항목에 접근하려면 권한 요청이 필요합니다.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '권한 요청하기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '권한 요청하기' })).not.toBeInTheDocument();
     expect(screen.queryByText('voc.read')).not.toBeInTheDocument();
     expect(screen.queryByText('권한 결정 데이터를 해석할 수 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
@@ -620,7 +620,7 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByRole('menuitem', { name: 'Conversation' })).toBeInTheDocument();
   });
 
-  it('submits an inline Task Request draft from the footer menu for an admin actor', async () => {
+  it('submits an inline Task Request draft from the footer button for an admin actor', async () => {
     vi.mocked(useMe).mockReturnValue(
       makeMeQuery({
         data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
@@ -633,11 +633,8 @@ describe('<VocDetailPanel>', () => {
     // Exactly one bottom action bar — the old design rendered NextActionFooter
     // and a second bordered CTA row as two separate stacked footers (#519).
     expect(container.querySelectorAll('.sticky.bottom-0')).toHaveLength(1);
-    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
-    // synthesise convincingly — driving it by keyboard matches this repo's
-    // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
-    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
+    expect(screen.getByRole('button', { name: 'Finding 생성' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Task 요청' }));
     const draft = await screen.findByRole('region', { name: 'Task Request 초안' });
     expect(draft).toHaveTextContent('출처 VOC-0001 · VOC');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -661,25 +658,27 @@ describe('<VocDetailPanel>', () => {
     await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
   });
 
-  it('opens the Create Finding flow from the footer menu for an admin actor', () => {
+  it('opens the Create Finding flow from the primary footer button for an admin actor', () => {
     vi.mocked(useMe).mockReturnValue(
       makeMeQuery({
         data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
       }),
     );
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
-    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
     expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
   });
 
-  it('omits the footer overflow menu entirely for a plain user actor', () => {
+  it('omits footer actions for a plain user actor', () => {
     vi.mocked(useMe).mockReturnValue(
       makeMeQuery({
         data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'user' } },
       }),
     );
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Finding 생성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Task 요청' })).not.toBeInTheDocument();
+    expect(screen.queryByText('다음 액션 없음')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '추가 작업' })).toBeNull();
   });
 

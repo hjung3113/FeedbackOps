@@ -36,10 +36,9 @@ describe('PermissionBlockedPanel — state rendering', () => {
     ).toBeInTheDocument();
   });
 
-  it('state=request_access: button disabled when onRequestAccess undefined', () => {
+  it('state=request_access: omits the request button when onRequestAccess is undefined', () => {
     render(<PermissionBlockedPanel state="request_access" category="VOC 상세" />);
-    const btn = screen.getByRole('button', { name: '권한 요청하기' });
-    expect(btn).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '권한 요청하기' })).not.toBeInTheDocument();
   });
 
   it('state=request_access: button enabled + onClick fires when handler provided', () => {
