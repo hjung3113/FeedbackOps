@@ -474,4 +474,62 @@ describe('integration links route', () => {
     await navigateToSearch({});
     await expectAllFirstPageReloaded(afterThirdLoad);
   });
+
+  // #706 — status tab counts are unknown until the counts read succeeds;
+  // unknown must never render as 0.
+  test.each(['pending', 'failed', 'loaded-empty'] as const)(
+    'shows status tab counts only after the counts read succeeds (%s)',
+    async (state) => {
+      const urls: string[] = [];
+      if (state === 'pending') {
+        // Never resolves: pins the counts read in its pending state. (The
+        // tsconfig lib predates Promise.withResolvers, and no resolver is
+        // needed.)
+        globalThis.fetch = vi.fn(
+          async () => new Promise<Response>(() => undefined),
+        ) as typeof globalThis.fetch;
+      } else if (state === 'failed') {
+        stubFetch(urls, ALL_LINKS, [
+          { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+          { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+        ]);
+      } else {
+        stubFetch(urls, [], undefined, () => ({
+          items: [],
+          page: {
+            has_more: false,
+            status_counts: { active: 0, stale: 0, detached: 0, revoked: 0 },
+          },
+        }));
+      }
+      const { router, qc } = buildHarness('/integration/links');
+
+      render(
+        <QueryClientProvider client={qc}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+
+      if (state === 'pending') {
+        await waitFor(() => expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument());
+        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Active \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'failed') {
+        await waitFor(
+          () =>
+            expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+          { timeout: 4000 },
+        );
+        expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Stale \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      expect(await screen.findByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Stale 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Revoked 0' })).toBeInTheDocument();
+    },
+  );
 });

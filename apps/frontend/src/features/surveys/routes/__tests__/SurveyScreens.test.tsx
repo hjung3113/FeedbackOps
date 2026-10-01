@@ -1169,4 +1169,64 @@ describe('Survey screens', () => {
       expect(screen.queryByText('설문 생성')).not.toBeInTheDocument();
     },
   );
+
+  // #706 — Survey tab counts are unknown until the list read succeeds; the
+  // routes pass `isPending` so the unknown window renders the skeleton or the
+  // error state instead of tabs rendering 0.
+  function SurveyListFromQuery() {
+    const query = useSurveys();
+    return (
+      <SurveyList
+        surveys={query.data ?? []}
+        isLoading={query.isPending}
+        error={query.error}
+        onSelect={vi.fn()}
+        onRetry={() => void query.refetch()}
+      />
+    );
+  }
+
+  it.each(['pending', 'failed', 'loaded-empty', 'loaded-populated'] as const)(
+    'shows Survey tab counts only after the list read succeeds (%s)',
+    async (state) => {
+      if (state === 'pending') {
+        // Never resolves: pins the read in its pending state. (The tsconfig
+        // lib predates Promise.withResolvers, and no resolver is needed.)
+        apiRequest.mockReturnValue(new Promise(() => undefined));
+      } else if (state === 'failed') {
+        apiRequest.mockRejectedValue(new Error('read failed'));
+      } else if (state === 'loaded-empty') {
+        apiRequest.mockResolvedValue({ data: [] });
+      } else {
+        apiRequest.mockResolvedValue({ data: [survey] });
+      }
+
+      renderWithQuery(<SurveyListFromQuery />);
+
+      if (state === 'pending') {
+        expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.queryByText('생성된 설문이 없습니다.')).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'failed') {
+        expect(
+          await screen.findByText('설문 목록을 불러오지 못했습니다', {}, { timeout: 5000 }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'loaded-empty') {
+        expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
+        return;
+      }
+      expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'All 1' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '초안 1' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
+    },
+  );
 });

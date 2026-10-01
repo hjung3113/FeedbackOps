@@ -125,3 +125,61 @@ describe('VocClusterListShell list states (#609)', () => {
     expect(screen.queryByTestId('list-state-message')).not.toBeInTheDocument();
   });
 });
+
+// #706 — tab counts are unknown until the list read succeeds; unknown must
+// never render as 0.
+describe('VocClusterListShell tab counts (#706)', () => {
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+
+  it.each(['pending', 'failed', 'empty', 'populated'] as const)(
+    'shows tab counts only after the list read succeeds (%s)',
+    async (state) => {
+      if (state === 'pending') {
+        // Never resolves: pins the read in its pending state. (The tsconfig
+        // lib predates Promise.withResolvers, and no resolver is needed.)
+        apiRequestMock.mockReturnValue(new Promise(() => undefined));
+      } else if (state === 'failed') {
+        apiRequestMock.mockRejectedValue(new Error('temporary read failure'));
+      } else if (state === 'empty') {
+        apiRequestMock.mockResolvedValue({ data: emptyList });
+      } else {
+        apiRequestMock.mockResolvedValue({ data: populatedList });
+      }
+
+      renderClusterList();
+
+      if (state === 'pending') {
+        expect(screen.getByTestId('cluster-list-skeleton')).toBeInTheDocument();
+      } else if (state === 'failed') {
+        expect(
+          await screen.findByTestId('list-state-message', {}, { timeout: 5000 }),
+        ).toHaveAttribute('data-variant', 'error');
+      } else if (state === 'empty') {
+        expect(await screen.findByTestId('cluster-empty-state')).toBeInTheDocument();
+      } else {
+        expect(await screen.findByText(draftNoFinding.title)).toBeInTheDocument();
+      }
+
+      if (state === 'pending' || state === 'failed') {
+        expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '확정' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Finding 없음' })).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^확정 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Finding 없음 \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'empty') {
+        expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '확정 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Finding 없음 0' })).toBeInTheDocument();
+        return;
+      }
+      expect(screen.getByRole('tab', { name: '전체 3' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '확정 2' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Finding 없음 2' })).toBeInTheDocument();
+    },
+  );
+});
