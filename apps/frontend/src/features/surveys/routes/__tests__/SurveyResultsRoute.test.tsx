@@ -1,3 +1,4 @@
+import { ApiError } from '@/lib/api/types';
 import { routeTree } from '@/routeTree.gen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
@@ -218,6 +219,68 @@ describe('/surveys/:surveyId/results route', () => {
     await waitFor(() =>
       expect(screen.getByText('설문 결과를 찾을 수 없습니다.')).toBeInTheDocument(),
     );
+  });
+
+  it('shows a retryable Korean read error instead of not-found when survey loading fails', async () => {
+    const refetch = vi.fn();
+    useSurvey.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('temporary failure'),
+      refetch,
+    });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: false, gateState: 'error' });
+    useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    expect(await screen.findByText('설문을 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('설문을 찾을 수 없습니다.')).not.toBeInTheDocument();
+    const retry = await screen.findByRole('button', { name: '다시 시도' });
+    retry.click();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('keeps the not-found copy for a real missing survey', async () => {
+    useSurvey.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+      refetch: vi.fn(),
+    });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    expect(await screen.findByText('설문을 찾을 수 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+  });
+
+  it('keeps permission denied distinct from a failed survey read', async () => {
+    useSurvey.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      refetch: vi.fn(),
+    });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: false, gateState: 'error' });
+    useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByText('설문을 찾을 수 없습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   });
 
   it('shows the holder follow-up callout and route link when needed', async () => {

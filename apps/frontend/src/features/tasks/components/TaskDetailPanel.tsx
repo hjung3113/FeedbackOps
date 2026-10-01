@@ -1,5 +1,7 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
 import { getTask } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
@@ -23,6 +25,7 @@ import {
   PanelTitleBlock,
   PermissionBlockedPanel,
   SeverityBadge,
+  Skeleton,
   UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -46,6 +49,37 @@ export const TASK_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'context', label: '맥락' },
   { id: 'notes', label: '진행 메모' },
 ];
+
+function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
+  return (
+    <aside
+      aria-busy="true"
+      aria-label="Task 상세 불러오는 중"
+      className="flex h-full flex-col bg-surface-detail"
+    >
+      <DetailPanelHeader kind="task" onClose={onClose} />
+      <div className="flex shrink-0 gap-4 border-b border-border-subtle px-4 py-3">
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-12" />
+      </div>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-7 w-3/4" />
+        <div className="grid gap-3 pt-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <Skeleton className="h-24 w-full" />
+      </div>
+      <div className="shrink-0 border-t border-border-subtle p-3">
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </aside>
+  );
+}
 
 export interface TaskDetailPanelProps {
   taskId: string;
@@ -105,7 +139,7 @@ export function TaskDetailPanel({
     me?.actor.role_level === 'admin' || notesManageQuery.data?.state === 'approved';
 
   if (taskQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Task...</div>;
+    return <TaskDetailSkeleton onClose={onClose} />;
   }
   if (isPermissionDenied(taskQuery.error)) {
     return (
@@ -118,7 +152,24 @@ export function TaskDetailPanel({
     );
   }
   if (taskQuery.error || !taskQuery.data) {
-    return <div className="p-4 text-sm text-accent-danger">Task detail unavailable.</div>;
+    return (
+      <aside className="flex h-full flex-col bg-surface-detail">
+        <DetailPanelHeader kind="task" onClose={onClose} />
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <ListStateMessage
+            variant="error"
+            title="Task 상세를 불러오지 못했습니다."
+            body={mapUnknownError(taskQuery.error).message}
+            action={{
+              label: '다시 시도',
+              onClick: () => {
+                void taskQuery.refetch();
+              },
+            }}
+          />
+        </div>
+      </aside>
+    );
   }
 
   const task: TaskDetailDto = taskQuery.data;

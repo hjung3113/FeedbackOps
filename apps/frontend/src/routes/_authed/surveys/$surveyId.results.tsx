@@ -1,8 +1,11 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { SurveyResultHeader } from '@/features/surveys/components/results/SurveyResultHeader';
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { EmptyState, PermissionBlockedPanel, WorkbenchShell } from '@fops/ui';
@@ -31,6 +34,35 @@ export function SurveyResultsRoute() {
       : null,
   );
 
+  if (isPermissionDenied(survey.error)) {
+    return <SurveyPermissionDeniedState />;
+  }
+  if (survey.isError) {
+    if (survey.error instanceof ApiError && survey.error.status === 404) {
+      return (
+        <ResultsWorkbench>
+          <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
+        </ResultsWorkbench>
+      );
+    }
+    return (
+      <ResultsWorkbench>
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <ListStateMessage
+            variant="error"
+            title="설문을 불러오지 못했습니다."
+            body={mapUnknownError(survey.error).message}
+            action={{
+              label: '다시 시도',
+              onClick: () => {
+                void survey.refetch();
+              },
+            }}
+          />
+        </div>
+      </ResultsWorkbench>
+    );
+  }
   if (survey.isLoading || gate.gateState === 'loading') {
     return (
       <ResultsWorkbench>
@@ -38,7 +70,7 @@ export function SurveyResultsRoute() {
       </ResultsWorkbench>
     );
   }
-  if (survey.isError || !survey.data) {
+  if (!survey.data) {
     return (
       <ResultsWorkbench>
         <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
@@ -46,17 +78,7 @@ export function SurveyResultsRoute() {
     );
   }
   if (!gate.canRead) {
-    return (
-      <ResultsWorkbench>
-        <div className="p-6">
-          <PermissionBlockedPanel
-            category="Survey Result"
-            reason={PERMISSION_BLOCKED_REASONS.surveyResult}
-            state="denied"
-          />
-        </div>
-      </ResultsWorkbench>
-    );
+    return <SurveyPermissionDeniedState />;
   }
   if (results.isLoading)
     return (
@@ -76,6 +98,20 @@ export function SurveyResultsRoute() {
     <ResultsWorkbench>
       <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
       <SurveyResultsSummary followUpRead={followUp} results={results.data} survey={survey.data} />
+    </ResultsWorkbench>
+  );
+}
+
+function SurveyPermissionDeniedState() {
+  return (
+    <ResultsWorkbench>
+      <div className="p-6">
+        <PermissionBlockedPanel
+          category="Survey Result"
+          reason={PERMISSION_BLOCKED_REASONS.surveyResult}
+          state="denied"
+        />
+      </div>
     </ResultsWorkbench>
   );
 }

@@ -71,4 +71,51 @@ describe('PublicUpdateReviewModal shared pickers', () => {
       },
     });
   });
+
+  it('shows candidate read errors with retry instead of the empty state', () => {
+    const refetch = vi.fn();
+    reviewHooks.candidates.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('candidate read failed'),
+      refetch,
+    });
+
+    render(
+      <PublicUpdateReviewModal
+        voc={{ id: 'voc-1' } as VocDetailEnvelope}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+    expect(screen.queryByText('검토할 후보가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '후보' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('shows the empty candidate state without review fields or an error', () => {
+    reviewHooks.candidates.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <PublicUpdateReviewModal
+        voc={{ id: 'voc-1' } as VocDetailEnvelope}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('검토할 후보가 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('후보 목록을 불러오지 못했습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '후보' })).not.toBeInTheDocument();
+  });
 });

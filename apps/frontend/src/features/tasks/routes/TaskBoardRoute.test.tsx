@@ -204,6 +204,43 @@ describe('TaskBoardRoute', () => {
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 
+  it('keeps the board toolbar visible and retries a failed task read', async () => {
+    api.listTasks
+      .mockRejectedValueOnce(new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }))
+      .mockResolvedValueOnce({ items: [task] });
+    renderBoard();
+
+    expect(
+      await screen.findByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '그룹화' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Task Request 검토' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(
+      await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` }),
+    ).toBeInTheDocument();
+    expect(api.listTasks).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes group options with Escape and returns focus to the trigger', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+
+    const trigger = await screen.findByRole('button', { name: '그룹화' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const option = await screen.findByRole('radio', { name: '우선순위' });
+
+    fireEvent.keyDown(option, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('radio', { name: '우선순위' })).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+  });
+
   it('keeps a pointer click on a status-board card available for selection', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
     api.getTask.mockResolvedValue({ ...task, source: null });
@@ -326,6 +363,31 @@ describe('TaskBoardRoute', () => {
     api.getTask.mockResolvedValue({ ...task, source: null });
     renderBoard(task.id);
     await waitFor(() => expect(screen.getByText(task.title)).toBeInTheDocument());
+  });
+
+  it('shows task detail skeleton chrome while the detail query is pending', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    api.getTask.mockReturnValue(new Promise(() => {}));
+    renderBoard(task.id);
+
+    const skeleton = await screen.findByLabelText('Task 상세 불러오는 중');
+    expect(skeleton).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+  });
+
+  it('shows task detail read errors with a retry that refetches the task', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    api.getTask.mockRejectedValue(new Error('detail failed'));
+    renderBoard();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` }),
+    );
+    expect(await screen.findByText('Task 상세를 불러오지 못했습니다.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    await waitFor(() => expect(api.getTask).toHaveBeenCalledTimes(2));
   });
 
   it('refreshes the selected detail after moving a task from done to released', async () => {
