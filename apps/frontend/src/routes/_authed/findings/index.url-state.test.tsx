@@ -57,8 +57,19 @@ vi.mock('@fops/ui', async (importOriginal) => {
 });
 
 vi.mock('@/features/findings/components/FindingDetail', () => ({
-  FindingDetailPanel: ({ findingId }: { findingId: string }) => (
-    <section data-testid="finding-detail-panel">finding:{findingId}</section>
+  FindingDetailPanel: ({
+    findingId,
+    headerExtras,
+  }: {
+    findingId: string;
+    headerExtras?: React.ReactNode;
+  }) => (
+    <section data-testid="finding-detail-panel">
+      <header data-kind="finding">
+        <div data-testid="detail-panel-header-content">{headerExtras}</div>
+      </header>
+      <div>finding:{findingId}</div>
+    </section>
   ),
 }));
 
@@ -216,7 +227,33 @@ describe('/findings URL state', () => {
       'href',
       origin,
     );
+    expect(
+      screen.getByRole('link', { name: '원래 VOC로 돌아가기' }).closest('[data-kind="finding"]'),
+    ).toBeInTheDocument();
     expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
+  });
+
+  test.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Meta', { metaKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+  ])('%s-clicking the header return link preserves browser handling', async (_, modifiers) => {
+    const origin = `/vocs?view=triage&managedSystem=${MS_1}&selected=${F2_ID}`;
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+    const link = await screen.findByRole('link', { name: '원래 VOC로 돌아가기' });
+
+    const event = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+    link.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
   });
 
   test('returning to the VOC context uses client-side router navigation', async () => {

@@ -136,6 +136,55 @@ beforeEach(() => {
 });
 
 describe('TaskRequestPanel next actions', () => {
+  it('uses the Task Request header chip and shared missing reviewer badge', () => {
+    const { container } = render(
+      <TaskRequestPanel
+        item={request}
+        names={names}
+        currentActorId={request.requester_actor_id}
+        currentRole="developer"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const header = container.querySelector('[data-kind="task_request"]');
+    expect(header).toBeInTheDocument();
+    expect(within(header as HTMLElement).getByText('Task Request')).toHaveClass('rounded');
+    expect(within(header as HTMLElement).getByText('REQ-42')).toBeInTheDocument();
+    expect(screen.getByText('검토자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+  });
+
+  it('uses the shared unassigned badge for linked Task candidates', () => {
+    useLink.mockReturnValue({
+      open: true,
+      canLinkExisting: true,
+      setOpen: vi.fn(),
+      isTasksLoading: false,
+      inScopeTasks: [resultingTask],
+      result: null,
+      resultTaskRequestId: null,
+      link: vi.fn(),
+    });
+
+    render(
+      <TaskRequestPanel
+        item={{ ...request, status: 'approved' }}
+        names={names}
+        currentActorId={request.requester_actor_id}
+        currentRole="developer"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+  });
+
   it.each([
     ['pending', 'pending_review', ['승인', '근거 추가 요청', '반려']],
     ['approved', 'approved', ['Task로 전환', '기존 Task 연결']],
@@ -430,7 +479,7 @@ describe('TaskRequestPanel next actions', () => {
       expect(within(summary as HTMLElement).getByText('김지원')).toBeInTheDocument();
       expect(summary).toHaveTextContent(formatDate(decidedAt));
       expect(screen.getByRole('button', { name: '결정 요약' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Decision' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '결정' })).not.toBeInTheDocument();
       expect(screen.queryByText('검토 결정')).not.toBeInTheDocument();
 
       if (reason) {

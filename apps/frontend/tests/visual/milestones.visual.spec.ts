@@ -83,7 +83,8 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(page.getByText('Why this milestone exists')).toBeVisible();
     await expect(page.getByText('0 of 1 tasks released')).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
-    for (const label of ['Overview', 'Evidence', 'Activity']) {
+    // #675: panel section labels follow the Korean chrome policy (Evidence stays English).
+    for (const label of ['요약', 'Evidence', '이력']) {
       await expect(page.getByRole('button', { name: label })).toBeVisible();
     }
     // Slice C (Timeline) stays absent; B2d-tasks adds the Tasks entry.

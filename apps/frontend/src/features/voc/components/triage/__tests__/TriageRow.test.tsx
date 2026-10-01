@@ -37,9 +37,12 @@ describe('TriageRow', () => {
     expect(screen.getByText('VOC-001')).toBeInTheDocument();
   });
 
-  it('shows "Owner 없음" when owner is unset', () => {
+  it('shows the shared unassigned badge when owner is unset', () => {
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={vi.fn()} />);
-    expect(screen.getByText('Owner 없음')).toBeInTheDocument();
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
   it('shows "Area 미지정" when analytics_area_id is null', () => {
@@ -47,12 +50,14 @@ describe('TriageRow', () => {
     expect(screen.getByText('Area 미지정')).toBeInTheDocument();
   });
 
-  it('keeps missing owner, missing area, and similar count neutral', () => {
+  it('uses danger tone only for missing owner while area and similar count stay neutral', () => {
     render(
       <TriageRow voc={{ ...BASE_VOC, similar_count: 3 }} selected={false} onSelect={vi.fn()} />,
     );
 
-    for (const text of ['Owner 없음', 'Area 미지정', '같은 Managed System의 VOC 3건']) {
+    const owner = screen.getByText('담당자 없음');
+    expect(owner).toHaveClass('text-accent-danger', 'bg-accent-danger/10');
+    for (const text of ['Area 미지정', '같은 Managed System의 VOC 3건']) {
       const item = screen.getByText(text);
       expect(item).toHaveClass('text-text-muted');
       expect(item).not.toHaveClass('text-text-danger');
@@ -76,10 +81,10 @@ describe('TriageRow', () => {
     expect(row).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('does NOT show "Owner 없음" when owner_user_id is set', () => {
+  it('does NOT show the unassigned badge when owner_user_id is set', () => {
     const vocWithOwner = { ...BASE_VOC, owner_user_id: 'u-owner-1' };
     render(<TriageRow voc={vocWithOwner} selected={false} onSelect={vi.fn()} />);
-    expect(screen.queryByText('Owner 없음')).not.toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
   it('does NOT show "Area 미지정" when analytics_area_id is set', () => {

@@ -182,14 +182,33 @@ describe('FindingDetailPanel', () => {
     expect(screen.queryByText('medium', { exact: true })).not.toBeInTheDocument();
   });
 
-  it('renders finding display_id in the detail header and linked task display_id in the link chip', async () => {
+  it('renders the Finding title without duplicate horizontal padding', () => {
+    const { container } = renderWithClient(
+      <FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />,
+    );
+
+    const header = container.querySelector('[data-kind="finding"]');
+    expect(header).toBeInTheDocument();
+    expect(within(header as HTMLElement).getByText('FIN-179')).toBeInTheDocument();
+    const findingTitle = screen.getByRole('heading', { name: '리포트 속도 저하' });
+    expect(findingTitle).toBeInTheDocument();
+    expect(findingTitle.parentElement).toHaveClass('px-0');
+    expect(screen.getByText('FIN-179')).toBeInTheDocument();
+    expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('keeps linked Task identity accessible and its move affordance on one line', async () => {
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 
-    expect(screen.getByText('FIN-179')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText('TASK-901')).toBeInTheDocument();
+      const taskId = screen.getByText('TASK-901');
+      expect(taskId).toHaveClass('whitespace-nowrap', 'shrink-0');
+      const taskLink = screen.getByRole('link', {
+        name: /매출 리포트 쿼리 플랜 개선.*TASK-901/,
+      });
+      expect(taskLink).toContainElement(taskId);
+      expect(within(taskLink).getByText('이동')).toHaveClass('whitespace-nowrap', 'shrink-0');
     });
-    expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });
 
   it('AC-681-2 shows an active pending Task Request and makes it the primary footer action', async () => {

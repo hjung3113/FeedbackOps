@@ -24,6 +24,22 @@ const REQUEST: TaskRequestDto = {
 };
 
 describe('TaskRequestRow identity', () => {
+  it('uses the shared reviewer badge when no reviewer is assigned', () => {
+    render(
+      <TaskRequestRow
+        item={REQUEST}
+        selected={false}
+        names={{ actorsById: {}, managedSystemsById: {} }}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('검토자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+  });
+
   it('uses safe source, Managed System, and requester labels when names are unavailable', () => {
     render(
       <TaskRequestRow

@@ -82,6 +82,7 @@ export {
 } from './badges/SeverityBadge';
 export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
 export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
+export { UnassignedBadge, type UnassignedBadgeProps } from './badges/UnassignedBadge';
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
 export {
   managedSystemMarkColor,

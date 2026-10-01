@@ -25,6 +25,8 @@ Show user-facing display labels for serialized enum values. Keep API payloads, q
 
 Use Korean for field labels and action buttons on Korean-language surfaces. Keep established product terms in English: `VOC`, `Finding`, `Task`, `Task Request`, `Managed System`, `Analytics Area`, `Triage`, `Milestone`, and `Cluster`. A short product term or wording that would be awkward in Korean may also remain English. Prototype wording remains authoritative for all copy outside these exceptions.
 
+Owner amendment (2026-10-01, #675): all UI chrome is Korean, and only domain nouns stay English (`VOC`, `Finding`, `Task`, `Task Request`, `Survey`, `Cluster`, `Managed System`, `Analytics Area`, `Milestone`, `Evidence`, `Triage`) plus Task workflow statuses.
+
 ### B1–B7 — Layout and interaction deviations
 
 | Item | Deviation | Implemented by |
@@ -38,6 +40,7 @@ Use Korean for field labels and action buttons on Korean-language surfaces. Keep
 | B7 | Native `select`/date inputs become the shared Select and a new shared DatePicker | #616 |
 | B8 | Board has no standalone Task creation control; it points to Task Request conversion (owner, 2026-10-01) | #669 |
 | B9 | Internal-sounding prototype copy rewritten (MVP, particle spacing, table names, metric keys) | owner, 2026-10-01, #683 |
+| B10 | Every detail panel uses the shared header chip; the Finding back link moves into the header | #675 |
 
 ## Consequences
 

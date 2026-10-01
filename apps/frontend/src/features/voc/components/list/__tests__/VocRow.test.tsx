@@ -64,12 +64,15 @@ describe('<VocRow>', () => {
     expect(screen.getByText('Tableau')).toBeInTheDocument();
   });
 
-  it('renders "Owner 필요" when both owner_user_id and owner_team_id are null', () => {
+  it('renders the shared unassigned badge when both owner ids are null', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.getByText('Owner 필요')).toBeInTheDocument();
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
-  it('does NOT render "Owner 필요" when an owner is resolved', () => {
+  it('does NOT render the unassigned badge when an owner is resolved', () => {
     const vocWithOwner: VocListItem = { ...BASE_VOC, owner_user_id: 'user-2' };
     render(
       <VocRow
@@ -80,7 +83,7 @@ describe('<VocRow>', () => {
         owner={{ display_name: '박서연' }}
       />,
     );
-    expect(screen.queryByText('Owner 필요')).not.toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
   it('renders the SeverityBadge label on the meta line', () => {

@@ -621,7 +621,7 @@ describe('<VocDetailPanel>', () => {
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
-  it('puts Description and Conversation in overflow while keeping the dead Internal anchor absent', async () => {
+  it('puts 설명 and 대화 in overflow while keeping the dead Internal anchor absent', async () => {
     const { container } = renderWithClient(
       <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
     );
@@ -634,8 +634,8 @@ describe('<VocDetailPanel>', () => {
     // Driving it by keyboard matches this repo's established pattern (see
     // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
     fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: 'Description' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '설명' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '대화' })).toBeInTheDocument();
   });
 
   it('submits an inline Task Request draft from the footer button for an admin actor', async () => {
@@ -766,7 +766,7 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
     expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
-    for (const label of ['Overview', 'Triage', 'Trail', 'Compose']) {
+    for (const label of ['요약', 'Triage', '이력', '작성']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
     expect(
@@ -782,7 +782,7 @@ describe('<VocDetailPanel>', () => {
     Object.defineProperty(scrollContainer, 'scrollTo', { configurable: true, value: scrollTo });
 
     fireEvent.keyDown(moreButton, { key: 'Enter' });
-    const descriptionItem = screen.getByRole('menuitem', { name: 'Description' });
+    const descriptionItem = screen.getByRole('menuitem', { name: '설명' });
     const similarItem = screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' });
     expect(descriptionItem).toHaveFocus();
     await user.keyboard('{ArrowDown}');

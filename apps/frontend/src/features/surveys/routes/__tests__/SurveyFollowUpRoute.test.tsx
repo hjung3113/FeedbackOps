@@ -263,6 +263,13 @@ describe('/surveys/:surveyId/follow-up route', () => {
     expect(screen.getByRole('button', { name: '후속 없음 1' })).toBeInTheDocument();
     expect(screen.getByText('만족도 2 / 5 (하위 구간)')).toBeInTheDocument();
     expect(screen.getByText(/승인된 발췌입니다\./)).toBeInTheDocument();
+    const detailHeader = screen
+      .getByTestId('follow-up-detail-panel')
+      .querySelector('[data-kind="survey"]');
+    expect(detailHeader).toBeInTheDocument();
+    expect(detailHeader).toHaveTextContent('Survey');
+    expect(detailHeader).toHaveTextContent('응답 #04');
+    expect(detailHeader).not.toHaveTextContent('RESPONSE');
 
     await userEvent.setup().click(screen.getByRole('button', { name: '해소됨 1' }));
     expect(await screen.findByTestId('follow-up-row-9')).toBeInTheDocument();

@@ -175,35 +175,35 @@ function FindingsListShell({
       }
       detailPanel={
         stateIsError && isPermissionDenied(stateError) ? null : selectedId ? (
-          <div className="flex h-full min-h-0 flex-col">
-            {safeReturnTo !== null && (
-              <div className="flex h-10 shrink-0 items-center border-b border-border-subtle px-4">
-                <a
-                  href={safeReturnTo}
-                  onClick={(event) => {
-                    if (
-                      event.metaKey ||
-                      event.ctrlKey ||
-                      event.shiftKey ||
-                      event.altKey ||
-                      event.button !== 0
-                    ) {
-                      return;
-                    }
-                    event.preventDefault();
-                    void navigate({ href: safeReturnTo });
-                  }}
-                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                  <span>원래 VOC로 돌아가기</span>
-                </a>
-              </div>
-            )}
-            <div className="min-h-0 flex-1">
-              <FindingDetailPanel findingId={selectedId} />
-            </div>
-          </div>
+          <FindingDetailPanel
+            findingId={selectedId}
+            {...(safeReturnTo !== null
+              ? {
+                  headerExtras: (
+                    <a
+                      href={safeReturnTo}
+                      onClick={(event) => {
+                        if (
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey ||
+                          event.button !== 0
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        void navigate({ href: safeReturnTo });
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-text-muted hover:bg-surface-canvas hover:text-text-primary"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                      <span>원래 VOC로 돌아가기</span>
+                    </a>
+                  ),
+                }
+              : {})}
+          />
         ) : (
           <FindingEmptyDetail />
         )

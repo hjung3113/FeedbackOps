@@ -19,6 +19,7 @@ import {
   FieldRow,
   ManagedSystemPill,
   PanelSectionTitle,
+  PanelTitleBlock,
   SeverityBadge,
   type SeverityEnum,
   UserChip,
@@ -156,15 +157,6 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
   return (
     <>
       <div className="flex h-full flex-col" data-testid="finding-detail-panel">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border-subtle px-6 pt-6 pb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <FitBadge>Finding</FitBadge>
-            <span className="text-xs text-text-muted">{finding.display_id}</span>
-          </div>
-          <h1 className="text-xl font-semibold text-text-primary">{finding.title}</h1>
-        </div>
-
         <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
         <div
@@ -173,6 +165,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         >
           {/* Summary */}
           <div data-anchor="summary" className="flex flex-col gap-1">
+            <PanelTitleBlock title={finding.title} className="px-0" />
             <PanelSectionTitle>요약</PanelSectionTitle>
             <p className="text-sm text-text-primary whitespace-pre-wrap">{finding.summary}</p>
           </div>
@@ -272,10 +265,10 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                   className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                 >
                   <span>{linkedTaskQuery.data?.title ?? 'Linked task'}</span>
-                  <span className="font-mono text-xs text-text-muted">
+                  <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                     {linkedTaskQuery.data?.display_id ?? shortId(finding.linked_task_id)}
                   </span>
-                  <span className="text-xs text-text-muted">jump</span>
+                  <span className="shrink-0 whitespace-nowrap text-xs text-text-muted">이동</span>
                 </Link>
               ) : (
                 <span className="text-text-muted">—</span>

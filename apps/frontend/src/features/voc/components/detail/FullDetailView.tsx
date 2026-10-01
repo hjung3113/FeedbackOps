@@ -1,5 +1,6 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, DetailPanelSectionNav, DirtyConfirmation } from '@fops/ui';
+import type { PanelSection } from '@fops/ui';
 import type * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
@@ -30,16 +31,17 @@ export interface FullDetailViewProps {
   me: MeResponse | null;
 }
 
+// ADR-0057 A2 amendment localizes Korean navigation while preserving domain nouns.
 // Prototype deviation (screen-voc.jsx:175-185): issue #519 and the user's Option C decision
 // pin the core navigation and move Description/Conversation into an overflow menu.
 // Execution section only shown when there's an active finding/task (Slice 4+).
-const STATIC_DETAIL_SECTIONS = [
-  { id: 'overview', label: 'Overview' },
+export const VOC_DETAIL_SECTIONS: PanelSection[] = [
+  { id: 'overview', label: '요약' },
   { id: 'triage', label: 'Triage' },
-  { id: 'description', label: 'Description', overflow: true },
-  { id: 'trail', label: 'Trail' },
-  { id: 'conversation', label: 'Conversation', overflow: true },
-  { id: 'compose', label: 'Compose' },
+  { id: 'description', label: '설명', overflow: true },
+  { id: 'trail', label: '이력' },
+  { id: 'conversation', label: '대화', overflow: true },
+  { id: 'compose', label: '작성' },
 ];
 
 export function FullDetailView({
@@ -90,14 +92,14 @@ export function FullDetailView({
   });
 
   const detailSections = isReporterArm
-    ? STATIC_DETAIL_SECTIONS.filter((section) => section.id !== 'triage')
+    ? VOC_DETAIL_SECTIONS.filter((section) => section.id !== 'triage')
     : showsSimilarVocSection
       ? [
-          ...STATIC_DETAIL_SECTIONS.slice(0, 4),
+          ...VOC_DETAIL_SECTIONS.slice(0, 4),
           { id: 'similar', label: SAME_MANAGED_SYSTEM_VOC_LABEL, overflow: true },
-          ...STATIC_DETAIL_SECTIONS.slice(4),
+          ...VOC_DETAIL_SECTIONS.slice(4),
         ]
-      : STATIC_DETAIL_SECTIONS;
+      : VOC_DETAIL_SECTIONS;
 
   return (
     <>

@@ -45,8 +45,12 @@ test.describe('/findings/$findingId visual harness', () => {
 
     const panel = page.getByTestId('finding-detail-panel');
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('heading', { level: 1 })).toHaveText(populatedFinding.title);
-    await expect(panel.getByText(populatedFinding.display_id)).toBeVisible();
+    // #675: the title lives in the shared PanelTitleBlock (h2) under the shared header.
+    await expect(panel.getByRole('heading', { name: populatedFinding.title })).toBeVisible();
+    // #675: the display id moved into the shared DetailPanelHeader (outside the body testid).
+    await expect(
+      page.locator('[data-kind="finding"]').getByText(populatedFinding.display_id),
+    ).toBeVisible();
 
     // Metadata section: source badge, status, severity + confidence, creator chip.
     const metadata = panel.locator('[data-anchor="metadata"]');
@@ -103,7 +107,8 @@ test.describe('/findings/$findingId visual harness', () => {
     // assertions below are not vacuous.
     const panel = page.getByTestId('finding-detail-panel');
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('heading', { level: 1 })).toHaveText(populatedFinding.title);
+    // #675: the title lives in the shared PanelTitleBlock (h2) under the shared header.
+    await expect(panel.getByRole('heading', { name: populatedFinding.title })).toBeVisible();
 
     for (const testId of MANAGE_CTAS) {
       await expect(panel.getByTestId(testId)).toBeDisabled();
@@ -165,7 +170,8 @@ test.describe('/findings/$findingId visual harness', () => {
     await expect(list.getByTestId('finding-status-badge-active')).toBeVisible();
 
     const panel = page.getByTestId('finding-detail-panel');
-    await expect(panel.getByRole('heading', { level: 1 })).toHaveText(populatedFinding.title);
+    // #675: the title lives in the shared PanelTitleBlock (h2) under the shared header.
+    await expect(panel.getByRole('heading', { name: populatedFinding.title })).toBeVisible();
     await expect(page.locator('[data-shell="list"]')).toHaveCount(1);
 
     await expectBackgroundSettled(page);

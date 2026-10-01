@@ -3,8 +3,8 @@ import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { TasksRouteView, tasksSearchSchema } from '@/routes/_authed/tasks';
 import { taskPrioritySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import * as React from 'react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type * as React from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
@@ -138,6 +138,11 @@ describe('TaskBoardRoute', () => {
 
     await screen.findByText('TASK-1000');
     expect(screen.getByText('전체 Task')).toBeInTheDocument();
+    const card = screen.getByRole('button', { name: 'TASK-1000: 매출 리포트 쿼리 플랜 개선' });
+    expect(within(card).getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
     expect(screen.getAllByText('미배정').length).toBeGreaterThan(0);
     expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.queryByText('Total tasks')).not.toBeInTheDocument();

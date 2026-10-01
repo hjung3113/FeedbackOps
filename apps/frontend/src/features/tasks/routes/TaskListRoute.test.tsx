@@ -141,10 +141,30 @@ describe('TaskListRoute display ids', () => {
     renderWithClient(<TaskListRoute />);
 
     await screen.findByText('TASK-1000');
-    expect(screen.getByText('미배정')).toBeInTheDocument();
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
     expect(screen.getByText('담당자 지정됨')).toBeInTheDocument();
     expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
     expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
+  });
+
+  it('uses the shared unassigned badge in Task detail properties', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(priorityTaskDetail('high'));
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
   it('uses Korean Task detail navigation labels that match section headings', async () => {
