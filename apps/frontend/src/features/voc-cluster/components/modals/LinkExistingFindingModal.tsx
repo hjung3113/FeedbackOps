@@ -121,7 +121,7 @@ export function LinkExistingFindingModal({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={closeAndReset}
             disabled={mutation.isPending}
           >

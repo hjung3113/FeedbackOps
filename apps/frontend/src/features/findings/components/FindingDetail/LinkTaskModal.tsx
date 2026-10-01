@@ -98,7 +98,7 @@ export function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): R
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={mutation.isPending}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
             취소
           </Button>
           <Button

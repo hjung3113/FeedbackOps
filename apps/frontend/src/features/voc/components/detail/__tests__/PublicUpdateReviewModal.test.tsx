@@ -39,6 +39,11 @@ describe('PublicUpdateReviewModal shared pickers', () => {
       />,
     );
 
+    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
+
     fireEvent.click(screen.getByRole('combobox', { name: '후보' }));
     fireEvent.click(await screen.findByRole('option', { name: /Released Task 후보/ }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Reporter-facing status' }));

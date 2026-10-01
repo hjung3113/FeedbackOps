@@ -191,7 +191,7 @@ export function CreateFindingFromClusterModal({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={closeAndReset}
             disabled={isSubmitting}
             data-testid="create-finding-from-cluster-cancel"

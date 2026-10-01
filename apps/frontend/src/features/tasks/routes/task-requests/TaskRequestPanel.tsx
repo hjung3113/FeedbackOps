@@ -12,6 +12,7 @@ import {
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
+  FieldLabel,
   FieldRow,
   InternalTaskBadge,
   ManagedSystemPill,
@@ -309,9 +310,10 @@ export function TaskRequestPanel({
                   className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
                   onSubmit={conversion.submit}
                 >
-                  <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    제목
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel htmlFor="task-request-convert-title-input">제목</FieldLabel>
                     <input
+                      id="task-request-convert-title-input"
                       ref={conversion.titleInputRef}
                       className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
                       value={conversion.title}
@@ -340,10 +342,10 @@ export function TaskRequestPanel({
                         {conversion.titleError}
                       </span>
                     )}
-                  </label>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-1 text-xs text-text-muted">
-                      <label htmlFor="task-request-convert-priority">우선순위</label>
+                    <div className="flex flex-col gap-1">
+                      <FieldLabel htmlFor="task-request-convert-priority">우선순위</FieldLabel>
                       <Select
                         value={conversion.priority}
                         onValueChange={(value) => conversion.setPriority(value as TaskPriority)}
@@ -360,8 +362,8 @@ export function TaskRequestPanel({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex flex-col gap-1 text-xs text-text-muted">
-                      <label htmlFor="task-request-convert-due-date">마감일</label>
+                    <div className="flex flex-col gap-1">
+                      <FieldLabel htmlFor="task-request-convert-due-date">마감일</FieldLabel>
                       <DatePicker
                         id="task-request-convert-due-date"
                         aria-label="마감일"
@@ -371,8 +373,8 @@ export function TaskRequestPanel({
                       />
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1 text-xs text-text-muted">
-                    <label htmlFor="task-request-convert-assignee">담당자</label>
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel htmlFor="task-request-convert-assignee">담당자</FieldLabel>
                     <Select
                       value={conversion.assigneeId || NO_SELECTION}
                       onValueChange={(value) =>
@@ -392,8 +394,10 @@ export function TaskRequestPanel({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-1 text-xs text-text-muted">
-                    <label htmlFor="task-request-convert-analytics-area">Analytics Area</label>
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel htmlFor="task-request-convert-analytics-area">
+                      Analytics Area
+                    </FieldLabel>
                     <Select
                       value={conversion.analyticsAreaId || NO_SELECTION}
                       onValueChange={(value) =>
@@ -416,8 +420,8 @@ export function TaskRequestPanel({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-1 text-xs text-text-muted">
-                    <label htmlFor="task-request-convert-milestone">Milestone</label>
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel htmlFor="task-request-convert-milestone">Milestone</FieldLabel>
                     <Select
                       value={conversion.milestoneId || NO_SELECTION}
                       onValueChange={(value) =>

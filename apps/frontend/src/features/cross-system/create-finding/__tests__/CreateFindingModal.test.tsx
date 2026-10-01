@@ -98,6 +98,15 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     ) as typeof globalThis.fetch;
   });
 
+  it('uses secondary styling for its cancel action', () => {
+    renderModal(null);
+
+    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
+  });
+
   it.each(findingSeveritySchema.options)(
     'renders a display label for severity %s',
     async (severity) => {
