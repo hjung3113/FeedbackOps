@@ -7,9 +7,9 @@
 import type { ReactNode } from 'react';
 
 import type { FrontendPermissionState } from '@/lib/api';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { PermissionBlockedPanel } from '@fops/ui';
-import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { RequestAccessButton } from './request-access-button.js';
 
 export interface PermissionGateProps {

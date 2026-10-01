@@ -14,11 +14,11 @@
  * action is deferred to a follow-up issue. "Clear" is fully wired.
  */
 
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import { ListStateMessage } from '@/components/ListStateMessage';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';

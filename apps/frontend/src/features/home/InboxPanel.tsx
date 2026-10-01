@@ -15,6 +15,7 @@ import { Archive, Check } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { ListStateMessage } from '@/components/ListStateMessage';
 import {
   type ApiError,
   archiveNotification,
@@ -25,7 +26,6 @@ import {
 } from '@/lib/api';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import { formatRelativeTime } from '@/lib/datetime';
-import { ListStateMessage } from '@/components/ListStateMessage';
 
 type InboxFilter = 'unread' | 'all';
 
