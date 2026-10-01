@@ -280,10 +280,7 @@ describe('/admin/permissions/requests URL state', () => {
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ selected: PENDING_ID });
     });
-    expect(screen.getByRole('tab', { name: /대기 중 1/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByRole('tab', { name: /대기 중 1/ })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
         'workspace.read',
