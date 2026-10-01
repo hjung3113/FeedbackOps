@@ -17,6 +17,7 @@ import {
 import { Layers, Settings, Shield } from 'lucide-react';
 import { useRef } from 'react';
 
+import { formatDate } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { scopeMark } from '../lib/scopeMark.js';
 import { teamName } from './teamName.js';
@@ -44,7 +45,7 @@ export function AnalyticsAreaSlideOver({
 
   const mark = ms ? scopeMark(ms.slug, ms.name) : null;
   const lead = teamName(area, resolved);
-  const created = area.created_at.slice(0, 10);
+  const created = formatDate(area.created_at);
 
   // Workload + Findings are Slice 4/5 surfaces (not built). Shells render with
   // "—" placeholders; no counts available from the DTO (locked decision #88).

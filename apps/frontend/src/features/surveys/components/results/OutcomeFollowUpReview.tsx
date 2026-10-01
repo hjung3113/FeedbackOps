@@ -1,5 +1,6 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { formatShortDate } from '@/lib/format/datetime';
 import type { OutcomeFollowUpItem, OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
 import {
   Button,
@@ -58,8 +59,7 @@ function lowAnswerSummary(item: OutcomeFollowUpItem): string {
 }
 
 function submittedDate(value: string): string {
-  const date = new Date(value);
-  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} 제출`;
+  return `${formatShortDate(value)} 제출`;
 }
 
 function currentStateText(item: OutcomeFollowUpItem): string {

@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatRelativeTime } from '@/lib/datetime';
+import { formatDateOnly, formatRelativeTime } from '@/lib/format/datetime';
 import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
 import {
   LinkedEntityTrail,
@@ -51,7 +51,7 @@ function ReporterTaskSummary({
           {summary.expected_resolution_date !== undefined && (
             <div className="flex gap-2">
               <dt>예상 해결일</dt>
-              <dd>{formatAbsoluteDate(summary.expected_resolution_date)}</dd>
+              <dd>{formatDateOnly(summary.expected_resolution_date)}</dd>
             </div>
           )}
           {summary.last_public_update_at !== undefined && (

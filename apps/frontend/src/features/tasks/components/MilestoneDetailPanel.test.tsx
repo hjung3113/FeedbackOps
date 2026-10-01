@@ -556,7 +556,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
-    expect(row).toHaveTextContent('updated 2026-07-21');
+    expect(row).toHaveTextContent('updated 2026. 7. 21.');
   });
 
   it('renders no Add task control in the Tasks section', async () => {

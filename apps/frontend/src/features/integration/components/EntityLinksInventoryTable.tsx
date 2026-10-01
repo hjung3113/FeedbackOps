@@ -1,6 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 import type { EntityLinkDto } from '@fops/shared';
 import { Button, Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
@@ -35,14 +36,7 @@ export interface EntityLinksInventoryTableProps {
 
 function formatTimestamp(raw: string | null): string {
   if (raw === null) return '-';
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatShortDateTime(raw);
 }
 
 export function EntityLinksInventoryTable({

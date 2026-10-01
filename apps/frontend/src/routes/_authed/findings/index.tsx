@@ -11,6 +11,8 @@ import {
 } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatCount } from '@/lib/format/count';
+import { formatShortDate } from '@/lib/format/datetime';
 import { parseRouteSearch } from '@/lib/router/search';
 import type { FindingDto } from '@fops/shared';
 import {
@@ -267,7 +269,7 @@ function FindingsListBody({
               Finding 목록
             </h3>
             {isSuccess ? (
-              <span className="text-xs text-text-muted">{findings.length}개</span>
+              <span className="text-xs text-text-muted">{formatCount(findings.length)}</span>
             ) : null}
           </div>
         </div>
@@ -361,7 +363,7 @@ function FindingRow({
           {dot()}
           <span>Evidence {finding.evidence_count}개</span>
           {dot()}
-          <span>{formatDate(finding.created_at)}</span>
+          <span>{formatShortDate(finding.created_at)}</span>
         </>
       }
       trailing={owner !== null ? <UserAvatar user={owner} size="sm" /> : null}
@@ -408,11 +410,4 @@ function FindingEmptyDetail(): React.ReactElement {
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
-}
-
-function formatDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-  }).format(new Date(raw));
 }

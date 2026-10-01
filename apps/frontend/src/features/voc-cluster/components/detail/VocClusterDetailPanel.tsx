@@ -37,10 +37,11 @@ import {
 } from '@/lib/copy/enum-labels';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatShortDate } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 
-import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
+import { ClusterStatusBadge } from '../../lib/presentation';
 import { AddVocModal } from '../modals/AddVocModal';
 import { CreateFindingFromClusterModal } from '../modals/CreateFindingFromClusterModal';
 import { LinkExistingFindingModal } from '../modals/LinkExistingFindingModal';
@@ -452,7 +453,7 @@ export function VocClusterDetailPanel({
             </FieldRow>
             <FieldRow label="Confirmed at" className="px-0">
               <span data-testid="cluster-detail-confirmed-at">
-                {data.confirmed_at ? formatClusterDate(data.confirmed_at) : '대기 중'}
+                {data.confirmed_at ? formatShortDate(data.confirmed_at) : '대기 중'}
               </span>
             </FieldRow>
           </section>

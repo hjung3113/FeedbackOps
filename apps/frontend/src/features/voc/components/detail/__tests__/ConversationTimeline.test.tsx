@@ -14,9 +14,6 @@ vi.mock('@fops/ui', async (importOriginal) => {
     RichContentRenderer: () => <div data-testid="rce" />,
   };
 });
-vi.mock('@/features/voc/components/list/VocRow', () => ({
-  formatVocCreatedAt: () => '방금 전',
-}));
 vi.mock('../TimelineEntry', () => ({
   TimelineEntry: ({ entry }: { entry: ConversationEntry }) => (
     <div data-entry-id={entry.id}>

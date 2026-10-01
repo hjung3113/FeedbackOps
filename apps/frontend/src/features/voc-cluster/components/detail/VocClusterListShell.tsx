@@ -7,6 +7,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
 import { isPermissionDenied } from '@/lib/api';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatShortDate } from '@/lib/format/datetime';
 import {
   ListShell,
   ListToolbar,
@@ -18,7 +19,7 @@ import {
 import * as React from 'react';
 import { useState } from 'react';
 
-import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
+import { ClusterStatusBadge } from '../../lib/presentation';
 import type { VocClusterListPresentation } from '../types';
 import { VocClusterDetailPanel } from './VocClusterDetailPanel';
 
@@ -252,7 +253,7 @@ function ClusterRow({
         <>
           <span>VOC {memberCount}개</span>
           {dot()}
-          <span>{formatClusterDate(cluster.created_at)}</span>
+          <span>{formatShortDate(cluster.created_at)}</span>
         </>
       }
     />

@@ -25,7 +25,7 @@ import {
   notificationsQueryKey,
 } from '@/lib/api';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
-import { formatRelativeTime } from '@/lib/datetime';
+import { formatRelativeTime } from '@/lib/format/datetime';
 
 type InboxFilter = 'unread' | 'all';
 

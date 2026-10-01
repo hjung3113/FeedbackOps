@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/format/datetime';
 import type { TaskDto } from '@fops/shared';
 import { InternalTaskBadge, SeverityIndicator, UnassignedBadge, UserAvatar } from '@fops/ui';
 import { PRIORITY_SEVERITY } from './constants';
@@ -24,7 +25,7 @@ export function MilestoneTaskRow({
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
           <InternalTaskBadge status={task.status} />
           {task.due_date !== null && <span>· {task.due_date}</span>}
-          <span>· updated {task.updated_at.slice(0, 10)}</span>
+          <span>· updated {formatDate(task.updated_at)}</span>
         </div>
       </div>
       {assigneeName !== undefined ? (

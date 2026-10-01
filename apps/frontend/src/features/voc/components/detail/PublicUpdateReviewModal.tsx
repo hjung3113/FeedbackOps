@@ -4,6 +4,7 @@ import {
 } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
+import { formatDate } from '@/lib/format/datetime';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import {
   Button,
@@ -146,7 +147,7 @@ export function PublicUpdateReviewModal({
                 <SelectContent>
                   {(candidates.data?.items ?? []).map((candidate) => (
                     <SelectItem key={candidate.id} value={candidate.id}>
-                      Released Task 후보 · {new Date(candidate.created_at).toLocaleDateString()}
+                      Released Task 후보 · {formatDate(candidate.created_at)}
                     </SelectItem>
                   ))}
                 </SelectContent>

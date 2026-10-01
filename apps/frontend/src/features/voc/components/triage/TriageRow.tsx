@@ -17,7 +17,7 @@
  *   Semantic row color is limited to SeverityIndicator and ReporterStatusBadge.
  */
 
-import { formatRelativeTime } from '@/lib/datetime';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocListItem } from '@fops/shared';
 import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fops/ui';
 import type * as React from 'react';

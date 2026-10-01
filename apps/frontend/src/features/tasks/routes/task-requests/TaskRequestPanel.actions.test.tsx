@@ -29,8 +29,8 @@ vi.mock('./useTaskRequestConvertedTaskLink', () => ({
 }));
 
 import { TASK_REQUEST_STATUS_LABELS as STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { TaskRequestPanel } from './TaskRequestPanel';
-import { formatDate } from './predicates';
 
 const request: TaskRequestDto = {
   id: '10000000-0000-0000-0000-000000000001',
@@ -477,7 +477,7 @@ describe('TaskRequestPanel next actions', () => {
       expect(summary).toHaveTextContent('결정 요약');
       expect(within(summary as HTMLElement).getByText(STATUS_LABELS[status])).toBeInTheDocument();
       expect(within(summary as HTMLElement).getByText('김지원')).toBeInTheDocument();
-      expect(summary).toHaveTextContent(formatDate(decidedAt));
+      expect(summary).toHaveTextContent(formatShortDateTime(decidedAt));
       expect(screen.getByRole('button', { name: '결정 요약' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '결정' })).not.toBeInTheDocument();
       expect(screen.queryByText('검토 결정')).not.toBeInTheDocument();

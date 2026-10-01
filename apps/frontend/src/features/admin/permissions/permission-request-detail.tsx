@@ -2,14 +2,11 @@ import { Button, FieldRow, OutlineBadge, PanelSectionTitle } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDecisionForm } from './permission-request-decision-form.js';
-import {
-  formatPermissionRequestDate,
-  formatPermissionRequestExpiration,
-  permissionRequestStatusLabel,
-} from './permission-requests-search.js';
+import { permissionRequestStatusLabel } from './permission-requests-search.js';
 
 export function PermissionRequestDetail({
   request,
@@ -81,7 +78,7 @@ export function PermissionRequestDetail({
             <FieldRow label="요청 만료일" className="px-0">
               <span>
                 {request.requested_expiration
-                  ? formatPermissionRequestExpiration(request.requested_expiration)
+                  ? formatDateOnly(request.requested_expiration.slice(0, 10))
                   : '만료 없음'}
               </span>
             </FieldRow>
@@ -89,7 +86,7 @@ export function PermissionRequestDetail({
               <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
             </FieldRow>
             <FieldRow label="요청 일시" className="px-0">
-              <span>{formatPermissionRequestDate(request.created_at)}</span>
+              <span>{formatDateTime(request.created_at)}</span>
             </FieldRow>
           </section>
           <section className="flex flex-col gap-2">

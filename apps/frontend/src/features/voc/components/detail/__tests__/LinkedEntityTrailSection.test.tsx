@@ -72,7 +72,7 @@ describe('<LinkedEntityTrailSection>', () => {
 
     expect(screen.getByText('공개 가능한 개선 작업')).toBeInTheDocument();
     expect(screen.getByText('진행 중')).toBeInTheDocument();
-    expect(screen.getByText('2026. 07. 31.')).toBeInTheDocument();
+    expect(screen.getByText('2026. 7. 31.')).toBeInTheDocument();
     expect(screen.getByText('2시간 전')).toBeInTheDocument();
     expect(screen.queryByText('2026-07-31')).not.toBeInTheDocument();
     expect(screen.getByTestId('linked-task-summary')).toBeInTheDocument();

@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
-vi.mock('@/features/voc/lib/format-date', () => ({
-  formatVocCreatedAt: (_iso: string) => '방금 전',
+vi.mock('@/lib/format/datetime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format/datetime')>()),
+  formatRelativeTime: (_iso: string) => '방금 전',
 }));
 
 import { useMe } from '@/lib/auth/useMe';
