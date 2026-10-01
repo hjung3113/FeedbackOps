@@ -349,3 +349,10 @@ packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/a11y/useButtonType -
 packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
 packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedVariables -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
 packages/ui/src/feedback/__tests__/EmptyState.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+apps/frontend/src/features/voc/components/detail/EditDescriptionModal.tsx format -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel button variant
+packages/ui/src/feedback/DirtyConfirmation.tsx format -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/DirtyConfirmation.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/DirtyConfirmation.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
