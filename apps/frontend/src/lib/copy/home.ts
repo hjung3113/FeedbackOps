@@ -1,5 +1,7 @@
 import type { DashboardSummary } from '@fops/shared';
 
+import { COVERAGE_METRIC_LABELS } from './coverage';
+
 export const HOME_COPY = {
   title: (name: string) => `안녕하세요, ${name}님`,
   subtitle: (
@@ -36,7 +38,7 @@ export const HOME_KPI_COPY = {
   active_finding: 'Active Finding',
   pending_request: 'Pending Request',
   tasks_in_flight: 'Tasks In Flight',
-  coverage_percent: 'Coverage',
+  coverage_percent: COVERAGE_METRIC_LABELS['voc-task'],
 } as const;
 
 export const HOME_QUEUE_COPY: Record<
@@ -91,15 +93,6 @@ export const HOME_QUEUE_COPY: Record<
     detail: 'Workspace Admin 검토를 기다리는 elevated/scope 권한 요청입니다.',
     primaryAction: 'Open Requests',
   },
-};
-
-export const HOME_COVERAGE_COPY: Record<DashboardSummary['coverage'][number]['id'], string> = {
-  'voc-task': 'VOC linked to Task',
-  'finding-execution': 'Active Finding with execution',
-  'milestone-outcome': 'Milestone with outcome survey',
-  'high-followup': 'High severity VOC follow-up',
-  'released-update': 'Released Task reporter update',
-  'analytics-area': 'Analytics area coverage',
 };
 
 export const HOME_INBOX_COPY = {

@@ -15,6 +15,7 @@ import {
   IntegrationCoverageRouteShell,
   integrationCoverageSearchSchema,
 } from '../../../routes/_authed/integration/coverage';
+import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 
 const MS_A = '77777777-0000-0000-0000-0000000000a1';
 const MS_B = '77777777-0000-0000-0000-0000000000b2';
@@ -175,9 +176,9 @@ function stubFetch(capturedUrls: string[], summary: unknown = SUMMARY) {
   }) as typeof globalThis.fetch;
 }
 
-async function renderCoverage(initialPath: string) {
+async function renderCoverage(initialPath: string, summary: unknown = SUMMARY) {
   const capturedUrls: string[] = [];
-  stubFetch(capturedUrls);
+  stubFetch(capturedUrls, summary);
   const { router, qc } = buildHarness(initialPath);
   render(
     <QueryClientProvider client={qc}>
@@ -280,17 +281,16 @@ describe('integration coverage route', () => {
     );
   });
 
-  test('uses the Coverage prototype surface labels and the locked subtitle', async () => {
+  test('uses the canonical Coverage metric labels and the locked subtitle', async () => {
     await renderCoverage('/integration/coverage');
     expect(screen.getByRole('heading', { level: 1, name: 'Coverage' })).toBeVisible();
     const signals = within(screen.getByTestId('coverage-signals'));
-    expect(signals.getByText('Released Task with public update')).toBeVisible();
-    expect(signals.getByText('VOC with Analytics Area set')).toBeVisible();
-    // Plan-corrected wording (plan-513 copy table): no "SLA" suffix.
-    expect(signals.getByText('High severity VOC follow-up')).toBeVisible();
+    expect(signals.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
+    expect(signals.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
+    expect(signals.getByText('High severity VOC 후속 조치')).toBeVisible();
     const table = within(screen.getByTestId('coverage-table'));
-    expect(table.getByText('Released Task with public update')).toBeVisible();
-    expect(table.getByText('VOC with Analytics Area set')).toBeVisible();
+    expect(table.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
+    expect(table.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
     expect(
       screen.getByText('Partial integration coverage. 정책이 요구하는 연결만 표시합니다.'),
     ).toBeVisible();
@@ -305,6 +305,20 @@ describe('integration coverage route', () => {
       expect(row).toHaveAttribute('data-testid', `coverage-row-${item.id}`);
       expect(row.textContent).not.toContain(item.id);
     }
+  });
+
+  test.each(COVERAGE_METRIC_IDS)('renders the shared Coverage label for %s', async (id) => {
+    const summary = dashboardSummarySchema.parse({
+      ...SUMMARY,
+      coverage: [
+        ...(SUMMARY.coverage ?? []),
+        { id: 'milestone-outcome', value: 1, total: 2, percent: 50, status: 'warn' },
+      ],
+    });
+    await renderCoverage('/integration/coverage', summary);
+
+    const signals = within(screen.getByTestId('coverage-signals'));
+    expect(signals.getByText(COVERAGE_METRIC_LABELS[id])).toBeVisible();
   });
 
   test('maps coverage status directly to success, warn, and danger presentation', async () => {

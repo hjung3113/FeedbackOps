@@ -8,6 +8,7 @@ import { Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
 import {
   INTEGRATION_DASHBOARD_QUEUE_ORDER,
   IntegrationDashboardQueueCard,
@@ -164,7 +165,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
               {...(coveragePercent !== undefined
-                ? { stat: coveragePercent, statLabel: 'avg coverage' }
+                ? { stat: coveragePercent, statLabel: INTEGRATION_AVERAGE_COVERAGE_LABEL }
                 : {})}
             />
             <IntegrationJumpCard

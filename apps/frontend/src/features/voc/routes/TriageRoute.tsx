@@ -19,10 +19,13 @@
 // (enabled:false on the useVocList query) so a blocked actor never triggers
 // a queue query.
 
+import { fetchNavCounts } from '@/lib/api/nav';
 import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { PermissionBlockedPanel } from '@fops/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
 import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
@@ -54,6 +57,16 @@ export function TriageRoute(): React.ReactElement {
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
   const isApproved = capCheck.data?.state === 'approved';
+  const navCountsQuery = useQuery({
+    queryKey: [...NAV_COUNTS_QUERY_KEY, search.managedSystem] as const,
+    queryFn: ({ signal }) =>
+      fetchNavCounts({
+        signal,
+        ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+      }),
+    enabled: isApproved,
+    retry: false,
+  });
 
   // Fetch triage queue — server-pinned sort, no sort param sent (D-1.2).
   // REV-2 #9: gate BEFORE fetch via enabled:false so a blocked actor doesn't
@@ -72,6 +85,7 @@ export function TriageRoute(): React.ReactElement {
 
   const items = data?.items ?? [];
   const outOfScopeSummary = data?.out_of_scope_summary;
+  const queueTotal = navCountsQuery.data?.counts['voc.triage'];
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -125,6 +139,7 @@ export function TriageRoute(): React.ReactElement {
       items={items}
       selectedId={search.selected ?? null}
       activeTab={activeTab}
+      {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
       onSelectVoc={handleSelectVoc}
       onTabChange={handleTabChange}

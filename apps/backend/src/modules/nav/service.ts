@@ -51,7 +51,7 @@ export function createNavCountsService(deps: NavCountsDeps) {
       ['voc.my', 'my'],
       ['voc.tab.high', 'triage', 'high'],
       ['voc.tab.unassigned', 'triage', 'unassigned'],
-      ['voc.tab.no-link', 'triage', 'no-link'],
+      ['voc.inbox.no-link', 'inbox', 'no-link'],
     ] as const;
     const vocCounts = Object.fromEntries(
       (

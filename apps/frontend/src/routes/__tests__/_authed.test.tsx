@@ -180,9 +180,9 @@ describe('_authed sidebar current destination', () => {
       expectedId: 'unassigned',
     },
     {
-      route: 'No follow-up triage',
+      route: 'No-link inbox tab',
       pathname: '/vocs',
-      searchStr: '?view=triage&tab=no-link',
+      searchStr: '?view=inbox&tab=no-link',
       expectedId: 'no-link',
     },
     { route: 'My VOCs', pathname: '/vocs', searchStr: '?view=my', expectedId: 'my-vocs' },

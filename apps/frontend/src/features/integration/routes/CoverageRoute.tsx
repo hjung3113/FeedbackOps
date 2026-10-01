@@ -25,6 +25,7 @@ import { Activity, AlertTriangle, Filter, RefreshCw, Shield } from 'lucide-react
 import * as React from 'react';
 
 import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
+import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 
 type ByManagedSystemRow = DashboardSummary['by_managed_system'][number];
@@ -91,18 +92,6 @@ function coverageCellText(cell: PerSystemCoverageCell): string {
 function queueCellText(count: number | undefined): string {
   return count === undefined ? '—' : String(count);
 }
-
-// Per-surface copy: the Coverage prototype specifies these metric labels
-// (data.js CoverageMetrics), except high-followup which carries the
-// plan-corrected wording (plan-513 copy table). Home keeps its own labels.
-const COVERAGE_LABELS: Record<DashboardCoverageId, string> = {
-  'voc-task': 'VOC linked to Task',
-  'finding-execution': 'Active Finding with execution',
-  'milestone-outcome': 'Milestone with outcome survey',
-  'high-followup': 'High severity VOC follow-up',
-  'released-update': 'Released Task with public update',
-  'analytics-area': 'VOC with Analytics Area set',
-};
 
 // The server's 75/40 good/warn/bad band maps directly to presentation.
 // No client-side thresholds (plan-513: direction C is out).
@@ -291,7 +280,7 @@ export function CoverageRoute(): React.ReactElement {
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-text-primary">
-                        {COVERAGE_LABELS[item.id]}
+                        {COVERAGE_METRIC_LABELS[item.id]}
                       </div>
                     </div>
                     <div className="text-right text-xs tabular-nums text-text-muted">
@@ -375,7 +364,7 @@ export function CoverageRoute(): React.ReactElement {
                         data-testid={`coverage-col-${id}`}
                         className="px-3 py-2 text-right font-medium"
                       >
-                        {COVERAGE_LABELS[id]}
+                        {COVERAGE_METRIC_LABELS[id]}
                       </th>
                     ))}
                     {QUEUE_COLUMNS.map((id) => (

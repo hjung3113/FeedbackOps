@@ -18,10 +18,10 @@ import {
 } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import {
   HOME_COPY,
-  HOME_COVERAGE_COPY,
   HOME_INBOX_COPY,
   HOME_KPI_COPY,
   HOME_QUEUE_COPY,
@@ -414,7 +414,7 @@ function CoverageMetricRow({
   const body = (
     <>
       <div className="flex justify-between gap-2 text-xs">
-        <span className="text-text-primary">{HOME_COVERAGE_COPY[item.id]}</span>
+        <span className="text-text-primary">{COVERAGE_METRIC_LABELS[item.id]}</span>
         <span className="shrink-0 tabular-nums text-text-muted">
           {item.value} / {item.total} · {item.percent}%
         </span>

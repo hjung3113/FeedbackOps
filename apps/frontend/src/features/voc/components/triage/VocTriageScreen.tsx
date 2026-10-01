@@ -10,6 +10,7 @@
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
@@ -24,6 +25,7 @@ export interface VocTriageScreenProps {
   items: VocListItem[];
   selectedId: string | null;
   activeTab: TriageTab;
+  queueTotal?: number;
   outOfScopeSummary?: {
     count: number;
     severity_distribution: Record<string, number>;
@@ -33,9 +35,9 @@ export interface VocTriageScreenProps {
 }
 
 const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
-  { value: 'unassigned', label: '미배정' },
+  { value: 'unassigned', label: VOC_TRIAGE_TAB_LABELS.unassigned },
   { value: 'untriaged', label: TRIAGE_STATE_LABELS.untriaged },
-  { value: 'high', label: '높은 심각도' },
+  { value: 'high', label: VOC_TRIAGE_TAB_LABELS.high },
   { value: 'waiting', label: '보류' },
 ];
 
@@ -43,6 +45,7 @@ export function VocTriageScreen({
   items,
   selectedId,
   activeTab,
+  queueTotal,
   outOfScopeSummary,
   onSelectVoc,
   onTabChange,
@@ -98,6 +101,7 @@ export function VocTriageScreen({
     !items.some((v) => v.id === selectedId) &&
     !everInQueueRef.current.has(selectedId);
   const selectedVoc = deepLinkTargetMissing ? null : (selectedInQueue ?? liveQueue[0] ?? null);
+  const activeTabLabel = TRIAGE_TABS.find((tab) => tab.value === activeTab)?.label;
 
   return (
     <div className="flex flex-col h-full">
@@ -131,9 +135,18 @@ export function VocTriageScreen({
         </div>
         <Flag size={14} className="text-text-warning shrink-0" aria-hidden="true" />
         <span className="text-sm font-semibold text-text-primary">Triage queue</span>
-        <span className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium bg-surface-canvas text-text-muted border border-border-subtle">
-          {liveQueue.length} VOC
+        {/* #680 separates the whole-queue total from the selected tab's count. */}
+        <span
+          data-testid="triage-queue-total"
+          className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium bg-surface-canvas text-text-muted border border-border-subtle"
+        >
+          {queueTotal ?? liveQueue.length} VOC
         </span>
+        {activeTabLabel !== undefined && (
+          <span data-testid="triage-tab-count" className="ml-1 text-xs text-text-muted">
+            · {activeTabLabel} {liveQueue.length}
+          </span>
+        )}
         <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → severity">
           미배정 → severity 순
         </span>

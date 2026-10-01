@@ -27,6 +27,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
 import { VocTriageScreen } from '../VocTriageScreen';
 
@@ -71,6 +72,25 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     );
 
     expect(screen.getByRole('button', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+  });
+
+  it('uses the sidebar labels for the Unassigned and High severity tabs', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="unassigned"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.unassigned }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
   });
 
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {

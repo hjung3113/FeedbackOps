@@ -22,6 +22,10 @@ function renderWithQc(node: React.ReactElement) {
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
 
+vi.mock('@/lib/api/nav', () => ({
+  fetchNavCounts: vi.fn(async () => ({ counts: { 'voc.triage': 7 } })),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => searchState,
   useNavigate: () => navigateMock,
@@ -213,6 +217,15 @@ describe('TriageRoute', () => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Triage VOC 2').length).toBeGreaterThanOrEqual(1);
     });
+  });
+
+  it('shows the whole queue total and the selected tab count', async () => {
+    renderWithQc(<TriageRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
+    });
+    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 2');
   });
 
   it('selecting a tab calls navigate with tab param', async () => {

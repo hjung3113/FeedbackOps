@@ -35,6 +35,44 @@ afterEach(() => {
 });
 
 describe('AppSidebar', () => {
+  it('groups triage tabs under the Korean triage section and keeps No link in Inbox', () => {
+    const triageViews = NAV_TREE.voc.filter((entry) => entry.section === 'Triage 보기');
+    expect(
+      triageViews.map(({ id, label, href, countKey }) => ({ id, label, href, countKey })),
+    ).toEqual([
+      {
+        id: 'high-severity',
+        label: '높은 심각도',
+        href: '/vocs?view=triage&tab=high',
+        countKey: 'voc.tab.high',
+      },
+      {
+        id: 'unassigned',
+        label: '미배정',
+        href: '/vocs?view=triage&tab=unassigned',
+        countKey: 'voc.tab.unassigned',
+      },
+    ]);
+
+    const noLink = NAV_TREE.voc.find((entry) => entry.id === 'no-link');
+    expect(noLink).toMatchObject({
+      label: 'No link',
+      href: '/vocs?view=inbox&tab=no-link',
+      section: '보기',
+      countKey: 'voc.inbox.no-link',
+    });
+    expect(noLink?.parentId).toBeUndefined();
+  });
+
+  it('uses the neutral tone for an urgent zero count', () => {
+    render(<AppSidebar entries={NAV_TREE.voc} counts={{ 'voc.tab.unassigned': 0 }} />);
+
+    const badge = screen.getByTestId('sidebar-count-unassigned');
+    expect(badge).toHaveTextContent('0');
+    expect(badge.className).toContain('bg-surface-row-selected');
+    expect(badge.className).not.toContain('text-accent-danger');
+  });
+
   it('renders nav entries with correct aria-current on active', () => {
     render(<AppSidebar entries={entries} />);
     expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
@@ -257,7 +295,7 @@ describe('AppSidebar', () => {
       'voc.my': 2,
       'voc.tab.high': 1,
       'voc.tab.unassigned': 1,
-      'voc.tab.no-link': 2,
+      'voc.inbox.no-link': 2,
       'voc.clusters': 4,
       'findings.all': 7,
       'surveys.all': 0,

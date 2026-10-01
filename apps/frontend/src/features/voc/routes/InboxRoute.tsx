@@ -6,6 +6,7 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import {
   Button,
   type FilterCategory,
@@ -74,7 +75,7 @@ const INBOX_TABS: ListToolbarTab[] = [
   { value: 'untriaged', label: 'Untriaged' },
   { value: 'high', label: 'High' },
   { value: 'unassigned', label: 'Unassigned', urgent: true },
-  { value: 'no-link', label: 'No link' },
+  { value: 'no-link', label: VOC_INBOX_NO_LINK_TAB_LABEL },
   { value: 'high-no-link', label: 'High · no link' },
   { value: 'no-task', label: 'No task' },
 ];

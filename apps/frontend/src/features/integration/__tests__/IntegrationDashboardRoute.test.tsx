@@ -245,6 +245,7 @@ describe('integration action dashboard route', () => {
     ).toBeVisible();
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
+    expect(surfaces.getByText('평균 Coverage')).toBeVisible();
     expect(surfaces.queryByText('active links')).toBeNull();
     expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_A}`).textContent).toBe(
       '18',
