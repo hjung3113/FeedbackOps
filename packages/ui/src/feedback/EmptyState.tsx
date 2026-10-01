@@ -1,4 +1,4 @@
-import type * as React from 'react';
+import * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export interface EmptyStateProps {
@@ -16,7 +16,14 @@ const SIZE_CLASSES = {
   lg: 'py-20 gap-4 text-lg',
 } as const;
 
-export function EmptyState({ icon, title, body, action, size = 'md', className }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+  size = 'md',
+  className,
+}: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -35,8 +42,12 @@ export function EmptyState({ icon, title, body, action, size = 'md', className }
       >
         {title}
       </p>
-      {body !== undefined && <p className="text-text-muted">{body}</p>}
-      {action !== undefined && <div>{action}</div>}
+      {body !== undefined && (
+        <p className="text-text-muted">{body}</p>
+      )}
+      {action !== undefined && (
+        <div>{action}</div>
+      )}
     </div>
   );
 }
