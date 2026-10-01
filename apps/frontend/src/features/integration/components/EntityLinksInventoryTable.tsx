@@ -61,7 +61,7 @@ export function EntityLinksInventoryTable({
   onLoadMore,
 }: EntityLinksInventoryTableProps) {
   if (loading === true) {
-    return <div className="p-6 text-sm text-text-muted">Loading entity_links…</div>;
+    return <div className="p-6 text-sm text-text-muted">Entity links를 불러오는 중…</div>;
   }
 
   if (error != null) {

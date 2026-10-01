@@ -100,9 +100,8 @@ export function AnalyticsAreaSlideOver({
               icon={<Shield className="h-4 w-4" />}
               title="Not a permission boundary"
             >
-              AA 는 권한 경계가 아닌 분류·집계 단위입니다. Triage filter, dashboard tab, survey
-              targeting 같은 surface 에서만 사용되며 backend permission check 에는 영향을 주지
-              않습니다.
+              Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage filter, dashboard
+              tab, survey targeting에만 사용되며 권한 확인에는 영향을 주지 않습니다.
             </Callout>
           </div>
 

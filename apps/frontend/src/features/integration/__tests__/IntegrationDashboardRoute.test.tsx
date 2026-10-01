@@ -238,6 +238,11 @@ describe('integration action dashboard route', () => {
     const surfaces = within(screen.getByTestId('integration-surfaces'));
     expect(surfaces.getByRole('link', { name: /Coverage/ })).toBeVisible();
     expect(surfaces.getByRole('link', { name: /Entity links/ })).toBeVisible();
+    expect(
+      surfaces.getByText(
+        'VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다.',
+      ),
+    ).toBeVisible();
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
     expect(surfaces.queryByText('active links')).toBeNull();

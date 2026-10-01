@@ -35,7 +35,7 @@ import { EditDialog, RegisterDialog } from './ManagedSystemsDialogs.js';
 import { useManagedSystemsRegistry } from './useManagedSystemsRegistry.js';
 
 const SUBTITLE =
-  'Managed System 은 MVP 의 권한·집계 단위입니다. Project 가 아닙니다. 각 시스템의 default owner, AA 매핑, 활성 상태를 관리합니다.';
+  'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.';
 
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);

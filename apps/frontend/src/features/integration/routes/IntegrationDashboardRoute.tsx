@@ -170,7 +170,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             <IntegrationJumpCard
               href={`/integration/links${surfaceScopeSearch}`}
               title="Entity links"
-              description="entity_links 테이블의 활성·stale·detached 상태와 cross-system 관계를 점검합니다."
+              description="VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다."
               icon={<Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-links"
             />

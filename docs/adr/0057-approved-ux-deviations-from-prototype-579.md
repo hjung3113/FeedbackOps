@@ -34,6 +34,7 @@ Use Korean for field labels and action buttons on Korean-language surfaces. Keep
 | B5 | One blocked/empty state per region, in the same placement everywhere | #615 |
 | B6 | Managed System marks come from identity tokens everywhere | #615 |
 | B7 | Native `select`/date inputs become the shared Select and a new shared DatePicker | #616 |
+| B9 | Internal-sounding prototype copy rewritten (MVP, particle spacing, table names, metric keys) | owner, 2026-10-01, #683 |
 
 ## Consequences
 
