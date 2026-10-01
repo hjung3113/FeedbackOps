@@ -6,7 +6,7 @@ import {
   convertTaskRequestRequestSchema,
   taskPrioritySchema,
 } from '@fops/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -166,7 +166,11 @@ beforeEach(() => {
   api.fetchAnalyticsAreas.mockReset();
   api.fetchAnalyticsAreas.mockResolvedValue({ items: [] });
   api.useFindingDetail.mockReset();
-  api.useFindingDetail.mockReturnValue({ data: null });
+  api.useFindingDetail.mockReturnValue({
+    data: { id: taskRequest.source_id, analytics_area_id: null },
+    isSuccess: true,
+    isError: false,
+  });
   vi.mocked(listMilestones).mockReset();
   toast.success.mockReset();
   vi.mocked(listMilestones).mockImplementation(async (options) => ({
@@ -266,6 +270,8 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     const analyticsAreaId = '30000000-0000-4000-8000-000000000021';
     api.useFindingDetail.mockReturnValue({
       data: { id: taskRequest.source_id, analytics_area_id: analyticsAreaId },
+      isSuccess: true,
+      isError: false,
     });
     api.fetchAnalyticsAreas.mockResolvedValue({
       items: [
@@ -291,6 +297,65 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     );
   });
 
+  it('keeps conversion disabled during a deferred source Finding read until an explicit Area choice', async () => {
+    const sourceAreaId = '30000000-0000-4000-8000-000000000021';
+    const alternativeAreaId = '30000000-0000-4000-8000-000000000022';
+    let settleSourceFinding:
+      | ((finding: { id: string; analytics_area_id: string | null }) => void)
+      | undefined;
+    api.useFindingDetail.mockImplementation(function useDeferredSourceFinding(findingId: string) {
+      return useQuery({
+        queryKey: ['deferred-source-finding', findingId],
+        queryFn: () =>
+          new Promise<{ id: string; analytics_area_id: string | null }>((resolve) => {
+            settleSourceFinding = resolve;
+          }),
+      });
+    });
+    api.fetchAnalyticsAreas.mockResolvedValue({
+      items: [
+        {
+          id: sourceAreaId,
+          managed_system_id: taskRequest.primary_managed_system_id,
+          name: 'Source Area',
+          archived_at: null,
+        },
+        {
+          id: alternativeAreaId,
+          managed_system_id: taskRequest.primary_managed_system_id,
+          name: 'Alternative Area',
+          archived_at: null,
+        },
+      ],
+    });
+    api.convertTaskRequest.mockReset().mockResolvedValue({ display_id: 'TASK-7' });
+
+    await openConvertForm();
+    await waitFor(() => expect(settleSourceFinding).toEqual(expect.any(Function)));
+
+    const submit = screen.getByTestId('task-request-convert-submit');
+    expect(submit).toBeDisabled();
+    await chooseOption('Analytics Area', 'Alternative Area');
+    expect(submit).toBeEnabled();
+
+    if (!settleSourceFinding) throw new Error('Expected a deferred source Finding read.');
+    settleSourceFinding({ id: taskRequest.source_id, analytics_area_id: sourceAreaId });
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Analytics Area' })).toHaveTextContent(
+        'Alternative Area',
+      ),
+    );
+    fireEvent.click(submit);
+
+    await waitFor(() =>
+      expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
+        taskRequest.id,
+        expect.objectContaining({ analytics_area_id: alternativeAreaId }),
+        expect.any(String),
+      ),
+    );
+  });
+
   it.each([
     ['an alternate Area', 'Alternative Area', '30000000-0000-4000-8000-000000000022'],
     ['explicit None', '없음', null],
@@ -301,6 +366,8 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
       const alternativeAreaId = '30000000-0000-4000-8000-000000000022';
       api.useFindingDetail.mockReturnValue({
         data: { id: taskRequest.source_id, analytics_area_id: sourceAreaId },
+        isSuccess: true,
+        isError: false,
       });
       api.fetchAnalyticsAreas.mockResolvedValue({
         items: [
@@ -368,6 +435,8 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
       const archivedAreaId = '30000000-0000-4000-8000-000000000023';
       api.useFindingDetail.mockReturnValue({
         data: { id: taskRequest.source_id, analytics_area_id: archivedAreaId },
+        isSuccess: true,
+        isError: false,
       });
       api.fetchAnalyticsAreas.mockResolvedValue({
         items: [
@@ -420,6 +489,8 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     const selectedAreaId = '30000000-0000-4000-8000-000000000022';
     api.useFindingDetail.mockReturnValue({
       data: { id: taskRequest.source_id, analytics_area_id: sourceAreaId },
+      isSuccess: true,
+      isError: false,
     });
     api.fetchAnalyticsAreas
       .mockResolvedValueOnce({

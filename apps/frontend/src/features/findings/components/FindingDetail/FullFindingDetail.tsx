@@ -113,6 +113,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
   const retryInProgressRef = React.useRef(false);
   const retryObservedFetchingRef = React.useRef(false);
   const retryHadFocusRef = React.useRef(false);
+  const retryButtonAtActivationRef = React.useRef<HTMLButtonElement | null>(null);
   const taskRequestRegionRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -130,12 +131,16 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     }
 
     if (!retryHadFocusRef.current) return;
-    if (requestedTaskRequestsState === 'loaded') {
+    const focusStillBelongsToRetry =
+      document.activeElement === retryButtonAtActivationRef.current ||
+      document.activeElement === document.body;
+    if (requestedTaskRequestsState === 'loaded' && focusStillBelongsToRetry) {
       const region = taskRequestRegionRef.current;
       const requestLink = region?.querySelector<HTMLAnchorElement>('a');
       (requestLink ?? region)?.focus();
     }
     retryHadFocusRef.current = false;
+    retryButtonAtActivationRef.current = null;
   }, [retryInProgress, requestedTaskRequestsFetching, requestedTaskRequestsState]);
 
   function handleRetryRequestedTaskRequests(event: React.MouseEvent<HTMLButtonElement>): void {
@@ -143,6 +148,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     retryInProgressRef.current = true;
     retryObservedFetchingRef.current = false;
     retryHadFocusRef.current = document.activeElement === event.currentTarget;
+    retryButtonAtActivationRef.current = retryHadFocusRef.current ? event.currentTarget : null;
     setRetryInProgress(true);
     retryRequestedTaskRequests();
   }
@@ -284,7 +290,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 ) : requestedTaskRequestsState === 'error' || retryInProgress ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className="text-text-muted"
+                      className={retryInProgress ? 'text-text-muted' : 'text-text-danger'}
                       {...(retryInProgress
                         ? { 'aria-live': 'polite' as const }
                         : { role: 'alert' as const })}
