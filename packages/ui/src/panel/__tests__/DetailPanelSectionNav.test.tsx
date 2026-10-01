@@ -201,7 +201,8 @@ describe('DetailPanelSectionNav', () => {
     );
 
     const track = screen.getByTestId('detail-panel-section-nav-track');
-    track.scrollBy = vi.fn();
+    const scrollBy = vi.fn();
+    track.scrollBy = scrollBy;
     Object.defineProperties(track, {
       clientWidth: { configurable: true, value: 100 },
       scrollWidth: { configurable: true, value: 300 },
@@ -215,7 +216,7 @@ describe('DetailPanelSectionNav', () => {
     ]);
     for (const [id, position] of tabPositions) {
       screen.getByRole('button', {
-        name: id === 'properties' ? 'Properties' : id[0].toUpperCase() + id.slice(1),
+        name: id === 'properties' ? 'Properties' : id.charAt(0).toUpperCase() + id.slice(1),
       }).getBoundingClientRect = vi.fn(() => position);
     }
 
@@ -229,7 +230,7 @@ describe('DetailPanelSectionNav', () => {
     expect(screen.getByRole('button', { name: 'Properties' })).toHaveClass('border-accent-primary');
     expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 100, behavior: 'smooth' });
 
-    track.scrollBy.mockClear();
+    scrollBy.mockClear();
     act(() => window.dispatchEvent(new Event('resize')));
     expect(track.scrollBy).toHaveBeenCalledWith({ left: 100, behavior: 'smooth' });
     scrollEl.remove();
@@ -257,7 +258,7 @@ describe('DetailPanelSectionNav', () => {
     track.scrollBy = vi.fn((options: ScrollToOptions) => {
       track.scrollLeft += options.left ?? 0;
       track.dispatchEvent(new Event('scroll'));
-    });
+    }) as unknown as typeof track.scrollBy;
     act(() => window.dispatchEvent(new Event('resize')));
 
     const right = screen.getByRole('button', { name: '다음 탭 보기' });
