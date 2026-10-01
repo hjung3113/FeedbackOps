@@ -24,7 +24,7 @@ import {
   UserChip,
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
-import type * as React from 'react';
+import * as React from 'react';
 import { toast } from 'sonner';
 import { AddEvidenceModal } from './AddEvidenceModal';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
@@ -100,6 +100,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     linkedTaskQuery,
     requestedTaskRequests,
     requestedTaskRequestsState,
+    requestedTaskRequestsFetching,
     retryRequestedTaskRequests,
     canManage,
     handleMarkNotActionable,
@@ -108,6 +109,43 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
   const pendingTaskRequest = requestedTaskRequests.find(
     (request) => request.status === 'pending_review' || request.status === 'needs_more_evidence',
   );
+  const [retryInProgress, setRetryInProgress] = React.useState(false);
+  const retryInProgressRef = React.useRef(false);
+  const retryObservedFetchingRef = React.useRef(false);
+  const retryHadFocusRef = React.useRef(false);
+  const taskRequestRegionRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (retryInProgress) {
+      if (requestedTaskRequestsFetching) {
+        retryObservedFetchingRef.current = true;
+        return;
+      }
+      if (!retryObservedFetchingRef.current) return;
+
+      retryInProgressRef.current = false;
+      setRetryInProgress(false);
+      retryObservedFetchingRef.current = false;
+      return;
+    }
+
+    if (!retryHadFocusRef.current) return;
+    if (requestedTaskRequestsState === 'loaded') {
+      const region = taskRequestRegionRef.current;
+      const requestLink = region?.querySelector<HTMLAnchorElement>('a');
+      (requestLink ?? region)?.focus();
+    }
+    retryHadFocusRef.current = false;
+  }, [retryInProgress, requestedTaskRequestsFetching, requestedTaskRequestsState]);
+
+  function handleRetryRequestedTaskRequests(event: React.MouseEvent<HTMLButtonElement>): void {
+    if (retryInProgressRef.current) return;
+    retryInProgressRef.current = true;
+    retryObservedFetchingRef.current = false;
+    retryHadFocusRef.current = document.activeElement === event.currentTarget;
+    setRetryInProgress(true);
+    retryRequestedTaskRequests();
+  }
 
   return (
     <>
@@ -238,43 +276,52 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               )}
             </FieldRow>
             <FieldRow label="Task Request" className="px-0">
-              {requestedTaskRequestsState === 'loading' ? (
-                <span className="text-text-muted" aria-live="polite">
-                  확인 중…
-                </span>
-              ) : requestedTaskRequestsState === 'error' ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-text-muted" role="alert">
-                    Task Request를 확인하지 못했습니다.
+              <div ref={taskRequestRegionRef} tabIndex={-1} className="min-w-0">
+                {requestedTaskRequestsState === 'loading' && !retryInProgress ? (
+                  <span className="text-text-muted" aria-live="polite">
+                    확인 중…
                   </span>
-                  <Button
-                    type="button"
-                    variant="subtle"
-                    size="sm"
-                    onClick={retryRequestedTaskRequests}
-                  >
-                    다시 시도
-                  </Button>
-                </div>
-              ) : requestedTaskRequests.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {requestedTaskRequests.map((request) => (
-                    <Link
-                      key={request.id}
-                      to="/tasks"
-                      search={{ view: 'requests', param: request.id }}
-                      className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
+                ) : requestedTaskRequestsState === 'error' || retryInProgress ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="text-text-muted"
+                      {...(retryInProgress
+                        ? { 'aria-live': 'polite' as const }
+                        : { role: 'alert' as const })}
                     >
-                      <span className="font-mono">{request.display_id}</span>
-                      <span className="text-xs text-text-muted">
-                        {TASK_REQUEST_STATUS_LABELS[request.status]}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
+                      {retryInProgress ? '확인 중…' : 'Task Request를 확인하지 못했습니다.'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="subtle"
+                      size="sm"
+                      aria-disabled={retryInProgress}
+                      aria-busy={retryInProgress}
+                      onClick={handleRetryRequestedTaskRequests}
+                    >
+                      다시 시도
+                    </Button>
+                  </div>
+                ) : requestedTaskRequests.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {requestedTaskRequests.map((request) => (
+                      <Link
+                        key={request.id}
+                        to="/tasks"
+                        search={{ view: 'requests', param: request.id }}
+                        className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
+                      >
+                        <span className="font-mono">{request.display_id}</span>
+                        <span className="text-xs text-text-muted">
+                          {TASK_REQUEST_STATUS_LABELS[request.status]}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-text-muted">—</span>
+                )}
+              </div>
             </FieldRow>
           </div>
           {requestTaskOpen && (

@@ -7,7 +7,7 @@ import {
   taskPrioritySchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from '../TaskRequestsRoute';
@@ -359,31 +359,122 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     });
   });
 
-  it('AC-681-3 leaves an archived source Area empty and never submits its hidden id', async () => {
-    const archivedAreaId = '30000000-0000-4000-8000-000000000023';
+  it.each([
+    ['없음', null],
+    ['Current Area', '30000000-0000-4000-8000-000000000024'],
+  ] as const)(
+    'AC-681-3 requires an explicit %s choice for an archived source Area',
+    async (choice, expectedAreaId) => {
+      const archivedAreaId = '30000000-0000-4000-8000-000000000023';
+      api.useFindingDetail.mockReturnValue({
+        data: { id: taskRequest.source_id, analytics_area_id: archivedAreaId },
+      });
+      api.fetchAnalyticsAreas.mockResolvedValue({
+        items: [
+          {
+            id: '30000000-0000-4000-8000-000000000024',
+            managed_system_id: taskRequest.primary_managed_system_id,
+            name: 'Current Area',
+            archived_at: null,
+          },
+        ],
+      });
+      api.convertTaskRequest.mockReset().mockResolvedValue({ display_id: 'TASK-7' });
+
+      await openConvertForm();
+      const hint = await screen.findByText(
+        '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.',
+      );
+      const areaPicker = screen.getByRole('combobox', { name: 'Analytics Area' });
+      expect(areaPicker).toHaveTextContent('Analytics Area 선택 필요');
+      expect(areaPicker).toHaveAccessibleDescription(hint.textContent ?? '');
+      const submit = screen.getByTestId('task-request-convert-submit');
+      expect(submit).toBeDisabled();
+      const form = submit.closest('form');
+      if (!form) throw new Error('Expected the conversion form.');
+      fireEvent.submit(form);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(api.convertTaskRequest).not.toHaveBeenCalled();
+
+      await chooseOption('Analytics Area', choice);
+      expect(submit).toBeEnabled();
+      fireEvent.click(submit);
+
+      await waitFor(() =>
+        expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
+          taskRequest.id,
+          expect.objectContaining({ analytics_area_id: expectedAreaId }),
+          expect.any(String),
+        ),
+      );
+      expect(api.convertTaskRequest.mock.lastCall?.[1]).not.toMatchObject({
+        analytics_area_id: archivedAreaId,
+      });
+    },
+  );
+
+  it('AC-681-3 requires a new Area choice when a previously selected Area disappears', async () => {
+    const sourceAreaId = '30000000-0000-4000-8000-000000000021';
+    const selectedAreaId = '30000000-0000-4000-8000-000000000022';
     api.useFindingDetail.mockReturnValue({
-      data: { id: taskRequest.source_id, analytics_area_id: archivedAreaId },
+      data: { id: taskRequest.source_id, analytics_area_id: sourceAreaId },
     });
-    api.fetchAnalyticsAreas.mockResolvedValue({
-      items: [
-        {
-          id: '30000000-0000-4000-8000-000000000024',
-          managed_system_id: taskRequest.primary_managed_system_id,
-          name: 'Current Area',
-          archived_at: null,
-        },
-      ],
-    });
+    api.fetchAnalyticsAreas
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: sourceAreaId,
+            managed_system_id: taskRequest.primary_managed_system_id,
+            name: 'Source Area',
+            archived_at: null,
+          },
+          {
+            id: selectedAreaId,
+            managed_system_id: taskRequest.primary_managed_system_id,
+            name: 'Alternative Area',
+            archived_at: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: sourceAreaId,
+            managed_system_id: taskRequest.primary_managed_system_id,
+            name: 'Source Area',
+            archived_at: null,
+          },
+        ],
+      });
     api.convertTaskRequest.mockReset().mockResolvedValue({ display_id: 'TASK-7' });
 
-    await openConvertForm();
-    expect(
-      await screen.findByText(
-        '원본 Finding의 Analytics Area가 보관되어 있거나 사용할 수 없습니다. 다른 Area를 선택하거나 없음으로 전환하세요.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Analytics Area' })).toHaveTextContent('없음');
-    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    const { queryClient } = await openConvertFormReturnsClient();
+    await chooseOption('Analytics Area', 'Alternative Area');
+    await queryClient.invalidateQueries({
+      queryKey: ['analytics-areas', taskRequest.primary_managed_system_id],
+    });
+
+    const hint = await screen.findByText(
+      '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.',
+    );
+    const areaPicker = screen.getByRole('combobox', { name: 'Analytics Area' });
+    expect(areaPicker).toHaveTextContent('Analytics Area 선택 필요');
+    expect(areaPicker).toHaveAccessibleDescription(hint.textContent ?? '');
+    const submit = screen.getByTestId('task-request-convert-submit');
+    expect(submit).toBeDisabled();
+    const form = submit.closest('form');
+    if (!form) throw new Error('Expected the conversion form.');
+    fireEvent.submit(form);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api.convertTaskRequest).not.toHaveBeenCalled();
+
+    await chooseOption('Analytics Area', '없음');
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
 
     await waitFor(() =>
       expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
@@ -392,9 +483,6 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
         expect.any(String),
       ),
     );
-    expect(api.convertTaskRequest.mock.lastCall?.[1]).not.toMatchObject({
-      analytics_area_id: archivedAreaId,
-    });
   });
 });
 

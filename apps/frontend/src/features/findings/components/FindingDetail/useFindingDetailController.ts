@@ -72,6 +72,7 @@ export interface FindingDetailController {
   linkedTaskQuery: UseQueryResult<TaskDetailDto>;
   requestedTaskRequests: RequestedTaskRequestSummary[];
   requestedTaskRequestsState: 'loading' | 'error' | 'loaded';
+  requestedTaskRequestsFetching: boolean;
   retryRequestedTaskRequests: () => void;
   canManage: boolean;
   handleMarkNotActionable: () => void;
@@ -204,6 +205,7 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
       : requestedTaskRequestQuery.isPending
         ? 'loading'
         : 'loaded',
+    requestedTaskRequestsFetching: requestedTaskRequestQuery.isFetching,
     retryRequestedTaskRequests: () => {
       void requestedTaskRequestQuery.refetch();
     },

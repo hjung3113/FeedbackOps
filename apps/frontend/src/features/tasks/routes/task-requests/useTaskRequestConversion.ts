@@ -23,7 +23,17 @@ export interface UseTaskRequestConversionArgs {
   item: TaskRequestDto;
   currentRole: string | null;
   defaultAnalyticsAreaId?: string | null;
+  defaultAnalyticsAreaResolved?: boolean;
 }
+
+export type AnalyticsAreaSelection =
+  | { kind: 'active'; id: string }
+  | { kind: 'none' }
+  | {
+      kind: 'unresolved';
+      reason: 'source-unavailable' | 'selection-unavailable';
+      unavailableId: string;
+    };
 
 export const TASK_PRIORITIES: readonly TaskPriority[] = taskPrioritySchema.options;
 
@@ -49,16 +59,17 @@ export interface UseTaskRequestConversionResult {
   milestonePickerError: { denied: boolean; message: string } | null;
   /** R4 — a held selection missing from a settled successful list. */
   milestoneSelectionUnavailable: boolean;
-  analyticsAreaId: string;
+  analyticsAreaSelection: AnalyticsAreaSelection;
+  analyticsAreaUnresolvedReason: 'source-unavailable' | 'selection-unavailable' | null;
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
-  sourceAnalyticsAreaUnavailable: boolean;
   isPending: boolean;
   /** Last conversion mutation's settled result, independent of toast state. */
   result: TaskDto | null;
   /** Last conversion mutation's settled error, independent of toast state. */
   error: Error | null;
   canConvert: boolean;
+  canSubmit: boolean;
   submit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -66,6 +77,7 @@ export function useTaskRequestConversion({
   item,
   currentRole,
   defaultAnalyticsAreaId = null,
+  defaultAnalyticsAreaResolved = true,
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
   const itemRef = React.useRef(item);
@@ -82,7 +94,9 @@ export function useTaskRequestConversion({
   const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
-  const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
+  const [convertAnalyticsAreaSelection, setConvertAnalyticsAreaSelection] =
+    React.useState<AnalyticsAreaSelection>({ kind: 'none' });
+  const [analyticsAreaChoiceInitialized, setAnalyticsAreaChoiceInitialized] = React.useState(false);
   const analyticsAreaEdited = React.useRef(false);
 
   React.useEffect(() => {
@@ -95,7 +109,8 @@ export function useTaskRequestConversion({
     setConvertAssigneeId('');
     setConvertDueDate('');
     setConvertMilestoneId('');
-    setConvertAnalyticsAreaId('');
+    setConvertAnalyticsAreaSelection({ kind: 'none' });
+    setAnalyticsAreaChoiceInitialized(false);
     analyticsAreaEdited.current = false;
     setConvertOpen(false);
   }, [selectedRequestId]);
@@ -130,33 +145,67 @@ export function useTaskRequestConversion({
   const analyticsAreaOptionsResolved = analyticsAreasQuery.isSuccess || analyticsAreasQuery.isError;
   const inheritedAnalyticsAreaIsActive =
     defaultAnalyticsAreaId !== null &&
+    analyticsAreasQuery.isSuccess &&
     (activeAnalyticsAreaOptions?.some((area) => area.id === defaultAnalyticsAreaId) ?? false);
-  const sourceAnalyticsAreaUnavailable =
-    defaultAnalyticsAreaId !== null &&
-    analyticsAreaOptionsResolved &&
-    !inheritedAnalyticsAreaIsActive;
 
   React.useEffect(() => {
     if (
       itemRef.current.id !== selectedRequestId ||
       analyticsAreaEdited.current ||
-      !analyticsAreaOptionsResolved
+      !analyticsAreaOptionsResolved ||
+      !defaultAnalyticsAreaResolved
     ) {
       return;
     }
-    setConvertAnalyticsAreaId(
-      inheritedAnalyticsAreaIsActive && defaultAnalyticsAreaId !== null
-        ? defaultAnalyticsAreaId
-        : '',
+    setConvertAnalyticsAreaSelection(
+      defaultAnalyticsAreaId === null
+        ? { kind: 'none' }
+        : inheritedAnalyticsAreaIsActive
+          ? { kind: 'active', id: defaultAnalyticsAreaId }
+          : {
+              kind: 'unresolved',
+              reason: 'source-unavailable',
+              unavailableId: defaultAnalyticsAreaId,
+            },
     );
+    setAnalyticsAreaChoiceInitialized(true);
   }, [
     analyticsAreaOptionsResolved,
     defaultAnalyticsAreaId,
+    defaultAnalyticsAreaResolved,
     inheritedAnalyticsAreaIsActive,
     selectedRequestId,
   ]);
-  const selectedAnalyticsAreaIsActive =
-    activeAnalyticsAreaOptions?.some((area) => area.id === convertAnalyticsAreaId) ?? false;
+  const selectedAnalyticsAreaUnavailable =
+    convertAnalyticsAreaSelection.kind === 'active' &&
+    (analyticsAreasQuery.isError ||
+      (analyticsAreasQuery.isSuccess &&
+        !(
+          activeAnalyticsAreaOptions?.some(
+            (area) => area.id === convertAnalyticsAreaSelection.id,
+          ) ?? false
+        )));
+  const analyticsAreaSelection: AnalyticsAreaSelection = selectedAnalyticsAreaUnavailable
+    ? {
+        kind: 'unresolved',
+        reason: 'selection-unavailable',
+        unavailableId:
+          convertAnalyticsAreaSelection.kind === 'active' ? convertAnalyticsAreaSelection.id : '',
+      }
+    : convertAnalyticsAreaSelection;
+  const analyticsAreaUnresolvedReason =
+    analyticsAreaSelection.kind === 'unresolved' ? analyticsAreaSelection.reason : null;
+
+  React.useEffect(() => {
+    if (!selectedAnalyticsAreaUnavailable || convertAnalyticsAreaSelection.kind !== 'active') {
+      return;
+    }
+    setConvertAnalyticsAreaSelection({
+      kind: 'unresolved',
+      reason: 'selection-unavailable',
+      unavailableId: convertAnalyticsAreaSelection.id,
+    });
+  }, [convertAnalyticsAreaSelection, selectedAnalyticsAreaUnavailable]);
 
   const milestonesQuery = useQuery({
     queryKey: ['milestones', item.primary_managed_system_id] as const,
@@ -206,7 +255,10 @@ export function useTaskRequestConversion({
           assignee_actor_id: convertAssigneeId.trim() || null,
           due_date: convertDueDate.trim() || null,
           milestone_id: convertMilestoneId || null,
-          analytics_area_id: selectedAnalyticsAreaIsActive ? convertAnalyticsAreaId : null,
+          analytics_area_id:
+            convertAnalyticsAreaSelection.kind === 'active' && !selectedAnalyticsAreaUnavailable
+              ? convertAnalyticsAreaSelection.id
+              : null,
         },
         crypto.randomUUID(),
       );
@@ -232,6 +284,7 @@ export function useTaskRequestConversion({
     if ((milestonesError !== null || milestoneSelectionUnavailable) && convertMilestoneId !== '') {
       return;
     }
+    if (analyticsAreaSelection.kind === 'unresolved' || selectedAnalyticsAreaUnavailable) return;
     const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
     if (!titleResult.success) {
       const issue = titleResult.error.issues[0];
@@ -265,17 +318,28 @@ export function useTaskRequestConversion({
     milestones: milestonesError === null ? milestonesQuery.data?.items : undefined,
     milestonePickerError,
     milestoneSelectionUnavailable,
-    analyticsAreaId: convertAnalyticsAreaId,
+    analyticsAreaSelection,
+    analyticsAreaUnresolvedReason,
     setAnalyticsAreaId: (value) => {
       analyticsAreaEdited.current = true;
-      setConvertAnalyticsAreaId(value);
+      setAnalyticsAreaChoiceInitialized(true);
+      setConvertAnalyticsAreaSelection(
+        value === '' ? { kind: 'none' } : { kind: 'active', id: value },
+      );
     },
-    analyticsAreas: activeAnalyticsAreaOptions?.map(({ id, name }) => ({ id, name })),
-    sourceAnalyticsAreaUnavailable,
+    analyticsAreas: analyticsAreasQuery.isError
+      ? undefined
+      : activeAnalyticsAreaOptions?.map(({ id, name }) => ({ id, name })),
     isPending: convertMutation.isPending,
     result: convertMutation.data ?? null,
     error: convertMutation.error ?? null,
     canConvert: canConvertTaskRequest(item.status) && canManage,
+    canSubmit:
+      canConvertTaskRequest(item.status) &&
+      canManage &&
+      analyticsAreaChoiceInitialized &&
+      analyticsAreaSelection.kind !== 'unresolved' &&
+      !selectedAnalyticsAreaUnavailable,
     submit,
   };
 }

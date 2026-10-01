@@ -41,6 +41,8 @@ import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestLink } from './useTaskRequestLink';
 
 const NO_SELECTION = '__none__';
+const UNRESOLVED_ANALYTICS_AREA = '__analytics_area_unresolved__';
+const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
 
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
@@ -82,7 +84,23 @@ export function TaskRequestPanel({
     item,
     currentRole,
     defaultAnalyticsAreaId: sourceAnalyticsAreaId,
+    defaultAnalyticsAreaResolved:
+      item.source_type !== 'finding' ||
+      (sourceFindingQuery.isSuccess && sourceFindingQuery.data?.id === item.source_id) ||
+      sourceFindingQuery.isError,
   });
+  const analyticsAreaValue =
+    conversion.analyticsAreaSelection.kind === 'active'
+      ? conversion.analyticsAreaSelection.id
+      : conversion.analyticsAreaSelection.kind === 'none'
+        ? NO_SELECTION
+        : UNRESOLVED_ANALYTICS_AREA;
+  const analyticsAreaHint =
+    conversion.analyticsAreaUnresolvedReason === 'source-unavailable'
+      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+      : conversion.analyticsAreaUnresolvedReason === 'selection-unavailable'
+        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+        : null;
   const link = useTaskRequestLink({ item, currentRole });
   const resultingTask: TaskDto | null =
     conversion.result?.source_task_request_id === item.id
@@ -417,7 +435,7 @@ export function TaskRequestPanel({
                       Analytics Area
                     </FieldLabel>
                     <Select
-                      value={conversion.analyticsAreaId || NO_SELECTION}
+                      value={analyticsAreaValue}
                       onValueChange={(value) =>
                         conversion.setAnalyticsAreaId(value === NO_SELECTION ? '' : value)
                       }
@@ -425,11 +443,19 @@ export function TaskRequestPanel({
                       <SelectTrigger
                         id="task-request-convert-analytics-area"
                         aria-label="Analytics Area"
+                        {...(analyticsAreaHint === null
+                          ? {}
+                          : { 'aria-describedby': ANALYTICS_AREA_HINT_ID })}
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NO_SELECTION}>없음</SelectItem>
+                        {conversion.analyticsAreaSelection.kind === 'unresolved' && (
+                          <SelectItem value={UNRESOLVED_ANALYTICS_AREA} disabled>
+                            Analytics Area 선택 필요
+                          </SelectItem>
+                        )}
                         {conversion.analyticsAreas?.map((area) => (
                           <SelectItem key={area.id} value={area.id}>
                             {area.name}
@@ -437,10 +463,13 @@ export function TaskRequestPanel({
                         ))}
                       </SelectContent>
                     </Select>
-                    {conversion.sourceAnalyticsAreaUnavailable && (
-                      <p className="text-xs text-text-muted" aria-live="polite">
-                        원본 Finding의 Analytics Area가 보관되어 있거나 사용할 수 없습니다. 다른
-                        Area를 선택하거나 없음으로 전환하세요.
+                    {analyticsAreaHint !== null && (
+                      <p
+                        id={ANALYTICS_AREA_HINT_ID}
+                        className="text-xs text-text-muted"
+                        aria-live="polite"
+                      >
+                        {analyticsAreaHint}
                       </p>
                     )}
                   </div>
@@ -507,7 +536,7 @@ export function TaskRequestPanel({
                     variant="primary"
                     size="sm"
                     loading={conversion.isPending}
-                    disabled={!conversion.canConvert}
+                    disabled={!conversion.canSubmit}
                     data-testid="task-request-convert-submit"
                   >
                     Task로 전환

@@ -197,8 +197,11 @@ Side effects are atomic:
 
 The conversion form inherits the source Finding's Analytics Area only when the
 Area is active and present in the form's options. If it is archived or
-unavailable, start at `없음`, show a Korean hint to choose an active Area or
-`없음`, and never submit the hidden source ID. Preserve an explicit Area or
+unavailable, show an unresolved `Analytics Area 선택 필요` value and a Korean
+hint; block conversion until the operator selects an active Area or explicitly
+chooses `없음`. Never submit the hidden source ID. If a previously selected Area
+disappears from refreshed options, show the unresolved value and block
+conversion until another explicit choice is made. Preserve an explicit Area or
 `없음` choice across same-request refetches; selecting a different Task Request
 resets the conversion form.
 

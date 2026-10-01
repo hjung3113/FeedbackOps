@@ -305,16 +305,17 @@ describe('FindingDetailPanel', () => {
     const failedRead = new Promise<Response>((resolve) => {
       settleFailedRead = resolve;
     });
+    let settleRetryRead: (response: Response) => void = () => undefined;
+    const retryRead = new Promise<Response>((resolve) => {
+      settleRetryRead = resolve;
+    });
     let entityLinkReads = 0;
     globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
       const path = new URL(String(input), 'http://localhost').pathname;
       if (path === '/entity-links') {
         entityLinkReads += 1;
         if (entityLinkReads === 1) return failedRead;
-        return new Response(JSON.stringify(pendingPayload), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
+        return retryRead;
       }
       return new Response(JSON.stringify({ items: [] }), {
         status: 200,
@@ -336,9 +337,25 @@ describe('FindingDetailPanel', () => {
     expect(screen.queryByRole('group', { name: '주요 실행' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-task-btn')).not.toBeInTheDocument();
 
-    await userEvent.setup().click(screen.getByRole('button', { name: '다시 시도' }));
+    const user = userEvent.setup();
+    const retryButton = screen.getByRole('button', { name: '다시 시도' });
+    retryButton.focus();
+    expect(document.activeElement).toBe(retryButton);
+    await user.keyboard('{Enter}');
+
+    expect(retryButton).toBeInTheDocument();
+    expect(retryButton).toHaveAttribute('aria-disabled', 'true');
+    expect(retryButton).toHaveAttribute('aria-busy', 'true');
+    expect(document.activeElement).toBe(retryButton);
+    settleRetryRead(
+      new Response(JSON.stringify(pendingPayload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const requestLink = await screen.findByRole('link', { name: /REQ-682/ });
+    await waitFor(() => expect(document.activeElement).toBe(requestLink));
     expect(requestLink).toHaveTextContent(TASK_REQUEST_STATUS_LABELS.pending_review);
     expect(
       within(screen.getByRole('group', { name: '주요 실행' })).getByRole('link', {
