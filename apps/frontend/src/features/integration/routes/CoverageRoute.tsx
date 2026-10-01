@@ -293,7 +293,6 @@ export function CoverageRoute(): React.ReactElement {
                       <div className="truncate text-sm font-medium text-text-primary">
                         {COVERAGE_LABELS[item.id]}
                       </div>
-                      <div aria-hidden="true" className="h-4" />
                     </div>
                     <div className="text-right text-xs tabular-nums text-text-muted">
                       {item.value} / {item.total}
