@@ -16,7 +16,9 @@ Code ownership and URL mount are not the same thing here:
 - Owns both code and URL for Coverage, at `/integration/coverage` (route file `apps/frontend/src/routes/_authed/integration/coverage.tsx`, screen `features/integration/routes/CoverageRoute.tsx`).
 - Owns the Integration Action Dashboard at `/integration` (route file `apps/frontend/src/routes/_authed/integration/index.tsx`, screen `features/integration/routes/IntegrationDashboardRoute.tsx`).
 - `/integration/evidence` is planned, not yet built.
-- Findings is mounted at the top-level `/findings` and `/findings/$findingId` routes and owned by `apps/frontend/src/features/findings/` (route files live in `apps/frontend/src/routes/_authed/findings/`).
+- Findings is mounted at top-level `/findings` and owned by `apps/frontend/src/features/findings/`
+  (route files live in `apps/frontend/src/routes/_authed/findings/`). The direct
+  `/findings/$findingId` URL redirects to `/findings?selected=:findingId`.
 - Home may link into Integration-owned surfaces with selected object and action intent.
 
 ## Invariants

@@ -192,6 +192,24 @@ describe('<VocDetailPanel>', () => {
     source: null,
   };
 
+  it('uses the 50px toolbar height while the VOC detail is loading', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: undefined,
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('.h-toolbar')).toBeInTheDocument();
+  });
+
   it('fails closed while /me is unresolved: no Task fetch or allowed Task fields', () => {
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),

@@ -8,7 +8,9 @@ It does not own source object lifecycles or backend authorization truth.
 
 ## Route Boundary
 
-- Finding screens mount at the top-level `/findings` and `/findings/$findingId` routes; route files live in `apps/frontend/src/routes/_authed/findings/`, not in this folder.
+- Finding screens mount at the top-level `/findings` route; `/findings/$findingId` remains a
+  redirect to `/findings?selected=:findingId` and preserves `returnTo` when provided. Route files
+  live in `apps/frontend/src/routes/_authed/findings/`, not in this folder.
 - This folder does not own the entity-link inventory or `/integration/links` — `EntityRelationRow`, `EntityLinksInventoryTable`, `LinkStatusBadge`, and `useEntityLinkInventory` stay under `features/integration/`.
 
 ## Rules
@@ -20,7 +22,8 @@ It does not own source object lifecycles or backend authorization truth.
 ## Key files
 
 - `apps/frontend/src/routes/_authed/findings/index.tsx` — list, selected-detail state, and list status labels.
-- `apps/frontend/src/routes/_authed/findings/$findingId.tsx` — direct Finding detail route.
+- `apps/frontend/src/routes/_authed/findings/$findingId.tsx` — redirects direct Finding deep links
+  to the list + selected panel.
 - `apps/frontend/src/features/findings/hooks/useFindingsList.ts` — Finding list query.
 - `apps/frontend/src/features/findings/components/FindingDetail/FindingDetailPanel.tsx` — loading, blocked, error, and full-detail branches; includes inline blocked copy.
 - `apps/frontend/src/features/findings/components/FindingDetail/FullFindingDetail.tsx` — detail fields, actions, and status labels.

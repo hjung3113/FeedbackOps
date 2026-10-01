@@ -139,6 +139,34 @@ describe('/surveys/:surveyId/results route', () => {
     await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument());
   });
 
+  it('renders the result header in the WorkbenchShell toolbar at 50px', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        status: 'closed',
+        identity_protected: false,
+        response_state: 'visible',
+        anonymity_threshold: 5,
+        questions: [],
+        next_actions: [],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    const header = await screen.findByTestId('survey-result-header');
+    expect(header).toHaveClass('h-toolbar');
+    expect(header).toHaveAttribute('data-shell-header', 'toolbar');
+    expect(header.closest('[data-shell="workbench"]')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument();
+  });
+
   it('renders not-found state when results cannot be loaded', async () => {
     useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
     mockParentRoute();

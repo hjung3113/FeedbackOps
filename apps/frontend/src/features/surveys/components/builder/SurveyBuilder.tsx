@@ -1,6 +1,6 @@
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { surveyQuestionKindSchema } from '@fops/shared';
-import { Button, Input } from '@fops/ui';
+import { Button, Input, WorkbenchShell } from '@fops/ui';
 import { Check, Megaphone } from 'lucide-react';
 import type { QuestionKind, Survey } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
@@ -90,9 +90,14 @@ export function SurveyBuilder({
     save,
   } = useSurveyBuilderController({ survey, canManage, gateState, onBack });
 
-  return (
+  const builderPage = (
     <main className="flex h-full flex-col bg-surface-canvas" data-testid="survey-builder">
-      <header className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-4">
+      <header
+        className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-4"
+        data-shell-header="toolbar"
+        data-testid="survey-builder-toolbar"
+        data-toolbar-height="50"
+      >
         <Button variant="ghost" size="sm" onClick={onBack}>
           뒤로
         </Button>
@@ -204,4 +209,6 @@ export function SurveyBuilder({
       />
     </main>
   );
+
+  return <WorkbenchShell>{builderPage}</WorkbenchShell>;
 }

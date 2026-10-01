@@ -212,6 +212,15 @@ describe('Survey screens', () => {
     expect(screen.getByText('질문 1')).toBeInTheDocument();
   });
 
+  it('renders the builder toolbar in the WorkbenchShell toolbar region', () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    const shell = screen.getByTestId('survey-builder').closest('[data-shell="workbench"]');
+    const toolbar = screen.getByTestId('survey-builder-toolbar');
+    expect(shell).toBeInTheDocument();
+    expect(toolbar).toHaveAttribute('data-shell-header', 'toolbar');
+  });
+
   it('resolves list row names and removes response placeholders and UUIDs', () => {
     const managedSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
     const operatorId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';

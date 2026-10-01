@@ -65,7 +65,7 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
   if (isLoading) {
     return (
       <div className="flex flex-col h-full overflow-y-auto">
-        <div className="h-12 border-b border-border-subtle flex items-center px-6">
+        <div className="h-toolbar shrink-0 border-b border-border-subtle flex items-center px-6">
           <Skeleton className="h-4 w-32" />
         </div>
         <FindingDetailSkeleton />
@@ -83,7 +83,7 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
     if (code === 'permission.denied') {
       return (
         <div className="flex flex-col h-full">
-          <div className="h-12 border-b border-border-subtle flex items-center px-6">
+          <div className="h-toolbar shrink-0 border-b border-border-subtle flex items-center px-6">
             <span className="text-sm font-medium text-text-primary">Finding 상세</span>
           </div>
           <div className="flex-1 flex items-center justify-center p-6">
