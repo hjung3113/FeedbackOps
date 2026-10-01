@@ -125,7 +125,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone의 목적')).toBeInTheDocument();
-    expect(screen.getByText('0 of 1 tasks released')).toBeInTheDocument();
+    expect(screen.getByText('Task 1개 중 0개 Released')).toBeInTheDocument();
     for (const label of [
       '상태',
       'Managed System',
@@ -252,7 +252,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       },
     );
 
-    expect(await screen.findByRole('heading', { name: 'Milestone detail' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Milestone 상세' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone을 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
@@ -269,7 +269,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       onClose,
     });
 
-    expect(await screen.findByText('Milestone detail unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Milestone 상세를 불러오지 못했습니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '패널 닫기' }));
@@ -322,14 +322,14 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
       if (blocked) {
         expect(
-          await screen.findByRole('heading', { name: 'Milestone detail' }),
+          await screen.findByRole('heading', { name: 'Milestone 상세' }),
         ).toBeInTheDocument();
         expect(screen.getByText('이 Milestone을 볼 권한이 없습니다.')).toBeInTheDocument();
         expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
-        expect(screen.queryByText('Milestone detail unavailable.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Milestone 상세를 불러오지 못했습니다.')).not.toBeInTheDocument();
       } else {
-        expect(await screen.findByText('Milestone detail unavailable.')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', { name: 'Milestone detail' })).not.toBeInTheDocument();
+        expect(await screen.findByText('Milestone 상세를 불러오지 못했습니다.')).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Milestone 상세' })).not.toBeInTheDocument();
       }
 
       expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();

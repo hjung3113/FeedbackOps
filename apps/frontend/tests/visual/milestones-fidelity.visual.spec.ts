@@ -86,7 +86,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         throw new Error('Expected the source finding title and id');
       }
 
-      const headline = findByOwnText('0 of 1 tasks released');
+      const headline = findByOwnText('Task 1개 중 0개 Released');
 
       // Title block (Overview) — pill and area badge next to the h2.
       const heading = Array.from(root.querySelectorAll('h2')).find(

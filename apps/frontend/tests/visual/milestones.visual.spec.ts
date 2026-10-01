@@ -51,7 +51,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(ssoRow).toContainText('진행 중');
     await expect(ssoRow).toContainText('Power BI');
     await expect(ssoRow).toContainText('Product Usage');
-    await expect(ssoRow).toContainText('0/1 released');
+    await expect(ssoRow).toContainText('Released 0/1');
     await expect(ssoRow).toContainText('2026-06-15');
 
     const uxRow = page.locator('[role="button"]', { hasText: 'MLS-1018' });
@@ -81,7 +81,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
     await expect(page.getByText('이 Milestone의 목적')).toBeVisible();
-    await expect(page.getByText('0 of 1 tasks released')).toBeVisible();
+    await expect(page.getByText('Task 1개 중 0개 Released')).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
     // #675: panel section labels follow the Korean chrome policy (Evidence stays English).
     for (const label of ['요약', 'Evidence', '이력']) {
@@ -169,7 +169,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     // The scoped list stays as primary context; the blocked detail is dismissible.
     await expect(page.getByText('MLS-1021')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Milestone detail' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Milestone 상세' })).toBeVisible();
     await expect(page.getByRole('button', { name: '패널 닫기' })).toBeVisible();
     // Panel-only record content must not render (the list row legitimately
     // still shows the title; the blocked panel must not).
@@ -379,7 +379,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(detail.getByText('0%', { exact: true })).toBeVisible();
 
     const progressCard = detail
-      .getByText('0 of 1 tasks released', { exact: true })
+      .getByText('Task 1개 중 0개 Released', { exact: true })
       .locator('xpath=../..');
     const track = progressCard.locator('div[aria-hidden="true"]');
     await expect(track).toHaveCount(1);

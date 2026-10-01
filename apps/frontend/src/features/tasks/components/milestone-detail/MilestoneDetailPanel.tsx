@@ -109,12 +109,12 @@ export function MilestoneDetailPanel({
           ) : error !== null && isPermissionDenied(error) ? (
             <PermissionBlockedPanel
               state="denied"
-              category="Milestone detail"
+              category="Milestone 상세"
               reason={PERMISSION_BLOCKED_REASONS.milestoneDetail}
               className="m-4"
             />
           ) : (
-            <div className="p-4 text-sm text-accent-danger">Milestone detail unavailable.</div>
+            <div className="p-4 text-sm text-accent-danger">Milestone 상세를 불러오지 못했습니다.</div>
           )}
         </div>
       ) : (

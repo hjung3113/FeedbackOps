@@ -65,7 +65,7 @@ export function MilestoneRow({
         </span>
         <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />
         <span className="tabular-nums">
-          {milestone.progress.released_done}/{milestone.progress.total} released
+          Released {milestone.progress.released_done}/{milestone.progress.total}
         </span>
         <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />
         <span className="inline-flex items-center gap-1">
