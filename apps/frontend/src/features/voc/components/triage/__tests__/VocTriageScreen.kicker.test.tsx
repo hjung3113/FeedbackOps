@@ -26,6 +26,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import type { VocListItem } from '@fops/shared';
 import { VocTriageScreen } from '../VocTriageScreen';
 
@@ -56,6 +57,22 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('VocTriageScreen — V1 inline kicker', () => {
+  it('uses the shared untriaged label for the triage tab', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByRole('button', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+  });
+
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {
     render(
       <Wrapper>

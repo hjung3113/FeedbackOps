@@ -1,9 +1,11 @@
+import type { FindingDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FindingDetailPanel } from './FindingDetailPanel';
+import { FullFindingDetail } from './FullFindingDetail';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
 const findingSourceType = vi.hoisted(() => ({
@@ -111,9 +113,38 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+const mediumFinding: FindingDto = {
+  id: '10000000-0000-0000-0000-000000000001',
+  workspace_id: '90000000-0000-0000-0000-000000000009',
+  display_id: 'FIN-179',
+  primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+  title: '리포트 속도 저하',
+  summary: '쿼리 플랜 개선 필요',
+  source_type: 'manual',
+  source_id: null,
+  evidence_count: 0,
+  severity: 'medium',
+  confidence: 'medium',
+  status: 'active',
+  analytics_area_id: null,
+  linked_task_id: null,
+  linked_milestone_id: null,
+  created_by: '40000000-0000-0000-0000-000000000004',
+  created_at: '2026-07-10T00:00:00.000Z',
+  updated_at: '2026-07-10T00:00:00.000Z',
+  source: null,
+};
+
 describe('FindingDetailPanel', () => {
   beforeEach(() => {
     findingSourceType.value = 'manual';
+  });
+
+  it('renders medium Finding severity as "중간" in the detail panel', () => {
+    renderWithClient(<FullFindingDetail finding={mediumFinding} />);
+
+    const panel = screen.getByTestId('finding-detail-panel');
+    expect(panel.querySelector('[data-token="--severity-medium"]')).toHaveTextContent('중간');
   });
 
   it.each([

@@ -272,7 +272,7 @@ describe('SurveyResultsSummary', () => {
 
   it.each([
     ['low', '낮음'],
-    ['medium', '보통'],
+    ['medium', '중간'],
     ['high', '높음'],
     ['critical', '심각'],
   ] as const)('renders the Korean Finding severity option for %s', async (_severity, label) => {

@@ -9,6 +9,7 @@
 // TriagePanel so the panel can drive queue side-effects on mutation.
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import type { VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
@@ -33,7 +34,7 @@ export interface VocTriageScreenProps {
 
 const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
   { value: 'unassigned', label: '미배정' },
-  { value: 'untriaged', label: '미트리아지' },
+  { value: 'untriaged', label: TRIAGE_STATE_LABELS.untriaged },
   { value: 'high', label: '높은 심각도' },
   { value: 'waiting', label: '보류' },
 ];

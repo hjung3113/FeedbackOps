@@ -14,6 +14,7 @@ import {
   ListToolbar,
   type ListToolbarTab,
   PermissionBlockedPanel,
+  SEVERITY_LABELS,
   SearchInput,
   type SortOption,
 } from '@fops/ui';
@@ -82,12 +83,7 @@ const FILTER_CATEGORIES: FilterCategory[] = [
   {
     key: 'filter.severity',
     label: '심각도',
-    options: [
-      { value: 'low', label: '낮음' },
-      { value: 'medium', label: '중간' },
-      { value: 'high', label: '높음' },
-      { value: 'critical', label: '심각' },
-    ],
+    options: Object.entries(SEVERITY_LABELS).map(([value, label]) => ({ value, label })),
   },
   {
     // Unified on the single URL/UI key `filter.reporterStatus` (#89). The

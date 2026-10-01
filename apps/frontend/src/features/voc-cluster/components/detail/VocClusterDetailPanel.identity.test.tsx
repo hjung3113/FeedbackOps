@@ -75,7 +75,7 @@ const cluster = clusterState.data as unknown as VocClusterDto;
 
 const severityLabels: Record<FindingSeverity, string> = {
   low: '낮음',
-  medium: '보통',
+  medium: '중간',
   high: '높음',
   critical: '심각',
 };

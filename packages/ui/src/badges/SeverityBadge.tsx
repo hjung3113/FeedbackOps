@@ -8,7 +8,7 @@ export interface SeverityBadgeProps {
 }
 
 /** Korean label per severity level. */
-const LABELS: Record<SeverityEnum, string> = {
+export const SEVERITY_LABELS: Record<SeverityEnum, string> = {
   low: '낮음',
   medium: '중간',
   high: '높음',
@@ -40,7 +40,7 @@ export function SeverityBadge({ severity, label, className }: SeverityBadgeProps
       data-token={token}
     >
       <SeverityIndicator severity={severity} />
-      {label ?? LABELS[severity]}
+      {label ?? SEVERITY_LABELS[severity]}
     </span>
   );
 }
