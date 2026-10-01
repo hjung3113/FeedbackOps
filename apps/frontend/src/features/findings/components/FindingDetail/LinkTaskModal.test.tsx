@@ -92,7 +92,7 @@ describe('LinkTaskModal', () => {
     );
 
     // Same-managed-system filter: only TASK-901 is offered.
-    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('combobox'));
     expect(await screen.findAllByRole('option')).toHaveLength(1);
     const option = screen.getByRole('option', { name: /TASK-901/ });
     await user.click(option);
@@ -104,5 +104,50 @@ describe('LinkTaskModal', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finding', IDS.finding] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['tasks'] });
     expect(toast.success).toHaveBeenCalledWith('Task가 Finding에 연결되었습니다.');
+  });
+
+  it('keeps loading, error, and empty task states exclusive and retries the read', async () => {
+    const pending = new Promise<{ items: TaskDto[] }>(() => {});
+    vi.mocked(listTasks).mockReturnValue(pending);
+    const loadingClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const loadingView = render(
+      <QueryClientProvider client={loadingClient}>
+        <LinkTaskModal finding={FINDING} open onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('Task 불러오는 중...')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('연결 가능한 같은 Managed System Task가 없습니다.'),
+    ).not.toBeInTheDocument();
+
+    loadingView.unmount();
+    const user = userEvent.setup();
+    vi.mocked(listTasks).mockClear();
+    vi.mocked(listTasks)
+      .mockRejectedValueOnce(new Error('task list failed'))
+      .mockResolvedValueOnce({ items: [] });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <LinkTaskModal finding={FINDING} open onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Task 목록을 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('연결 가능한 같은 Managed System Task가 없습니다.'),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(
+      await screen.findByText('연결 가능한 같은 Managed System Task가 없습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 불러오지 못했습니다.')).not.toBeInTheDocument();
+    expect(listTasks).toHaveBeenCalledTimes(2);
   });
 });

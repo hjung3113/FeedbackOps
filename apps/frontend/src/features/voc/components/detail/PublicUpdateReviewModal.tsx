@@ -14,11 +14,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Textarea,
 } from '@fops/ui';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -51,6 +54,7 @@ export function PublicUpdateReviewModal({
   const [status, setStatus] = useState<ReporterFacingStatusEnum | ''>('');
   const [message, setMessage] = useState('');
   const [dismissalReason, setDismissalReason] = useState('');
+  const reviewCandidates = candidates.data?.items ?? [];
 
   const resetForm = () => {
     setCandidateId('');
@@ -132,6 +136,22 @@ export function PublicUpdateReviewModal({
         </DialogHeader>
         {candidates.isLoading ? (
           <p className="text-sm text-text-muted">후보를 불러오는 중…</p>
+        ) : candidates.isError ? (
+          <div className="grid gap-2" role="alert">
+            <p className="text-sm text-text-danger">후보 목록을 불러오지 못했습니다.</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void candidates.refetch();
+              }}
+            >
+              다시 시도
+            </Button>
+          </div>
+        ) : reviewCandidates.length === 0 ? (
+          <p className="text-sm text-text-muted">검토할 후보가 없습니다.</p>
         ) : (
           <div className="grid gap-3">
             <div className="text-sm">
@@ -145,7 +165,7 @@ export function PublicUpdateReviewModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(candidates.data?.items ?? []).map((candidate) => (
+                  {reviewCandidates.map((candidate) => (
                     <SelectItem key={candidate.id} value={candidate.id}>
                       Released Task 후보 · {formatDate(candidate.created_at)}
                     </SelectItem>
@@ -153,14 +173,15 @@ export function PublicUpdateReviewModal({
                 </SelectContent>
               </Select>
             </div>
-            <label className="text-sm">
-              공개 업데이트
-              <textarea
-                className="mt-1 w-full"
+            <div className="grid gap-1.5 text-sm">
+              <FieldLabel htmlFor="public-update-review-message">공개 업데이트</FieldLabel>
+              <Textarea
+                id="public-update-review-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                className="mt-1"
               />
-            </label>
+            </div>
             <div className="text-sm">
               <label htmlFor="public-update-reporter-status">Reporter-facing status</label>
               <Select
@@ -186,14 +207,17 @@ export function PublicUpdateReviewModal({
                 </SelectContent>
               </Select>
             </div>
-            <label className="text-sm">
-              Dismiss reason
-              <input
-                className="mt-1 w-full"
+            <div className="grid gap-1.5 text-sm">
+              <FieldLabel htmlFor="public-update-review-dismissal-reason">
+                Dismiss reason
+              </FieldLabel>
+              <Input
+                id="public-update-review-dismissal-reason"
                 value={dismissalReason}
                 onChange={(e) => setDismissalReason(e.target.value)}
+                className="mt-1"
               />
-            </label>
+            </div>
           </div>
         )}
         <DialogFooter>

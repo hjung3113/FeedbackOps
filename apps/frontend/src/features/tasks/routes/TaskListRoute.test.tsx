@@ -332,7 +332,7 @@ describe('TaskListRoute display ids', () => {
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
     expect(screen.getByText('이 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
-    expect(screen.queryByText('Task detail unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 상세를 불러오지 못했습니다.')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission task detail failure unavailable', async () => {
@@ -348,7 +348,7 @@ describe('TaskListRoute display ids', () => {
       />,
     );
 
-    expect(await screen.findByText('Task detail unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Task 상세를 불러오지 못했습니다.')).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 });

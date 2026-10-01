@@ -1,3 +1,4 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
@@ -13,6 +14,11 @@ import {
   ListFilterButton,
   OutlineBadge,
   PermissionBlockedPanel,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  RadioGroup,
+  RadioGroupItem,
   SeverityBadge,
   UnassignedBadge,
   UserAvatar,
@@ -99,12 +105,38 @@ function BoardColumn({ id, label, tasks, groupBy, selectedId, selectTask, names,
 
 function GroupByButton({ value, onChange }: { value: GroupBy; onChange: (value: GroupBy) => void }) {
   const [open, setOpen] = React.useState(false);
-  return <div className="relative">
-    <Button type="button" variant="outline" size="sm" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="dialog"><Layers className="h-4 w-4" />그룹화</Button>
-    {open && <div role="dialog" aria-label="그룹화 옵션" className="absolute right-0 z-10 mt-1 w-52 rounded-md border border-border-subtle bg-surface-raised p-1 shadow-md">
-      <div role="radiogroup" aria-label="그룹화">{GROUP_OPTIONS.map((option) => <button key={option.value} type="button" role="radio" aria-checked={option.value === value} className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm text-text-primary hover:bg-surface-card" onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}</div>
-    </div>}
-  </div>;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm" aria-expanded={open}>
+          <Layers className="h-4 w-4" />
+          그룹화
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" aria-label="그룹화 옵션" className="w-52 p-1">
+        <RadioGroup
+          value={value}
+          aria-label="그룹화"
+          className="gap-1"
+          onValueChange={(next) => {
+            onChange(next as GroupBy);
+            setOpen(false);
+          }}
+        >
+          {GROUP_OPTIONS.map((option) => (
+            <label
+              key={option.value}
+              htmlFor={`group-by-${option.value}`}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-text-primary hover:bg-surface-card"
+            >
+              <RadioGroupItem id={`group-by-${option.value}`} value={option.value} />
+              {option.label}
+            </label>
+          ))}
+        </RadioGroup>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
@@ -212,7 +244,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const next = task && nextStatus[task.status];
     if (task && next) mutation.mutate({ task, status: next });
   }
-  if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Task 불러오는 중...</div>;
   if (isPermissionDenied(tasksQuery.error)) {
     return (
       <PermissionBlockedPanel
@@ -223,20 +254,16 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       />
     );
   }
-  if (tasksQuery.error) {
-    return (
-      <div className="p-4 text-sm text-accent-danger">
-        {mapUnknownError(tasksQuery.error).message}
-      </div>
-    );
-  }
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return (
     <WorkbenchShell
       toolbar={{
         title: (
           <span className="flex items-center gap-2">
-            보드 <OutlineBadge>{filtered.length}건</OutlineBadge>
+            보드
+            {tasksQuery.isSuccess && !tasksQuery.isFetching && !tasksQuery.isError ? (
+              <OutlineBadge>{filtered.length}건</OutlineBadge>
+            ) : null}
           </span>
         ),
         actions: (
@@ -266,6 +293,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
             actorNamesById={actorNames}
             managedSystemNamesById={systemNames}
             view="board"
+            hasActionFooter={selected.status !== 'released'}
             onMoveToNextStatus={moveToNextStatus}
             onClose={() => {
               setSelectedId(null);
@@ -275,56 +303,79 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
         ) : null
       }
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
-          <StatBlock label="전체 Task" value={items.length} />
-          <StatDivider />
-          <StatBlock
-            label="미배정"
-            value={items.filter((task) => task.assignee_actor_id === null).length}
-            valueClassName="text-accent-warn"
-          />
-          <StatDivider />
-          <StatBlock
-            label="진행 중"
-            value={items.filter((task) => task.status === 'doing').length}
-            valueClassName="text-accent-success"
-          />
-        </div>
-        {items.length === 0 ? (
-          <output className="flex flex-1 items-center justify-center p-6">
-            <p className="text-sm text-text-muted">
-              Task는 Task Request에서 전환됩니다.{' '}
-              <Link
-                to="/tasks"
-                search={{
-                  view: 'requests',
-                  ...(managedSystem !== undefined ? { managedSystem } : {}),
-                }}
-                className="font-medium underline underline-offset-2 hover:text-text-secondary"
-              >
-                Task Request 검토
-              </Link>
-            </p>
-          </output>
+      <div
+        aria-live={tasksQuery.isLoading || tasksQuery.isError ? 'polite' : 'off'}
+        className="flex h-full min-h-0 flex-col"
+      >
+        {tasksQuery.isLoading ? (
+          <div className="p-4 text-sm text-text-muted">Task 불러오는 중...</div>
+        ) : tasksQuery.isError ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <ListStateMessage
+              variant="error"
+              title="Task 보드를 불러오지 못했습니다."
+              body={mapUnknownError(tasksQuery.error).message}
+              action={{
+                label: '다시 시도',
+                onClick: () => {
+                  void tasksQuery.refetch();
+                },
+              }}
+            />
+          </div>
         ) : (
-          <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
-              {columns.map((column) => (
-                <BoardColumn
-                  key={column.key}
-                  id={column.key}
-                  label={column.label}
-                  tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)}
-                  groupBy={groupBy}
-                  selectedId={selectedId}
-                  selectTask={selectTask}
-                  names={{ systems: systemNames, actors: actorNames }}
-                  enabled={groupBy === 'status'}
-                />
-              ))}
+          <>
+            <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
+              <StatBlock label="전체 Task" value={items.length} />
+              <StatDivider />
+              <StatBlock
+                label="미배정"
+                value={items.filter((task) => task.assignee_actor_id === null).length}
+                valueClassName="text-accent-warn"
+              />
+              <StatDivider />
+              <StatBlock
+                label="진행 중"
+                value={items.filter((task) => task.status === 'doing').length}
+                valueClassName="text-accent-success"
+              />
             </div>
-          </DndContext>
+            {items.length === 0 ? (
+              <output className="flex flex-1 items-center justify-center p-6">
+                <p className="text-sm text-text-muted">
+                  Task는 Task Request에서 전환됩니다.{' '}
+                  <Link
+                    to="/tasks"
+                    search={{
+                      view: 'requests',
+                      ...(managedSystem !== undefined ? { managedSystem } : {}),
+                    }}
+                    className="font-medium underline underline-offset-2 hover:text-text-secondary"
+                  >
+                    Task Request 검토
+                  </Link>
+                </p>
+              </output>
+            ) : (
+              <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+                <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+                  {columns.map((column) => (
+                    <BoardColumn
+                      key={column.key}
+                      id={column.key}
+                      label={column.label}
+                      tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)}
+                      groupBy={groupBy}
+                      selectedId={selectedId}
+                      selectTask={selectTask}
+                      names={{ systems: systemNames, actors: actorNames }}
+                      enabled={groupBy === 'status'}
+                    />
+                  ))}
+                </div>
+              </DndContext>
+            )}
+          </>
         )}
       </div>
     </WorkbenchShell>
