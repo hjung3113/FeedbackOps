@@ -321,14 +321,14 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       await queryClient.invalidateQueries({ queryKey: ['milestone', MILESTONE_ID] });
 
       if (blocked) {
-        expect(
-          await screen.findByRole('heading', { name: 'Milestone 상세' }),
-        ).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Milestone 상세' })).toBeInTheDocument();
         expect(screen.getByText('이 Milestone을 볼 권한이 없습니다.')).toBeInTheDocument();
         expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
         expect(screen.queryByText('Milestone 상세를 불러오지 못했습니다.')).not.toBeInTheDocument();
       } else {
-        expect(await screen.findByText('Milestone 상세를 불러오지 못했습니다.')).toBeInTheDocument();
+        expect(
+          await screen.findByText('Milestone 상세를 불러오지 못했습니다.'),
+        ).toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Milestone 상세' })).not.toBeInTheDocument();
       }
 

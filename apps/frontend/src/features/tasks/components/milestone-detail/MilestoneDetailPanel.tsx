@@ -114,7 +114,9 @@ export function MilestoneDetailPanel({
               className="m-4"
             />
           ) : (
-            <div className="p-4 text-sm text-accent-danger">Milestone 상세를 불러오지 못했습니다.</div>
+            <div className="p-4 text-sm text-accent-danger">
+              Milestone 상세를 불러오지 못했습니다.
+            </div>
           )}
         </div>
       ) : (
