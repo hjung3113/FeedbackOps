@@ -134,7 +134,10 @@ describe('<VocList>', () => {
     expect(screen.getByText('내가 제출한 VOC가 없습니다')).toBeInTheDocument();
   });
 
-  it('shows the My VOCs create action as a button that opens create', () => {
+  it.each([
+    { view: 'inbox', label: 'Inbox' },
+    { view: 'my', label: 'My VOCs' },
+  ] as const)('shows the $label create action as a button that opens create', ({ view }) => {
     const onCreate = vi.fn();
     render(
       <VocList
@@ -143,7 +146,7 @@ describe('<VocList>', () => {
         error={null}
         onSelect={onSelect}
         onCreate={onCreate}
-        view="my"
+        view={view}
       />,
       { wrapper: makeWrapper() },
     );

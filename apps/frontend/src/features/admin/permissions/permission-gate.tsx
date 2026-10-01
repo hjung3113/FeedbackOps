@@ -36,9 +36,9 @@ export function PermissionGate(props: PermissionGateProps) {
 
   if (query.isPending) {
     return (
-      <output aria-live="polite" className="text-text-muted text-sm">
-        {props.loading ?? 'Checking access…'}
-      </output>
+      <div aria-live="polite">
+        <div className="text-text-muted text-sm">{props.loading ?? 'Checking access…'}</div>
+      </div>
     );
   }
 
@@ -46,14 +46,18 @@ export function PermissionGate(props: PermissionGateProps) {
     // Treat fetch failure as blocked to avoid flashing protected content.
     // The error envelope itself is rendered by the route-level boundary; the
     // gate stays narrow.
-    return renderBlockedState('blocked_non_requestable', props, actors.actors);
+    return (
+      <div aria-live="polite">
+        {renderBlockedState('blocked_non_requestable', props, actors.actors)}
+      </div>
+    );
   }
 
   if (query.data.state === 'approved') return <>{props.children}</>;
 
   if (props.fallback !== undefined) return <>{props.fallback}</>;
 
-  return renderBlockedState(query.data.state, props, actors.actors);
+  return <div aria-live="polite">{renderBlockedState(query.data.state, props, actors.actors)}</div>;
 }
 
 type NonApprovedState = Exclude<FrontendPermissionState, 'approved'>;

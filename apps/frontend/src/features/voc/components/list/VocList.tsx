@@ -22,7 +22,6 @@ import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { FileText, Flag, Layers, User } from 'lucide-react';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
@@ -107,7 +106,7 @@ export interface VocListProps {
   view?: 'inbox' | 'my';
   /** Retry handler for error variant. */
   onRetry?: () => void;
-  /** Opens the route-owned VOC create flow from the My VOC empty state. */
+  /** Opens the route-owned VOC create flow from an empty list state. */
   onCreate?: () => void;
 }
 
@@ -202,14 +201,13 @@ export function VocList({
     }
     // inbox or unspecified
     return (
-      <EmptyState
+      <ListStateMessage
+        variant="empty"
         title="큐가 비었습니다"
         body="제출된 VOC가 표시됩니다."
-        action={
-          <Link to="/vocs" search={{ action: 'create' }}>
-            + 새 VOC 작성
-          </Link>
-        }
+        {...(onCreate !== undefined
+          ? { action: { label: '+ 새 VOC 작성', onClick: onCreate } }
+          : {})}
       />
     );
   }

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Eye, Lock, Slash, XCircle } from 'lucide-react';
+import { Ban, Eye, Lock, XCircle } from 'lucide-react';
 import { cn } from '../utils/cn.js';
 import { Button } from '../components/Button.js';
 import { NestedTextBlock } from '../panel/NestedTextBlock.js';
@@ -22,7 +22,7 @@ export interface PermissionBlockedPanelProps {
   requestAccessLabel?: string;
   /** Canonical `required_scope` strings from permissionDecisionSchema. */
   requiredScope?: readonly string[];
-  /** Optional ReactNode for summary state to inject summary content. */
+  /** Summary content; omit for the default placeholder or pass null to omit its container. */
   summary?: React.ReactNode;
   /** Decision identifier returned by BE for audit trail. */
   decisionId?: string;
@@ -39,7 +39,7 @@ const STATE_ICON: Record<PermissionState, React.ElementType> = {
   request_access:         Lock,
   summary_visible:        Eye,
   denied:                 XCircle,
-  blocked_not_requestable: Slash,
+  blocked_not_requestable: Ban,
 };
 
 export function PermissionBlockedPanel({

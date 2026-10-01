@@ -116,6 +116,64 @@ describe('<PermissionGate>', () => {
     await waitFor(() => {
       expect(screen.getByText('secret payload')).toBeInTheDocument();
     });
+    expect(screen.getByText('secret payload').closest('[aria-live]')).toBeNull();
+  });
+
+  test('keeps status copy and Admin names in one polite region across loading and result', async () => {
+    let resolvePermissionCheck!: (response: Response) => void;
+    const permissionCheck = new Promise<Response>((resolve) => {
+      resolvePermissionCheck = resolve;
+    });
+    const fetchMock = vi.fn(async (input) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/me/permissions/check') return permissionCheck;
+      if (url.pathname === '/actors') {
+        return new Response(
+          JSON.stringify({
+            actors: [
+              {
+                id: '11111111-1111-4111-8111-111111111111',
+                display_name: 'Admin One',
+                email: 'admin.one@example.test',
+                role_level: 'admin',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response('not mocked', { status: 500 });
+    });
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+
+    wrap(
+      <PermissionGate capability="workspace.admin">
+        <p>secret payload</p>
+      </PermissionGate>,
+    );
+
+    const liveRegion = screen.getByText('Checking access…').closest('[aria-live="polite"]');
+    expect(liveRegion).not.toBeNull();
+    expect(liveRegion).toHaveTextContent('Checking access…');
+
+    resolvePermissionCheck(
+      new Response(
+        JSON.stringify({
+          state: 'blocked_non_requestable',
+          decision: { allow: false, reason: 'explicit_deny', requestable: null },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const contactGuidance = await screen.findByText('담당 관리자에게 문의하세요. Admin One');
+    expect(liveRegion).toBeInTheDocument();
+    expect(liveRegion).toContainElement(screen.getByText('접근할 수 없습니다.'));
+    expect(liveRegion).toContainElement(
+      screen.getByText('현재 계정에서는 이 작업을 사용할 수 없습니다.'),
+    );
+    expect(liveRegion).toContainElement(contactGuidance);
+    expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
   });
 
   test('renders request_access state when backend says request_access', async () => {
@@ -137,7 +195,9 @@ describe('<PermissionGate>', () => {
     expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
-    expect(await screen.findByTestId('permission-request-dialog')).toBeInTheDocument();
+    const dialog = await screen.findByTestId('permission-request-dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.closest('[aria-live]')).toBeNull();
   });
 
   test('renders blocked_non_requestable when backend says so', async () => {
@@ -167,7 +227,12 @@ describe('<PermissionGate>', () => {
       expect(panelTitle.closest('[data-state]')).toHaveAttribute('data-state', panelState);
       expect(screen.getByText(description)).toBeInTheDocument();
       expect(document.querySelector('[data-permission-state]')).toBeNull();
+      expect(screen.queryByRole('button', { name: '권한 요청' })).not.toBeInTheDocument();
       expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
+      if (state === 'summary_visible') {
+        expect(screen.queryByText('요약 정보가 없습니다.')).not.toBeInTheDocument();
+        expect(panelTitle.closest('[data-state]')?.querySelector('.bg-surface-canvas')).toBeNull();
+      }
     },
   );
 
