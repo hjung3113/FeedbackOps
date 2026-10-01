@@ -472,7 +472,7 @@ describe('document titles from production detail panels', () => {
     await waitFor(() =>
       expect(document.title).toBe(`${DOCUMENT_TITLE_COPY.tasks.backlog} · FeedbackOps`),
     );
-    expect(screen.getByText('Loading Task...')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task 상세 불러오는 중')).toHaveAttribute('aria-busy', 'true');
 
     blockedRead.reject(
       new ApiError(403, { code: 'permission.denied', message: 'Task is not readable' }),
