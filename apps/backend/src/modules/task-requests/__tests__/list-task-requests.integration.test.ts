@@ -16,7 +16,11 @@ import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { randomUUID, uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  grantCapability,
+  revokeDeny,
+} from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
 
@@ -286,4 +290,56 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
     expect(unreadableVoc.source).not.toHaveProperty('display_id');
     expect(unreadableVoc.source).not.toHaveProperty('title');
   });
+
+  it.each([
+    { scope: 'Managed-System-scoped', managedSystemId: () => msAId },
+    { scope: 'workspace-wide', managedSystemId: () => null },
+  ])(
+    'omits source VOC text for a non-reporter Admin with a $scope voc.read deny',
+    async ({ managedSystemId }) => {
+      await insertRequestedTaskLink('voc', vocId, requestAId, msAId);
+
+      const reader = await insertDevActor(dbHandle, WORKSPACE_ID, uid('task-req-admin-voc'));
+      await migrateHandle.pool.query("update core.actors set role_level = 'admin' where id = $1", [
+        reader.id,
+      ]);
+      const readerCookie = await loginAs(app, reader.externalId);
+
+      const readableResponse = await listTaskRequests(msAId, readerCookie);
+      expect(readableResponse.statusCode).toBe(200);
+      const readableItem = taskRequestDtoSchema.parse(
+        readableResponse
+          .json<{ items: unknown[] }>()
+          .items.find((item) => (item as { id?: string }).id === requestAId),
+      );
+      expect(readableItem.source).toMatchObject({
+        display_id: expect.any(String),
+        title: 'Task request filter seed VOC',
+      });
+
+      const denyId = await denyCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        reader.id,
+        'voc.read',
+        managedSystemId(),
+        adminActorId,
+      );
+      try {
+        const deniedResponse = await listTaskRequests(msAId, readerCookie);
+        expect(deniedResponse.statusCode).toBe(200);
+        const deniedItem = taskRequestDtoSchema.parse(
+          deniedResponse
+            .json<{ items: unknown[] }>()
+            .items.find((item) => (item as { id?: string }).id === requestAId),
+        );
+        expect(deniedItem.source).toMatchObject({ type: 'voc' });
+        expect(deniedItem.source).not.toHaveProperty('display_id');
+        expect(deniedItem.source).not.toHaveProperty('title');
+        expect(deniedResponse.body).not.toContain('Task request filter seed VOC');
+      } finally {
+        await revokeDeny(dbHandle, denyId, adminActorId);
+      }
+    },
+  );
 });

@@ -51,9 +51,9 @@ sort: created_at DESC
 source projection: when an active `requested_task` link exists, `source`
   includes its type, id, relation, and link id plus the source `display_id`
   and `title`; Finding sources also include `evidence_count`. VOC `display_id`
-  and `title` are included only when `canReadSourceVoc` allows the actor to
-  read that VOC; otherwise those summary keys are omitted. A missing active
-  source link omits `source`.
+  and `title` are included for the Reporter or when the deny-first `voc.read`
+  check allows the actor to read that VOC, including for Admins; otherwise those
+  summary keys are omitted. A missing active source link omits `source`.
 ```
 
 Decision endpoints:

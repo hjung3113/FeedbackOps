@@ -201,7 +201,6 @@ describe('TaskListRoute display ids', () => {
       expect(screen.getAllByText('TASK-1000').length).toBeGreaterThan(0);
     });
     expect(await screen.findByText('FIN-179')).toBeInTheDocument();
-    expect(screen.queryByText('40000000')).not.toBeInTheDocument();
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });
 

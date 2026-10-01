@@ -148,6 +148,20 @@ async function canReadSourceVoc(
   return decision.allow;
 }
 
+async function canExposeSourceVocText(
+  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
+  actor: TaskRequestsActor,
+  managedSystemId: string,
+  reporterId: string,
+): Promise<boolean> {
+  if (actor.actor_id === reporterId) return true;
+  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: managedSystemId,
+  });
+  return decision.allow;
+}
+
 async function hasSelfApprovalCapability(
   deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
   actor: TaskRequestsActor,
@@ -210,12 +224,11 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     if (row.source_type === 'voc') {
       const canRead =
         row.source_voc_reporter_id !== undefined &&
-        (await canReadSourceVoc(
+        (await canExposeSourceVocText(
           deps,
           actor,
           row.primary_managed_system_id,
           row.source_voc_reporter_id,
-          {},
         ));
       if (!canRead) return source;
     }

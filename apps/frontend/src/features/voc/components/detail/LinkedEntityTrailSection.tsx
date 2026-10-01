@@ -1,6 +1,5 @@
-import { getReporterStatusLabel } from '@/lib/copy/reporter-status-labels';
 import { formatAbsoluteDate, formatRelativeTime } from '@/lib/datetime';
-import type { EntityLinkDto, ReporterFacingStatusEnum, TaskReporterSummary } from '@fops/shared';
+import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
 import {
   LinkedEntityTrail,
   OutlineBadge,
@@ -36,9 +35,7 @@ function ReporterTaskSummary({
     <div className="flex flex-col gap-2" data-testid="linked-task-summary">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-text-primary">{summary.public_title}</span>
-        <OutlineBadge>
-          {getReporterStatusLabel(summary.reporter_facing_status as ReporterFacingStatusEnum)}
-        </OutlineBadge>
+        <OutlineBadge>{summary.reporter_facing_status}</OutlineBadge>
       </div>
       {(summary.owning_team_public_name !== undefined ||
         summary.expected_resolution_date !== undefined ||
