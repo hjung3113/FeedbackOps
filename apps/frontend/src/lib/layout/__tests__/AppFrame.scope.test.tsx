@@ -147,12 +147,17 @@ describe('AppFrame managed-system scope', () => {
       await waitFor(() => expect(screen.getByTestId('scope-selector')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('scope-selector'));
 
-      expect(screen.getByTestId('scope-union-badge')).toHaveTextContent('union');
+      expect(screen.getByTestId('scope-name')).toHaveTextContent('전체 Managed System');
+      expect(screen.getByTestId('scope-selector')).toHaveAccessibleName(
+        '전체 Managed System, 내 담당 범위',
+      );
+      expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
       expect(await screen.findByTestId(`scope-option-${MS_ONE}`)).toBeInTheDocument();
       expect(await screen.findByTestId(`scope-option-${MS_TWO}`)).toBeInTheDocument();
       // The denominator comes from the loaded system list, so this has to be
       // asserted after the options render — before that it is legitimately 0/0.
-      expect(screen.getByTestId('scope-option-all')).toHaveTextContent('granted 0 / 2');
+      expect(screen.getByTestId('scope-option-all')).toHaveTextContent('내 담당 0 / 2');
+      expect(screen.getByTestId('scope-option-all')).toHaveTextContent('전체 Managed System');
     } finally {
       globalThis.fetch = originalFetch;
     }

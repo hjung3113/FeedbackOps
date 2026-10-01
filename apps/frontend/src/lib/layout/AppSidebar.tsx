@@ -1,3 +1,4 @@
+import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { cn } from '@fops/ui';
 import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
 import * as React from 'react';
@@ -114,16 +115,14 @@ export function AppSidebar({
   const grantedSystems = managedSystems.filter((system) => system.granted);
   const isUnion = !isAdmin && selectedManagedSystemId === undefined;
   const scopeName = scopeControlEnabled
-    ? selectedSystem?.name ?? 'All Managed Systems'
-    : '워크스페이스 전체';
+    ? (selectedSystem?.name ?? SCOPE_SELECTOR_COPY.allLabel)
+    : SCOPE_SELECTOR_COPY.workspaceAll;
   const scopeQualifier = scopeControlEnabled
     ? selectedSystem && !selectedSystem.granted
-      ? 'out of scope'
+      ? SCOPE_SELECTOR_COPY.outOfScope
       : isUnion
-        ? 'union'
-        : selectedManagedSystemId === undefined && isAdmin
-          ? 'workspace-wide'
-          : null
+        ? SCOPE_SELECTOR_COPY.unionAccessibleQualifier
+        : null
     : null;
   const scopeAccessibleName = scopeQualifier ? `${scopeName}, ${scopeQualifier}` : scopeName;
   const visibleFooterItems = footerItems.filter(
@@ -182,10 +181,20 @@ export function AppSidebar({
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="flex min-w-0 items-center gap-1 font-medium">
                 <span className="min-w-0 flex-1 truncate" data-testid="scope-name" title={scopeName}>{scopeName}</span>
-                {scopeControlEnabled && isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
-                {scopeControlEnabled && selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
+                {scopeControlEnabled && selectedSystem && !selectedSystem.granted && (
+                  <ScopeBadge
+                    testId="scope-out-of-scope-badge"
+                    label={SCOPE_SELECTOR_COPY.outOfScope}
+                    urgent
+                  />
+                )}
               </span>
-              {scopeControlEnabled && isUnion && grantedSystems.length > 0 && <span className="block truncate text-[10px] text-text-muted">{grantedSystems.map((system) => system.name).join(' · ')}</span>}
+              {scopeControlEnabled && isUnion && grantedSystems.length > 0 && (
+                <span className="block truncate text-[10px] text-text-muted">
+                  {SCOPE_SELECTOR_COPY.assignedPrefix}{' '}
+                  {grantedSystems.map((system) => system.name).join(' · ')}
+                </span>
+              )}
             </span>
             {scopeControlEnabled && <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />}
           </button>
@@ -193,7 +202,14 @@ export function AppSidebar({
             <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System scope">
               <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover" onClick={() => selectScope(undefined)} data-testid="scope-option-all">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
-                <span className="min-w-0 flex-1"><span className="block font-medium">All Managed Systems</span><span className="block text-[10px] text-text-muted">{isAdmin ? 'workspace-wide' : `granted ${grantedSystems.length} / ${managedSystems.length}`}</span></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{SCOPE_SELECTOR_COPY.allLabel}</span>
+                  <span className="block text-[10px] text-text-muted">
+                    {isAdmin
+                      ? SCOPE_SELECTOR_COPY.workspaceAll
+                      : `${SCOPE_SELECTOR_COPY.assignedCountPrefix} ${grantedSystems.length} / ${managedSystems.length}`}
+                  </span>
+                </span>
               </button>
               {managedSystems.map((system) => (
                 <button key={system.id} type="button" className={cn('flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover', !system.granted && 'opacity-55')} onClick={() => selectScope(system.id)} data-testid={`scope-option-${system.id}`}>

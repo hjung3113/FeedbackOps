@@ -322,7 +322,7 @@ describe('AppSidebar', () => {
 
     fireEvent.click(screen.getByTestId('scope-selector'));
     const allScope = screen.getByTestId('scope-option-all');
-    expect(allScope).toHaveTextContent('granted 0 / 3');
+    expect(allScope).toHaveTextContent('내 담당 0 / 3');
     expect(allScope).not.toHaveTextContent('0 systems');
     // The note lives outside the option buttons so it never becomes part of an
     // option's accessible name.
@@ -335,32 +335,44 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('scope-option-sales')).toHaveTextContent('Sales Workspace');
   });
 
-  it('labels non-admin all scope as the union of granted Managed Systems only', () => {
-    const { rerender } = render(
+  it('labels non-admin all scope with the assigned systems on an unobstructed second line', () => {
+    render(
       <AppSidebar
         entries={entries}
         isAdmin={false}
         managedSystems={[
-          { id: 'one', name: 'Identity', granted: true },
-          { id: 'two', name: 'Finance', granted: true },
+          { id: 'tableau', name: 'Tableau', granted: true },
+          { id: 'powerbi', name: 'Power BI', granted: true },
         ]}
       />,
     );
-    expect(screen.getByTestId('scope-union-badge')).toBeVisible();
-    expect(screen.getByTestId('scope-selector')).toHaveTextContent('Identity · Finance');
+    const selector = screen.getByTestId('scope-selector');
+    const scopeName = screen.getByTestId('scope-name');
+    expect(scopeName).toHaveTextContent('전체 Managed System');
+    expect(selector).toHaveTextContent('내 담당: Tableau · Power BI');
+    expect(selector).toHaveAccessibleName('전체 Managed System, 내 담당 범위');
+    expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+    expect(Array.from(scopeName.parentElement?.children ?? [])).toHaveLength(1);
 
-    rerender(
+    fireEvent.click(selector);
+    expect(screen.getByTestId('scope-option-all')).toHaveTextContent('전체 Managed System');
+  });
+
+  it('labels Admin all scope without a second line or qualifier', () => {
+    render(
       <AppSidebar
         entries={entries}
         isAdmin={true}
         managedSystems={[{ id: 'one', name: 'Identity', granted: true }]}
       />,
     );
+    expect(screen.getByTestId('scope-name')).toHaveTextContent('전체 Managed System');
+    expect(screen.getByTestId('scope-selector')).not.toHaveTextContent('내 담당:');
+    expect(screen.getByTestId('scope-selector')).toHaveAccessibleName('전체 Managed System');
     expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
-    expect(screen.getByTestId('scope-name')).toHaveTextContent('All Managed Systems');
-    expect(screen.getByTestId('scope-selector')).toHaveAccessibleName(
-      'All Managed Systems, workspace-wide',
-    );
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    expect(screen.getByTestId('scope-option-all')).toHaveTextContent('워크스페이스 전체');
   });
 
   it('keeps scope qualifiers visible and exposes a long system name accessibly', () => {
@@ -375,10 +387,11 @@ describe('AppSidebar', () => {
     );
 
     const selector = screen.getByTestId('scope-selector');
-    expect(selector).toHaveAccessibleName(`${name}, out of scope`);
+    expect(selector).toHaveAccessibleName(`${name}, 범위 밖`);
     expect(selector).toHaveAttribute('title', name);
     expect(screen.getByTestId('scope-name')).toHaveTextContent(name);
     expect(screen.getByTestId('scope-name')).toHaveClass('truncate');
+    expect(screen.getByTestId('scope-out-of-scope-badge')).toHaveTextContent('범위 밖');
     expect(screen.getByTestId('scope-out-of-scope-badge')).toBeVisible();
   });
 

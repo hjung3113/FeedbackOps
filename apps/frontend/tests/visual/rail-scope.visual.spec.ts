@@ -31,7 +31,7 @@ test.describe('rail and Managed System scope visual harness', () => {
     await installMockApi(page, { railScope: true, role: 'user' });
     await page.goto('/voc-clusters');
     await page.getByTestId('scope-selector').click();
-    await expect(page.getByTestId('scope-option-all')).toContainText('granted 0 / 3');
+    await expect(page.getByTestId('scope-option-all')).toContainText('내 담당 0 / 3');
     await expect(page.getByText('Sales Operations', { exact: true })).toBeVisible();
     await expectVisual(page, page.getByTestId('app-sidebar'), railScopeSnapshots[3]);
   });
