@@ -27,7 +27,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
 
     const detail = page.getByTestId('app-detail-slot');
     await expect(detail.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    await expect(detail.getByText('Owner', { exact: true })).toBeVisible();
+    await expect(detail.getByText('담당자', { exact: true })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
 
     const captured = await detail.evaluate((root) => {
@@ -97,7 +97,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
 
       // Source header action — prototype .btn-sm: 24px high, 12px label,
       // 11px arrow (styles.css .btn-sm; screen-milestones.jsx source header).
-      const openButton = findByOwnText('Open finding');
+      const openButton = findByOwnText('Finding 열기');
       const openArrow = openButton.querySelector('svg');
       const openCss = {
         height: `${openButton.getBoundingClientRect().height}px`,
@@ -116,7 +116,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       const msValue = msLabel.parentElement?.querySelector(':scope > div');
       const areaLabel = findByOwnText('Analytics Area');
       const areaValue = areaLabel.parentElement?.querySelector(':scope > div');
-      const ownerLabel = findByOwnText('Owner');
+      const ownerLabel = findByOwnText('담당자');
       const ownerValue = ownerLabel.parentElement?.querySelector(':scope > div');
       const ownerChip = ownerValue?.firstElementChild;
       const ownerAvatar = ownerChip?.firstElementChild;

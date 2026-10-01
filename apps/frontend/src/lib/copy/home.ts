@@ -13,7 +13,7 @@ export const HOME_COPY = {
     if (queues === undefined) return '오늘 워크스페이스의 운영 현황을 불러오는 중입니다.';
     if (queues.length === 0) {
       if (coverage?.length === 0) {
-        return '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.';
+        return '운영 큐와 커버리지는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.';
       }
       return '현재 확인할 운영 큐가 없습니다.';
     }
@@ -27,12 +27,12 @@ export const HOME_COPY = {
   queueHeading: '복구 · 후속 조치 큐',
   noZeroQueueItems: '처리할 항목 없음',
   assignedToYou: '내게 배정됨',
-  coverage: 'Coverage 신호',
+  coverage: '커버리지 신호',
   openRequests: '열린 요청',
   noOpenRequests: '열린 요청이 없습니다.',
   refresh: '큐 새로고침',
   newVoc: 'VOC 생성',
-  viewCoverage: 'Coverage 보기',
+  viewCoverage: '커버리지 보기',
 } as const;
 
 export const HOME_KPI_COPY = {
@@ -78,7 +78,7 @@ export const HOME_QUEUE_COPY: Record<
   'released-task-unresolved-voc': {
     title: 'Released Task · 미해결 VOC',
     sidebarLabel: '공개 업데이트 검토',
-    detail: 'Task는 Released지만 연결된 Reporter-facing VOC Status가 해결됨이 아닙니다.',
+    detail: 'Task는 Released지만 연결된 공개 상태가 해결됨이 아닙니다.',
     primaryAction: '업데이트 검토',
     secondaryAction: '큐 열기',
   },

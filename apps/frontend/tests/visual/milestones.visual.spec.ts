@@ -35,10 +35,10 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.goto('/tasks?view=milestones');
 
     await expect(page.getByText('표시할 milestone 이 없습니다.')).toBeVisible();
-    for (const label of ['All', 'In progress', 'Planning', 'Released']) {
+    for (const label of ['전체', '진행 중', '계획 중', '릴리스됨']) {
       await expect(page.getByRole('tab', { name: new RegExp(`^${label}`) })).toBeVisible();
     }
-    await expect(page.getByRole('tab', { name: /Blocked/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /차단/ })).toHaveCount(0);
     await expectVisual(page, page.locator('[data-shell="list"]'), 'milestone-empty.png');
   });
 
@@ -48,7 +48,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const ssoRow = page.locator('[role="button"]', { hasText: 'MLS-1021' });
     await expect(ssoRow).toContainText('SSO Stabilization');
-    await expect(ssoRow).toContainText('In progress');
+    await expect(ssoRow).toContainText('진행 중');
     await expect(ssoRow).toContainText('Power BI');
     await expect(ssoRow).toContainText('Product Usage');
     await expect(ssoRow).toContainText('0/1 released');
@@ -56,20 +56,20 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const uxRow = page.locator('[role="button"]', { hasText: 'MLS-1018' });
     await expect(uxRow).toContainText('Q1 UX Polish');
-    await expect(uxRow).toContainText('Released');
+    await expect(uxRow).toContainText('릴리스됨');
 
     // Tab counts derive from the unfiltered list fixture (5 milestones:
     // 2 in progress, 2 planning, 1 released).
-    await expect(page.getByRole('tab', { name: /^All/ })).toContainText('5');
-    await expect(page.getByRole('tab', { name: /^In progress/ })).toContainText('2');
-    await expect(page.getByRole('tab', { name: /^Planning/ })).toContainText('2');
-    await expect(page.getByRole('tab', { name: /^Released/ })).toContainText('1');
+    await expect(page.getByRole('tab', { name: /^전체/ })).toContainText('5');
+    await expect(page.getByRole('tab', { name: /^진행 중/ })).toContainText('2');
+    await expect(page.getByRole('tab', { name: /^계획 중/ })).toContainText('2');
+    await expect(page.getByRole('tab', { name: /^릴리스됨/ })).toContainText('1');
 
     const summary = page.getByTestId('milestones-summary');
     await expect(summary).toContainText('Milestones');
-    await expect(summary).toContainText('Tasks in flight');
-    await expect(summary).toContainText('Evidence linked');
-    await expect(summary).toContainText('Released');
+    await expect(summary).toContainText('진행 중 Task');
+    await expect(summary).toContainText('Evidence 연결');
+    await expect(summary).toContainText('릴리스됨');
     await expect(summary).not.toContainText('Schedule risk'); // #670: the prototype annotation is gone
     await expect(page.getByTestId('milestone-summary-evidence-linked')).toHaveText('0');
   });
@@ -80,7 +80,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    await expect(page.getByText('Why this milestone exists')).toBeVisible();
+    await expect(page.getByText('이 Milestone의 목적')).toBeVisible();
     await expect(page.getByText('0 of 1 tasks released')).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
     // #675: panel section labels follow the Korean chrome policy (Evidence stays English).
@@ -115,7 +115,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    await expect(page.getByText('Why this milestone exists')).toBeVisible();
+    await expect(page.getByText('이 Milestone의 목적')).toBeVisible();
     await expect(page.getByText('FIN-181')).toBeVisible();
 
     const ssoRow = page.locator('[role="button"]', { hasText: 'MLS-1021' });
@@ -153,7 +153,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await installMockApi(page, { milestones: true });
     await page.goto('/tasks?view=milestones');
 
-    await expect(page.getByRole('button', { name: 'New milestone' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Milestone 생성' })).toBeVisible();
   });
 
   // B2d fixup — a selected detail the actor cannot read (403) still mounts the
@@ -174,8 +174,8 @@ test.describe('/tasks?view=milestones visual harness', () => {
     // Panel-only record content must not render (the list row legitimately
     // still shows the title; the blocked panel must not).
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
-    await expect(page.getByText('Why this milestone exists')).toHaveCount(0);
-    await expect(page.getByText('From finding')).toHaveCount(0);
+    await expect(page.getByText('이 Milestone의 목적')).toHaveCount(0);
+    await expect(page.getByText('Finding에서')).toHaveCount(0);
 
     await page.getByRole('button', { name: '패널 닫기' }).click();
     await expect(page.getByRole('button', { name: '패널 닫기' })).toHaveCount(0);
@@ -203,7 +203,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const tabsContainer = page.locator('[data-list-toolbar-tabs]');
     await expect(tabsContainer).toBeVisible();
-    const newMilestone = page.getByRole('button', { name: 'New milestone' });
+    const newMilestone = page.getByRole('button', { name: 'Milestone 생성' });
     await expect(newMilestone).toBeVisible();
 
     // Measure only the settled layout: web-font swap and the async tab-count
@@ -211,7 +211,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.evaluate(() => document.fonts.ready);
     // Fixture: 5 milestones → the All tab's count badge is the last toolbar
     // content to arrive; its presence implies the counts query settled.
-    await expect(page.getByRole('tab', { name: /^All 5$/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^전체 5$/ })).toBeVisible();
 
     const search = page.getByPlaceholder('Milestone 검색…');
     await expect(search).toBeVisible();
@@ -221,7 +221,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     const toolbar = page.locator('[data-toolbar-height="50"]').first();
     const toolbarBox = requireBox(await toolbar.boundingBox());
 
-    for (const label of ['All', 'In progress', 'Planning', 'Released']) {
+    for (const label of ['전체', '진행 중', '계획 중', '릴리스됨']) {
       const tab = page.getByRole('tab', { name: new RegExp(`^${label}`) });
       await expect(tab).toBeVisible();
       const tabBox = requireBox(await tab.boundingBox());
@@ -259,7 +259,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     const actionHit = await page.evaluate(
       ([x, y]: [number, number]) => {
         const el = document.elementFromPoint(x, y);
-        return el !== null && (el.closest('button')?.textContent ?? '').includes('New milestone');
+        return el !== null && (el.closest('button')?.textContent ?? '').includes('Milestone 생성');
       },
       [actionBox.x + actionBox.width / 2, actionBox.y + actionBox.height / 2] as [number, number],
     );
@@ -406,10 +406,10 @@ test.describe('/tasks?view=milestones visual harness', () => {
     const propertyLabels = [
       'Managed System',
       'Analytics Area',
-      'Owner',
-      'Start',
-      'Target',
-      'Created',
+      '담당자',
+      '시작일',
+      '목표일',
+      '생성일',
     ];
     await Promise.all(
       propertyLabels.map((label) => expect(detail.getByText(label, { exact: true })).toBeVisible()),

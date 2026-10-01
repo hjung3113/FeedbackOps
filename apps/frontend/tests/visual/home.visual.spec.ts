@@ -35,7 +35,7 @@ test.describe('/home visual harness', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await installMockApi(page, { home: 'populated', notifications: 'subject-references' });
     await page.goto('/home?tab=inbox');
-    await page.getByRole('radio', { name: 'All' }).click();
+    await page.getByRole('radio', { name: '전체' }).click();
 
     const allowedRow = page.getByTestId('home-inbox-row-77777777-7777-4777-8777-777777777777');
     const unavailableRow = page.getByTestId('home-inbox-row-dddddddd-dddd-4ddd-8ddd-dddddddddddd');
@@ -86,18 +86,18 @@ test.describe('/home visual harness', () => {
     await page.goto('/home');
     await expect(
       page.getByText(
-        '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
+        '운영 큐와 커버리지는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
       ),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Recovery & follow-up queues' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Coverage signals' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '복구 · 후속 조치 큐' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '커버리지 신호' })).toHaveCount(0);
     await expectVisual(page, page.locator('[data-app-frame]'), homeUnscopedVisualSnapshot);
   });
 
   test('inbox-high-no-link-selected', async ({ page }) => {
     await installMockApi(page, { inboxHighNoLink: true });
     await page.goto('/vocs?view=inbox&tab=high-no-link');
-    const tab = page.getByRole('tab', { name: 'High · no link' });
+    const tab = page.getByRole('tab', { name: '높음 · 연결 없음' });
     await expect(tab).toHaveAttribute('aria-selected', 'true');
     await expectVisual(
       page,

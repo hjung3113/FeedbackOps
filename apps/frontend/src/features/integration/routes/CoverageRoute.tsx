@@ -40,7 +40,7 @@ interface CoverageSearch {
 
 // The prototype subtitle pitches editable thresholds (direction C, deferred);
 // the integration guide requires the partial-integration-coverage label.
-const PARTIAL_COVERAGE_SUBTITLE = '부분 Coverage. 정책이 요구하는 연결만 표시합니다.';
+const PARTIAL_COVERAGE_SUBTITLE = '부분 커버리지. 정책이 요구하는 연결만 표시합니다.';
 
 // Coverage columns are the five rollup ratios; the queue columns are the five
 // per-system queues. permission-requests-pending is workspace review, never a
@@ -241,7 +241,7 @@ export function CoverageRoute(): React.ReactElement {
           </div>
         </header>
         {summary.isError && (
-          <p className="mb-5 text-sm text-accent-danger">Coverage 요약을 불러올 수 없습니다.</p>
+          <p className="mb-5 text-sm text-accent-danger">커버리지 요약을 불러올 수 없습니다.</p>
         )}
 
         {summary.isPending ? (
@@ -256,15 +256,15 @@ export function CoverageRoute(): React.ReactElement {
             className="rounded-md border border-border-subtle bg-surface-card p-8 text-center"
             data-testid="coverage-empty"
           >
-            <p className="text-sm font-medium text-text-primary">표시할 Coverage가 없습니다</p>
+            <p className="text-sm font-medium text-text-primary">표시할 커버리지가 없습니다</p>
             <p className="mt-2 text-sm text-text-muted">
-              이 범위에 대한 Coverage 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는 항목은
+              이 범위에 대한 커버리지 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는 항목은
               생략됩니다 — 0과 같지 않습니다.
             </p>
           </div>
         ) : (
           <>
-            <PanelSectionTitle>Coverage 신호</PanelSectionTitle>
+            <PanelSectionTitle>커버리지 신호</PanelSectionTitle>
             <div
               className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               data-testid="coverage-signals"

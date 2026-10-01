@@ -219,7 +219,7 @@ describe('HomeScreen route content', () => {
     );
     expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '커버리지 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -235,7 +235,7 @@ describe('HomeScreen route content', () => {
     await screen.findByTestId('home-kpi-open_voc');
     expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Coverage 신호' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '커버리지 신호' })).toBeInTheDocument();
   });
 
   it('omits the Coverage section when coverage is empty', async () => {
@@ -243,7 +243,7 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-kpi-open_voc');
-    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '커버리지 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -252,11 +252,11 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByText(
-      '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
+      '운영 큐와 커버리지는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
     );
     expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '커버리지 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-coverage-row-voc-task');
-    expect(screen.getByRole('link', { name: /Coverage 보기/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /커버리지 보기/ })).toHaveAttribute(
       'href',
       '/integration/coverage',
     );
@@ -332,7 +332,7 @@ describe('HomeScreen route content', () => {
     renderHome(`/home?managedSystem=${systemId}`);
 
     await screen.findByTestId('home-coverage-row-voc-task');
-    expect(screen.getByRole('link', { name: /Coverage 보기/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /커버리지 보기/ })).toHaveAttribute(
       'href',
       '/integration/coverage',
     );

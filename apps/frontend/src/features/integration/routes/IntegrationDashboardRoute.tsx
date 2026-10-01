@@ -20,7 +20,7 @@ interface IntegrationDashboardSearch {
   managedSystem?: string;
 }
 
-const SUMMARY_ERROR_TITLE = 'Integration 요약을 불러오지 못했습니다.';
+const SUMMARY_ERROR_TITLE = '연동 요약을 불러오지 못했습니다.';
 
 function isPermissionError(error: unknown): boolean {
   return (
@@ -84,7 +84,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-              Integration 액션 대시보드
+              연동 액션 대시보드
             </h1>
             <p className="mt-3 text-sm text-text-muted">
               VOC · Finding · Task · Survey 사이의 흐름이 끊긴 지점을 추적합니다. 차트가 아니라 다음
@@ -126,7 +126,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
           ) : summary.isError ? (
             isPermissionError(summary.error) ? (
               <div data-testid="integration-dashboard-blocked">
-                <PermissionBlockedPanel state="denied" category="Integration 요약" />
+                <PermissionBlockedPanel state="denied" category="연동 요약" />
               </div>
             ) : (
               <div data-testid="integration-dashboard-summary-error">
@@ -157,7 +157,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
         </div>
 
         <div className="mb-9" data-testid="integration-surfaces">
-          <PanelSectionTitle>Integration 화면</PanelSectionTitle>
+          <PanelSectionTitle>연동 화면</PanelSectionTitle>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <IntegrationJumpCard
               href={`/integration/coverage${surfaceScopeSearch}`}

@@ -291,7 +291,7 @@ describe('integration coverage route', () => {
     const table = within(screen.getByTestId('coverage-table'));
     expect(table.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
     expect(table.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
-    expect(screen.getByText('부분 Coverage. 정책이 요구하는 연결만 표시합니다.')).toBeVisible();
+    expect(screen.getByText('부분 커버리지. 정책이 요구하는 연결만 표시합니다.')).toBeVisible();
   });
 
   test('keeps metric keys out of visible Coverage rows', async () => {

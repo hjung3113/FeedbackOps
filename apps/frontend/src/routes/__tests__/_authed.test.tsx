@@ -118,7 +118,7 @@ describe('_authed sidebar navigation tree', () => {
       id: 'integration-dashboard',
       label: '액션 대시보드',
       href: '/integration',
-      section: 'Integration',
+      section: '연동',
     });
   });
 

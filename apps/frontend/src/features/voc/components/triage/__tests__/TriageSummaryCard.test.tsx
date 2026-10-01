@@ -22,7 +22,7 @@ describe('TriageSummaryCard', () => {
     expect(screen.getByText('변경 없음 — 현재 값 그대로 확정됩니다.')).toBeInTheDocument();
     expect(screen.queryByTestId(/^summary-diff-row-/)).not.toBeInTheDocument();
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('접수됨');
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
@@ -45,7 +45,7 @@ describe('TriageSummaryCard', () => {
     expect(row.querySelector('.text-text-primary')).toHaveTextContent('critical');
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
   });
@@ -67,7 +67,7 @@ describe('TriageSummaryCard', () => {
     expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
     expect(row.querySelector('.text-text-primary')).toHaveTextContent('김철수');
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('담당자 배정됨');
     expect(screen.queryByText('Cluster')).not.toBeInTheDocument();

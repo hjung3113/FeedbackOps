@@ -109,7 +109,7 @@ export function TriageSummaryCard({
           className="flex items-center gap-1.5 text-xs text-text-muted"
           data-testid="reporter-status-transition"
         >
-          <span>확정 시 Reporter status:</span>
+          <span>확정 시 공개 상태:</span>
           <ReporterStatusBadge status={currentReporterStatus} />
           <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
           <ReporterStatusBadge status={stagedOwnerMissing ? 'reviewing' : 'assigned'} />

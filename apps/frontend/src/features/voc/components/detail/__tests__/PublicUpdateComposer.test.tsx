@@ -62,7 +62,7 @@ import type { VocDetailEnvelope } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
 async function chooseReporterStatus(label: string): Promise<void> {
-  fireEvent.click(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '다음 공개 상태 선택' }));
   fireEvent.click(await screen.findByRole('option', { name: label }));
 }
 
@@ -261,12 +261,12 @@ describe('<PublicUpdateComposer>', () => {
 
     await waitFor(() => {
       expect(delayedDetailRefetch).toHaveBeenCalledTimes(1);
-      expect(
-        screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
-      ).toHaveValue('reviewing');
-      expect(screen.getByText('Reporter-facing status는 그대로 유지됩니다.')).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: '다음 공개 상태 선택' })).toHaveValue(
+        'reviewing',
+      );
+      expect(screen.getByText('공개 상태는 그대로 유지됩니다.')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '다음 공개 상태 선택' }));
     await waitFor(() => {
       // The "(현재)" marker tracks the response VOC, and that option is the one
       // selected — i.e. nextStatus was resynced from data.voc, not the stale prop.
@@ -320,15 +320,11 @@ describe('<PublicUpdateComposer>', () => {
   it('keeps the staged status instead of silently resyncing it to the moved VOC', async () => {
     await renderThenMoveVoc();
 
-    expect(
-      screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
-    ).toHaveValue('reviewing');
+    expect(screen.getByRole('combobox', { name: '다음 공개 상태 선택' })).toHaveValue('reviewing');
     // The choice is still presented as pending, not quietly dropped: the footer
     // hint would read "그대로 유지됩니다" if nextStatus had been resynced.
     expect(screen.getByText('로 함께 게시')).toBeInTheDocument();
-    expect(
-      screen.queryByText('Reporter-facing status는 그대로 유지됩니다.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('공개 상태는 그대로 유지됩니다.')).not.toBeInTheDocument();
   });
 
   it('blocks Publish when the staged status is no longer an allowed transition', async () => {

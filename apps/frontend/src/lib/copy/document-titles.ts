@@ -21,7 +21,7 @@ export const DOCUMENT_TITLE_COPY = {
     milestones: 'Milestones',
   },
   integration: {
-    dashboard: 'Integration 액션 대시보드',
+    dashboard: '연동 액션 대시보드',
     coverage: GLOSSARY.coverage,
     links: GLOSSARY.entityLinks,
   },

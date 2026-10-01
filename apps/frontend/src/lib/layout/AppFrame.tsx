@@ -106,7 +106,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     voc: { label: 'VOC', subtitle: '고객 피드백' },
     findings: { label: 'Findings', subtitle: 'Evidence → 실행' },
     tasks: { label: 'Tasks', subtitle: '실행' },
-    integration: { label: 'Integration', subtitle: '커버리지 · 복구' },
+    integration: { label: '연동', subtitle: '커버리지 · 복구' },
     surveys: { label: 'Surveys', subtitle: '탐색 · 검증 · 결과' },
     admin: { label: '관리자', subtitle: '워크스페이스' },
   };

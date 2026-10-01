@@ -158,12 +158,12 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       id: 'integration-dashboard',
       label: GLOSSARY.actionDashboard,
       href: '/integration',
-      section: 'Integration',
+      section: '연동',
       icon: <Activity className="h-4 w-4" />,
     },
-    { id: 'integration-findings', label: 'Findings', href: '/findings', section: 'Integration', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
-    { id: 'integration-links', label: GLOSSARY.entityLinks, href: '/integration/links', section: 'Integration', icon: <Link2 className="h-4 w-4" /> },
-    { id: 'integration-coverage', label: GLOSSARY.coverage, href: '/integration/coverage', section: 'Integration', icon: <Layers className="h-4 w-4" /> },
+    { id: 'integration-findings', label: 'Findings', href: '/findings', section: '연동', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
+    { id: 'integration-links', label: GLOSSARY.entityLinks, href: '/integration/links', section: '연동', icon: <Link2 className="h-4 w-4" /> },
+    { id: 'integration-coverage', label: GLOSSARY.coverage, href: '/integration/coverage', section: '연동', icon: <Layers className="h-4 w-4" /> },
   ],
   surveys: [
     {

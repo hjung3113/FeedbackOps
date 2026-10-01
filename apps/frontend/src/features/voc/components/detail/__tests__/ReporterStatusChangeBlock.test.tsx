@@ -211,7 +211,7 @@ describe('ReporterStatusChangeBlock', () => {
     );
 
     // Preview card should be present with "Reporter가 보게 될 화면 미리보기" label
-    expect(screen.getByText('Reporter가 보게 될 화면 미리보기')).toBeInTheDocument();
+    expect(screen.getByText('제출자가 보게 될 화면 미리보기')).toBeInTheDocument();
     // VOC display_id shown in preview
     expect(screen.getByText('VOC-0001')).toBeInTheDocument();
   });

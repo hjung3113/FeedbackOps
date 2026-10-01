@@ -12,4 +12,4 @@ export const COVERAGE_METRIC_LABELS = {
 
 export const COVERAGE_METRIC_IDS = Object.keys(COVERAGE_METRIC_LABELS) as DashboardCoverageId[];
 
-export const INTEGRATION_AVERAGE_COVERAGE_LABEL = '평균 Coverage';
+export const INTEGRATION_AVERAGE_COVERAGE_LABEL = '평균 커버리지';

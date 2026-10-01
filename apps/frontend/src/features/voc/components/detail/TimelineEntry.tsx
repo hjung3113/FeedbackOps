@@ -18,7 +18,7 @@ import { AttachmentChipList } from './AttachmentChip';
 
 const KIND_LABELS: Record<ConversationEntry['kind'], string> = {
   public_update:     '공개 업데이트',
-  reporter_reply:    'Reporter 답변',
+  reporter_reply:    '제출자 답변',
   internal_comment:  '내부 코멘트',
 };
 

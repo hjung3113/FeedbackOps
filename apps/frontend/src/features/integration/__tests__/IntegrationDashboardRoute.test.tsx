@@ -245,7 +245,7 @@ describe('integration action dashboard route', () => {
     ).toBeVisible();
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
-    expect(surfaces.getByText('평균 Coverage')).toBeVisible();
+    expect(surfaces.getByText('평균 커버리지')).toBeVisible();
     expect(surfaces.queryByText('active links')).toBeNull();
     expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_A}`).textContent).toBe(
       '18',
@@ -433,7 +433,7 @@ describe('integration action dashboard route', () => {
     });
 
     const summaryError = await screen.findByTestId('integration-dashboard-summary-error');
-    expect(summaryError).toHaveTextContent('Integration 요약을 불러오지 못했습니다.');
+    expect(summaryError).toHaveTextContent('연동 요약을 불러오지 못했습니다.');
     expect(summaryError).toHaveTextContent(
       '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
     );
@@ -459,7 +459,7 @@ describe('integration action dashboard route', () => {
     });
 
     const blocked = await screen.findByTestId('integration-dashboard-blocked');
-    const blockedPanel = within(blocked).getByText('Integration 요약').closest('[data-state]');
+    const blockedPanel = within(blocked).getByText('연동 요약').closest('[data-state]');
     expect(blockedPanel).not.toBeNull();
     expect(blockedPanel).toHaveAttribute('data-state', 'denied');
     expect(screen.queryByTestId('integration-queue-card-unassigned-voc')).toBeNull();
@@ -469,9 +469,7 @@ describe('integration action dashboard route', () => {
   test('keeps the dashboard mounted at /integration', async () => {
     const { router } = await renderDashboard('/integration');
     expect(router.state.location.pathname).toBe('/integration');
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Integration 액션 대시보드' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: '연동 액션 대시보드' })).toBeVisible();
   });
 
   test('strictly accepts the documented Managed System scope search values', () => {

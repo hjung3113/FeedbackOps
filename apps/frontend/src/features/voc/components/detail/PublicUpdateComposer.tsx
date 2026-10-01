@@ -259,7 +259,7 @@ export function PublicUpdateComposer({
       <span className="text-text-muted">로 함께 게시</span>
     </span>
   ) : (
-    <span className="text-xs text-text-muted">Reporter-facing status는 그대로 유지됩니다.</span>
+    <span className="text-xs text-text-muted">공개 상태는 그대로 유지됩니다.</span>
   );
 
   // ── Error matrix ─────────────────────────────────────────────────────────────
@@ -343,7 +343,7 @@ export function PublicUpdateComposer({
       <PreviewModal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="공개 업데이트 — 접수자 미리보기"
+        title="공개 업데이트 — 제출자 미리보기"
       >
         <ComposerPublicPreview
           voc={voc}

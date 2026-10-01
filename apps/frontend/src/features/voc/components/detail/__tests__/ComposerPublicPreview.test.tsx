@@ -39,7 +39,7 @@ describe('<ComposerPublicPreview>', () => {
     // Body text rendered via RichContentRenderer
     expect(screen.getByText(/검토 완료/)).toBeInTheDocument();
     // status hint — status is changing
-    expect(screen.getByText(/Reporter-facing 상태가/)).toBeInTheDocument();
+    expect(screen.getByText(/공개 상태가/)).toBeInTheDocument();
   });
 
   it('renders italic placeholder copy when body doc is empty', () => {

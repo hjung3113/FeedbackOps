@@ -30,19 +30,17 @@ test.describe('/admin/settings visual harness', () => {
       const target = page.getByTestId('workspace-settings-screen');
       await expect(target).toBeVisible();
       if (scenario === 'editing') {
-        await page.getByRole('button', { name: 'Edit', exact: true }).nth(1).click();
-        await page.getByLabel('Anonymity threshold').fill('12');
+        await page.getByRole('button', { name: '편집', exact: true }).nth(1).click();
+        await page.getByLabel('익명성 임계값').fill('12');
         await expect(page.getByTestId('workspace-settings-save-bar')).toBeVisible();
       }
       if (scenario === 'locked') {
-        await expect(target.getByText('Locked', { exact: true })).toHaveCount(5);
-        await expect(page.getByTestId('locked-value-survey-response-to-voc')).toHaveText(
-          'Forbidden',
-        );
+        await expect(target.getByText('잠김', { exact: true })).toHaveCount(5);
+        await expect(page.getByTestId('locked-value-survey-response-to-voc')).toHaveText('금지');
       }
       if (scenario === 'settings-self-approval-scoped') {
         await expect(
-          target.getByText('Self-approval of Permission Request', { exact: true }),
+          target.getByText('Permission Request 직접 승인', { exact: true }),
         ).toBeVisible();
         await expect(
           target.getByText('Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.', {

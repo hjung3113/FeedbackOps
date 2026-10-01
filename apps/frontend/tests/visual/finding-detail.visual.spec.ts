@@ -64,7 +64,7 @@ test.describe('/findings/$findingId visual harness', () => {
 
     // Evidence Highlights: DTO count in the section title, one row per fixture item.
     await expect(
-      panel.getByText(`Evidence Highlights (${populatedFinding.evidence_count})`),
+      panel.getByText(`Evidence 하이라이트 (${populatedFinding.evidence_count})`),
     ).toBeVisible();
     await expect(panel.getByTestId('evidence-highlight-row')).toHaveCount(2);
     await expect(panel.getByText(EVIDENCE_QUOTES.voc)).toBeVisible();

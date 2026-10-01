@@ -39,10 +39,10 @@ describe('<TimelineEntry>', () => {
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
   });
 
-  it('renders "Reporter 답변" kind chip', () => {
+  it('renders "제출자 답변" kind chip', () => {
     const entry: ConversationEntry = { ...BASE, kind: 'reporter_reply', visibility: 'reporter' };
     render(<TimelineEntry entry={entry} />);
-    expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
+    expect(screen.getByText('제출자 답변')).toBeInTheDocument();
   });
 
   it('renders "내부 코멘트" kind chip', () => {

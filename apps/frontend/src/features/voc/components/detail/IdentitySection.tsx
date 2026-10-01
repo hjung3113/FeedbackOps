@@ -40,7 +40,7 @@ export function IdentitySection({
 }: IdentitySectionProps): React.ReactElement {
   const { data: me } = useMe();
   const resolvedReporterDisplayName =
-    reporterDisplayName ?? (me?.actor.id === voc.reporter_id ? me.actor.display_name : 'Reporter');
+    reporterDisplayName ?? (me?.actor.id === voc.reporter_id ? me.actor.display_name : '제출자');
   const relativeTime = formatRelativeTime(voc.created_at);
 
   // Title block: prototype .panel-title typography via PanelTitleBlock.

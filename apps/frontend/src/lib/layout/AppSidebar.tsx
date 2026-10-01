@@ -322,7 +322,11 @@ function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; colla
 }
 
 function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }
-function sectionTestId(section: string) { return section.toLowerCase().replace(/\s+/g, '-'); }
+const KOREAN_SECTION_TEST_IDS: Record<string, string> = { 연동: 'integration', 관리자: 'admin' };
+function sectionTestId(section: string) {
+  // Test ids stay Latin even when the visible section header is Korean.
+  return KOREAN_SECTION_TEST_IDS[section] ?? section.toLowerCase().replace(/\s+/g, '-');
+}
 function scopedHref(href: string, managedSystemId: string | undefined) {
   if (managedSystemId === undefined || !href.startsWith('/vocs')) return href;
   const url = new URL(href, 'http://feedbackops.local');

@@ -232,7 +232,7 @@ export function ReporterReplyComposer({
       <PreviewModal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="접수자 답변 미리보기"
+        title="제출자 미리보기"
       >
         <ComposerReplyPreview voc={voc} owner={owner} reporter={reporter} draftDoc={draftDoc} />
       </PreviewModal>

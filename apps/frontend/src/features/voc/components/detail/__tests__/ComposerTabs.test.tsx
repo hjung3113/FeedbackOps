@@ -24,7 +24,7 @@ describe('<ComposerTabs>', () => {
       />,
     );
     expect(screen.queryByText('공개 업데이트')).not.toBeInTheDocument();
-    expect(screen.getByText('접수자 답변')).toBeInTheDocument();
+    expect(screen.getByText('제출자 답변')).toBeInTheDocument();
     expect(screen.getByText('내부 메모')).toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe('<ComposerTabs>', () => {
     );
     // The leftmost visible tab is "reply" since public is hidden
     // The active tab button should be "reply"
-    const replyBtn = screen.getByRole('tab', { name: /접수자 답변/i });
+    const replyBtn = screen.getByRole('tab', { name: /제출자 답변/i });
     expect(replyBtn).toHaveAttribute('aria-selected', 'true');
   });
 

@@ -18,7 +18,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
     return (
       <Card className={cn('p-3.5', className)}>
         <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
-          Reporter
+          제출자
         </div>
         <CardContent className="flex items-center gap-3 p-0">
           <Skeleton className="h-8 w-8 rounded-full" />
@@ -43,7 +43,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
   return (
     <Card className={cn('p-3.5', className)}>
       <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
-        Reporter
+        제출자
       </div>
       <CardContent className="flex items-center gap-2.5 p-0">
         <Avatar className="h-8 w-8">

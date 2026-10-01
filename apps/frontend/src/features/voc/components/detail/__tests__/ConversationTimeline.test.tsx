@@ -20,7 +20,7 @@ vi.mock('../TimelineEntry', () => ({
       {entry.kind === 'public_update'
         ? '공개 업데이트'
         : entry.kind === 'reporter_reply'
-          ? 'Reporter 답변'
+          ? '제출자 답변'
           : '내부 코멘트'}
     </div>
   ),
@@ -179,7 +179,7 @@ describe('<ConversationTimeline>', () => {
     render(<ConversationTimeline voc={vocWithEntries} canTriage={true} />);
     // public tab is default; public + reporter_reply should appear
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
-    expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
+    expect(screen.getByText('제출자 답변')).toBeInTheDocument();
   });
 
   it('shows empty state when no entries in public tab', () => {
