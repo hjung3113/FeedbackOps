@@ -256,16 +256,22 @@ function FindingsListBody({
   onRetry: () => void;
   onResetFilters: () => void;
 }): React.ReactElement {
+  const isReadDenied = isError && isPermissionDenied(error);
+
   return (
     <section className="flex min-h-full flex-col">
-      <div className="border-b border-border-subtle px-5 py-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Finding 목록
-          </h3>
-          {isSuccess ? <span className="text-xs text-text-muted">{findings.length}개</span> : null}
+      {!isReadDenied ? (
+        <div className="border-b border-border-subtle px-5 py-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Finding 목록
+            </h3>
+            {isSuccess ? (
+              <span className="text-xs text-text-muted">{findings.length}개</span>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {isPending ? (
         <div className="space-y-2 p-4" data-testid="finding-list-skeleton">

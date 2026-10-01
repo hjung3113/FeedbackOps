@@ -37,7 +37,11 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <p className="font-medium text-text-primary">{title}</p>
+      <p
+        className={size === 'sm' ? 'font-normal text-text-muted' : 'font-medium text-text-primary'}
+      >
+        {title}
+      </p>
       {body !== undefined && (
         <p className="text-text-muted">{body}</p>
       )}

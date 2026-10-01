@@ -383,6 +383,12 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           onRetry={() => {
             void vocList.refetch();
           }}
+          onCreate={() =>
+            void navigate({
+              to: '/vocs',
+              search: (previous) => ({ ...previous, action: 'create' }),
+            })
+          }
         />
       )}
     </>

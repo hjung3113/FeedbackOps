@@ -342,3 +342,10 @@ packages/ui/src/components/shadcn/avatar.tsx organizeImports -- pre-existing on 
 packages/ui/src/identity/__tests__/UserAvatar.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
 packages/ui/src/identity/__tests__/UserAvatar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
 packages/ui/src/identity/__tests__/UserAvatar.test.tsx format -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
+packages/ui/src/feedback/EmptyState.tsx format -- pre-existing on develop (measured 2026-10-01); #674 only changes the sm title classes
+packages/ui/src/feedback/EmptyState.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-01); #674 only changes the sm title classes
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx format -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/a11y/useButtonType -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedVariables -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block

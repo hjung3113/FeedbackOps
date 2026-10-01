@@ -15,6 +15,7 @@ import { Archive, Check } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { ListStateMessage } from '@/components/ListStateMessage';
 import {
   type ApiError,
   archiveNotification,
@@ -151,9 +152,10 @@ export function InboxPanel(): React.ReactElement {
       ) : null}
 
       {!list.isPending && !list.isError && items.length === 0 ? (
-        <p className="py-5 text-sm text-text-muted">
-          {filter === 'unread' ? HOME_INBOX_COPY.emptyUnread : HOME_INBOX_COPY.emptyAll}
-        </p>
+        <ListStateMessage
+          variant="empty"
+          title={filter === 'unread' ? HOME_INBOX_COPY.emptyUnread : HOME_INBOX_COPY.emptyAll}
+        />
       ) : null}
 
       {!list.isPending && !list.isError && items.length > 0 ? (

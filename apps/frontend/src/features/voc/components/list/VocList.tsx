@@ -14,6 +14,7 @@
  * action is deferred to a follow-up issue. "Clear" is fully wired.
  */
 
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
@@ -21,7 +22,6 @@ import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { FileText, Flag, Layers, User } from 'lucide-react';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
@@ -106,6 +106,8 @@ export interface VocListProps {
   view?: 'inbox' | 'my';
   /** Retry handler for error variant. */
   onRetry?: () => void;
+  /** Opens the route-owned VOC create flow from an empty list state. */
+  onCreate?: () => void;
 }
 
 const SKELETON_COUNT = 10;
@@ -122,6 +124,7 @@ export function VocList({
   onSelect,
   view,
   onRetry,
+  onCreate,
 }: VocListProps) {
   const msMap = useManagedSystemMap();
   const areaMap = useAnalyticsAreaMap();
@@ -187,26 +190,24 @@ export function VocList({
   if (!loading && items.length === 0) {
     if (view === 'my') {
       return (
-        <EmptyState
+        <ListStateMessage
+          variant="empty"
           title="내가 제출한 VOC가 없습니다"
-          action={
-            <Link to="/vocs" search={{ action: 'create' }}>
-              + 새 VOC 작성
-            </Link>
-          }
+          {...(onCreate !== undefined
+            ? { action: { label: '+ 새 VOC 작성', onClick: onCreate } }
+            : {})}
         />
       );
     }
     // inbox or unspecified
     return (
-      <EmptyState
+      <ListStateMessage
+        variant="empty"
         title="큐가 비었습니다"
         body="제출된 VOC가 표시됩니다."
-        action={
-          <Link to="/vocs" search={{ action: 'create' }}>
-            + 새 VOC 작성
-          </Link>
-        }
+        {...(onCreate !== undefined
+          ? { action: { label: '+ 새 VOC 작성', onClick: onCreate } }
+          : {})}
       />
     );
   }

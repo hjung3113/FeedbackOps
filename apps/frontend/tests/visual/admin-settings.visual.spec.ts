@@ -14,7 +14,7 @@ test.describe('/admin/settings visual harness', () => {
       await page.goto('/admin/settings');
 
       if (scenario === 'no-permission') {
-        const target = page.locator('[data-permission-state="blocked_non_requestable"]');
+        const target = page.locator('[data-state="blocked_not_requestable"]');
         await expect(target).toBeVisible();
         await expectVisual(page, target, 'admin-settings-no-permission.png');
         return;

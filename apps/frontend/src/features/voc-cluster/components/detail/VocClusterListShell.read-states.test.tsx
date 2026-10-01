@@ -117,6 +117,11 @@ describe('VocClusterListShell list states (#609)', () => {
         { timeout: 5000 },
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('VOC 클러스터')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: '클러스터 필터' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByText(/전체 0|확정 0|Finding 없음 0/)).not.toBeInTheDocument();
+    expect(screen.queryByText('0개')).not.toBeInTheDocument();
     expect(screen.queryByTestId('list-state-message')).not.toBeInTheDocument();
   });
 });

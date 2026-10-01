@@ -1,3 +1,4 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { Button, ListShell, ObjectRow, OutlineBadge } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
@@ -72,7 +73,7 @@ export function PermissionRequestsScreen() {
             <p className="p-6 text-sm text-accent-danger">권한 요청을 불러오지 못했습니다.</p>
           ) : null}
           {!isPending && !isError && visibleRequests.length === 0 ? (
-            <p className="p-6 text-sm text-text-muted">표시할 권한 요청이 없습니다.</p>
+            <ListStateMessage variant="empty" title="표시할 요청이 없습니다." />
           ) : null}
           {visibleRequests.map((request) => (
             <PermissionRequestRow
