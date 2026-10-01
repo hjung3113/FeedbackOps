@@ -26,6 +26,7 @@ import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
+import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
 import {
   AuthenticatedRouteErrorFallback,
   AuthenticatedRoutePendingFallback,
@@ -83,18 +84,19 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     },
     {
       id: 'high-severity',
-      label: 'High severity',
+      label: VOC_TRIAGE_TAB_LABELS.high,
       href: '/vocs?view=triage&tab=high',
-      section: 'VIEWS',
+      // #680 follows the accepted Korean-first labels where the prototype says "VIEWS".
+      section: 'Triage 보기',
       parentId: 'triage',
       icon: <Flag className="h-4 w-4" />,
       countKey: 'voc.tab.high',
     },
     {
       id: 'unassigned',
-      label: 'Unassigned',
+      label: VOC_TRIAGE_TAB_LABELS.unassigned,
       href: '/vocs?view=triage&tab=unassigned',
-      section: 'VIEWS',
+      section: 'Triage 보기',
       parentId: 'triage',
       icon: <User className="h-4 w-4" />,
       countKey: 'voc.tab.unassigned',
@@ -102,12 +104,12 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     },
     {
       id: 'no-link',
-      label: 'No follow-up',
-      href: '/vocs?view=triage&tab=no-link',
-      section: 'VIEWS',
-      parentId: 'triage',
+      label: VOC_INBOX_NO_LINK_TAB_LABEL,
+      href: '/vocs?view=inbox&tab=no-link',
+      section: '보기',
+      parentId: 'inbox',
       icon: <Link2 className="h-4 w-4" />,
-      countKey: 'voc.tab.no-link',
+      countKey: 'voc.inbox.no-link',
     },
   ],
   findings: [

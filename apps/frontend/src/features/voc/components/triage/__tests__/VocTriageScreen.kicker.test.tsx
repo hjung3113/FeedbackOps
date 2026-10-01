@@ -27,6 +27,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
 import { VocTriageScreen } from '../VocTriageScreen';
 
@@ -49,6 +50,15 @@ const MOCK_VOC: VocListItem = {
   attachment_count: 0,
 };
 
+const PINNED_OUT_OF_TAB_VOC: VocListItem = {
+  ...MOCK_VOC,
+  id: 'voc-kicker-pinned',
+  display_id: 'VOC-K-PINNED',
+  title: '이미 분류된 고정 VOC',
+  triage_state: 'triaged',
+  owner_user_id: '00000000-0000-0000-0000-000000000011',
+};
+
 function Wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -57,6 +67,24 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('VocTriageScreen — V1 inline kicker', () => {
+  it('does not add a pinned out-of-tab VOC to the authoritative tab count', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC, PINNED_OUT_OF_TAB_VOC]}
+          selectedId={PINNED_OUT_OF_TAB_VOC.id}
+          activeTab="unassigned"
+          queueTotal={7}
+          activeTabTotal={1}
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 1');
+  });
+
   it('uses the shared untriaged label for the triage tab', () => {
     render(
       <Wrapper>
@@ -71,6 +99,25 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     );
 
     expect(screen.getByRole('button', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+  });
+
+  it('uses the sidebar labels for the Unassigned and High severity tabs', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="unassigned"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.unassigned }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
   });
 
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {

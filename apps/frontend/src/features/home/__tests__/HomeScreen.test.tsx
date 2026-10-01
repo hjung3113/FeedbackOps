@@ -1,4 +1,5 @@
 import { DASHBOARD_HOP_ROUTES, dashboardSummarySchema } from '@fops/shared';
+import type { DashboardCoverageId } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -12,6 +13,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { AppSidebar } from '@/lib/layout/AppSidebar';
 import { HomeRoute } from '@/routes/_authed/home';
 import { HomeScreen } from '../HomeScreen';
@@ -167,6 +169,28 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('home-queue-high-severity-unlinked')).toBeNull();
   });
 
+  it('keeps an urgent zero Home sidebar queue badge neutral', () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: [
+        {
+          id: 'bad-outcome-no-followup',
+          severity: 'urgent',
+          count: 0,
+          next_action: { label: 'Review', route: '/surveys', intent: 'review' },
+          secondary_action: null,
+        },
+      ],
+    });
+
+    render(<AppSidebar entries={homeSidebarEntries(summary, true)} />);
+
+    const badge = screen.getByTestId('sidebar-count-queue-bad-outcome-no-followup');
+    expect(badge).toHaveTextContent('0');
+    expect(badge.className).toContain('bg-surface-row-selected');
+    expect(badge.className).not.toContain('text-accent-danger');
+  });
+
   it('renders only the zero queue strip when every queue count is zero', async () => {
     const allZero = dashboardSummarySchema.parse({
       ...response,
@@ -265,6 +289,33 @@ describe('HomeScreen route content', () => {
         href: DASHBOARD_HOP_ROUTES[item.id],
       });
     }
+  });
+
+  it.each(COVERAGE_METRIC_IDS)('renders the shared Home coverage label for %s', async (id) => {
+    const metric = {
+      id,
+      value: 1,
+      total: 2,
+      percent: 50,
+      status: 'warn' as const,
+    };
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage: [metric] }));
+    renderHome();
+
+    const row = await screen.findByTestId(`home-coverage-row-${id}`);
+    expect(row).toHaveTextContent(COVERAGE_METRIC_LABELS[id as DashboardCoverageId]);
+  });
+
+  it('labels the Home coverage KPI with the VOC-to-Task metric', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: { open_voc: 1, coverage_percent: 18 },
+    });
+    installFetch(summary);
+    renderHome();
+
+    const pill = await screen.findByTestId('home-kpi-coverage_percent');
+    expect(pill).toHaveTextContent(COVERAGE_METRIC_LABELS['voc-task']);
   });
 
   it('keeps the selected managed system on coverage hops', async () => {

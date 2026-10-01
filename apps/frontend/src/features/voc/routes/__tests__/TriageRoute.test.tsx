@@ -4,7 +4,7 @@
 // TDD RED: written before TriageRoute.tsx implementation exists.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +21,10 @@ function renderWithQc(node: React.ReactElement) {
 
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
+
+vi.mock('@/lib/api/nav', () => ({
+  fetchNavCounts: vi.fn(),
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => searchState,
@@ -150,6 +154,7 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // ── Import subject ─────────────────────────────────────────────────────────────
 
+import { fetchNavCounts } from '@/lib/api/nav';
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { TriageRoute } from '../TriageRoute';
@@ -193,6 +198,15 @@ describe('TriageRoute', () => {
   beforeEach(() => {
     searchState = { view: 'triage' };
     navigateMock.mockClear();
+    vi.mocked(fetchNavCounts)
+      .mockReset()
+      .mockResolvedValue({
+        counts: {
+          'voc.triage': 7,
+          'voc.tab.unassigned': 2,
+          'voc.tab.high': 1,
+        },
+      });
     // Default: admin actor with voc.triage capability
     vi.mocked(useMe).mockReturnValue(ADMIN_ME as unknown as ReturnType<typeof useMe>);
     // Default: capability check approves (Admin/Developer with scope).
@@ -213,6 +227,75 @@ describe('TriageRoute', () => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Triage VOC 2').length).toBeGreaterThanOrEqual(1);
     });
+  });
+
+  it('shows the whole queue total and the selected tab count', async () => {
+    renderWithQc(<TriageRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
+    });
+    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 2');
+  });
+
+  it('keeps the queue total unavailable while nav counts are delayed', async () => {
+    let resolveCounts!: (result: Awaited<ReturnType<typeof fetchNavCounts>>) => void;
+    const delayedCounts = new Promise<Awaited<ReturnType<typeof fetchNavCounts>>>((resolve) => {
+      resolveCounts = resolve;
+    });
+    vi.mocked(fetchNavCounts).mockReturnValueOnce(delayedCounts);
+
+    renderWithQc(<TriageRoute />);
+
+    const total = await screen.findByTestId('triage-queue-total');
+    expect(total).toHaveTextContent('— VOC');
+    expect(total).toHaveAttribute('aria-label', '전체 대기열 불러오는 중');
+    expect(total).not.toHaveTextContent(/\d/);
+
+    await act(async () => {
+      resolveCounts({
+        counts: {
+          'voc.triage': 7,
+          'voc.tab.unassigned': 2,
+          'voc.tab.high': 1,
+        },
+      });
+      await delayedCounts;
+    });
+
+    await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
+  });
+
+  it('shows an unavailable queue total after nav counts fail', async () => {
+    vi.mocked(fetchNavCounts).mockRejectedValueOnce(new Error('nav counts unavailable'));
+
+    renderWithQc(<TriageRoute />);
+
+    const total = await screen.findByTestId('triage-queue-total');
+    await waitFor(() => {
+      expect(total).toHaveTextContent('— VOC');
+      expect(total).toHaveAttribute('aria-label', '전체 대기열 알 수 없음');
+    });
+    expect(total).not.toHaveTextContent(/\d/);
+  });
+
+  it('uses the High nav count for the High tab', async () => {
+    searchState = { view: 'triage', tab: 'high' };
+
+    renderWithQc(<TriageRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 높은 심각도 1');
+    });
+  });
+
+  it('omits a secondary count when the active tab has no nav count key', async () => {
+    searchState = { view: 'triage', tab: 'waiting' };
+
+    renderWithQc(<TriageRoute />);
+
+    await screen.findAllByText('Triage VOC 1');
+    expect(screen.queryByTestId('triage-tab-count')).not.toBeInTheDocument();
   });
 
   it('selecting a tab calls navigate with tab param', async () => {

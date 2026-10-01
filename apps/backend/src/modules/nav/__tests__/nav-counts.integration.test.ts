@@ -96,10 +96,17 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'high unassigned', {
       severity: 'high',
     });
-    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'triaged high', {
-      severity: 'high',
-      triageState: 'triaged',
-    });
+    const triagedUnlinkedVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'triaged high',
+      {
+        severity: 'high',
+        triageState: 'triaged',
+      },
+    );
     const badge = await counts(adminCookie);
     expect(badge.response.statusCode).toBe(200);
     for (const [url, key] of [
@@ -111,6 +118,26 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
       expect(list.statusCode).toBe(200);
       expect(badge.body.counts[key]).toBe(list.json<{ items: unknown[] }>().items.length);
     }
+
+    const noLinkList = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=inbox&tab=no-link',
+      headers: headers(adminCookie),
+    });
+    expect(noLinkList.statusCode).toBe(200);
+    const noLinkItems = noLinkList.json<{ items: Array<{ id: string }> }>().items;
+    expect(badge.body.counts['voc.inbox.no-link']).toBe(noLinkItems.length);
+    expect(noLinkItems.map((item) => item.id)).toContain(triagedUnlinkedVoc.id);
+
+    const triageList = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=triage',
+      headers: headers(adminCookie),
+    });
+    expect(triageList.statusCode).toBe(200);
+    expect(
+      triageList.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id),
+    ).not.toContain(triagedUnlinkedVoc.id);
   });
 
   it('filters counts to each actor read scope', async () => {
@@ -123,11 +150,32 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     const devCookie = await loginAs(app, dev.externalId);
     const admin = await counts(adminCookie);
     const scoped = await counts(devCookie);
+    const scopedNoLinkList = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=inbox&tab=no-link',
+      headers: headers(devCookie),
+    });
     expect(admin.response.statusCode).toBe(200);
     expect(scoped.response.statusCode).toBe(200);
-    if (admin.response.statusCode !== 200 || scoped.response.statusCode !== 200) return;
+    expect(scopedNoLinkList.statusCode).toBe(200);
+    if (
+      admin.response.statusCode !== 200 ||
+      scoped.response.statusCode !== 200 ||
+      scopedNoLinkList.statusCode !== 200
+    )
+      return;
     expect(admin.body.counts['voc.inbox']).toBeGreaterThan(scoped.body.counts['voc.inbox']!);
     expect(scoped.body.counts['voc.inbox']).toBe(1);
+    const adminNoLinkCount = admin.body.counts['voc.inbox.no-link'];
+    const scopedNoLinkCount = scoped.body.counts['voc.inbox.no-link'];
+    expect(adminNoLinkCount).toBeDefined();
+    expect(scopedNoLinkCount).toBeDefined();
+    if (adminNoLinkCount === undefined || scopedNoLinkCount === undefined) return;
+    expect(adminNoLinkCount).toBeGreaterThan(scopedNoLinkCount);
+    expect(scoped.body.counts['voc.inbox.no-link']).toBe(
+      scopedNoLinkList.json<{ items: unknown[] }>().items.length,
+    );
+    expect(scopedNoLinkCount).toBe(1);
     expect(scoped.body.counts['voc.triage']).toBeUndefined();
     expect(Object.hasOwn(scoped.body.counts, 'voc.triage')).toBe(false);
     expect(Object.hasOwn(admin.body.counts, 'voc.triage')).toBe(true);
@@ -211,6 +259,7 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
 
     expect(result.response.statusCode).toBe(200);
     expect(result.body.counts['voc.my']).toBe(1);
+    expect(Object.hasOwn(result.body.counts, 'voc.inbox.no-link')).toBe(false);
     expect(Object.hasOwn(result.body.counts, 'findings.all')).toBe(false);
   });
 

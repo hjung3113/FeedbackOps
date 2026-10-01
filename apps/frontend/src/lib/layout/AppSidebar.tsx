@@ -10,7 +10,7 @@ export type NavCountKey =
   | 'voc.my'
   | 'voc.tab.high'
   | 'voc.tab.unassigned'
-  | 'voc.tab.no-link'
+  | 'voc.inbox.no-link'
   | 'voc.clusters'
   | 'findings.all'
   | 'surveys.all'
@@ -308,7 +308,7 @@ function SavedViewsSection({
 }
 
 function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: number; urgent?: boolean }) {
-  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
+  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
