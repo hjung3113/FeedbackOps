@@ -459,9 +459,8 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     expect(await screen.findByTestId('milestone-summary-total')).toHaveTextContent('0');
     expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('0');
     expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('0');
-    // A genuine zero is not rendered as unavailable; the badge itself stays
-    // hidden at 0 (ListToolbar renders badgeCount only when > 0).
-    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('—');
+    // A genuine zero is rendered as a bare count; unavailable counts stay absent.
+    expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
   });
 
   // R6 correction — a settled error on the LIST read hides the totals and

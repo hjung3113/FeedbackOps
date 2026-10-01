@@ -1,7 +1,7 @@
 import type { FrontendPermissionState } from '@/lib/api';
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { surveyTypeSchema } from '@fops/shared';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -131,6 +131,47 @@ describe('SurveyList empty state', () => {
       '담당 관리자에게 문의하세요.',
     );
     expect(screen.queryByTestId('request-access-survey.manage')).not.toBeInTheDocument();
+  });
+});
+
+describe('SurveyList tabs', () => {
+  it('uses shared tabs with status counts and preserves filtering and row selection', () => {
+    const onSelect = vi.fn();
+    const openSurvey = {
+      ...survey,
+      id: 'survey-open',
+      display_id: 'SRV-22',
+      status: 'open' as const,
+    };
+    render(
+      <SurveyList
+        surveys={[survey, openSurvey]}
+        isLoading={false}
+        error={null}
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(screen.getByRole('tablist', { name: 'Survey status' })).toBeInTheDocument();
+    const allTab = screen.getByRole('tab', { name: 'All 2' });
+    const panel = screen.getByRole('tabpanel');
+    expect(allTab).toHaveAttribute('aria-selected', 'true');
+    expect(allTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(allTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', allTab.id);
+    expect(screen.getByRole('tab', { name: /진행 중 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /초안 1/ })).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /진행 중 1/ }));
+
+    const openTab = screen.getByRole('tab', { name: /진행 중 1/ });
+    expect(openTab).toHaveAttribute('aria-selected', 'true');
+    expect(openTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(openTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', openTab.id);
+    expect(screen.queryByTestId('survey-row-survey-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('survey-row-survey-open'));
+    expect(onSelect).toHaveBeenCalledWith('survey-open');
   });
 });
 

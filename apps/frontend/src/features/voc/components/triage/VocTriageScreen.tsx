@@ -12,6 +12,7 @@ import { CreateFindingModal } from '@/features/cross-system/create-finding/Creat
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { VOC_TRIAGE_QUEUE_TOTAL_LABELS, VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { FindingSeverity, VocListItem } from '@fops/shared';
+import { ListTabs, type ListToolbarTab } from '@fops/ui';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -27,7 +28,8 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
-  activeTabTotal?: number;
+  unassignedTabCount?: number;
+  highTabCount?: number;
   outOfScopeSummary?: {
     count: number;
     severity_distribution: Record<string, number>;
@@ -42,6 +44,7 @@ const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
   { value: 'high', label: VOC_TRIAGE_TAB_LABELS.high },
   { value: 'waiting', label: '보류' },
 ];
+const TRIAGE_QUEUE_PANEL_ID = 'triage-queue-panel';
 
 export function VocTriageScreen({
   items,
@@ -49,7 +52,8 @@ export function VocTriageScreen({
   activeTab,
   queueTotal,
   queueTotalUnavailableState,
-  activeTabTotal,
+  unassignedTabCount,
+  highTabCount,
   outOfScopeSummary,
   onSelectVoc,
   onTabChange,
@@ -107,7 +111,16 @@ export function VocTriageScreen({
     !items.some((v) => v.id === selectedId) &&
     !everInQueueRef.current.has(selectedId);
   const selectedVoc = deepLinkTargetMissing ? null : (selectedInQueue ?? liveQueue[0] ?? null);
-  const activeTabLabel = TRIAGE_TABS.find((tab) => tab.value === activeTab)?.label;
+  const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => ({
+    value: tab.value,
+    label: tab.label,
+    id: `triage-tab-${tab.value}`,
+    controlsId: TRIAGE_QUEUE_PANEL_ID,
+    ...(tab.value === 'unassigned' && unassignedTabCount !== undefined
+      ? { badgeCount: unassignedTabCount }
+      : {}),
+    ...(tab.value === 'high' && highTabCount !== undefined ? { badgeCount: highTabCount } : {}),
+  }));
   const queueTotalAccessibleLabel =
     queueTotal === undefined
       ? VOC_TRIAGE_QUEUE_TOTAL_LABELS[queueTotalUnavailableState ?? 'unavailable']
@@ -153,11 +166,6 @@ export function VocTriageScreen({
         >
           {queueTotal === undefined ? '— VOC' : `${queueTotal} VOC`}
         </output>
-        {activeTabLabel !== undefined && activeTabTotal !== undefined && (
-          <span data-testid="triage-tab-count" className="ml-1 text-xs text-text-muted">
-            · {activeTabLabel} {activeTabTotal}
-          </span>
-        )}
         <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → severity">
           미배정 → severity 순
         </span>
@@ -169,34 +177,24 @@ export function VocTriageScreen({
           </span>
         )}
 
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Tab strip */}
-        <div className="flex items-center gap-0.5">
-          {TRIAGE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => {
-                onTabChange(tab.value);
-              }}
-              className={
-                activeTab === tab.value
-                  ? 'h-7 px-2.5 rounded-md text-[13px] font-medium text-text-primary bg-surface-popover'
-                  : 'h-7 px-2.5 rounded-md text-[13px] font-medium text-text-muted hover:bg-surface-card hover:text-text-primary'
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* ADR-0022 keeps Triage tabs in the toolbar's right cluster. */}
+        <ListTabs
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={(next) => onTabChange(next as TriageTab)}
+          align="end"
+        />
       </div>
 
       {/* Body: queue (left) + panel (right) */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: queue list */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-border-subtle">
+        <div
+          id={TRIAGE_QUEUE_PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={`triage-tab-${activeTab}`}
+          className="flex-1 min-w-0 overflow-y-auto border-r border-border-subtle"
+        >
           <TriageQueue
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}

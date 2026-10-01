@@ -1,6 +1,8 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Flag } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ListTabs } from '../ListTabs.js';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
 
@@ -107,17 +109,100 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.getByText('미배정')).toBeInTheDocument();
   });
 
-  it('renders badgeCount when > 0', () => {
-    render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
-    expect(screen.getByText('5')).toBeInTheDocument();
+  it('end-aligns the Tabs root as the viewport direct child', () => {
+    const { container } = render(<ListTabs tabs={tabs} activeTab="untriaged" align="end" />);
+    const viewport = container.querySelector('[data-list-toolbar-tabs]');
+    const tabsRoot = viewport?.firstElementChild;
+
+    expect(tabsRoot).toHaveClass('ml-auto');
+    expect(tabsRoot).toContainElement(screen.getByRole('tablist'));
+    expect(screen.getByRole('tablist')).not.toHaveClass('ml-auto');
   });
 
-  it('does not render badgeCount when 0', () => {
-    const tabsWithZero: ListToolbarTab[] = [{ value: 'a', label: '탭A', badgeCount: 0 }];
+  it('uses the shared prototype tab size, hover, and active states', () => {
+    const styledTabs: ListToolbarTab[] = [
+      { value: 'normal', label: 'Normal' },
+      { value: 'urgent', label: 'Urgent', urgent: true },
+    ];
+    const { rerender } = render(<ListTabs tabs={styledTabs} activeTab="normal" />);
+
+    const normalTab = screen.getByRole('tab', { name: 'Normal' });
+    const urgentTab = screen.getByRole('tab', { name: 'Urgent' });
+    expect(normalTab).toHaveClass(
+      'h-7',
+      'px-2.5',
+      'gap-1.5',
+      'text-[13px]',
+      'hover:bg-surface-card',
+      'hover:text-text-primary',
+      'data-[state=active]:bg-surface-card-elevated',
+      'data-[state=active]:text-text-primary',
+      'data-[state=active]:shadow-none',
+    );
+    expect(normalTab).not.toHaveClass('data-[state=active]:shadow-sm');
+    expect(urgentTab).toHaveClass(
+      'text-text-danger',
+      'hover:text-text-danger',
+      'data-[state=active]:text-text-danger',
+    );
+
+    rerender(<ListTabs tabs={styledTabs} activeTab="urgent" />);
+    expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveClass(
+      'text-text-danger',
+      'data-[state=active]:bg-surface-card-elevated',
+      'data-[state=active]:text-text-danger',
+    );
+  });
+
+  it('renders badgeCount as a bare number when defined', () => {
+    render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
+    const tab = screen.getByRole('tab', { name: '미배정 5' });
+    expect(tab).toBeInTheDocument();
+    expect(screen.getByText('5')).toHaveClass('text-[11px]', 'text-text-muted', 'tabular-nums');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders defined zero counts and omits undefined counts', () => {
+    const tabsWithZero: ListToolbarTab[] = [
+      { value: 'a', label: '탭A', badgeCount: 0 },
+      { value: 'b', label: '탭B' },
+    ];
     render(<ListToolbar tabs={tabsWithZero} activeTab="a" />);
-    // The '0' number should not be in a badge
-    const badge = screen.queryByText('0');
-    expect(badge).toBeNull();
+
+    expect(screen.getByRole('tab', { name: '탭A 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '탭B' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('0')).toHaveClass(
+      'text-[11px]',
+      'text-text-muted',
+      'tabular-nums',
+      'group-data-[state=active]:text-text-secondary',
+    );
+    expect(screen.getByRole('tab', { name: '탭B' }).querySelector('span')).toBeNull();
+  });
+
+  it('renders the icon as decorative and uses a native title for its tip', () => {
+    const iconTab: ListToolbarTab[] = [
+      { value: 'flagged', label: 'Flagged', icon: Flag, tip: 'Items waiting for review' },
+    ];
+    render(<ListToolbar tabs={iconTab} activeTab="flagged" />);
+
+    const tab = screen.getByRole('tab', { name: 'Flagged' });
+    expect(tab).toHaveAttribute('title', 'Items waiting for review');
+    expect(tab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('uses the secondary text token for the active tab count', () => {
+    const countedTabs: ListToolbarTab[] = [
+      { value: 'selected', label: 'Selected', badgeCount: 1 },
+      { value: 'other', label: 'Other', badgeCount: 2 },
+    ];
+    render(<ListToolbar tabs={countedTabs} activeTab="selected" />);
+
+    const selectedCount = screen.getByRole('tab', { name: 'Selected 1' }).querySelector('span');
+    const otherCount = screen.getByRole('tab', { name: 'Other 2' }).querySelector('span');
+    expect(selectedCount).toHaveClass('group-data-[state=active]:text-text-secondary');
+    expect(otherCount).toHaveClass('text-text-muted');
   });
 
   it('calls onTabChange when a tab is clicked', async () => {
@@ -139,9 +224,9 @@ describe('ListToolbar — tabs mode', () => {
       { value: 'unassigned', label: 'Unassigned', urgent: true },
     ];
     render(<ListToolbar tabs={urgentTabs} activeTab="untriaged" />);
-    expect(screen.getByText('Unassigned').className).toContain('text-danger');
+    expect(screen.getByText('Unassigned').className).toContain('text-text-danger');
     // Non-urgent tabs are not flagged.
-    expect(screen.getByText('미분류').className).not.toContain('text-danger');
+    expect(screen.getByText('미분류').className).not.toContain('text-text-danger');
   });
 
   it('renders action slot when provided', () => {

@@ -8,6 +8,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -29,7 +30,7 @@ vi.mock('sonner', () => ({
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
-import { VocTriageScreen } from '../VocTriageScreen';
+import { type TriageTab, VocTriageScreen } from '../VocTriageScreen';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-kicker-001',
@@ -66,8 +67,46 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+function ControlledTriageScreen() {
+  const [activeTab, setActiveTab] = useState<TriageTab>('unassigned');
+  return (
+    <VocTriageScreen
+      items={[MOCK_VOC]}
+      selectedId={MOCK_VOC.id}
+      activeTab={activeTab}
+      onSelectVoc={vi.fn()}
+      onTabChange={setActiveTab}
+    />
+  );
+}
+
 describe('VocTriageScreen — V1 inline kicker', () => {
-  it('does not add a pinned out-of-tab VOC to the authoritative tab count', () => {
+  it('associates each selected tab with the queue panel and end-aligns the strip', () => {
+    render(
+      <Wrapper>
+        <ControlledTriageScreen />
+      </Wrapper>,
+    );
+
+    const unassignedTab = screen.getByRole('tab', { name: /미배정/ });
+    let panel = screen.getByRole('tabpanel');
+    const viewport = screen.getByRole('tablist').closest('[data-list-toolbar-tabs]');
+    expect(viewport?.firstElementChild).toHaveClass('ml-auto');
+    expect(unassignedTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(unassignedTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', unassignedTab.id);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /높은 심각도/ }));
+
+    const highTab = screen.getByRole('tab', { name: /높은 심각도/ });
+    panel = screen.getByRole('tabpanel');
+    expect(highTab).toHaveAttribute('aria-selected', 'true');
+    expect(highTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(highTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', highTab.id);
+  });
+
+  it('renders independently supplied navigation counts on both supported tabs', () => {
     render(
       <Wrapper>
         <VocTriageScreen
@@ -75,14 +114,16 @@ describe('VocTriageScreen — V1 inline kicker', () => {
           selectedId={PINNED_OUT_OF_TAB_VOC.id}
           activeTab="unassigned"
           queueTotal={7}
-          activeTabTotal={1}
+          unassignedTabCount={1}
+          highTabCount={3}
           onSelectVoc={vi.fn()}
           onTabChange={vi.fn()}
         />
       </Wrapper>,
     );
 
-    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 1');
+    expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /높은 심각도 3/ })).toBeInTheDocument();
   });
 
   it('uses the shared untriaged label for the triage tab', () => {
@@ -98,7 +139,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(screen.getByRole('button', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
   });
 
   it('uses the sidebar labels for the Unassigned and High severity tabs', () => {
@@ -114,10 +155,8 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(
-      screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.unassigned }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.unassigned })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
   });
 
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {

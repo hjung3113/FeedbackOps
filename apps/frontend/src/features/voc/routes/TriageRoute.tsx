@@ -87,12 +87,8 @@ export function TriageRoute(): React.ReactElement {
   const outOfScopeSummary = data?.out_of_scope_summary;
   const navCounts = navCountsQuery.data?.counts;
   const queueTotal = navCounts?.['voc.triage'];
-  const activeTabTotal =
-    activeTab === 'unassigned'
-      ? navCounts?.['voc.tab.unassigned']
-      : activeTab === 'high'
-        ? navCounts?.['voc.tab.high']
-        : undefined;
+  const unassignedTabCount = navCounts?.['voc.tab.unassigned'];
+  const highTabCount = navCounts?.['voc.tab.high'];
   const queueTotalUnavailableState = navCountsQuery.isPending ? 'loading' : 'unavailable';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -149,7 +145,8 @@ export function TriageRoute(): React.ReactElement {
       activeTab={activeTab}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
-      {...(activeTabTotal !== undefined ? { activeTabTotal } : {})}
+      {...(unassignedTabCount !== undefined ? { unassignedTabCount } : {})}
+      {...(highTabCount !== undefined ? { highTabCount } : {})}
       {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
       onSelectVoc={handleSelectVoc}
       onTabChange={handleTabChange}

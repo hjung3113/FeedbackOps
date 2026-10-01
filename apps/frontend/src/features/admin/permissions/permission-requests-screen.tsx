@@ -1,5 +1,5 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { Button, ListShell, ObjectRow, OutlineBadge } from '@fops/ui';
+import { ListShell, ListTabs, type ListToolbarTab, ObjectRow, OutlineBadge } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
@@ -13,6 +13,8 @@ import {
   permissionRequestTabs,
 } from './permission-requests-search.js';
 import { usePermissionRequestsConsole } from './use-permission-requests-console.js';
+
+const PERMISSION_REQUESTS_PANEL_ID = 'permission-requests-list-panel';
 
 export function PermissionRequestsScreen() {
   const {
@@ -29,6 +31,16 @@ export function PermissionRequestsScreen() {
     handleSelect,
     handleClose,
   } = usePermissionRequestsConsole();
+  const tabs: ListToolbarTab[] = permissionRequestTabs.map((tab) => ({
+    value: tab.value,
+    label: tab.label,
+    id: `permission-request-tab-${tab.value}`,
+    controlsId: PERMISSION_REQUESTS_PANEL_ID,
+    badgeCount:
+      tab.value === 'all'
+        ? allRequests.length
+        : allRequests.filter((request) => request.status === tab.value).length,
+  }));
 
   return (
     <ListShell
@@ -37,33 +49,18 @@ export function PermissionRequestsScreen() {
         subtitle: '워크스페이스 권한 요청을 검토하고 결정합니다.',
       }}
       tabs={
-        <div className="flex items-center gap-1" role="tablist" aria-label="권한 요청 상태">
-          {permissionRequestTabs.map((tab) => {
-            const count =
-              tab.value === 'all'
-                ? allRequests.length
-                : allRequests.filter((request) => request.status === tab.value).length;
-
-            return (
-              <Button
-                key={tab.value}
-                type="button"
-                variant={activeTab === tab.value ? 'secondary' : 'ghost'}
-                size="sm"
-                role="tab"
-                aria-selected={activeTab === tab.value}
-                onClick={() => handleTabChange(tab.value)}
-              >
-                {tab.label} ({count})
-              </Button>
-            );
-          })}
-        </div>
+        <ListTabs
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={(next) => handleTabChange(next as typeof activeTab)}
+          ariaLabel="권한 요청 상태"
+        />
       }
       list={
         <section
+          id={PERMISSION_REQUESTS_PANEL_ID}
           role="tabpanel"
-          aria-label={`${permissionRequestTabs.find((tab) => tab.value === activeTab)?.label} 요청`}
+          aria-labelledby={`permission-request-tab-${activeTab}`}
           data-testid="permission-requests-list"
         >
           {isPending ? (
