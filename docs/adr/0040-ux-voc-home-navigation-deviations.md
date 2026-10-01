@@ -26,3 +26,7 @@ The Inbox prototype contains five tabs. Production accepts the canonical `high-n
 - `/tasks?view=my` is deliberately not linked anywhere: that route currently aliases the unfiltered backlog rather than a My Tasks view, so linking it would move the same defect instead of fixing it.
 - A shared canonical URL and the Inbox toolbar now express the same high-severity-without-link queue.
 - No other prototype deviations are introduced by D3 or D6.
+
+## Amendment (2026-10-01, #682)
+
+`/tasks?view=my` now renders the Task list filtered to Tasks assigned to the current actor (`assignee=me`); it no longer aliases the unfiltered backlog. The previous consequence that `/tasks?view=my` is deliberately not linked anywhere is superseded. `view=backlog` remains the unfiltered Task list.

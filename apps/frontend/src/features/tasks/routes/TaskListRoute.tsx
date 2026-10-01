@@ -11,6 +11,7 @@ import {
   ListShell,
   ObjectRow,
   type ObjectRowSeverity,
+  OutlineBadge,
   PermissionBlockedPanel,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -39,19 +40,22 @@ function formatDate(raw: string): string {
 }
 
 export function TaskListRoute({
+  view = 'backlog',
   selectedParam,
   managedSystem,
 }: {
+  view?: 'my' | 'backlog';
   selectedParam?: string | undefined;
   managedSystem?: string;
 }) {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const tasksQuery = useQuery({
-    queryKey: ['tasks', managedSystem] as const,
+    queryKey: ['tasks', view, managedSystem] as const,
     queryFn: ({ signal }) =>
       listTasks({
         signal,
+        ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
     staleTime: 30 * 1000,
@@ -84,7 +88,7 @@ export function TaskListRoute({
 
   function selectTask(id: string): void {
     setSelectedId(id);
-    void navigate({ to: '/tasks', search: { view: 'backlog', param: id } });
+    void navigate({ to: '/tasks', search: { view, param: id } });
   }
 
   if (tasksQuery.isLoading) {
@@ -111,8 +115,17 @@ export function TaskListRoute({
     );
   }
 
+  // #682 owner decision sets title/count and empty copy within the prototype Tasks list.
   return (
     <ListShell
+      toolbar={{
+        title: (
+          <span className="flex items-center gap-2">
+            {view === 'my' ? 'My Tasks' : 'Tasks'}
+            <OutlineBadge>{items.length}건</OutlineBadge>
+          </span>
+        ),
+      }}
       list={
         <>
           {items.map((task) => (
@@ -144,13 +157,16 @@ export function TaskListRoute({
               }
             />
           ))}
-          {items.length === 0 && (
-            <ListStateMessage
-              variant="empty"
-              title="Task가 없습니다."
-              body="생성된 Task가 여기에 표시됩니다."
-            />
-          )}
+          {items.length === 0 &&
+            (view === 'my' ? (
+              <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
+            ) : (
+              <ListStateMessage
+                variant="empty"
+                title="Task가 없습니다."
+                body="생성된 Task가 여기에 표시됩니다."
+              />
+            ))}
         </>
       }
       detailPanel={
@@ -159,10 +175,10 @@ export function TaskListRoute({
             taskId={selected.id}
             actorNamesById={actorNamesById}
             managedSystemNamesById={managedSystemNamesById}
-            view="backlog"
+            view={view}
             onClose={() => {
               setSelectedId(null);
-              void navigate({ to: '/tasks', search: { view: 'backlog' } });
+              void navigate({ to: '/tasks', search: { view } });
             }}
           />
         ) : null

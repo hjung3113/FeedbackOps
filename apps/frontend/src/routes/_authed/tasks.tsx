@@ -45,7 +45,8 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
   if (search.view === 'milestones') {
     return <MilestonesRoute {...managedSystemProps} {...selectedParamProps} />;
   }
-  return <TaskListRoute {...managedSystemProps} {...selectedParamProps} />;
+  const view = search.view === 'my' ? 'my' : 'backlog';
+  return <TaskListRoute view={view} {...managedSystemProps} {...selectedParamProps} />;
 }
 
 function TasksRouteShell() {

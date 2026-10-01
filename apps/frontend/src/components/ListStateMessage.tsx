@@ -12,7 +12,7 @@ export interface ListStateAction {
 export interface ListStateMessageProps {
   variant: ListStateVariant;
   title: string;
-  body: string;
+  body?: string;
   action?: ListStateAction;
   /** Preserves existing permission-specific Survey actions that are not plain buttons. */
   actionContent?: ReactNode;
@@ -36,7 +36,7 @@ export function ListStateMessage({
 
   return (
     <div data-testid="list-state-message" data-variant={variant}>
-      <EmptyState title={title} body={body} action={renderedAction} />
+      <EmptyState title={title} {...(body !== undefined ? { body } : {})} action={renderedAction} />
     </div>
   );
 }
