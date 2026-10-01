@@ -171,8 +171,16 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(screen.getByTestId('aa-grouped-list')).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(
+        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 dashboard와 Triage에서 쓰는 필터 기준입니다.',
+      ),
+    ).toBeVisible();
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
-      'Analytics Area 는 MVP 권한 경계가 아닙니다',
+      'Analytics Area는 권한 경계가 아닙니다',
+    );
+    expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
+      'Analytics Area는 Managed System 안에서 분류와 집계에만 쓰입니다. 권한 범위는 Managed System으로만 정해집니다.',
     );
     // Both MS groups render; Tableau has one area, Power BI is empty.
     expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
@@ -180,6 +188,23 @@ describe('/admin/analytics-areas route', () => {
     expect(
       within(screen.getByTestId('aa-group-ms-pbi')).getByText(/등록된 Analytics Area/),
     ).toBeInTheDocument();
+  });
+
+  test('uses user-facing language in the Analytics Area detail guardrail', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-row-permission-management'));
+    const detail = await screen.findByTestId('aa-slide-over');
+    expect(detail).toHaveTextContent(
+      'Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage 필터, 대시보드 탭, Survey 대상 지정에만 사용되며 권한 확인에는 영향을 주지 않습니다.',
+    );
   });
 
   test('filters by Managed System and archived inclusion through requests, then clears both', async () => {

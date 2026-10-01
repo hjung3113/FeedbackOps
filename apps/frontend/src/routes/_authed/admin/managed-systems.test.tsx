@@ -160,6 +160,11 @@ describe('/admin/managed-systems route', () => {
     await waitFor(() => {
       expect(screen.getByTestId('managed-systems-registry')).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(
+        'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.',
+      ),
+    ).toBeVisible();
     expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument();
     expect(screen.getByText('managed-system/tableau')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('김지원')).toBeInTheDocument());

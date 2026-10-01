@@ -296,6 +296,17 @@ describe('integration coverage route', () => {
     ).toBeVisible();
   });
 
+  test('keeps metric keys out of visible Coverage rows', async () => {
+    await renderCoverage('/integration/coverage');
+    const signals = within(screen.getByTestId('coverage-signals'));
+
+    for (const item of SUMMARY.coverage) {
+      const row = signals.getByTestId(`coverage-row-${item.id}`);
+      expect(row).toHaveAttribute('data-testid', `coverage-row-${item.id}`);
+      expect(row.textContent).not.toContain(item.id);
+    }
+  });
+
   test('maps coverage status directly to success, warn, and danger presentation', async () => {
     await renderCoverage('/integration/coverage');
     // finding-execution 77% good (server band >= 75).

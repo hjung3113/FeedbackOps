@@ -44,6 +44,13 @@ const ALLOWED_LINK = {
 } as unknown as EntityLinkDto;
 
 describe('EntityLinksInventoryTable identity', () => {
+  it('uses user-facing language while loading entity links', () => {
+    render(<EntityLinksInventoryTable items={[]} loading />);
+
+    expect(screen.getByText('Entity links를 불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByText(/entity_links/)).not.toBeInTheDocument();
+  });
+
   it('leads with endpoint display ids and keeps link/system/actor ids secondary', () => {
     render(<EntityLinksInventoryTable items={[ALLOWED_LINK]} />);
 
