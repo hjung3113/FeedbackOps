@@ -36,6 +36,12 @@ const taskRequest: TaskRequestDto = {
   updated_at: '2026-07-10T00:00:00.000Z',
   source: undefined,
 };
+const otherTaskRequest: TaskRequestDto = {
+  ...taskRequest,
+  id: '10000000-0000-0000-0000-000000000002',
+  display_id: 'REQ-1072',
+  requested_outcome: 'Review the other candidate task',
+};
 
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@fops/ui', async () => {
@@ -56,6 +62,9 @@ vi.mock('@fops/ui', async () => {
 vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
   useFindingDetail: () => ({ data: null }),
 }));
+vi.mock('@/lib/api/entity-links', () => ({
+  fetchTaskRequestEntityLinks: vi.fn(async () => ({ items: [] })),
+}));
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
 }));
@@ -64,7 +73,8 @@ vi.mock('@/lib/api/managed-systems', () => ({
     items: [{ id: taskRequest.primary_managed_system_id, name: 'Billing Ops' }],
   })),
 }));
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
   approveTaskRequest: api.approveTaskRequest,
   convertTaskRequest: vi.fn(),
   fetchMe: api.fetchMe,
@@ -97,6 +107,7 @@ function renderRoute() {
       <TaskRequestsRoute selectedParam={taskRequest.id} />
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
 async function mountRoute() {
@@ -165,6 +176,109 @@ describe('TaskRequestsRoute decision dialogs', () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith('Task Request가 처리되었습니다.'),
     );
+  });
+
+  it.each([
+    {
+      action: 'approve',
+      button: '승인',
+      dialog: 'Task Request 승인',
+      status: 'approved',
+      tab: '승인됨',
+    },
+    {
+      action: 'reject',
+      button: '반려',
+      dialog: 'Task Request 반려',
+      status: 'rejected',
+      tab: '반려됨',
+    },
+    {
+      action: 'request-evidence',
+      button: '근거 추가 요청',
+      dialog: '근거 추가 요청',
+      status: 'needs_more_evidence',
+      tab: '근거 추가 필요',
+    },
+  ] as const)(
+    'AC-681-5 follows the $action result and keeps the Task Request selected',
+    async ({ action, button, dialog, status, tab }) => {
+      const updatedItem: TaskRequestDto = { ...taskRequest, status };
+      await mountRoute();
+      api.fetchTaskRequests.mockResolvedValue({ items: [updatedItem] });
+      const mutation =
+        action === 'approve'
+          ? api.approveTaskRequest
+          : action === 'reject'
+            ? api.rejectTaskRequest
+            : api.requestMoreEvidenceForTaskRequest;
+      mutation.mockResolvedValue(updatedItem);
+
+      fireEvent.click(screen.getByRole('button', { name: button }));
+      await screen.findByRole('dialog', { name: dialog });
+      if (action === 'reject') {
+        fireEvent.change(screen.getByRole('textbox', { name: '반려 사유' }), {
+          target: { value: 'Out of scope.' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '반려' }));
+      } else if (action === 'request-evidence') {
+        fireEvent.change(screen.getByRole('textbox', { name: '근거 메모' }), {
+          target: { value: 'Add source metrics.' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '요청' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: '승인' }));
+      }
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: new RegExp(tab) })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(
+          screen
+            .getByRole('button', { name: /REQ-1071/ })
+            .querySelector('[data-testid="object-row-selected-bar"]'),
+        ).toBeInTheDocument();
+      });
+    },
+  );
+
+  it('AC-681-1 does not replay an old decision after a converted request is revisited', async () => {
+    const approvedItem: TaskRequestDto = {
+      ...taskRequest,
+      status: 'approved',
+      reviewer_actor_id: reviewerId,
+      decided_at: '2026-07-10T01:00:00.000Z',
+    };
+    const convertedItem: TaskRequestDto = { ...approvedItem, status: 'converted' };
+    api.fetchTaskRequests.mockResolvedValue({ items: [taskRequest, otherTaskRequest] });
+    api.approveTaskRequest.mockResolvedValue(approvedItem);
+    const queryClient = renderRoute();
+    await screen.findByText('검토 결정');
+
+    api.fetchTaskRequests.mockResolvedValue({ items: [approvedItem, otherTaskRequest] });
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 승인' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryState(['task-requests', undefined])?.fetchStatus).toBe('idle');
+    });
+
+    queryClient.setQueryData(['task-requests', undefined], {
+      items: [convertedItem, otherTaskRequest],
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^All/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /REQ-1072/ }));
+    fireEvent.click(screen.getByRole('button', { name: /REQ-1071/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^All/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: /REQ-1071/ })).toHaveTextContent('전환됨');
+    });
   });
 
   it('trims an approval reason for another actor request', async () => {

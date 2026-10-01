@@ -9,6 +9,7 @@ import {
   FINDING_CONFIDENCE_LABELS,
   FINDING_SOURCE_TYPE_LABELS,
   FINDING_STATUS_LABELS,
+  TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
@@ -23,7 +24,7 @@ import {
   UserChip,
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
-import type * as React from 'react';
+import * as React from 'react';
 import { toast } from 'sonner';
 import { AddEvidenceModal } from './AddEvidenceModal';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
@@ -97,10 +98,60 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     linkedVocTitle,
     linkedVocDisplayId,
     linkedTaskQuery,
+    requestedTaskRequests,
+    requestedTaskRequestsState,
+    requestedTaskRequestsFetching,
+    retryRequestedTaskRequests,
     canManage,
     handleMarkNotActionable,
     markNotActionableDisabled,
   } = useFindingDetailController(finding);
+  const pendingTaskRequest = requestedTaskRequests.find(
+    (request) => request.status === 'pending_review' || request.status === 'needs_more_evidence',
+  );
+  const [retryInProgress, setRetryInProgress] = React.useState(false);
+  const retryInProgressRef = React.useRef(false);
+  const retryObservedFetchingRef = React.useRef(false);
+  const retryHadFocusRef = React.useRef(false);
+  const retryButtonAtActivationRef = React.useRef<HTMLButtonElement | null>(null);
+  const taskRequestRegionRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (retryInProgress) {
+      if (requestedTaskRequestsFetching) {
+        retryObservedFetchingRef.current = true;
+        return;
+      }
+      if (!retryObservedFetchingRef.current) return;
+
+      retryInProgressRef.current = false;
+      setRetryInProgress(false);
+      retryObservedFetchingRef.current = false;
+      return;
+    }
+
+    if (!retryHadFocusRef.current) return;
+    const focusStillBelongsToRetry =
+      document.activeElement === retryButtonAtActivationRef.current ||
+      document.activeElement === document.body;
+    if (requestedTaskRequestsState === 'loaded' && focusStillBelongsToRetry) {
+      const region = taskRequestRegionRef.current;
+      const requestLink = region?.querySelector<HTMLAnchorElement>('a');
+      (requestLink ?? region)?.focus();
+    }
+    retryHadFocusRef.current = false;
+    retryButtonAtActivationRef.current = null;
+  }, [retryInProgress, requestedTaskRequestsFetching, requestedTaskRequestsState]);
+
+  function handleRetryRequestedTaskRequests(event: React.MouseEvent<HTMLButtonElement>): void {
+    if (retryInProgressRef.current) return;
+    retryInProgressRef.current = true;
+    retryObservedFetchingRef.current = false;
+    retryHadFocusRef.current = document.activeElement === event.currentTarget;
+    retryButtonAtActivationRef.current = retryHadFocusRef.current ? event.currentTarget : null;
+    setRetryInProgress(true);
+    retryRequestedTaskRequests();
+  }
 
   return (
     <>
@@ -230,6 +281,54 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
+            <FieldRow label="Task Request" className="px-0">
+              <div ref={taskRequestRegionRef} tabIndex={-1} className="min-w-0">
+                {requestedTaskRequestsState === 'loading' && !retryInProgress ? (
+                  <span className="text-text-muted" aria-live="polite">
+                    확인 중…
+                  </span>
+                ) : requestedTaskRequestsState === 'error' || retryInProgress ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={retryInProgress ? 'text-text-muted' : 'text-text-danger'}
+                      {...(retryInProgress
+                        ? { 'aria-live': 'polite' as const }
+                        : { role: 'alert' as const })}
+                    >
+                      {retryInProgress ? '확인 중…' : 'Task Request를 확인하지 못했습니다.'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="subtle"
+                      size="sm"
+                      aria-disabled={retryInProgress}
+                      aria-busy={retryInProgress}
+                      onClick={handleRetryRequestedTaskRequests}
+                    >
+                      다시 시도
+                    </Button>
+                  </div>
+                ) : requestedTaskRequests.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {requestedTaskRequests.map((request) => (
+                      <Link
+                        key={request.id}
+                        to="/tasks"
+                        search={{ view: 'requests', param: request.id }}
+                        className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
+                      >
+                        <span className="font-mono">{request.display_id}</span>
+                        <span className="text-xs text-text-muted">
+                          {TASK_REQUEST_STATUS_LABELS[request.status]}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-text-muted">—</span>
+                )}
+              </div>
+            </FieldRow>
           </div>
           {requestTaskOpen && (
             <FindingRequestTaskDraft
@@ -259,20 +358,41 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
         {/* CTA Footer */}
         <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-col gap-2">
-          <fieldset className="m-0 min-w-0 border-0 p-0">
-            <legend className="sr-only">주요 실행</legend>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setRequestTaskOpen(true)}
-              disabled={!canManage}
-              data-testid="request-task-btn"
-            >
-              Task 요청
-            </Button>
-          </fieldset>
+          {requestedTaskRequestsState === 'loaded' && (
+            <fieldset className="m-0 min-w-0 border-0 p-0">
+              <legend className="sr-only">주요 실행</legend>
+              {pendingTaskRequest ? (
+                <Button asChild variant="primary" size="sm">
+                  <Link to="/tasks" search={{ view: 'requests', param: pendingTaskRequest.id }}>
+                    Task Request 보기
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setRequestTaskOpen(true)}
+                  disabled={!canManage}
+                  data-testid="request-task-btn"
+                >
+                  Task 요청
+                </Button>
+              )}
+            </fieldset>
+          )}
           <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
             <legend className="sr-only">보조 작업</legend>
+            {pendingTaskRequest && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                disabled={!canManage}
+                data-testid="request-task-btn"
+              >
+                Task 요청
+              </Button>
+            )}
             {/* Add Evidence — gated to finding.manage; backend authoritative */}
             <Button
               variant="outline"

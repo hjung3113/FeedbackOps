@@ -5,7 +5,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { NameMaps } from './TaskRequestRow';
@@ -37,6 +37,7 @@ export interface UseTaskRequestsQueueResult {
   permissionDeniedError: { message: string } | null;
   hasError: boolean;
   refetch: () => void;
+  onDecisionComplete: (item: TaskRequestDto) => void;
 }
 
 export function useTaskRequestsQueue({
@@ -46,6 +47,7 @@ export function useTaskRequestsQueue({
   selectedParam?: string | undefined;
   managedSystem?: string | undefined;
 }): UseTaskRequestsQueueResult {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
@@ -126,6 +128,26 @@ export function useTaskRequestsQueue({
     ? (items.find((item) => item.id === selectedId) ?? shown[0] ?? null)
     : null;
 
+  const onDecisionComplete = React.useCallback(
+    (updatedItem: TaskRequestDto) => {
+      queryClient.setQueryData<{ items: TaskRequestDto[] }>(
+        ['task-requests', managedSystem],
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.id === updatedItem.id ? updatedItem : item,
+                ),
+              }
+            : current,
+      );
+      setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
+      setSelectedId(updatedItem.id);
+    },
+    [managedSystem, queryClient],
+  );
+
   return {
     activeTab,
     setActiveTab,
@@ -146,5 +168,6 @@ export function useTaskRequestsQueue({
     refetch: () => {
       void taskRequestsQuery.refetch();
     },
+    onDecisionComplete,
   };
 }

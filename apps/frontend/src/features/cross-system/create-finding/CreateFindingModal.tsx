@@ -42,6 +42,8 @@ export interface CreateFindingModalProps {
   vocId: string;
   managedSystemId: string;
   sourceAnalyticsAreaId: string | null;
+  defaultTitle?: string;
+  defaultSeverity?: FindingSeverity;
   open: boolean;
   onClose: () => void;
 }
@@ -67,6 +69,8 @@ export function CreateFindingModal({
   vocId,
   managedSystemId,
   sourceAnalyticsAreaId,
+  defaultTitle = '',
+  defaultSeverity = 'medium',
   open,
   onClose,
 }: CreateFindingModalProps): React.ReactElement {
@@ -80,9 +84,9 @@ export function CreateFindingModal({
   const form = useForm<CreateFindingRequest>({
     resolver: zodResolver(createFindingRequestSchema),
     defaultValues: {
-      title: '',
+      title: defaultTitle,
       summary: '',
-      severity: 'medium',
+      severity: defaultSeverity,
       analytics_area_id: sourceAnalyticsAreaId ?? undefined,
     },
     mode: 'onBlur',
@@ -258,7 +262,7 @@ export function CreateFindingModal({
               심각도
             </FieldLabel>
             <Select
-              defaultValue="medium"
+              defaultValue={defaultSeverity}
               onValueChange={(val) =>
                 form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
               }

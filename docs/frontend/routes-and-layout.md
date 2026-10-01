@@ -79,6 +79,7 @@ VOC route views:
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
 - `/vocs?view=list` or saved list views may support broader browsing after the Inbox and Triage workspaces are defined.
 - `/voc-clusters` owns cluster-specific list/detail behavior.
+- The global VOC rail uses loaded navigation counts for its landing: a `voc.inbox` key, including zero, links to `/vocs?view=inbox`; an omitted key links to `/vocs?view=my`. While counts are loading or unavailable after an error, keep the Inbox destination. This landing hint does not replace route or backend authorization.
 ```
 
 Task route views:

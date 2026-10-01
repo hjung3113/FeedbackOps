@@ -67,6 +67,16 @@ beforeEach(() => {
 
 describe('AppRail', () => {
   it.each([
+    ['loading counts', undefined, '/vocs?view=inbox'],
+    ['loaded counts with Inbox access', { 'voc.inbox': 0 }, '/vocs?view=inbox'],
+    ['loaded counts without Inbox access', {}, '/vocs?view=my'],
+  ] as const)('AC-681-6 uses %s to select the VOC rail destination', (_state, counts, href) => {
+    renderRail(counts === undefined ? {} : { counts });
+
+    expect(screen.getByTestId('rail-voc')).toHaveAttribute('href', href);
+  });
+
+  it.each([
     ['/home', 'home'],
     ['/vocs?view=inbox', 'voc'],
     ['/voc-clusters', 'voc'],

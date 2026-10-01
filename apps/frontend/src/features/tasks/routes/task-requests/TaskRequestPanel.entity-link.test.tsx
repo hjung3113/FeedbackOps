@@ -109,7 +109,14 @@ beforeEach(() => {
     changeValue: vi.fn(),
     close: vi.fn(),
   });
-  useConversion.mockReturnValue({ open: false, canConvert: false, result: null, setOpen: vi.fn() });
+  useConversion.mockReturnValue({
+    analyticsAreaSelection: { kind: 'none' },
+    analyticsAreaUnresolvedReason: null,
+    open: false,
+    canConvert: false,
+    result: null,
+    setOpen: vi.fn(),
+  });
   useLink.mockReturnValue({
     open: false,
     canLinkExisting: false,
@@ -211,6 +218,8 @@ describe('TaskRequestPanel converted Task entity link', () => {
 
   it('keeps the canonical answer over the mutation result when a later refetch fails', async () => {
     useConversion.mockReturnValue({
+      analyticsAreaSelection: { kind: 'none' },
+      analyticsAreaUnresolvedReason: null,
       open: false,
       canConvert: false,
       setOpen: vi.fn(),

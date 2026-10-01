@@ -41,6 +41,8 @@ import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestLink } from './useTaskRequestLink';
 
 const NO_SELECTION = '__none__';
+const UNRESOLVED_ANALYTICS_AREA = '__analytics_area_unresolved__';
+const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
 
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
@@ -48,6 +50,7 @@ interface TaskRequestPanelProps {
   currentActorId: string | null;
   currentRole: string | null;
   onClose: () => void;
+  onDecisionComplete?: (item: TaskRequestDto) => void;
 }
 
 export function TaskRequestPanel({
@@ -56,13 +59,48 @@ export function TaskRequestPanel({
   currentActorId,
   currentRole,
   onClose,
+  onDecisionComplete,
 }: TaskRequestPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
 
   const decision = useTaskRequestDecision({ item, currentActorId, currentRole });
-  const conversion = useTaskRequestConversion({ item, currentRole });
+  const deliveredDecisionResultRef = React.useRef<TaskRequestDto | null>(null);
+  React.useEffect(() => {
+    const result = decision.result;
+    if (result === null || result === deliveredDecisionResultRef.current) return;
+    deliveredDecisionResultRef.current = result;
+    onDecisionComplete?.(result);
+  }, [decision.result, onDecisionComplete]);
+  const sourceFindingQuery = useFindingDetail(
+    item.source_type === 'finding' ? item.source_id : null,
+  );
+  const sourceAnalyticsAreaId =
+    sourceFindingQuery.data?.id === item.source_id
+      ? sourceFindingQuery.data.analytics_area_id
+      : null;
+  const conversion = useTaskRequestConversion({
+    item,
+    currentRole,
+    defaultAnalyticsAreaId: sourceAnalyticsAreaId,
+    defaultAnalyticsAreaResolved:
+      item.source_type !== 'finding' ||
+      (sourceFindingQuery.isSuccess && sourceFindingQuery.data?.id === item.source_id) ||
+      sourceFindingQuery.isError,
+  });
+  const analyticsAreaValue =
+    conversion.analyticsAreaSelection.kind === 'active'
+      ? conversion.analyticsAreaSelection.id
+      : conversion.analyticsAreaSelection.kind === 'none'
+        ? NO_SELECTION
+        : UNRESOLVED_ANALYTICS_AREA;
+  const analyticsAreaHint =
+    conversion.analyticsAreaUnresolvedReason === 'source-unavailable'
+      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+      : conversion.analyticsAreaUnresolvedReason === 'selection-unavailable'
+        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+        : null;
   const link = useTaskRequestLink({ item, currentRole });
   const resultingTask: TaskDto | null =
     conversion.result?.source_task_request_id === item.id
@@ -76,9 +114,6 @@ export function TaskRequestPanel({
   const taskForOutcome =
     convertedTaskLink.data !== undefined ? convertedTaskLink.data : resultingTask;
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
-  const sourceFindingQuery = useFindingDetail(
-    item.source_type === 'finding' ? item.source_id : null,
-  );
 
   const sections: PanelSection[] = [
     { id: 'overview', label: 'Overview' },
@@ -400,7 +435,7 @@ export function TaskRequestPanel({
                       Analytics Area
                     </FieldLabel>
                     <Select
-                      value={conversion.analyticsAreaId || NO_SELECTION}
+                      value={analyticsAreaValue}
                       onValueChange={(value) =>
                         conversion.setAnalyticsAreaId(value === NO_SELECTION ? '' : value)
                       }
@@ -408,11 +443,19 @@ export function TaskRequestPanel({
                       <SelectTrigger
                         id="task-request-convert-analytics-area"
                         aria-label="Analytics Area"
+                        {...(analyticsAreaHint === null
+                          ? {}
+                          : { 'aria-describedby': ANALYTICS_AREA_HINT_ID })}
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NO_SELECTION}>없음</SelectItem>
+                        {conversion.analyticsAreaSelection.kind === 'unresolved' && (
+                          <SelectItem value={UNRESOLVED_ANALYTICS_AREA} disabled>
+                            Analytics Area 선택 필요
+                          </SelectItem>
+                        )}
                         {conversion.analyticsAreas?.map((area) => (
                           <SelectItem key={area.id} value={area.id}>
                             {area.name}
@@ -420,6 +463,15 @@ export function TaskRequestPanel({
                         ))}
                       </SelectContent>
                     </Select>
+                    {analyticsAreaHint !== null && (
+                      <p
+                        id={ANALYTICS_AREA_HINT_ID}
+                        className="text-xs text-text-muted"
+                        aria-live="polite"
+                      >
+                        {analyticsAreaHint}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1">
                     <FieldLabel htmlFor="task-request-convert-milestone">Milestone</FieldLabel>
@@ -484,7 +536,7 @@ export function TaskRequestPanel({
                     variant="primary"
                     size="sm"
                     loading={conversion.isPending}
-                    disabled={!conversion.canConvert}
+                    disabled={!conversion.canSubmit}
                     data-testid="task-request-convert-submit"
                   >
                     Task로 전환

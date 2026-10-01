@@ -1,7 +1,7 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { VocListItem } from '@fops/shared';
+import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { type PickerOption, UndoToast } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
@@ -21,7 +21,13 @@ export function useTriagePanelController({
   voc: VocListItem;
   onAct?: (
     kind: 'confirm' | 'finding' | 'skip',
-    context?: { vocId: string; managedSystemId: string; analyticsAreaId: string | null },
+    context?: {
+      vocId: string;
+      managedSystemId: string;
+      analyticsAreaId: string | null;
+      title: string;
+      severity: FindingSeverity;
+    },
   ) => void;
   onOptimisticRemove?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
@@ -154,6 +160,8 @@ export function useTriagePanelController({
         vocId: voc.id,
         managedSystemId: voc.primary_managed_system_id,
         analyticsAreaId: panelState.analyticsAreaId,
+        title: voc.title,
+        severity: (panelState.severity ?? voc.severity ?? 'medium') as FindingSeverity,
       });
     },
     [
@@ -162,6 +170,8 @@ export function useTriagePanelController({
       voc.display_id,
       voc.updated_at,
       voc.primary_managed_system_id,
+      voc.title,
+      voc.severity,
       panelState,
       onOptimisticRemove,
       onAct,

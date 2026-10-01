@@ -124,6 +124,7 @@ export function TaskRequestsRoute({
             currentActorId={queue.currentActorId}
             currentRole={queue.currentRole}
             onClose={() => queue.setSelectedId(null)}
+            onDecisionComplete={queue.onDecisionComplete}
           />
         ) : null
       }

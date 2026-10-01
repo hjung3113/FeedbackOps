@@ -237,6 +237,13 @@ Primary CTAs:
 - Mark as Not Actionable
 ```
 
+The linked Task Request row shows its display ID and status when the read
+succeeds. While the read is loading, show muted `확인 중…`; on failure, show a
+Korean error and `다시 시도`. Show `—` only after a successful empty read. While
+the result is unknown, hide the primary execution action and keep secondary
+actions available. A successful empty read makes `Task 요청` primary; a pending
+Task Request makes `Task Request 보기` primary and `Task 요청` secondary.
+
 Finding-to-Milestone and Finding-to-Work-Initiative actions are future
 cross-system behavior. MVP Finding execution actions are Request Task and Link
 Existing Task.

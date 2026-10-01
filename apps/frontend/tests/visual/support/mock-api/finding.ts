@@ -1,4 +1,7 @@
-import { createTaskRequestFromFindingRequestSchema } from '@fops/shared';
+import {
+  createTaskRequestFromFindingRequestSchema,
+  listEntityLinksResponseSchema,
+} from '@fops/shared';
 import {
   FINDING_DETAIL_IDS,
   evidenceHighlights,
@@ -14,6 +17,8 @@ import {
 import { json } from './shared';
 import type { MockApiHandler } from './shared';
 import type { MockApiContext } from './types';
+
+const findingEntityLinks = listEntityLinksResponseSchema.parse({ items: [] });
 
 export function createFindingHandlers(context: MockApiContext): MockApiHandler[] {
   if (!context.options.findingDetail) return [];
@@ -63,6 +68,11 @@ export function createFindingHandlers(context: MockApiContext): MockApiHandler[]
       method: 'GET',
       path: `/findings/${FINDING_DETAIL_IDS.finding}/evidence-highlights`,
       handle: (route) => json(route, 200, evidenceHighlights),
+    },
+    {
+      method: 'GET',
+      path: '/entity-links',
+      handle: (route) => json(route, 200, findingEntityLinks),
     },
     {
       method: 'POST',

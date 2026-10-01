@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 import { type AnalyticsAreaDto, fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
-import { findingSeveritySchema } from '@fops/shared';
+import { type FindingSeverity, findingSeveritySchema } from '@fops/shared';
 import { CreateFindingModal } from '../CreateFindingModal';
 
 const IDS = {
@@ -50,6 +50,7 @@ function renderModal(
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   }),
+  defaults: { defaultTitle?: string; defaultSeverity?: FindingSeverity } = {},
 ) {
   return render(
     <QueryClientProvider client={client}>
@@ -57,6 +58,7 @@ function renderModal(
         vocId={IDS.voc}
         managedSystemId={IDS.managedSystem}
         sourceAnalyticsAreaId={sourceAnalyticsAreaId}
+        {...defaults}
         open
         onClose={vi.fn()}
       />
@@ -64,8 +66,8 @@ function renderModal(
   );
 }
 
-function submitValidForm(): void {
-  fireEvent.change(screen.getByLabelText(/제목/), { target: { value: 'VOC 기반 Finding' } });
+function submitValidForm(title = 'VOC 기반 Finding'): void {
+  fireEvent.change(screen.getByLabelText(/제목/), { target: { value: title } });
   fireEvent.change(screen.getByLabelText(/요약/), {
     target: { value: '소스 VOC의 분석 결과를 실행 가능한 판단으로 정리합니다.' },
   });
@@ -165,6 +167,29 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
       summary: '소스 VOC의 분석 결과를 실행 가능한 판단으로 정리합니다.',
     });
     expect(body).not.toHaveProperty('analytics_area_id');
+  });
+
+  it('AC-681-1 defaults from a high-severity VOC and lets the user edit the values', async () => {
+    renderModal(null, undefined, {
+      defaultTitle: '리포트 속도 저하',
+      defaultSeverity: 'high',
+    });
+    await screen.findByTestId('create-finding-aa-picker');
+
+    const title = screen.getByLabelText(/제목/);
+    const severity = screen.getByRole('combobox', { name: '심각도' });
+    expect(title).toHaveValue('리포트 속도 저하');
+    expect(severity).toHaveTextContent(FINDING_SEVERITY_LABELS.high);
+
+    fireEvent.change(title, { target: { value: 'VOC에서 수정한 Finding 제목' } });
+    fireEvent.click(severity);
+    fireEvent.click(await screen.findByRole('option', { name: FINDING_SEVERITY_LABELS.medium }));
+    submitValidForm('VOC에서 수정한 Finding 제목');
+
+    expect(await submittedBody()).toMatchObject({
+      title: 'VOC에서 수정한 Finding 제목',
+      severity: 'medium',
+    });
   });
 
   it('navigates to the selected Finding and retains the exact VOC origin URL', async () => {

@@ -116,6 +116,8 @@ beforeEach(() => {
     close: vi.fn(),
   }));
   useConversion.mockImplementation(({ item }: { item: TaskRequestDto }) => ({
+    analyticsAreaSelection: { kind: 'none' },
+    analyticsAreaUnresolvedReason: null,
     open: false,
     canConvert: item.status === 'approved',
     result: null,
@@ -245,8 +247,11 @@ describe('TaskRequestPanel next actions', () => {
 
   it('keeps only the form submit primary while the conversion form is open', () => {
     useConversion.mockReturnValue({
+      analyticsAreaSelection: { kind: 'none' },
+      analyticsAreaUnresolvedReason: null,
       open: true,
       canConvert: true,
+      canSubmit: true,
       result: null,
       setOpen: vi.fn(),
       title: '로그인 오류를 수정합니다.',
@@ -265,7 +270,6 @@ describe('TaskRequestPanel next actions', () => {
       milestones: [],
       milestonePickerError: null,
       milestoneSelectionUnavailable: false,
-      analyticsAreaId: '',
       setAnalyticsAreaId: vi.fn(),
       analyticsAreas: [],
       submit: vi.fn(),
@@ -303,8 +307,11 @@ describe('TaskRequestPanel next actions', () => {
     ['Milestone', 'task-request-convert-milestone'],
   ] as const)('uses an associated FieldLabel for %s', (labelText, controlId) => {
     useConversion.mockReturnValue({
+      analyticsAreaSelection: { kind: 'none' },
+      analyticsAreaUnresolvedReason: null,
       open: true,
       canConvert: true,
+      canSubmit: true,
       result: null,
       setOpen: vi.fn(),
       title: '로그인 오류를 수정합니다.',
@@ -323,7 +330,6 @@ describe('TaskRequestPanel next actions', () => {
       milestones: [],
       milestonePickerError: null,
       milestoneSelectionUnavailable: false,
-      analyticsAreaId: '',
       setAnalyticsAreaId: vi.fn(),
       analyticsAreas: [],
       submit: vi.fn(),
@@ -350,8 +356,11 @@ describe('TaskRequestPanel next actions', () => {
 
   it('keeps the conversion title count in muted helper text styling', () => {
     useConversion.mockReturnValue({
+      analyticsAreaSelection: { kind: 'none' },
+      analyticsAreaUnresolvedReason: null,
       open: true,
       canConvert: true,
+      canSubmit: true,
       result: null,
       setOpen: vi.fn(),
       title: '로그인 오류를 수정합니다.',
@@ -370,7 +379,6 @@ describe('TaskRequestPanel next actions', () => {
       milestones: [],
       milestonePickerError: null,
       milestoneSelectionUnavailable: false,
-      analyticsAreaId: '',
       setAnalyticsAreaId: vi.fn(),
       analyticsAreas: [],
       submit: vi.fn(),
@@ -438,6 +446,8 @@ describe('TaskRequestPanel next actions', () => {
     async (resultSource) => {
       if (resultSource === 'conversion') {
         useConversion.mockReturnValue({
+          analyticsAreaSelection: { kind: 'none' },
+          analyticsAreaUnresolvedReason: null,
           open: false,
           canConvert: false,
           result: resultingTask,
@@ -473,6 +483,8 @@ describe('TaskRequestPanel next actions', () => {
       data: { display_id: 'FIN-181', title: 'SSO session recovery', status: 'active' },
     });
     useConversion.mockReturnValue({
+      analyticsAreaSelection: { kind: 'none' },
+      analyticsAreaUnresolvedReason: null,
       open: false,
       canConvert: false,
       result: resultingTask,
