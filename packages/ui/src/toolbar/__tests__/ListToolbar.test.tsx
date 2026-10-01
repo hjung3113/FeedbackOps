@@ -67,7 +67,7 @@ function setOverflowGeometry(tabViewport: HTMLDivElement) {
       Math.min(maxScroll, tabViewport.scrollLeft + (options.left ?? 0)),
     );
     tabViewport.dispatchEvent(new Event('scroll'));
-  });
+  }) as unknown as HTMLElement['scrollBy'];
 
   const tabElements = tabViewport.querySelectorAll<HTMLElement>('[role="tab"]');
   let left = 0;
