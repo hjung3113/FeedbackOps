@@ -88,50 +88,41 @@ export function SurveyResultsRoute() {
       </ResultsWorkbench>
     );
   }
-  if (results.isLoading)
-    return (
-      <ResultsWorkbench>
-        <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>
-      </ResultsWorkbench>
-    );
-  if (isPermissionDenied(results.error)) {
-    return (
-      <ResultsWorkbench>
-        <SurveyPermissionDeniedState />
-      </ResultsWorkbench>
-    );
-  }
-  if (results.error instanceof ApiError && results.error.status === 404) {
-    return (
-      <ResultsWorkbench>
-        <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />
-      </ResultsWorkbench>
-    );
-  }
-  if (results.isError || !results.data) {
-    return (
-      <ResultsWorkbench>
-        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <ListStateMessage
-            variant="error"
-            title="결과를 불러오지 못했습니다."
-            body={mapUnknownError(results.error).message}
-            action={{
-              label: '다시 시도',
-              onClick: () => {
-                void results.refetch();
-              },
-            }}
-          />
-        </div>
-      </ResultsWorkbench>
-    );
-  }
   const followUp = survey.data.type === 'outcome' ? (followUpRead.data ?? null) : null;
-  return (
-    <ResultsWorkbench ariaLive="off">
-      <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
+  let resultsContent: ReactNode;
+  if (results.isLoading) {
+    resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
+  } else if (isPermissionDenied(results.error)) {
+    resultsContent = <SurveyPermissionDeniedState />;
+  } else if (results.error instanceof ApiError && results.error.status === 404) {
+    resultsContent = (
+      <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />
+    );
+  } else if (results.isError || !results.data) {
+    resultsContent = (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <ListStateMessage
+          variant="error"
+          title="결과를 불러오지 못했습니다."
+          body={mapUnknownError(results.error).message}
+          action={{
+            label: '다시 시도',
+            onClick: () => {
+              void results.refetch();
+            },
+          }}
+        />
+      </div>
+    );
+  } else {
+    resultsContent = (
       <SurveyResultsSummary followUpRead={followUp} results={results.data} survey={survey.data} />
+    );
+  }
+  return (
+    <ResultsWorkbench ariaLive={results.isSuccess ? 'off' : 'polite'}>
+      <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
+      {resultsContent}
     </ResultsWorkbench>
   );
 }

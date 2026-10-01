@@ -207,6 +207,27 @@ describe('/surveys/:surveyId/results route', () => {
     expect(deniedHeading.closest('.p-6')).toBeInTheDocument();
   });
 
+  it('keeps the result header above the loading results body', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    const loading = await screen.findByText('결과를 불러오는 중…');
+    const liveRegion = loading.closest('[aria-live="polite"]');
+    const header = screen.getByTestId('survey-result-header');
+    expect(liveRegion?.firstElementChild).toBe(header);
+    expect(within(header).getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+    expect(within(header).getByText('SRV-21')).toBeInTheDocument();
+    expect(within(header).getByRole('link', { name: 'Surveys /' })).toHaveAttribute(
+      'href',
+      '/surveys',
+    );
+  });
+
   it('shows a retryable results read error and refetches results instead of the survey', async () => {
     const surveyRefetch = vi.fn();
     const resultsRefetch = vi.fn();
@@ -232,6 +253,14 @@ describe('/surveys/:surveyId/results route', () => {
     const title = await screen.findByText('결과를 불러오지 못했습니다.');
     const liveRegion = title.closest('[aria-live="polite"]');
     expect(liveRegion).toBeInTheDocument();
+    const header = screen.getByTestId('survey-result-header');
+    expect(liveRegion?.firstElementChild).toBe(header);
+    expect(within(header).getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+    expect(within(header).getByText('SRV-21')).toBeInTheDocument();
+    expect(within(header).getByRole('link', { name: 'Surveys /' })).toHaveAttribute(
+      'href',
+      '/surveys',
+    );
     expect(screen.queryByText('설문 결과를 찾을 수 없습니다.')).not.toBeInTheDocument();
     const retry = screen.getByRole('button', { name: '다시 시도' });
     expect(liveRegion).toContainElement(retry);
