@@ -20,9 +20,9 @@ import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import {
-  createRecordingNotificationDispatcher,
   NOTIFICATION_DISPATCH_QUEUE,
   type RecordingNotificationDispatcher,
+  createRecordingNotificationDispatcher,
 } from '../../notifications/port.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
 
@@ -318,7 +318,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
         );
         if (taskTable.rows[0]?.exists) {
           const tasks = await dbHandle.pool.query<{ n: number }>(
-            `select count(*)::int as n from task.tasks where workspace_id = $1`,
+            'select count(*)::int as n from task.tasks where workspace_id = $1',
             [WORKSPACE_ID],
           );
           expect(tasks.rows[0]?.n).toBe(0);

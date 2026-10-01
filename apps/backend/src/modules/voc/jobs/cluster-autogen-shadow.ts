@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
-import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
+import { JOB_WORK_OPTIONS, type JobLog, withJobLogging } from '../../../lib/job-log.js';
 import { allManagedSystemWorkspacePairs } from '../../managed-systems/read-projections.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../recommendations/constants.js';
 
@@ -306,7 +306,10 @@ export async function runVocClusterAutogenShadow(
     managed_systems: managedSystems,
   };
 
-  const workspaces = new Map<string, Array<Omit<VocClusterAutogenShadowManagedSystemSummary, 'workspace_id'>>>();
+  const workspaces = new Map<
+    string,
+    Array<Omit<VocClusterAutogenShadowManagedSystemSummary, 'workspace_id'>>
+  >();
   for (const row of managedSystems) {
     const { workspace_id, ...managedSystem } = row;
     const rows = workspaces.get(workspace_id) ?? [];

@@ -18,9 +18,7 @@ export const submitMoreInfoPermissionRequestResultSchema = z
   })
   .strict();
 
-export type SubmitMoreInfoPermissionRequest = z.infer<
-  typeof submitMoreInfoPermissionRequestSchema
->;
+export type SubmitMoreInfoPermissionRequest = z.infer<typeof submitMoreInfoPermissionRequestSchema>;
 export type SubmitMoreInfoPermissionRequestResult = z.infer<
   typeof submitMoreInfoPermissionRequestResultSchema
 >;

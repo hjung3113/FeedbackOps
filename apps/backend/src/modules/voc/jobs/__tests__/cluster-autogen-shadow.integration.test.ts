@@ -11,8 +11,8 @@ import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../../recommendations/constants.js';
 import {
   VOC_CLUSTER_AUTOGEN_SHADOW_MAX_PAIRS_PER_MANAGED_SYSTEM_PER_RUN,
-  runVocClusterAutogenShadow,
   type VocClusterAutogenShadowResult,
+  runVocClusterAutogenShadow,
 } from '../cluster-autogen-shadow.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -140,10 +140,9 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     await migrateHandle.pool.query(`delete from voc.vocs where id in (${fixtureVocs})`, [
       FIXTURE_PREFIX,
     ]);
-    await migrateHandle.pool.query(
-      `delete from core.managed_systems where slug like $1 || '%'`,
-      [FIXTURE_PREFIX],
-    );
+    await migrateHandle.pool.query(`delete from core.managed_systems where slug like $1 || '%'`, [
+      FIXTURE_PREFIX,
+    ]);
     await migrateHandle.pool.query(
       `delete from core.actors
         where workspace_id in (
@@ -151,10 +150,9 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
         )`,
       [FIXTURE_PREFIX],
     );
-    await migrateHandle.pool.query(
-      `delete from core.workspaces where name like $1 || '%'`,
-      [FIXTURE_PREFIX],
-    );
+    await migrateHandle.pool.query(`delete from core.workspaces where name like $1 || '%'`, [
+      FIXTURE_PREFIX,
+    ]);
   }
 
   async function seedVoc(
@@ -206,22 +204,24 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     lowVersion: number,
     highVersion: number,
   ): Promise<[string, string]> {
-    const pair = [await seedVoc('versioned pair low'), await seedVoc('versioned pair high')].sort() as [
-      string,
-      string,
-    ];
+    const pair = [
+      await seedVoc('versioned pair low'),
+      await seedVoc('versioned pair high'),
+    ].sort() as [string, string];
     await seedEmbedding(pair[0], WORKSPACE_ID, '[1,0]', lowVersion);
     await seedEmbedding(pair[1], WORKSPACE_ID, '[0.8,0.6]', highVersion);
     return pair;
   }
 
-  async function runShadow(options: {
-    embeddingVersion?: number;
-    embeddingEnabled?: boolean;
-    statementTimeoutMs?: number;
-    correlationId?: string;
-    log?: JobLog;
-  } = {}): Promise<VocClusterAutogenShadowResult> {
+  async function runShadow(
+    options: {
+      embeddingVersion?: number;
+      embeddingEnabled?: boolean;
+      statementTimeoutMs?: number;
+      correlationId?: string;
+      log?: JobLog;
+    } = {},
+  ): Promise<VocClusterAutogenShadowResult> {
     return runVocClusterAutogenShadow(
       {
         db: appHandle.db,
@@ -348,7 +348,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
   it.each(['low', 'high'] as const)('does not pair when the %s VOC is archived', async (side) => {
     const pair = await seedPair();
     const archivedVocId = pair[side === 'low' ? 0 : 1];
-    await migrateHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [
+    await migrateHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [
       archivedVocId,
     ]);
 
@@ -532,7 +532,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
   it('keeps pair selection and records isolated by workspace', async () => {
     const workspaceOnePair = await seedPair();
     const secondWorkspace = await migrateHandle.pool.query<{ id: string }>(
-      `insert into core.workspaces (name) values ($1) returning id`,
+      'insert into core.workspaces (name) values ($1) returning id',
       [`${FIXTURE_PREFIX}-workspace`],
     );
     const secondWorkspaceId = secondWorkspace.rows[0]?.id;
@@ -542,11 +542,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
          (workspace_id, external_id, email, display_name, role_level, actor_type)
        values ($1, $2, $3, 'Cluster shadow fixture', 'admin', 'internal_member')
        returning id`,
-      [
-        secondWorkspaceId,
-        `${FIXTURE_PREFIX}-actor`,
-        `${FIXTURE_PREFIX}@example.test`,
-      ],
+      [secondWorkspaceId, `${FIXTURE_PREFIX}-actor`, `${FIXTURE_PREFIX}@example.test`],
     );
     const secondActorId = secondActor.rows[0]?.id;
     if (!secondActorId) throw new Error('second workspace actor fixture was not created');
@@ -598,7 +594,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
 
   it('does not alter clusters, members, decisions, or audit rows', async () => {
     const isolatedWorkspace = await migrateHandle.pool.query<{ id: string }>(
-      `insert into core.workspaces (name) values ($1) returning id`,
+      'insert into core.workspaces (name) values ($1) returning id',
       [`${FIXTURE_PREFIX}-side-effects-workspace`],
     );
     const workspaceId = isolatedWorkspace.rows[0]?.id;

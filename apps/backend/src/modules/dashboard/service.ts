@@ -130,7 +130,9 @@ export function createDashboardService(deps: DashboardDeps) {
       deps.vocReadService.countGroupedVocs({
         actor,
         readScope: vocScopeRaw,
-        ...(selectedManagedSystemId !== undefined ? { managedSystemId: selectedManagedSystemId } : {}),
+        ...(selectedManagedSystemId !== undefined
+          ? { managedSystemId: selectedManagedSystemId }
+          : {}),
       }),
     );
     const vocCountsBySystem = new Map<string, AggregatedVocCounts>();
@@ -344,8 +346,8 @@ export function createDashboardService(deps: DashboardDeps) {
       (vocScope.kind === 'all' || vocScope.managedSystemIds.length > 0)
     ) {
       const vocTaskValue = sumGroupedVocCounts((row) => row.with_task)!;
-      const analyticsAreaValue = sumGroupedVocCounts(
-        (row) => (row.analytics_area_id !== null ? row.total : 0),
+      const analyticsAreaValue = sumGroupedVocCounts((row) =>
+        row.analytics_area_id !== null ? row.total : 0,
       )!;
       const vocTaskPercent = percent(vocTaskValue, openVoc);
       coverage.push({

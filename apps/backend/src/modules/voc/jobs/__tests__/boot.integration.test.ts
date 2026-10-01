@@ -14,12 +14,12 @@ import {
   VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
   registerVocClusterAutogenShadow,
 } from '../cluster-autogen-shadow.js';
-import { registerVocJobs } from '../index.js';
 import { VOC_EMBED_QUEUE } from '../embed-voc.js';
 import {
   VOC_EMBEDDING_BACKFILL_CRON,
   VOC_EMBEDDING_BACKFILL_QUEUE,
 } from '../embedding-backfill.js';
+import { registerVocJobs } from '../index.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -61,9 +61,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
 
   it('registers the backfill cron in pgboss.schedule', async () => {
     const schedules = await boss.getSchedules(VOC_EMBEDDING_BACKFILL_QUEUE);
-    const ours = schedules.find(
-      (s: { name: string }) => s.name === VOC_EMBEDDING_BACKFILL_QUEUE,
-    );
+    const ours = schedules.find((s: { name: string }) => s.name === VOC_EMBEDDING_BACKFILL_QUEUE);
     expect(ours).toBeDefined();
     expect(ours?.cron).toBe(VOC_EMBEDDING_BACKFILL_CRON);
   });
@@ -74,10 +72,9 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
         retry_limit: number;
         retry_delay: number;
         retry_backoff: boolean;
-      }>(
-        `select retry_limit, retry_delay, retry_backoff from pgboss.queue where name = $1`,
-        [queue],
-      );
+      }>('select retry_limit, retry_delay, retry_backoff from pgboss.queue where name = $1', [
+        queue,
+      ]);
       expect(row.rowCount).toBe(1);
       expect(row.rows[0]?.retry_limit).toBe(5);
       expect(row.rows[0]?.retry_delay).toBe(30);
@@ -99,10 +96,9 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
       retry_limit: number;
       retry_delay: number;
       retry_backoff: boolean;
-    }>(
-      `select retry_limit, retry_delay, retry_backoff from pgboss.queue where name = $1`,
-      [VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE],
-    );
+    }>('select retry_limit, retry_delay, retry_backoff from pgboss.queue where name = $1', [
+      VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
+    ]);
     expect(row.rowCount).toBe(1);
     expect(row.rows[0]?.retry_limit).toBe(5);
     expect(row.rows[0]?.retry_delay).toBe(30);

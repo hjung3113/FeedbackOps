@@ -58,9 +58,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       actor: args.actor,
       query: {
         view: 'inbox',
-        ...(args.managedSystemId !== undefined
-          ? { managed_system_id: args.managedSystemId }
-          : {}),
+        ...(args.managedSystemId !== undefined ? { managed_system_id: args.managedSystemId } : {}),
       },
       readScope: args.readScope,
       triageScope: undefined,

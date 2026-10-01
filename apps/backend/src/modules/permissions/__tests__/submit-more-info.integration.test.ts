@@ -87,9 +87,10 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
           managedSystemIds,
         ]);
       }
-      await migrateDb.pool.query('delete from core.idempotency_keys where actor_id = any($1::uuid[])', [
-        actorIds,
-      ]);
+      await migrateDb.pool.query(
+        'delete from core.idempotency_keys where actor_id = any($1::uuid[])',
+        [actorIds],
+      );
       await migrateDb.pool.query('delete from core.rate_limits where key = any($1::text[])', [
         actorIds,
       ]);
@@ -376,7 +377,9 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
   it('trims a submitted reason and audits the stored pre-image', async () => {
     const actor = await createLoggedInActor();
     const requestId = await seedRequest(actor.id, { reason: ' create reason ' });
-    const { after } = await assertSuccess(requestId, actor.id, actor.cookie, { reason: '  more  ' });
+    const { after } = await assertSuccess(requestId, actor.id, actor.cookie, {
+      reason: '  more  ',
+    });
     expect(after.reason).toBe('more');
   });
 
@@ -416,7 +419,9 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     const actor = await createLoggedInActor();
     const requestId = await seedRequest(actor.id);
     const before = await captureState(requestId);
-    const response = await submit(requestId, actor.cookie, { requested_capability: 'workspace.admin' });
+    const response = await submit(requestId, actor.cookie, {
+      requested_capability: 'workspace.admin',
+    });
     await expectRejectedUnchanged(requestId, before, response, 422, 'validation.failed');
   });
 
@@ -474,7 +479,13 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     const requestId = await seedRequest(actor.id, { capability: 'unknown.capability' });
     const before = await captureState(requestId);
     const response = await submit(requestId, actor.cookie);
-    await expectRejectedUnchanged(requestId, before, response, 422, 'validation.unknown_capability');
+    await expectRejectedUnchanged(
+      requestId,
+      before,
+      response,
+      422,
+      'validation.unknown_capability',
+    );
   });
 
   it('rejects whitespace reason for a non-sensitive capability with reason field details', async () => {
