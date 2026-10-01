@@ -1467,8 +1467,18 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     ).toBe(true);
     const limitedTriage = remainingTriageResponses[49];
     expect(limitedTriage?.statusCode).toBe(429);
-    expect(limitedTriage?.json<{ code: string }>().code).toBe('rate_limited.actor');
-    expect(limitedTriage?.headers['retry-after']).toBeDefined();
+    const limitedBody = limitedTriage?.json<{
+      code: string;
+      message: string;
+      detail: { retry_after_seconds: number };
+    }>();
+    expect(limitedBody?.code).toBe('rate_limited.actor');
+    expect(limitedBody?.message).toEqual(expect.any(String));
+    expect(limitedBody?.message.length).toBeGreaterThan(0);
+    const retryAfterSeconds = limitedBody?.detail.retry_after_seconds;
+    expect(Number.isInteger(retryAfterSeconds)).toBe(true);
+    expect(retryAfterSeconds).toBeGreaterThan(0);
+    expect(Number(limitedTriage?.headers['retry-after'])).toBe(retryAfterSeconds);
 
     const mutationResponses = [];
     for (let attempt = 0; attempt < 11; attempt += 1) {
