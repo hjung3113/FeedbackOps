@@ -81,29 +81,24 @@ export function ListToolbar({
         canScrollRight: maxScroll - viewport.scrollLeft > 1,
       });
     };
-    const updateLayout = () => {
-      updateOverflow();
-      revealActiveTab();
-    };
-
-    updateLayout();
+    updateOverflow();
     viewport.addEventListener('scroll', updateOverflow, { passive: true });
-    window.addEventListener('resize', updateLayout);
+    window.addEventListener('resize', updateOverflow);
     const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateLayout);
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateOverflow);
     resizeObserver?.observe(viewport);
     for (const child of viewport.children) resizeObserver?.observe(child);
     return () => {
       viewport.removeEventListener('scroll', updateOverflow);
-      window.removeEventListener('resize', updateLayout);
+      window.removeEventListener('resize', updateOverflow);
       resizeObserver?.disconnect();
     };
-  }, [revealActiveTab, tabKey]);
+  }, [tabKey]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedTab is the trigger to reveal the newly active tab.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selection or tab-set changes must reveal the active tab.
   React.useLayoutEffect(() => {
     revealActiveTab();
-  }, [revealActiveTab, selectedTab]);
+  }, [revealActiveTab, selectedTab, tabKey]);
 
   const handleTabChange = (next: string) => {
     if (activeTab === undefined) setUncontrolledActiveTab(next);

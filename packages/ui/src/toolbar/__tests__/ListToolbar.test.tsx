@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
 
@@ -23,6 +23,27 @@ const rect = (left: number, right: number): DOMRect =>
     height: 40,
     toJSON: () => ({}),
   }) as DOMRect;
+
+function stubResizeObserver() {
+  const notifyCallbacks: Array<() => void> = [];
+  class TestResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      notifyCallbacks.push(() => callback([], this as unknown as ResizeObserver));
+    }
+
+    observe() {}
+
+    disconnect() {}
+  }
+  vi.stubGlobal('ResizeObserver', TestResizeObserver);
+  return () => {
+    for (const notify of notifyCallbacks) notify();
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('ListToolbar — tabs mode', () => {
   it('locks the toolbar row to the 50px h-toolbar rhythm', () => {
@@ -100,23 +121,89 @@ describe('ListToolbar — tabs mode', () => {
     expect(tabViewport?.className).toContain('whitespace-nowrap');
   });
 
-  it('shows a next-tab control for overflow and scrolls the active tab into view', () => {
-    const { container } = render(<ListToolbar tabs={tabs} activeTab="unassigned" />);
-    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
-    const scrollBy = vi.fn();
-    tabViewport.scrollBy = scrollBy;
-    Object.defineProperties(tabViewport, {
-      clientWidth: { configurable: true, value: 120 },
-      scrollWidth: { configurable: true, value: 300 },
-    });
-    tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 120));
-    screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() => rect(200, 260));
+  it.each([
+    {
+      change: 'selection',
+      initialTabs: tabs,
+      nextTabs: tabs,
+      initialActiveTab: 'untriaged',
+      nextActiveTab: 'unassigned',
+    },
+    {
+      change: 'tab set',
+      initialTabs: tabs.slice(0, 3),
+      nextTabs: tabs,
+      initialActiveTab: 'unassigned',
+      nextActiveTab: 'unassigned',
+    },
+  ])(
+    'shows overflow controls and reveals the active tab after a $change change',
+    ({ initialTabs, nextTabs, initialActiveTab, nextActiveTab }) => {
+      const { container, rerender } = render(
+        <ListToolbar tabs={initialTabs} activeTab={initialActiveTab} />,
+      );
+      const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+      const scrollBy = vi.fn();
+      tabViewport.scrollBy = scrollBy;
+      Object.defineProperties(tabViewport, {
+        clientWidth: { configurable: true, value: 120 },
+        scrollWidth: { configurable: true, value: 300 },
+      });
+      tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 120));
+      screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() =>
+        rect(200, 260),
+      );
 
-    act(() => window.dispatchEvent(new Event('resize')));
+      act(() => window.dispatchEvent(new Event('resize')));
+      rerender(<ListToolbar tabs={nextTabs} activeTab={nextActiveTab} />);
 
-    expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
-    expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
-  });
+      expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
+      expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
+    },
+  );
+
+  it.each([
+    { direction: 'right' as const, activeTab: 'untriaged', start: 0, control: '다음 탭 보기' },
+    { direction: 'left' as const, activeTab: 'disabled', start: 225, control: '이전 탭 보기' },
+  ])(
+    'keeps the $direction scroll position when the overflow control layout resizes',
+    async ({ direction, activeTab, start, control }) => {
+      const notifyResize = stubResizeObserver();
+      const user = userEvent.setup();
+      const { container } = render(<ListToolbar tabs={tabs} activeTab={activeTab} />);
+      const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+      Object.defineProperties(tabViewport, {
+        scrollLeft: { configurable: true, writable: true, value: start },
+        scrollWidth: { configurable: true, value: 300 },
+        clientWidth: {
+          configurable: true,
+          get: () => {
+            if (direction === 'right') return tabViewport.scrollLeft > 1 ? 75 : 100;
+            return tabViewport.scrollLeft > 200 ? 76 : 52;
+          },
+        },
+      });
+      tabViewport.getBoundingClientRect = vi.fn(() => rect(0, tabViewport.clientWidth));
+      tabViewport.scrollBy = vi.fn((options: ScrollToOptions) => {
+        tabViewport.scrollLeft += options.left ?? 0;
+        tabViewport.dispatchEvent(new Event('scroll'));
+      }) as unknown as typeof tabViewport.scrollBy;
+      const active = screen.getByRole('tab', { selected: true });
+      active.getBoundingClientRect = vi.fn(() =>
+        direction === 'right'
+          ? rect(-tabViewport.scrollLeft, 40 - tabViewport.scrollLeft)
+          : rect(274 - tabViewport.scrollLeft, 300 - tabViewport.scrollLeft),
+      );
+
+      act(() => window.dispatchEvent(new Event('resize')));
+      expect(screen.getByRole('button', { name: control })).toBeVisible();
+
+      await user.click(screen.getByRole('button', { name: control }));
+      act(() => notifyResize());
+
+      expect(tabViewport.scrollLeft).toBe(direction === 'right' ? 120 : 105);
+    },
+  );
 
   it('does not show scroll controls when the tab strip fits', () => {
     const { container } = render(<ListToolbar tabs={tabs} activeTab="untriaged" />);

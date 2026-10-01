@@ -91,20 +91,25 @@ export function DetailPanelSectionNav({
     setActiveSection(firstSection);
   }, [firstSection, sectionKey]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sectionKey rebinds when the section IDs change.
+  const updateAnchorScrollMargins = React.useCallback(() => {
+    const root = scrollRef?.current;
+    if (!root) return;
+    const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
+    for (const section of sections) {
+      const anchor = root.querySelector<HTMLElement>(`[data-anchor="${section.id}"]`);
+      if (anchor) anchor.style.scrollMarginTop = `${stickyHeaderHeight}px`;
+    }
+  }, [scrollRef, sectionKey]);
+
+  React.useEffect(() => {
+    updateAnchorScrollMargins();
+  }, [updateAnchorScrollMargins]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: Rebind when section IDs replace tab elements.
   React.useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    const root = scrollRef?.current;
-
-    const updateAnchorScrollMargins = () => {
-      if (!root) return;
-      const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
-      for (const section of sections) {
-        const anchor = root.querySelector<HTMLElement>(`[data-anchor="${section.id}"]`);
-        if (anchor) anchor.style.scrollMarginTop = `${stickyHeaderHeight}px`;
-      }
-    };
 
     const updateOverflow = () => {
       const maxScroll = nav.scrollWidth - nav.clientWidth;
@@ -134,7 +139,7 @@ export function DetailPanelSectionNav({
       window.removeEventListener('resize', updateLayout);
       resizeObserver?.disconnect();
     };
-  }, [revealSection, scrollRef, sectionKey]);
+  }, [revealSection, sectionKey, updateAnchorScrollMargins]);
 
   React.useLayoutEffect(() => {
     revealSection(activeSection);
