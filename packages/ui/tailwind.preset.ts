@@ -111,6 +111,25 @@ const preset: Config = {
         'confidence-high': 'rgb(var(--color-emerald) / <alpha-value>)',
       },
 
+      // Pack 17 typography tokens (issue #672). Sizes the documented Type Scale
+      // pairs with a leading (body 1.4, heading 1.2) carry it; the rest stay
+      // size-only like the prototype's .text-* helpers, inheriting the body
+      // leading. Token names not used by any screen (text-caption/tiny/md/
+      // heading-lg/display) are intentionally unmapped.
+      fontFamily: {
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+      },
+
+      fontSize: {
+        xs: 'var(--text-xs)',
+        sm: 'var(--text-sm)',
+        base: ['var(--text-body)', { lineHeight: 'var(--leading-normal)' }],
+        lg: 'var(--text-lg)',
+        xl: 'var(--text-xl)',
+        '2xl': ['var(--text-heading)', { lineHeight: 'var(--leading-tight)' }],
+      },
+
       spacing: {
         // Layout tokens exposed as spacing utilities
         sidebar: 'var(--sidebar-width)',
