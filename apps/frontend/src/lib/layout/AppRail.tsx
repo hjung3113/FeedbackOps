@@ -1,7 +1,6 @@
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
-import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import {
   formatUnreadBadge,
   useUnreadNotificationCount,
@@ -32,6 +31,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import * as React from 'react';
+import type { NavCounts } from './AppSidebar';
 
 export type RailDomain =
   | 'home'
@@ -70,6 +70,7 @@ export function railForPathname(pathname: string): RailDomain {
 export interface AppRailProps {
   activeDomain?: RailDomain;
   canAccessWorkspaceAdmin?: boolean;
+  counts?: NavCounts;
   className?: string;
 }
 
@@ -77,14 +78,14 @@ export interface AppRailProps {
 export function AppRail({
   activeDomain = 'voc',
   canAccessWorkspaceAdmin = false,
+  counts,
   className,
 }: AppRailProps) {
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
-  const inboxPermission = usePermissionCheck({ capability: 'voc.read' });
   const vocHref =
-    inboxPermission.data === undefined || inboxPermission.data.state === 'approved'
+    counts === undefined || counts['voc.inbox'] !== undefined
       ? '/vocs?view=inbox'
       : '/vocs?view=my';
   const unreadNotificationCount = useUnreadNotificationCount();

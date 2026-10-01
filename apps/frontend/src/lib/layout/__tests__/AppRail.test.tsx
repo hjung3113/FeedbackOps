@@ -6,15 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // vi.mock factories are hoisted above module-level const declarations, so the
 // doubles have to be created inside vi.hoisted or the factories close over
 // uninitialised bindings.
-const { navigate, logout, useMe, fetchUnreadNotificationCount, usePermissionCheck } = vi.hoisted(
-  () => ({
-    navigate: vi.fn(),
-    logout: vi.fn(),
-    useMe: vi.fn(),
-    fetchUnreadNotificationCount: vi.fn(),
-    usePermissionCheck: vi.fn(),
-  }),
-);
+const { navigate, logout, useMe, fetchUnreadNotificationCount } = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  logout: vi.fn(),
+  useMe: vi.fn(),
+  fetchUnreadNotificationCount: vi.fn(),
+}));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -22,7 +19,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 vi.mock('@/lib/api/auth', () => ({ logout }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe }));
-vi.mock('@/lib/cross-system/usePermissionCheck', () => ({ usePermissionCheck }));
 vi.mock('@/lib/api/notifications', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/notifications')>()),
   fetchUnreadNotificationCount,
@@ -65,25 +61,20 @@ beforeEach(() => {
   navigate.mockReset();
   logout.mockReset();
   useMe.mockReturnValue({ data: ACTOR });
-  usePermissionCheck.mockReturnValue({ data: { state: 'approved' } });
   fetchUnreadNotificationCount.mockReset();
   fetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 describe('AppRail', () => {
   it.each([
-    ['operator', 'approved', '/vocs?view=inbox'],
-    ['reporter', 'blocked_non_requestable', '/vocs?view=my'],
-  ] as const)(
-    'AC-681-6 sends a %s to the VOC view allowed by the read capability hint',
-    (_actor, state, href) => {
-      usePermissionCheck.mockReturnValue({ data: { state } });
-      renderRail();
+    ['loading counts', undefined, '/vocs?view=inbox'],
+    ['loaded counts with Inbox access', { 'voc.inbox': 0 }, '/vocs?view=inbox'],
+    ['loaded counts without Inbox access', {}, '/vocs?view=my'],
+  ] as const)('AC-681-6 uses %s to select the VOC rail destination', (_state, counts, href) => {
+    renderRail(counts === undefined ? {} : { counts });
 
-      expect(screen.getByTestId('rail-voc')).toHaveAttribute('href', href);
-      expect(usePermissionCheck).toHaveBeenCalledWith({ capability: 'voc.read' });
-    },
-  );
+    expect(screen.getByTestId('rail-voc')).toHaveAttribute('href', href);
+  });
 
   it.each([
     ['/home', 'home'],

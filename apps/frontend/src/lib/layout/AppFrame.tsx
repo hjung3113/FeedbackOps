@@ -65,6 +65,11 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     staleTime: 60_000,
     retry: false,
   });
+  const awaitingInitialScope =
+    actorId !== undefined &&
+    !isAdmin &&
+    grantsQuery.data === undefined &&
+    grantsQuery.fetchStatus === 'fetching';
   const countsQuery = useQuery({
     queryKey: [...NAV_COUNTS_QUERY_KEY, selectedManagedSystemId] as const,
     queryFn: ({ signal }) => fetchNavCounts({
@@ -88,8 +93,10 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
     id: system.id,
     name: system.name,
+    // Keep the initial permission fetch from briefly marking every system out of scope.
     granted:
       isAdmin ||
+      awaitingInitialScope ||
       grantsQuery.data?.scope.kind === 'all' ||
       (grantsQuery.data?.scope.kind === 'scoped' &&
         grantsQuery.data.scope.managed_system_ids.includes(system.id)),
@@ -164,7 +171,11 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   return (
     <DetailPanelSlotContext.Provider value={ctxValue}>
       <div className={cn('flex h-screen bg-surface-canvas text-text-primary', className)} data-app-frame>
-        <AppRail activeDomain={activeDomain} canAccessWorkspaceAdmin={canAccessWorkspaceAdmin} />
+        <AppRail
+          activeDomain={activeDomain}
+          canAccessWorkspaceAdmin={canAccessWorkspaceAdmin}
+          {...(counts !== undefined ? { counts } : {})}
+        />
         <AppSidebar {...sidebarProps} />
         <main className="flex-1 min-w-0 flex flex-col" data-testid="app-main">
           {children}
