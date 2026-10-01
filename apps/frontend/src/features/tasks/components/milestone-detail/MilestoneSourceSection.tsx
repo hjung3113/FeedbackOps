@@ -24,7 +24,7 @@ export function MilestoneSourceSection({
             source Finding is linked (finding 3): navigation to the existing
             Finding detail route only — no Finding → Milestone writer. */}
         <div className="flex items-center justify-between">
-          <MilestonePanelSectionTitle className="mb-0">Source</MilestonePanelSectionTitle>
+          <MilestonePanelSectionTitle className="mb-0">출처</MilestonePanelSectionTitle>
           {sourceFinding !== null && (
             <Button
               variant="subtle"
@@ -44,13 +44,13 @@ export function MilestoneSourceSection({
               }}
             >
               <ArrowRight className="h-[11px] w-[11px]" aria-hidden="true" />
-              Open finding
+              Finding 열기
             </Button>
           )}
         </div>
         {sourceFinding ? (
           <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
-            <span className="text-xs text-text-muted">From finding</span>
+            <span className="text-xs text-text-muted">Finding에서</span>
             <div className="text-[13px] font-medium text-text-primary">
               <span className="mr-1.5 font-mono text-xs text-text-muted">
                 {sourceFinding.display_id}

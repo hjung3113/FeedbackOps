@@ -54,7 +54,7 @@ export function SurveyResultHeader({
       </div>
       {/* Two views only exist for personal-response holders; a lone Results tab is noise. */}
       {canReviewResponses && (
-        <nav aria-label="Survey result views" className="flex items-center gap-1">
+        <nav aria-label="설문 결과 보기" className="flex items-center gap-1">
           <Link
             aria-current={activeTab === 'results' ? 'page' : undefined}
             className={tabClass(activeTab === 'results')}

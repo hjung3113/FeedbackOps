@@ -91,7 +91,7 @@ function renderRoute() {
 }
 
 function thresholdEditButton() {
-  const button = screen.getAllByRole('button', { name: 'Edit' })[1];
+  const button = screen.getAllByRole('button', { name: '편집' })[1];
   if (!button) throw new Error('Anonymity threshold edit button is missing');
   return button;
 }
@@ -113,7 +113,7 @@ describe('/admin/settings route', () => {
     renderRoute();
 
     if (permission.kind === 'pending') {
-      expect(await screen.findByText('Checking access…')).toBeInTheDocument();
+      expect(await screen.findByText('접근 확인 중…')).toBeInTheDocument();
     } else {
       await screen.findByText('접근할 수 없습니다.');
     }
@@ -126,7 +126,7 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     expect(
-      screen.getByText('Self-approval of Permission Request', { exact: true }),
+      screen.getByText('Permission Request 직접 승인', { exact: true }),
     ).toBeInTheDocument();
     expect(
       screen.queryByText('Self-approval of Task Request', { exact: true }),
@@ -146,24 +146,24 @@ describe('/admin/settings route', () => {
         'Admin 만 all 을 workspace-wide 로 해석합니다. 다른 역할은 effective scope union (교집합 = workspace ∩ grants) 으로 해석합니다.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('Forbidden', { exact: true })).toHaveLength(2);
+    expect(screen.getAllByText('금지', { exact: true })).toHaveLength(2);
     expect(
       screen.getByText('Survey Response → VOC').closest('div[class*="grid"]'),
-    ).toHaveTextContent('Forbidden');
+    ).toHaveTextContent('금지');
     expect(
       screen
         .getByText('Survey Response → VOC')
         .closest('div[class*="grid"]')
         ?.querySelector('.text-accent-danger'),
-    ).toHaveTextContent('Forbidden');
-    expect(screen.getByText('9 responses', { exact: true })).toBeInTheDocument();
+    ).toHaveTextContent('금지');
+    expect(screen.getByText('응답 9건', { exact: true })).toBeInTheDocument();
     expect(screen.queryByText('정책 강제 연결 후 편집 가능')).not.toBeInTheDocument();
     for (const label of [
-      'Cross-Managed-System linking',
-      'Permission request appeal window',
+      'Cross-Managed-System 연결',
+      '권한 요청 재신청 기간',
       'Survey Response → VOC',
-      'Default Managed System scope (Developer)',
-      'all = workspace-wide',
+      '기본 Managed System 범위 (Developer)',
+      'all = 워크스페이스 전체',
     ]) {
       const row = screen.getByText(label, { exact: true }).closest('div[class*="grid"]');
       expect(row?.querySelector('button,input,select')).toBeNull();
@@ -179,11 +179,11 @@ describe('/admin/settings route', () => {
       screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).not.toBeInTheDocument();
 
-    const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
+    const selfApprovalEditButton = screen.getAllByRole('button', { name: '편집' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
     fireEvent.click(selfApprovalEditButton);
-    fireEvent.click(screen.getByRole('combobox', { name: 'Self-approval' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Allowed' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '직접 승인' }));
+    fireEvent.click(await screen.findByRole('option', { name: '허용' }));
 
     expect(
       screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
@@ -191,7 +191,7 @@ describe('/admin/settings route', () => {
     expect(screen.getByText(/^active capability grant —/)).toBeInTheDocument();
     expect(screen.queryByText(/^\d+ active capability grant$/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: '버리기' }));
     expect(
       screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).not.toBeInTheDocument();
@@ -204,21 +204,21 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     fireEvent.click(thresholdEditButton());
-    const threshold = screen.getByLabelText('Anonymity threshold');
+    const threshold = screen.getByLabelText('익명성 임계값');
     fireEvent.change(threshold, { target: { value: '12' } });
     expect(screen.getByTestId('workspace-settings-save-bar')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
 
     await waitFor(() => expect(patches).toEqual([{ survey_anonymity_threshold: 12 }]));
     await waitFor(() =>
-      expect(screen.getByText('12 responses', { exact: true })).toBeInTheDocument(),
+      expect(screen.getByText('응답 12건', { exact: true })).toBeInTheDocument(),
     );
 
     fireEvent.click(thresholdEditButton());
-    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '15' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: '버리기' }));
     expect(screen.queryByTestId('workspace-settings-save-bar')).not.toBeInTheDocument();
-    expect(screen.getByText('12 responses', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('응답 12건', { exact: true })).toBeInTheDocument();
   });
 
   test('keeps the draft and save bar visible when patching fails', async () => {
@@ -227,15 +227,15 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     fireEvent.click(thresholdEditButton());
-    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '12' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Workspace settings 저장에 실패했습니다.',
+      '워크스페이스 설정 저장에 실패했습니다.',
     );
     expect(screen.getByTestId('workspace-settings-save-bar')).toBeInTheDocument();
-    expect(screen.getByLabelText('Anonymity threshold')).toHaveValue(12);
-    expect(screen.getByText('Previously:')).toHaveTextContent('9 responses');
+    expect(screen.getByLabelText('익명성 임계값')).toHaveValue(12);
+    expect(screen.getByText('이전 값:')).toHaveTextContent('응답 9건');
   });
 
   test('shows dirty row parity and changed field names, then clears them after save or discard', async () => {
@@ -244,30 +244,30 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     fireEvent.click(thresholdEditButton());
-    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: '12' } });
 
-    expect(screen.getByText('Unsaved')).toBeInTheDocument();
-    expect(screen.getByText('Previously:')).toHaveTextContent('9 responses');
+    expect(screen.getByText('변경됨')).toBeInTheDocument();
+    expect(screen.getByText('이전 값:')).toHaveTextContent('응답 9건');
     const saveBar = screen.getByTestId('workspace-settings-save-bar');
-    expect(saveBar).toHaveTextContent('1 unsaved change');
-    expect(saveBar).toHaveTextContent('Anonymity threshold');
+    expect(saveBar).toHaveTextContent('저장되지 않은 변경 1건');
+    expect(saveBar).toHaveTextContent('익명성 임계값');
 
-    const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
+    const selfApprovalEditButton = screen.getAllByRole('button', { name: '편집' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
     fireEvent.click(selfApprovalEditButton);
-    fireEvent.click(screen.getByRole('combobox', { name: 'Self-approval' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Allowed' }));
-    expect(saveBar).toHaveTextContent('2 unsaved changes');
-    expect(saveBar).toHaveTextContent('Self-approval of Permission Request · Anonymity threshold');
+    fireEvent.click(screen.getByRole('combobox', { name: '직접 승인' }));
+    fireEvent.click(await screen.findByRole('option', { name: '허용' }));
+    expect(saveBar).toHaveTextContent('저장되지 않은 변경 2건');
+    expect(saveBar).toHaveTextContent('Permission Request 직접 승인 · 익명성 임계값');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(screen.queryByText('Unsaved')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
+    await waitFor(() => expect(screen.queryByText('변경됨')).not.toBeInTheDocument());
 
     fireEvent.click(thresholdEditButton());
-    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '15' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
-    expect(screen.queryByText('Unsaved')).not.toBeInTheDocument();
-    expect(screen.queryByText('Previously:')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: '버리기' }));
+    expect(screen.queryByText('변경됨')).not.toBeInTheDocument();
+    expect(screen.queryByText('이전 값:')).not.toBeInTheDocument();
   });
 
   test.each(['4', '51'])('blocks save for an anonymity threshold of %s', async (invalid) => {
@@ -276,9 +276,9 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     fireEvent.click(thresholdEditButton());
-    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: invalid } });
+    fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: invalid } });
     expect(screen.getByText('5에서 50 사이의 정수를 입력하세요.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '변경사항 저장' })).toBeDisabled();
   });
 
   test('removes the placeholder destination from the default settings navigation', () => {

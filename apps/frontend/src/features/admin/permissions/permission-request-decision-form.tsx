@@ -316,9 +316,9 @@ export function PermissionRequestDecisionForm({
         >
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-text-primary">
-              Self-approval audit capture
+              직접 승인 감사 기록
             </span>
-            <OutlineBadge>SENSITIVE</OutlineBadge>
+            <OutlineBadge>민감</OutlineBadge>
           </div>
           <p className="text-xs leading-5 text-text-secondary">
             이 결정은 본인이 작성한 요청을 본인이 승인하는 self-approval 입니다. 감사 로그에

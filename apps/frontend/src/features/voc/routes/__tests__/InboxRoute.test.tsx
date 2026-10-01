@@ -236,7 +236,7 @@ describe('useInboxRoute', () => {
       const query = new URL(requestUrl, 'http://localhost').searchParams;
       expect(query.get('filter.analytics_area')).toBe('unset');
       expect(query.has('tab')).toBe(false);
-      expect(screen.getByRole('tab', { name: 'Untriaged' })).toHaveAttribute(
+      expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute(
         'aria-selected',
         'false',
       );
@@ -259,11 +259,11 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     const expectedTips: Array<[string, string]> = [
-      ['Untriaged', '아직 분류되지 않은 VOC'],
-      ['High', 'High / Critical severity'],
-      ['Unassigned', '담당자 미지정'],
-      ['No link', 'Finding / Task 연결 없음'],
-      ['High · no link', 'High 이상인데 Finding / Task 연결 없음'],
+      ['미분류', '아직 분류되지 않은 VOC'],
+      ['높음', 'High / Critical 심각도'],
+      ['미배정', '담당자 미지정'],
+      ['연결 없음', 'Finding / Task 연결 없음'],
+      ['높음 · 연결 없음', 'High 이상인데 Finding / Task 연결 없음'],
     ];
     for (const [label, tip] of expectedTips) {
       const tab = screen.getByRole('tab', { name: label });
@@ -272,7 +272,7 @@ describe('useInboxRoute', () => {
       expect(tab).not.toHaveTextContent(/\d/);
     }
 
-    const noTaskTab = screen.getByRole('tab', { name: 'No task' });
+    const noTaskTab = screen.getByRole('tab', { name: 'Task 없음' });
     expect(noTaskTab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(noTaskTab).not.toHaveAttribute('title');
     expect(noTaskTab).not.toHaveTextContent(/\d/);
@@ -282,7 +282,7 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'High' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '높음' }));
 
     const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
       to: string;
@@ -303,7 +303,7 @@ describe('useInboxRoute', () => {
     });
   });
 
-  it('opens VOC creation when the My VOCs empty-state button is clicked', () => {
+  it('opens VOC creation when the 내 VOC empty-state button is clicked', () => {
     searchState = { view: 'my' };
     useVocListMock.mockReturnValue({
       data: { items: [], next_cursor: undefined },
@@ -416,7 +416,7 @@ describe('useInboxRoute', () => {
 
     await waitFor(() => {
       // The same-Managed-System peer tab keeps its URL value `similar`.
-      expect(screen.getByText('Untriaged')).toBeInTheDocument();
+      expect(screen.getByText('미분류')).toBeInTheDocument();
     });
   });
 
@@ -424,7 +424,7 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox', tab: 'high-no-link' };
     render(<InboxTestHarness view="inbox" />);
 
-    const tab = await screen.findByRole('tab', { name: 'High · no link' });
+    const tab = await screen.findByRole('tab', { name: '높음 · 연결 없음' });
     expect(tab).toHaveAttribute('data-state', 'active');
   });
 
@@ -432,15 +432,15 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    await screen.findByRole('tab', { name: 'Untriaged' });
+    await screen.findByRole('tab', { name: '미분류' });
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      'Untriaged',
-      'High',
-      'Unassigned',
-      'No link',
-      'High · no link',
-      'No task',
+      '미분류',
+      '높음',
+      '미배정',
+      '연결 없음',
+      '높음 · 연결 없음',
+      'Task 없음',
     ]);
 
     // Untriaged is already the active tab and Radix emits no onValueChange for
@@ -463,12 +463,12 @@ describe('useInboxRoute', () => {
     ).toEqual(['high', 'unassigned', 'no-link', 'high-no-link', 'no-task']);
   });
 
-  it('my view renders My VOCs title instead of tabs', async () => {
+  it('my view renders 내 VOC title instead of tabs', async () => {
     searchState = { view: 'my' };
     render(<InboxTestHarness view="my" />);
 
     await waitFor(() => {
-      expect(screen.getByText('My VOCs')).toBeInTheDocument();
+      expect(screen.getByText('내 VOC')).toBeInTheDocument();
     });
   });
 
@@ -485,14 +485,14 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC Inbox');
+    const panel = await screen.findByText('VOC 수신함');
     // #562: specs/voc.md R-VOC-INBOX — nothing requestable -> blocked_not_requestable.
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
     expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
   });
 
-  it('shows the Korean denied reason and links to My VOCs for a 403', async () => {
+  it('shows the Korean denied reason and links to 내 VOC for a 403', async () => {
     useVocListMock.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -507,12 +507,12 @@ describe('useInboxRoute', () => {
 
     expect(
       await screen.findByText(
-        'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.',
+        'VOC 수신함을 볼 권한이 없습니다. 내가 접수한 VOC는 내 VOC에서 확인할 수 있습니다.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('no voc.read scope for actor')).not.toBeInTheDocument();
 
-    const myVocsLink = screen.getByRole('link', { name: 'My VOCs' });
+    const myVocsLink = screen.getByRole('link', { name: '내 VOC' });
     expect(myVocsLink).toHaveAttribute('href', '/vocs');
     expect(myVocsLink).toHaveAttribute('data-search', JSON.stringify({ view: 'my' }));
   });
@@ -531,7 +531,7 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC Inbox');
+    const panel = await screen.findByText('VOC 수신함');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'request_access');
     const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
     expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);
@@ -541,7 +541,7 @@ describe('useInboxRoute', () => {
     expect(requestFlow).toHaveAttribute('data-return-route-intent', '/vocs?view=inbox');
     fireEvent.click(requestButton);
     expect(openRequestAccessMock).toHaveBeenCalledTimes(1);
-    // #562: an out-of-scope Managed System is not "no Inbox access" — no My VOCs detour.
+    // #562: an out-of-scope Managed System is not "no Inbox access" — no 내 VOC detour.
     expect(
       screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),
     ).toBeInTheDocument();

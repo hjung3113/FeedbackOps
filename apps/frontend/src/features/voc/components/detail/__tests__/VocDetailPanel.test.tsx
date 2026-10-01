@@ -571,7 +571,7 @@ describe('<VocDetailPanel>', () => {
   it('does not render an empty related-entity section in the happy path', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
     // Description section now uses an English 'BODY' label per the
     // reference image (see .review/title-reference.png + relaxed copy rule).
     expect(screen.getByText('BODY')).toBeInTheDocument();
@@ -715,7 +715,7 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/같은 Managed System의 VOC/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
     expect(
@@ -733,7 +733,7 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
   });
 
@@ -764,7 +764,7 @@ describe('<VocDetailPanel>', () => {
     );
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
     expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
     for (const label of ['요약', 'Triage', '이력', '작성']) {

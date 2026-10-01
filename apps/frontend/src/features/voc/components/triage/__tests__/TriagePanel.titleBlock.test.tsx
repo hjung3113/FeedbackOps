@@ -194,7 +194,7 @@ describe('TriagePanel Overview and grouped navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'low' }));
 
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
-    expect(screen.getByTestId('summary-diff-row-Severity')).toHaveTextContent('low');
+    expect(screen.getByTestId('summary-diff-row-심각도')).toHaveTextContent('low');
     expect(screen.queryByTestId('summary-no-changes')).not.toBeInTheDocument();
   });
 

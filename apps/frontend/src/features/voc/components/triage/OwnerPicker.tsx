@@ -80,7 +80,7 @@ export function OwnerPicker({
         onChange={(v) => {
           onChange(toOwnerValue(v === UNASSIGNED_ID ? null : v));
         }}
-        placeholder="Owner 선택…"
+        placeholder="담당자 선택…"
         searchPlaceholder="이름으로 검색…"
         disabled={disabled}
       />

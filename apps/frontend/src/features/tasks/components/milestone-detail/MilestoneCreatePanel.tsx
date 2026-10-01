@@ -1,5 +1,6 @@
 import { mapUnknownError, useIdempotencyKey } from '@/lib/api';
 import { createMilestone } from '@/lib/api/milestones';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { CreateMilestoneRequest, MilestoneDto } from '@fops/shared';
 import {
   Button,
@@ -218,22 +219,22 @@ export function MilestoneCreatePanel({
         onSubmit={submit}
       >
         <div className="px-4 pb-3 pt-4">
-          <MilestonePanelSectionTitle>New milestone</MilestonePanelSectionTitle>
+          <MilestonePanelSectionTitle>Milestone 생성</MilestonePanelSectionTitle>
         </div>
         <div className="border-t border-border-subtle py-2">
-          <MilestonePanelSectionTitle className="px-4">Properties</MilestonePanelSectionTitle>
-          <FieldRow label="Title">
+          <MilestonePanelSectionTitle className="px-4">속성</MilestonePanelSectionTitle>
+          <FieldRow label="제목">
             <Input
-              aria-label="Title"
+              aria-label="제목"
               className="w-56"
               disabled={createMutation.isPending}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
           </FieldRow>
-          <FieldRow label="Why this milestone exists">
+          <FieldRow label={GLOSSARY.whyThisMilestoneExists}>
             <Textarea
-              aria-label="Why this milestone exists"
+              aria-label={GLOSSARY.whyThisMilestoneExists}
               className="w-56"
               rows={3}
               disabled={createMutation.isPending}
@@ -253,7 +254,7 @@ export function MilestoneCreatePanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_SELECTION}>Select…</SelectItem>
+                <SelectItem value={NO_SELECTION}>선택…</SelectItem>
                 {managedSystems.map((system) => (
                   <SelectItem key={system.id} value={system.id}>
                     {system.name}
@@ -281,13 +282,13 @@ export function MilestoneCreatePanel({
               </SelectContent>
             </Select>
           </FieldRow>
-          <FieldRow label="Owner">
+          <FieldRow label={GLOSSARY.owner}>
             <Select
               value={ownerActorId || NO_SELECTION}
               disabled={createMutation.isPending}
               onValueChange={(value) => setOwnerActorId(value === NO_SELECTION ? '' : value)}
             >
-              <SelectTrigger aria-label="Owner" value={ownerActorId} className="w-48">
+              <SelectTrigger aria-label={GLOSSARY.owner} value={ownerActorId} className="w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -300,18 +301,18 @@ export function MilestoneCreatePanel({
               </SelectContent>
             </Select>
           </FieldRow>
-          <FieldRow label="Start">
+          <FieldRow label={GLOSSARY.start}>
             <DatePicker
-              aria-label="Start"
+              aria-label={GLOSSARY.start}
               className="bg-surface-detail"
               disabled={createMutation.isPending}
               value={startDate}
               onChange={(value) => setStartDate(value ?? '')}
             />
           </FieldRow>
-          <FieldRow label="Target">
+          <FieldRow label={GLOSSARY.target}>
             <DatePicker
-              aria-label="Target"
+              aria-label={GLOSSARY.target}
               className="bg-surface-detail"
               disabled={createMutation.isPending}
               value={targetDate}
@@ -321,10 +322,10 @@ export function MilestoneCreatePanel({
         </div>
         <div className="flex items-center gap-2 border-t border-border-subtle px-4 py-3">
           <Button type="submit" variant="primary" size="sm" disabled={createMutation.isPending}>
-            Create milestone
+            생성
           </Button>
           <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
-            Cancel
+            취소
           </Button>
           {formError !== null && <span className="text-sm text-accent-danger">{formError}</span>}
         </div>

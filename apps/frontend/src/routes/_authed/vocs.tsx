@@ -11,6 +11,7 @@ import { ChevronLeft } from 'lucide-react';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
@@ -72,11 +73,11 @@ export function VocRouteShell() {
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                <span>Inbox</span>
+                <span>{GLOSSARY.inbox}</span>
               </Link>
               <span className="inline-flex items-center gap-1 rounded-md bg-accent-primary/10 px-2 py-1 text-xs font-medium text-accent-primary">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden />
-                New VOC
+                {createLabel('VOC')}
               </span>
             </div>
           ),

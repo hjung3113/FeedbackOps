@@ -204,9 +204,9 @@ describe('integration links route', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'All 2' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Active 1' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Detached 1' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '전체 2' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '활성 1' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '분리됨 1' })).toBeInTheDocument();
       expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText(`Link ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
@@ -215,9 +215,9 @@ describe('integration links route', () => {
       expect(screen.getByText('필터')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Entity link 검색…')).toBeInTheDocument();
     });
-    expect(screen.getByRole('list', { name: 'Entity link inventory' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '엔티티 링크 목록' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.queryByRole('table', { name: 'Entity link inventory' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: '엔티티 링크 목록' })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Relation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Managed System' })).not.toBeInTheDocument();
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
@@ -238,7 +238,7 @@ describe('integration links route', () => {
     await waitFor(() => {
       expect(screen.getByText('현재 조건에 맞는 Entity Link가 없습니다')).toBeInTheDocument();
     });
-    expect(screen.getByText('상태: Revoked')).toBeInTheDocument();
+    expect(screen.getByText('상태: 취소됨')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_A }));
@@ -304,10 +304,10 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText('Entity links')).toBeInTheDocument(), {
+    await waitFor(() => expect(screen.getByText('엔티티 링크')).toBeInTheDocument(), {
       timeout: 4000,
     });
-    const panel = screen.getByText('Entity links');
+    const panel = screen.getByText('엔티티 링크');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
     expect(screen.getByText('Entity link 목록을 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('entity_link.read capability required')).not.toBeInTheDocument();
@@ -326,7 +326,7 @@ describe('integration links route', () => {
     );
 
     await screen.findByText('권한 제한');
-    await userEvent.click(screen.getByRole('tab', { name: 'Detached 1' }));
+    await userEvent.click(screen.getByRole('tab', { name: '분리됨 1' }));
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
@@ -368,12 +368,12 @@ describe('integration links route', () => {
     );
 
     expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Active 2' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '활성 2' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
 
     expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByRole('tab', { name: 'Active 2' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '활성 2' })).toBeInTheDocument();
     expect(
       urls.some(
         (rawUrl) => new URL(rawUrl, 'http://localhost').searchParams.get('cursor') === 'page-2',
@@ -396,7 +396,7 @@ describe('integration links route', () => {
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
     expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^Active/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));
 
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ status: 'active' });
@@ -455,9 +455,9 @@ describe('integration links route', () => {
     expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     await loadSecondPage();
     const afterInitialLoad = allFirstPageRequests().length;
-    await userEvent.click(screen.getByRole('tab', { name: /^Active/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));
     await waitFor(() => expect(router.state.location.search).toEqual({ status: 'active' }));
-    await userEvent.click(screen.getByRole('tab', { name: /^All/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^전체/ }));
     await expectAllFirstPageReloaded(afterInitialLoad);
 
     await loadSecondPage();

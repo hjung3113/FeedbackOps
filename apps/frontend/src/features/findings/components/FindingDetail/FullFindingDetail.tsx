@@ -12,6 +12,7 @@ import {
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
   Button,
@@ -193,7 +194,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
             </FieldRow>
             <FieldRow label="생성자" className="px-0">
               <UserChip
-                user={{ display_name: actorsById.get(finding.created_by) ?? 'Finding creator' }}
+                user={{ display_name: actorsById.get(finding.created_by) ?? '생성자 없음' }}
                 size="sm"
               />
             </FieldRow>
@@ -203,7 +204,9 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
           {/* Evidence Highlights — per design/05 layout: after Summary/Source/Severity/Confidence */}
           <div data-anchor="evidence" className="flex flex-col gap-3">
-            <PanelSectionTitle>Evidence Highlights ({finding.evidence_count})</PanelSectionTitle>
+            <PanelSectionTitle>
+              {GLOSSARY.evidenceHighlight} ({finding.evidence_count})
+            </PanelSectionTitle>
             <EvidenceHighlightsSection
               findingId={finding.id}
               evidenceCount={finding.evidence_count}
@@ -214,7 +217,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
           {/* Primary Managed System */}
           <div data-anchor="managed-system" className="flex flex-col gap-2">
-            <PanelSectionTitle>Primary Managed System</PanelSectionTitle>
+            <PanelSectionTitle>주요 Managed System</PanelSectionTitle>
             <FieldRow label="Managed System" className="px-0">
               <ManagedSystemPill
                 name={managedSystemsById.get(finding.primary_managed_system_id) ?? 'Managed System'}
@@ -224,7 +227,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
           {/* Affected Analytics Area */}
           <div data-anchor="analytics-area" className="flex flex-col gap-2">
-            <PanelSectionTitle>Affected Analytics Area</PanelSectionTitle>
+            <PanelSectionTitle>영향 Analytics Area</PanelSectionTitle>
             <FieldRow label="Analytics Area" className="px-0">
               {finding.analytics_area_id !== null ? (
                 <FitBadge>
@@ -240,15 +243,15 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
           {/* Linked VOC — why this Finding exists */}
           <div data-anchor="links" className="flex flex-col gap-2">
-            <PanelSectionTitle>Linked VOC / Task</PanelSectionTitle>
-            <FieldRow label="Linked VOC" className="px-0">
+            <PanelSectionTitle>연결된 VOC / Task</PanelSectionTitle>
+            <FieldRow label={GLOSSARY.linkedVoc} className="px-0">
               {finding.source_type === 'voc' && finding.source_id !== null ? (
                 <Link
                   to="/vocs"
                   search={{ view: 'inbox', selected: finding.source_id }}
                   className="inline-flex items-center gap-1.5 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
                 >
-                  <span>{linkedVocTitle ?? 'Linked VOC'}</span>
+                  <span>{linkedVocTitle ?? GLOSSARY.linkedVoc}</span>
                   <span className="font-mono text-xs text-text-muted">
                     {linkedVocDisplayId ?? shortId(finding.source_id)}
                   </span>
@@ -257,14 +260,14 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Linked Task" className="px-0">
+            <FieldRow label={GLOSSARY.linkedTask} className="px-0">
               {finding.linked_task_id !== null ? (
                 <Link
                   to="/tasks"
                   search={{ view: 'backlog', param: finding.linked_task_id }}
                   className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                 >
-                  <span>{linkedTaskQuery.data?.title ?? 'Linked task'}</span>
+                  <span>{linkedTaskQuery.data?.title ?? GLOSSARY.linkedTask}</span>
                   <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                     {linkedTaskQuery.data?.display_id ?? shortId(finding.linked_task_id)}
                   </span>

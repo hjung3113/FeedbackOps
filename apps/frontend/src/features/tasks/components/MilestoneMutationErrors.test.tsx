@@ -74,14 +74,14 @@ function renderDetailPanel(): void {
 }
 
 function fillRequiredCreateFields(): void {
-  fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
-    target: { value: 'New milestone' },
+  fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
+    target: { value: 'Milestone 생성' },
   });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Why this milestone exists' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: '이 Milestone의 목적' }), {
     target: { value: 'A reason for this milestone' },
   });
-  fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-05-10' } });
-  fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-06-15' } });
+  fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-05-10' } });
+  fireEvent.change(screen.getByLabelText('목표일'), { target: { value: '2026-06-15' } });
 }
 
 beforeEach(() => {
@@ -103,7 +103,7 @@ describe('Milestone mutation error copy', () => {
         vi.mocked(createMilestone).mockRejectedValue(new Error(rawError));
         renderCreatePanel();
         fillRequiredCreateFields();
-        await user.click(screen.getByRole('button', { name: 'Create milestone' }));
+        await user.click(screen.getByRole('button', { name: '생성' }));
       } else {
         vi.mocked(updateMilestone).mockRejectedValue(new Error(rawError));
         renderDetailPanel();
@@ -111,13 +111,13 @@ describe('Milestone mutation error copy', () => {
 
         if (mutation === 'title') {
           await user.click(screen.getByRole('button', { name: 'Edit title' }));
-          fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+          fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
             target: { value: 'SSO Stabilization v2' },
           });
-          await user.click(screen.getByRole('button', { name: 'Save' }));
+          await user.click(screen.getByRole('button', { name: '저장' }));
         } else {
-          fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
-          fireEvent.click(await screen.findByRole('option', { name: 'Released' }));
+          fireEvent.click(screen.getByRole('combobox', { name: '상태' }));
+          fireEvent.click(await screen.findByRole('option', { name: '릴리스됨' }));
         }
       }
 
@@ -134,18 +134,18 @@ describe('Milestone create idempotency', () => {
     renderCreatePanel();
     fillRequiredCreateFields();
 
-    await user.click(screen.getByRole('button', { name: 'Create milestone' }));
+    await user.click(screen.getByRole('button', { name: '생성' }));
     await screen.findByText(GENERIC_ERROR_MESSAGE);
     const firstKey = vi.mocked(createMilestone).mock.calls[0]?.[1];
     if (firstKey === undefined) throw new Error('first create idempotency key missing');
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Changed milestone' },
     });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
-      target: { value: 'New milestone' },
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
+      target: { value: 'Milestone 생성' },
     });
-    await user.click(screen.getByRole('button', { name: 'Create milestone' }));
+    await user.click(screen.getByRole('button', { name: '생성' }));
     await screen.findByText(GENERIC_ERROR_MESSAGE);
     const retryKey = vi.mocked(createMilestone).mock.calls[1]?.[1];
     expect(retryKey).toBe(firstKey);

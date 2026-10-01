@@ -135,8 +135,8 @@ describe('<VocList>', () => {
   });
 
   it.each([
-    { view: 'inbox', label: 'Inbox' },
-    { view: 'my', label: 'My VOCs' },
+    { view: 'inbox', label: '수신함' },
+    { view: 'my', label: '내 VOC' },
   ] as const)('shows the $label create action as a button that opens create', ({ view }) => {
     const onCreate = vi.fn();
     render(
@@ -208,7 +208,7 @@ describe('<VocList>', () => {
     expect(dataRows).toHaveLength(3);
   });
 
-  it('hides the Owner need chip on My VOCs rows for a reporter-only viewer', () => {
+  it('hides the Owner need chip on 내 VOC rows for a reporter-only viewer', () => {
     render(
       <VocList items={[makeVoc()]} loading={false} error={null} onSelect={onSelect} view="my" />,
       { wrapper: makeWrapper() },
@@ -218,7 +218,7 @@ describe('<VocList>', () => {
   });
 
   it.each(['voc.read', 'voc.triage'] as const)(
-    'keeps the Owner need chip on My VOCs rows for an operator with approved %s capability',
+    'keeps the Owner need chip on 내 VOC rows for an operator with approved %s capability',
     (approvedCapability) => {
       permissionStates.set(approvedCapability, 'approved');
       render(

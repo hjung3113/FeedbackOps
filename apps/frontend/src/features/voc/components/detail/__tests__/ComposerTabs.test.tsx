@@ -23,9 +23,9 @@ describe('<ComposerTabs>', () => {
         onTabChange={vi.fn()}
       />,
     );
-    expect(screen.queryByText('Public update')).not.toBeInTheDocument();
-    expect(screen.getByText('Reporter reply')).toBeInTheDocument();
-    expect(screen.getByText('Internal note')).toBeInTheDocument();
+    expect(screen.queryByText('공개 업데이트')).not.toBeInTheDocument();
+    expect(screen.getByText('접수자 답변')).toBeInTheDocument();
+    expect(screen.getByText('내부 메모')).toBeInTheDocument();
   });
 
   it('defaults to leftmost visible tab (first in order: public > reply > internal)', () => {
@@ -44,7 +44,7 @@ describe('<ComposerTabs>', () => {
     );
     // The leftmost visible tab is "reply" since public is hidden
     // The active tab button should be "reply"
-    const replyBtn = screen.getByRole('tab', { name: /Reporter reply/i });
+    const replyBtn = screen.getByRole('tab', { name: /접수자 답변/i });
     expect(replyBtn).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -62,7 +62,7 @@ describe('<ComposerTabs>', () => {
         onTabChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /Internal note/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /내부 메모/i }));
     expect(onChange).toHaveBeenCalledWith('internal');
   });
 });

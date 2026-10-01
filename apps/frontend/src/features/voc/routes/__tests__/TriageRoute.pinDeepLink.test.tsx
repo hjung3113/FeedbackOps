@@ -1,6 +1,6 @@
 // TriageRoute.pinDeepLink.test.tsx — #383
 //
-// The VOC detail panel's "트리아지에서 변경" button deep-links to
+// The VOC detail panel's "Triage에서 변경" button deep-links to
 // /vocs?view=triage&selected=<id>. Already-triaged VOCs are excluded by the
 // queue predicate, so the route must forward that target as `pinVocId` or the
 // console cannot show what the link points at.

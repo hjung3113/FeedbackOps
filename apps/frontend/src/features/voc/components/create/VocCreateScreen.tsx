@@ -196,7 +196,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
               <FieldLabel
                 htmlFor="analytics_area_id"
                 className={SECTION_LABEL_CLASS}
-                tip="선택사항. 선택한 Managed System 안의 분석 영역만 고를 수 있어요."
+                tip="선택사항. 선택한 Managed System 안의 Analytics Area만 고를 수 있어요."
               >
                 ANALYTICS AREA
               </FieldLabel>

@@ -1,6 +1,7 @@
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
 import {
@@ -149,9 +150,9 @@ export function MilestoneDetailContent({
               onSubmit={(event) => submitTitleEdit(event, statusMutation.isPending)}
             >
               <div className="flex flex-col gap-1 text-xs text-text-muted">
-                <span>Title</span>
+                <span>제목</span>
                 <Input
-                  aria-label="Title"
+                  aria-label="제목"
                   disabled={titleMutation.isPending}
                   value={titleDraft}
                   onChange={(event) => {
@@ -167,10 +168,10 @@ export function MilestoneDetailContent({
                   size="sm"
                   disabled={titleMutation.isPending || statusMutation.isPending}
                 >
-                  Save
+                  저장
                 </Button>
                 <Button type="button" variant="subtle" size="sm" onClick={cancelTitleEdit}>
-                  Cancel
+                  취소
                 </Button>
                 {titleError !== null && (
                   <span className="text-sm text-accent-danger">{titleError}</span>
@@ -247,7 +248,7 @@ export function MilestoneDetailContent({
               border (shown in the reference baseline); only the type scale is
               corrected to the prototype 13px/1.6 (finding P3-1). */}
           <div className="mb-8">
-            <MilestonePanelSectionTitle>Why this milestone exists</MilestonePanelSectionTitle>
+            <MilestonePanelSectionTitle>{GLOSSARY.whyThisMilestoneExists}</MilestonePanelSectionTitle>
             <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
@@ -263,7 +264,7 @@ export function MilestoneDetailContent({
             <MilestonePanelSectionTitle>속성</MilestonePanelSectionTitle>
             {/* The scroll container owns horizontal padding. These local rows
                 use the prototype's 120px value column and left alignment. */}
-            <FieldRow label="Status" className={milestonePropertyFieldClassName}>
+            <FieldRow label="상태" className={milestonePropertyFieldClassName}>
               {/* B2e-status (ADR-0050): the closed set is accepted, so the
                   control offers exactly these four values; PATCH is free
                   among them. The title-block badge above stays read-only. */}
@@ -274,7 +275,7 @@ export function MilestoneDetailContent({
                   onValueChange={(value) => handleStatusChange(value, titleMutation.isPending)}
                 >
                   <SelectTrigger
-                    aria-label="Status"
+                    aria-label="상태"
                     value={milestone.status}
                     className={`${selectClassName} h-8 px-2 py-1`}
                   >
@@ -309,24 +310,24 @@ export function MilestoneDetailContent({
                 keeps avatar + display name at the prototype 18px/9px avatar
                 geometry; an actor missing from the directory keeps the
                 explicit — fallback (missing-actor handling preserved). */}
-            <FieldRow label="Owner" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.owner} className={milestonePropertyFieldClassName}>
               {ownerName !== undefined ? (
                 <MilestoneOwnerChip name={ownerName} />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Start" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.start} className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">
                 {formatDateOnly(milestone.start_date)}
               </span>
             </FieldRow>
-            <FieldRow label="Target" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.target} className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">
                 {formatDateOnly(milestone.target_date)}
               </span>
             </FieldRow>
-            <FieldRow label="Created" className={milestonePropertyFieldClassName}>
+            <FieldRow label="생성일" className={milestonePropertyFieldClassName}>
               {formatDate(milestone.created_at)}
             </FieldRow>
           </div>

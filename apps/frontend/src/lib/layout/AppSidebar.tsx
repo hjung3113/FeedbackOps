@@ -76,7 +76,7 @@ export interface AppSidebarProps {
 
 const STORAGE_KEY = 'appSidebarCollapsed';
 const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
-  { id: 'workspace-settings', label: 'Workspace settings', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
+  { id: 'workspace-settings', label: '워크스페이스 설정', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
 function readInitialCollapsed(defaultValue: boolean): boolean {
@@ -93,7 +93,7 @@ export function AppSidebar({
   entries,
   footerItems = DEFAULT_FOOTER_ITEMS,
   systemLabel = 'VOC',
-  systemSubtitle = 'Voice of Customer',
+  systemSubtitle = '고객 피드백',
   className,
   defaultCollapsed = false,
   counts = {},
@@ -146,7 +146,7 @@ export function AppSidebar({
     <aside
       className={cn('flex flex-col border-r border-border-subtle bg-surface-sidebar transition-[width] duration-150', className)}
       style={{ width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }}
-      aria-label="Primary navigation"
+      aria-label="주요 탐색"
       data-testid="app-sidebar"
       data-collapsed={collapsed ? 'true' : 'false'}
     >
@@ -157,7 +157,7 @@ export function AppSidebar({
             <div className="truncate text-[10px] text-text-muted" data-testid="sidebar-system-subtitle">{systemSubtitle}</div>
           </div>
         )}
-        <button type="button" onClick={toggle} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle">
+        <button type="button" onClick={toggle} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary" aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} data-testid="sidebar-collapse-toggle">
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
@@ -199,7 +199,7 @@ export function AppSidebar({
             {scopeControlEnabled && <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />}
           </button>
           {scopeControlEnabled && scopeOpen && (
-            <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System scope">
+            <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System 범위">
               <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover" onClick={() => selectScope(undefined)} data-testid="scope-option-all">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
                 <span className="min-w-0 flex-1">
@@ -215,7 +215,7 @@ export function AppSidebar({
                 <button key={system.id} type="button" className={cn('flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover', !system.granted && 'opacity-55')} onClick={() => selectScope(system.id)} data-testid={`scope-option-${system.id}`}>
                   <span className="flex h-5 w-5 items-center justify-center rounded bg-surface-row-selected text-xs font-semibold">{system.name.slice(0, 1)}</span>
                   <span className="min-w-0 flex-1 truncate">{system.name}</span>
-                  {!system.granted && <Shield className="h-3 w-3 text-text-muted" aria-label="Outside your grants" />}
+                  {!system.granted && <Shield className="h-3 w-3 text-text-muted" aria-label="범위 밖" />}
                 </button>
               ))}
               {/* #282: sits outside the option buttons on purpose — inside one,
@@ -287,20 +287,20 @@ function SavedViewsSection({
 }) {
   const [name, setName] = React.useState('');
   return (
-    <section className="mt-3.5" aria-label="Saved views" data-testid="saved-views-section">
-      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">Saved views</div>
+    <section className="mt-3.5" aria-label="저장된 보기" data-testid="saved-views-section">
+      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
       {views.map((view) => (
         <div key={view.id} className="group flex items-center gap-1">
           <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
             <span className="truncate">{view.name}</span>
           </button>
-          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`Delete saved view ${view.name}`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
+          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
         </div>
       ))}
       {canSave && (
         <form className="mt-1 flex gap-1 px-2" onSubmit={(event) => { event.preventDefault(); const trimmed = name.trim(); if (trimmed) { onSave?.(trimmed); setName(''); } }}>
-          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required aria-label="Saved view name" placeholder="Save current filter" className="min-w-0 flex-1 rounded border border-border-subtle bg-surface-canvas px-2 py-1 text-xs" />
-          <button type="submit" className="rounded px-2 py-1 text-xs text-accent-primary hover:bg-surface-row-hover" data-testid="saved-view-save">Save</button>
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required aria-label="저장된 보기 이름" placeholder="현재 필터 저장" className="min-w-0 flex-1 rounded border border-border-subtle bg-surface-canvas px-2 py-1 text-xs" />
+          <button type="submit" className="rounded px-2 py-1 text-xs text-accent-primary hover:bg-surface-row-hover" data-testid="saved-view-save">저장</button>
         </form>
       )}
     </section>

@@ -125,7 +125,7 @@ export function AppRail({
         className,
       )}
       style={{ width: 'var(--rail-width)' }}
-      aria-label="System selector"
+      aria-label="시스템 선택"
       data-testid="app-rail"
     >
       <div
@@ -172,8 +172,8 @@ export function AppRail({
           <button
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
-            title="Profile"
-            aria-label="Profile"
+            title="프로필"
+            aria-label="프로필"
           >
             <UserRound className="h-4 w-4" />
           </button>

@@ -40,13 +40,13 @@ function displayResponseNumber(value: number): string {
 }
 
 const FILTER_LABELS: Record<ResolutionFilter, string> = {
-  open: 'Open',
+  open: '미해소',
   finding: '해소됨',
   no_follow_up: '후속 없음',
 };
 
 function resolutionLabel(item: OutcomeFollowUpItem): string {
-  if (item.resolution === 'open') return 'Open';
+  if (item.resolution === 'open') return '미해소';
   // Option B shows the populated Finding display ID alone in list rows.
   if (item.resolution === 'finding') return item.finding?.display_id ?? 'Finding';
   return '후속 없음';
@@ -63,7 +63,7 @@ function submittedDate(value: string): string {
 }
 
 function currentStateText(item: OutcomeFollowUpItem): string {
-  if (item.resolution === 'open') return 'Open — Finding 없음, 후속 없음 결정 없음';
+  if (item.resolution === 'open') return '미해소 — Finding 없음, 후속 없음 결정 없음';
   if (item.resolution === 'finding')
     return `해소됨 — ${item.finding?.display_id ? `Finding ${item.finding.display_id}` : 'Finding'}`;
   return '후속 없음';
@@ -303,7 +303,7 @@ function OutcomeFollowUpDetailPanel({
                   </p>
                 ) : excerptsUnavailable ? (
                   <p className="text-sm text-text-muted">
-                    No approved excerpts are available for a response you can access.
+                    접근 가능한 응답에 승인된 발췌가 없습니다.
                   </p>
                 ) : null}
                 {draftOpen && (

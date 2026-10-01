@@ -2,6 +2,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { Button, Input, ListToolbar, type ListToolbarTab, Skeleton, UserAvatar } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
@@ -9,7 +10,7 @@ import type { Survey, SurveyStatus } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
 import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
 const tabs: Array<{ label: string; value: SurveyStatus | 'all' }> = [
-  { label: 'All', value: 'all' },
+  { label: GLOSSARY.all, value: 'all' },
   { label: SURVEY_STATUS_LABELS.open, value: 'open' },
   { label: SURVEY_STATUS_LABELS.draft, value: 'draft' },
   { label: SURVEY_STATUS_LABELS.closed, value: 'closed' },

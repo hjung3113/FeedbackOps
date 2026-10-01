@@ -10,8 +10,8 @@ import { Check, ChevronsUpDown } from 'lucide-react';
  *   options   — array of { value: string; label: string } items
  *   value     — currently selected value (string | null)
  *   onChange  — called with the newly selected value string
- *   placeholder — trigger placeholder text (optional, default "Select…")
- *   searchPlaceholder — search input placeholder (optional, default "Search…")
+ *   placeholder — trigger placeholder text (optional, default "선택…")
+ *   searchPlaceholder — search input placeholder (optional, default "검색…")
  *   className — forwarded to the trigger button
  *
  * a11y:
@@ -44,8 +44,8 @@ export function Combobox({
   options,
   value,
   onChange,
-  placeholder = 'Select…',
-  searchPlaceholder = 'Search…',
+  placeholder = '선택…',
+  searchPlaceholder = '검색…',
   className,
   disabled,
 }: ComboboxProps) {
@@ -188,7 +188,7 @@ export function Combobox({
           // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <ul role="listbox"> as scrollable container; native <select> does not support this layout
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <ul role="listbox"> is canonical ARIA listbox per APG §combobox; keyboard managed via search input onKeyDown
           role="listbox"
-          aria-label="Options"
+          aria-label="옵션"
           className="max-h-60 overflow-y-auto py-1"
         >
           {filtered.length === 0 ? (

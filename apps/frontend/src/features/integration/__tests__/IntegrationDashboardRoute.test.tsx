@@ -236,8 +236,8 @@ describe('integration action dashboard route', () => {
 
     expect(screen.getByTestId('integration-dashboard-gap-count').textContent).toBe('34');
     const surfaces = within(screen.getByTestId('integration-surfaces'));
-    expect(surfaces.getByRole('link', { name: /Coverage/ })).toBeVisible();
-    expect(surfaces.getByRole('link', { name: /Entity links/ })).toBeVisible();
+    expect(surfaces.getByRole('link', { name: /커버리지/ })).toBeVisible();
+    expect(surfaces.getByRole('link', { name: /엔티티 링크/ })).toBeVisible();
     expect(
       surfaces.getByText(
         'VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다.',
@@ -408,11 +408,11 @@ describe('integration action dashboard route', () => {
       requestedUrls.some((url) => url.includes(`/dashboard/summary?managed_system_id=${MS_A}`)),
     ).toBe(true);
     const surfaces = within(screen.getByTestId('integration-surfaces'));
-    expect(surfaces.getByRole('link', { name: /Coverage/ })).toHaveAttribute(
+    expect(surfaces.getByRole('link', { name: /커버리지/ })).toHaveAttribute(
       'href',
       `/integration/coverage?managedSystem=${MS_A}`,
     );
-    expect(surfaces.getByRole('link', { name: /Entity links/ })).toHaveAttribute(
+    expect(surfaces.getByRole('link', { name: /엔티티 링크/ })).toHaveAttribute(
       'href',
       `/integration/links?managedSystem=${MS_A}`,
     );
@@ -441,7 +441,7 @@ describe('integration action dashboard route', () => {
       'data-variant',
       'error',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => {
       expect(screen.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     });
@@ -459,7 +459,7 @@ describe('integration action dashboard route', () => {
     });
 
     const blocked = await screen.findByTestId('integration-dashboard-blocked');
-    const blockedPanel = within(blocked).getByText('Integration summary').closest('[data-state]');
+    const blockedPanel = within(blocked).getByText('Integration 요약').closest('[data-state]');
     expect(blockedPanel).not.toBeNull();
     expect(blockedPanel).toHaveAttribute('data-state', 'denied');
     expect(screen.queryByTestId('integration-queue-card-unassigned-voc')).toBeNull();
@@ -470,7 +470,7 @@ describe('integration action dashboard route', () => {
     const { router } = await renderDashboard('/integration');
     expect(router.state.location.pathname).toBe('/integration');
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Integration Action Dashboard' }),
+      screen.getByRole('heading', { level: 1, name: 'Integration 액션 대시보드' }),
     ).toBeVisible();
   });
 

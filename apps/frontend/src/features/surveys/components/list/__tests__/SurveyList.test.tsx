@@ -91,7 +91,7 @@ describe('SurveyList empty state', () => {
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /All/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /전체/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('textbox', { name: 'Survey 검색' })).toHaveValue('');
   });
 
@@ -153,7 +153,7 @@ describe('SurveyList tabs', () => {
     );
 
     expect(screen.getByRole('tablist', { name: 'Survey status' })).toBeInTheDocument();
-    const allTab = screen.getByRole('tab', { name: 'All 2' });
+    const allTab = screen.getByRole('tab', { name: '전체 2' });
     const panel = screen.getByRole('tabpanel');
     expect(allTab).toHaveAttribute('aria-selected', 'true');
     expect(allTab).toHaveAttribute('aria-controls', panel.id);

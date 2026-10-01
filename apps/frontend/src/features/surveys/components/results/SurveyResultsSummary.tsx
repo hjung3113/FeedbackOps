@@ -20,7 +20,7 @@ export interface SurveyResultsSummaryProps {
 }
 
 function questionPrompt(survey: Survey, questionId: string): string {
-  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? 'Question';
+  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? '질문';
 }
 
 function QuestionResult({
@@ -57,7 +57,7 @@ function QuestionResult({
         {questionPrompt(survey, result.question_id)}
       </h2>
       {result.kind === 'choice' && (
-        <ul className="mt-4 space-y-2" aria-label="Response distribution">
+        <ul className="mt-4 space-y-2" aria-label="응답 분포">
           {result.option_buckets.map((bucket) => (
             <li className="flex items-center justify-between gap-4 text-sm" key={bucket.key}>
               <span className="text-text-secondary">{bucket.label}</span>
@@ -67,7 +67,7 @@ function QuestionResult({
         </ul>
       )}
       {result.kind === 'rating' && (
-        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="Rating distribution">
+        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="평점 분포">
           {(['low', 'mid', 'high'] as const).map((band) => (
             <div className="rounded bg-surface-card p-3" key={band}>
               <dt className="text-xs text-text-muted">{RATING_BAND_LABELS[band]}</dt>
@@ -81,7 +81,7 @@ function QuestionResult({
       {result.kind === 'text' && (
         <div className="mt-4 space-y-2">
           {result.excerpts.length === 0 ? (
-            <p className="text-sm text-text-muted">No approved excerpts are available.</p>
+            <p className="text-sm text-text-muted">승인된 발췌가 없습니다.</p>
           ) : (
             result.excerpts.map((excerpt) => (
               <blockquote
@@ -240,7 +240,7 @@ function NextActions({
                 </Button>
                 {unavailable && (
                   <p className="text-sm text-text-muted">
-                    No approved excerpts are available for a response you can access.
+                    접근 가능한 응답에 승인된 발췌가 없습니다.
                   </p>
                 )}
                 {draftOpen && <CreateFindingDraftPanel groups={groups} surveyId={surveyId} />}
@@ -318,13 +318,13 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
             Question summaries and response distributions
           </p>
           {results.identity_protected && (
-            <p className="mt-3 text-sm text-text-muted">Identity protected responses</p>
+            <p className="mt-3 text-sm text-text-muted">신원 보호 응답</p>
           )}
           {hasOutcomeFollowUp &&
             (followUpRead === undefined ? (
               // Legacy direct-render branch keeps the develop-era Summary test green.
               <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
-                Outcome follow-up is available
+                후속 조치 검토 사용 가능
               </p>
             ) : (
               <div

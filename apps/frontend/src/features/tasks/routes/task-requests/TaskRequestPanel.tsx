@@ -4,6 +4,7 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 import type { TaskDto, TaskPriority, TaskRequestDto } from '@fops/shared';
@@ -156,7 +157,7 @@ export function TaskRequestPanel({
               <>
                 <TaskRequestBadge status={item.status} />
                 <span className="text-xs text-text-muted">
-                  · Requested by{' '}
+                  · {GLOSSARY.requestedBy}{' '}
                   <strong className="text-text-secondary">
                     {requester?.display_name ?? '알 수 없는 사용자'}
                   </strong>

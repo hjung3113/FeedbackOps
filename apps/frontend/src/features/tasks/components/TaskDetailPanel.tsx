@@ -289,7 +289,7 @@ export function TaskDetailPanel({
           <PanelSectionTitle>출처</PanelSectionTitle>
           {sourceFinding ? (
             <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
-              <span className="text-xs text-text-muted">From finding</span>
+              <span className="text-xs text-text-muted">Finding에서</span>
               <div className="text-sm font-medium text-text-primary">
                 {sourceFinding.title}
                 <span className="ml-2 font-mono text-xs text-text-muted">
@@ -307,7 +307,7 @@ export function TaskDetailPanel({
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-sm text-text-muted">Standalone task</div>
+            <div className="mt-2 text-sm text-text-muted">단독 Task</div>
           )}
         </div>
 

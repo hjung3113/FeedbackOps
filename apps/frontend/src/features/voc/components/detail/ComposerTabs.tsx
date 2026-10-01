@@ -48,19 +48,19 @@ interface TabConfig {
 const TAB_CONFIGS: TabConfig[] = [
   {
     surface: 'public',
-    label: 'Public update',
+    label: '공개 업데이트',
     activeBorderClass: 'border-b-accent-primary',
     visibilityKey: 'showPublic',
   },
   {
     surface: 'reply',
-    label: 'Reporter reply',
+    label: '접수자 답변',
     activeBorderClass: 'border-b-accent-info',
     visibilityKey: 'showReply',
   },
   {
     surface: 'internal',
-    label: 'Internal note',
+    label: '내부 메모',
     activeBorderClass: 'border-b-status-reporter-assigned',
     visibilityKey: 'showInternal',
   },
@@ -80,7 +80,7 @@ export function ComposerTabs({
     <div
       className="flex border-b border-border-subtle bg-surface-card"
       role="tablist"
-      aria-label="Composer tabs"
+      aria-label="작성 탭"
     >
       {visibleTabs.map((tab) => {
         const isActive = activeTab === tab.surface;

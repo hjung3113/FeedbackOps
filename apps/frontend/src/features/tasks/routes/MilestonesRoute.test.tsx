@@ -144,27 +144,27 @@ describe('MilestonesRoute list (#514 B2c)', () => {
     }));
   });
 
-  it('renders All/In progress/Planning/Released tabs, no Blocked, counts from the unfiltered list', async () => {
+  it('renders All/In progress/계획 중/Released tabs, no Blocked, counts from the unfiltered list', async () => {
     await renderMilestones();
 
-    expect(screen.getByRole('tab', { name: /^All/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^In progress/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Planning/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Released/ })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Blocked/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^전체/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^진행 중/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^계획 중/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^릴리스됨/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /차단/ })).not.toBeInTheDocument();
 
     // Counts come from the real unfiltered response, never hard-coded.
-    expect(screen.getByRole('tab', { name: /^All/ })).toHaveTextContent('3');
-    expect(screen.getByRole('tab', { name: /^In progress/ })).toHaveTextContent('1');
-    expect(screen.getByRole('tab', { name: /^Planning/ })).toHaveTextContent('1');
-    expect(screen.getByRole('tab', { name: /^Released/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /^전체/ })).toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /^진행 중/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /^계획 중/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /^릴리스됨/ })).toHaveTextContent('1');
   });
 
   it('choosing In progress requests status=in_progress', async () => {
     await renderMilestones();
     vi.mocked(listMilestones).mockClear();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^In progress/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^진행 중/ }));
 
     await waitFor(() => {
       expect(vi.mocked(listMilestones)).toHaveBeenCalledWith(
@@ -193,7 +193,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
   it('Filter is present but opens no menu', async () => {
     await renderMilestones();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Filter' }));
+    await userEvent.click(screen.getByRole('button', { name: '필터' }));
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -212,7 +212,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     const row = ssoRow();
     expect(within(row).getByText('SSO Stabilization')).toBeInTheDocument();
-    expect(within(row).getByText('In progress')).toBeInTheDocument();
+    expect(within(row).getByText('진행 중')).toBeInTheDocument();
     expect(within(row).getByText(/SSO 세션 만료/)).toBeInTheDocument();
     expect(within(row).getByText('Power BI')).toBeInTheDocument();
     expect(within(row).getByText('Product Usage')).toBeInTheDocument();
@@ -224,9 +224,9 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     const summary = screen.getByTestId('milestones-summary');
     expect(within(summary).getByText('Milestones')).toBeInTheDocument();
-    expect(within(summary).getByText('Tasks in flight')).toBeInTheDocument();
-    expect(within(summary).getByText('Evidence linked')).toBeInTheDocument();
-    expect(within(summary).getByText('Released')).toBeInTheDocument();
+    expect(within(summary).getByText('진행 중 Task')).toBeInTheDocument();
+    expect(within(summary).getByText('Evidence 연결')).toBeInTheDocument();
+    expect(within(summary).getByText('릴리스됨')).toBeInTheDocument();
     expect(
       within(summary).queryByText('Schedule risk · mini-timeline 우측 표시'),
     ).not.toBeInTheDocument();
@@ -307,7 +307,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
     const titleLine = screen.getByText('MLS-1021').parentElement as HTMLElement;
     const body = titleLine.parentElement as HTMLElement;
     expect(titleLine.textContent).toContain('SSO Stabilization');
-    expect(titleLine.textContent).toContain('In progress');
+    expect(titleLine.textContent).toContain('진행 중');
     expect(titleLine.textContent).toContain('Power BI');
     expect(titleLine.textContent).toContain('Product Usage');
     expect(body.childElementCount).toBe(3);
@@ -448,8 +448,8 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     // Evidence linked is pinned to exactly 0 and is not counts-derived.
     expect(screen.getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
     // Tab badges disappear instead of showing retained distributions.
-    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('3');
-    expect(screen.getByRole('tab', { name: /^In progress/ })).not.toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /^전체/ })).not.toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /^진행 중/ })).not.toHaveTextContent('1');
   });
 
   it('keeps genuine zeros when a successful counts read returns an empty list', async () => {
@@ -460,7 +460,7 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('0');
     expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('0');
     // A genuine zero is rendered as a bare count; unavailable counts stay absent.
-    expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
   });
 
   // R6 correction — a settled error on the LIST read hides the totals and
@@ -499,7 +499,7 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—');
     expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—');
     expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('—');
-    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /^전체/ })).not.toHaveTextContent('3');
     // The selected record's independent detail read is unchanged.
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
@@ -581,7 +581,7 @@ describe('MilestonesRoute list states (#609)', () => {
           expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—');
         });
       }
-      await user.click(screen.getByRole('tab', { name: /^Released/ }));
+      await user.click(screen.getByRole('tab', { name: /^릴리스됨/ }));
       expect(await screen.findByTestId('list-state-message')).toHaveAttribute(
         'data-variant',
         state === 'counts-failed' ? 'filtered' : state,
@@ -589,7 +589,7 @@ describe('MilestonesRoute list states (#609)', () => {
 
       if (state === 'filtered' || state === 'counts-failed') {
         await user.type(screen.getByRole('textbox', { name: 'Milestone 검색' }), 'SSO');
-        expect(screen.getByText('선택한 조건: Released · 검색: SSO')).toBeInTheDocument();
+        expect(screen.getByText('선택한 조건: 릴리스됨 · 검색: SSO')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: '필터 초기화' }));
         await screen.findByText('MLS-1021');
         expect(screen.getByRole('textbox', { name: 'Milestone 검색' })).toHaveValue('');

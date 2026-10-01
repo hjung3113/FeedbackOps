@@ -114,7 +114,7 @@ export function TaskListRoute({
       toolbar={{
         title: (
           <span className="flex items-center gap-2">
-            {view === 'my' ? 'My Tasks' : 'Tasks'}
+            {view === 'my' ? '내 Task' : 'Tasks'}
             <OutlineBadge>{items.length}건</OutlineBadge>
           </span>
         ),

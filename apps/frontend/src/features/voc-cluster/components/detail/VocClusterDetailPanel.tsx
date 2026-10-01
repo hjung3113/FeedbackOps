@@ -250,7 +250,7 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <section data-anchor="why" className="flex flex-col gap-1">
-            <PanelSectionTitle>Why grouped</PanelSectionTitle>
+            <PanelSectionTitle>그룹화 사유</PanelSectionTitle>
             {data.rationale ? (
               <p
                 className="rounded-md border border-border-subtle bg-surface-card p-3 text-sm text-text-primary whitespace-pre-wrap"
@@ -439,7 +439,7 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="Confirmed by" className="px-0">
+            <FieldRow label="확인자" className="px-0">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-confirmed-by">
                 <span>
                   {data.confirmed_by ? (confirmerName ?? '알 수 없는 사용자') : '대기 중'}
@@ -451,7 +451,7 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="Confirmed at" className="px-0">
+            <FieldRow label="확인일" className="px-0">
               <span data-testid="cluster-detail-confirmed-at">
                 {data.confirmed_at ? formatShortDate(data.confirmed_at) : '대기 중'}
               </span>

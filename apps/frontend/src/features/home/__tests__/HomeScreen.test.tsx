@@ -157,7 +157,7 @@ describe('HomeScreen route content', () => {
       expect(screen.getByTestId('home-zero-queue-unassigned-voc')).toBeInTheDocument(),
     );
     expect(screen.queryByTestId('home-queue-unassigned-voc')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Unassigned VOC 0' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '미배정 VOC 0' })).toHaveAttribute(
       'href',
       '/vocs?view=triage',
     );
@@ -200,7 +200,7 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-zero-queue-unassigned-voc');
-    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
     expect(screen.getByTestId('home-zero-queues')).toHaveTextContent('처리할 항목 없음');
     expect(screen.getAllByRole('link', { name: / 0$/ })).toHaveLength(3);
@@ -217,9 +217,9 @@ describe('HomeScreen route content', () => {
         fetchMock.mock.calls.some(([input]) => String(input).startsWith('/dashboard/summary')),
       ).toBe(true),
     );
-    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -233,9 +233,9 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-kpi-open_voc');
-    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Coverage signals' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Coverage 신호' })).toBeInTheDocument();
   });
 
   it('omits the Coverage section when coverage is empty', async () => {
@@ -243,7 +243,7 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-kpi-open_voc');
-    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -254,9 +254,9 @@ describe('HomeScreen route content', () => {
     await screen.findByText(
       '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
     );
-    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: '복구 · 후속 조치 큐' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage 신호' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     await screen.findByTestId('home-coverage-row-voc-task');
-    expect(screen.getByRole('link', { name: /View coverage/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Coverage 보기/ })).toHaveAttribute(
       'href',
       '/integration/coverage',
     );
@@ -332,7 +332,7 @@ describe('HomeScreen route content', () => {
     renderHome(`/home?managedSystem=${systemId}`);
 
     await screen.findByTestId('home-coverage-row-voc-task');
-    expect(screen.getByRole('link', { name: /View coverage/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Coverage 보기/ })).toHaveAttribute(
       'href',
       '/integration/coverage',
     );
@@ -357,7 +357,7 @@ describe('HomeScreen route content', () => {
       <AppSidebar entries={homeSidebarEntries(dashboardSummarySchema.parse(response), true)} />,
     );
     expect(screen.getByTestId('sidebar-count-queue-unassigned-voc')).toHaveTextContent('0');
-    expect(screen.getByText('Configured follow-up')).toBeInTheDocument();
+    expect(screen.getByText('구성된 후속 조치')).toBeInTheDocument();
   });
 
   it('omits permission-hidden queue ids from the sidebar', () => {
@@ -433,7 +433,7 @@ describe('HomeScreen route content', () => {
       within(card)
         .getAllByRole('link')
         .map((link) => link.textContent?.trim()),
-    ).toEqual(['Bulk assign', 'Review VOCs']);
+    ).toEqual(['일괄 배정', 'VOC 검토']);
   });
 
   it('refetches the strict summary when the scope selector changes', async () => {
@@ -530,7 +530,7 @@ describe('HomeScreen route content', () => {
   it('renders the empty state without the request list after the query resolves', async () => {
     installFetch();
     renderHome();
-    await screen.findByText('No open requests.');
+    await screen.findByText('열린 요청이 없습니다.');
     expect(screen.queryByTestId('home-open-requests-list')).not.toBeInTheDocument();
   });
 
@@ -545,7 +545,7 @@ describe('HomeScreen route content', () => {
 
     const panel = await screen.findByTestId('home-my-work');
     expect(panel).toBeInTheDocument();
-    expect(screen.getByText('Assigned to you')).toBeInTheDocument();
+    expect(screen.getByText('내게 배정됨')).toBeInTheDocument();
     expect(screen.queryByText('Open My Work')).not.toBeInTheDocument();
     expect(screen.queryByText('My work')).not.toBeInTheDocument();
 
@@ -602,8 +602,8 @@ describe('HomeScreen route content', () => {
     renderHome('/home?tab=inbox');
 
     await screen.findByTestId('home-inbox-list');
-    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('3'));
+    expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'));
   });
 
   it('caps the Inbox tab badge and hides it after its count refetch fails', async () => {
@@ -612,7 +612,7 @@ describe('HomeScreen route content', () => {
       failUnreadCountAfterFirst: true,
     });
     const { queryClient } = renderHome();
-    const inboxTab = await screen.findByRole('tab', { name: /^Inbox/ });
+    const inboxTab = await screen.findByRole('tab', { name: /^수신함/ });
 
     await waitFor(() => expect(inboxTab).toHaveTextContent('99+'));
     expect(inboxTab).not.toHaveTextContent('120');
@@ -633,7 +633,7 @@ describe('HomeScreen route content', () => {
     installFetch(response, { unreadCount: 4 });
     const { router } = renderHome(`/home?managedSystem=${managedSystemId}`);
 
-    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^Inbox/ }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^수신함/ }));
     await screen.findByTestId('home-inbox-list');
     await waitFor(() =>
       expect(router.state.location.search).toEqual({
@@ -641,9 +641,9 @@ describe('HomeScreen route content', () => {
         tab: 'inbox',
       }),
     );
-    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('4');
+    expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('4');
 
-    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^Dashboard/ }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^대시보드/ }));
     await screen.findByTestId('home-kpis');
     await waitFor(() =>
       expect(router.state.location.search).toEqual({ managedSystem: managedSystemId }),

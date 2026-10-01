@@ -795,7 +795,7 @@ describe('Survey screens', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
-    await screen.findByRole('dialog', { name: 'Respondent preview' });
+    await screen.findByRole('dialog', { name: '응답자 미리보기' });
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

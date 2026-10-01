@@ -170,11 +170,11 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
               <DialogHeader>
                 <DialogTitle>권한 요청 완료</DialogTitle>
                 <DialogDescription>
-                  Your request is ready for administrator review.
+                  요청이 접수되어 관리자 검토를 기다립니다.
                 </DialogDescription>
               </DialogHeader>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-                <dt className="text-text-muted">Request ID</dt>
+                <dt className="text-text-muted">요청 ID</dt>
                 <dd className="font-mono text-text-primary" data-testid="permission-request-id">
                   {submitted.id}
                 </dd>
@@ -226,7 +226,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
               <DialogHeader>
                 <DialogTitle>권한 요청</DialogTitle>
                 <DialogDescription className="text-pretty">
-                  Confirm the permission and explain why you need the least access required.
+                  권한을 확인하고, 필요한 최소 범위의 사유를 입력하세요.
                 </DialogDescription>
               </DialogHeader>
               <form

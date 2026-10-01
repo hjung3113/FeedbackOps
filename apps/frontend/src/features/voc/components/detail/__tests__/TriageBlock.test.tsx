@@ -9,7 +9,7 @@ import { DETAIL_ENVELOPE } from './_fixtures';
 describe('<TriageBlock>', () => {
   it('renders section title', () => {
     render(<TriageBlock voc={DETAIL_ENVELOPE} canTriage={false} onOpenTriage={vi.fn()} />);
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
   });
 
   it('shows SeverityBadge when severity is non-null', () => {
@@ -111,14 +111,14 @@ describe('<TriageBlock>', () => {
   it('omits the triage-console button when unauthorized', () => {
     render(<TriageBlock voc={DETAIL_ENVELOPE} canTriage={false} onOpenTriage={vi.fn()} />);
 
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
     expect(screen.queryByTestId('triage-open-console')).toBeNull();
   });
 
   it('renders all four read-only triage fields regardless of capability', () => {
     render(<TriageBlock voc={DETAIL_ENVELOPE} canTriage={false} onOpenTriage={vi.fn()} />);
 
-    for (const label of ['심각도', '담당자', '분석 영역', '트리아지 상태']) {
+    for (const label of ['심각도', '담당자', 'Analytics Area', 'Triage 상태']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

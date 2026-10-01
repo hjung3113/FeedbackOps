@@ -231,8 +231,8 @@ describe('SurveyResultsSummary', () => {
       expect(screen.queryByText(rawLabel, { exact: true })).not.toBeInTheDocument();
     }
     expect(screen.getByText('내보내기가 너무 느립니다.')).toBeInTheDocument();
-    expect(screen.getByText('Identity protected responses')).toBeInTheDocument();
-    expect(screen.getByText('Outcome follow-up is available')).toBeInTheDocument();
+    expect(screen.getByText('신원 보호 응답')).toBeInTheDocument();
+    expect(screen.getByText('후속 조치 검토 사용 가능')).toBeInTheDocument();
   });
 
   it('renders approved excerpt text without rendering its personal response identifier', async () => {
@@ -420,7 +420,10 @@ describe('SurveyResultsSummary', () => {
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
 
     await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
-    expect(screen.getByText('Create or link Finding')).toBeInTheDocument();
+    // Panel heading and trigger share the glossary label; scope to the draft panel.
+    expect(
+      within(await screen.findByTestId('survey-create-finding-draft')).getByText('Finding 생성'),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Finding 생성' })).toHaveLength(1);
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
@@ -833,7 +836,7 @@ describe('SurveyResultsSummary', () => {
     const button = screen.getByRole('button', { name: 'Finding 생성' });
     expect(button).toBeDisabled();
     expect(
-      screen.getByText('No approved excerpts are available for a response you can access.'),
+      screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.'),
     ).toBeInTheDocument();
     await user.click(button);
     expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();

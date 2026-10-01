@@ -48,7 +48,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   // ADR-0056 makes Admin discovery capability-based; route PermissionGates remain authoritative.
   const visibleSidebarEntries = canAccessWorkspaceAdmin
     ? sidebarEntries
-    : sidebarEntries.filter((entry) => entry.section !== 'ADMIN');
+    : sidebarEntries.filter((entry) => entry.section !== '관리자');
   const actorId = typeof actor?.id === 'string' ? actor.id : undefined;
   const roleLevel = actor?.role_level;
   const isAdmin = typeof roleLevel === 'string' && roleLevel.toLowerCase() === 'admin';
@@ -102,13 +102,13 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
         grantsQuery.data.scope.managed_system_ids.includes(system.id)),
   }));
   const systemMeta: Record<RailDomain, { label: string; subtitle: string }> = {
-    home: { label: 'Home', subtitle: '오늘의 운영 갭' },
-    voc: { label: 'VOC', subtitle: 'Voice of Customer' },
-    findings: { label: 'Findings', subtitle: 'Evidence → Execution' },
-    tasks: { label: 'Tasks', subtitle: 'Execution' },
-    integration: { label: 'Integration', subtitle: 'Coverage & Recovery' },
-    surveys: { label: 'Surveys', subtitle: 'Discovery · Validation · Outcome' },
-    admin: { label: 'Admin', subtitle: 'Workspace' },
+    home: { label: '홈', subtitle: '오늘의 운영 갭' },
+    voc: { label: 'VOC', subtitle: '고객 피드백' },
+    findings: { label: 'Findings', subtitle: 'Evidence → 실행' },
+    tasks: { label: 'Tasks', subtitle: '실행' },
+    integration: { label: 'Integration', subtitle: '커버리지 · 복구' },
+    surveys: { label: 'Surveys', subtitle: '탐색 · 검증 · 결과' },
+    admin: { label: '관리자', subtitle: '워크스페이스' },
   };
   const changeManagedSystem = React.useCallback((managedSystemId: string | undefined) => {
     setSelectedManagedSystemId(managedSystemId);
@@ -185,7 +185,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
             'border-l border-border-subtle bg-surface-detail overflow-y-auto transition-[width] duration-150',
             slotOpen ? '' : 'w-0',
           )}
-          aria-label="Detail panel"
+          aria-label="상세 패널"
           data-testid="app-detail-slot"
           data-open={slotOpen ? 'true' : 'false'}
           style={

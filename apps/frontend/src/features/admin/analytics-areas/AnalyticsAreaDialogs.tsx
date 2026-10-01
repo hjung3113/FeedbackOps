@@ -78,7 +78,7 @@ function RegisterForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>New area</DialogTitle>
+        <DialogTitle>Analytics Area 생성</DialogTitle>
         <DialogDescription>
           Managed System 하위에 새 Analytics Area 를 등록합니다.
         </DialogDescription>
@@ -240,7 +240,7 @@ function EditForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Edit {target.name}</DialogTitle>
+        <DialogTitle>{target.name} 편집</DialogTitle>
         <DialogDescription>
           <span className="font-mono text-xs">analytics-area/{target.slug}</span>
         </DialogDescription>

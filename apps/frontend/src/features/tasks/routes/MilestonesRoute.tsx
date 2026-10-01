@@ -4,6 +4,7 @@ import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listMilestones } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { MilestoneStatusFilter } from '@fops/shared';
 import {
@@ -44,10 +45,10 @@ const ANALYTICS_AREAS_PAGE_LIMIT = 500;
 // No Blocked tab: this slice has no backing blocked filter decision; Blocked
 // still appears as a row badge (MilestoneStatusBadge).
 const STATUS_TABS: Array<{ value: MilestoneTab; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'released', label: 'Released' },
+  { value: 'all', label: GLOSSARY.all },
+  { value: 'in_progress', label: GLOSSARY.milestoneStatusInProgress },
+  { value: 'planning', label: GLOSSARY.milestoneStatusPlanning },
+  { value: 'released', label: GLOSSARY.milestoneStatusReleased },
 ];
 
 export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRouteProps) {
@@ -357,7 +358,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                   {/* Filter intentionally opens no menu in this slice. */}
                   <Button variant="subtle" size="sm" className="shrink-0 gap-1.5 px-2">
                     <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                    Filter
+                    필터
                   </Button>
                   {/* B2e — opens the property block in a create state in the
                     detail slot; no separate create screen. */}
@@ -378,7 +379,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                     }}
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    New milestone
+                    Milestone 생성
                   </Button>
                 </div>
               }
@@ -399,20 +400,20 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               />
               <SummaryDivider />
               <SummaryCell
-                label="Tasks in flight"
+                label={GLOSSARY.tasksInFlight}
                 value={countsUnavailable ? null : summary.inFlight}
                 valueClassName="text-accent-primary"
                 testId="milestone-summary-in-flight"
               />
               <SummaryDivider />
               <SummaryCell
-                label="Evidence linked"
+                label="Evidence 연결"
                 value={0}
                 testId="milestone-summary-evidence-linked"
               />
               <SummaryDivider />
               <SummaryCell
-                label="Released"
+                label={GLOSSARY.milestoneStatusReleased}
                 value={countsUnavailable ? null : summary.released}
                 // Prototype colors the Released KPI with the emerald token
                 // (screen-milestones.jsx); `text-success` is not a generated
@@ -426,11 +427,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {listQuery.isLoading ? (
-                <div className="p-4 text-sm text-text-muted">Loading Milestones…</div>
+                <div className="p-4 text-sm text-text-muted">Milestones 불러오는 중…</div>
               ) : isPermissionDenied(listQuery.error) ? (
                 <PermissionBlockedPanel
                   state="denied"
-                  category="Milestone list"
+                  category="Milestone 목록"
                   reason={PERMISSION_BLOCKED_REASONS.milestoneList}
                   className="m-4"
                 />

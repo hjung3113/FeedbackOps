@@ -1,6 +1,7 @@
 import { resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,11 +40,11 @@ function toSearchableRelationType(value: string | undefined): SearchableRelation
 }
 
 const STATUS_TABS: ListToolbarTab[] = [
-  { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'stale', label: 'Stale', urgent: true },
-  { value: 'detached', label: 'Detached' },
-  { value: 'revoked', label: 'Revoked' },
+  { value: 'all', label: GLOSSARY.all },
+  { value: 'active', label: '활성' },
+  { value: 'stale', label: '오래됨', urgent: true },
+  { value: 'detached', label: '분리됨' },
+  { value: 'revoked', label: '취소됨' },
 ];
 
 const STATUS_TAB_VALUES: StatusFilter[] = ['active', 'stale', 'detached', 'revoked'];
@@ -301,7 +302,7 @@ export function LinksRoute() {
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Refresh
+              새로고침
             </Button>
           </div>
         }

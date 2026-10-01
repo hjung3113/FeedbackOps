@@ -95,7 +95,7 @@ export const ObjectRow = React.forwardRef<HTMLDivElement, ObjectRowProps>(
           )}
           {selectable && (
             <Checkbox
-              aria-label={id ? `Select ${id}` : 'Select row'}
+              aria-label={id ? `${id} 선택` : '행 선택'}
               checked={checked}
               onClick={(event) => event.stopPropagation()}
               onCheckedChange={(nextChecked) => onCheckedChange?.(nextChecked === true)}

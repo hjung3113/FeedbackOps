@@ -29,13 +29,13 @@ describe('WorkspaceSettingsScreen read retry (#609)', () => {
     );
 
     expect(await screen.findByTestId('workspace-settings-error')).toHaveTextContent(
-      'Workspace settings를 불러오지 못했습니다.',
+      '워크스페이스 설정을 불러오지 못했습니다.',
     );
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
     expect(await screen.findByTestId('workspace-settings-screen')).toBeInTheDocument();
     expect(
-      screen.getByText('Self-approval of Permission Request', { exact: true }),
+      screen.getByText('Permission Request 직접 승인', { exact: true }),
     ).toBeInTheDocument();
   });
 });

@@ -222,11 +222,11 @@ describe('AppFrame managed-system scope', () => {
         requestedUrls.filter((u) => u === '/me/permissions/check?capability=workspace.admin'),
       ).toHaveLength(1);
       fireEvent.click(screen.getByTestId('scope-selector'));
-      expect(await screen.findAllByLabelText('Outside your grants')).toHaveLength(2);
+      expect(await screen.findAllByLabelText('범위 밖')).toHaveLength(2);
       expect(
         screen
           .getByTestId(`scope-option-${MS_TWO}`)
-          .querySelector('[aria-label="Outside your grants"]'),
+          .querySelector('[aria-label="범위 밖"]'),
       ).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
@@ -277,7 +277,7 @@ describe('AppFrame managed-system scope', () => {
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByTestId(/^scope-option-[0-9]/)).toHaveLength(3);
       await waitFor(() =>
-        expect(screen.queryByLabelText('Outside your grants')).not.toBeInTheDocument(),
+        expect(screen.queryByLabelText('범위 밖')).not.toBeInTheDocument(),
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -357,14 +357,14 @@ describe('AppFrame capability navigation', () => {
 
         if (actor.canUseWorkspaceAdmin) {
           expect(screen.getByRole('link', { name: 'Admin' })).toBeInTheDocument();
-          expect(screen.getByTestId('sidebar-section-admin')).toBeInTheDocument();
+          expect(screen.getByTestId('sidebar-section-관리자')).toBeInTheDocument();
           for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
             expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
           }
           expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
         } else {
           expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
-          expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
+          expect(screen.queryByTestId('sidebar-section-관리자')).not.toBeInTheDocument();
           for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
             expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();
           }

@@ -96,9 +96,9 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(document.getElementById(unassignedTab.getAttribute('aria-controls') ?? '')).toBe(panel);
     expect(panel).toHaveAttribute('aria-labelledby', unassignedTab.id);
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /높은 심각도/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /높음/ }));
 
-    const highTab = screen.getByRole('tab', { name: /높은 심각도/ });
+    const highTab = screen.getByRole('tab', { name: /높음/ });
     panel = screen.getByRole('tabpanel');
     expect(highTab).toHaveAttribute('aria-selected', 'true');
     expect(highTab).toHaveAttribute('aria-controls', panel.id);
@@ -123,7 +123,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     );
 
     expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /높은 심각도 3/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높음 3/ })).toBeInTheDocument();
   });
 
   it('uses the shared untriaged label for the triage tab', () => {
@@ -194,7 +194,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     // It renders as text with data-testid="triage-kicker-console".
     const consoleLabel = screen.getByTestId('triage-kicker-console');
     expect(consoleLabel).toBeInTheDocument();
-    expect(consoleLabel.textContent).toBe('Console');
+    expect(consoleLabel.textContent).toBe('콘솔');
   });
 
   it('renders "Triage" kicker name in the toolbar', () => {

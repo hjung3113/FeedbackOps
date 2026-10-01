@@ -137,7 +137,7 @@ export function HomeScreen({
           </TabsList>
           <TabsContent value="dashboard" className="mt-0">
             {summary.isError ? (
-              <p className="mb-5 text-sm text-accent-danger">Home summary unavailable.</p>
+              <p className="mb-5 text-sm text-accent-danger">홈 요약을 불러올 수 없습니다.</p>
             ) : (
               <HomeSummary summary={summary.data} />
             )}
@@ -388,7 +388,7 @@ function MyWorkPanel({
           </a>
         ))}
         {rows.length === 0 && (
-          <p className="px-4 py-5 text-sm text-text-muted">No work is currently assigned to you.</p>
+          <p className="px-4 py-5 text-sm text-text-muted">현재 내게 배정된 작업이 없습니다.</p>
         )}
       </div>
     </section>

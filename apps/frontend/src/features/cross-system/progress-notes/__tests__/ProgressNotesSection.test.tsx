@@ -60,13 +60,13 @@ describe('<ProgressNotesSection>', () => {
     expect(screen.queryByTestId('progress-notes-composer')).not.toBeInTheDocument();
   });
 
-  it('shows the composer when canCompose is true (task, English copy)', async () => {
+  it('shows the composer when canCompose is true (task, Korean copy)', async () => {
     vi.mocked(listTaskComments).mockResolvedValue(emptyPage());
     render(<ProgressNotesSection resource={{ kind: 'task', id: 't1' }} canCompose={true} />, {
       wrapper: makeWrapper(),
     });
 
-    expect(await screen.findByText('No progress notes yet.')).toBeInTheDocument();
+    expect(await screen.findByText('아직 진행 메모가 없습니다.')).toBeInTheDocument();
     expect(screen.getByTestId('progress-notes-composer')).toBeInTheDocument();
   });
 
@@ -112,7 +112,7 @@ describe('<ProgressNotesSection>', () => {
       wrapper: makeWrapper(),
     });
 
-    expect(await screen.findByText('Progress notes')).toBeInTheDocument();
+    expect(await screen.findByText('진행 메모')).toBeInTheDocument();
     expect(screen.queryByTestId('progress-notes-composer')).not.toBeInTheDocument();
   });
 });

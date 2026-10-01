@@ -71,7 +71,7 @@ export function SurveyDetail({
           )}
         </div>
         <section className="mt-6 px-5">
-          <h2 className="mb-2 text-sm font-medium">Builder</h2>
+          <h2 className="mb-2 text-sm font-medium">설문 빌더</h2>
           {canManage && survey.status === 'draft' ? (
             <Link
               to="/surveys/$surveyId"
@@ -91,7 +91,7 @@ export function SurveyDetail({
         </section>
         <section className="mt-6 px-5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-medium">Result summary</h2>
+            <h2 className="text-sm font-medium">결과 요약</h2>
             {(survey.status === 'open' || survey.status === 'closed') && (
               <Button asChild variant="subtle" size="sm">
                 <Link to="/surveys/$surveyId/results" params={{ surveyId: survey.id }}>
@@ -121,11 +121,11 @@ export function SurveyDetail({
         </section>
         <section className="mt-6 space-y-3 px-5 pb-5 text-sm">
           <div>
-            <h2 className="font-medium">Guardrail</h2>
+            <h2 className="font-medium">권한 경계</h2>
             <p className="text-text-muted">Survey Response는 VOC를 생성하지 않습니다.</p>
           </div>
           <div>
-            <h2 className="font-medium">Privacy</h2>
+            <h2 className="font-medium">개인정보</h2>
             <p className="text-text-muted">
               {survey.responses_identity_protected
                 ? '응답은 익명으로 처리됩니다.'

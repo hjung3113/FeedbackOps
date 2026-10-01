@@ -1,6 +1,6 @@
 // ReporterReplyToolbar.test.tsx
 // Tests:
-//   1. Bold, Italic, Link always render.
+//   1. 굵게, Italic, Link always render.
 //   2. PLAN-22 C8: Attach renders only when `onAttach` is wired (enabled).
 //
 // C5.3 of slice3 #21 + PLAN-22 C8.
@@ -14,9 +14,9 @@ describe('<ReporterReplyToolbar>', () => {
   it('renders Bold, Italic, and Link buttons', () => {
     render(<ReporterReplyToolbar editor={null} />);
 
-    expect(screen.getByRole('button', { name: /bold/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /italic/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /굵게/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /기울임/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /링크/i })).toBeInTheDocument();
   });
 
   it('hides Attach when onAttach is not provided', () => {

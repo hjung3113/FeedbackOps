@@ -275,7 +275,7 @@ describe('TaskBoardRoute', () => {
       Sensor: expect.anything(),
       options: { activationConstraint: { distance: 5 } },
     });
-    await screen.findByText('Standalone task');
+    await screen.findByText('단독 Task');
     expect(navigate).toHaveBeenCalledWith({ to: '/tasks', search: { view: 'board', param: task.id } });
   });
 

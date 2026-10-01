@@ -30,14 +30,14 @@ const COPY = {
     kindBadge: { note: '메모', status_change: '상태 변경' } as const,
   },
   task: {
-    empty: 'No progress notes yet.',
-    loading: 'Loading…',
-    loadMore: 'Load earlier notes',
-    loadingMore: 'Loading…',
-    loadError: 'Unable to load progress notes.',
-    blockedCategory: 'Progress notes',
-    actorFallback: 'Progress note author',
-    kindBadge: { note: 'Note', status_change: 'Status change' } as const,
+    empty: '아직 진행 메모가 없습니다.',
+    loading: '불러오는 중…',
+    loadMore: '이전 항목 더보기',
+    loadingMore: '불러오는 중…',
+    loadError: '진행 메모를 불러올 수 없습니다.',
+    blockedCategory: '진행 메모',
+    actorFallback: '진행 메모 작성자',
+    kindBadge: { note: '메모', status_change: '상태 변경' } as const,
   },
 } as const;
 

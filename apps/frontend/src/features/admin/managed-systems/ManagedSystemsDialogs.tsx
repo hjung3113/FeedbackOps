@@ -69,7 +69,7 @@ function OwnerSelect({
   return (
     <div className="space-y-1">
       <Label htmlFor={testId} className="text-text-secondary">
-        Default owner (optional)
+        기본 담당자 (선택)
       </Label>
       <Select
         value={ownerSelectionValue(value)}
@@ -132,7 +132,7 @@ function RegisterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="ms-register-dialog">
         <DialogHeader>
-          <DialogTitle>{prefill ? '보관된 시스템 재등록' : 'Register system'}</DialogTitle>
+          <DialogTitle>{prefill ? '보관된 시스템 재등록' : 'Managed System 등록'}</DialogTitle>
           <DialogDescription>
             {prefill
               ? `보관된 "${prefill.slug}" 를 같은 slug로 다시 등록합니다. 보관 해제가 아니라 새 레코드가 만들어지며, 기존 VOC·Finding·Task 등 과거 참조는 보관된 시스템에 그대로 남습니다.`
@@ -184,7 +184,7 @@ function RegisterDialog({
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-name" className="text-text-secondary">
-              Name <span className="text-accent-danger">· 필수</span>
+              이름 <span className="text-accent-danger">· 필수</span>
             </Label>
             <Input
               id="ms-create-name"
@@ -204,7 +204,7 @@ function RegisterDialog({
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-external-key" className="text-text-secondary">
-              External key (optional)
+              External key (선택)
             </Label>
             <Input
               id="ms-create-external-key"
@@ -226,10 +226,10 @@ function RegisterDialog({
               onClick={() => onOpenChange(false)}
               data-testid="create-cancel"
             >
-              Cancel
+              취소
             </Button>
             <Button type="submit" disabled={mutation.isPending} data-testid="create-submit">
-              Register
+              등록
             </Button>
           </DialogFooter>
         </form>
@@ -306,7 +306,7 @@ function EditForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Configure {target.name}</DialogTitle>
+        <DialogTitle>{target.name} 설정</DialogTitle>
         <DialogDescription>
           <span className="font-mono text-xs">managed-system/{target.slug}</span>
         </DialogDescription>
@@ -322,7 +322,7 @@ function EditForm({
       >
         <div className="space-y-1">
           <Label htmlFor={`ms-edit-name-${target.slug}`} className="text-text-secondary">
-            Name
+            이름
           </Label>
           <Input
             id={`ms-edit-name-${target.slug}`}
@@ -376,7 +376,7 @@ function EditForm({
               disabled={archiveMutation.isPending}
               data-testid={`archive-${target.slug}`}
             >
-              Archive
+              보관
             </Button>
           )}
           {isArchived ? (
@@ -395,7 +395,7 @@ function EditForm({
               disabled={updateMutation.isPending}
               data-testid={`save-${target.slug}`}
             >
-              Save
+              저장
             </Button>
           )}
         </DialogFooter>

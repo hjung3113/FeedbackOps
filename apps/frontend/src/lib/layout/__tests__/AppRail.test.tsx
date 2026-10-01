@@ -54,7 +54,7 @@ function renderRail(props: ComponentProps<typeof AppRail> = {}) {
 // environment and the one worth asserting: a logout that only pointers can
 // reach is the same accessibility failure as #335's native prompt.
 function openAccountMenu() {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Profile' }), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('button', { name: '프로필' }), { key: 'Enter' });
 }
 
 beforeEach(() => {
@@ -118,7 +118,7 @@ describe('AppRail', () => {
       await Promise.resolve();
     });
 
-    const notifications = screen.getByRole('link', { name: 'Notifications' });
+    const notifications = screen.getByRole('link', { name: '알림' });
     expect(notifications).toHaveAttribute('href', '/home?tab=inbox');
     expect(notifications).not.toHaveTextContent('0');
   });
@@ -128,7 +128,7 @@ describe('AppRail', () => {
     renderRail();
 
     expect(await screen.findByText('99+')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Notifications, 120 unread' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '알림, 읽지 않음 120건' })).toHaveAttribute(
       'href',
       '/home?tab=inbox',
     );
@@ -144,7 +144,7 @@ describe('AppRail', () => {
     });
 
     expect(screen.getByTestId('app-rail')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '알림' })).toHaveAttribute(
       'href',
       '/home?tab=inbox',
     );

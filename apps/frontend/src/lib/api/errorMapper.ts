@@ -59,7 +59,7 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'conflict.record_archived':              { tone: 'error', message: '이 항목은 보관되어 더 이상 변경할 수 없습니다.' },
   'conflict.saved_view_name_taken':        { tone: 'error', message: '이미 사용 중인 저장된 뷰 이름입니다.' },
   'conflict.stale_write':                  { tone: 'warning', message: '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?' },
-  'conflict.triage_already_committed':     { tone: 'error', message: '이미 트리아지가 완료되어 본인이 직접 수정할 수 없습니다.' },
+  'conflict.triage_already_committed':     { tone: 'error', message: '이미 Triage가 완료되어 본인이 직접 수정할 수 없습니다.' },
   'conflict.survey_not_open':              { tone: 'error', message: '이 설문은 현재 응답을 받을 수 없습니다.' },
   'conflict.survey_response_already_submitted': { tone: 'info', message: '이 설문에는 이미 응답을 제출했습니다.' },
   'conflict.survey_results_unavailable':   { tone: 'error', message: '이 설문은 아직 결과를 볼 수 없습니다.' },
@@ -71,8 +71,8 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'internal.unexpected': { tone: 'error', message: GENERIC_ERROR_MESSAGE },
 
   // voc.*
-  'voc.severity_not_user_settable':             { tone: 'error', message: '심각도는 트리아지 단계에서만 설정할 수 있습니다.' },
-  'voc.reporter_status_via_public_update_only': { tone: 'error', message: 'Reporter-facing status는 공개 업데이트를 통해서만 변경됩니다.' },
+  'voc.severity_not_user_settable':             { tone: 'error', message: '심각도는 Triage 단계에서만 설정할 수 있습니다.' },
+  'voc.reporter_status_via_public_update_only': { tone: 'error', message: '공개 상태는 공개 업데이트를 통해서만 변경됩니다.' },
 
   // rich_content.*
   'rich_content.disallowed_node':          { tone: 'error', message: '허용되지 않는 콘텐츠 요소가 포함되어 있습니다.' },

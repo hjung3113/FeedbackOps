@@ -91,7 +91,7 @@ export function ReporterReplyToolbar({
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={disabled}
-        title="Bold"
+        title="굵게"
       >
         <Bold size={14} />
       </ToolbarButton>
@@ -100,7 +100,7 @@ export function ReporterReplyToolbar({
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={disabled}
-        title="Italic"
+        title="기울임"
       >
         <Italic size={14} />
       </ToolbarButton>
@@ -109,7 +109,7 @@ export function ReporterReplyToolbar({
         onClick={toggleLink}
         isActive={editor?.isActive('link') ?? false}
         disabled={disabled}
-        title="Link"
+        title="링크"
       >
         <Link size={14} />
       </ToolbarButton>

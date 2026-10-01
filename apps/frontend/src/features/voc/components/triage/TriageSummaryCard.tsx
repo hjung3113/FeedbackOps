@@ -1,6 +1,7 @@
 /** Summary of staged changes in the triage panel. */
 
 import { FieldRow, ReporterStatusBadge, cn } from '@fops/ui';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { AvatarUser, ReporterFacingStatusEnum } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
@@ -68,14 +69,14 @@ export function TriageSummaryCard({
         <>
           {severityChanged && (
             <DiffRow
-              label="Severity"
+              label="심각도"
               from={baseline.severity ?? '미지정'}
               to={panelState.severity ?? '미지정'}
             />
           )}
           {ownerChanged && (
             <DiffRow
-              label="Owner"
+              label={GLOSSARY.owner}
               from={ownerLabel(baseline.ownerUserId, baseline.ownerTeamId, actorMap, ownerTeamName)}
               to={ownerLabel(
                 panelState.ownerUserId,

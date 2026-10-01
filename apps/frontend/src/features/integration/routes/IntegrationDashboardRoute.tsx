@@ -9,6 +9,7 @@ import * as React from 'react';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   INTEGRATION_DASHBOARD_QUEUE_ORDER,
   IntegrationDashboardQueueCard,
@@ -83,7 +84,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-              Integration Action Dashboard
+              Integration 액션 대시보드
             </h1>
             <p className="mt-3 text-sm text-text-muted">
               VOC · Finding · Task · Survey 사이의 흐름이 끊긴 지점을 추적합니다. 차트가 아니라 다음
@@ -99,17 +100,17 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               data-testid="integration-dashboard-refresh"
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Refresh
+              새로고침
             </Button>
           </div>
         </header>
 
         <div className="mb-9">
           <div className="mb-3.5 flex items-center justify-between">
-            <PanelSectionTitle className="mb-0">Recovery queues</PanelSectionTitle>
+            <PanelSectionTitle className="mb-0">복구 · 후속 조치 큐</PanelSectionTitle>
             {gapCount !== undefined && (
               <span className="text-xs text-text-muted">
-                <span data-testid="integration-dashboard-gap-count">{gapCount}</span> gaps
+                <span data-testid="integration-dashboard-gap-count">{gapCount}</span>건
               </span>
             )}
           </div>
@@ -125,7 +126,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
           ) : summary.isError ? (
             isPermissionError(summary.error) ? (
               <div data-testid="integration-dashboard-blocked">
-                <PermissionBlockedPanel state="denied" category="Integration summary" />
+                <PermissionBlockedPanel state="denied" category="Integration 요약" />
               </div>
             ) : (
               <div data-testid="integration-dashboard-summary-error">
@@ -133,15 +134,15 @@ export function IntegrationDashboardRoute(): React.ReactElement {
                   variant="error"
                   title={SUMMARY_ERROR_TITLE}
                   body={mapUnknownError(summary.error).message}
-                  action={{ label: 'Retry', onClick: () => void summary.refetch() }}
+                  action={{ label: '다시 시도', onClick: () => void summary.refetch() }}
                 />
               </div>
             )
           ) : queues.length === 0 ? (
             <ListStateMessage
               variant="empty"
-              title="No recovery queues are available for this scope."
-              body="Only queue data returned for your role and Managed System scope appears here."
+              title="이 범위에서 표시할 큐가 없습니다."
+              body="역할과 Managed System 범위에서 반환된 큐 데이터만 표시됩니다."
             />
           ) : (
             <div
@@ -156,11 +157,11 @@ export function IntegrationDashboardRoute(): React.ReactElement {
         </div>
 
         <div className="mb-9" data-testid="integration-surfaces">
-          <PanelSectionTitle>Integration surfaces</PanelSectionTitle>
+          <PanelSectionTitle>Integration 화면</PanelSectionTitle>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <IntegrationJumpCard
               href={`/integration/coverage${surfaceScopeSearch}`}
-              title="Coverage"
+              title={GLOSSARY.coverage}
               description="VOC→Task · Finding→Execution · Milestone→Outcome 같이 워크플로 단절을 임계값으로 추적합니다."
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
@@ -170,7 +171,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             />
             <IntegrationJumpCard
               href={`/integration/links${surfaceScopeSearch}`}
-              title="Entity links"
+              title={GLOSSARY.entityLinks}
               description="VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다."
               icon={<Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-links"
@@ -180,14 +181,14 @@ export function IntegrationDashboardRoute(): React.ReactElement {
 
         {!summary.isError && (
           <div data-testid="integration-managed-system-overview">
-            <PanelSectionTitle>Managed system overview</PanelSectionTitle>
+            <PanelSectionTitle>Managed System 개요</PanelSectionTitle>
             {summary.isPending || systems.isPending ? (
               <Skeleton className="h-48 rounded-md" />
             ) : summary.data === undefined || summary.data.by_managed_system.length === 0 ? (
               <ListStateMessage
                 variant="empty"
-                title="No Managed System summary is available for this scope."
-                body="Managed System rows appear when the summary returns visible projections."
+                title="이 범위에서 표시할 Managed System 요약이 없습니다."
+                body="요약이 표시 가능한 항목을 반환할 때 Managed System 행이 나타납니다."
               />
             ) : (
               <ManagedSystemOverview
@@ -227,10 +228,10 @@ function ManagedSystemOverview({
         <thead>
           <tr className="border-b border-border-subtle text-[10px] uppercase tracking-wide text-text-muted">
             <th scope="col" className="px-4 py-2 font-medium">
-              System
+              Managed System
             </th>
             <th scope="col" className="px-3 py-2 text-right font-medium">
-              Open VOC
+              미해결 VOC
             </th>
             <th scope="col" className="px-3 py-2 text-right font-medium">
               Findings
@@ -239,10 +240,10 @@ function ManagedSystemOverview({
               Tasks
             </th>
             <th scope="col" className="px-3 py-2 text-right font-medium">
-              Unassigned
+              미배정
             </th>
             <th scope="col" className="px-3 py-2 text-right font-medium">
-              Coverage
+              커버리지
             </th>
           </tr>
         </thead>
@@ -310,7 +311,7 @@ function ManagedSystemOverview({
                     <span className="inline-flex items-center justify-end gap-2">
                       <span
                         role="meter"
-                        aria-label="Coverage"
+                        aria-label={GLOSSARY.coverage}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={coveragePercent}

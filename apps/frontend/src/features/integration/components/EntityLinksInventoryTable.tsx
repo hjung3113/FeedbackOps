@@ -63,7 +63,7 @@ export function EntityLinksInventoryTable({
       return (
         <PermissionBlockedPanel
           state="denied"
-          category="Entity links"
+          category="엔티티 링크"
           reason={PERMISSION_BLOCKED_REASONS.entityLinks}
           className="m-4"
           {...(onRetry !== undefined
@@ -129,7 +129,7 @@ export function EntityLinksInventoryTable({
 
   return (
     <>
-      <div aria-label="Entity link inventory" role="list" className="min-w-full">
+      <div aria-label="엔티티 링크 목록" role="list" className="min-w-full">
         {items.map((link) => {
           const managedSystem = managedSystemsById[link.managed_system_id];
           const actor = actorsById[link.created_by];

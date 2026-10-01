@@ -15,13 +15,13 @@ export interface MilestoneStatusBadgeProps {
 // Blocked has no internal-status token yet, so it consumes --text-danger
 // (the same warning-red value).
 const STATUS_META: Record<string, { label: string; token: string }> = {
-  planning: { label: 'Planning', token: '--status-internal-todo' },
-  in_progress: { label: 'In progress', token: '--status-internal-doing' },
-  blocked: { label: 'Blocked', token: '--text-danger' },
-  released: { label: 'Released', token: '--status-internal-done' },
+  planning: { label: '계획 중', token: '--status-internal-todo' },
+  in_progress: { label: '진행 중', token: '--status-internal-doing' },
+  blocked: { label: '차단', token: '--text-danger' },
+  released: { label: '릴리스됨', token: '--status-internal-done' },
 };
 
-const FALLBACK_STATUS_META = { label: 'Planning', token: '--status-internal-todo' };
+const FALLBACK_STATUS_META = { label: '계획 중', token: '--status-internal-todo' };
 
 // Geometry per the prototype .badge/.badge-dot (styles.css:1246-1268): 20px
 // pill, 6px side padding, 4px radius, 11px/500 label, 6×6 dot in the token

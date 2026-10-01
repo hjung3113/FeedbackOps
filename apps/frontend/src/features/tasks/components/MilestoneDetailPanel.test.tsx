@@ -124,23 +124,23 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
-    expect(screen.getByText('Why this milestone exists')).toBeInTheDocument();
+    expect(screen.getByText('이 Milestone의 목적')).toBeInTheDocument();
     expect(screen.getByText('0 of 1 tasks released')).toBeInTheDocument();
     for (const label of [
-      'Status',
+      '상태',
       'Managed System',
       'Analytics Area',
-      'Owner',
-      'Start',
-      'Target',
-      'Created',
+      '담당자',
+      '시작일',
+      '목표일',
+      '생성일',
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByText('2026. 5. 10.')).toBeInTheDocument();
     expect(screen.getByText('2026. 6. 15.')).toBeInTheDocument();
     // Existing linked source Finding keeps its display card (approved contract).
-    expect(screen.getByText('From finding')).toBeInTheDocument();
+    expect(screen.getByText('Finding에서')).toBeInTheDocument();
     expect(screen.getByText('FIN-181')).toBeInTheDocument();
     expect(screen.getByText('Evidence · 7')).toBeInTheDocument();
 
@@ -315,7 +315,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
       expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
       expect(screen.getByText('MLS-1021')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Open finding' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Finding 열기' })).toBeInTheDocument();
 
       vi.mocked(getMilestone).mockRejectedValueOnce(error);
       await queryClient.invalidateQueries({ queryKey: ['milestone', MILESTONE_ID] });
@@ -337,9 +337,9 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
       expect(
         screen.queryByText('SSO 세션 만료 후 재인증 흐름이 없습니다.'),
       ).not.toBeInTheDocument();
-      expect(screen.queryByText('From finding')).not.toBeInTheDocument();
+      expect(screen.queryByText('Finding에서')).not.toBeInTheDocument();
       expect(screen.queryByText('FIN-181')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Open finding' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Finding 열기' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '링크 복사' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
 
@@ -351,24 +351,24 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
   );
 
   // B2d fixup finding 3 — a linked source Finding opens its own detail route
-  // (prototype Open finding, screen-milestones.jsx:337-343; routes-and-layout
+  // (prototype Finding 열기, screen-milestones.jsx:337-343; routes-and-layout
   // linked-context rule). No writer is implied: source_finding is read-only.
   it('opens the linked source Finding detail route from the Source section', async () => {
     const user = userEvent.setup();
     renderPanel(linkedDetail);
 
-    await user.click(await screen.findByRole('button', { name: 'Open finding' }));
+    await user.click(await screen.findByRole('button', { name: 'Finding 열기' }));
     expect(navigateMock).toHaveBeenCalledWith({
       to: '/findings/$findingId',
       params: { findingId: FINDING_ID },
     });
   });
 
-  it('renders no Open finding control when the milestone is standalone', async () => {
+  it('renders no Finding 열기 control when the milestone is standalone', async () => {
     renderPanel(standaloneDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    expect(screen.queryByRole('button', { name: 'Open finding' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finding 열기' })).not.toBeInTheDocument();
   });
 
   // B2e fixup S1/P1 — editor state is isolated to the selected record. With
@@ -427,7 +427,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     await screen.findByRole('heading', { name: 'Alpha milestone' });
 
     await user.click(screen.getByRole('button', { name: 'Edit title' }));
-    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' typed on A');
+    await user.type(screen.getByRole('textbox', { name: '제목' }), ' typed on A');
 
     view.rerender(
       <QueryClientProvider client={queryClient}>
@@ -444,8 +444,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     // B renders with no editor, no Save control, and no trace of A's draft:
     // the wrong-record submit path cannot even be reached.
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '저장' })).not.toBeInTheDocument();
     expect(screen.queryByText(/typed on A/)).not.toBeInTheDocument();
     expect(vi.mocked(updateMilestone)).not.toHaveBeenCalled();
   });
@@ -658,7 +658,7 @@ describe('MilestoneDetailPanel title edit concurrency (Astra finding 2)', () => 
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     await user.click(screen.getByRole('button', { name: 'Edit title' }));
-    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
+    await user.type(screen.getByRole('textbox', { name: '제목' }), ' v2');
 
     // Another actor's change lands through a background refetch while the
     // draft is open. The draft itself survives — but it stays bound to the
@@ -670,9 +670,9 @@ describe('MilestoneDetailPanel title edit concurrency (Astra finding 2)', () => 
       updated_at: REMOTE_UPDATED_AT,
     });
     await queryClient.refetchQueries({ queryKey: ['milestone', MILESTONE_ID], exact: true });
-    expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '제목' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     const patchCall = vi.mocked(updateMilestone).mock.calls[0];
@@ -718,11 +718,11 @@ describe('MilestoneDetailPanel title save lock (R4)', () => {
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     await user.click(screen.getByRole('button', { name: 'Edit title' }));
-    const input = screen.getByRole('textbox', { name: 'Title' });
+    const input = screen.getByRole('textbox', { name: '제목' });
     await user.type(input, ' v2');
     // Mock call history accumulates across tests in this file; assert deltas.
     const callsBeforeSave = vi.mocked(updateMilestone).mock.calls.length;
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() =>
       expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBeforeSave + 1),
     );
@@ -738,7 +738,7 @@ describe('MilestoneDetailPanel title save lock (R4)', () => {
     expect(
       await screen.findByRole('heading', { name: 'SSO Stabilization v2' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
   });
 });
 
@@ -748,34 +748,34 @@ describe('MilestoneDetailPanel title save lock (R4)', () => {
 // linked Finding. A clean panel navigates immediately (covered by the
 // existing Open finding test).
 describe('MilestoneDetailPanel open finding guard (R4)', () => {
-  it('confirms the dirty title before Open finding navigates', async () => {
+  it('confirms the dirty title before Finding 열기 navigates', async () => {
     const user = userEvent.setup();
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     await user.click(screen.getByRole('button', { name: 'Edit title' }));
-    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' with unsaved work');
+    await user.type(screen.getByRole('textbox', { name: '제목' }), ' with unsaved work');
 
-    await user.click(screen.getByRole('button', { name: 'Open finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 열기' }));
     expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
 
     // Decline: the draft and the editor stay, no navigation.
     await user.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue(
       'SSO Stabilization with unsaved work',
     );
     expect(navigateMock).not.toHaveBeenCalled();
 
     // Confirm: the draft is discarded and the Finding route is opened.
-    await user.click(screen.getByRole('button', { name: 'Open finding' }));
+    await user.click(screen.getByRole('button', { name: 'Finding 열기' }));
     await user.click(await screen.findByRole('button', { name: '이동' }));
     expect(navigateMock).toHaveBeenCalledWith({
       to: '/findings/$findingId',
       params: { findingId: FINDING_ID },
     });
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
   });
 });
 
@@ -846,11 +846,11 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
       const callsBefore = vi.mocked(updateMilestone).mock.calls.length;
       if (viaTitleSave) {
         await user.click(screen.getByRole('button', { name: 'Edit title' }));
-        await user.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
-        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await user.type(screen.getByRole('textbox', { name: '제목' }), ' v2');
+        await user.click(screen.getByRole('button', { name: '저장' }));
       } else {
-        fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
-        fireEvent.click(await screen.findByRole('option', { name: 'Released' }));
+        fireEvent.click(screen.getByRole('combobox', { name: '상태' }));
+        fireEvent.click(await screen.findByRole('option', { name: '릴리스됨' }));
       }
       await waitFor(() =>
         expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBefore + 1),
@@ -863,7 +863,7 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
       await waitFor(() => expect(resolveRefetch).toBeDefined());
       if (viaTitleSave) {
         await waitFor(() =>
-          expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument(),
+          expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument(),
         );
       }
 
@@ -872,7 +872,7 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
       const editButton = screen.getByRole('button', { name: 'Edit title' });
       expect(editButton).toBeDisabled();
       await user.click(editButton);
-      expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
 
       // The refetch settles with the new version: the lock lifts, the
       // reopened editor holds the NEW row's title, and its save uses the NEW
@@ -880,10 +880,10 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
       resolveRefetch(v2Detail);
       await waitFor(() => expect(editButton).toBeEnabled());
       await user.click(editButton);
-      const reopened = screen.getByRole('textbox', { name: 'Title' });
+      const reopened = screen.getByRole('textbox', { name: '제목' });
       expect(reopened).toHaveValue(storedTitle);
       await user.type(reopened, 'B');
-      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.click(screen.getByRole('button', { name: '저장' }));
 
       await waitFor(() =>
         expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBefore + 2),

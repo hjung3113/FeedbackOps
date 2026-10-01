@@ -91,7 +91,7 @@ export function AnalyticsAreasAdminPage() {
   return (
     <PageShell
       header={{
-        title: 'Analytics areas',
+        title: 'Analytics Area',
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>

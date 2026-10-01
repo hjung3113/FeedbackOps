@@ -26,6 +26,7 @@ import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
+import { GLOSSARY, createLabel } from '../lib/copy/glossary';
 import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
 import {
   AuthenticatedRouteErrorFallback,
@@ -45,7 +46,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
   voc: [
     {
       id: 'inbox',
-      label: 'Inbox',
+      label: GLOSSARY.inbox,
       href: '/vocs?view=inbox',
       section: 'VOC',
       icon: <Inbox className="h-4 w-4" />,
@@ -61,7 +62,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     },
     {
       id: 'my-vocs',
-      label: 'My VOCs',
+      label: GLOSSARY.myVocs,
       href: '/vocs?view=my',
       section: 'VOC',
       icon: <User className="h-4 w-4" />,
@@ -77,7 +78,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     },
     {
       id: 'create',
-      label: 'New VOC',
+      label: createLabel('VOC'),
       href: '/vocs?action=create',
       section: 'VOC',
       icon: <Plus className="h-4 w-4" />,
@@ -115,9 +116,9 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
   findings: [
     {
       id: 'findings',
-      label: 'All findings',
+      label: GLOSSARY.allFindings,
       href: '/findings',
-      section: 'FINDINGS',
+      section: 'Finding',
       icon: <ListChecks className="h-4 w-4" />,
       countKey: 'findings.all',
     },
@@ -127,49 +128,49 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       id: 'task-requests',
       label: 'Task Requests',
       href: '/tasks?view=requests',
-      section: 'TASKS',
+      section: 'Task',
       icon: <Inbox className="h-4 w-4" />,
     },
     {
       id: 'tasks-board',
       label: 'Tasks',
       href: '/tasks?view=board',
-      section: 'TASKS',
+      section: 'Task',
       icon: <ListTodo className="h-4 w-4" />,
     },
     {
       id: 'my-tasks',
-      label: 'My Tasks',
+      label: '내 Task',
       href: '/tasks?view=my',
-      section: 'TASKS',
+      section: 'Task',
       icon: <User className="h-4 w-4" />,
     },
     {
       id: 'milestones',
       label: 'Milestones',
       href: '/tasks?view=milestones',
-      section: 'TASKS',
+      section: 'Task',
       icon: <Flag className="h-4 w-4" />,
     },
   ],
   integration: [
     {
       id: 'integration-dashboard',
-      label: 'Action dashboard',
+      label: GLOSSARY.actionDashboard,
       href: '/integration',
-      section: 'INTEGRATION',
+      section: 'Integration',
       icon: <Activity className="h-4 w-4" />,
     },
-    { id: 'integration-findings', label: 'Findings', href: '/findings', section: 'INTEGRATION', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
-    { id: 'integration-links', label: 'Entity links', href: '/integration/links', section: 'INTEGRATION', icon: <Link2 className="h-4 w-4" /> },
-    { id: 'integration-coverage', label: 'Coverage', href: '/integration/coverage', section: 'INTEGRATION', icon: <Layers className="h-4 w-4" /> },
+    { id: 'integration-findings', label: 'Findings', href: '/findings', section: 'Integration', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
+    { id: 'integration-links', label: GLOSSARY.entityLinks, href: '/integration/links', section: 'Integration', icon: <Link2 className="h-4 w-4" /> },
+    { id: 'integration-coverage', label: GLOSSARY.coverage, href: '/integration/coverage', section: 'Integration', icon: <Layers className="h-4 w-4" /> },
   ],
   surveys: [
     {
       id: 'surveys',
-      label: 'All surveys',
+      label: GLOSSARY.allSurveys,
       href: '/surveys',
-      section: 'SURVEYS',
+      section: 'Survey',
       icon: <FileBarChart className="h-4 w-4" />,
       countKey: 'surveys.all',
     },
@@ -177,30 +178,30 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
   admin: [
     {
       id: 'admin-ms',
-      label: 'Managed Systems',
+      label: 'Managed System',
       href: '/admin/managed-systems',
-      section: 'ADMIN',
+      section: '관리자',
       icon: <Database className="h-4 w-4" />,
     },
     {
       id: 'admin-aa',
-      label: 'Analytics Areas',
+      label: 'Analytics Area',
       href: '/admin/analytics-areas',
-      section: 'ADMIN',
+      section: '관리자',
       icon: <Layers className="h-4 w-4" />,
     },
     {
       id: 'admin-permissions',
-      label: 'Permission requests',
+      label: GLOSSARY.permissionRequests,
       href: '/admin/permissions/requests',
-      section: 'ADMIN',
+      section: '관리자',
       icon: <Shield className="h-4 w-4" />,
     },
     {
       id: 'admin-settings',
-      label: 'Workspace settings',
+      label: '워크스페이스 설정',
       href: '/admin/settings',
-      section: 'ADMIN',
+      section: '관리자',
       icon: <Settings className="h-4 w-4" />,
     },
   ],

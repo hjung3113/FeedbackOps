@@ -6,6 +6,7 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import {
   Button,
@@ -72,9 +73,15 @@ interface InboxSearch {
 // wiring live counts is data-deferred (see PR body, follow-up issue). We do not
 // invent counts.
 const INBOX_TABS: ListToolbarTab[] = [
-  { value: 'untriaged', label: 'Untriaged', icon: Flag, tip: '아직 분류되지 않은 VOC' },
-  { value: 'high', label: 'High', icon: TriangleAlert, tip: 'High / Critical severity' },
-  { value: 'unassigned', label: 'Unassigned', urgent: true, icon: User, tip: '담당자 미지정' },
+  { value: 'untriaged', label: GLOSSARY.untriaged, icon: Flag, tip: '아직 분류되지 않은 VOC' },
+  { value: 'high', label: GLOSSARY.high, icon: TriangleAlert, tip: 'High / Critical 심각도' },
+  {
+    value: 'unassigned',
+    label: GLOSSARY.unassigned,
+    urgent: true,
+    icon: User,
+    tip: '담당자 미지정',
+  },
   {
     value: 'no-link',
     label: VOC_INBOX_NO_LINK_TAB_LABEL,
@@ -83,12 +90,12 @@ const INBOX_TABS: ListToolbarTab[] = [
   },
   {
     value: 'high-no-link',
-    label: 'High · no link',
+    label: GLOSSARY.highNoLink,
     icon: TriangleAlert,
     tip: 'High 이상인데 Finding / Task 연결 없음',
   },
   // The prototype has no No task icon or tip; reuse the link icon without inventing copy.
-  { value: 'no-task', label: 'No task', icon: LinkIcon },
+  { value: 'no-task', label: GLOSSARY.noTask, icon: LinkIcon },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [
@@ -301,7 +308,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               activeTab,
               onTabChange: handleTabChange,
             }
-          : { title: 'My VOCs' })}
+          : { title: GLOSSARY.myVocs })}
         action={
           <div className="flex items-center gap-2">
             {/* Prototype placeholder verbatim (screen-voc.jsx). value/onChange is
@@ -319,11 +326,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               defaultValue={DEFAULT_SORT}
               onChange={handleSortChange}
             />
-            {/* Prototype: primary Button (not a text link). Label verbatim "New VOC". */}
+            {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
             <Button asChild variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                New VOC
+                {createLabel('VOC')}
               </Link>
             </Button>
           </div>
@@ -347,7 +354,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                 <PermissionBlockedPanel
                   // The server marks the capability requestable, so its panel state owns the CTA.
                   state="request_access"
-                  category="VOC Inbox"
+                  category="VOC 수신함"
                   // #562 copy: a named Managed System means this selected scope is out of reach.
                   reason={
                     deniedMsScoped
@@ -363,7 +370,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
               // -> blocked_not_requestable (#562).
               state="blocked_not_requestable"
-              category="VOC Inbox"
+              category="VOC 수신함"
               reason={PERMISSION_BLOCKED_REASONS.vocInbox}
             />
           )}
@@ -377,7 +384,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               data-testid="voc-inbox-denied-my-vocs"
             >
               <Link to="/vocs" search={{ view: 'my' }}>
-                My VOCs
+                {GLOSSARY.myVocs}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>

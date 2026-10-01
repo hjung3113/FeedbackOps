@@ -208,7 +208,7 @@ function fillPublicUpdate(value: string): void {
 }
 
 function previewDialog() {
-  return screen.findByRole('dialog', { name: 'Public update — Reporter preview' });
+  return screen.findByRole('dialog', { name: '공개 업데이트 — 접수자 미리보기' });
 }
 
 /**
@@ -258,9 +258,9 @@ describe('Composer flow — integration (C6.3)', () => {
     );
 
     // Tab labels from ComposerTabs TAB_CONFIGS: 'Public update', 'Reporter reply', 'Internal note'
-    expect(screen.getByRole('tab', { name: /public update/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /reporter reply/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /internal note/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /공개 업데이트/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /접수자 답변/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /내부 메모/i })).toBeInTheDocument();
   });
 
   // ── Test 2: Reporter sees only Reply tab ───────────────────────────────────
@@ -274,9 +274,9 @@ describe('Composer flow — integration (C6.3)', () => {
     );
 
     // Only Reporter reply tab shown
-    expect(screen.getByRole('tab', { name: /reporter reply/i })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /public update/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /internal note/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /접수자 답변/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /공개 업데이트/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /내부 메모/i })).not.toBeInTheDocument();
   });
 
   // ── Test 3: Switching tabs renders the correct composer body ────────────────
@@ -293,13 +293,13 @@ describe('Composer flow — integration (C6.3)', () => {
     expect(screen.getByTestId('rich-editor-public-update')).toBeInTheDocument();
 
     // Switch to Internal note
-    fireEvent.click(screen.getByRole('tab', { name: /internal note/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /내부 메모/i }));
     await waitFor(() => {
       expect(screen.getByTestId('rich-editor-internal-comment')).toBeInTheDocument();
     });
 
     // Switch to Reporter reply
-    fireEvent.click(screen.getByRole('tab', { name: /reporter reply/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /접수자 답변/i }));
     await waitFor(() => {
       expect(screen.getByTestId('rich-editor-reporter-reply')).toBeInTheDocument();
     });
@@ -447,7 +447,7 @@ describe('Composer flow — integration (C6.3)', () => {
 
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(
-      screen.queryByRole('dialog', { name: 'Public update — Reporter preview' }),
+      screen.queryByRole('dialog', { name: '공개 업데이트 — 접수자 미리보기' }),
     ).not.toBeInTheDocument();
 
     const request = requests[0];
@@ -483,7 +483,7 @@ describe('Composer flow — integration (C6.3)', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole('dialog', { name: 'Public update — Reporter preview' }),
+        screen.queryByRole('dialog', { name: '공개 업데이트 — 접수자 미리보기' }),
       ).not.toBeInTheDocument();
     });
     // The draft survives: this closed the preview, it did not discard the update.

@@ -43,7 +43,7 @@ export function ManagedSystemsAdminPage() {
   return (
     <PageShell
       header={{
-        title: 'Managed systems',
+        title: 'Managed System',
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
@@ -58,7 +58,7 @@ export function ManagedSystemsAdminPage() {
               data-testid="ms-register-button"
             >
               <Plus className="h-4 w-4" />
-              Register system
+              Managed System 등록
             </Button>
           </PermissionGate>
         ),
@@ -99,15 +99,15 @@ function ManagedSystemsBody({
       <div>
         <div className="mb-3.5 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Registry
+            레지스트리
           </h3>
           <span className="text-xs text-text-muted">
-            {systems.length} systems · {renderedAreaCount} analytics areas
+            Managed System {systems.length}개 · Analytics Area {renderedAreaCount}개
           </span>
         </div>
 
         {listQuery.isPending ? (
-          <p className="text-sm text-text-muted">Loading…</p>
+          <p className="text-sm text-text-muted">불러오는 중…</p>
         ) : listQuery.isError ? (
           <p className="text-sm text-accent-danger" data-testid="ms-list-error">
             오류: {envelopeMessage(listQuery.error)}
@@ -142,12 +142,12 @@ function ManagedSystemsBody({
       <div>
         <div className="mb-3.5 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Permission requests
+            권한 요청
           </h3>
           <Button variant="primary" size="sm" asChild>
             <Link to="/admin/permissions/requests" data-testid="ms-open-review-console">
               <ArrowRight className="h-3 w-3" />
-              Open review console
+              검토 콘솔 열기
             </Link>
           </Button>
         </div>
@@ -160,16 +160,16 @@ function ManagedSystemsBody({
               className="text-base font-semibold text-text-primary"
               data-testid="ms-requests-count"
             >
-              {requestsCount} requests awaiting decision
+              결정 대기 중인 요청 {requestsCount}건
             </div>
             <span className="text-xs text-text-muted">
-              Pending · Needs more info · High-risk · Self-approval 까지 검토 콘솔에서 확인합니다.
+              검토 대기 · 추가 정보 필요 · 고위험 · 직접 승인까지 검토 콘솔에서 확인합니다.
             </span>
           </div>
           <Button variant="secondary" size="sm" asChild>
             <Link to="/admin/permissions/requests" data-testid="ms-review-button">
               <ArrowRight className="h-3 w-3" />
-              Review
+              검토
             </Link>
           </Button>
         </div>
@@ -220,7 +220,7 @@ function ManagedSystemsFilter({
       <PopoverTrigger asChild>
         <Button variant="subtle" size="sm" data-testid="ms-filter-button">
           <Filter className="h-4 w-4" />
-          Filter
+          필터
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end">
@@ -287,12 +287,12 @@ function RegistryRow({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
-          {row.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
+          {row.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
         </div>
         <div className="truncate font-mono text-xs text-text-muted">managed-system/{row.slug}</div>
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-text-muted">Default owner</span>
+        <span className="text-xs text-text-muted">기본 담당자</span>
         {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
           <span className="text-xs text-text-muted">(미지정)</span>
         ) : (
@@ -303,7 +303,7 @@ function RegistryRow({
         {areas.map((a) => (
           <OutlineBadge key={a.id}>
             {a.name}
-            {a.archived_at !== null ? ' · Archived' : ''}
+            {a.archived_at !== null ? ' · 보관됨' : ''}
           </OutlineBadge>
         ))}
       </div>
@@ -314,7 +314,7 @@ function RegistryRow({
           onClick={onConfigure}
           data-testid={`ms-configure-${row.slug}`}
         >
-          Configure
+          설정
         </Button>
       </div>
     </div>

@@ -343,7 +343,7 @@ export function PublicUpdateComposer({
       <PreviewModal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="Public update — Reporter preview"
+        title="공개 업데이트 — 접수자 미리보기"
       >
         <ComposerPublicPreview
           voc={voc}

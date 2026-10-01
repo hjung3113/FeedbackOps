@@ -1,6 +1,6 @@
 // VocTriageScreen.deepLinkSelection.test.tsx — #383
 //
-// The VOC detail panel's "트리아지에서 변경" button deep-links into this screen
+// The VOC detail panel's "Triage에서 변경" button deep-links into this screen
 // with ?selected=<id>. Before the fix, a target the queue could not show fell
 // through `?? liveQueue[0]` and put a DIFFERENT VOC's commit form on screen with
 // no indication the target had changed — a wrong-record write hazard.

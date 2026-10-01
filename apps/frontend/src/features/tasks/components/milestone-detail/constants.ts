@@ -24,10 +24,10 @@ export const PRIORITY_SEVERITY: Record<
 // PATCH is free among them. Labels verbatim from MILESTONE_STATUS_META in
 // screen-milestones.jsx.
 export const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label: string }> = [
-  { value: 'planning', label: 'Planning' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'blocked', label: 'Blocked' },
-  { value: 'released', label: 'Released' },
+  { value: 'planning', label: '계획 중' },
+  { value: 'in_progress', label: '진행 중' },
+  { value: 'blocked', label: '차단' },
+  { value: 'released', label: '릴리스됨' },
 ];
 
 export const selectClassName =

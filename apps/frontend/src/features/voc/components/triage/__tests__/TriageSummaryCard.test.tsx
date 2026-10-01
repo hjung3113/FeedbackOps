@@ -38,7 +38,7 @@ describe('TriageSummaryCard', () => {
         currentReporterStatus="received"
       />,
     );
-    const row = screen.getByTestId('summary-diff-row-Severity');
+    const row = screen.getByTestId('summary-diff-row-심각도');
     expect(row).toHaveTextContent('medium');
     expect(row).toHaveTextContent('critical');
     expect(row.querySelector('.line-through')).toHaveTextContent('medium');
@@ -61,7 +61,7 @@ describe('TriageSummaryCard', () => {
         currentReporterStatus="received"
       />,
     );
-    const row = screen.getByTestId('summary-diff-row-Owner');
+    const row = screen.getByTestId('summary-diff-row-담당자');
     expect(row).toHaveTextContent('미지정');
     expect(row).toHaveTextContent('김철수');
     expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
@@ -77,7 +77,7 @@ describe('TriageSummaryCard', () => {
     const baseline = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
     const panelState = { ...BASE_STATE, ownerTeamId: null };
     const { container } = render(<TriageSummaryCard panelState={panelState} baseline={baseline} />);
-    const row = screen.getByTestId('summary-diff-row-Owner');
+    const row = screen.getByTestId('summary-diff-row-담당자');
     expect(within(row).getByText('Owner team')).toBeInTheDocument();
     expect(row).toHaveTextContent('미지정');
     expect(container).not.toHaveTextContent('00000000');

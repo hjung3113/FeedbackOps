@@ -1,5 +1,6 @@
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
 
@@ -8,29 +9,29 @@ type QueueId = DashboardQueue['id'];
 
 const QUEUE_COPY: Record<QueueId, { title: string; detail: (count: number) => string }> = {
   'unassigned-voc': {
-    title: 'Unassigned VOC',
+    title: '미배정 VOC',
     detail: (count) =>
       `담당자가 지정되지 않은 VOC가 ${count}건 누적되어 있습니다. 우선 분류와 담당 배정이 필요합니다.`,
   },
   'high-severity-unlinked': {
-    title: 'High Severity VOC unlinked',
+    title: GLOSSARY.highNoLink,
     detail: () => 'High/Critical severity인 VOC 중 Finding 연결이 없는 항목.',
   },
   'actionable-finding-no-execution': {
-    title: 'Actionable Finding without execution',
+    title: '실행 계획 없는 Finding',
     detail: () => 'Active 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
   },
   'released-task-unresolved-voc': {
-    title: 'Released Task with unresolved VOC',
+    title: 'Released Task · 미해결 VOC',
     detail: () =>
       'Task는 Released지만 연결된 Reporter-facing VOC Status가 해결됨이 아닙니다. 공개 업데이트 검토가 필요합니다.',
   },
   'bad-outcome-no-followup': {
-    title: 'Bad Outcome Survey without follow-up',
+    title: '후속 조치 없는 부정 Outcome Survey',
     detail: () => 'Negative outcome survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
   },
   'permission-requests-pending': {
-    title: 'Permission requests awaiting review',
+    title: '검토 대기 중인 권한 요청',
     detail: () => 'Workspace Admin 검토를 기다리는 elevated/scope 권한 요청.',
   },
 };
@@ -40,17 +41,17 @@ const QUEUE_SEVERITY_TONE: Record<
   { label: string; count: string; badge: string }
 > = {
   urgent: {
-    label: 'Recovery',
+    label: '복구',
     count: 'text-accent-danger',
     badge: 'bg-accent-danger/10 text-accent-danger',
   },
   warn: {
-    label: 'Follow-up',
+    label: '후속 조치',
     count: 'text-accent-warn',
     badge: 'bg-accent-warn/10 text-accent-warn',
   },
   info: {
-    label: 'Review',
+    label: '검토',
     count: 'text-text-primary',
     badge: 'bg-accent-info/10 text-accent-info',
   },
