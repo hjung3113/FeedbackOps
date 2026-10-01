@@ -590,17 +590,20 @@ describe('VOC cluster route shells', () => {
     expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
     expect(screen.getByText('연결된 Finding 있음')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('cluster-tab-confirmed'));
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-confirmed'));
     expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
     expect(screen.queryByText('반복 결제 문의')).not.toBeInTheDocument();
     expect(screen.queryByText('연결된 Finding 있음')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('cluster-tab-no-finding'));
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-no-finding'));
     expect(screen.getByText('반복 결제 문의')).toBeInTheDocument();
     expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
     expect(screen.queryByText('연결된 Finding 있음')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('cluster-tab-all'));
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-all'));
     expect(screen.getByText('반복 결제 문의')).toBeInTheDocument();
     expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
     expect(screen.getByText('연결된 Finding 있음')).toBeInTheDocument();
@@ -631,7 +634,7 @@ describe('VOC cluster route shells', () => {
 
     expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('cluster-tab-confirmed'));
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-confirmed'));
 
     expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
     expect(onCloseDetail).toHaveBeenCalledTimes(1);

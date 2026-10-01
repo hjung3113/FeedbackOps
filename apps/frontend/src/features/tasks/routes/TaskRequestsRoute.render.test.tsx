@@ -177,7 +177,8 @@ describe('TaskRequestsRoute display ids', () => {
     renderWithClient(<TaskRequestsRoute />);
 
     await screen.findByRole('button', { name: /REQ-42/ });
-    await userEvent.click(screen.getByRole('tab', { name: '승인됨' }));
+    // The tab's accessible name now includes its count (#673).
+    await userEvent.click(screen.getByRole('tab', { name: /^승인됨/ }));
 
     expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();
     expect(screen.getByText('선택한 상태: 승인됨')).toBeInTheDocument();
