@@ -17,7 +17,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
       });
       await page.goto('/admin/permissions/requests');
       if (scenario === 'blocked-contact-admin') {
-        const target = page.locator('[data-permission-state="blocked_non_requestable"]');
+        const target = page.locator('[data-state="blocked_not_requestable"]');
         await expect(target).toBeVisible();
         await expect(target).toContainText('담당 관리자에게 문의하세요.');
         await expect(target).toContainText('Admin One');
@@ -257,7 +257,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
 
     await page.goto('/admin/permissions/requests');
 
-    const emptyState = page.getByText('표시할 권한 요청이 없습니다.', { exact: true });
+    const emptyState = page.getByText('표시할 요청이 없습니다.', { exact: true });
     await expect(emptyState).toBeVisible();
     await expectVisual(page, emptyState, 'permission-requests-empty.png');
   });
@@ -267,7 +267,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
 
     await page.goto('/admin/permissions/requests');
 
-    await expect(page.locator('[data-permission-state="blocked_non_requestable"]')).toBeVisible();
+    await expect(page.locator('[data-state="blocked_not_requestable"]')).toBeVisible();
     await expect(page.getByTestId('permission-requests-list')).toHaveCount(0);
     await expect(page.getByTestId('permission-decision-section')).toHaveCount(0);
   });
