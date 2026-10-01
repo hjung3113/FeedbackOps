@@ -502,7 +502,7 @@ export function OutcomeFollowUpReview({
                   'grid w-full grid-cols-[96px_minmax(0,1fr)_110px_110px] items-center gap-3',
                   'border-b border-border-subtle',
                   'px-5 py-3 text-left text-sm hover:bg-surface-card',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
                   selectedResponseId === item.response_id
                     ? 'border-l-2 border-l-border-selected bg-surface-card'
                     : '',

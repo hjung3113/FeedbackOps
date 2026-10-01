@@ -287,7 +287,7 @@ export function CreateFindingModal({
             {analyticsAreasQuery.isLoading ? (
               <p className="text-xs text-text-muted">Analytics Area를 불러오는 중입니다.</p>
             ) : analyticsAreasQuery.isError ? (
-              <p className="text-xs text-feedback-error">Analytics Area를 불러오지 못했습니다.</p>
+              <p className="text-xs text-text-danger">Analytics Area를 불러오지 못했습니다.</p>
             ) : analyticsAreaOptions.length === 0 ? (
               <p className="text-xs text-text-muted">
                 이 Managed System에 선택할 수 있는 Analytics Area가 없습니다.

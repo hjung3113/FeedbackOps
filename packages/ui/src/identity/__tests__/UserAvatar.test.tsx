@@ -41,6 +41,13 @@ describe('UserAvatar', () => {
     expect(container.textContent).toBe('A');
   });
 
+  it('uses a tinted accent background with matching foreground for the fallback', () => {
+    const { getByText } = render(<UserAvatar user={{ display_name: 'Dana' }} />);
+
+    expect(getByText('D')).toHaveClass('bg-accent-primary/10');
+    expect(getByText('D')).toHaveClass('text-accent-primary');
+  });
+
   it('shows uppercase initial for a Latin name', () => {
     const { container } = render(
       <UserAvatar user={{ display_name: 'Bob Smith' }} />,

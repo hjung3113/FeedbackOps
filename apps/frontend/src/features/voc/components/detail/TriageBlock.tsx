@@ -50,7 +50,7 @@ export function TriageBlock({
         {voc.owner_user_id !== null ? (
           <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
         ) : (
-          <span className="text-sm text-feedback-error">Owner 없음</span>
+          <span className="text-sm text-text-danger">Owner 없음</span>
         )}
       </FieldRow>
 
@@ -59,7 +59,7 @@ export function TriageBlock({
         {voc.analytics_area_id !== null ? (
           <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics area'}</span>
         ) : (
-          <span className="text-sm text-feedback-warning">미지정</span>
+          <span className="text-sm text-text-warning">미지정</span>
         )}
       </FieldRow>
 

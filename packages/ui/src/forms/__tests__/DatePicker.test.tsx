@@ -92,6 +92,16 @@ describe('DatePicker', () => {
     expect(onChange).toHaveBeenCalledWith('2026-06-16');
   });
 
+  it('uses the registered selected-row surface token for the selected day', () => {
+    render(<DatePicker aria-label="날짜" value="2026-06-12" onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '달력 열기' }));
+
+    expect(screen.getByRole('button', { name: '2026년 6월 12일' })).toHaveClass(
+      'aria-[pressed=true]:bg-surface-row-selected',
+    );
+  });
+
   it.each([
     ['', ''],
     [null, null],
