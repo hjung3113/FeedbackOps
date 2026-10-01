@@ -2,16 +2,10 @@
 // Uses useMe() from @/lib/auth/useMe. Shows skeleton while loading;
 // renders nothing on error (auth guard in _authed.tsx handles redirect).
 
-import * as React from 'react';
-import {
-  Avatar,
-  AvatarFallback,
-  Card,
-  CardContent,
-  Skeleton,
-  cn,
-} from '@fops/ui';
 import { useMe } from '@/lib/auth/useMe';
+import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import { Avatar, AvatarFallback, Card, CardContent, Skeleton, cn } from '@fops/ui';
+import type * as React from 'react';
 
 export interface ReporterCardProps {
   className?: string;
@@ -57,7 +51,9 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
         </Avatar>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-text-primary">{actor.display_name}</span>
-          <span className="text-xs text-text-muted">Role: {actor.role_level}</span>
+          <span className="text-xs text-text-muted">
+            Role: {ROLE_LEVEL_LABELS[actor.role_level as RoleLevel]}
+          </span>
         </div>
       </CardContent>
     </Card>

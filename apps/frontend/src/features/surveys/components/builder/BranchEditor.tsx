@@ -42,7 +42,7 @@ export function BranchEditor({
             <SelectItem value={NO_BRANCH}>분기 없음</SelectItem>
             {parents.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
-                {candidate.prompt || candidate.id}
+                {candidate.prompt || `Q${candidate.sort_order + 1}`}
               </SelectItem>
             ))}
           </SelectContent>

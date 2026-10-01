@@ -67,4 +67,25 @@ describe('BranchEditor', () => {
 
     expect(onChange).toHaveBeenCalledWith({ branch_trigger_option_key: 'unsatisfied' });
   });
+
+  it('labels an empty prompt with its question position instead of its UUID', async () => {
+    const unnamedParent = {
+      ...parentQuestion,
+      id: '10000000-0000-4000-8000-000000000003',
+      prompt: '',
+      sort_order: 1,
+    };
+    render(
+      <BranchEditor
+        question={childQuestion}
+        parents={[parentQuestion, unnamedParent]}
+        onChange={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+
+    expect(await screen.findByRole('option', { name: 'Q2' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: unnamedParent.id })).not.toBeInTheDocument();
+  });
 });

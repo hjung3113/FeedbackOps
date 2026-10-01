@@ -8,8 +8,8 @@ vi.mock('@/lib/auth/useMe', () => ({
 }));
 
 import { useMe } from '@/lib/auth/useMe';
-import type { UseQueryResult } from '@tanstack/react-query';
 import type { MeResponse } from '@/lib/auth/useMe';
+import type { UseQueryResult } from '@tanstack/react-query';
 
 const MOCK_ME: MeResponse = {
   actor: {
@@ -17,12 +17,14 @@ const MOCK_ME: MeResponse = {
     external_id: 'reporter-1',
     email: 'reporter@feedbackops.local',
     display_name: '김호중',
-    role_level: 'Reporter',
+    role_level: 'user',
   },
   workspace_id: '11111111-1111-1111-1111-111111111111',
 };
 
-function makeQuery(overrides: Partial<UseQueryResult<MeResponse>> = {}): UseQueryResult<MeResponse> {
+function makeQuery(
+  overrides: Partial<UseQueryResult<MeResponse>> = {},
+): UseQueryResult<MeResponse> {
   return {
     data: MOCK_ME,
     isLoading: false,
@@ -53,11 +55,23 @@ function makeQuery(overrides: Partial<UseQueryResult<MeResponse>> = {}): UseQuer
 }
 
 describe('<ReporterCard>', () => {
-  it('renders the display_name and role_level', () => {
-    vi.mocked(useMe).mockReturnValue(makeQuery());
+  it.each([
+    ['admin', 'Admin'],
+    ['developer', 'Developer'],
+    ['user', 'User'],
+  ] as const)('renders the canonical role label for %s', (role_level, label) => {
+    vi.mocked(useMe).mockReturnValue(
+      makeQuery({
+        data: {
+          ...MOCK_ME,
+          actor: { ...MOCK_ME.actor, role_level },
+        },
+      }),
+    );
     render(<ReporterCard />);
     expect(screen.getByText('김호중')).toBeInTheDocument();
-    expect(screen.getByText('Reporter')).toBeInTheDocument();
+    expect(screen.getByText(`Role: ${label}`)).toBeInTheDocument();
+    expect(screen.queryByText(role_level, { exact: true })).not.toBeInTheDocument();
   });
 
   it('does NOT render the workspace UUID', () => {
@@ -68,7 +82,13 @@ describe('<ReporterCard>', () => {
 
   it('renders a skeleton while loading', () => {
     vi.mocked(useMe).mockReturnValue(
-      makeQuery({ isLoading: true, isPending: true, isSuccess: false, status: 'pending', data: undefined }),
+      makeQuery({
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+        data: undefined,
+      }),
     );
     const { container } = render(<ReporterCard />);
     // Skeleton uses animate-pulse class

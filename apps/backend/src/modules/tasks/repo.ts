@@ -388,10 +388,12 @@ export async function resolveTaskSource(
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       tr.id AS task_request_id,
+      tr.display_id AS task_request_display_id,
       tr.status AS task_request_status,
       tr.source_type AS task_request_source_type,
       tr.source_id AS task_request_source_id,
       f.id AS finding_id,
+      f.display_id AS finding_display_id,
       f.title AS finding_title,
       f.summary AS finding_summary,
       f.evidence_count AS finding_evidence_count,
@@ -419,12 +421,14 @@ export async function resolveTaskSource(
   const source: TaskDetailSource = {
     task_request: {
       id: row.task_request_id as string,
+      display_id: row.task_request_display_id as string,
       status: row.task_request_status as NonNullable<TaskDetailSource['task_request']>['status'],
     },
   };
   if (row.finding_id) {
     source.finding = {
       id: row.finding_id as string,
+      display_id: row.finding_display_id as string,
       title: row.finding_title as string,
       summary: row.finding_summary as string,
       evidence_count: Number(row.finding_evidence_count),

@@ -36,6 +36,7 @@ export const taskDetailSourceSchema = z
     task_request: z
       .object({
         id: z.string().uuid(),
+        display_id: z.string(),
         status: z.enum([
           'pending_review',
           'approved',
@@ -49,6 +50,7 @@ export const taskDetailSourceSchema = z
     finding: z
       .object({
         id: z.string().uuid(),
+        display_id: z.string(),
         title: z.string(),
         summary: z.string(),
         evidence_count: z.number().int().nonnegative(),

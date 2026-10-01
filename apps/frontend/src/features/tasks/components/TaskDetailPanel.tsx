@@ -6,7 +6,6 @@ import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
-import { shortId } from '@/lib/identity';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import type { TaskDetailDto, TaskStatus } from '@fops/shared';
 import {
@@ -45,10 +44,6 @@ const SECTIONS: PanelSection[] = [
   { id: 'context', label: '맥락' },
   { id: 'notes', label: '진행 메모' },
 ];
-
-function optionalDisplayId(value: { id: string; display_id?: string | null }): string {
-  return value.display_id?.trim() ? value.display_id : shortId(value.id);
-}
 
 export interface TaskDetailPanelProps {
   taskId: string;
@@ -126,9 +121,7 @@ export function TaskDetailPanel({
 
   const task: TaskDetailDto = taskQuery.data;
   const source = task.source;
-  const sourceFinding = source?.finding as
-    | (NonNullable<TaskDetailDto['source']>['finding'] & { display_id?: string | null })
-    | undefined;
+  const sourceFinding = source?.finding;
   const sourceVoc = source?.voc;
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
@@ -209,7 +202,7 @@ export function TaskDetailPanel({
               <div className="text-sm font-medium text-text-primary">
                 {sourceFinding.title}
                 <span className="ml-2 font-mono text-xs text-text-muted">
-                  {optionalDisplayId(sourceFinding)}
+                  {sourceFinding.display_id}
                 </span>
               </div>
               <p className="text-sm text-text-muted">{sourceFinding.summary}</p>
@@ -263,7 +256,7 @@ export function TaskDetailPanel({
                       {
                         type: 'finding' as const,
                         id: sourceFinding.id,
-                        display_id: optionalDisplayId(sourceFinding),
+                        display_id: sourceFinding.display_id,
                         title: sourceFinding.title,
                         // The trail is the only place this panel names the source
                         // Finding, so it has to be the way there too.

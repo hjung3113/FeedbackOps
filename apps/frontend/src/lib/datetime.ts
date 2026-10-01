@@ -10,3 +10,13 @@ export function formatRelativeTime(iso: string): string {
   const diffDay = Math.round(diffHour / 24);
   return rtf.format(diffDay, 'day');
 }
+
+export function formatAbsoluteDate(date: string): string {
+  const value = new Date(`${date}T00:00:00+09:00`);
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value);
+}

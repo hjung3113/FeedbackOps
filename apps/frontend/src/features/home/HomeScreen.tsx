@@ -32,6 +32,7 @@ import {
   formatUnreadBadge,
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
+import { formatRelativeTime } from '@/lib/datetime';
 import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';
@@ -196,9 +197,8 @@ function OpenRequestsPanel({
               </p>
               <p className="text-xs text-text-muted">
                 {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]} ·{' '}
-                {new Date(request.created_at).toLocaleString()}
+                {formatRelativeTime(request.created_at)}
               </p>
-              <p className="text-xs text-text-muted">id: {request.id}</p>
             </li>
           ))}
         </ul>

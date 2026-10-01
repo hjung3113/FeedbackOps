@@ -378,10 +378,11 @@ describe('HomeScreen route content', () => {
     renderHome();
 
     const card = await screen.findByTestId('home-queue-unassigned-voc');
-    expect(within(card).getAllByRole('link').map((link) => link.textContent?.trim())).toEqual([
-      'Bulk assign',
-      'Review VOCs',
-    ]);
+    expect(
+      within(card)
+        .getAllByRole('link')
+        .map((link) => link.textContent?.trim()),
+    ).toEqual(['Bulk assign', 'Review VOCs']);
   });
 
   it('refetches the strict summary when the scope selector changes', async () => {
@@ -428,7 +429,7 @@ describe('HomeScreen route content', () => {
           JSON.stringify({
             requests: [
               {
-                id: 'request-1',
+                id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
                 requested_capability: 'workspace.admin',
                 requested_managed_system_id: null,
                 reason: 'Need admin',
@@ -438,10 +439,10 @@ describe('HomeScreen route content', () => {
                 source_object_id: null,
                 source_action_id: null,
                 status: 'pending',
-                created_at: '2026-08-01T00:00:00.000Z',
+                created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
               },
               {
-                id: 'request-2',
+                id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
                 requested_capability: 'finding.manage',
                 requested_managed_system_id: null,
                 reason: 'Need write',
@@ -451,7 +452,7 @@ describe('HomeScreen route content', () => {
                 source_object_id: null,
                 source_action_id: null,
                 status: 'needs_more_info',
-                created_at: '2026-08-01T00:00:00.000Z',
+                created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
               },
             ],
           }),
@@ -465,8 +466,12 @@ describe('HomeScreen route content', () => {
     expect(requests.getByText('워크스페이스 관리자 권한')).toBeInTheDocument();
     expect(requests.getByText('Finding 관리')).toBeInTheDocument();
     expect(requests.queryByText('workspace.admin')).not.toBeInTheDocument();
+    expect(requests.queryByText(/id:/i)).not.toBeInTheDocument();
+    expect(requests.queryByText('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).not.toBeInTheDocument();
+    expect(requests.queryByText('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).not.toBeInTheDocument();
     expect(requests.getByText(/대기 중 ·/)).toBeInTheDocument();
     expect(requests.getByText(/추가 정보 필요 ·/)).toBeInTheDocument();
+    expect(requests.getByText(/대기 중 · 3시간 전/)).toBeInTheDocument();
     expect(requests.queryByText(/pending ·/)).not.toBeInTheDocument();
     expect(requests.queryByText(/needs_more_info ·/)).not.toBeInTheDocument();
   });

@@ -1,4 +1,6 @@
-import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
+import { getReporterStatusLabel } from '@/lib/copy/reporter-status-labels';
+import { formatAbsoluteDate, formatRelativeTime } from '@/lib/datetime';
+import type { EntityLinkDto, ReporterFacingStatusEnum, TaskReporterSummary } from '@fops/shared';
 import {
   LinkedEntityTrail,
   OutlineBadge,
@@ -34,7 +36,9 @@ function ReporterTaskSummary({
     <div className="flex flex-col gap-2" data-testid="linked-task-summary">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-text-primary">{summary.public_title}</span>
-        <OutlineBadge>{summary.reporter_facing_status}</OutlineBadge>
+        <OutlineBadge>
+          {getReporterStatusLabel(summary.reporter_facing_status as ReporterFacingStatusEnum)}
+        </OutlineBadge>
       </div>
       {(summary.owning_team_public_name !== undefined ||
         summary.expected_resolution_date !== undefined ||
@@ -50,13 +54,13 @@ function ReporterTaskSummary({
           {summary.expected_resolution_date !== undefined && (
             <div className="flex gap-2">
               <dt>예상 해결일</dt>
-              <dd>{summary.expected_resolution_date}</dd>
+              <dd>{formatAbsoluteDate(summary.expected_resolution_date)}</dd>
             </div>
           )}
           {summary.last_public_update_at !== undefined && (
             <div className="flex gap-2">
               <dt>최근 공개 업데이트</dt>
-              <dd>{summary.last_public_update_at}</dd>
+              <dd>{formatRelativeTime(summary.last_public_update_at)}</dd>
             </div>
           )}
           {summary.public_update_excerpt !== undefined && <dd>{summary.public_update_excerpt}</dd>}
