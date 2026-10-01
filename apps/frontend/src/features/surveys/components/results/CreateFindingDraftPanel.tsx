@@ -125,9 +125,7 @@ export function CreateFindingDraftPanel({
         </fieldset>
       )}
       {scopedResponseId && !selectedGroup ? (
-        <p className="text-sm text-text-muted">
-          접근 가능한 응답에 승인된 발췌가 없습니다.
-        </p>
+        <p className="text-sm text-text-muted">접근 가능한 응답에 승인된 발췌가 없습니다.</p>
       ) : (
         selectedGroup && (
           <fieldset className="space-y-2">

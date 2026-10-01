@@ -5,8 +5,8 @@
 
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { isPermissionDenied } from '@/lib/api/types';
-import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import {
   Button,

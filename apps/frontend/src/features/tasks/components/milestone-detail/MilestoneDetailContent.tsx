@@ -1,7 +1,7 @@
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
-import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
 import {
@@ -248,7 +248,9 @@ export function MilestoneDetailContent({
               border (shown in the reference baseline); only the type scale is
               corrected to the prototype 13px/1.6 (finding P3-1). */}
           <div className="mb-8">
-            <MilestonePanelSectionTitle>{GLOSSARY.whyThisMilestoneExists}</MilestonePanelSectionTitle>
+            <MilestonePanelSectionTitle>
+              {GLOSSARY.whyThisMilestoneExists}
+            </MilestonePanelSectionTitle>
             <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>

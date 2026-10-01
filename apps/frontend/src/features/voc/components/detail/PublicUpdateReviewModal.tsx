@@ -209,9 +209,7 @@ export function PublicUpdateReviewModal({
               </Select>
             </div>
             <div className="grid gap-1.5 text-sm">
-              <FieldLabel htmlFor="public-update-review-dismissal-reason">
-                기각 사유
-              </FieldLabel>
+              <FieldLabel htmlFor="public-update-review-dismissal-reason">기각 사유</FieldLabel>
               <Input
                 id="public-update-review-dismissal-reason"
                 value={dismissalReason}

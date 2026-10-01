@@ -28,9 +28,7 @@ describe('WorkspaceSettingsForm', () => {
       </QueryClientProvider>,
     );
 
-    expect(
-      screen.getByText('Permission Request 직접 승인', { exact: true }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Permission Request 직접 승인', { exact: true })).toBeInTheDocument();
     expect(
       screen.getByText('Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.', {
         exact: true,

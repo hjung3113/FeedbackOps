@@ -125,9 +125,7 @@ describe('/admin/settings route', () => {
     renderRoute();
 
     await screen.findByTestId('workspace-settings-screen');
-    expect(
-      screen.getByText('Permission Request 직접 승인', { exact: true }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Permission Request 직접 승인', { exact: true })).toBeInTheDocument();
     expect(
       screen.queryByText('Self-approval of Task Request', { exact: true }),
     ).not.toBeInTheDocument();
@@ -210,9 +208,7 @@ describe('/admin/settings route', () => {
     fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
 
     await waitFor(() => expect(patches).toEqual([{ survey_anonymity_threshold: 12 }]));
-    await waitFor(() =>
-      expect(screen.getByText('응답 12건', { exact: true })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('응답 12건', { exact: true })).toBeInTheDocument());
 
     fireEvent.click(thresholdEditButton());
     fireEvent.change(screen.getByLabelText('익명성 임계값'), { target: { value: '15' } });

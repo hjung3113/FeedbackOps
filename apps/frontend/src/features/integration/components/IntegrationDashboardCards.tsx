@@ -1,6 +1,6 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
-import { GLOSSARY } from '@/lib/copy/glossary';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
 

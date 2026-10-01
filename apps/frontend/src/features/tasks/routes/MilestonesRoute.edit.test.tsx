@@ -474,12 +474,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    expect(await readOptionNames('상태')).toEqual([
-      '계획 중',
-      '진행 중',
-      '차단',
-      '릴리스됨',
-    ]);
+    expect(await readOptionNames('상태')).toEqual(['계획 중', '진행 중', '차단', '릴리스됨']);
     expect(statusSelect()).toHaveValue('in_progress');
   });
 

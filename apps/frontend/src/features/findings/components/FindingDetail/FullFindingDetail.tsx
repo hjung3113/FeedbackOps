@@ -11,8 +11,8 @@ import {
   FINDING_STATUS_LABELS,
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
-import { shortId } from '@/lib/identity';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
   Button,

@@ -236,10 +236,7 @@ describe('useInboxRoute', () => {
       const query = new URL(requestUrl, 'http://localhost').searchParams;
       expect(query.get('filter.analytics_area')).toBe('unset');
       expect(query.has('tab')).toBe(false);
-      expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute(
-        'aria-selected',
-        'false',
-      );
+      expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute('aria-selected', 'false');
     });
   });
 

@@ -18,9 +18,7 @@ describe('<PublicUpdateToolbar>', () => {
 
     expect(screen.getByRole('button', { name: /굵게/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /기울임/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /글머리 기호|bullet/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /글머리 기호|bullet/i })).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: /링크/i })).toBeNull();
   });

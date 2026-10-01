@@ -375,7 +375,10 @@ describe('InboxPanel', () => {
     renderInbox();
     await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
-    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(screen.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'false');
 
     fireEvent.click(screen.getByRole('radio', { name: '전체' }));
@@ -387,7 +390,10 @@ describe('InboxPanel', () => {
 
     expect(calls.some(({ path }) => path.includes('unread=true'))).toBe(true);
     expect(calls.some(({ path }) => path === '/notifications?unread=false')).toBe(false);
-    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
     expect(screen.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'true');
   });
 

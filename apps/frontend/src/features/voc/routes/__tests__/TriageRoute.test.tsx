@@ -292,10 +292,7 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /높음 1/ })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
+      expect(screen.getByRole('tab', { name: /높음 1/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
     });
   });

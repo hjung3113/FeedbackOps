@@ -224,9 +224,7 @@ describe('AppFrame managed-system scope', () => {
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByLabelText('범위 밖')).toHaveLength(2);
       expect(
-        screen
-          .getByTestId(`scope-option-${MS_TWO}`)
-          .querySelector('[aria-label="범위 밖"]'),
+        screen.getByTestId(`scope-option-${MS_TWO}`).querySelector('[aria-label="범위 밖"]'),
       ).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
@@ -276,9 +274,7 @@ describe('AppFrame managed-system scope', () => {
       await waitFor(() => expect(screen.getByTestId('scope-selector')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByTestId(/^scope-option-[0-9]/)).toHaveLength(3);
-      await waitFor(() =>
-        expect(screen.queryByLabelText('범위 밖')).not.toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.queryByLabelText('범위 밖')).not.toBeInTheDocument());
     } finally {
       globalThis.fetch = originalFetch;
     }

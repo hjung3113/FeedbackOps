@@ -258,7 +258,10 @@ describe('/surveys/:surveyId/follow-up route', () => {
     expect(await screen.findByTestId('follow-up-row-4')).toBeInTheDocument();
     expect(screen.queryByTestId('follow-up-row-9')).not.toBeInTheDocument();
     expect(screen.queryByTestId('follow-up-row-12')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '미해소 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '미해소 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('button', { name: '해소됨 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '후속 없음 1' })).toBeInTheDocument();
     expect(screen.getByText('만족도 2 / 5 (하위 구간)')).toBeInTheDocument();
@@ -583,9 +586,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
 
     const createFinding = await screen.findByRole('button', { name: 'Finding 생성' });
     expect(createFinding).toBeDisabled();
-    expect(
-      screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.')).toBeInTheDocument();
   });
 
   it('reopens a no-follow-up response with a required reason', async () => {

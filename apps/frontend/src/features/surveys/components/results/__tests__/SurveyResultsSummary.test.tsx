@@ -835,9 +835,7 @@ describe('SurveyResultsSummary', () => {
 
     const button = screen.getByRole('button', { name: 'Finding 생성' });
     expect(button).toBeDisabled();
-    expect(
-      screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.')).toBeInTheDocument();
     await user.click(button);
     expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();
     expect(apiClient).not.toHaveBeenCalled();

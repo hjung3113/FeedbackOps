@@ -144,10 +144,7 @@ describe('AppRail', () => {
     });
 
     expect(screen.getByTestId('app-rail')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '알림' })).toHaveAttribute(
-      'href',
-      '/home?tab=inbox',
-    );
+    expect(screen.getByRole('link', { name: '알림' })).toHaveAttribute('href', '/home?tab=inbox');
     expect(screen.queryByText('99+')).not.toBeInTheDocument();
   });
 });

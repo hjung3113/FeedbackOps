@@ -40,8 +40,7 @@ interface CoverageSearch {
 
 // The prototype subtitle pitches editable thresholds (direction C, deferred);
 // the integration guide requires the partial-integration-coverage label.
-const PARTIAL_COVERAGE_SUBTITLE =
-  '부분 Coverage. 정책이 요구하는 연결만 표시합니다.';
+const PARTIAL_COVERAGE_SUBTITLE = '부분 Coverage. 정책이 요구하는 연결만 표시합니다.';
 
 // Coverage columns are the five rollup ratios; the queue columns are the five
 // per-system queues. permission-requests-pending is workspace review, never a
@@ -259,8 +258,8 @@ export function CoverageRoute(): React.ReactElement {
           >
             <p className="text-sm font-medium text-text-primary">표시할 Coverage가 없습니다</p>
             <p className="mt-2 text-sm text-text-muted">
-              이 범위에 대한 Coverage 또는 연결 없음 항목이 대시보드에 없습니다.
-              받을 수 없는 항목은 생략됩니다 — 0과 같지 않습니다.
+              이 범위에 대한 Coverage 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는 항목은
+              생략됩니다 — 0과 같지 않습니다.
             </p>
           </div>
         ) : (

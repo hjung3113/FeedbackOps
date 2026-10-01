@@ -3,9 +3,9 @@
 // analytics-free severity picker. Its mutation invalidates the Findings list
 // before the success path navigates to the new Finding.
 
+import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
 import type { CreateFindingRequest } from '@fops/shared';
 import { createFindingRequestSchema, findingSeveritySchema } from '@fops/shared';
-import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
 import {
   Button,
   Dialog,

@@ -169,9 +169,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
             <>
               <DialogHeader>
                 <DialogTitle>권한 요청 완료</DialogTitle>
-                <DialogDescription>
-                  요청이 접수되어 관리자 검토를 기다립니다.
-                </DialogDescription>
+                <DialogDescription>요청이 접수되어 관리자 검토를 기다립니다.</DialogDescription>
               </DialogHeader>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
                 <dt className="text-text-muted">요청 ID</dt>

@@ -1,7 +1,7 @@
 /** Summary of staged changes in the triage panel. */
 
-import { FieldRow, ReporterStatusBadge, cn } from '@fops/ui';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { FieldRow, ReporterStatusBadge, cn } from '@fops/ui';
 import type { AvatarUser, ReporterFacingStatusEnum } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
