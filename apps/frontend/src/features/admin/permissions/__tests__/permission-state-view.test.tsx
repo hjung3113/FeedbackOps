@@ -23,29 +23,34 @@ describe('<PermissionStateView>', () => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
-  test('approved → "Access granted"', () => {
+  test('approved state shows Korean access copy', () => {
     render(<PermissionStateView state="approved" capability="workspace.admin" />);
-    expect(screen.getByText('Access granted')).toBeInTheDocument();
+    expect(screen.getByText('접근이 허용되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('이 화면을 볼 수 있는 권한이 있습니다.')).toBeInTheDocument();
   });
 
   test('request_access → renders 권한 요청 button (Slice 1: noop click)', () => {
     render(<PermissionStateView state="request_access" capability="workspace.admin" />);
+    expect(screen.getByRole('heading', { name: '권한 요청' })).toBeInTheDocument();
+    expect(screen.getByText('이 화면을 보려면 권한이 필요합니다.')).toBeInTheDocument();
     const btn = screen.getByRole('button', { name: '권한 요청' });
     expect(btn).toBeInTheDocument();
     // ADR-0021 shadcn CVA Button: h-10 px-4 for size=md (default).
     expect(btn).toHaveClass('h-10');
   });
 
-  test('pending_request → "Request pending"', () => {
+  test('pending_request state shows Korean pending copy', () => {
     render(<PermissionStateView state="pending_request" capability="workspace.admin" />);
-    expect(screen.getByText('Request pending')).toBeInTheDocument();
+    expect(screen.getByText('권한 요청 검토 중')).toBeInTheDocument();
+    expect(screen.getByText('관리자가 권한 요청을 검토하고 있습니다.')).toBeInTheDocument();
     // No request button when the request is already in flight.
     expect(screen.queryByRole('button', { name: '권한 요청' })).not.toBeInTheDocument();
   });
 
-  test('blocked_non_requestable → "Access blocked"', () => {
+  test('blocked_non_requestable state shows Korean blocked copy', () => {
     render(<PermissionStateView state="blocked_non_requestable" capability="workspace.admin" />);
-    expect(screen.getByText('Access blocked')).toBeInTheDocument();
+    expect(screen.getByText('접근할 수 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('현재 계정에서는 이 작업을 사용할 수 없습니다.')).toBeInTheDocument();
   });
 
   test('AC-D13a blocked non-requestable state renders contact guidance and all Admin names', async () => {
@@ -107,23 +112,27 @@ describe('<PermissionStateView>', () => {
     );
   });
 
-  test('hidden_existence → "Not found"', () => {
+  test('hidden_existence state shows Korean not found copy', () => {
     render(<PermissionStateView state="hidden_existence" capability="workspace.admin" />);
-    expect(screen.getByText('Not found')).toBeInTheDocument();
+    expect(screen.getByText('찾을 수 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('요청한 항목을 사용할 수 없습니다.')).toBeInTheDocument();
   });
 
-  test('rejected → "Request rejected"', () => {
+  test('rejected state shows Korean rejection copy', () => {
     render(<PermissionStateView state="rejected" capability="workspace.admin" />);
-    expect(screen.getByText('Request rejected')).toBeInTheDocument();
+    expect(screen.getByText('권한 요청이 거절되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('이 권한 요청은 이전에 거절되었습니다.')).toBeInTheDocument();
   });
 
-  test('expired → "Access expired"', () => {
+  test('expired state shows Korean expiration copy', () => {
     render(<PermissionStateView state="expired" capability="workspace.admin" />);
-    expect(screen.getByText('Access expired')).toBeInTheDocument();
+    expect(screen.getByText('권한이 만료되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('이전에 받은 권한이 만료되었습니다.')).toBeInTheDocument();
   });
 
-  test('revoked → "Access revoked"', () => {
+  test('revoked state shows Korean revocation copy', () => {
     render(<PermissionStateView state="revoked" capability="workspace.admin" />);
-    expect(screen.getByText('Access revoked')).toBeInTheDocument();
+    expect(screen.getByText('권한이 취소되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('이전에 받은 권한이 취소되었습니다.')).toBeInTheDocument();
   });
 });

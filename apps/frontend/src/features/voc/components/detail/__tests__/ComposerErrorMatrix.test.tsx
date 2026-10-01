@@ -221,7 +221,7 @@ describe('Composer error matrix (C5.5)', () => {
     expect(callout).toHaveTextContent('Task가 검토 중입니다.');
   });
 
-  it('AC-A2a PublicUpdateComposer surfaces validation.failed in an error toast', async () => {
+  it('AC-A2a PublicUpdateComposer maps validation failures in an error toast', async () => {
     const { useVocPublicUpdateMutation } = await import(
       '@/features/voc/hooks/useVocPublicUpdateMutation'
     );
@@ -245,11 +245,11 @@ describe('Composer error matrix (C5.5)', () => {
     await waitFor(() => {
       expect(publicMutate).toHaveBeenCalledTimes(1);
       expect(toast.error).toHaveBeenCalledTimes(1);
-      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+      expect(toast.error).toHaveBeenCalledWith('입력값이 올바르지 않습니다.');
     });
   });
 
-  it('AC-A2a ReporterReplyComposer surfaces validation.failed in an error toast', async () => {
+  it('AC-A2a ReporterReplyComposer maps validation failures in an error toast', async () => {
     const { useVocReporterReplyMutation } = await import(
       '@/features/voc/hooks/useVocReporterReplyMutation'
     );
@@ -273,11 +273,11 @@ describe('Composer error matrix (C5.5)', () => {
     await waitFor(() => {
       expect(replyMutate).toHaveBeenCalledTimes(1);
       expect(toast.error).toHaveBeenCalledTimes(1);
-      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+      expect(toast.error).toHaveBeenCalledWith('입력값이 올바르지 않습니다.');
     });
   });
 
-  it('AC-A2a InternalCommentComposer surfaces validation.failed in an error toast', async () => {
+  it('AC-A2a InternalCommentComposer maps validation failures in an error toast', async () => {
     const { useVocInternalCommentMutation } = await import(
       '@/features/voc/hooks/useVocInternalCommentMutation'
     );
@@ -301,7 +301,7 @@ describe('Composer error matrix (C5.5)', () => {
     await waitFor(() => {
       expect(internalMutate).toHaveBeenCalledTimes(1);
       expect(toast.error).toHaveBeenCalledTimes(1);
-      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+      expect(toast.error).toHaveBeenCalledWith('입력값이 올바르지 않습니다.');
     });
   });
 

@@ -310,7 +310,7 @@ function OutcomeFollowUpDetailPanel({
                   <CreateFindingDraftPanel
                     groups={responseExcerpts.length > 0 ? [responseExcerpts] : []}
                     onCreated={(finding, responseId) => {
-                      toast.success(`Finding ${finding.display_id} created.`);
+                      toast.success(`Finding 생성 완료: ${finding.display_id}`);
                       setDecisionNotice(null);
                       onClose(responseId);
                     }}

@@ -11,6 +11,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 
 import { fetchTaskRequests } from '@/lib/api';
+import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
 
 export interface TaskRequestDraftCardProps {
   sourceKind: 'VOC' | 'VOC Cluster' | 'Finding';
@@ -32,7 +33,7 @@ export function TaskRequestDraftCard({
   source,
 }: TaskRequestDraftCardProps): React.ReactElement {
   const form = useForm<CreateTaskRequestRequest>({
-    resolver: zodResolver(createTaskRequestRequestSchema),
+    resolver: zodResolver(createTaskRequestRequestSchema, { errorMap: koreanZodErrorMap }),
     defaultValues: {
       evidence_summary: evidenceSummaryDefault,
       requested_outcome: '',

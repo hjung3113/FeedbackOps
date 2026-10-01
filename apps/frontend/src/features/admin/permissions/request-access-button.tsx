@@ -27,6 +27,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useMemo, useState } from 'react';
 
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import {
   permissionCheckQueryKey,
@@ -146,10 +147,10 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
         return;
       }
       if (err instanceof ApiError) {
-        setErrorMessage(err.envelope.message || err.envelope.code);
+        setErrorMessage(mapUnknownError(err).message);
         return;
       }
-      setErrorMessage('Request failed');
+      setErrorMessage(mapUnknownError(err).message);
     },
   });
 

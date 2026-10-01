@@ -1,6 +1,6 @@
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   requestMoreEvidenceForTaskRequest: vi.fn(),
   resolveActors: vi.fn(),
 }));
-const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 
 const requesterId = '20000000-0000-0000-0000-000000000002';
 const reviewerId = '60000000-0000-0000-0000-000000000006';
@@ -134,6 +134,7 @@ describe('TaskRequestsRoute decision dialogs', () => {
     setActor(reviewerId);
     toast.mockReset();
     toast.error.mockReset();
+    toast.success.mockReset();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -157,6 +158,15 @@ describe('TaskRequestsRoute decision dialogs', () => {
     await waitFor(() => expectDecisionCall(api.approveTaskRequest, {}));
   });
 
+  it('shows a Korean success toast after a decision', async () => {
+    const dialog = await openDialog('승인', 'Task Request 승인');
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Task Request가 처리되었습니다.'),
+    );
+  });
+
   it('trims an approval reason for another actor request', async () => {
     await openDialog('승인', 'Task Request 승인');
     fireEvent.change(screen.getByRole('textbox', { name: '승인 사유' }), {
@@ -168,16 +178,65 @@ describe('TaskRequestsRoute decision dialogs', () => {
     );
   });
 
-  it('keeps a self-approval dialog open when its reason is blank', async () => {
-    setActor(requesterId);
-    await openDialog('승인', 'Task Request 승인');
-    fireEvent.change(screen.getByRole('textbox', { name: '본인 승인 사유' }), {
-      target: { value: '   ' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '승인' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Self-approval requires a reason.');
-    expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
+  it.each([
+    {
+      action: 'approve-self',
+      buttonName: '승인',
+      dialogName: 'Task Request 승인',
+      textboxName: '본인 승인 사유',
+      message: '본인 승인 사유를 입력해 주세요.',
+      actorId: requesterId,
+      submitName: '승인',
+      value: '검토를 마쳤습니다.',
+      mock: 'approve',
+      payload: { reason: '검토를 마쳤습니다.' },
+    },
+    {
+      action: 'request-more-evidence',
+      buttonName: '근거 추가 요청',
+      dialogName: '근거 추가 요청',
+      textboxName: '근거 메모',
+      message: '근거 메모를 입력해 주세요.',
+      actorId: null,
+      submitName: '요청',
+      value: '추가 지표를 확인해 주세요.',
+      mock: 'evidence',
+      payload: { note: '추가 지표를 확인해 주세요.' },
+    },
+    {
+      action: 'reject',
+      buttonName: '반려',
+      dialogName: 'Task Request 반려',
+      textboxName: '반려 사유',
+      message: '반려 사유를 입력해 주세요.',
+      actorId: null,
+      submitName: '반려',
+      value: '범위에 포함되지 않습니다.',
+      mock: 'reject',
+      payload: { reason: '범위에 포함되지 않습니다.' },
+    },
+  ])('validates empty $action input in Korean and submits a trimmed value', async (scenario) => {
+    if (scenario.actorId) setActor(scenario.actorId);
+    const dialog = await openDialog(scenario.buttonName, scenario.dialogName);
+    fireEvent.click(within(dialog).getByRole('button', { name: scenario.submitName }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(scenario.message);
+    expect(dialog).toBeInTheDocument();
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
+    expect(api.requestMoreEvidenceForTaskRequest).not.toHaveBeenCalled();
+    expect(api.rejectTaskRequest).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox', { name: scenario.textboxName }), {
+      target: { value: `  ${scenario.value}  ` },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: scenario.submitName }));
+    const mutation =
+      scenario.mock === 'approve'
+        ? api.approveTaskRequest
+        : scenario.mock === 'evidence'
+          ? api.requestMoreEvidenceForTaskRequest
+          : api.rejectTaskRequest;
+    await waitFor(() => expectDecisionCall(mutation, scenario.payload));
   });
 
   it('cancels without dispatching a mutation', async () => {
@@ -187,32 +246,6 @@ describe('TaskRequestsRoute decision dialogs', () => {
       expect(screen.queryByRole('dialog', { name: 'Task Request 승인' })).not.toBeInTheDocument(),
     );
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
-  });
-
-  it('validates and trims rejection reasons', async () => {
-    await openDialog('반려', 'Task Request 반려');
-    fireEvent.click(screen.getByRole('button', { name: '반려' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Reason is required.');
-    expect(api.rejectTaskRequest).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('textbox', { name: '반려 사유' }), {
-      target: { value: '  Out of scope.  ' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '반려' }));
-    await waitFor(() => expectDecisionCall(api.rejectTaskRequest, { reason: 'Out of scope.' }));
-  });
-
-  it('validates and trims evidence notes', async () => {
-    await openDialog('근거 추가 요청', '근거 추가 요청');
-    fireEvent.click(screen.getByRole('button', { name: '요청' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Note is required.');
-    expect(api.requestMoreEvidenceForTaskRequest).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('textbox', { name: '근거 메모' }), {
-      target: { value: '  Add source metrics.  ' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '요청' }));
-    await waitFor(() =>
-      expectDecisionCall(api.requestMoreEvidenceForTaskRequest, { note: 'Add source metrics.' }),
-    );
   });
 
   it('locks duplicate submissions while a decision is pending', async () => {
@@ -244,7 +277,7 @@ describe('TaskRequestsRoute decision dialogs', () => {
     await openDialog('승인', 'Task Request 승인');
     fireEvent.click(screen.getByRole('button', { name: '승인' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Approval was rejected by the server.',
+      '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
   });

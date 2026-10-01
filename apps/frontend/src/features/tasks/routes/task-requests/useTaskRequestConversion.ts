@@ -1,7 +1,9 @@
 import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { GENERIC_ERROR_MESSAGE, mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
+import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
   type MilestoneDto,
@@ -135,7 +137,7 @@ export function useTaskRequestConversion({
   const milestonePickerError =
     milestonesError === null
       ? null
-      : { denied: milestonePickerDenied, message: milestonesError.message };
+      : { denied: milestonePickerDenied, message: mapUnknownError(milestonesError).message };
 
   // R4 (Astra P2-2) — the list can also drop the held row inside a 200
   // response (the list filters rows the actor can no longer see). A held id
@@ -167,11 +169,11 @@ export function useTaskRequestConversion({
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast(`Converted to Task ${task.display_id}.`);
+      toast.success(`Task ${task.display_id}로 전환했습니다.`);
       setConvertOpen(false);
     },
     onError: (err) => {
-      toast.error(err.message);
+      toast.error(mapUnknownError(err).message);
     },
   });
 
@@ -186,7 +188,8 @@ export function useTaskRequestConversion({
     }
     const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
     if (!titleResult.success) {
-      setConvertTitleError(titleResult.error.issues[0]?.message ?? 'Title is invalid.');
+      const issue = titleResult.error.issues[0];
+      setConvertTitleError(issue ? zodIssueMessage(issue) : GENERIC_ERROR_MESSAGE);
       convertTitleInputRef.current?.focus();
       return;
     }

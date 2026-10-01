@@ -830,7 +830,7 @@ describe('MilestonesRoute create archived deep-link default (F4 followup)', () =
     expect(vi.mocked(createMilestone)).not.toHaveBeenCalled();
     expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
     expect(
-      screen.getByText('Title, why, Managed System, Start, and Target are required.'),
+      screen.getByText('제목, 사유, Managed System, 시작일, 목표일을 입력해 주세요.'),
     ).toBeInTheDocument();
   });
 

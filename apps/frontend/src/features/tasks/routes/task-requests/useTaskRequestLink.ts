@@ -1,5 +1,5 @@
 import { fetchPermissionCheck, linkExistingTask, listTasks } from '@/lib/api';
-import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskDto, TaskRequestDto } from '@fops/shared';
@@ -78,11 +78,11 @@ export function useTaskRequestLink({
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast(`Linked Task ${task.display_id}.`);
+      toast.success(`Task ${task.display_id}을 연결했습니다.`);
       setLinkOpen(false);
     },
     onError: (err) => {
-      toast.error(err?.envelope?.message ?? GENERIC_ERROR_MESSAGE);
+      toast.error(mapUnknownError(err).message);
     },
   });
 

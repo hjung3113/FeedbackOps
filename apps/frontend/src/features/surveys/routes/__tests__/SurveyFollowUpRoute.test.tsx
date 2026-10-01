@@ -553,7 +553,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
         },
       ),
     );
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Finding FND-424 created.'));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Finding 생성 완료: FND-424'));
     await waitFor(() =>
       expect(screen.queryByTestId('follow-up-detail-panel')).not.toBeInTheDocument(),
     );

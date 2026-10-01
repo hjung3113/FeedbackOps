@@ -233,7 +233,7 @@ describe('/admin/managed-systems route', () => {
     fireEvent.change(screen.getByTestId('create-name'), { target: { value: 'dup' } });
     fireEvent.click(screen.getByTestId('create-submit'));
     await waitFor(() => {
-      expect(screen.getByTestId('create-error')).toHaveTextContent(/conflict\.duplicate_slug/);
+      expect(screen.getByTestId('create-error')).toHaveTextContent('이미 사용 중인 식별자입니다.');
     });
   });
 });

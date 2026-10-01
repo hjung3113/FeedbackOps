@@ -91,9 +91,9 @@ function RegisterForm({
           e.preventDefault();
           setError(null);
           const nextErrors: Partial<Record<'managedSystem' | 'slug' | 'name', string>> = {};
-          if (!msId) nextErrors.managedSystem = 'Managed System is required.';
-          if (!slug.trim()) nextErrors.slug = 'Slug is required.';
-          if (!name.trim()) nextErrors.name = 'Name is required.';
+          if (!msId) nextErrors.managedSystem = 'Managed System을 선택해 주세요.';
+          if (!slug.trim()) nextErrors.slug = 'Slug를 입력해 주세요.';
+          if (!name.trim()) nextErrors.name = '이름을 입력해 주세요.';
           if (Object.keys(nextErrors).length > 0) {
             setFieldErrors(nextErrors);
             if (nextErrors.managedSystem) {

@@ -87,8 +87,8 @@ describe('Admin required registration fields', () => {
       await Promise.resolve();
     });
     expect(screen.getAllByText('· 필수', { exact: true })).toHaveLength(2);
-    expect(screen.getByText('Slug is required.')).toBeInTheDocument();
-    expect(screen.getByText('Name is required.')).toBeInTheDocument();
+    expect(screen.getByText('Slug를 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.getByText('이름을 입력해 주세요.')).toBeInTheDocument();
     expect(postedRequests).toEqual([]);
   });
 
@@ -109,9 +109,9 @@ describe('Admin required registration fields', () => {
       await Promise.resolve();
     });
     expect(screen.getAllByText('· 필수', { exact: true })).toHaveLength(3);
-    expect(screen.getByText('Managed System is required.')).toBeInTheDocument();
-    expect(screen.getByText('Slug is required.')).toBeInTheDocument();
-    expect(screen.getByText('Name is required.')).toBeInTheDocument();
+    expect(screen.getByText('Managed System을 선택해 주세요.')).toBeInTheDocument();
+    expect(screen.getByText('Slug를 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.getByText('이름을 입력해 주세요.')).toBeInTheDocument();
     // ManagedSystemPicker is a Radix ToggleGroup type="single", so its options
     // are radios inside a radiogroup — not buttons.
     expect(screen.getByRole('radio', { name: 'Power BI' })).toHaveFocus();

@@ -88,7 +88,7 @@ export function useMilestoneTitleEdit(
     // guard (Enter submits the form too) both refuse the race.
     if (titleMutation.isPending || statusMutationPending) return;
     if (titleDraft.trim() === '') {
-      setTitleError('Title is required.');
+      setTitleError('제목을 입력해 주세요.');
       return;
     }
     // Unreachable in practice — the editor only opens via startTitleEdit,

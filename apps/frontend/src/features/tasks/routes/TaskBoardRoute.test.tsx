@@ -184,14 +184,18 @@ describe('TaskBoardRoute', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
-    expect(screen.queryByText('Task board unavailable.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission board failure unavailable', async () => {
     api.listTasks.mockRejectedValue(new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }));
     renderBoard();
 
-    expect(await screen.findByText('Task board unavailable.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 
@@ -261,7 +265,9 @@ describe('TaskBoardRoute', () => {
     update.reject(new ApiError(409, { code: 'conflict.stale_write', message: 'stale' }));
     await waitFor(() => expect(screen.getByLabelText('Backlog column')).toHaveTextContent('TASK-1000'));
     await waitFor(() => expect(api.listTasks.mock.calls.length).toBeGreaterThan(1));
-    expect(toast.error).toHaveBeenCalledWith('Task changed elsewhere. Board refreshed.');
+    expect(toast.error).toHaveBeenCalledWith(
+      '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?',
+    );
   });
 
   it('filters rendered board items for public_update=missing and still drags only when grouped by status', async () => {

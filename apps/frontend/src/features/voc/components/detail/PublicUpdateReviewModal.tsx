@@ -2,7 +2,7 @@ import {
   usePublicUpdateReviewCandidates,
   useResolvePublicUpdateReviewCandidate,
 } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
-import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import {
@@ -95,7 +95,7 @@ export function PublicUpdateReviewModal({
           resetForm();
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error?.envelope?.message ?? GENERIC_ERROR_MESSAGE),
+        onError: (error) => toast.error(mapUnknownError(error).message),
       },
     );
   };
@@ -109,7 +109,7 @@ export function PublicUpdateReviewModal({
           resetForm();
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error?.envelope?.message ?? GENERIC_ERROR_MESSAGE),
+        onError: (error) => toast.error(mapUnknownError(error).message),
       },
     );
   };

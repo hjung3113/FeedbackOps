@@ -228,7 +228,11 @@ describe('<RequestAccessButton>', () => {
     openForm();
 
     fillReasonAndSubmit();
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('request failed'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      ),
+    );
     fireEvent.submit(screen.getByTestId('permission-request-form'));
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-id')).toHaveTextContent('PR-D8-RETRY'),
