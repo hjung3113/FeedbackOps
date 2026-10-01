@@ -83,7 +83,7 @@ Task route views:
 
 ```text
 - `/tasks?view=requests` is Task Requests. `/tasks?view=board` is the board.
-- `/tasks?view=backlog`, `/tasks?view=inbox`, `/tasks?view=my`, and `/tasks` with no `view` all render `TaskListRoute`. `view=my` does not filter `assignee=me`. It is an unfiltered backlog alias (ADR-0040). The Tasks rail still labels that URL "My Tasks".
+- `/tasks?view=backlog`, `/tasks?view=inbox`, and `/tasks` with no `view` render `TaskListRoute` in backlog mode. `/tasks?view=my` also renders `TaskListRoute`, filtered to Tasks assigned to the current actor (`assignee=me`). The Tasks rail labels that destination "My Tasks".
 - `managedSystem` and `param` on that URL are the list's scope and selection, not a personal filter.
 ```
 

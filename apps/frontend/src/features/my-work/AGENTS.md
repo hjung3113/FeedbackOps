@@ -9,7 +9,7 @@ This folder does not own a screen. Home's assigned-work panel is `features/home/
 ## Route Boundary
 
 - `/my-work` is not a registered route. Do not add one in MVP.
-- Do not treat `/tasks?view=my` as this feature. That search value is an unfiltered backlog alias of `TaskListRoute`.
+- Do not treat `/tasks?view=my` as a `/my-work` route; it is `TaskListRoute` filtered to Tasks assigned to the current actor.
 
 ## Rules
 
@@ -23,11 +23,11 @@ This folder does not own a screen. Home's assigned-work panel is `features/home/
 - `apps/frontend/src/routes/_authed/home.tsx` — mounts Home, which currently owns assigned-work rows.
 - `apps/frontend/src/features/home/HomeScreen.tsx` — live “Assigned to you” Task and Task Request rows.
 - `apps/frontend/src/features/home/homeNavigation.tsx` — Home queue destinations; no My Work destination is registered.
-- `apps/frontend/src/routes/_authed/tasks.tsx` — maps `view=my` to the Task list route.
-- `apps/frontend/src/features/tasks/routes/TaskListRoute.tsx` — Task backlog list; `view=my` is not an assignee filter.
+- `apps/frontend/src/routes/_authed/tasks.tsx` — maps `view=my` to `TaskListRoute` and passes its view mode.
+- `apps/frontend/src/features/tasks/routes/TaskListRoute.tsx` — Task list; `view=my` filters to Tasks assigned to the current actor.
 - `docs/adr/0038-entity-link-management-surface-out-of-mvp.md` — records the MVP My Work exclusion.
 - `docs/adr/0040-ux-voc-home-navigation-deviations.md` — records the remaining Home assigned-work panel.
 
 ## Verification
 
-- No route tests until a route exists. A change that adds `/my-work` or makes `view=my` an assignee filter is out of MVP and needs an ADR reopen, not a silent route.
+- Verify `/tasks?view=my` filters to the current actor's assigned Tasks, preserves the view on selection, and shows its toolbar and empty state. No dedicated `/my-work` route is added.

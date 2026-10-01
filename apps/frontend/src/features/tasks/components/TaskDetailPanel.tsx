@@ -56,7 +56,7 @@ export interface TaskDetailPanelProps {
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
   /** 생략 시 backlog. copy URL과 board 전용 footer의 스위치. */
-  view?: 'backlog' | 'board';
+  view?: 'backlog' | 'my' | 'board';
   /** board만 전달. 상태 그래프는 이 컴포넌트가 모른다. */
   onMoveToNextStatus?: (taskId: string) => void;
 }

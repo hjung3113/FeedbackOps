@@ -20,7 +20,7 @@ Neither an entity-link management surface nor a `My Work` view is in MVP scope.
 
 **Entity links.** No link lifecycle view, no link history surface, and no detach action ship in MVP. Per-record projections remain the only way to read connections. A future implementation must not widen any read-scope boundary to assemble a cross-record link view — it splits the query instead, as `create_finding` does (ADR-0037) — and a detach action must require a reason and preserve history rather than deleting rows.
 
-**My Work.** The disabled `My Work` cue is removed from Home and the sidebar rather than left inert. `My Tasks` and `My VOCs`, which are implemented, are the personal-work entry points until a dedicated view exists.
+**My Work.** The disabled `My Work` cue is removed from Home and the sidebar rather than left inert. `My Tasks` (`/tasks?view=my`) shows Tasks assigned to the current actor; `My VOCs` remains the other implemented personal-work entry point until a dedicated view exists.
 
 A disabled control that points at an unbuilt feature is a promise, not a state. Where a capability does not exist, the UI omits the entry; where a capability exists but the actor lacks permission, the UI renders the permission state established in #284.
 
