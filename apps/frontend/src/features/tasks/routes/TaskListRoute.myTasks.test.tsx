@@ -146,7 +146,9 @@ describe('TaskListRoute My Tasks view', () => {
   ])('shows the $title toolbar with a count', async ({ view, title }) => {
     renderWithClient(<TasksRouteView search={{ view }} />);
 
-    expect(await screen.findByRole('heading', { name: new RegExp(title) })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(`^${title}\\s*1건$`) }),
+    ).toBeInTheDocument();
     expect(screen.getByText('1건')).toBeInTheDocument();
   });
 
