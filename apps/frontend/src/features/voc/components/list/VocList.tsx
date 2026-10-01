@@ -18,6 +18,7 @@ import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { ListStateMessage } from '@/components/ListStateMessage';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState, managedSystemMarkColor } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -106,6 +107,8 @@ export interface VocListProps {
   view?: 'inbox' | 'my';
   /** Retry handler for error variant. */
   onRetry?: () => void;
+  /** Opens the route-owned VOC create flow from the My VOC empty state. */
+  onCreate?: () => void;
 }
 
 const SKELETON_COUNT = 10;
@@ -122,6 +125,7 @@ export function VocList({
   onSelect,
   view,
   onRetry,
+  onCreate,
 }: VocListProps) {
   const msMap = useManagedSystemMap();
   const areaMap = useAnalyticsAreaMap();
@@ -187,13 +191,12 @@ export function VocList({
   if (!loading && items.length === 0) {
     if (view === 'my') {
       return (
-        <EmptyState
+        <ListStateMessage
+          variant="empty"
           title="내가 제출한 VOC가 없습니다"
-          action={
-            <Link to="/vocs" search={{ action: 'create' }}>
-              + 새 VOC 작성
-            </Link>
-          }
+          {...(onCreate !== undefined
+            ? { action: { label: '+ 새 VOC 작성', onClick: onCreate } }
+            : {})}
         />
       );
     }

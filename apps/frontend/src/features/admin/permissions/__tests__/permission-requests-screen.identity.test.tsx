@@ -1,5 +1,5 @@
 import type { AdminPermissionRequestRow } from '@/lib/api';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,5 +74,23 @@ describe('PermissionRequestsScreen identity', () => {
     expect(screen.getByText('Managed System')).toBeInTheDocument();
     expect(screen.getByText('20000000')).toHaveClass('font-mono');
     expect(screen.getByText('30000000')).toHaveClass('font-mono');
+  });
+
+  it('renders the permission-request empty state through the shared list message', () => {
+    const previousAllRequests = consoleState.allRequests;
+    const previousVisibleRequests = consoleState.visibleRequests;
+    consoleState.allRequests = [];
+    consoleState.visibleRequests = [];
+
+    try {
+      render(<PermissionRequestsScreen />);
+
+      const emptyState = screen.getByTestId('list-state-message');
+      expect(emptyState).toHaveAttribute('data-variant', 'empty');
+      expect(within(emptyState).getByText('표시할 요청이 없습니다.')).toBeInTheDocument();
+    } finally {
+      consoleState.allRequests = previousAllRequests;
+      consoleState.visibleRequests = previousVisibleRequests;
+    }
   });
 });

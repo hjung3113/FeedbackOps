@@ -265,6 +265,26 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it('opens VOC creation when the My VOCs empty-state button is clicked', () => {
+    searchState = { view: 'my' };
+    useVocListMock.mockReturnValue({
+      data: { items: [], next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(<InboxTestHarness view="my" />);
+
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 VOC 작성' }));
+
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search(searchState)).toEqual({ view: 'my', action: 'create' });
+  });
+
   it('clicking a row calls navigate with selected param', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);

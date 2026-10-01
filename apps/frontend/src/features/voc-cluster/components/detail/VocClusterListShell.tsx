@@ -130,39 +130,47 @@ function ClusterListBody({
       count: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0).length,
     },
   ];
+  const isReadDenied = isError && isPermissionDenied(error);
 
   return (
     <section className="flex min-h-full flex-col">
-      <div
-        className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
-        data-toolbar-height="50"
-      >
+      {!isReadDenied ? (
         <div
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
-          role="tablist"
-          aria-label="클러스터 필터"
+          className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
+          data-toolbar-height="50"
         >
-          {tabs.map((tab) => (
-            <Button
-              key={tab.key}
-              type="button"
-              variant={activeTab === tab.key ? 'secondary' : 'ghost'}
-              size="sm"
-              role="tab"
-              id={`cluster-tab-${tab.key}`}
-              aria-controls="cluster-list-panel"
-              aria-selected={activeTab === tab.key}
-              onClick={() => onTabChange(tab.key)}
-              data-testid={`cluster-tab-${tab.key}`}
-            >
-              {tab.label} {tab.count}
-            </Button>
-          ))}
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
+            role="tablist"
+            aria-label="클러스터 필터"
+          >
+            {tabs.map((tab) => (
+              <Button
+                key={tab.key}
+                type="button"
+                variant={activeTab === tab.key ? 'secondary' : 'ghost'}
+                size="sm"
+                role="tab"
+                id={`cluster-tab-${tab.key}`}
+                aria-controls="cluster-list-panel"
+                aria-selected={activeTab === tab.key}
+                onClick={() => onTabChange(tab.key)}
+                data-testid={`cluster-tab-${tab.key}`}
+              >
+                {tab.label} {tab.count}
+              </Button>
+            ))}
+          </div>
+          <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
         </div>
-        <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
-      </div>
+      ) : null}
 
-      <div id="cluster-list-panel" role="tabpanel" aria-labelledby={`cluster-tab-${activeTab}`}>
+      <div
+        id="cluster-list-panel"
+        {...(!isReadDenied
+          ? { role: 'tabpanel', 'aria-labelledby': `cluster-tab-${activeTab}` }
+          : {})}
+      >
         {isPending ? (
           <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
             <Skeleton className="h-12 w-full" />

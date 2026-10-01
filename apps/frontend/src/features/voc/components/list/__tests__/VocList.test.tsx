@@ -134,6 +134,28 @@ describe('<VocList>', () => {
     expect(screen.getByText('내가 제출한 VOC가 없습니다')).toBeInTheDocument();
   });
 
+  it('shows the My VOCs create action as a button that opens create', () => {
+    const onCreate = vi.fn();
+    render(
+      <VocList
+        items={[]}
+        loading={false}
+        error={null}
+        onSelect={onSelect}
+        onCreate={onCreate}
+        view="my"
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    const createButton = screen.getByRole('button', { name: '+ 새 VOC 작성' });
+    expect(createButton).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '+ 새 VOC 작성' })).not.toBeInTheDocument();
+
+    fireEvent.click(createButton);
+    expect(onCreate).toHaveBeenCalledOnce();
+  });
+
   it('shows "불러오기 실패" error state when error and no items', () => {
     const onRetry = vi.fn();
     render(

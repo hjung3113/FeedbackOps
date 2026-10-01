@@ -8,12 +8,17 @@ const requestProps = vi.hoisted(
   () => [] as Array<{ capability: string; returnRouteIntent: string }>,
 );
 const useVocListMock = vi.hoisted(() => vi.fn());
+const usePermissionCheckMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: (props: { capability: string; returnRouteIntent: string }) => {
     requestProps.push(props);
     return <div data-testid={`request-access-${props.capability}`}>{props.returnRouteIntent}</div>;
   },
+}));
+
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
+  usePermissionCheck: usePermissionCheckMock,
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -30,7 +35,7 @@ vi.mock('@/features/voc/components/list/VocList', () => ({ VocList: () => null }
 
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
-import { PermissionStateView } from '../permission-state-view.js';
+import { PermissionGate } from '../permission-gate.js';
 
 const SURVEY_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
@@ -52,6 +57,14 @@ describe('permission request return routes', () => {
   beforeEach(() => {
     cleanup();
     requestProps.length = 0;
+    usePermissionCheckMock.mockReturnValue({
+      data: {
+        state: 'request_access',
+        decision: { allow: false, reason: 'no_grant', requestable: [{ workspace_id: 'ws' }] },
+      },
+      isPending: false,
+      isError: false,
+    });
     window.history.pushState({}, '', '/permission-state?selected=state-fixture');
     useVocListMock.mockReturnValue({
       data: undefined,
@@ -71,7 +84,9 @@ describe('permission request return routes', () => {
   test('AC-D8e three call sites pass distinct return_route_intent values', () => {
     render(
       withClient(
-        <PermissionStateView state="request_access" capability="permission.state.fixture" />,
+        <PermissionGate capability="permission.state.fixture">
+          <p>protected fixture</p>
+        </PermissionGate>,
       ),
     );
     expect(screen.getByTestId('request-access-permission.state.fixture')).toBeInTheDocument();

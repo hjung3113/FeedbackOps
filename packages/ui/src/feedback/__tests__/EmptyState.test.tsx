@@ -69,6 +69,14 @@ describe('EmptyState — size variants', () => {
     expect(root?.className).toContain('text-sm');
   });
 
+  it('sm: renders the title as regular muted text', () => {
+    const { container } = render(<EmptyState title="Empty" size="sm" />);
+    const title = container.querySelector('p');
+
+    expect(title).toHaveClass('font-normal', 'text-text-muted');
+    expect(title).not.toHaveClass('font-medium', 'text-text-primary');
+  });
+
   it('md (default): applies py-12 gap-3 text-base classes', () => {
     const { container } = render(<EmptyState title="Empty" />);
     const root = container.firstElementChild;

@@ -511,9 +511,13 @@ describe('InboxPanel', () => {
     installNotificationFetch([]);
     renderInbox();
 
-    await screen.findByText('읽지 않은 알림이 없습니다.');
+    const unreadEmpty = await screen.findByTestId('list-state-message');
+    expect(unreadEmpty).toHaveAttribute('data-variant', 'empty');
+    expect(within(unreadEmpty).getByText('읽지 않은 알림이 없습니다.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'All' }));
-    await screen.findByText('받은 알림이 없습니다.');
+    const allEmpty = await screen.findByTestId('list-state-message');
+    expect(allEmpty).toHaveAttribute('data-variant', 'empty');
+    expect(within(allEmpty).getByText('받은 알림이 없습니다.')).toBeInTheDocument();
   });
 
   it('shows the list error and Retry refetches it', async () => {

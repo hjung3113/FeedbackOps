@@ -25,6 +25,7 @@ import {
 } from '@/lib/api';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import { formatRelativeTime } from '@/lib/datetime';
+import { ListStateMessage } from '@/components/ListStateMessage';
 
 type InboxFilter = 'unread' | 'all';
 
@@ -151,9 +152,10 @@ export function InboxPanel(): React.ReactElement {
       ) : null}
 
       {!list.isPending && !list.isError && items.length === 0 ? (
-        <p className="py-5 text-sm text-text-muted">
-          {filter === 'unread' ? HOME_INBOX_COPY.emptyUnread : HOME_INBOX_COPY.emptyAll}
-        </p>
+        <ListStateMessage
+          variant="empty"
+          title={filter === 'unread' ? HOME_INBOX_COPY.emptyUnread : HOME_INBOX_COPY.emptyAll}
+        />
       ) : null}
 
       {!list.isPending && !list.isError && items.length > 0 ? (
