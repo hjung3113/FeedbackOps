@@ -172,7 +172,7 @@ export function ListTabs({
                         'hover:bg-surface-card hover:text-text-primary',
                         'data-[state=active]:bg-surface-card-elevated data-[state=active]:text-text-primary data-[state=active]:shadow-none',
                         tab.urgent === true &&
-                          'text-danger hover:text-danger data-[state=active]:text-danger',
+                          'text-text-danger hover:text-text-danger data-[state=active]:text-text-danger',
                       )}
                     >
                       {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />}
