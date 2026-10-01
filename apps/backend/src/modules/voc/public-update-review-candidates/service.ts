@@ -1,11 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq } from 'drizzle-orm';
 
-import type { Db } from "../../../db/client.js";
-import { tasks } from "../../../db/schema/task.js";
-import { vocs } from "../../../db/schema/voc.js";
-import type { AuditService } from "../../core/audit/audit-service.js";
-import type { NotificationNotifier } from "../../notifications/index.js";
-import { insertPublicUpdateReviewCandidate } from "./repo.js";
+import type { Db } from '../../../db/client.js';
+import { tasks } from '../../../db/schema/task.js';
+import { vocs } from '../../../db/schema/voc.js';
+import type { AuditService } from '../../core/audit/audit-service.js';
+import type { NotificationNotifier } from '../../notifications/index.js';
+import { insertPublicUpdateReviewCandidate } from './repo.js';
 
 export interface ReleasedReviewCandidateInput {
   workspace_id: string;
@@ -61,10 +61,10 @@ export function createPublicUpdateReviewCandidatesService(deps: {
         await deps.auditService.record(tx, {
           workspace_id: input.workspace_id,
           actor_id: input.triggered_by_actor_id,
-          event_type: "public_update_review_candidate_created",
-          subject_type: "voc",
+          event_type: 'public_update_review_candidate_created',
+          subject_type: 'voc',
           subject_id: link.voc_id,
-          summary: "Public Update review candidate created for released Task",
+          summary: 'Public Update review candidate created for released Task',
           detail: {
             candidate_id: candidate.id,
             voc_id: link.voc_id,
@@ -80,10 +80,7 @@ export function createPublicUpdateReviewCandidatesService(deps: {
             .filter((actorId): actorId is string => actorId !== null)
             .map(String),
         );
-        if (
-          releaseContext.ownerUserId &&
-          !excludedActorIds.has(releaseContext.ownerUserId)
-        ) {
+        if (releaseContext.ownerUserId && !excludedActorIds.has(releaseContext.ownerUserId)) {
           await deps.notify(tx, 'task.released', {
             workspace_id: input.workspace_id,
             actor_ids: [releaseContext.ownerUserId],

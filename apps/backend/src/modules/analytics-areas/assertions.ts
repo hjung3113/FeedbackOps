@@ -1,6 +1,6 @@
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { lockAnalyticsArea, type LockedAnalyticsArea } from './repo.js';
+import { type LockedAnalyticsArea, lockAnalyticsArea } from './repo.js';
 
 export type AssertActiveAnalyticsAreaOptions = {
   onInvalid?: (reason: 'out_of_scope' | 'archived') => HttpError;

@@ -138,7 +138,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
-    const systems = `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
+    const systems = 'select id from core.managed_systems where workspace_id = $1 and slug like $2';
     await migrateHandle.pool.query(
       `delete from core.entity_links where managed_system_id in (${systems})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -172,7 +172,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from permission.permission_requests where workspace_id = $1 and reason like $2`,
+      'delete from permission.permission_requests where workspace_id = $1 and reason like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
@@ -188,7 +188,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from permission.permission_grants where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from permission.permission_grants where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
@@ -198,11 +198,11 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [reporterActorId, WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.rate_limits where key in (select id::text from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from core.rate_limits where key in (select id::text from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
-      `delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
@@ -212,11 +212,11 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [adminActorId, WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.audit_log where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      'delete from core.audit_log where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
-      `delete from core.actors where workspace_id = $1 and external_id like $2`,
+      'delete from core.actors where workspace_id = $1 and external_id like $2',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
@@ -224,7 +224,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
   }
@@ -494,7 +494,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         ],
       );
       const response = await migrateHandle.pool.query<{ id: string }>(
-        `insert into survey.survey_responses (workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at) values ($1, $2, $3, true, now()) returning id`,
+        'insert into survey.survey_responses (workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at) values ($1, $2, $3, true, now()) returning id',
         [WORKSPACE_ID, surveyId, respondent.rows[0]?.id],
       );
       // 1-5 low band is 1-2: poor responses rate 1, filler rates 5.
@@ -653,7 +653,13 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     await createVoc(seed.msA, null, 'A without area', 'low', false);
     const vocB1High = await createVoc(seed.msB, areaB1, 'B1 high unlinked', 'high', true);
     const vocB1Task = await createVoc(seed.msB, areaB1, 'B1 task assigned', 'low', true);
-    const vocB2High = await createVoc(seed.msB, areaB2, 'B2 critical unassigned', 'critical', false);
+    const vocB2High = await createVoc(
+      seed.msB,
+      areaB2,
+      'B2 critical unassigned',
+      'critical',
+      false,
+    );
     const vocB2Task = await createVoc(seed.msB, areaB2, 'B2 task unassigned', 'low', false);
     await createVoc(seed.msB, null, 'B without area', 'low', true);
     const taskA = await insertTaskRow(migrateHandle, {
@@ -772,7 +778,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 
   it('keeps bad-outcome-no-followup present at zero for an admin with no outcome surveys', async () => {
     const surveys = await migrateHandle.pool.query<{ count: string }>(
-      `select count(*)::text as count from survey.surveys where workspace_id = $1`,
+      'select count(*)::text as count from survey.surveys where workspace_id = $1',
       [WORKSPACE_ID],
     );
     const seed = await createDashboardScope();

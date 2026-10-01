@@ -260,10 +260,7 @@ runCase(
       "import { analyticsAreas } from '../db/schema/core';\n",
   },
   false,
-  [
-    'apps/backend/src/modules/findings/creation.ts:1',
-    'apps/backend/src/test-support/seed.ts:1',
-  ],
+  ['apps/backend/src/modules/findings/creation.ts:1', 'apps/backend/src/test-support/seed.ts:1'],
 );
 
 runCase(
@@ -308,10 +305,7 @@ runCase(
       'await tx.execute(sql`delete from voc.vocs using core.analytics_areas`);\n',
   },
   false,
-  [
-    'apps/backend/src/modules/tasks/comma-join.ts:1',
-    'apps/backend/src/modules/tasks/using.ts:1',
-  ],
+  ['apps/backend/src/modules/tasks/comma-join.ts:1', 'apps/backend/src/modules/tasks/using.ts:1'],
 );
 
 if (failures > 0) {

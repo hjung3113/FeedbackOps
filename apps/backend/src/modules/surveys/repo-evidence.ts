@@ -135,9 +135,7 @@ export async function readApprovedResultExcerptsPersonal(
     question_id: string;
     redacted_excerpt: string;
     response_id: string;
-  }>(
-    sql`select * from survey.read_approved_result_excerpts_personal(${workspaceId}, ${surveyId})`,
-  );
+  }>(sql`select * from survey.read_approved_result_excerpts_personal(${workspaceId}, ${surveyId})`);
   return result.rows;
 }
 

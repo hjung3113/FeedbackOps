@@ -82,10 +82,7 @@ export const vocs = vocSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    workspaceDisplayUq: uniqueIndex('vocs_workspace_display_id_uq').on(
-      t.workspaceId,
-      t.displayId,
-    ),
+    workspaceDisplayUq: uniqueIndex('vocs_workspace_display_id_uq').on(t.workspaceId, t.displayId),
     inboxIdx: index('vocs_inbox_idx').on(
       t.workspaceId,
       t.primaryManagedSystemId,
@@ -95,9 +92,7 @@ export const vocs = vocSchema.table(
     triageQueueIdx: index('vocs_triage_queue_idx')
       .on(t.workspaceId, t.triageState)
       .where(sql`${t.triageState} = 'untriaged'`),
-    activeIdx: index('vocs_active_idx')
-      .on(t.workspaceId)
-      .where(sql`${t.archivedAt} IS NULL`),
+    activeIdx: index('vocs_active_idx').on(t.workspaceId).where(sql`${t.archivedAt} IS NULL`),
     severityEnum: check(
       'vocs_severity_enum',
       sql`${t.severity} IS NULL OR ${t.severity} IN ('low','medium','high','critical')`,
@@ -114,10 +109,7 @@ export const vocs = vocSchema.table(
       'vocs_source_context_enum',
       sql`${t.sourceContext} IN ('direct_use','proxy_report','operational_discovery','stakeholder_request')`,
     ),
-    ownerXor: check(
-      'vocs_owner_xor',
-      sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`,
-    ),
+    ownerXor: check('vocs_owner_xor', sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`),
   }),
 );
 
@@ -317,13 +309,23 @@ export const publicUpdateReviewCandidates = vocSchema.table(
   'public_update_review_candidates',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
-    vocId: uuid('voc_id').notNull().references(() => vocs.id),
-    sourceTaskId: uuid('source_task_id').notNull().references(() => tasks.id),
-    sourceEntityLinkId: uuid('source_entity_link_id').notNull().references(() => entityLinks.id),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id),
+    sourceTaskId: uuid('source_task_id')
+      .notNull()
+      .references(() => tasks.id),
+    sourceEntityLinkId: uuid('source_entity_link_id')
+      .notNull()
+      .references(() => entityLinks.id),
     releaseEventId: uuid('release_event_id').notNull(),
     correlationId: uuid('correlation_id').notNull(),
-    triggeredByActorId: uuid('triggered_by_actor_id').notNull().references(() => actors.id),
+    triggeredByActorId: uuid('triggered_by_actor_id')
+      .notNull()
+      .references(() => actors.id),
     status: text('status').notNull().default('pending'),
     resolvedByActorId: uuid('resolved_by_actor_id').references(() => actors.id),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
@@ -334,13 +336,17 @@ export const publicUpdateReviewCandidates = vocSchema.table(
   },
   (t) => ({
     releaseVocUq: uniqueIndex('public_update_review_candidates_release_voc_uq').on(
-      t.workspaceId, t.releaseEventId, t.vocId,
+      t.workspaceId,
+      t.releaseEventId,
+      t.vocId,
     ),
     pendingTaskVocUq: uniqueIndex('public_update_review_candidates_pending_task_voc_uq')
       .on(t.workspaceId, t.sourceTaskId, t.vocId)
       .where(sql`${t.status} = 'pending'`),
     pendingQueueIdx: index('public_update_review_candidates_pending_queue_idx').on(
-      t.workspaceId, t.status, t.createdAt,
+      t.workspaceId,
+      t.status,
+      t.createdAt,
     ),
     statusCheck: check(
       'public_update_review_candidates_status_check',
@@ -421,7 +427,9 @@ export const vocAttachments = vocSchema.table(
     // Migration 0012 (#22 / C2): renamed from storage_uri; opaque object
     // key shaped `{workspace_id}/{uuidv7}/{sanitized_filename}` per D-03.
     storageKey: text('storage_key').notNull().unique('voc_attachments_storage_key_unique'),
-    uploadedByActorId: uuid('uploaded_by_actor_id').notNull().references(() => actors.id),
+    uploadedByActorId: uuid('uploaded_by_actor_id')
+      .notNull()
+      .references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     // IM-03: archive-over-delete columns (migration 0011).
     archivedAt: timestamp('archived_at', { withTimezone: true }),
@@ -432,7 +440,9 @@ export const vocAttachments = vocSchema.table(
   },
   (t) => ({
     vocIdx: index('voc_attachments_voc_idx').on(t.vocId).where(sql`${t.vocId} IS NOT NULL`),
-    commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind).where(sql`${t.commentId} IS NOT NULL`),
+    commentIdx: index('voc_attachments_comment_idx')
+      .on(t.commentId, t.commentKind)
+      .where(sql`${t.commentId} IS NOT NULL`),
     // IM-03: active-only partial index for attachment queries (migration 0011).
     activeIdx: index('voc_attachments_active_idx')
       .on(t.vocId)
@@ -463,7 +473,9 @@ export const vocAttachments = vocSchema.table(
 export const vocPermissionDecisionsSeedFixture = vocSchema.table(
   'voc_permission_decisions_seed_fixture',
   {
-    vocId: uuid('voc_id').primaryKey().references(() => vocs.id, { onDelete: 'cascade' }),
+    vocId: uuid('voc_id')
+      .primaryKey()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
     envelope: jsonb('envelope').notNull(),
   },
 );

@@ -305,9 +305,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
         'select analytics_area_id from survey.surveys where workspace_id = $1 and primary_managed_system_id = $2',
         [WORKSPACE_ID, managedSystemId],
       );
-      expect(surveys.rows).toEqual(
-        operation === 'create' ? [] : [{ analytics_area_id: null }],
-      );
+      expect(surveys.rows).toEqual(operation === 'create' ? [] : [{ analytics_area_id: null }]);
     },
   );
 

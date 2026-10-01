@@ -131,8 +131,12 @@ export const savedViews = coreSchema.table(
   'saved_views',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
-    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     surface: text('surface').notNull(),
     name: text('name').notNull(),
     filterPayload: jsonb('filter_payload').notNull(),
@@ -245,8 +249,12 @@ export const notifications = coreSchema.table(
   'notifications',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
-    actorId: uuid('actor_id').notNull().references(() => actors.id),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
     eventType: text('event_type').notNull(),
     subjectType: text('subject_type').notNull(),
     subjectId: uuid('subject_id').notNull(),

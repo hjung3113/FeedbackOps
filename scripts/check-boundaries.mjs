@@ -310,14 +310,10 @@ for (const rule of RULES) {
       const testSupportRoot = join(ROOT, 'apps/backend/src/test-support');
       const isModuleFile = isWithinPath(modulesRoot, file);
       const isTestSupportFile = isWithinPath(testSupportRoot, file);
-      const relativeParts = relative(
-        isModuleFile ? modulesRoot : testSupportRoot,
-        file,
-      ).split(sep);
+      const relativeParts = relative(isModuleFile ? modulesRoot : testSupportRoot, file).split(sep);
       if (
         (!isModuleFile && !isTestSupportFile) ||
-        (isModuleFile &&
-          (srcSegment === 'managed-systems' || srcSegment === 'analytics-areas')) ||
+        (isModuleFile && (srcSegment === 'managed-systems' || srcSegment === 'analytics-areas')) ||
         relativeParts.includes('__tests__') ||
         /\.test\./.test(basename(file))
       ) {
@@ -328,13 +324,12 @@ for (const rule of RULES) {
         console.error(`[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${name})`);
       }
       if (isModuleFile) {
-        const tableReference =
-          new RegExp(
-            String.raw`\b(?:(?:from|join|update|into|using|delete\s+from|` +
-              String.raw`truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+|,\s*)` +
-              String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)\b["']?`,
-            'gi',
-          );
+        const tableReference = new RegExp(
+          String.raw`\b(?:(?:from|join|update|into|using|delete\s+from|` +
+            String.raw`truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+|,\s*)` +
+            String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)\b["']?`,
+          'gi',
+        );
         for (const match of content.matchAll(tableReference)) {
           const line = content.slice(0, match.index).split('\n').length;
           violations++;
