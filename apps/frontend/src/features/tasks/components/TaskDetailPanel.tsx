@@ -106,10 +106,7 @@ function TaskDetailSkeletonContent({ hasActionFooter }: { hasActionFooter: boole
         <Skeleton className="h-24 w-full" />
       </div>
       {hasActionFooter ? (
-        <div
-          aria-hidden="true"
-          className="shrink-0 border-t border-border-subtle p-3"
-        >
+        <div aria-hidden="true" className="shrink-0 border-t border-border-subtle p-3">
           <Skeleton className="h-10 w-full" />
         </div>
       ) : null}
@@ -179,11 +176,7 @@ export function TaskDetailPanel({
 
   if (taskQuery.isLoading) {
     return (
-      <TaskDetailPanelFrame
-        loading
-        ariaLive="polite"
-        onClose={onClose}
-      >
+      <TaskDetailPanelFrame loading ariaLive="polite" onClose={onClose}>
         <TaskDetailSkeletonContent hasActionFooter={hasActionFooter} />
       </TaskDetailPanelFrame>
     );
@@ -200,10 +193,7 @@ export function TaskDetailPanel({
   }
   if (taskQuery.error || !taskQuery.data) {
     return (
-      <TaskDetailPanelFrame
-        ariaLive="polite"
-        onClose={onClose}
-      >
+      <TaskDetailPanelFrame ariaLive="polite" onClose={onClose}>
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <ListStateMessage
             variant="error"
