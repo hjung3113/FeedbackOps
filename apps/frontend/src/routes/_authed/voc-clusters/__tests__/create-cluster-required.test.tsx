@@ -59,6 +59,15 @@ async function openCreateDialog() {
 describe('VOC cluster creation Managed System validation', () => {
   beforeEach(() => createClusterMutate.mockReset());
 
+  it('uses secondary styling for the create-dialog cancel action', async () => {
+    await openCreateDialog();
+
+    expect(screen.getByTestId('create-cluster-cancel')).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
+  });
+
   it('blocks the real submit button, shows an associated error, and focuses Managed System', async () => {
     await openCreateDialog();
     const managedSystem = screen.getByTestId('cluster-managed-system-select');

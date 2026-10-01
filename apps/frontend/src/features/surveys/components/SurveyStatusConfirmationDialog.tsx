@@ -60,7 +60,7 @@ export function SurveyStatusConfirmationDialog({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={onClose}
             disabled={isPending}
             data-testid="survey-status-cancel"

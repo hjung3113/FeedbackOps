@@ -149,8 +149,10 @@ describe('<EditDescriptionModal>', () => {
     await user.clear(titleInput);
     await user.type(titleInput, '변경된 제목');
 
-    // Click the cancel/close button
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    // Click the secondary cancel/close control.
+    const cancelButton = screen.getByRole('button', { name: '취소' });
+    expect(cancelButton).toHaveClass('bg-surface-raised', 'border-border-subtle');
+    await user.click(cancelButton);
 
     // DirtyConfirmation uses DirtyConfirmation (AlertDialog from @radix-ui/react-dialog)
     // which renders with role="dialog". Query by the title text.

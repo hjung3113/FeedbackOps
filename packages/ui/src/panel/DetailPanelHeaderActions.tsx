@@ -85,7 +85,7 @@ export function DetailPanelHeaderActions({
       typeof window !== 'undefined' ? new URL(copyUrl, window.location.href).href : copyUrl;
 
     if (await writeToClipboard(absolute)) {
-      toast('링크가 복사되었습니다.');
+      toast.success('링크가 복사되었습니다.');
     } else {
       // Saying "복사되었습니다" after copying nothing is worse than failing:
       // the actor pastes stale content and never learns why.

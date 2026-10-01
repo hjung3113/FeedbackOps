@@ -209,7 +209,7 @@ export function PublicUpdateReviewModal({
           >
             Apply public update
           </Button>
-          <Button variant="ghost" onClick={close} disabled={resolve.isPending}>
+          <Button variant="secondary" onClick={close} disabled={resolve.isPending}>
             취소
           </Button>
         </DialogFooter>

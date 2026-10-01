@@ -319,7 +319,7 @@ export function CreateFindingModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+          <Button type="button" variant="secondary" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button type="submit" form="create-finding-form" disabled={isSubmitting}>

@@ -149,7 +149,7 @@ export function AddVocModal({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={closeAndReset}
             disabled={mutation.isPending}
             data-testid="add-voc-cancel"

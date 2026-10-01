@@ -12,7 +12,7 @@
 // AttachmentRow (icon mapping, oversize / pending / uploaded state, remove
 // button, formatFileSize) mirrors screen-voc-create.jsx:285-340.
 
-import { cn } from '@fops/ui';
+import { FieldLabel, cn } from '@fops/ui';
 import { Check, FileText, Paperclip, X } from 'lucide-react';
 import type * as React from 'react';
 
@@ -25,6 +25,7 @@ import {
 // Korean copy is verbatim from prototype lines 148, 170, 172.
 const COPY = {
   fieldLabel: '첨부',
+  fieldTip: '최대 25MB. 큰 스프레드시트는 본문이 아니라 파일 첨부로 저장됩니다.',
   dropHint: '파일을 드래그하거나 클릭해서 추가',
   footer: '최대 25MB · 다중 선택',
   removeTitle: '첨부 제거',
@@ -72,16 +73,7 @@ export function AttachmentDropzone({
 
   return (
     <section data-testid={testId} className="flex flex-col gap-2">
-      {/* Label */}
-      <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-        <span>{COPY.fieldLabel}</span>
-        <span
-          className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-surface-row-selected text-xs text-text-muted"
-          aria-hidden
-        >
-          ?
-        </span>
-      </div>
+      <FieldLabel tip={COPY.fieldTip}>{COPY.fieldLabel}</FieldLabel>
 
       {/* Dropzone */}
       {/* biome-ignore lint/a11y/noLabelWithoutControl: htmlFor wires to the hidden input via id */}
