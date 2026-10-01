@@ -1,5 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
-import { EVIDENCE_IMPORTANCE_LABELS } from '@/lib/copy/enum-labels';
+import { EVIDENCE_IMPORTANCE_LABELS, EVIDENCE_SOURCE_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
@@ -40,11 +40,10 @@ interface AddEvidenceModalProps {
 const SOURCE_TYPE_OPTIONS: {
   value: EvidenceHighlightSourceType;
   label: string;
-}[] = [
-  { value: 'voc', label: 'VOC' },
-  { value: 'survey_response', label: 'Survey Response' },
-  { value: 'note', label: 'Note (manual)' },
-];
+}[] = (['voc', 'survey_response', 'note'] as const).map((value) => ({
+  value,
+  label: EVIDENCE_SOURCE_TYPE_LABELS[value],
+}));
 
 const SENTIMENT_OPTIONS: {
   value: EvidenceHighlightSentiment;
