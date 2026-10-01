@@ -646,14 +646,14 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       return voc.id;
     };
 
-    const vocA1High = await createVoc(seed.msA, areaA1, 'A1 high unassigned', 'high', false);
+    await createVoc(seed.msA, areaA1, 'A1 high unassigned', 'high', false);
     const vocA1Task = await createVoc(seed.msA, areaA1, 'A1 task assigned', 'low', true);
     const vocA2High = await createVoc(seed.msA, areaA2, 'A2 high task', 'high', true);
     await createVoc(seed.msA, areaA2, 'A2 unassigned', 'low', false);
     await createVoc(seed.msA, null, 'A without area', 'low', false);
-    const vocB1High = await createVoc(seed.msB, areaB1, 'B1 high unlinked', 'high', true);
+    await createVoc(seed.msB, areaB1, 'B1 high unlinked', 'high', true);
     const vocB1Task = await createVoc(seed.msB, areaB1, 'B1 task assigned', 'low', true);
-    const vocB2High = await createVoc(
+    await createVoc(
       seed.msB,
       areaB2,
       'B2 critical unassigned',

@@ -333,3 +333,8 @@ apps/frontend/src/routes/_authed/admin/analytics-areas.test.tsx format -- pre-ex
 packages/ui/src/index.ts format -- pre-existing on develop (measured 2026-10-01); #616 only adds the DatePicker export
 packages/ui/src/badges/__tests__/ManagedSystemPill.test.tsx format -- pre-existing on develop (measured 2026-10-01); #615 adds the identity-token mark cases
 packages/ui/src/components/ChipPicker.tsx format -- pre-existing on develop (measured 2026-10-01); #615 passes the system slug to the shared mark helper
+apps/backend/migrations/meta/0051_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0052_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0053_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0054_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/src/modules/dashboard/service.ts lint/style/noNonNullAssertion -- pre-existing; values are defined inside the openVoc/vocScope guard, and a lint chore must not change the coverage math (release gate vs main, 2026-10-01)
