@@ -155,7 +155,7 @@ export function TaskRequestPanel({
                     className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                   >
                     <span>{taskForOutcome.title}</span>
-                    <span className="font-mono text-xs text-text-muted">
+                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                       {taskForOutcome.display_id}
                     </span>
                   </Link>
@@ -176,7 +176,7 @@ export function TaskRequestPanel({
                     className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                   >
                     <span>{resultingTask.title}</span>
-                    <span className="font-mono text-xs text-text-muted">
+                    <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                       {resultingTask.display_id}
                     </span>
                   </Link>
@@ -508,7 +508,7 @@ export function TaskRequestPanel({
                       {FINDING_STATUS_LABELS[sourceFindingQuery.data.status]}
                     </OutlineBadge>
                   )}
-                  <span className="font-mono text-xs text-text-muted">
+                  <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                     {sourceFindingQuery.data?.display_id ?? 'Finding'}
                   </span>
                   {!sourceFindingQuery.data?.display_id && (

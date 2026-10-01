@@ -111,7 +111,7 @@ describe('TaskRequestsRoute display ids', () => {
   it('uses Korean Task Request statuses on the queue tabs', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
-    await screen.findByText('REQ-42');
+    await screen.findByRole('button', { name: /REQ-42/ });
     for (const label of ['검토 대기', '근거 추가 필요', '승인됨', '반려됨']) {
       expect(screen.getByRole('tab', { name: new RegExp(label) })).toBeInTheDocument();
     }
@@ -176,7 +176,7 @@ describe('TaskRequestsRoute display ids', () => {
   it('resets an empty non-default status tab to the default Pending tab', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
-    await screen.findByText('REQ-42');
+    await screen.findByRole('button', { name: /REQ-42/ });
     await userEvent.click(screen.getByRole('tab', { name: '승인됨' }));
 
     expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();

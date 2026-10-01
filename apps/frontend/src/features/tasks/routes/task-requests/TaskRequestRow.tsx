@@ -1,5 +1,6 @@
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import { ObjectRow } from '@fops/ui';
+import { Fragment, type ReactNode } from 'react';
 
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
@@ -52,6 +53,37 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
   const ms = names.managedSystemsById[item.primary_managed_system_id];
   const showsSourceId = item.source_type === 'finding';
   const evidenceCount = item.source?.evidence_count;
+  const metaParts: Array<{ key: string; node: ReactNode }> = [];
+
+  if (showsSourceId) {
+    metaParts.push({
+      key: 'source',
+      node: (
+        <span className="inline-flex items-center gap-1">
+          <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
+        </span>
+      ),
+    });
+  }
+  if (evidenceCount !== undefined) {
+    metaParts.push({ key: 'evidence-count', node: <span>Evidence · {evidenceCount}</span> });
+  }
+  metaParts.push({
+    key: 'managed-system',
+    node: (
+      <>
+        <span>{ms?.name ?? 'Managed System'}</span>
+        {!ms && (
+          <span className="font-mono text-text-muted">
+            {shortId(item.primary_managed_system_id)}
+          </span>
+        )}
+      </>
+    ),
+  });
+  if (item.created_at) {
+    metaParts.push({ key: 'created-at', node: <span>{formatDate(item.created_at)}</span> });
+  }
 
   return (
     <ObjectRow
@@ -61,30 +93,12 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
       density="default"
       onClick={() => onSelect(item.id)}
       badges={<TaskRequestBadge status={item.status} />}
-      meta={
-        <>
-          {showsSourceId && (
-            <span className="inline-flex items-center gap-1">
-              <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
-            </span>
-          )}
-          {evidenceCount !== undefined && (
-            <>
-              {showsSourceId && dot()}
-              <span>Evidence · {evidenceCount}</span>
-            </>
-          )}
-          {(showsSourceId || evidenceCount !== undefined) && dot()}
-          <span>{ms?.name ?? 'Managed System'}</span>
-          {!ms && (
-            <span className="font-mono text-text-muted">
-              {shortId(item.primary_managed_system_id)}
-            </span>
-          )}
-          {dot()}
-          <span>{formatDate(item.created_at)}</span>
-        </>
-      }
+      meta={metaParts.map(({ key, node }, index) => (
+        <Fragment key={key}>
+          {index > 0 && dot()}
+          {node}
+        </Fragment>
+      ))}
       trailing={
         <>
           <span className="text-xs text-text-muted">

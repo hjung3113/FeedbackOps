@@ -83,7 +83,7 @@ export function MentionPickerButton({
           )}
         >
           <AtSign size={12} aria-hidden="true" />
-          <span>@</span>
+          <span>멘션</span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>

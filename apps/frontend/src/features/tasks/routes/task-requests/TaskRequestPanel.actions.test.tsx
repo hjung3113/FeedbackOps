@@ -368,4 +368,23 @@ describe('TaskRequestPanel next actions', () => {
       expect(screen.queryByRole('button', { name: 'Task로 전환' })).not.toBeInTheDocument();
     },
   );
+
+  it('keeps linked Task and Finding display IDs on one line', async () => {
+    useFindingDetail.mockReturnValue({
+      data: { display_id: 'FIN-181', title: 'SSO session recovery', status: 'active' },
+    });
+    useConversion.mockReturnValue({
+      open: false,
+      canConvert: false,
+      result: resultingTask,
+      setOpen: vi.fn(),
+    });
+
+    renderInRouter({ ...request, source_type: 'finding', status: 'converted' });
+
+    const taskDisplayId = await screen.findByText('TASK-901');
+    const findingDisplayId = screen.getByText('FIN-181');
+    expect(taskDisplayId).toHaveClass('whitespace-nowrap', 'shrink-0');
+    expect(findingDisplayId).toHaveClass('whitespace-nowrap', 'shrink-0');
+  });
 });

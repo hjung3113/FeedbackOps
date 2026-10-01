@@ -17,7 +17,7 @@ import {
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Activity, Filter, Plus, Search } from 'lucide-react';
+import { Filter, Plus, Search } from 'lucide-react';
 import * as React from 'react';
 import { MilestoneCreatePanel, MilestoneDetailPanel } from '../components/MilestoneDetailPanel';
 import { MilestoneRow } from '../components/MilestoneRow';
@@ -28,8 +28,7 @@ import { MilestoneRow } from '../components/MilestoneRow';
 // docs/design-prototype/screen-milestones.jsx MilestonesScreen. The detail
 // panel is B2d; B2e wires New milestone to the same property block in a
 // create state — no separate create screen. Slice C (per-row mini timeline,
-// Gantt) is out of this slice — the summary keeps the prototype's
-// schedule-risk label only.
+// Gantt) is out of this slice, so the summary strip uses supported KPIs only.
 // Selection rides `param` like every shipped Task view (design §7 item 8);
 // there is no `selected` key on /tasks.
 export interface MilestonesRouteProps {
@@ -428,11 +427,8 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 valueClassName="text-text-success"
                 testId="milestone-summary-released"
               />
+              {/* #670: the prototype's schedule-risk string is designer guidance, not shipped copy. */}
               <div className="flex-1" />
-              <span className="inline-flex items-center gap-1 text-xs text-text-muted">
-                <Activity className="h-3.5 w-3.5" aria-hidden="true" />
-                Schedule risk · mini-timeline 우측 표시
-              </span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">

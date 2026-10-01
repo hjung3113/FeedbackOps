@@ -24,8 +24,8 @@ export function DescriptionSection({
   const [modalOpen, setModalOpen] = React.useState(false);
 
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">BODY</p>
+    <div className="mt-8">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3.5">BODY</p>
       <div
         data-testid="description-body-card"
         className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"

@@ -73,6 +73,25 @@ describe('TaskRequestRow identity', () => {
     expect(screen.queryByText('40000000')).not.toBeInTheDocument();
   });
 
+  it('omits the trailing separator when the created date is missing', () => {
+    render(
+      <TaskRequestRow
+        item={{ ...REQUEST, created_at: '' }}
+        selected={false}
+        names={{
+          actorsById: {},
+          managedSystemsById: { [REQUEST.primary_managed_system_id]: { name: 'Billing Ops' } },
+        }}
+        onSelect={() => undefined}
+      />,
+    );
+
+    const row = screen.getByRole('button', { name: /REQ-42/ });
+    const separators = row.querySelectorAll('span[aria-hidden="true"]');
+    expect(separators).toHaveLength(1);
+    expect(separators[0]?.nextElementSibling).toHaveTextContent('Billing Ops');
+  });
+
   it.each(taskRequestStatusSchema.options)(
     'renders a display label for Task Request status %s',
     (status) => {

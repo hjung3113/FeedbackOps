@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useLayoutEffect, useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DetailPanelSectionNav } from '../DetailPanelSectionNav';
 
@@ -10,18 +11,61 @@ const SECTIONS = [
   { id: 'summary', label: 'Summary', count: 3 },
 ];
 
-const rect = (left: number, right: number, top = 0): DOMRect =>
+const rect = (left: number, right: number, top = 0, height = 24): DOMRect =>
   ({
     x: left,
     y: top,
     left,
     right,
     top,
-    bottom: top + 24,
+    bottom: top + height,
     width: right - left,
-    height: 24,
+    height,
     toJSON: () => ({}),
   }) as DOMRect;
+
+function stubResizeObserver() {
+  let headerHeight = 24;
+  const notifyCallbacks: Array<() => void> = [];
+  class TestResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      notifyCallbacks.push(() => callback([], this as unknown as ResizeObserver));
+    }
+
+    observe(target: Element) {
+      if (target.classList.contains('sticky')) {
+        target.getBoundingClientRect = vi.fn(() => rect(0, 300, 0, headerHeight));
+      }
+    }
+
+    disconnect() {}
+  }
+  vi.stubGlobal('ResizeObserver', TestResizeObserver);
+  return {
+    setHeaderHeight: (height: number) => {
+      headerHeight = height;
+    },
+    notify: () => {
+      for (const notify of notifyCallbacks) notify();
+    },
+  };
+}
+
+function ScrollBody({ scrollRef }: { scrollRef: { current: HTMLElement | null } }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    scrollRef.current = bodyRef.current;
+    return () => {
+      scrollRef.current = null;
+    };
+  }, [scrollRef]);
+
+  return (
+    <div ref={bodyRef} data-testid="section-scroll-body">
+      <div data-anchor="overview" data-testid="section-anchor" />
+    </div>
+  );
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -71,6 +115,59 @@ describe('DetailPanelSectionNav', () => {
     expect(bodyBtn.className).toMatch(/border-accent-primary/);
 
     document.body.removeChild(scrollEl);
+  });
+
+  it('keeps a section heading below the sticky navigation after a jump', () => {
+    const scrollEl = document.createElement('div');
+    scrollEl.scrollTop = 10;
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 120, 30));
+    scrollEl.scrollTo = vi.fn();
+    const overview = document.createElement('div');
+    overview.setAttribute('data-anchor', 'overview');
+    overview.getBoundingClientRect = vi.fn(() => rect(0, 120, 130));
+    scrollEl.append(overview);
+    document.body.append(scrollEl);
+
+    const { container } = render(
+      <DetailPanelSectionNav
+        sections={[{ id: 'overview', label: 'Overview' }]}
+        scrollRef={{ current: scrollEl }}
+      />,
+    );
+    const stickyNav = container.firstElementChild as HTMLDivElement;
+    stickyNav.getBoundingClientRect = vi.fn(() => rect(0, 120));
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+
+    expect(overview.style.scrollMarginTop).toBe('24px');
+    expect(scrollEl.scrollTo).toHaveBeenCalledWith({ top: 86, behavior: 'smooth' });
+    scrollEl.remove();
+  });
+
+  it('sets anchor scroll margins after the scroll body ref attaches and updates them after header resize', () => {
+    const observer = stubResizeObserver();
+    function DetailPanel() {
+      const scrollRef = useRef<HTMLElement | null>(null);
+      return (
+        <>
+          <DetailPanelSectionNav
+            sections={[{ id: 'overview', label: 'Overview' }]}
+            scrollRef={scrollRef}
+          />
+          <ScrollBody scrollRef={scrollRef} />
+        </>
+      );
+    }
+
+    render(<DetailPanel />);
+    const anchor = screen.getByTestId('section-anchor');
+    expect(anchor).toHaveStyle({ scrollMarginTop: '24px' });
+
+    observer.setHeaderHeight(40);
+    act(() => observer.notify());
+
+    expect(anchor).toHaveStyle({ scrollMarginTop: '40px' });
   });
 
   it('returns null when sections is empty', () => {
