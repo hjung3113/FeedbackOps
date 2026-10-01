@@ -259,7 +259,7 @@ export function MilestoneDetailContent({
           />
 
           <div className="mb-8">
-            <MilestonePanelSectionTitle>Properties</MilestonePanelSectionTitle>
+            <MilestonePanelSectionTitle>속성</MilestonePanelSectionTitle>
             {/* The scroll container owns horizontal padding. These local rows
                 use the prototype's 120px value column and left alignment. */}
             <FieldRow label="Status" className={milestonePropertyFieldClassName}>
@@ -384,7 +384,7 @@ export function MilestoneDetailContent({
         </div>
 
         <div data-anchor="activity" className="last:mb-0">
-          <MilestonePanelSectionTitle>Activity</MilestonePanelSectionTitle>
+          <MilestonePanelSectionTitle>이력</MilestonePanelSectionTitle>
           {/* No audit_log read path exists (§7 item 9); the empty copy ships. */}
           <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
         </div>

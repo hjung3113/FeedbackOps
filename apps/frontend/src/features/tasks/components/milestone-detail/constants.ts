@@ -1,14 +1,13 @@
 import type { MilestoneStatusFilter, TaskDto } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
 
-// Nav order mirrors the prototype (Overview, Timeline, Tasks, Evidence,
-// Activity); Timeline stays Slice C. MilestoneDetailContent appends the
-// child-row count to the Tasks entry once the milestone query resolves.
+// ADR-0057 A2 amendment localizes Korean navigation; Timeline stays Slice C.
+// MilestoneDetailContent appends the child-row count to Tasks when loaded.
 export const SECTIONS: PanelSection[] = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'overview', label: '요약' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'evidence', label: 'Evidence' },
-  { id: 'activity', label: 'Activity' },
+  { id: 'activity', label: '이력' },
 ];
 
 export const PRIORITY_SEVERITY: Record<

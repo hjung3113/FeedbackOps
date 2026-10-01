@@ -13,6 +13,7 @@ import {
   type ObjectRowSeverity,
   OutlineBadge,
   PermissionBlockedPanel,
+  UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -143,9 +144,11 @@ export function TaskListRoute({
                   <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                   {dot()}
                   <span>
-                    {task.assignee_actor_id
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
-                      : '미배정'}
+                    {task.assignee_actor_id ? (
+                      (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                    ) : (
+                      <UnassignedBadge />
+                    )}
                   </span>
                   {dot()}
                   <span>

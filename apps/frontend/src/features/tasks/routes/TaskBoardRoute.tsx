@@ -14,6 +14,7 @@ import {
   OutlineBadge,
   PermissionBlockedPanel,
   SeverityBadge,
+  UnassignedBadge,
   UserAvatar,
   WorkbenchShell,
 } from '@fops/ui';
@@ -67,7 +68,7 @@ function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assign
       <div className="flex items-center gap-1.5"><span className="font-mono text-xs text-text-muted">{task.display_id}</span><SeverityBadge severity={severity(task.priority)} label={TASK_PRIORITY_LABELS[task.priority]} /></div>
       {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}
       <div className="mt-2 text-sm font-medium text-text-primary">{task.title}</div>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <span className="rounded border border-border-subtle px-1.5 py-0.5">미배정</span>}</div>
+      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <UnassignedBadge />}</div>
       {!enabled && <span className="sr-only">Drag changes status only when grouped by status.</span>}
     </button>
   );

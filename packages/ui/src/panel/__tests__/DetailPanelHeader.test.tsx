@@ -15,9 +15,20 @@ const KIND_ACCENT: Record<DetailPanelKind, string> = {
   voc: 'rgb(var(--color-aether-blue))',
   finding: 'rgb(var(--color-emerald))',
   task: 'rgb(var(--color-amethyst))',
+  task_request: 'rgb(var(--color-amber))',
   survey: 'rgb(var(--color-cyan-spark))',
   cluster: 'rgb(var(--color-amber))',
   milestone: 'rgb(var(--color-amber))',
+};
+
+const KIND_LABELS: Record<DetailPanelKind, string> = {
+  voc: 'VOC',
+  finding: 'Finding',
+  task: 'Task',
+  task_request: 'Task Request',
+  survey: 'Survey',
+  cluster: 'Cluster',
+  milestone: 'Milestone',
 };
 
 const kinds = Object.keys(KIND_ACCENT) as DetailPanelKind[];
@@ -49,6 +60,21 @@ describe('DetailPanelHeader — kind accent stripe', () => {
 });
 
 describe('DetailPanelHeader — milestone kind badge', () => {
+  it.each(kinds)('renders kind="%s" as a title-case chip with a dot', (kind) => {
+    const { container } = render(<DetailPanelHeader kind={kind} id="ID-1" onClose={() => {}} />);
+    const chip = screen.getByText(KIND_LABELS[kind]);
+
+    expect(chip).toHaveClass('rounded');
+    expect(chip).toHaveClass('text-[11px]');
+    expect(chip).not.toHaveClass('uppercase');
+    expect(chip.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect((chip as HTMLElement).style.color).toBe(KIND_ACCENT[kind]);
+    expect((chip as HTMLElement).style.backgroundColor).toBe(
+      KIND_ACCENT[kind].replace(/\)$/, ' / 12%)'),
+    );
+    expect(container.querySelector(`[data-kind="${kind}"]`)).toBeInTheDocument();
+  });
+
   it('renders the rounded title-case badge without a leading stripe', () => {
     const { container } = render(
       <DetailPanelHeader

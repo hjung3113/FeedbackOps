@@ -23,6 +23,7 @@ import {
   PanelTitleBlock,
   PermissionBlockedPanel,
   SeverityBadge,
+  UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -37,7 +38,8 @@ const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'h
     urgent: 'critical',
   };
 
-const SECTIONS: PanelSection[] = [
+// ADR-0057 A2 amendment: keep panel navigation in Korean and preserve domain nouns.
+export const TASK_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'overview', label: '요약' },
   { id: 'properties', label: '속성' },
   { id: 'source', label: '출처' },
@@ -137,7 +139,7 @@ export function TaskDetailPanel({
           />
         }
       />
-      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+      <DetailPanelSectionNav sections={TASK_DETAIL_SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
           <PanelSectionTitle className="px-4">요약</PanelSectionTitle>
@@ -172,7 +174,7 @@ export function TaskDetailPanel({
                 {actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨'}
               </span>
             ) : (
-              <span className="text-accent-danger">미배정</span>
+              <UnassignedBadge />
             )}
           </FieldRow>
           <FieldRow label="마감일">

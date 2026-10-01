@@ -5,7 +5,7 @@
  * indicator lead, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
- * "Owner 필요" badge + reporter avatar).
+ * shared unassigned badge + reporter avatar).
  *
  * SELECTED STATE: prototype uses a 2px left accent bar (`.object-row.selected::before`,
  * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
@@ -30,6 +30,7 @@ import {
   ReporterStatusBadge,
   SeverityBadge,
   SeverityIndicator,
+  UnassignedBadge,
   UserAvatar,
 } from '@fops/ui';
 import { cn } from '@fops/ui';
@@ -225,13 +226,11 @@ export function VocRow({
         )}
       </div>
 
-      {/* TRAILING: owner avatar / "Owner 필요" + reporter avatar */}
+      {/* TRAILING: owner avatar / unassigned badge + reporter avatar */}
       {permissionLimited !== true && (
         <div className="flex items-center gap-2 shrink-0">
           {showOwnerMissing && ownerMissing ? (
-            <span className="inline-flex items-center rounded-full bg-accent-danger/10 px-2 py-0.5 text-xs font-medium text-accent-danger">
-              Owner 필요
-            </span>
+            <UnassignedBadge />
           ) : owner !== null && owner !== undefined ? (
             <UserAvatar user={owner} size="sm" />
           ) : null}

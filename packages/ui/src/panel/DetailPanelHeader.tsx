@@ -2,9 +2,15 @@ import { X } from 'lucide-react';
 import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
-// 'milestone' (#514 B2d): label and amber accent match DETAIL_PANEL_KINDS in
-// docs/design-prototype/panel.jsx.
-export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster' | 'milestone';
+// Labels and accents follow DETAIL_PANEL_KINDS in docs/design-prototype/panel.jsx.
+export type DetailPanelKind =
+  | 'voc'
+  | 'finding'
+  | 'task_request'
+  | 'task'
+  | 'milestone'
+  | 'survey'
+  | 'cluster';
 
 export interface DetailPanelHeaderProps {
   kind: DetailPanelKind;
@@ -22,6 +28,7 @@ export interface DetailPanelHeaderProps {
 const KIND_LABELS: Record<DetailPanelKind, string> = {
   voc: 'VOC',
   finding: 'Finding',
+  task_request: 'Task Request',
   task: 'Task',
   survey: 'Survey',
   cluster: 'Cluster',
@@ -35,6 +42,7 @@ const KIND_LABELS: Record<DetailPanelKind, string> = {
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
   voc: 'rgb(var(--color-aether-blue))',
   finding: 'rgb(var(--color-emerald))',
+  task_request: 'rgb(var(--color-amber))',
   task: 'rgb(var(--color-amethyst))',
   survey: 'rgb(var(--color-cyan-spark))',
   cluster: 'rgb(var(--color-amber))',
@@ -50,6 +58,7 @@ export function DetailPanelHeader({
 }: DetailPanelHeaderProps) {
   const isMilestone = kind === 'milestone';
   const accentColor = KIND_ACCENT[kind];
+  const accentTint = accentColor.replace(/\)$/, ' / 12%)');
 
   return (
     <div
@@ -69,28 +78,19 @@ export function DetailPanelHeader({
         data-testid="detail-panel-header-content"
         className={cn('flex flex-1 items-center gap-3 pr-3 min-w-0', isMilestone ? 'pl-5' : 'pl-4')}
       >
-        {/* Kind label + id (id only when the caller has it) */}
+        {/* Kind chip + id (id only when the caller has it) */}
         <div className={cn('flex gap-2 min-w-0', isMilestone ? 'items-center' : 'items-baseline')}>
-          {isMilestone ? (
+          <span
+            className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em]"
+            style={{ color: accentColor, backgroundColor: accentTint }}
+          >
             <span
-              className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em]"
-              style={{
-                color: 'rgb(var(--color-amber))',
-                backgroundColor: 'rgb(var(--color-amber) / 12%)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: 'rgb(var(--color-amber))' }}
-              />
-              {KIND_LABELS[kind]}
-            </span>
-          ) : (
-            <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
-              {KIND_LABELS[kind]}
-            </span>
-          )}
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: accentColor }}
+            />
+            {KIND_LABELS[kind]}
+          </span>
           {id !== undefined && (
             <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
           )}

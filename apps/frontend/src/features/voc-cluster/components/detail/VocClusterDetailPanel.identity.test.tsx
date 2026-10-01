@@ -20,7 +20,7 @@ const clusterState = vi.hoisted(() => ({
     status: 'confirmed',
     severity: 'high',
     confidence: 'high',
-    owner_user_id: '20000000-0000-0000-0000-000000000002',
+    owner_user_id: '20000000-0000-0000-0000-000000000002' as string | null,
     confirmed_by: '30000000-0000-0000-0000-000000000003',
     confirmed_at: '2026-07-10T00:00:00.000Z',
     primary_managed_system_id: '40000000-0000-0000-0000-000000000004',
@@ -131,6 +131,17 @@ describe('VocClusterDetailPanel identity', () => {
 
     expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('알 수 없는 사용자');
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
+  });
+
+  it('uses the shared unassigned badge when the cluster has no owner', () => {
+    clusterState.data.owner_user_id = null;
+
+    render(<VocClusterDetailPanel clusterId={cluster.id} />);
+
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
   it.each(findingSeveritySchema.options)('renders the %s severity label', (severity) => {

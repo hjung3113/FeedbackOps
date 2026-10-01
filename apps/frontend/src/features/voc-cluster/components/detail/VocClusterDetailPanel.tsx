@@ -9,10 +9,12 @@ import {
   FieldRow,
   ManagedSystemPill,
   OutlineBadge,
+  type PanelSection,
   PanelSectionTitle,
   type ReporterStatusBadge,
   SeverityBadge,
   Skeleton,
+  UnassignedBadge,
 } from '@fops/ui';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Plus, Trash2 } from 'lucide-react';
@@ -69,6 +71,17 @@ function memberDisplay(member: VocClusterMemberPresentation): {
     return { primary: member.display_id, secondary: shortId(member.voc_id) };
   }
   return { primary: 'VOC', secondary: shortId(member.voc_id) };
+}
+
+// ADR-0057 A2 amendment localizes Korean navigation and preserves domain nouns.
+export function buildVocClusterDetailSections(memberCount: number): PanelSection[] {
+  return [
+    { id: 'overview', label: '요약' },
+    { id: 'why', label: '근거' },
+    { id: 'execution', label: '실행' },
+    { id: 'members', label: '멤버', count: memberCount },
+    { id: 'properties', label: '속성' },
+  ];
 }
 
 export function VocClusterDetailPanel({
@@ -188,13 +201,7 @@ export function VocClusterDetailPanel({
       />
       <DetailPanelSectionNav
         scrollRef={sectionScrollRef}
-        sections={[
-          { id: 'overview', label: 'Overview' },
-          { id: 'why', label: 'Why' },
-          { id: 'execution', label: 'Execution' },
-          { id: 'members', label: 'Members', count: data.member_count },
-          { id: 'properties', label: 'Properties' },
-        ]}
+        sections={buildVocClusterDetailSections(data.member_count)}
       />
       <div ref={sectionScrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="flex flex-col gap-6">
@@ -422,7 +429,7 @@ export function VocClusterDetailPanel({
             <FieldRow label="담당자" className="px-0">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
                 <span>
-                  {data.owner_user_id ? (ownerName ?? '알 수 없는 사용자') : '담당자 없음'}
+                  {data.owner_user_id ? (ownerName ?? '알 수 없는 사용자') : <UnassignedBadge />}
                 </span>
                 {data.owner_user_id && !ownerName && (
                   <span className="font-mono text-xs text-text-muted">

@@ -171,28 +171,29 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByRole('button', { name: 'Link source finding' })).not.toBeInTheDocument();
   });
 
-  it('renders empty Evidence and Activity copy without outcome-survey controls', async () => {
+  it('renders empty Evidence and history copy without outcome-survey controls', async () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     expect(screen.getByText('연결된 evidence highlight 가 없습니다.')).toBeInTheDocument();
     expect(screen.getByText('활동 기록이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '이력' })).toBeInTheDocument();
     // FOP-OUT-014: no Milestone → Outcome Survey validation in MVP.
     expect(screen.queryByText(/Outcome survey/)).not.toBeInTheDocument();
   });
 
-  it('has exactly Overview, Tasks, Evidence, Activity in the section nav — no Timeline', async () => {
+  it('has exactly the approved section labels in the section nav — no Timeline', async () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    const nav = screen.getByRole('button', { name: 'Overview' }).closest('div');
+    const nav = screen.getByRole('button', { name: '요약' }).closest('div');
     if (!nav) throw new Error('section nav not found');
     const labels = within(nav)
       .getAllByRole('button')
       .map((button) => button.textContent);
     // 'Tasks0' = the label plus the count pill (DetailPanelSectionNav renders
     // the count as a child span once the child read resolves).
-    expect(labels).toEqual(['Overview', 'Tasks0', 'Evidence', 'Activity']);
+    expect(labels).toEqual(['요약', 'Tasks0', 'Evidence', '이력']);
     expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
   });
 
@@ -486,11 +487,14 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(within(row as HTMLElement).getByText('정')).toBeInTheDocument();
   });
 
-  it('renders the 미배정 chip when a child row has no assignee', async () => {
+  it('renders the shared unassigned badge when a child row has no assignee', async () => {
     vi.mocked(listTasks).mockResolvedValue({ items: [{ ...childTask, assignee_actor_id: null }] });
     renderPanel(linkedDetail);
 
-    expect(await screen.findByText('미배정')).toBeInTheDocument();
+    expect(await screen.findByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
   // B2d fixup F2 — a non-null assignee id missing from the actor directory
@@ -515,10 +519,10 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
     if (!row) throw new Error('tasks section not found');
-    // The avatar renders the Korean assigned fallback; 미배정 stays
+    // The avatar renders the Korean assigned fallback; the badge stays
     // specific to a genuinely null assignment.
     expect(within(row as HTMLElement).getByText('담')).toBeInTheDocument();
-    expect(within(row as HTMLElement).queryByText('미배정')).not.toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText('담당자 없음')).not.toBeInTheDocument();
 
     view.rerender(
       <QueryClientProvider client={queryClient}>
@@ -614,12 +618,12 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     // Retained success data no longer feeds the nav entry or section count.
     expect(screen.queryByText('Tasks · 1')).not.toBeInTheDocument();
-    const nav = screen.getByRole('button', { name: 'Overview' }).closest('div');
+    const nav = screen.getByRole('button', { name: '요약' }).closest('div');
     if (!nav) throw new Error('section nav not found');
     const labels = within(nav)
       .getAllByRole('button')
       .map((button) => button.textContent);
-    expect(labels).toEqual(['Overview', 'Tasks', 'Evidence', 'Activity']);
+    expect(labels).toEqual(['요약', 'Tasks', 'Evidence', '이력']);
     // Rows and empty copy stay hidden: a denied read is not an empty success.
     expect(screen.queryByText('TASK-902')).not.toBeInTheDocument();
     expect(screen.queryByText('아직 연결된 Task 가 없습니다.')).not.toBeInTheDocument();

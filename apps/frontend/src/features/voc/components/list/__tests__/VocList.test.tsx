@@ -214,7 +214,7 @@ describe('<VocList>', () => {
       { wrapper: makeWrapper() },
     );
 
-    expect(screen.queryByText('Owner 필요')).not.toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
   it.each(['voc.read', 'voc.triage'] as const)(
@@ -226,7 +226,7 @@ describe('<VocList>', () => {
         { wrapper: makeWrapper() },
       );
 
-      expect(screen.getByText('Owner 필요')).toBeInTheDocument();
+      expect(screen.getByText('담당자 없음')).toBeInTheDocument();
     },
   );
 

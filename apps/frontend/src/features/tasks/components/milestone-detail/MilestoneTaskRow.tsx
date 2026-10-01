@@ -1,5 +1,5 @@
 import type { TaskDto } from '@fops/shared';
-import { InternalTaskBadge, SeverityIndicator, UserAvatar } from '@fops/ui';
+import { InternalTaskBadge, SeverityIndicator, UnassignedBadge, UserAvatar } from '@fops/ui';
 import { PRIORITY_SEVERITY } from './constants';
 
 // Read-only child Task row mirroring screen-milestones.jsx:214-238.
@@ -30,7 +30,7 @@ export function MilestoneTaskRow({
       {assigneeName !== undefined ? (
         <UserAvatar user={{ display_name: assigneeName }} size="sm" />
       ) : task.assignee_actor_id === null ? (
-        <span className="rounded border border-border-subtle px-1.5 py-0.5">미배정</span>
+        <UnassignedBadge />
       ) : null}
     </div>
   );

@@ -2,7 +2,14 @@
 
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { Button, FieldRow, PanelSectionTitle, SeverityBadge, UserChip } from '@fops/ui';
+import {
+  Button,
+  FieldRow,
+  PanelSectionTitle,
+  SeverityBadge,
+  UnassignedBadge,
+  UserChip,
+} from '@fops/ui';
 import type * as React from 'react';
 
 export interface TriageBlockProps {
@@ -50,7 +57,7 @@ export function TriageBlock({
         {voc.owner_user_id !== null ? (
           <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
         ) : (
-          <span className="text-sm text-text-danger">Owner 없음</span>
+          <UnassignedBadge />
         )}
       </FieldRow>
 

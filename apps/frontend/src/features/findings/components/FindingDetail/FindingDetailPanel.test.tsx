@@ -183,11 +183,19 @@ describe('FindingDetailPanel', () => {
   });
 
   it('renders finding display_id in the detail header and linked task display_id in the link chip', async () => {
-    renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
+    const { container } = renderWithClient(
+      <FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />,
+    );
 
+    const header = container.querySelector('[data-kind="finding"]');
+    expect(header).toBeInTheDocument();
+    expect(within(header as HTMLElement).getByText('FIN-179')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '리포트 속도 저하' })).toBeInTheDocument();
     expect(screen.getByText('FIN-179')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText('TASK-901')).toBeInTheDocument();
+      const taskId = screen.getByText('TASK-901');
+      expect(taskId).toHaveClass('whitespace-nowrap', 'shrink-0');
+      expect(screen.getByRole('link', { name: /이동/ })).toContainElement(taskId);
     });
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });

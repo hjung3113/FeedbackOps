@@ -322,11 +322,12 @@ Anatomy:
 PanelHeader:
 
 ```text
-- object type
+- one shared kind chip with the kind accent, tint, and dot
 - object id optional
 - close button
 - overflow menu
 - open full page optional
+- secondary navigation such as the Finding VOC return link may use the header extras slot
 ```
 
 Rules:
@@ -337,6 +338,9 @@ Rules:
 - Internal status and reporter-facing status must be visually separate.
 - Permission-hidden content should show a PermissionBlockedPanel, not disappear silently.
 - Unsaved edits show dirty state and confirm before close.
+- Keep the 4px kind accent stripe on every header except Milestone.
+- Omit the id until the record is available; render it in mono when present.
+- Panel section navigation follows the Korean labels recorded in ADR-0057 A2; keep the approved domain nouns and anchor ids.
 ```
 
 ### LinkedEntityTrail
@@ -488,6 +492,7 @@ Rules:
 ```text
 - Signal badges are secondary unless they represent urgent action.
 - Critical and blocked states must remain distinguishable for color-blind users through icon or label.
+- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`.
 ```
 
 ### RichContentEditor

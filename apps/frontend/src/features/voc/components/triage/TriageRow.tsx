@@ -4,9 +4,7 @@
  * Prototype ref: screen-voc-create.jsx:363-391 (TriageQueueRow)
  * Layout: SeverityIndicator | row-body[title + row-meta] | row-trailing[createdAt]
  *
- * Prototype verbatim copy keys preserved:
- *   "Owner 없음"   — when owner_user_id and owner_team_id are both null
- *   "Area 미지정"  — when analytics_area_id is null
+ * Missing owners use the shared danger badge; the missing-area label stays neutral.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.8):
  *   .object-row.expanded → min-h-[96px] py-3.5 px-5
@@ -21,7 +19,7 @@
 
 import { formatRelativeTime } from '@/lib/datetime';
 import type { VocListItem } from '@fops/shared';
-import { ReporterStatusBadge, SeverityIndicator, cn } from '@fops/ui';
+import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fops/ui';
 import type * as React from 'react';
 
 import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
@@ -122,7 +120,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-text-muted">Owner 없음</span>
+              <UnassignedBadge />
             </>
           )}
 

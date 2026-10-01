@@ -57,8 +57,19 @@ vi.mock('@fops/ui', async (importOriginal) => {
 });
 
 vi.mock('@/features/findings/components/FindingDetail', () => ({
-  FindingDetailPanel: ({ findingId }: { findingId: string }) => (
-    <section data-testid="finding-detail-panel">finding:{findingId}</section>
+  FindingDetailPanel: ({
+    findingId,
+    headerExtras,
+  }: {
+    findingId: string;
+    headerExtras?: React.ReactNode;
+  }) => (
+    <section data-testid="finding-detail-panel">
+      <header data-kind="finding">
+        <div data-testid="detail-panel-header-content">{headerExtras}</div>
+      </header>
+      <div>finding:{findingId}</div>
+    </section>
   ),
 }));
 
@@ -216,6 +227,23 @@ describe('/findings URL state', () => {
       'href',
       origin,
     );
+    expect(
+      screen.getByRole('link', { name: '원래 VOC로 돌아가기' }).closest('[data-kind="finding"]'),
+    ).toBeInTheDocument();
+    expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
+  });
+
+  test('modifier-clicking the header return link leaves client-side navigation untouched', async () => {
+    const origin = `/vocs?view=triage&managedSystem=${MS_1}&selected=${F2_ID}`;
+    const router = renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+    const link = await screen.findByRole('link', { name: '원래 VOC로 돌아가기' });
+
+    fireEvent.click(link, { ctrlKey: true });
+
+    expect(router.state.location.pathname).toBe('/findings');
     expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
   });
 

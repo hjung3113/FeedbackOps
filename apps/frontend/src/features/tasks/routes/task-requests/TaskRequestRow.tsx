@@ -1,5 +1,5 @@
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
-import { ObjectRow } from '@fops/ui';
+import { ObjectRow, UnassignedBadge } from '@fops/ui';
 import { Fragment, type ReactNode } from 'react';
 
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -126,9 +126,7 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
               {reviewer.display_name}
             </span>
           ) : (
-            <span className="rounded border border-accent-danger/30 px-2 py-1 text-xs text-accent-danger">
-              No reviewer
-            </span>
+            <UnassignedBadge label="검토자 없음" />
           )}
         </>
       }

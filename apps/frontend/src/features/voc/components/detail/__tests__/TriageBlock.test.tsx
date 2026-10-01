@@ -35,7 +35,7 @@ describe('<TriageBlock>', () => {
     expect(screen.getByText('미설정')).toBeInTheDocument();
   });
 
-  it('shows "Owner 없음" when owner_user_id and owner_team_id are both null', () => {
+  it('shows the shared unassigned badge when owner_user_id and owner_team_id are both null', () => {
     render(
       <TriageBlock
         voc={{ ...DETAIL_ENVELOPE, owner_user_id: null, owner_team_id: null }}
@@ -43,7 +43,10 @@ describe('<TriageBlock>', () => {
         onOpenTriage={vi.fn()}
       />,
     );
-    expect(screen.getByText('Owner 없음')).toBeInTheDocument();
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
   it('shows resolved owner display name when owner_user_id is present', () => {

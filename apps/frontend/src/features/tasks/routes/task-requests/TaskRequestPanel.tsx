@@ -26,6 +26,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  UnassignedBadge,
   UserChip,
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
@@ -43,6 +44,20 @@ import { useTaskRequestLink } from './useTaskRequestLink';
 const NO_SELECTION = '__none__';
 const UNRESOLVED_ANALYTICS_AREA = '__analytics_area_unresolved__';
 const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
+
+// ADR-0057 A2 amendment: keep panel navigation in Korean and preserve domain nouns.
+export function buildTaskRequestSections(
+  showDecisionSummary: boolean,
+  hasFindingSource: boolean,
+): PanelSection[] {
+  return [
+    { id: 'overview', label: '요약' },
+    showDecisionSummary ? { id: 'outcome', label: '결정 요약' } : { id: 'decision', label: '결정' },
+    hasFindingSource ? { id: 'source', label: '출처' } : null,
+    { id: 'properties', label: '속성' },
+    { id: 'audit', label: '이력' },
+  ].filter((section): section is PanelSection => section !== null);
+}
 
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
@@ -115,21 +130,13 @@ export function TaskRequestPanel({
     convertedTaskLink.data !== undefined ? convertedTaskLink.data : resultingTask;
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
 
-  const sections: PanelSection[] = [
-    { id: 'overview', label: 'Overview' },
-    showDecisionSummary
-      ? { id: 'outcome', label: '결정 요약' }
-      : { id: 'decision', label: 'Decision' },
-    item.source_type === 'finding' ? { id: 'source', label: 'Source' } : null,
-    { id: 'properties', label: 'Properties' },
-    { id: 'audit', label: 'Audit' },
-  ].filter((section): section is PanelSection => section !== null);
+  const sections = buildTaskRequestSections(showDecisionSummary, item.source_type === 'finding');
 
   // Task Request has no impact field; omit the prototype's status-derived row (#585).
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
-        kind="task"
+        kind="task_request"
         id={item.display_id}
         onClose={onClose}
         extras={
@@ -326,10 +333,12 @@ export function TaskRequestPanel({
                           <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                           {dot()}
                           <span>
-                            {task.assignee_actor_id
-                              ? (names.actorsById[task.assignee_actor_id]?.display_name ??
-                                '담당자 지정됨')
-                              : '미배정'}
+                            {task.assignee_actor_id ? (
+                              (names.actorsById[task.assignee_actor_id]?.display_name ??
+                              '담당자 지정됨')
+                            ) : (
+                              <UnassignedBadge />
+                            )}
                           </span>
                         </>
                       }
@@ -603,7 +612,7 @@ export function TaskRequestPanel({
                 {...(reviewer.email !== undefined ? { sub: reviewer.email } : {})}
               />
             ) : (
-              <span className="text-xs text-text-muted">검토자 없음</span>
+              <UnassignedBadge label="검토자 없음" />
             )}
           </FieldRow>
           <FieldRow label="본인 승인">
@@ -614,7 +623,7 @@ export function TaskRequestPanel({
         </section>
 
         <section data-anchor="audit" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Audit</PanelSectionTitle>
+          <PanelSectionTitle>이력</PanelSectionTitle>
           <div className="flex flex-col gap-2 border-l border-border-subtle pl-3">
             <div className="text-xs text-text-muted">
               <strong className="text-text-secondary">
