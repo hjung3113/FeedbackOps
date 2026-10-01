@@ -13,8 +13,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AppSidebar } from '@/lib/layout/AppSidebar';
 import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { AppSidebar } from '@/lib/layout/AppSidebar';
 import { HomeRoute } from '@/routes/_authed/home';
 import { HomeScreen } from '../HomeScreen';
 import { homeSidebarEntries } from '../homeNavigation';
@@ -302,7 +302,7 @@ describe('HomeScreen route content', () => {
     installFetch(dashboardSummarySchema.parse({ ...response, coverage: [metric] }));
     renderHome();
 
-    const row = await screen.findByTestId('home-coverage-row-' + id);
+    const row = await screen.findByTestId(`home-coverage-row-${id}`);
     expect(row).toHaveTextContent(COVERAGE_METRIC_LABELS[id as DashboardCoverageId]);
   });
 

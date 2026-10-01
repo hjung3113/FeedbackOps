@@ -11,11 +11,11 @@ import {
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import {
   IntegrationCoverageRouteShell,
   integrationCoverageSearchSchema,
 } from '../../../routes/_authed/integration/coverage';
-import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 
 const MS_A = '77777777-0000-0000-0000-0000000000a1';
 const MS_B = '77777777-0000-0000-0000-0000000000b2';
