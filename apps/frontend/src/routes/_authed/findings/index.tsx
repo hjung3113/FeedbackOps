@@ -4,6 +4,11 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { isPermissionDenied } from '@/lib/api/types';
+import {
+  FINDING_CONFIDENCE_LABELS,
+  FINDING_SEVERITY_LABELS,
+  FINDING_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { parseRouteSearch } from '@/lib/router/search';
@@ -340,7 +345,7 @@ function FindingRow({
       badges={<FindingStatusBadge status={finding.status} />}
       meta={
         <>
-          <span>{severityLabel(finding.severity)}</span>
+          <span>{FINDING_SEVERITY_LABELS[finding.severity]}</span>
           {finding.confidence !== null ? (
             <>
               {dot()}
@@ -365,7 +370,7 @@ function FindingStatusBadge({
 }): React.ReactElement {
   return (
     <OutlineBadge data-testid={`finding-status-badge-${status}`}>
-      {statusLabel(status)}
+      {FINDING_STATUS_LABELS[status]}
     </OutlineBadge>
   );
 }
@@ -379,7 +384,7 @@ function ConfidenceBadge({
 }): React.ReactElement {
   return (
     <OutlineBadge data-testid={`finding-confidence-badge-${displayId}`}>
-      Confidence · {confidenceLabel(confidence)}
+      신뢰도 · {FINDING_CONFIDENCE_LABELS[confidence]}
     </OutlineBadge>
   );
 }
@@ -404,34 +409,4 @@ function formatDate(raw: string): string {
     month: 'short',
     day: '2-digit',
   }).format(new Date(raw));
-}
-
-function severityLabel(severity: FindingDto['severity']): string {
-  const labels: Record<FindingDto['severity'], string> = {
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    critical: 'Critical',
-  };
-  return labels[severity];
-}
-
-function confidenceLabel(confidence: NonNullable<FindingDto['confidence']>): string {
-  const labels: Record<NonNullable<FindingDto['confidence']>, string> = {
-    low: '낮음',
-    medium: '중간',
-    high: '높음',
-  };
-  return labels[confidence];
-}
-
-function statusLabel(status: FindingDto['status']): string {
-  const labels: Record<FindingDto['status'], string> = {
-    draft: 'Draft',
-    active: 'Active',
-    not_actionable: 'Not actionable',
-    converted: 'Converted',
-    archived: 'Archived',
-  };
-  return labels[status];
 }

@@ -1,5 +1,8 @@
 import {
   entityLinkRelationTypeSchema,
+  evidenceHighlightImportanceSchema,
+  evidenceHighlightSentimentSchema,
+  evidenceHighlightSourceTypeSchema,
   findingConfidenceSchema,
   findingDtoSchema,
   findingSeveritySchema,
@@ -16,6 +19,9 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   ENTITY_LINK_RELATION_LABELS,
+  EVIDENCE_IMPORTANCE_LABELS,
+  EVIDENCE_SENTIMENT_LABELS,
+  EVIDENCE_SOURCE_TYPE_LABELS,
   FINDING_CONFIDENCE_LABELS,
   FINDING_SEVERITY_LABELS,
   FINDING_SOURCE_TYPE_LABELS,
@@ -71,6 +77,18 @@ describe('enum display labels', () => {
   it('covers every Finding source type', () => {
     const sourceTypes = findingDtoSchema.options.map((option) => option.shape.source_type.value);
     expectCompleteLabels(sourceTypes, FINDING_SOURCE_TYPE_LABELS);
+  });
+
+  it('covers every Evidence source type', () => {
+    expectCompleteLabels(evidenceHighlightSourceTypeSchema.options, EVIDENCE_SOURCE_TYPE_LABELS);
+  });
+
+  it('covers every Evidence sentiment', () => {
+    expectCompleteLabels(evidenceHighlightSentimentSchema.options, EVIDENCE_SENTIMENT_LABELS);
+  });
+
+  it('covers every Evidence importance', () => {
+    expectCompleteLabels(evidenceHighlightImportanceSchema.options, EVIDENCE_IMPORTANCE_LABELS);
   });
 
   it('covers every rating band', () => {

@@ -1,4 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { EVIDENCE_IMPORTANCE_LABELS, EVIDENCE_SOURCE_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
@@ -39,11 +40,10 @@ interface AddEvidenceModalProps {
 const SOURCE_TYPE_OPTIONS: {
   value: EvidenceHighlightSourceType;
   label: string;
-}[] = [
-  { value: 'voc', label: 'VOC' },
-  { value: 'survey_response', label: 'Survey Response' },
-  { value: 'note', label: 'Note (manual)' },
-];
+}[] = (['voc', 'survey_response', 'note'] as const).map((value) => ({
+  value,
+  label: EVIDENCE_SOURCE_TYPE_LABELS[value],
+}));
 
 const SENTIMENT_OPTIONS: {
   value: EvidenceHighlightSentiment;
@@ -58,9 +58,9 @@ const IMPORTANCE_OPTIONS: {
   value: EvidenceHighlightImportance;
   label: string;
 }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
+  { value: 'low', label: EVIDENCE_IMPORTANCE_LABELS.low },
+  { value: 'medium', label: EVIDENCE_IMPORTANCE_LABELS.medium },
+  { value: 'high', label: EVIDENCE_IMPORTANCE_LABELS.high },
 ];
 
 export function AddEvidenceModal({
