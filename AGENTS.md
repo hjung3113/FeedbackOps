@@ -136,7 +136,7 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI; external PRs are not a request surface. Includes wayfinding operations for `/wayfinder`. See `docs/agents/issue-tracker.md`.
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 - **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
-- **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in.
+- **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in. `shadcn` is vendored from `shadcn-ui/ui` (`skills/shadcn`, MIT). `impeccable` is installed in `.claude/skills/impeccable` (plus `.claude/agents/impeccable-*`) via `npx impeccable install --providers=claude --scope=project`; its engine binary (`scripts/bin/`) is gitignored and downloads on first run. Its edit/stop hooks are intentionally disabled, so remove them from `.claude/settings.local.json` again after `npx impeccable update`.
 
 <!-- agent-workflow:begin (managed by install-into.sh — do not edit) -->
 ### Model routing (installed by the agent-workflow toolkit)

@@ -43,3 +43,6 @@ scripts/codex-safe.sh
 .agents/skills/agent-workflow
 .opencode/agents/agent-workflow.md
 opencode.json
+
+# impeccable engine binary (downloaded on first run)
+.claude/skills/impeccable/scripts/bin/
