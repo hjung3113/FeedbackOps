@@ -356,3 +356,6 @@ packages/ui/src/feedback/DirtyConfirmation.tsx organizeImports -- pre-existing o
 packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
 packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
 packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
