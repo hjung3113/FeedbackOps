@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Flag } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ListTabs } from '../ListTabs.js';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
 
@@ -106,6 +107,52 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.getByText('미분류')).toBeInTheDocument();
     expect(screen.getByText('긴급')).toBeInTheDocument();
     expect(screen.getByText('미배정')).toBeInTheDocument();
+  });
+
+  it('end-aligns the Tabs root as the viewport direct child', () => {
+    const { container } = render(<ListTabs tabs={tabs} activeTab="untriaged" align="end" />);
+    const viewport = container.querySelector('[data-list-toolbar-tabs]');
+    const tabsRoot = viewport?.firstElementChild;
+
+    expect(tabsRoot).toHaveClass('ml-auto');
+    expect(tabsRoot).toContainElement(screen.getByRole('tablist'));
+    expect(screen.getByRole('tablist')).not.toHaveClass('ml-auto');
+  });
+
+  it('uses the shared prototype tab size, hover, and active states', () => {
+    const styledTabs: ListToolbarTab[] = [
+      { value: 'normal', label: 'Normal' },
+      { value: 'urgent', label: 'Urgent', urgent: true },
+    ];
+    const { rerender } = render(<ListTabs tabs={styledTabs} activeTab="normal" />);
+
+    const normalTab = screen.getByRole('tab', { name: 'Normal' });
+    const urgentTab = screen.getByRole('tab', { name: 'Urgent' });
+    expect(normalTab).toHaveClass(
+      'h-7',
+      'px-2.5',
+      'gap-1.5',
+      'text-[13px]',
+      'hover:bg-surface-card',
+      'hover:text-text-primary',
+      'data-[state=active]:bg-surface-card-elevated',
+      'data-[state=active]:text-text-primary',
+      'data-[state=active]:shadow-none',
+    );
+    expect(normalTab).not.toHaveClass('data-[state=active]:shadow-sm');
+    expect(urgentTab).toHaveClass(
+      'text-danger',
+      'hover:text-danger',
+      'data-[state=active]:text-danger',
+    );
+
+    rerender(<ListTabs tabs={styledTabs} activeTab="urgent" />);
+    expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveClass(
+      'text-danger',
+      'data-[state=active]:bg-surface-card-elevated',
+      'data-[state=active]:text-danger',
+    );
   });
 
   it('renders badgeCount as a bare number when defined', () => {

@@ -21,6 +21,13 @@ test.describe('VOC public-update review visual harness (#180)', () => {
     await expect(dialog.getByRole('combobox', { name: 'Reporter-facing status' })).toContainText(
       '상태 선택',
     );
+    await page.evaluate(() => document.fonts.ready);
+    // FullDetailView owns this independent scroll container; normalize it after fonts settle.
+    await page
+      .locator('[data-testid="voc-detail-panel"] > .overflow-y-auto')
+      .evaluate((container) => {
+        container.scrollTop = 0;
+      });
     await expectVisual(page, dialog, 'voc-public-update-review-empty-status.png');
   });
 

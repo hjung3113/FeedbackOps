@@ -44,6 +44,7 @@ const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
   { value: 'high', label: VOC_TRIAGE_TAB_LABELS.high },
   { value: 'waiting', label: '보류' },
 ];
+const TRIAGE_QUEUE_PANEL_ID = 'triage-queue-panel';
 
 export function VocTriageScreen({
   items,
@@ -113,6 +114,8 @@ export function VocTriageScreen({
   const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => ({
     value: tab.value,
     label: tab.label,
+    id: `triage-tab-${tab.value}`,
+    controlsId: TRIAGE_QUEUE_PANEL_ID,
     ...(tab.value === 'unassigned' && unassignedTabCount !== undefined
       ? { badgeCount: unassignedTabCount }
       : {}),
@@ -186,7 +189,12 @@ export function VocTriageScreen({
       {/* Body: queue (left) + panel (right) */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: queue list */}
-        <div className="flex-1 min-w-0 overflow-y-auto border-r border-border-subtle">
+        <div
+          id={TRIAGE_QUEUE_PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={`triage-tab-${activeTab}`}
+          className="flex-1 min-w-0 overflow-y-auto border-r border-border-subtle"
+        >
           <TriageQueue
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}

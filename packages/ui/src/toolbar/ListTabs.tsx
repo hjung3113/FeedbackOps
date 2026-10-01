@@ -147,13 +147,14 @@ export function ListTabs({
             className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             data-list-toolbar-tabs
           >
-            <Tabs value={selectedTab} onValueChange={handleTabChange}>
+            <Tabs
+              className={cn(align === 'end' && 'ml-auto')}
+              value={selectedTab}
+              onValueChange={handleTabChange}
+            >
               <TabsList
                 {...(ariaLabel !== undefined ? { 'aria-label': ariaLabel } : {})}
-                className={cn(
-                  'h-7 justify-start gap-0.5 rounded-none bg-transparent p-0 text-text-muted',
-                  align === 'end' && 'ml-auto',
-                )}
+                className="h-7 justify-start gap-0.5 rounded-none bg-transparent p-0 text-text-muted"
               >
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -167,9 +168,11 @@ export function ListTabs({
                       {...(tab.testId !== undefined ? { 'data-testid': tab.testId } : {})}
                       {...(tab.tip !== undefined ? { title: tab.tip } : {})}
                       className={cn(
-                        'group inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-0 text-sm font-medium text-text-muted transition-colors',
-                        'data-[state=active]:bg-surface-raised data-[state=active]:text-text-primary data-[state=active]:shadow-sm',
-                        tab.urgent === true && 'text-danger data-[state=active]:text-danger',
+                        'group inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-0 text-[13px] font-medium text-text-muted transition-colors',
+                        'hover:bg-surface-card hover:text-text-primary',
+                        'data-[state=active]:bg-surface-card-elevated data-[state=active]:text-text-primary data-[state=active]:shadow-none',
+                        tab.urgent === true &&
+                          'text-danger hover:text-danger data-[state=active]:text-danger',
                       )}
                     >
                       {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />}

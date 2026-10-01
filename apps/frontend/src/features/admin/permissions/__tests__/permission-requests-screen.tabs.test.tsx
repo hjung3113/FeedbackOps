@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const consoleState = vi.hoisted(() => {
+  let activeTab = 'pending';
   const requests = [
     {
       id: '10000000-0000-0000-0000-000000000001',
@@ -17,14 +18,21 @@ const consoleState = vi.hoisted(() => {
   return {
     allRequests: requests,
     visibleRequests: requests,
-    activeTab: 'pending' as const,
+    get activeTab() {
+      return activeTab;
+    },
+    setActiveTab(next: string) {
+      activeTab = next;
+    },
     selected: null,
     selectedId: null,
     actorNames: {},
     managedSystemNames: {},
     isPending: false,
     isError: false,
-    handleTabChange: vi.fn(),
+    handleTabChange: vi.fn((next: string) => {
+      activeTab = next;
+    }),
     handleSelect: vi.fn(),
     handleClose: vi.fn(),
   };
@@ -50,6 +58,11 @@ vi.mock('../use-permission-requests-console.js', () => ({
 import { PermissionRequestsScreen } from '../permission-requests-screen.js';
 
 describe('PermissionRequestsScreen tabs', () => {
+  beforeEach(() => {
+    consoleState.setActiveTab('pending');
+    consoleState.handleTabChange.mockClear();
+  });
+
   it('uses shared tabs with bare status counts and forwards tab selection', () => {
     render(<PermissionRequestsScreen />);
 
@@ -61,5 +74,24 @@ describe('PermissionRequestsScreen tabs', () => {
     fireEvent.mouseDown(screen.getByRole('tab', { name: '승인됨 0' }));
 
     expect(consoleState.handleTabChange).toHaveBeenCalledWith('approved');
+  });
+
+  it('associates the selected tab with the real list panel after a tab change', () => {
+    const { rerender } = render(<PermissionRequestsScreen />);
+    const pendingTab = screen.getByRole('tab', { name: '대기 중 1' });
+    let panel = screen.getByRole('tabpanel');
+    expect(pendingTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(pendingTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', pendingTab.id);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '승인됨 0' }));
+    rerender(<PermissionRequestsScreen />);
+
+    const approvedTab = screen.getByRole('tab', { name: '승인됨 0' });
+    panel = screen.getByRole('tabpanel');
+    expect(approvedTab).toHaveAttribute('aria-selected', 'true');
+    expect(approvedTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(approvedTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', approvedTab.id);
   });
 });

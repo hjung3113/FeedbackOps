@@ -330,19 +330,12 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       <ListShell
         list={
           <>
-            {/* CP-pixel finding 1 (.review/pixel-514-findings.md): with the
-                detail open the list column is 708px and the prototype-scale
-                content (tabs 335 + search + Filter + CTA, measured on the
-                rendered prototype at 1440) exceeds it — the prototype itself
-                clips its CTA there (scrollWidth 789 > 708). The tab strip is
-                compacted to the prototype's own .tab scale (13px label, 20px
-                side padding, bare 11px tab-count instead of a pill badge, via
-                feature-local overrides on this ListToolbar instance only) and
-                the search box yields width first, so all four tabs stay
-                unclipped and the New milestone CTA stays inside the column at
-                1440 with the detail open. No shared component changes. */}
+            {/* CP-pixel finding 1 (.review/pixel-514-findings.md): with detail
+                open the list column is 708px. Keep the action side shrinkable
+                so the search field yields width before Filter and New milestone,
+                while the tabs keep the shared size. */}
             <ListToolbar
-              className="gap-2 [&>div:last-child]:min-w-0 [&>div:last-child]:shrink [&_[role=tablist]]:h-8 [&_[role=tablist]]:p-0.5 [&_[role=tab]]:h-7 [&_[role=tab]]:px-2.5 [&_[role=tab]]:text-[13px] [&_[role=tab]_div]:ml-1 [&_[role=tab]_div]:bg-transparent [&_[role=tab]_div]:px-0 [&_[role=tab]_div]:py-0 [&_[role=tab]_div]:text-[11px] [&_[role=tab]_div]:font-normal [&_[role=tab]_div]:leading-none [&_[role=tab]_div]:text-text-muted"
+              className="gap-2 [&>div:last-child]:min-w-0 [&>div:last-child]:shrink"
               tabs={tabs}
               activeTab={activeTab}
               onTabChange={(next) => setActiveTab(next as MilestoneTab)}

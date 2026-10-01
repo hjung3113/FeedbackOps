@@ -153,13 +153,22 @@ describe('SurveyList tabs', () => {
     );
 
     expect(screen.getByRole('tablist', { name: 'Survey status' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'All 2' })).toHaveAttribute('aria-selected', 'true');
+    const allTab = screen.getByRole('tab', { name: 'All 2' });
+    const panel = screen.getByRole('tabpanel');
+    expect(allTab).toHaveAttribute('aria-selected', 'true');
+    expect(allTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(allTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', allTab.id);
     expect(screen.getByRole('tab', { name: /진행 중 1/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /초안 1/ })).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: /진행 중 1/ }));
 
-    expect(screen.getByRole('tab', { name: /진행 중 1/ })).toHaveAttribute('aria-selected', 'true');
+    const openTab = screen.getByRole('tab', { name: /진행 중 1/ });
+    expect(openTab).toHaveAttribute('aria-selected', 'true');
+    expect(openTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(openTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', openTab.id);
     expect(screen.queryByTestId('survey-row-survey-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('survey-row-survey-open'));
     expect(onSelect).toHaveBeenCalledWith('survey-open');

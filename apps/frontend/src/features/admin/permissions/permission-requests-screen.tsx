@@ -14,6 +14,8 @@ import {
 } from './permission-requests-search.js';
 import { usePermissionRequestsConsole } from './use-permission-requests-console.js';
 
+const PERMISSION_REQUESTS_PANEL_ID = 'permission-requests-list-panel';
+
 export function PermissionRequestsScreen() {
   const {
     allRequests,
@@ -32,6 +34,8 @@ export function PermissionRequestsScreen() {
   const tabs: ListToolbarTab[] = permissionRequestTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
+    id: `permission-request-tab-${tab.value}`,
+    controlsId: PERMISSION_REQUESTS_PANEL_ID,
     badgeCount:
       tab.value === 'all'
         ? allRequests.length
@@ -54,8 +58,9 @@ export function PermissionRequestsScreen() {
       }
       list={
         <section
+          id={PERMISSION_REQUESTS_PANEL_ID}
           role="tabpanel"
-          aria-label={`${permissionRequestTabs.find((tab) => tab.value === activeTab)?.label} 요청`}
+          aria-labelledby={`permission-request-tab-${activeTab}`}
           data-testid="permission-requests-list"
         >
           {isPending ? (

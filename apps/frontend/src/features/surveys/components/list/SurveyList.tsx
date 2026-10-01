@@ -14,6 +14,7 @@ const tabs: Array<{ label: string; value: SurveyStatus | 'all' }> = [
   { label: SURVEY_STATUS_LABELS.draft, value: 'draft' },
   { label: SURVEY_STATUS_LABELS.closed, value: 'closed' },
 ];
+const SURVEY_LIST_PANEL_ID = 'survey-list-panel';
 
 export interface SurveyListProps {
   surveys: Survey[];
@@ -76,6 +77,8 @@ export function SurveyList({
   const toolbarTabs: ListToolbarTab[] = tabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
+    id: `survey-tab-${tab.value}`,
+    controlsId: SURVEY_LIST_PANEL_ID,
     badgeCount:
       tab.value === 'all'
         ? surveys.length
@@ -131,111 +134,113 @@ export function SurveyList({
           </div>
         }
       />
-      {visible.length === 0 ? (
-        isFilteredEmpty ? (
-          <ListStateMessage
-            variant="filtered"
-            title="현재 조건에 맞는 설문이 없습니다"
-            body={activeConditions.join(' · ')}
-            action={{
-              label: '필터 초기화',
-              onClick: () => {
-                setStatus('all');
-                setSearch('');
-              },
-            }}
-          />
-        ) : (
-          <ListStateMessage
-            variant="empty"
-            title="생성된 설문이 없습니다."
-            body={
-              canCreate
-                ? '설문을 만들어 응답을 수집하세요.'
-                : '설문을 만들려면 survey.manage 권한이 필요합니다.'
-            }
-            actionContent={
-              canCreate ? (
-                onCreate && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={onCreate}
-                    data-testid="survey-empty-create-button"
-                  >
-                    <Plus className="h-4 w-4" />
-                    설문 생성
-                  </Button>
+      <div id={SURVEY_LIST_PANEL_ID} role="tabpanel" aria-labelledby={`survey-tab-${status}`}>
+        {visible.length === 0 ? (
+          isFilteredEmpty ? (
+            <ListStateMessage
+              variant="filtered"
+              title="현재 조건에 맞는 설문이 없습니다"
+              body={activeConditions.join(' · ')}
+              action={{
+                label: '필터 초기화',
+                onClick: () => {
+                  setStatus('all');
+                  setSearch('');
+                },
+              }}
+            />
+          ) : (
+            <ListStateMessage
+              variant="empty"
+              title="생성된 설문이 없습니다."
+              body={
+                canCreate
+                  ? '설문을 만들어 응답을 수집하세요.'
+                  : '설문을 만들려면 survey.manage 권한이 필요합니다.'
+              }
+              actionContent={
+                canCreate ? (
+                  onCreate && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={onCreate}
+                      data-testid="survey-empty-create-button"
+                    >
+                      <Plus className="h-4 w-4" />
+                      설문 생성
+                    </Button>
+                  )
+                ) : permissionState === 'request_access' ? (
+                  <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
+                ) : (
+                  <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
                 )
-              ) : permissionState === 'request_access' ? (
-                <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
-              ) : (
-                <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
-              )
+              }
+            />
+          )
+        ) : (
+          <div
+            className={
+              viewMode === 'list'
+                ? 'divide-y divide-border-subtle'
+                : 'grid grid-cols-1 gap-3 p-4 md:grid-cols-2'
             }
-          />
-        )
-      ) : (
-        <div
-          className={
-            viewMode === 'list'
-              ? 'divide-y divide-border-subtle'
-              : 'grid grid-cols-1 gap-3 p-4 md:grid-cols-2'
-          }
-          data-testid={viewMode === 'list' ? 'survey-list-rows' : 'survey-list-cards'}
-        >
-          {visible.map((survey) => {
-            const operatorLookupPending =
-              survey.operator_actor_id !== null && actorNamesById === undefined;
-            const operatorName = survey.operator_actor_id
-              ? actorNamesById === undefined
-                ? '—'
-                : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
-              : null;
-            return (
-              <button
-                key={survey.id}
-                type="button"
-                onClick={() => onSelect(survey.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${viewMode === 'card' ? 'rounded border border-border-subtle' : ''} ${selectedId === survey.id ? 'bg-surface-detail' : ''}`}
-                data-testid={`survey-row-${survey.id}`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-text-primary">
-                    {survey.title}
-                  </span>
-                  <span className="flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
-                    <span>{survey.display_id}</span>
-                    <span aria-hidden="true">·</span>
-                    <SurveyStatusBadge status={survey.status} />
-                    <span aria-hidden="true">·</span>
-                    <span>{SURVEY_TYPE_LABELS[survey.type]}</span>
-                    <span aria-hidden="true">·</span>
-                    <SurveyManagedSystemPill
-                      name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
-                      resolved={managedSystemNamesById !== undefined}
-                    />
-                  </span>
-                </span>
-                <span
-                  className={`flex max-w-40 shrink-0 items-center gap-2 truncate text-xs ${operatorLookupPending ? 'text-text-muted' : 'text-text-secondary'}`}
+            data-testid={viewMode === 'list' ? 'survey-list-rows' : 'survey-list-cards'}
+          >
+            {visible.map((survey) => {
+              const operatorLookupPending =
+                survey.operator_actor_id !== null && actorNamesById === undefined;
+              const operatorName = survey.operator_actor_id
+                ? actorNamesById === undefined
+                  ? '—'
+                  : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+                : null;
+              return (
+                <button
+                  key={survey.id}
+                  type="button"
+                  onClick={() => onSelect(survey.id)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${viewMode === 'card' ? 'rounded border border-border-subtle' : ''} ${selectedId === survey.id ? 'bg-surface-detail' : ''}`}
+                  data-testid={`survey-row-${survey.id}`}
                 >
-                  {operatorName === null ? (
-                    <span>담당자 미지정</span>
-                  ) : operatorLookupPending ? (
-                    <span>—</span>
-                  ) : (
-                    <>
-                      <UserAvatar user={{ display_name: operatorName }} size="sm" />
-                      <span className="truncate">{operatorName}</span>
-                    </>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-text-primary">
+                      {survey.title}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
+                      <span>{survey.display_id}</span>
+                      <span aria-hidden="true">·</span>
+                      <SurveyStatusBadge status={survey.status} />
+                      <span aria-hidden="true">·</span>
+                      <span>{SURVEY_TYPE_LABELS[survey.type]}</span>
+                      <span aria-hidden="true">·</span>
+                      <SurveyManagedSystemPill
+                        name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+                        resolved={managedSystemNamesById !== undefined}
+                      />
+                    </span>
+                  </span>
+                  <span
+                    className={`flex max-w-40 shrink-0 items-center gap-2 truncate text-xs ${operatorLookupPending ? 'text-text-muted' : 'text-text-secondary'}`}
+                  >
+                    {operatorName === null ? (
+                      <span>담당자 미지정</span>
+                    ) : operatorLookupPending ? (
+                      <span>—</span>
+                    ) : (
+                      <>
+                        <UserAvatar user={{ display_name: operatorName }} size="sm" />
+                        <span className="truncate">{operatorName}</span>
+                      </>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -29,7 +30,7 @@ vi.mock('sonner', () => ({
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
-import { VocTriageScreen } from '../VocTriageScreen';
+import { type TriageTab, VocTriageScreen } from '../VocTriageScreen';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-kicker-001',
@@ -66,7 +67,45 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+function ControlledTriageScreen() {
+  const [activeTab, setActiveTab] = useState<TriageTab>('unassigned');
+  return (
+    <VocTriageScreen
+      items={[MOCK_VOC]}
+      selectedId={MOCK_VOC.id}
+      activeTab={activeTab}
+      onSelectVoc={vi.fn()}
+      onTabChange={setActiveTab}
+    />
+  );
+}
+
 describe('VocTriageScreen — V1 inline kicker', () => {
+  it('associates each selected tab with the queue panel and end-aligns the strip', () => {
+    render(
+      <Wrapper>
+        <ControlledTriageScreen />
+      </Wrapper>,
+    );
+
+    const unassignedTab = screen.getByRole('tab', { name: /미배정/ });
+    let panel = screen.getByRole('tabpanel');
+    const viewport = screen.getByRole('tablist').closest('[data-list-toolbar-tabs]');
+    expect(viewport?.firstElementChild).toHaveClass('ml-auto');
+    expect(unassignedTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(unassignedTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', unassignedTab.id);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /높은 심각도/ }));
+
+    const highTab = screen.getByRole('tab', { name: /높은 심각도/ });
+    panel = screen.getByRole('tabpanel');
+    expect(highTab).toHaveAttribute('aria-selected', 'true');
+    expect(highTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(highTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', highTab.id);
+  });
+
   it('renders independently supplied navigation counts on both supported tabs', () => {
     render(
       <Wrapper>
