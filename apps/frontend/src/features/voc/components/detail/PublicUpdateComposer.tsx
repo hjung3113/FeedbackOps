@@ -67,6 +67,7 @@ import {
 } from '@/features/voc/hooks/useReporterStatusTransitions';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
@@ -201,7 +202,7 @@ export function PublicUpdateComposer({
     onError: (error) => {
       submitInFlightRef.current = false;
       if (getComposerErrorTone(error.code) == null) {
-        toast.error(`${error.code}: ${error.message}`);
+        toast.error(mapUnknownError(error).message);
       }
     },
   });
@@ -268,7 +269,8 @@ export function PublicUpdateComposer({
   const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
   const inlineCalloutReason =
     inlineCalloutTone != null
-      ? ((mutationError?.detail?.reason as string | undefined) ?? mutationError?.message)
+      ? ((mutationError?.detail?.reason as string | undefined) ??
+        mapUnknownError(mutationError).message)
       : null;
 
   return (
@@ -288,9 +290,7 @@ export function PublicUpdateComposer({
           <PublicUpdateToolbar
             editor={editor}
             onAttach={(file) => api.attach(file)}
-            onAttachError={(e) =>
-              toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
-            }
+            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
           />
         )}
       />

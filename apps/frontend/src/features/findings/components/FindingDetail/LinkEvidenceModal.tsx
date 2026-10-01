@@ -1,4 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
 import { type LinkEvidenceRequest, linkEvidenceRequestSchema } from '@fops/shared';
 import {
   Button,
@@ -32,7 +33,7 @@ export function LinkEvidenceModal({
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<LinkEvidenceRequest>({
-    resolver: zodResolver(linkEvidenceRequestSchema),
+    resolver: zodResolver(linkEvidenceRequestSchema, { errorMap: koreanZodErrorMap }),
     defaultValues: {
       source_type: 'voc',
       source_id: '',

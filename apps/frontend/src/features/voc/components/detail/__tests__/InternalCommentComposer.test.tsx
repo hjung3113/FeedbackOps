@@ -7,6 +7,7 @@
 // C5.4 of slice3 #21.
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (internal variant)
 
+import { ApiError } from '@/lib/api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
@@ -15,14 +16,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
 const mockMutate = vi.fn();
+const mockMutationOnError = vi.fn();
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocInternalCommentMutation', () => ({
-  useVocInternalCommentMutation: vi.fn(() => ({
-    mutate: mockMutate,
-    isPending: false,
-    isError: false,
-    error: null,
-  })),
+  useVocInternalCommentMutation: vi.fn(
+    (options: {
+      onError: (error: {
+        code: string;
+        message: string;
+        envelope: { code: string; message: string };
+      }) => void;
+    }) => {
+      mockMutationOnError.mockImplementation(options.onError);
+      return { mutate: mockMutate, isPending: false, isError: false, error: null };
+    },
+  ),
 }));
+vi.mock('sonner', () => ({ toast }));
 
 // Mock RichEditor — exposes a callback to simulate doc changes with mention nodes.
 let capturedOnChange: ((doc: import('@fops/ui').TipTapDoc) => void) | undefined;
@@ -221,5 +231,18 @@ describe('<InternalCommentComposer>', () => {
 
     expect(screen.getByTestId('internal-comment-composer')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add note/i })).not.toBeDisabled();
+  });
+
+  it('toasts the mapped Korean message when an internal comment fails', () => {
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
+
+    act(() => {
+      mockMutationOnError(
+        new ApiError(422, { code: 'validation.failed', message: 'raw server message' }),
+      );
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('입력값이 올바르지 않습니다.');
+    expect(toast.error).not.toHaveBeenCalledWith('validation.failed: raw server message');
   });
 });

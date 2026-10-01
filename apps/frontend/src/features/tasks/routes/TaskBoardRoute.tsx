@@ -1,3 +1,4 @@
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
@@ -180,8 +181,17 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       if (context && mutationTokens.current.get(context.taskId) === context.token) {
         client.setQueryData<{ items: TaskDto[] }>(tasksKey, (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old);
       }
-      if (error instanceof ApiError && error.code === 'conflict.stale_write' && context && mutationTokens.current.get(context.taskId) === context.token) { void client.invalidateQueries({ queryKey: ['tasks'] }); toast.error('Task changed elsewhere. Board refreshed.'); return; }
-      toast.error('Task status could not be updated.');
+      if (
+        error instanceof ApiError &&
+        error.code === 'conflict.stale_write' &&
+        context &&
+        mutationTokens.current.get(context.taskId) === context.token
+      ) {
+        void client.invalidateQueries({ queryKey: ['tasks'] });
+        toast.error(mapUnknownError(error).message);
+        return;
+      }
+      toast.error(mapUnknownError(error).message);
     },
     onSettled: (_data, _error, _variables, context) => {
       if (!context || mutationTokens.current.get(context.taskId) === context.token) {
@@ -212,7 +222,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       />
     );
   }
-  if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
+  if (tasksQuery.error) {
+    return (
+      <div className="p-4 text-sm text-accent-danger">
+        {mapUnknownError(tasksQuery.error).message}
+      </div>
+    );
+  }
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return (
     <WorkbenchShell

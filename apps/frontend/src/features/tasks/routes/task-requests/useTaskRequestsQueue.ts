@@ -1,4 +1,5 @@
 import { fetchTaskRequests, resolveActors } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -139,7 +140,7 @@ export function useTaskRequestsQueue({
     currentRole: meQuery.data?.actor.role_level ?? null,
     isLoading: taskRequestsQuery.isLoading,
     permissionDeniedError: isPermissionDenied(taskRequestsQuery.error)
-      ? { message: taskRequestsQuery.error.message }
+      ? { message: mapUnknownError(taskRequestsQuery.error).message }
       : null,
     hasError: taskRequestsQuery.error !== null,
     refetch: () => {

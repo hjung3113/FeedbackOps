@@ -147,8 +147,8 @@ function RegisterDialog({
             e.preventDefault();
             setError(null);
             const nextErrors: Partial<Record<'slug' | 'name', string>> = {};
-            if (!slug.trim()) nextErrors.slug = 'Slug is required.';
-            if (!name.trim()) nextErrors.name = 'Name is required.';
+            if (!slug.trim()) nextErrors.slug = 'Slug를 입력해 주세요.';
+            if (!name.trim()) nextErrors.name = '이름을 입력해 주세요.';
             if (Object.keys(nextErrors).length > 0) {
               setFieldErrors(nextErrors);
               (nextErrors.slug ? slugRef : nameRef).current?.focus();

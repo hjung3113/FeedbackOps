@@ -432,6 +432,10 @@ describe('integration action dashboard route', () => {
     });
 
     const summaryError = await screen.findByTestId('integration-dashboard-summary-error');
+    expect(summaryError).toHaveTextContent('Integration 요약을 불러오지 못했습니다.');
+    expect(summaryError).toHaveTextContent(
+      '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+    );
     expect(within(summaryError).getByTestId('list-state-message')).toHaveAttribute(
       'data-variant',
       'error',

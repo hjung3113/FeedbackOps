@@ -1,3 +1,4 @@
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
 import {
   type FindingDto,
@@ -174,7 +175,7 @@ export function CreateFindingDraftPanel({
       </Select>
       {mutation.error && (
         <p className="text-sm text-text-danger" role="alert">
-          {mutation.error.message}
+          {mapUnknownError(mutation.error).message}
         </p>
       )}
       <Button

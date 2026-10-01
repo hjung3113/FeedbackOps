@@ -115,7 +115,7 @@ describe('/admin/settings route', () => {
     if (permission.kind === 'pending') {
       expect(await screen.findByText('Checking access…')).toBeInTheDocument();
     } else {
-      await screen.findByText('Access blocked');
+      await screen.findByText('접근할 수 없습니다.');
     }
     expect(screen.queryByTestId('workspace-settings-screen')).not.toBeInTheDocument();
   });

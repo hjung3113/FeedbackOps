@@ -374,7 +374,9 @@ describe('/admin/analytics-areas route', () => {
     fireEvent.change(screen.getByTestId('create-aa-name'), { target: { value: 'X' } });
     fireEvent.click(screen.getByTestId('create-aa-submit'));
     await waitFor(() => {
-      expect(screen.getByTestId('create-aa-error')).toHaveTextContent(/conflict\.parent_archived/);
+      expect(screen.getByTestId('create-aa-error')).toHaveTextContent(
+        '상위 항목이 보관되어 더 이상 변경할 수 없습니다.',
+      );
     });
   });
 

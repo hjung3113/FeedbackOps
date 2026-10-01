@@ -1,4 +1,5 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { DashboardSummary } from '@fops/shared';
 import { Button, PageShell, PanelSectionTitle, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -17,8 +18,7 @@ interface IntegrationDashboardSearch {
   managedSystem?: string;
 }
 
-const SUMMARY_ERROR_TITLE = 'Integration summary unavailable.';
-const SUMMARY_ERROR_BODY = 'Refresh to try again.';
+const SUMMARY_ERROR_TITLE = 'Integration 요약을 불러오지 못했습니다.';
 
 function isPermissionError(error: unknown): boolean {
   return (
@@ -131,7 +131,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
                 <ListStateMessage
                   variant="error"
                   title={SUMMARY_ERROR_TITLE}
-                  body={SUMMARY_ERROR_BODY}
+                  body={mapUnknownError(summary.error).message}
                   action={{ label: 'Retry', onClick: () => void summary.refetch() }}
                 />
               </div>

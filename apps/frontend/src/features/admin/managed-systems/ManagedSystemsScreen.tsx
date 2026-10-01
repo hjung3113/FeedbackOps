@@ -110,7 +110,7 @@ function ManagedSystemsBody({
           <p className="text-sm text-text-muted">Loading…</p>
         ) : listQuery.isError ? (
           <p className="text-sm text-accent-danger" data-testid="ms-list-error">
-            Error: {envelopeMessage(listQuery.error)}
+            오류: {envelopeMessage(listQuery.error)}
           </p>
         ) : systems.length === 0 ? (
           <div

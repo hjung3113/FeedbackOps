@@ -85,7 +85,7 @@ describe('<PermissionGate>', () => {
       </PermissionGate>,
     );
     await waitFor(() => {
-      expect(screen.getByText(/Access blocked/i)).toBeInTheDocument();
+      expect(screen.getByText('접근할 수 없습니다.')).toBeInTheDocument();
     });
     expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
   });

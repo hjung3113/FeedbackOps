@@ -30,6 +30,7 @@ import { MentionPickerButton } from '@/features/cross-system/mentions/MentionPic
 import { extractMentions } from '@/features/cross-system/mentions/extractMentions';
 import { insertMention } from '@/features/cross-system/mentions/insertMention';
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
@@ -110,7 +111,7 @@ export function InternalCommentComposer({
       toast.success('내부 코멘트가 추가되었습니다.');
     },
     onError: (error) => {
-      toast.error(`${error.code}: ${error.message}`);
+      toast.error(mapUnknownError(error).message);
     },
   });
 
@@ -161,9 +162,7 @@ export function InternalCommentComposer({
                 // below.
               }}
               onAttach={(file) => api.attach(file)}
-              onAttachError={(e) =>
-                toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
-              }
+              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
             />
           );
         }}

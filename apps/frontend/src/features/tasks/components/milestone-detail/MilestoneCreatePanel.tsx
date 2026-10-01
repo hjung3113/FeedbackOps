@@ -184,7 +184,7 @@ export function MilestoneCreatePanel({
       startDate === '' ||
       targetDate === ''
     ) {
-      setFormError('Title, why, Managed System, Start, and Target are required.');
+      setFormError('제목, 사유, Managed System, 시작일, 목표일을 입력해 주세요.');
       return;
     }
     setFormError(null);

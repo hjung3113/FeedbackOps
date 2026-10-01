@@ -1,7 +1,6 @@
-import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
-import { errorMapper } from '@/lib/api';
-import { useIdempotencyKey } from '@/lib/api';
+import { fetchAnalyticsAreas, fetchManagedSystems, useIdempotencyKey } from '@/lib/api';
 import type { ApiError, ApiErrorEnvelope } from '@/lib/api';
+import { errorMapper, mapUnknownError } from '@/lib/api/errorMapper';
 import { createVocRequestSchema, emptyTipTapDoc } from '@fops/shared';
 import type { CreateVocRequest } from '@fops/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -153,7 +152,7 @@ export function useVocCreateController({
   }
 
   function handleAttachmentError(err: unknown): void {
-    const msg = err instanceof Error ? err.message : '첨부 업로드에 실패했습니다';
+    const msg = mapUnknownError(err).message;
     toast.error(msg);
   }
 

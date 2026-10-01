@@ -131,7 +131,7 @@ export function AnalyticsAreasCatalog({
           <p className="text-sm text-text-muted">Loading…</p>
         ) : areasIsError ? (
           <p className="text-sm text-accent-danger" data-testid="aa-list-error">
-            Error: {envelopeMessage(areasError)}
+            오류: {envelopeMessage(areasError)}
           </p>
         ) : systems.length === 0 ? (
           <div

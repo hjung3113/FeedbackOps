@@ -818,7 +818,10 @@ describe('SurveyResultsSummary', () => {
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be created');
+    // #665: failures render the Korean catalog message, never the raw error text.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    expect(alert).not.toHaveTextContent('Finding could not be created');
     expect(screen.getByTestId('survey-create-finding-draft')).toBeInTheDocument();
     expect(screen.getByTestId('survey-create-finding-submit')).not.toBeDisabled();
   });

@@ -1,5 +1,6 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { EVIDENCE_IMPORTANCE_LABELS, EVIDENCE_SOURCE_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
 import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
@@ -71,7 +72,7 @@ export function AddEvidenceModal({
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<AddEvidenceHighlightRequest>({
-    resolver: zodResolver(addEvidenceHighlightRequestSchema),
+    resolver: zodResolver(addEvidenceHighlightRequestSchema, { errorMap: koreanZodErrorMap }),
     defaultValues: {
       source_type: 'note',
       source_id: null,

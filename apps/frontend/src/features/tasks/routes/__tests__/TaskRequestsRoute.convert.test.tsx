@@ -23,6 +23,7 @@ async function readOptions(label: string): Promise<HTMLElement[]> {
 }
 
 const api = vi.hoisted(() => ({ apiClient: vi.fn(), convertTaskRequest: vi.fn() }));
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 const requestedOutcome225 = `핵심 결과 ${'x'.repeat(219)}`;
 const requestedOutcome69 = `업무 결과 ${'x'.repeat(63)}`;
 const truncationMarker = '…';
@@ -100,6 +101,7 @@ vi.mock('@fops/ui', async () => {
     ),
   };
 });
+vi.mock('sonner', () => ({ toast }));
 
 vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
   useFindingDetail: () => ({ data: null }),
@@ -151,6 +153,7 @@ async function openConvertForm() {
 
 beforeEach(() => {
   vi.mocked(listMilestones).mockReset();
+  toast.success.mockReset();
   vi.mocked(listMilestones).mockImplementation(async (options) => ({
     items: MILESTONES.filter(
       (milestone) => milestone.primary_managed_system_id === options?.managed_system_id,
@@ -284,6 +287,14 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     });
   });
 
+  it('shows a Korean success toast after converting a Task Request', async () => {
+    api.convertTaskRequest.mockReset().mockResolvedValue({ display_id: 'TASK-7' });
+    await openConvertForm();
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Task TASK-7로 전환했습니다.'));
+  });
+
   // R2 (Astra P2-3) — after a successful picker read, a denied refetch must
   // win over the data React Query retains: the cached titles leave the
   // options, the denial reason is surfaced (distinct from an empty list), and
@@ -308,7 +319,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     });
     // The retained titles leave the UI, and the denial is distinguishable
     // from an empty list.
-    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(await screen.findByText('권한이 없습니다.')).toBeInTheDocument();
     fireEvent.click(select);
     expect(
       screen.queryByRole('option', { name: milestoneForRequestSystem.title }),
@@ -382,7 +393,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     await queryClient.invalidateQueries({
       queryKey: ['milestones', taskRequest.primary_managed_system_id],
     });
-    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(await screen.findByText('권한이 없습니다.')).toBeInTheDocument();
 
     // The held selection keeps a disabled, identity-free slot: the select
     // shows what is actually held instead of pretending it is None.

@@ -39,6 +39,7 @@
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
@@ -130,7 +131,7 @@ export function ReporterReplyComposer({
     },
     onError: (error) => {
       if (getComposerErrorTone(error.code) == null) {
-        toast.error(`${error.code}: ${error.message}`);
+        toast.error(mapUnknownError(error).message);
       }
     },
   });
@@ -158,7 +159,8 @@ export function ReporterReplyComposer({
   const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
   const inlineCalloutReason =
     inlineCalloutTone != null
-      ? ((mutationError?.detail?.reason as string | undefined) ?? mutationError?.message)
+      ? ((mutationError?.detail?.reason as string | undefined) ??
+        mapUnknownError(mutationError).message)
       : null;
 
   // Owner for preview card — priority: actor from me, then fallback.
@@ -187,9 +189,7 @@ export function ReporterReplyComposer({
           <ReporterReplyToolbar
             editor={editor}
             onAttach={(file) => api.attach(file)}
-            onAttachError={(e) =>
-              toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
-            }
+            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
           />
         )}
       />
