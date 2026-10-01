@@ -203,7 +203,7 @@ describe('/admin/analytics-areas route', () => {
     fireEvent.click(screen.getByTestId('aa-row-permission-management'));
     const detail = await screen.findByTestId('aa-slide-over');
     expect(detail).toHaveTextContent(
-      'Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage filter, dashboard tab, survey targeting에만 사용되며 권한 확인에는 영향을 주지 않습니다.',
+      'Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage 필터, 대시보드 탭, Survey 대상 지정에만 사용되며 권한 확인에는 영향을 주지 않습니다.',
     );
   });
 
