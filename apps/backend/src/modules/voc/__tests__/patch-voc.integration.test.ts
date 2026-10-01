@@ -183,10 +183,7 @@ async function revokeGrant(
 // Archives a VOC row directly via SQL (simulates the archived state for
 // tests that need to bypass normal archive flows).
 async function archiveVoc(dbHandle: DbHandle, vocId: string): Promise<void> {
-  await dbHandle.pool.query(
-    `update voc.vocs set archived_at = now() where id = $1`,
-    [vocId],
-  );
+  await dbHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [vocId]);
 }
 
 // Returns all audit event_type values for a given subject_id, in
@@ -196,7 +193,7 @@ async function getAuditTypes(vocId: string): Promise<string[]> {
   const ops = createDb(MIGRATE_URL);
   try {
     const rows = await ops.pool.query<{ event_type: string }>(
-      `select event_type from core.audit_log where subject_id = $1 order by created_at asc`,
+      'select event_type from core.audit_log where subject_id = $1 order by created_at asc',
       [vocId],
     );
     return rows.rows.map((r) => r.event_type);
@@ -207,12 +204,15 @@ async function getAuditTypes(vocId: string): Promise<string[]> {
 
 // Returns the `detail` JSON for the first audit row matching event_type for
 // the given subject_id. Returns null if MIGRATE_URL is absent or no row found.
-async function getAuditDetail(vocId: string, eventType: string): Promise<Record<string, unknown> | null> {
+async function getAuditDetail(
+  vocId: string,
+  eventType: string,
+): Promise<Record<string, unknown> | null> {
   if (!MIGRATE_URL) return null;
   const ops = createDb(MIGRATE_URL);
   try {
     const rows = await ops.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1`,
+      'select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1',
       [vocId, eventType],
     );
     return rows.rows[0]?.detail ?? null;
@@ -437,7 +437,13 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       randomUUID(),
     );
 
-    const res = await patchVoc(app, admin, voc.id, { severity: 'low' }, { idempotencyKey: randomUUID() });
+    const res = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { severity: 'low' },
+      { idempotencyKey: randomUUID() },
+    );
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
@@ -493,7 +499,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       randomUUID(),
     );
 
-    const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `14-c3-${randomUUID().slice(0, 8)}`);
+    const { externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `14-c3-${randomUUID().slice(0, 8)}`,
+    );
     const devCookie = await loginAs(app, externalId);
     const bogusMatch = '1970-01-01T00:00:00.000Z';
 
@@ -787,7 +797,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
 
     // Verify postponed_at is set in the DB.
     const dbRow = await dbHandle.pool.query<{ postponed_at: string | null }>(
-      `select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1`,
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
       [voc.id],
     );
     expect(dbRow.rows[0]?.postponed_at).not.toBeNull();
@@ -805,7 +815,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   it('PATCH { postpone_review, severity, owner_user_id, analytics_area_id } → 200, audit order: [postponed,severity_set,owner_assigned,aa_linked]', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-patch-postpone-multi', 'Postpone Multi MS');
-    const aaId = await createAa(app, admin, { managed_system_id: msId, slug: 'aa-pm', name: 'AA Postpone Multi' });
+    const aaId = await createAa(app, admin, {
+      managed_system_id: msId,
+      slug: 'aa-pm',
+      name: 'AA Postpone Multi',
+    });
     const reporter = await loginAs(app, 'mock-user-1');
     const voc = await postVoc(
       app,
@@ -936,7 +950,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
 
     // Confirm postponed_at is set.
     const afterPostpone = await dbHandle.pool.query<{ postponed_at: string | null }>(
-      `select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1`,
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
       [voc.id],
     );
     expect(afterPostpone.rows[0]?.postponed_at).not.toBeNull();
@@ -956,7 +970,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
 
     // Assert postponed_at is cleared in the DB (C5).
     const afterTriage = await dbHandle.pool.query<{ postponed_at: string | null }>(
-      `select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1`,
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
       [voc.id],
     );
     expect(afterTriage.rows[0]?.postponed_at).toBeNull();
@@ -1026,8 +1040,9 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(res2.statusCode).toBe(422);
     const body2 = res2.json();
     expect(body2.code).toBe('validation.failed');
-    const ownerTeamField = (body2.detail.fields as Array<{ path: string[]; code: string }>)
-      .find((f) => f.path.includes('owner_team_id'));
+    const ownerTeamField = (body2.detail.fields as Array<{ path: string[]; code: string }>).find(
+      (f) => f.path.includes('owner_team_id'),
+    );
     expect(ownerTeamField?.code).toBe('invalid');
   });
 
@@ -1142,7 +1157,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       randomUUID(),
     );
 
-    const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `14-dev403-${randomUUID().slice(0, 8)}`);
+    const { externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `14-dev403-${randomUUID().slice(0, 8)}`,
+    );
     const devCookie = await loginAs(app, externalId);
 
     const res = await patchVoc(
@@ -1184,7 +1203,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       randomUUID(),
     );
 
-    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `14-revoke-${randomUUID().slice(0, 8)}`);
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `14-revoke-${randomUUID().slice(0, 8)}`,
+    );
     const grantId = await grantVocTriage(dbHandle, WORKSPACE_ID, devId, msId, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -1280,8 +1303,20 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
 
     // Fire both requests concurrently — exercises SELECT FOR UPDATE contention.
     const [res1, res2] = await Promise.all([
-      patchVoc(app, admin, voc.id, { severity: 'low' }, { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch }),
-      patchVoc(app, admin, voc.id, { severity: 'medium' }, { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch }),
+      patchVoc(
+        app,
+        admin,
+        voc.id,
+        { severity: 'low' },
+        { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch },
+      ),
+      patchVoc(
+        app,
+        admin,
+        voc.id,
+        { severity: 'medium' },
+        { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch },
+      ),
     ]);
 
     const statuses = [res1.statusCode, res2.statusCode].sort();
@@ -1318,10 +1353,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     const key = randomUUID();
     const body = { severity: 'high' };
 
-    const res1 = await patchVoc(app, admin, voc.id, body, { idempotencyKey: key, ifMatch: voc.updated_at });
+    const res1 = await patchVoc(app, admin, voc.id, body, {
+      idempotencyKey: key,
+      ifMatch: voc.updated_at,
+    });
     expect(res1.statusCode).toBe(200);
 
-    const res2 = await patchVoc(app, admin, voc.id, body, { idempotencyKey: key, ifMatch: voc.updated_at });
+    const res2 = await patchVoc(app, admin, voc.id, body, {
+      idempotencyKey: key,
+      ifMatch: voc.updated_at,
+    });
     expect(res2.statusCode).toBe(200);
 
     // Both responses have the same body (idempotent).
