@@ -182,71 +182,95 @@ export function TaskRequestPanel({
                   </Link>
                 </div>
               )}
-              {!resultingTask && decision.canApprove && (
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="w-full"
-                  loading={decision.isPending}
-                  onClick={decision.approve}
-                >
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  승인
-                </Button>
-              )}
-              {!resultingTask && conversion.canConvert && (
-                <Button
-                  type="button"
-                  variant={conversion.open ? 'secondary' : 'primary'}
-                  size={conversion.open ? 'sm' : 'md'}
-                  className="w-full"
-                  onClick={() => {
-                    conversion.setOpen((open) => !open);
-                    link.setOpen(false);
-                  }}
-                >
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  Task로 전환
-                </Button>
-              )}
-              {!resultingTask && (link.canLinkExisting || decision.canRequestEvidence) && (
-                <div
-                  className={
-                    link.canLinkExisting && decision.canRequestEvidence
-                      ? 'grid grid-cols-2 gap-2'
-                      : 'flex flex-col gap-2'
-                  }
-                >
-                  {link.canLinkExisting && (
+              {!resultingTask && (decision.canApprove || conversion.canConvert) && (
+                <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+                  <legend className="sr-only">주요 결정</legend>
+                  {decision.canApprove && (
                     <Button
                       type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => {
-                        link.setOpen((open) => !open);
-                        conversion.setOpen(false);
-                      }}
-                    >
-                      <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      기존 Task 연결
-                    </Button>
-                  )}
-                  {decision.canRequestEvidence && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
+                      variant="primary"
                       className="w-full"
                       loading={decision.isPending}
-                      onClick={decision.requestEvidence}
+                      onClick={decision.approve}
                     >
-                      <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
-                      근거 추가 요청
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      승인
                     </Button>
                   )}
-                </div>
+                  {conversion.canConvert && (
+                    <Button
+                      type="button"
+                      variant={conversion.open ? 'secondary' : 'primary'}
+                      size={conversion.open ? 'sm' : 'md'}
+                      className="w-full"
+                      onClick={() => {
+                        conversion.setOpen((open) => !open);
+                        link.setOpen(false);
+                      }}
+                    >
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      Task로 전환
+                    </Button>
+                  )}
+                </fieldset>
               )}
+              {!resultingTask &&
+                (link.canLinkExisting || decision.canRequestEvidence || decision.canReject) && (
+                  <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+                    <legend className="sr-only">보조 결정</legend>
+                    {(link.canLinkExisting || decision.canRequestEvidence) && (
+                      <div
+                        className={
+                          link.canLinkExisting && decision.canRequestEvidence
+                            ? 'grid grid-cols-2 gap-2'
+                            : 'flex flex-col gap-2'
+                        }
+                      >
+                        {link.canLinkExisting && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                              link.setOpen((open) => !open);
+                              conversion.setOpen(false);
+                            }}
+                          >
+                            <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            기존 Task 연결
+                          </Button>
+                        )}
+                        {decision.canRequestEvidence && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
+                            loading={decision.isPending}
+                            onClick={decision.requestEvidence}
+                          >
+                            <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
+                            근거 추가 요청
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {decision.canReject && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-accent-danger text-accent-danger hover:bg-accent-danger/10"
+                        loading={decision.isPending}
+                        onClick={decision.reject}
+                      >
+                        <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        반려
+                      </Button>
+                    )}
+                  </fieldset>
+                )}
               {!resultingTask && link.open && (
                 <div className="max-h-52 overflow-y-auto rounded border border-border-subtle bg-surface-card">
                   {link.isTasksLoading && (
@@ -461,19 +485,6 @@ export function TaskRequestPanel({
                     Task로 전환
                   </Button>
                 </form>
-              )}
-              {!resultingTask && decision.canReject && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  className="w-full"
-                  loading={decision.isPending}
-                  onClick={decision.reject}
-                >
-                  <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                  반려
-                </Button>
               )}
             </div>
           </section>

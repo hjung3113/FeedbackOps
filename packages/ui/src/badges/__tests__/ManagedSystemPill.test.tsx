@@ -1,7 +1,7 @@
 /// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { ManagedSystemPill } from '../ManagedSystemPill.js';
+import { managedSystemMarkColor, managedSystemMarkToken } from '../managed-system-mark.js';
 
 describe('ManagedSystemPill', () => {
   it('renders the name', () => {
@@ -15,6 +15,33 @@ describe('ManagedSystemPill', () => {
     // hex values in style.backgroundColor to rgb, so we assert via the attribute).
     const mark = container.querySelector('[data-mark="#5e6ad2"]');
     expect(mark).not.toBeNull();
+  });
+
+  it.each([
+    ['tableau', '--managed-system-tableau'],
+    ['power-bi', '--managed-system-power-bi'],
+    ['looker', '--managed-system-looker'],
+    ['metabase', '--managed-system-metabase'],
+  ])('maps the %s slug to its identity token', (slug, token) => {
+    expect(managedSystemMarkToken(slug)).toBe(token);
+  });
+
+  it.each(['salesforce', undefined, 'constructor', 'toString', '__proto__'])(
+    'uses a neutral token and CSS color for unknown slug %s',
+    (slug) => {
+      expect(managedSystemMarkToken(slug)).toBe('--managed-system-default');
+      expect(managedSystemMarkColor(slug)).toBe('rgb(var(--managed-system-default) / 1)');
+    },
+  );
+
+  it('renders the system name beside a mark using its slug token', () => {
+    const { container } = render(
+      <ManagedSystemPill name="Tableau" mark={managedSystemMarkColor('tableau')} />,
+    );
+    const mark = container.querySelector('[data-mark]');
+    expect(screen.getByText('Tableau')).toBeInTheDocument();
+    expect(mark).toHaveAttribute('data-mark', 'rgb(var(--managed-system-tableau) / 1)');
+    expect(mark?.parentElement).toHaveTextContent('Tableau');
   });
 
   it('does not render a mark square when mark is omitted', () => {

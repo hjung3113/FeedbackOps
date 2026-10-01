@@ -248,9 +248,9 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
               {HOME_COPY.queueHeading}
             </h2>
           </div>
-          <div className="grid grid-cols-4 gap-3" data-testid="home-action-queues">
+          <div className="flex flex-col gap-2" data-testid="home-action-queues">
             {activeQueues.map((queue) => (
-              <ActionQueueCard key={queue.id} queue={queue} />
+              <ActionQueueRow key={queue.id} queue={queue} />
             ))}
           </div>
         </>
@@ -274,7 +274,7 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
   );
 }
 
-function ActionQueueCard({
+function ActionQueueRow({
   queue,
 }: { queue: DashboardSummary['action_queues'][number] }): React.ReactElement {
   const copy = HOME_QUEUE_COPY[queue.id];
@@ -292,30 +292,32 @@ function ActionQueueCard({
         : 'bg-accent-info/10 text-accent-info';
   return (
     <article
-      className="flex min-h-[252px] flex-col rounded-md border border-border-subtle bg-surface-card p-4"
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-md border border-border-subtle bg-surface-card px-3 py-2"
       data-testid={`home-queue-${queue.id}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold text-text-primary">{copy.title}</h3>
-          <p className="mt-2 text-xs leading-5 text-text-muted">{copy.detail}</p>
-        </div>
+      <div className="flex min-w-0 items-center gap-3">
         <span
-          className={`shrink-0 rounded px-1.5 py-1 text-[10px] font-medium uppercase tracking-wide ${chipClass}`}
+          className={`shrink-0 text-2xl font-semibold tabular-nums ${countClass}`}
+          data-testid={`home-queue-count-${queue.id}`}
         >
-          {homeSeverityLabel(queue.severity)}
+          {queue.count}
         </span>
-      </div>
-      <div
-        className={`mt-auto pt-5 text-4xl font-semibold tabular-nums ${countClass}`}
-        data-testid={`home-queue-count-${queue.id}`}
-      >
-        {queue.count}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-text-primary">{copy.title}</h3>
+            <span
+              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${chipClass}`}
+            >
+              {homeSeverityLabel(queue.severity)}
+            </span>
+          </div>
+          <p className="truncate text-xs leading-5 text-text-muted">{copy.detail}</p>
+        </div>
       </div>
       <footer
         className={[
-          'mt-4 flex flex-wrap items-center justify-between gap-2',
-          'border-t border-border-subtle pt-3',
+          'flex flex-wrap items-center justify-end gap-3',
+          'max-sm:col-span-2 max-sm:justify-between',
         ].join(' ')}
       >
         {queue.secondary_action && copy.secondaryAction ? (
@@ -332,7 +334,7 @@ function ActionQueueCard({
           asChild
           variant="primary"
           size="sm"
-          className="ml-auto max-w-full h-auto min-h-8 py-1 whitespace-normal"
+          className="max-w-full h-auto min-h-8 py-1 whitespace-normal"
         >
           <a href={queue.next_action.route}>
             <span className="min-w-0 break-words">{copy.primaryAction}</span>

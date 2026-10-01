@@ -372,6 +372,13 @@ Example:
 VOC → optional Evidence → optional Finding → optional Task Request → optional Task → optional Outcome Survey
 ```
 
+### Managed System Identity Mark
+
+Managed System marks use `managedSystemMarkColor(slug)` from `@fops/ui`, which
+maps `tableau`, `power-bi`, `looker`, and `metabase` to their identity tokens.
+Unknown slugs use the neutral `--managed-system-default` token. Keep the
+Managed System name visible next to its mark.
+
 ### EvidenceHighlight
 
 Purpose:

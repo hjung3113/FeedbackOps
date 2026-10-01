@@ -118,7 +118,7 @@
   --managed-system-power-bi: 242 196 109; /* #f2c46d */
   --managed-system-looker: 2 184 204;    /* #02b8cc */
   --managed-system-metabase: 39 166 68;  /* #27a644 */
-  --managed-system-default: var(--color-aether-blue);
+  --managed-system-default: var(--color-storm-cloud);
 
   /* --- Layout tokens --- */
   --sidebar-width: 240px;

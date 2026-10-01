@@ -63,7 +63,7 @@ describe('useManagedSystem', () => {
     expect(result.current?.id).toBe('ms-aaa');
     expect(result.current?.name).toBe('Tableau');
     expect(typeof result.current?.mark).toBe('string');
-    expect(result.current?.mark).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(result.current?.mark).toBe('rgb(var(--managed-system-tableau) / 1)');
     expect(result.current?.archived).toBe(false);
   });
 

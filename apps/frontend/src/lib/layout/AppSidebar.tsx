@@ -113,6 +113,19 @@ export function AppSidebar({
   const selectedSystem = managedSystems.find((system) => system.id === selectedManagedSystemId);
   const grantedSystems = managedSystems.filter((system) => system.granted);
   const isUnion = !isAdmin && selectedManagedSystemId === undefined;
+  const scopeName = scopeControlEnabled
+    ? selectedSystem?.name ?? 'All Managed Systems'
+    : '워크스페이스 전체';
+  const scopeQualifier = scopeControlEnabled
+    ? selectedSystem && !selectedSystem.granted
+      ? 'out of scope'
+      : isUnion
+        ? 'union'
+        : selectedManagedSystemId === undefined && isAdmin
+          ? 'workspace-wide'
+          : null
+    : null;
+  const scopeAccessibleName = scopeQualifier ? `${scopeName}, ${scopeQualifier}` : scopeName;
   const visibleFooterItems = footerItems.filter(
     (item) => item.id !== 'workspace-settings' || canAccessWorkspaceAdmin,
   );
@@ -161,13 +174,14 @@ export function AppSidebar({
             disabled={!scopeControlEnabled}
             aria-expanded={scopeOpen}
             aria-haspopup="listbox"
-            title={scopeControlEnabled ? undefined : '이 화면은 Managed System 범위를 지원하지 않습니다'}
+            aria-label={scopeAccessibleName}
+            title={scopeControlEnabled ? scopeName : '이 화면은 Managed System 범위를 지원하지 않습니다'}
             data-testid="scope-selector"
           >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-primary/15 text-xs font-semibold text-accent-primary">{selectedSystem ? selectedSystem.name.slice(0, 1) : '∗'}</span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1 truncate font-medium">
-                {scopeControlEnabled ? (selectedSystem?.name ?? 'All Managed Systems') : '워크스페이스 전체'}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-0 items-center gap-1 font-medium">
+                <span className="min-w-0 flex-1 truncate" data-testid="scope-name" title={scopeName}>{scopeName}</span>
                 {scopeControlEnabled && isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
                 {scopeControlEnabled && selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
               </span>
@@ -282,7 +296,7 @@ function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: num
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
-  return <span className={cn('inline-flex items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-[9px] font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
+  return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-[9px] font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
 }
 
 function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {

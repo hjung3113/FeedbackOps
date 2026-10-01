@@ -6,14 +6,12 @@ describe('scopeMarkColor', () => {
     expect(scopeMarkColor('tableau')).toBe(scopeMarkColor('tableau'));
   });
 
-  it('returns a hex from the palette', () => {
-    expect(scopeMarkColor('power-bi')).toMatch(/^#[0-9a-f]{6}$/);
+  it('uses the known Managed System token', () => {
+    expect(scopeMarkColor('power-bi')).toBe('rgb(var(--managed-system-power-bi) / 1)');
   });
 
-  it('distinguishes most distinct slugs', () => {
-    const colors = ['tableau', 'powerbi', 'looker', 'metabase'].map(scopeMarkColor);
-    // Not guaranteed unique across 8 buckets, but these four should not all collide.
-    expect(new Set(colors).size).toBeGreaterThan(1);
+  it('uses the neutral fallback for an unknown slug', () => {
+    expect(scopeMarkColor('salesforce')).toBe('rgb(var(--managed-system-default) / 1)');
   });
 });
 
@@ -38,7 +36,7 @@ describe('scopeMarkLabel', () => {
 describe('scopeMark', () => {
   it('combines color + label', () => {
     const m = scopeMark('tableau', 'Tableau');
-    expect(m.color).toMatch(/^#[0-9a-f]{6}$/);
+    expect(m.color).toBe('rgb(var(--managed-system-tableau) / 1)');
     expect(m.label).toBe('TA');
   });
 });

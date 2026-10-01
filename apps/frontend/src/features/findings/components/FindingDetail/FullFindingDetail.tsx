@@ -258,58 +258,63 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         </div>
 
         {/* CTA Footer */}
-        <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2">
-          {/* Add Evidence — gated to finding.manage; backend authoritative */}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setAddEvidenceOpen(true)}
-            disabled={!canManage}
-            data-testid="add-evidence-btn"
-          >
-            Evidence 추가
-          </Button>
-
-          {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setLinkEvidenceOpen(true)}
-            disabled={!canManage}
-            data-testid="link-evidence-btn"
-          >
-            기존 Evidence 연결
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRequestTaskOpen(true)}
-            disabled={!canManage}
-            data-testid="request-task-btn"
-          >
-            Task 요청
-          </Button>
-          {finding.linked_task_id === null && (
+        <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-col gap-2">
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="sr-only">주요 실행</legend>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setRequestTaskOpen(true)}
+              disabled={!canManage}
+              data-testid="request-task-btn"
+            >
+              Task 요청
+            </Button>
+          </fieldset>
+          <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
+            <legend className="sr-only">보조 작업</legend>
+            {/* Add Evidence — gated to finding.manage; backend authoritative */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setLinkTaskOpen(true)}
+              onClick={() => setAddEvidenceOpen(true)}
               disabled={!canManage}
-              data-testid="link-task-btn"
+              data-testid="add-evidence-btn"
             >
-              Task 연결
+              Evidence 추가
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleMarkNotActionable}
-            disabled={markNotActionableDisabled}
-            data-testid="mark-not-actionable-btn"
-          >
-            조치 불필요 표시
-          </Button>
+
+            {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLinkEvidenceOpen(true)}
+              disabled={!canManage}
+              data-testid="link-evidence-btn"
+            >
+              기존 Evidence 연결
+            </Button>
+            {finding.linked_task_id === null && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLinkTaskOpen(true)}
+                disabled={!canManage}
+                data-testid="link-task-btn"
+              >
+                Task 연결
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMarkNotActionable}
+              disabled={markNotActionableDisabled}
+              data-testid="mark-not-actionable-btn"
+            >
+              조치 불필요 표시
+            </Button>
+          </fieldset>
         </div>
       </div>
 

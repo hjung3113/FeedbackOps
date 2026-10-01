@@ -1,43 +1,12 @@
-// scopeMark — deterministic colored-square identity for a Managed System.
-//
-// Prototype-silent deviation (issue #87 locked decision #1): the prototype's
-// `data.js` hands each Managed System a hand-authored `color` + `mark`. The
-// real API (core.managed_systems) carries no color/mark column. We derive both
-// deterministically so the registry stays visually stable across reloads
-// without a schema change:
-//   - color: hashed from the immutable slug into a fixed palette.
-//   - mark:  initials from the display name (1-2 chars, uppercased).
-// This is the ONE place hex color is allowed in the admin screen path
-// (apps/frontend/AGENTS.md → Design Consistency: scope-mark palette helper).
+// scopeMark — admin registry mark derivation.
+// ADR-0057 B6 supersedes #87's hashed palette; the shared UI helper resolves
+// known slugs to identity tokens and unknown slugs to the neutral fallback.
 
-// Fixed palette — saturated, legible against white text. Order is stable; the
-// hash picks an index so a given slug always lands on the same swatch.
-const SCOPE_MARK_PALETTE = [
-  '#5e6ad2', // indigo
-  '#e5793b', // orange
-  '#0f9d8e', // teal
-  '#3aa655', // green
-  '#c0497b', // magenta
-  '#4b8fd6', // blue
-  '#9a6dd7', // violet
-  '#d4a017', // amber
-] as const;
-
-/** FNV-1a 32-bit hash — small, fast, deterministic; no crypto needed. */
-function hashString(input: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+import { managedSystemMarkColor } from '@fops/ui';
 
 /** Stable swatch for a slug. */
 export function scopeMarkColor(slug: string): string {
-  const idx = hashString(slug) % SCOPE_MARK_PALETTE.length;
-  // SCOPE_MARK_PALETTE is a non-empty const tuple; idx is always in range.
-  return SCOPE_MARK_PALETTE[idx] as string;
+  return managedSystemMarkColor(slug);
 }
 
 /**

@@ -101,7 +101,7 @@ export function AnalyticsAreasBody({
 
   const msOptions: PickerOption[] = systems
     .filter((m) => includeArchived || m.archived_at === null)
-    .map((m) => ({ id: m.id, label: m.name }));
+    .map((m) => ({ id: m.id, label: m.name, slug: m.slug }));
 
   async function invalidate() {
     await invalidateAnalyticsAreas(qc);

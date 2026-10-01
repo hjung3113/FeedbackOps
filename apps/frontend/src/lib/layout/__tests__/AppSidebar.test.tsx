@@ -357,6 +357,29 @@ describe('AppSidebar', () => {
       />,
     );
     expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('scope-name')).toHaveTextContent('All Managed Systems');
+    expect(screen.getByTestId('scope-selector')).toHaveAccessibleName(
+      'All Managed Systems, workspace-wide',
+    );
+  });
+
+  it('keeps scope qualifiers visible and exposes a long system name accessibly', () => {
+    const name = 'Finance Analytics and Global Revenue Operations';
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[{ id: 'outside', name, granted: false }]}
+        selectedManagedSystemId="outside"
+      />,
+    );
+
+    const selector = screen.getByTestId('scope-selector');
+    expect(selector).toHaveAccessibleName(`${name}, out of scope`);
+    expect(selector).toHaveAttribute('title', name);
+    expect(screen.getByTestId('scope-name')).toHaveTextContent(name);
+    expect(screen.getByTestId('scope-name')).toHaveClass('truncate');
+    expect(screen.getByTestId('scope-out-of-scope-badge')).toBeVisible();
   });
 
   it('replaces prior-rail items when the sidebar tree changes', () => {

@@ -169,7 +169,7 @@ function FindingsListShell({
         />
       }
       detailPanel={
-        selectedId ? (
+        stateIsError && isPermissionDenied(stateError) ? null : selectedId ? (
           <div className="flex h-full min-h-0 flex-col">
             {safeReturnTo !== null && (
               <div className="flex h-10 shrink-0 items-center border-b border-border-subtle px-4">
