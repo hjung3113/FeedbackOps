@@ -33,9 +33,7 @@ export interface NameMaps {
 
 // `exactOptionalPropertyTypes` is on: an optional property must spell `| undefined`
 // explicitly for a value that may actually be undefined to be assignable.
-export type TaskRequestListItem = TaskRequestDto & {
-  source?: (NonNullable<TaskRequestDto['source']> & { display_id?: string | null }) | undefined;
-};
+export type TaskRequestListItem = TaskRequestDto;
 
 interface TaskRequestRowProps {
   item: TaskRequestListItem;
@@ -52,6 +50,8 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
   const ms = names.managedSystemsById[item.primary_managed_system_id];
+  const showsSourceId = item.source_type === 'finding';
+  const evidenceCount = item.source?.evidence_count;
 
   return (
     <ObjectRow
@@ -63,17 +63,18 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
       badges={<TaskRequestBadge status={item.status} />}
       meta={
         <>
-          {item.source_type === 'finding' && (
+          {showsSourceId && (
             <span className="inline-flex items-center gap-1">
               <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
-              {!item.source?.display_id?.trim() && (
-                <span className="font-mono text-text-muted">{shortId(item.source_id)}</span>
-              )}
             </span>
           )}
-          {dot()}
-          <span>Evidence 1</span>
-          {dot()}
+          {evidenceCount !== undefined && (
+            <>
+              {showsSourceId && dot()}
+              <span>Evidence · {evidenceCount}</span>
+            </>
+          )}
+          {(showsSourceId || evidenceCount !== undefined) && dot()}
           <span>{ms?.name ?? 'Managed System'}</span>
           {!ms && (
             <span className="font-mono text-text-muted">

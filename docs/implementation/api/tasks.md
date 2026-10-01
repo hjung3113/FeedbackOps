@@ -48,6 +48,12 @@ auth and permission: Admin or Developer. Admin sees all Task Requests in the
   workspace. Developer rows are filtered per Task Request by `finding.manage`
   on `primary_managed_system_id`.
 sort: created_at DESC
+source projection: when an active `requested_task` link exists, `source`
+  includes its type, id, relation, and link id plus the source `display_id`
+  and `title`; Finding sources also include `evidence_count`. VOC `display_id`
+  and `title` are included for the Reporter or when the deny-first `voc.read`
+  check allows the actor to read that VOC, including for Admins; otherwise those
+  summary keys are omitted. A missing active source link omits `source`.
 ```
 
 Decision endpoints:
@@ -168,8 +174,8 @@ auth and permission: Admin or Developer with finding.manage on the Task
   primary_managed_system_id. Admin bypass follows GET /tasks.
 source resolution:
   - source = null when source_task_request_id is null
-  - source.task_request = { id, status } when source_task_request_id resolves
-  - source.finding = { id, title, summary, evidence_count } via active
+  - source.task_request = { id, display_id, status } when source_task_request_id resolves
+  - source.finding = { id, display_id, title, summary, evidence_count } via active
     (finding, task_request, requested_task) when present
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
     by the FE: allowed = { visibility_state, id, display_id, title };

@@ -386,6 +386,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -434,6 +435,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         voc: { visibility_state: 'summary_visible' },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -465,6 +467,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         voc: { visibility_state: 'denied' },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -491,6 +494,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
       taskDetailFixture({
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,

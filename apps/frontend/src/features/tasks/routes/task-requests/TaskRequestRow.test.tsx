@@ -38,10 +38,39 @@ describe('TaskRequestRow identity', () => {
     expect(screen.getByText(/↔ Finding/)).toBeInTheDocument();
     expect(screen.getByText('Managed System')).toBeInTheDocument();
     expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
-    expect(screen.getByText('40000000')).toHaveClass('text-text-muted');
+    expect(screen.queryByText('40000000')).not.toBeInTheDocument();
+    expect(screen.queryByText('Evidence 1')).not.toBeInTheDocument();
     expect(screen.getByText('30000000')).toHaveClass('text-text-muted');
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
     expect(screen.queryByText('10000000')).not.toBeInTheDocument();
+  });
+
+  it('shows the Finding display id and actual evidence count', () => {
+    const item = {
+      ...REQUEST,
+      source: {
+        type: 'finding' as const,
+        id: REQUEST.source_id,
+        relation_type: 'requested_task' as const,
+        link_id: '50000000-0000-0000-0000-000000000005',
+        display_id: 'FIN-181',
+        title: '리포트 속도 저하',
+        evidence_count: 7,
+      },
+    };
+    render(
+      <TaskRequestRow
+        item={item}
+        selected={false}
+        names={{ actorsById: {}, managedSystemsById: {} }}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText(/↔ FIN-181/)).toBeInTheDocument();
+    expect(screen.getByText('Evidence · 7')).toBeInTheDocument();
+    expect(screen.queryByText('Evidence 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('40000000')).not.toBeInTheDocument();
   });
 
   it.each(taskRequestStatusSchema.options)(

@@ -59,11 +59,22 @@ function allowedTaskLink(): EntityLinkDto {
 }
 
 describe('<LinkedEntityTrailSection>', () => {
-  it('renders only the reporter summary title and projected status', () => {
-    render(<LinkedEntityTrailSection links={[summaryVisibleTask]} isReporterContext />);
+  it('renders the reporter status label and formats public dates', () => {
+    const summaryWithDates: EntityLinkDto = {
+      ...summaryVisibleTask,
+      summary: {
+        ...summaryVisibleTask.summary,
+        expected_resolution_date: '2026-07-31',
+        last_public_update_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+    };
+    render(<LinkedEntityTrailSection links={[summaryWithDates]} isReporterContext />);
 
     expect(screen.getByText('공개 가능한 개선 작업')).toBeInTheDocument();
     expect(screen.getByText('진행 중')).toBeInTheDocument();
+    expect(screen.getByText('2026. 07. 31.')).toBeInTheDocument();
+    expect(screen.getByText('2시간 전')).toBeInTheDocument();
+    expect(screen.queryByText('2026-07-31')).not.toBeInTheDocument();
     expect(screen.getByTestId('linked-task-summary')).toBeInTheDocument();
   });
 

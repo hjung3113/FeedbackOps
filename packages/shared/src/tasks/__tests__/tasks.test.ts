@@ -38,10 +38,12 @@ describe('taskDetailDtoSchema', () => {
       source: {
         task_request: {
           id: U4,
+          display_id: 'REQ-100',
           status: 'converted',
         },
         finding: {
           id: U1,
+          display_id: 'FIN-123',
           title: 'Export failures',
           summary: 'VOC evidence needs execution.',
           evidence_count: 2,
@@ -50,6 +52,7 @@ describe('taskDetailDtoSchema', () => {
     });
 
     expect(parsed.source?.finding?.evidence_count).toBe(2);
+    expect(parsed.source?.finding?.display_id).toBe('FIN-123');
   });
 
   it('accepts a standalone task with null source', () => {
@@ -69,6 +72,7 @@ describe('taskDetailDtoSchema', () => {
         source: {
           finding: {
             id: U1,
+            display_id: 'FIN-123',
             title: 'Export failures',
             summary: 'VOC evidence needs execution.',
             evidence_count: 2,
@@ -92,7 +96,7 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
     const parsed = taskDetailDtoSchema.parse({
       ...baseTask,
       source: {
-        task_request: { id: U4, status: 'approved' },
+        task_request: { id: U4, display_id: 'REQ-100', status: 'approved' },
         voc: vocAllowed,
       },
     });
@@ -121,7 +125,7 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
   it('accepts a source without voc (hidden is omitted, never serialized)', () => {
     const parsed = taskDetailDtoSchema.parse({
       ...baseTask,
-      source: { task_request: { id: U4, status: 'approved' } },
+      source: { task_request: { id: U4, display_id: 'REQ-100', status: 'approved' } },
     });
 
     expect(parsed.source?.voc).toBeUndefined();
