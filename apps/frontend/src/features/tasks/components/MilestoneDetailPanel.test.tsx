@@ -547,7 +547,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
-    expect(row).toHaveTextContent('2026-06-15');
+    expect(row).toHaveTextContent('2026. 6. 15.');
     expect(row).not.toHaveTextContent('estimate');
   });
 
