@@ -109,7 +109,14 @@ beforeEach(() => {
     changeValue: vi.fn(),
     close: vi.fn(),
   });
-  useConversion.mockReturnValue({ analyticsAreaSelection: { kind: 'none' }, analyticsAreaUnresolvedReason: null, open: false, canConvert: false, result: null, setOpen: vi.fn() });
+  useConversion.mockReturnValue({
+    analyticsAreaSelection: { kind: 'none' },
+    analyticsAreaUnresolvedReason: null,
+    open: false,
+    canConvert: false,
+    result: null,
+    setOpen: vi.fn(),
+  });
   useLink.mockReturnValue({
     open: false,
     canLinkExisting: false,
