@@ -83,7 +83,7 @@ export function EvidenceHighlightsSection({
   }
 
   if (isError) {
-    return <p className="text-sm text-feedback-error">Evidence 목록을 불러오지 못했습니다.</p>;
+    return <p className="text-sm text-text-danger">Evidence 목록을 불러오지 못했습니다.</p>;
   }
 
   const items = highlights ?? [];

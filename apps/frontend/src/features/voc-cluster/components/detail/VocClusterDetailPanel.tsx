@@ -134,7 +134,7 @@ export function VocClusterDetailPanel({
         className="flex flex-col items-center justify-center py-16 px-6 text-center"
         data-testid="cluster-detail-error"
       >
-        <p className="text-sm text-feedback-error">
+        <p className="text-sm text-text-danger">
           {code === 'not_found.record'
             ? '클러스터를 찾을 수 없습니다.'
             : '데이터를 불러오지 못했습니다.'}

@@ -374,7 +374,7 @@ export function DatePicker({
                                   tabIndex={dateValue === activeDate ? 0 : -1}
                                   disabled={isDisabled}
                                   aria-pressed={dateValue === value}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-[pressed=true]:bg-surface-selected aria-[pressed=true]:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-[pressed=true]:bg-surface-row-selected aria-[pressed=true]:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
                                   onClick={() => selectDate(date)}
                                   onKeyDown={(event) => handleDayKeyDown(event, date)}
                                 >

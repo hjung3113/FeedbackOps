@@ -89,7 +89,7 @@ export function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): R
             </SelectContent>
           </Select>
           {tasksQuery.isError && (
-            <p className="text-sm text-feedback-error">Task 목록을 불러오지 못했습니다.</p>
+            <p className="text-sm text-text-danger">Task 목록을 불러오지 못했습니다.</p>
           )}
           {!tasksQuery.isLoading && candidates.length === 0 && (
             <p className="text-sm text-text-muted">

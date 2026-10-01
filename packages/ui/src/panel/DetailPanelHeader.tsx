@@ -108,7 +108,7 @@ export function DetailPanelHeader({
             className={cn(
               'flex items-center justify-center rounded p-1',
               'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
               extras === undefined && 'ml-auto',
             )}
           >

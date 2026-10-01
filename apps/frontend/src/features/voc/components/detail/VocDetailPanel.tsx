@@ -94,7 +94,7 @@ export function VocDetailPanel({
     }
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <p className="text-sm text-feedback-error">데이터를 불러오지 못했습니다.</p>
+        <p className="text-sm text-text-danger">데이터를 불러오지 못했습니다.</p>
       </div>
     );
   }
