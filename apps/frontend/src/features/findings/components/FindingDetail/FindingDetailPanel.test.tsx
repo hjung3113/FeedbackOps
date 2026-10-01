@@ -1,9 +1,10 @@
-import type { FindingDto } from '@fops/shared';
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { type FindingDto, listEntityLinksQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FindingDetailPanel } from './FindingDetailPanel';
 import { FullFindingDetail } from './FullFindingDetail';
 
@@ -11,18 +12,24 @@ const apiClientMock = vi.hoisted(() => vi.fn());
 const findingSourceType = vi.hoisted(() => ({
   value: 'manual' as 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual',
 }));
+const ORIGINAL_FETCH = globalThis.fetch;
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
     to,
+    search,
     className,
   }: {
     children: React.ReactNode;
     to: string;
+    search?: Record<string, string>;
     className?: string;
   }) => (
-    <a href={to} className={className}>
+    <a
+      href={`${to}${search ? `?${new URLSearchParams(search).toString()}` : ''}`}
+      className={className}
+    >
       {children}
     </a>
   ),
@@ -138,6 +145,18 @@ const mediumFinding: FindingDto = {
 describe('FindingDetailPanel', () => {
   beforeEach(() => {
     findingSourceType.value = 'manual';
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as typeof globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH;
+    vi.restoreAllMocks();
   });
 
   it('renders medium Finding severity as "중간" in the detail panel', () => {
@@ -171,6 +190,82 @@ describe('FindingDetailPanel', () => {
       expect(screen.getByText('TASK-901')).toBeInTheDocument();
     });
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('AC-681-2 shows an active pending Task Request and makes it the primary footer action', async () => {
+    const taskRequestId = '10000000-0000-4000-8000-000000000077';
+    const entityLinksPayload = {
+      items: [
+        {
+          id: '50000000-0000-4000-8000-000000000077',
+          source_type: 'finding',
+          source_id: mediumFinding.id,
+          target_type: 'task_request',
+          target_id: taskRequestId,
+          relation_type: 'requested_task',
+          visibility: 'internal_only',
+          status: 'active',
+          managed_system_id: mediumFinding.primary_managed_system_id,
+          created_by: '40000000-0000-0000-0000-000000000004',
+          created_at: '2026-07-10T00:00:00.000Z',
+          updated_at: null,
+          visibility_state: 'allowed',
+          target_summary: {
+            type: 'task_request',
+            id: taskRequestId,
+            display_id: 'REQ-681',
+            source_type: 'finding',
+            source_id: mediumFinding.id,
+            evidence_summary: '쿼리 플랜 개선 필요',
+            requested_outcome: '쿼리 플랜을 검토합니다.',
+            status: 'pending_review',
+            primary_managed_system_id: mediumFinding.primary_managed_system_id,
+            requester_actor_id: '40000000-0000-0000-0000-000000000004',
+          },
+        },
+      ],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      return new Response(
+        JSON.stringify(path === '/entity-links' ? entityLinksPayload : { items: [] }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
+    });
+    globalThis.fetch = fetchMock;
+
+    renderWithClient(<FullFindingDetail finding={mediumFinding} />);
+
+    const requestLink = await screen.findByRole('link', { name: /REQ-681/ });
+    expect(requestLink).toHaveTextContent(TASK_REQUEST_STATUS_LABELS.pending_review);
+    expect(requestLink).toHaveAttribute('href', `/tasks?view=requests&param=${taskRequestId}`);
+
+    const primaryGroup = screen.getByRole('group', { name: '주요 실행' });
+    expect(within(primaryGroup).getByRole('link', { name: 'Task Request 보기' })).toHaveAttribute(
+      'href',
+      `/tasks?view=requests&param=${taskRequestId}`,
+    );
+    expect(
+      within(primaryGroup).queryByRole('button', { name: 'Task 요청' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '보조 작업' })).toHaveTextContent('Task 요청');
+
+    const entityLinksUrl = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .find((input) => new URL(input, 'http://localhost').pathname === '/entity-links');
+    expect(entityLinksUrl).toBeDefined();
+    if (entityLinksUrl === undefined) throw new Error('Expected the entity-links read.');
+    const url = new URL(entityLinksUrl, 'http://localhost');
+    expect(url.pathname).toBe('/entity-links');
+    expect(url.searchParams.get('source_type')).toBe('finding');
+    expect(url.searchParams.get('source_id')).toBe(mediumFinding.id);
+    expect(url.searchParams.has('relation_type')).toBe(false);
+    expect(listEntityLinksQuerySchema.safeParse(Object.fromEntries(url.searchParams)).success).toBe(
+      true,
+    );
   });
 
   it('keeps one primary execution action and groups the remaining actions as secondary', () => {

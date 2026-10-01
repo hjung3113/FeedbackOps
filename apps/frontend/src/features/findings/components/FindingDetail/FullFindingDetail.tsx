@@ -9,6 +9,7 @@ import {
   FINDING_CONFIDENCE_LABELS,
   FINDING_SOURCE_TYPE_LABELS,
   FINDING_STATUS_LABELS,
+  TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
@@ -97,10 +98,14 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     linkedVocTitle,
     linkedVocDisplayId,
     linkedTaskQuery,
+    requestedTaskRequests,
     canManage,
     handleMarkNotActionable,
     markNotActionableDisabled,
   } = useFindingDetailController(finding);
+  const pendingTaskRequest = requestedTaskRequests.find(
+    (request) => request.status === 'pending_review' || request.status === 'needs_more_evidence',
+  );
 
   return (
     <>
@@ -230,6 +235,27 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
+            <FieldRow label="Task Request" className="px-0">
+              {requestedTaskRequests.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {requestedTaskRequests.map((request) => (
+                    <Link
+                      key={request.id}
+                      to="/tasks"
+                      search={{ view: 'requests', param: request.id }}
+                      className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
+                    >
+                      <span className="font-mono">{request.display_id}</span>
+                      <span className="text-xs text-text-muted">
+                        {TASK_REQUEST_STATUS_LABELS[request.status]}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </FieldRow>
           </div>
           {requestTaskOpen && (
             <FindingRequestTaskDraft
@@ -261,18 +287,37 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-col gap-2">
           <fieldset className="m-0 min-w-0 border-0 p-0">
             <legend className="sr-only">주요 실행</legend>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setRequestTaskOpen(true)}
-              disabled={!canManage}
-              data-testid="request-task-btn"
-            >
-              Task 요청
-            </Button>
+            {pendingTaskRequest ? (
+              <Button asChild variant="primary" size="sm">
+                <Link to="/tasks" search={{ view: 'requests', param: pendingTaskRequest.id }}>
+                  Task Request 보기
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                disabled={!canManage}
+                data-testid="request-task-btn"
+              >
+                Task 요청
+              </Button>
+            )}
           </fieldset>
           <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
             <legend className="sr-only">보조 작업</legend>
+            {pendingTaskRequest && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                disabled={!canManage}
+                data-testid="request-task-btn"
+              >
+                Task 요청
+              </Button>
+            )}
             {/* Add Evidence — gated to finding.manage; backend authoritative */}
             <Button
               variant="outline"

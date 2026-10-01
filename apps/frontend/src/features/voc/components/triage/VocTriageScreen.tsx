@@ -11,7 +11,7 @@
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { VOC_TRIAGE_QUEUE_TOTAL_LABELS, VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
-import type { VocListItem } from '@fops/shared';
+import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -69,6 +69,8 @@ export function VocTriageScreen({
     vocId: string;
     managedSystemId: string;
     analyticsAreaId: string | null;
+    defaultTitle: string;
+    defaultSeverity: FindingSeverity;
   } | null>(null);
 
   // Processed-count — number of VOCs optimistically removed (triaged/skipped)
@@ -227,7 +229,13 @@ export function VocTriageScreen({
               voc={selectedVoc}
               onAct={(kind, context) => {
                 if (kind === 'finding' && context) {
-                  setCreateFindingTarget(context);
+                  setCreateFindingTarget({
+                    vocId: context.vocId,
+                    managedSystemId: context.managedSystemId,
+                    analyticsAreaId: context.analyticsAreaId,
+                    defaultTitle: context.title,
+                    defaultSeverity: context.severity,
+                  });
                 }
               }}
               onOptimisticRemove={(vocId) => {
@@ -251,6 +259,8 @@ export function VocTriageScreen({
           vocId={createFindingTarget.vocId}
           managedSystemId={createFindingTarget.managedSystemId}
           sourceAnalyticsAreaId={createFindingTarget.analyticsAreaId}
+          defaultTitle={createFindingTarget.defaultTitle}
+          defaultSeverity={createFindingTarget.defaultSeverity}
           open={createFindingTarget !== null}
           onClose={() => setCreateFindingTarget(null)}
         />

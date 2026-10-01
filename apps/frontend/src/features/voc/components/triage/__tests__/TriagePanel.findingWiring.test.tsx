@@ -69,7 +69,7 @@ describe('TriagePanel — Finding wiring (#527)', () => {
     vi.restoreAllMocks();
   });
 
-  it('reports vocId/managedSystemId/analyticsAreaId through onAct instead of the old deferral toast', async () => {
+  it('reports the VOC title, triaged severity, and source context instead of the old deferral toast', async () => {
     globalThis.fetch = vi.fn(
       async () =>
         new Response(
@@ -100,6 +100,8 @@ describe('TriagePanel — Finding wiring (#527)', () => {
       vocId: VOC.id,
       managedSystemId: VOC.primary_managed_system_id,
       analyticsAreaId: VOC.analytics_area_id,
+      title: VOC.title,
+      severity: 'medium',
     });
     // No deferral toast — this is the defect #527 fixes.
     expect(toast.info).not.toHaveBeenCalled();

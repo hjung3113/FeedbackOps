@@ -14,7 +14,7 @@
  */
 
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
-import { type VocListItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
+import { type FindingSeverity, type VocListItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
   Button,
@@ -45,8 +45,14 @@ export interface TriagePanelProps {
    */
   onAct?: (
     kind: 'confirm' | 'finding' | 'skip',
-    /** vocId/managedSystemId/analyticsAreaId as just committed — only populated for 'confirm' and 'finding'. */
-    context?: { vocId: string; managedSystemId: string; analyticsAreaId: string | null },
+    /** Finding defaults and committed source context for the finding action. */
+    context?: {
+      vocId: string;
+      managedSystemId: string;
+      analyticsAreaId: string | null;
+      title: string;
+      severity: FindingSeverity;
+    },
   ) => void;
   /**
    * C3.2: Optimistic remove — called synchronously on confirm/finding/skip

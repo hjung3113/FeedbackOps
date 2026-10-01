@@ -249,6 +249,8 @@ export function FullDetailView({
         vocId={vocId}
         managedSystemId={voc.primary_managed_system_id}
         sourceAnalyticsAreaId={voc.analytics_area_id ?? null}
+        defaultTitle={voc.title}
+        defaultSeverity={voc.severity ?? 'medium'}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
       />

@@ -22,6 +22,7 @@ import { TASK_TITLE_MAX_LENGTH, canConvertTaskRequest, defaultConvertTitle } fro
 export interface UseTaskRequestConversionArgs {
   item: TaskRequestDto;
   currentRole: string | null;
+  defaultAnalyticsAreaId?: string | null;
 }
 
 export const TASK_PRIORITIES: readonly TaskPriority[] = taskPrioritySchema.options;
@@ -63,6 +64,7 @@ export interface UseTaskRequestConversionResult {
 export function useTaskRequestConversion({
   item,
   currentRole,
+  defaultAnalyticsAreaId = null,
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
   const [convertOpen, setConvertOpen] = React.useState(false);
@@ -76,6 +78,9 @@ export function useTaskRequestConversion({
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
   const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
+  const analyticsAreaEdited = React.useRef(false);
+  const defaultAnalyticsAreaIdRef = React.useRef(defaultAnalyticsAreaId);
+  defaultAnalyticsAreaIdRef.current = defaultAnalyticsAreaId;
 
   React.useEffect(() => {
     setConvertTitle(defaultConvertTitle(item.requested_outcome));
@@ -84,9 +89,16 @@ export function useTaskRequestConversion({
     setConvertAssigneeId('');
     setConvertDueDate('');
     setConvertMilestoneId('');
-    setConvertAnalyticsAreaId('');
+    setConvertAnalyticsAreaId(defaultAnalyticsAreaIdRef.current ?? '');
+    analyticsAreaEdited.current = false;
     setConvertOpen(false);
   }, [item]);
+
+  React.useEffect(() => {
+    if (!analyticsAreaEdited.current && defaultAnalyticsAreaId !== null) {
+      setConvertAnalyticsAreaId(defaultAnalyticsAreaId);
+    }
+  }, [defaultAnalyticsAreaId]);
 
   const manageCheck = useQuery({
     queryKey: ['permission-check', 'finding.manage', item.primary_managed_system_id],
@@ -220,7 +232,10 @@ export function useTaskRequestConversion({
     milestonePickerError,
     milestoneSelectionUnavailable,
     analyticsAreaId: convertAnalyticsAreaId,
-    setAnalyticsAreaId: setConvertAnalyticsAreaId,
+    setAnalyticsAreaId: (value) => {
+      analyticsAreaEdited.current = true;
+      setConvertAnalyticsAreaId(value);
+    },
     analyticsAreas: analyticsAreasQuery.data?.items,
     isPending: convertMutation.isPending,
     result: convertMutation.data ?? null,

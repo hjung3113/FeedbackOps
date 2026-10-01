@@ -84,11 +84,23 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
   if (item.created_at) {
     metaParts.push({ key: 'created-at', node: <span>{formatDate(item.created_at)}</span> });
   }
+  const sourceTitle = item.source?.title?.trim() ? item.source.title : null;
 
   return (
     <ObjectRow
       id={item.display_id}
-      title={item.requested_outcome}
+      title={
+        sourceTitle ? (
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">{sourceTitle}</span>
+            <span className="truncate text-xs font-normal text-text-muted">
+              {item.requested_outcome}
+            </span>
+          </span>
+        ) : (
+          item.requested_outcome
+        )
+      }
       selected={selected}
       density="default"
       onClick={() => onSelect(item.id)}

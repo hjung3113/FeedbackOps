@@ -48,6 +48,7 @@ interface TaskRequestPanelProps {
   currentActorId: string | null;
   currentRole: string | null;
   onClose: () => void;
+  onDecisionComplete?: (item: TaskRequestDto) => void;
 }
 
 export function TaskRequestPanel({
@@ -56,13 +57,28 @@ export function TaskRequestPanel({
   currentActorId,
   currentRole,
   onClose,
+  onDecisionComplete,
 }: TaskRequestPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
 
   const decision = useTaskRequestDecision({ item, currentActorId, currentRole });
-  const conversion = useTaskRequestConversion({ item, currentRole });
+  React.useEffect(() => {
+    if (decision.result?.id === item.id) onDecisionComplete?.(decision.result);
+  }, [decision.result, item.id, onDecisionComplete]);
+  const sourceFindingQuery = useFindingDetail(
+    item.source_type === 'finding' ? item.source_id : null,
+  );
+  const sourceAnalyticsAreaId =
+    sourceFindingQuery.data?.id === item.source_id
+      ? sourceFindingQuery.data.analytics_area_id
+      : null;
+  const conversion = useTaskRequestConversion({
+    item,
+    currentRole,
+    defaultAnalyticsAreaId: sourceAnalyticsAreaId,
+  });
   const link = useTaskRequestLink({ item, currentRole });
   const resultingTask: TaskDto | null =
     conversion.result?.source_task_request_id === item.id
@@ -76,9 +92,6 @@ export function TaskRequestPanel({
   const taskForOutcome =
     convertedTaskLink.data !== undefined ? convertedTaskLink.data : resultingTask;
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
-  const sourceFindingQuery = useFindingDetail(
-    item.source_type === 'finding' ? item.source_id : null,
-  );
 
   const sections: PanelSection[] = [
     { id: 'overview', label: 'Overview' },

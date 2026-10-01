@@ -1,4 +1,26 @@
-import * as React from 'react';
+import { logout } from '@/lib/api/auth';
+import { useMe } from '@/lib/auth/useMe';
+import { HOME_INBOX_COPY } from '@/lib/copy/home';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
+import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Bell,
   Boxes,
@@ -9,30 +31,16 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react';
-import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
-import {
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@fops/ui';
-import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { logout } from '@/lib/api/auth';
-import { useMe } from '@/lib/auth/useMe';
-import { HOME_INBOX_COPY } from '@/lib/copy/home';
-import {
-  formatUnreadBadge,
-  useUnreadNotificationCount,
-} from '@/lib/cross-system/useUnreadNotificationCount';
+import * as React from 'react';
 
-export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
+export type RailDomain =
+  | 'home'
+  | 'voc'
+  | 'findings'
+  | 'tasks'
+  | 'integration'
+  | 'surveys'
+  | 'admin';
 
 export const RAIL_ITEMS: Array<{
   key: RailDomain;
@@ -74,6 +82,11 @@ export function AppRail({
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
+  const inboxPermission = usePermissionCheck({ capability: 'voc.read' });
+  const vocHref =
+    inboxPermission.data === undefined || inboxPermission.data.state === 'approved'
+      ? '/vocs?view=inbox'
+      : '/vocs?view=my';
   const unreadNotificationCount = useUnreadNotificationCount();
   const unreadCount = unreadNotificationCount.data;
   const unreadBadge =
@@ -123,7 +136,12 @@ export function AppRail({
       </div>
       <TooltipProvider delayDuration={400}>
         {head.map((item) => (
-          <RailButton key={item.key} item={item} active={activeDomain === item.key} />
+          <RailButton
+            key={item.key}
+            item={item}
+            active={activeDomain === item.key}
+            href={item.key === 'voc' ? vocHref : item.href}
+          />
         ))}
         {canAccessWorkspaceAdmin && admin && (
           <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />
@@ -181,16 +199,18 @@ export function AppRail({
 function RailButton({
   item,
   active,
+  href = item.href,
 }: {
   item: (typeof RAIL_ITEMS)[number];
   active: boolean;
+  href?: string;
 }) {
   const Icon = item.icon;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <a
-          href={item.href}
+          href={href}
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',

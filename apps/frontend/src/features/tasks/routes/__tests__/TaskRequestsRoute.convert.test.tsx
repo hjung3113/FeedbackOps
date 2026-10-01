@@ -22,7 +22,12 @@ async function readOptions(label: string): Promise<HTMLElement[]> {
   return screen.findAllByRole('option');
 }
 
-const api = vi.hoisted(() => ({ apiClient: vi.fn(), convertTaskRequest: vi.fn() }));
+const api = vi.hoisted(() => ({
+  apiClient: vi.fn(),
+  convertTaskRequest: vi.fn(),
+  fetchAnalyticsAreas: vi.fn(),
+  useFindingDetail: vi.fn(),
+}));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 const requestedOutcome225 = `핵심 결과 ${'x'.repeat(219)}`;
 const requestedOutcome69 = `업무 결과 ${'x'.repeat(63)}`;
@@ -104,10 +109,10 @@ vi.mock('@fops/ui', async () => {
 vi.mock('sonner', () => ({ toast }));
 
 vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
-  useFindingDetail: () => ({ data: null }),
+  useFindingDetail: api.useFindingDetail,
 }));
 vi.mock('@/lib/api/analytics-areas', () => ({
-  fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
+  fetchAnalyticsAreas: api.fetchAnalyticsAreas,
 }));
 vi.mock('@/lib/api/milestones', () => ({
   listMilestones: vi.fn(),
@@ -152,6 +157,10 @@ async function openConvertForm() {
 }
 
 beforeEach(() => {
+  api.fetchAnalyticsAreas.mockReset();
+  api.fetchAnalyticsAreas.mockResolvedValue({ items: [] });
+  api.useFindingDetail.mockReset();
+  api.useFindingDetail.mockReturnValue({ data: null });
   vi.mocked(listMilestones).mockReset();
   toast.success.mockReset();
   vi.mocked(listMilestones).mockImplementation(async (options) => ({
@@ -240,6 +249,37 @@ describe('TaskRequestsRoute conversion priority labels', () => {
           milestone_id: milestoneForRequestSystem.id,
           analytics_area_id: null,
         },
+        expect.any(String),
+      ),
+    );
+  });
+});
+
+describe('TaskRequestsRoute Analytics Area inheritance', () => {
+  it('AC-681-3 defaults conversion to the source Finding Analytics Area', async () => {
+    const analyticsAreaId = '30000000-0000-4000-8000-000000000021';
+    api.useFindingDetail.mockReturnValue({
+      data: { id: taskRequest.source_id, analytics_area_id: analyticsAreaId },
+    });
+    api.fetchAnalyticsAreas.mockResolvedValue({
+      items: [
+        {
+          id: analyticsAreaId,
+          managed_system_id: taskRequest.primary_managed_system_id,
+          name: '재무 전환 분석',
+          archived_at: null,
+        },
+      ],
+    });
+    api.convertTaskRequest.mockResolvedValue({ display_id: 'TASK-7' });
+
+    await openConvertForm();
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+
+    await waitFor(() =>
+      expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
+        taskRequest.id,
+        expect.objectContaining({ analytics_area_id: analyticsAreaId }),
         expect.any(String),
       ),
     );

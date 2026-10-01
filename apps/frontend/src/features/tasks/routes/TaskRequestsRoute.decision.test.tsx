@@ -167,6 +167,72 @@ describe('TaskRequestsRoute decision dialogs', () => {
     );
   });
 
+  it.each([
+    {
+      action: 'approve',
+      button: '승인',
+      dialog: 'Task Request 승인',
+      status: 'approved',
+      tab: '승인됨',
+    },
+    {
+      action: 'reject',
+      button: '반려',
+      dialog: 'Task Request 반려',
+      status: 'rejected',
+      tab: '반려됨',
+    },
+    {
+      action: 'request-evidence',
+      button: '근거 추가 요청',
+      dialog: '근거 추가 요청',
+      status: 'needs_more_evidence',
+      tab: '근거 추가 필요',
+    },
+  ] as const)(
+    'AC-681-5 follows the $action result and keeps the Task Request selected',
+    async ({ action, button, dialog, status, tab }) => {
+      const updatedItem: TaskRequestDto = { ...taskRequest, status };
+      await mountRoute();
+      api.fetchTaskRequests.mockResolvedValue({ items: [updatedItem] });
+      const mutation =
+        action === 'approve'
+          ? api.approveTaskRequest
+          : action === 'reject'
+            ? api.rejectTaskRequest
+            : api.requestMoreEvidenceForTaskRequest;
+      mutation.mockResolvedValue(updatedItem);
+
+      fireEvent.click(screen.getByRole('button', { name: button }));
+      await screen.findByRole('dialog', { name: dialog });
+      if (action === 'reject') {
+        fireEvent.change(screen.getByRole('textbox', { name: '반려 사유' }), {
+          target: { value: 'Out of scope.' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '반려' }));
+      } else if (action === 'request-evidence') {
+        fireEvent.change(screen.getByRole('textbox', { name: '근거 메모' }), {
+          target: { value: 'Add source metrics.' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '요청' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: '승인' }));
+      }
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: new RegExp(tab) })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(
+          screen
+            .getByRole('button', { name: /REQ-1071/ })
+            .querySelector('[data-testid="object-row-selected-bar"]'),
+        ).toBeInTheDocument();
+      });
+    },
+  );
+
   it('trims an approval reason for another actor request', async () => {
     await openDialog('승인', 'Task Request 승인');
     fireEvent.change(screen.getByRole('textbox', { name: '승인 사유' }), {

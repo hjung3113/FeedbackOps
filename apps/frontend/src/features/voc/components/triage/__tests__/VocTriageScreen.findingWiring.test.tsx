@@ -32,6 +32,8 @@ vi.mock('@/features/cross-system/create-finding/CreateFindingModal', () => ({
     vocId: string;
     managedSystemId: string;
     sourceAnalyticsAreaId: string | null;
+    defaultTitle?: string;
+    defaultSeverity?: string;
     open: boolean;
     onClose: () => void;
   }) => {
@@ -70,7 +72,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('VocTriageScreen — Finding wiring (#527)', () => {
-  it('opens CreateFindingModal with the committed vocId/managedSystemId/analyticsAreaId, not a deferral toast', async () => {
+  it('opens CreateFindingModal with VOC defaults and committed source context, not a deferral toast', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(
       async () =>
@@ -108,6 +110,8 @@ describe('VocTriageScreen — Finding wiring (#527)', () => {
         vocId: MOCK_VOC.id,
         managedSystemId: MOCK_VOC.primary_managed_system_id,
         sourceAnalyticsAreaId: MOCK_VOC.analytics_area_id,
+        defaultTitle: MOCK_VOC.title,
+        defaultSeverity: 'high',
         open: true,
       }),
     );

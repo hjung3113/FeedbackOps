@@ -1,20 +1,57 @@
 // useFindingDetailController — state machine behind FullFindingDetail.
 // Owns modal open/close state, the detail queries (managed systems, analytics
-// areas, linked task, linked VOC, actors, permission check), derived lookups,
-// and the status mutation handler. Pure state: rendering lives in FullFindingDetail.
+// areas, linked Task Request, linked task, linked VOC, actors, permission check),
+// derived lookups, and the status mutation handler. Rendering lives in FullFindingDetail.
 
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { fetchEntityLinksBySource } from '@/lib/api/entity-links';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { FindingDto, TaskDetailDto } from '@fops/shared';
+import {
+  type EntityLinkTargetSummary,
+  type FindingDto,
+  type ListEntityLinksResponse,
+  type TaskDetailDto,
+  type TaskRequestStatus,
+  taskRequestStatusSchema,
+} from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { useFindingStatusMutation } from '../../hooks/useFindingStatusMutation';
+
+export type RequestedTaskRequestSummary = Extract<
+  EntityLinkTargetSummary,
+  { type: 'task_request' }
+> & { status: TaskRequestStatus };
+
+export function requestedTaskRequestsFromEntityLinks(
+  findingId: string,
+  response: ListEntityLinksResponse,
+): RequestedTaskRequestSummary[] {
+  const requests: RequestedTaskRequestSummary[] = [];
+  for (const link of response.items) {
+    if (
+      link.visibility_state !== 'allowed' ||
+      link.status !== 'active' ||
+      link.source_type !== 'finding' ||
+      link.source_id !== findingId ||
+      link.target_type !== 'task_request' ||
+      link.relation_type !== 'requested_task' ||
+      link.target_summary?.type !== 'task_request' ||
+      link.target_summary.id !== link.target_id
+    ) {
+      continue;
+    }
+    const status = taskRequestStatusSchema.safeParse(link.target_summary.status);
+    if (status.success) requests.push({ ...link.target_summary, status: status.data });
+  }
+  return requests;
+}
 
 export interface FindingDetailController {
   sections: { id: string; label: string }[];
@@ -33,6 +70,7 @@ export interface FindingDetailController {
   linkedVocTitle: string | null;
   linkedVocDisplayId: string | null;
   linkedTaskQuery: UseQueryResult<TaskDetailDto>;
+  requestedTaskRequests: RequestedTaskRequestSummary[];
   canManage: boolean;
   handleMarkNotActionable: () => void;
   markNotActionableDisabled: boolean;
@@ -88,6 +126,13 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     queryFn: ({ signal }) => getTask(finding.linked_task_id as string, signal),
     enabled: finding.linked_task_id !== null,
     staleTime: 30 * 1000,
+  });
+  const requestedTaskRequestQuery = useQuery({
+    queryKey: ['entity-links', 'finding', finding.id, 'requested_task'] as const,
+    queryFn: ({ signal }) => fetchEntityLinksBySource('finding', finding.id, { signal }),
+    select: (response) => requestedTaskRequestsFromEntityLinks(finding.id, response),
+    staleTime: 30 * 1000,
+    retry: false,
   });
   const linkedVocTitle =
     linkedVocQuery.data && 'title' in linkedVocQuery.data ? linkedVocQuery.data.title : null;
@@ -149,6 +194,9 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     linkedVocTitle,
     linkedVocDisplayId,
     linkedTaskQuery,
+    requestedTaskRequests: requestedTaskRequestQuery.isError
+      ? []
+      : (requestedTaskRequestQuery.data ?? []),
     canManage,
     handleMarkNotActionable,
     markNotActionableDisabled,
