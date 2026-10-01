@@ -165,7 +165,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         >
           {/* Summary */}
           <div data-anchor="summary" className="flex flex-col gap-1">
-            <PanelTitleBlock title={finding.title} />
+            <PanelTitleBlock title={finding.title} className="px-0" />
             <PanelSectionTitle>요약</PanelSectionTitle>
             <p className="text-sm text-text-primary whitespace-pre-wrap">{finding.summary}</p>
           </div>
@@ -268,7 +268,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                   <span className="shrink-0 whitespace-nowrap font-mono text-xs text-text-muted">
                     {linkedTaskQuery.data?.display_id ?? shortId(finding.linked_task_id)}
                   </span>
-                  <span className="text-xs text-text-muted">이동</span>
+                  <span className="shrink-0 whitespace-nowrap text-xs text-text-muted">이동</span>
                 </Link>
               ) : (
                 <span className="text-text-muted">—</span>

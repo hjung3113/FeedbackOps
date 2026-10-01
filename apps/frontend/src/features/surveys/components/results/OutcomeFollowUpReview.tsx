@@ -212,7 +212,7 @@ function OutcomeFollowUpDetailPanel({
     >
       <DetailPanelHeader
         kind="survey"
-        id={`RESPONSE · 응답 #${displayResponseNumber(item.response_number)}`}
+        id={`응답 #${displayResponseNumber(item.response_number)}`}
         onClose={() => onClose(item.response_id)}
       />
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">

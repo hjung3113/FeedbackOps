@@ -233,18 +233,27 @@ describe('/findings URL state', () => {
     expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
   });
 
-  test('modifier-clicking the header return link leaves client-side navigation untouched', async () => {
+  test.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Meta', { metaKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+  ])('%s-clicking the header return link preserves browser handling', async (_, modifiers) => {
     const origin = `/vocs?view=triage&managedSystem=${MS_1}&selected=${F2_ID}`;
-    const router = renderUrlState(
+    renderUrlState(
       { requested: [] },
       `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
     );
     const link = await screen.findByRole('link', { name: '원래 VOC로 돌아가기' });
 
-    fireEvent.click(link, { ctrlKey: true });
+    const event = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+    link.dispatchEvent(event);
 
-    expect(router.state.location.pathname).toBe('/findings');
-    expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
+    expect(event.defaultPrevented).toBe(false);
   });
 
   test('returning to the VOC context uses client-side router navigation', async () => {
