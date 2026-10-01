@@ -88,7 +88,13 @@ export function SurveyResultsRoute() {
       </ResultsWorkbench>
     );
   }
-  const followUp = survey.data.type === 'outcome' ? (followUpRead.data ?? null) : null;
+  const resultsReadUnavailable =
+    isPermissionDenied(results.error) ||
+    (results.error instanceof ApiError && results.error.status === 404);
+  const followUp =
+    survey.data.type === 'outcome' && followUpRead.isSuccess && !resultsReadUnavailable
+      ? (followUpRead.data ?? null)
+      : null;
   let resultsContent: ReactNode;
   if (results.isLoading) {
     resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;

@@ -22,11 +22,19 @@ const {
   useSurveyReadGate: vi.fn(),
   useSurveyManageGate: vi.fn(),
   useSurveys: vi.fn(),
-  useOutcomeFollowUp: vi.fn(() => ({
-    data: undefined as unknown,
-    isLoading: false,
-    isError: false,
-  })),
+  useOutcomeFollowUp: vi.fn(
+    (): {
+      data: unknown;
+      isLoading: boolean;
+      isError: boolean;
+      isSuccess?: boolean;
+      error?: unknown;
+    } => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    }),
+  ),
 }));
 
 vi.mock('@/features/surveys/hooks/useSurveys', () => ({
@@ -212,6 +220,18 @@ describe('/surveys/:surveyId/results route', () => {
     mockParentRoute();
     useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
     useSurveyResults.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    useOutcomeFollowUp.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        classifiable: true,
+        follow_up_needed: true,
+        personal_access: true,
+        items: [{ resolution: 'open' }],
+      },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+    });
 
     const router = renderSurveyRoute();
     await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
@@ -226,6 +246,7 @@ describe('/surveys/:surveyId/results route', () => {
       'href',
       '/surveys',
     );
+    expect(within(header).getByRole('link', { name: 'Follow-up · 1' })).toBeInTheDocument();
   });
 
   it('shows a retryable results read error and refetches results instead of the survey', async () => {
@@ -246,6 +267,18 @@ describe('/surveys/:surveyId/results route', () => {
       error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
       refetch: resultsRefetch,
     });
+    useOutcomeFollowUp.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        classifiable: true,
+        follow_up_needed: true,
+        personal_access: true,
+        items: [{ resolution: 'open' }],
+      },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+    });
 
     const router = renderSurveyRoute();
     await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
@@ -261,12 +294,48 @@ describe('/surveys/:surveyId/results route', () => {
       'href',
       '/surveys',
     );
+    expect(within(header).getByRole('link', { name: 'Follow-up · 1' })).toBeInTheDocument();
     expect(screen.queryByText('설문 결과를 찾을 수 없습니다.')).not.toBeInTheDocument();
     const retry = screen.getByRole('button', { name: '다시 시도' });
     expect(liveRegion).toContainElement(retry);
     fireEvent.click(retry);
     expect(resultsRefetch).toHaveBeenCalledTimes(1);
     expect(surveyRefetch).not.toHaveBeenCalled();
+  });
+
+  it('hides retained Follow-up data when that read is denied during a retryable results error', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      refetch: vi.fn(),
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        classifiable: true,
+        follow_up_needed: true,
+        personal_access: true,
+        items: [{ resolution: 'open' }],
+      },
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+    });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    expect(await screen.findByText('결과를 불러오지 못했습니다.')).toBeInTheDocument();
+    const header = screen.getByTestId('survey-result-header');
+    expect(within(header).getByText('SRV-21')).toBeInTheDocument();
+    expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+    expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
   });
 
   it('keeps not-found copy for a real missing results response', async () => {
@@ -308,6 +377,72 @@ describe('/surveys/:surveyId/results route', () => {
     expect(screen.queryByText('설문 결과를 찾을 수 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   });
+
+  it.each([
+    [
+      '403 with denied Follow-up read',
+      new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+    ],
+    [
+      '403 with successful Follow-up read',
+      new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      undefined,
+    ],
+    [
+      'denial-shaped 404 with denied Follow-up read',
+      new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+      new ApiError(404, { code: 'not_found.record', message: 'not found' }),
+    ],
+  ] as const)(
+    'keeps only the survey identity after a %s results denial with holder data',
+    async (_denialType, resultsError, followUpError) => {
+      useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+      mockParentRoute();
+      useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+      useSurveyResults.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: resultsError,
+        refetch: vi.fn(),
+      });
+      useOutcomeFollowUp.mockReturnValue({
+        data: {
+          survey_id: surveyId,
+          classifiable: true,
+          follow_up_needed: true,
+          personal_access: true,
+          items: [{ resolution: 'open' }],
+        },
+        isLoading: false,
+        isError: followUpError !== undefined,
+        isSuccess: followUpError === undefined,
+        ...(followUpError === undefined ? {} : { error: followUpError }),
+      });
+
+      const router = renderSurveyRoute();
+      await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+      if (resultsError.status === 403) {
+        expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+      } else {
+        expect(await screen.findByText('설문 결과를 찾을 수 없습니다.')).toBeInTheDocument();
+      }
+      const header = screen.getByTestId('survey-result-header');
+      expect(within(header).getByRole('heading', { name: 'Results' })).toBeInTheDocument();
+      expect(within(header).getByText('SRV-21')).toBeInTheDocument();
+      expect(within(header).getByText('결과')).toBeInTheDocument();
+      expect(within(header).getByText('종료됨')).toBeInTheDocument();
+      expect(within(header).getByRole('link', { name: 'Surveys /' })).toHaveAttribute(
+        'href',
+        '/surveys',
+      );
+      expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+      expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+    },
+  );
 
   it('shows a retryable Korean read error instead of not-found when survey loading fails', async () => {
     const refetch = vi.fn();
@@ -399,6 +534,7 @@ describe('/surveys/:surveyId/results route', () => {
       },
       isLoading: false,
       isError: false,
+      isSuccess: true,
     });
 
     const router = renderSurveyRoute();
@@ -439,6 +575,7 @@ describe('/surveys/:surveyId/results route', () => {
       },
       isLoading: false,
       isError: false,
+      isSuccess: true,
     });
 
     const router = renderSurveyRoute();
@@ -480,6 +617,7 @@ describe('/surveys/:surveyId/results route', () => {
       },
       isLoading: false,
       isError: false,
+      isSuccess: true,
     });
 
     const router = renderSurveyRoute();
