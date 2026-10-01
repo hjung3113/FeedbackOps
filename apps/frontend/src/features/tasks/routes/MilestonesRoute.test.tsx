@@ -228,8 +228,8 @@ describe('MilestonesRoute list (#514 B2c)', () => {
     expect(within(summary).getByText('Evidence linked')).toBeInTheDocument();
     expect(within(summary).getByText('Released')).toBeInTheDocument();
     expect(
-      within(summary).getByText('Schedule risk · mini-timeline 우측 표시'),
-    ).toBeInTheDocument();
+      within(summary).queryByText('Schedule risk · mini-timeline 우측 표시'),
+    ).not.toBeInTheDocument();
     expect(within(summary).getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
     // Sum of progress.in_flight across the unfiltered list (1 + 0 + 0).
     expect(within(summary).getByTestId('milestone-summary-in-flight')).toHaveTextContent('1');

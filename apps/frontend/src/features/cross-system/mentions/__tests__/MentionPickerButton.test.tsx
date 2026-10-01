@@ -43,6 +43,15 @@ describe('<MentionPickerButton>', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the Korean label beside the @ icon and keeps its accessible name', () => {
+    render(<MentionPickerButton onSelect={vi.fn()} />, { wrapper: makeWrapper() });
+
+    const trigger = screen.getByRole('button', { name: '@Mention' });
+    expect(screen.getByText('멘션')).toBeInTheDocument();
+    expect(trigger.querySelector('svg')).toBeInTheDocument();
+    expect(screen.queryByText('@', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
   it('lists workspace actors in the Combobox dropdown', async () => {
     const onSelect = vi.fn();
     render(<MentionPickerButton onSelect={onSelect} />, { wrapper: makeWrapper() });

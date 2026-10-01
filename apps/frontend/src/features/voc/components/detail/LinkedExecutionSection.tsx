@@ -23,7 +23,7 @@ export function LinkedExecutionSection({
 
   if (linkedFindingDecision !== null) {
     return (
-      <div>
+      <div className="mt-8">
         <PanelSectionTitle>연결된 실행</PanelSectionTitle>
         <PermissionBlockedPanel
           state={linkedFindingDecision.state}
@@ -46,7 +46,7 @@ export function LinkedExecutionSection({
   }
 
   return (
-    <div>
+    <div className="mt-8">
       <PanelSectionTitle>연결된 실행</PanelSectionTitle>
       {linkedTask !== null ? (
         <div className="flex items-center justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card px-3 py-2">

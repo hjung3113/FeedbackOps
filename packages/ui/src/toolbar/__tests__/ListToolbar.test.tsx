@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
+import { describe, expect, it, vi } from 'vitest';
 
 const tabs: ListToolbarTab[] = [
   { value: 'untriaged', label: '미분류' },
@@ -9,6 +10,19 @@ const tabs: ListToolbarTab[] = [
   { value: 'unassigned', label: '미배정', badgeCount: 5 },
   { value: 'disabled', label: '비활성', disabled: true },
 ];
+
+const rect = (left: number, right: number): DOMRect =>
+  ({
+    x: left,
+    y: 0,
+    left,
+    right,
+    top: 0,
+    bottom: 40,
+    width: right - left,
+    height: 40,
+    toJSON: () => ({}),
+  }) as DOMRect;
 
 describe('ListToolbar — tabs mode', () => {
   it('locks the toolbar row to the 50px h-toolbar rhythm', () => {
@@ -84,6 +98,40 @@ describe('ListToolbar — tabs mode', () => {
     const tabViewport = container.querySelector('[data-list-toolbar-tabs]');
     expect(tabViewport?.className).toContain('overflow-x-auto');
     expect(tabViewport?.className).toContain('whitespace-nowrap');
+  });
+
+  it('shows a next-tab control for overflow and scrolls the active tab into view', () => {
+    const { container } = render(<ListToolbar tabs={tabs} activeTab="unassigned" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    const scrollBy = vi.fn();
+    tabViewport.scrollBy = scrollBy;
+    Object.defineProperties(tabViewport, {
+      clientWidth: { configurable: true, value: 120 },
+      scrollWidth: { configurable: true, value: 300 },
+    });
+    tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 120));
+    screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() =>
+      rect(200, 260),
+    );
+
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
+    expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
+  });
+
+  it('does not show scroll controls when the tab strip fits', () => {
+    const { container } = render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    Object.defineProperties(tabViewport, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 300 },
+    });
+
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(screen.queryByRole('button', { name: '이전 탭 보기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다음 탭 보기' })).not.toBeInTheDocument();
   });
 });
 

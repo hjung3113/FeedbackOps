@@ -21,7 +21,7 @@ export function TriageBlock({
   onOpenTriage,
 }: TriageBlockProps): React.ReactElement {
   return (
-    <div>
+    <div className="mt-8">
       <div className="flex items-center justify-between">
         <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
         {canTriage && (
@@ -37,7 +37,7 @@ export function TriageBlock({
       </div>
 
       {/* 심각도 */}
-      <FieldRow label="심각도">
+      <FieldRow label="심각도" className="px-0">
         {voc.severity !== null ? (
           <SeverityBadge severity={voc.severity} />
         ) : (
@@ -46,7 +46,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* 담당자 */}
-      <FieldRow label="담당자">
+      <FieldRow label="담당자" className="px-0">
         {voc.owner_user_id !== null ? (
           <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
         ) : (
@@ -55,7 +55,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* 분석 영역 */}
-      <FieldRow label="분석 영역">
+      <FieldRow label="분석 영역" className="px-0">
         {voc.analytics_area_id !== null ? (
           <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics area'}</span>
         ) : (
@@ -64,7 +64,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* 트리아지 상태 */}
-      <FieldRow label="트리아지 상태">
+      <FieldRow label="트리아지 상태" className="px-0">
         <span className="text-sm text-text-primary">{TRIAGE_STATE_LABELS[voc.triage_state]}</span>
       </FieldRow>
     </div>

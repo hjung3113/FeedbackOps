@@ -73,6 +73,34 @@ describe('DetailPanelSectionNav', () => {
     document.body.removeChild(scrollEl);
   });
 
+  it('keeps a section heading below the sticky navigation after a jump', () => {
+    const scrollEl = document.createElement('div');
+    scrollEl.scrollTop = 10;
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 120, 30));
+    scrollEl.scrollTo = vi.fn();
+    const overview = document.createElement('div');
+    overview.setAttribute('data-anchor', 'overview');
+    overview.getBoundingClientRect = vi.fn(() => rect(0, 120, 130));
+    scrollEl.append(overview);
+    document.body.append(scrollEl);
+
+    const { container } = render(
+      <DetailPanelSectionNav
+        sections={[{ id: 'overview', label: 'Overview' }]}
+        scrollRef={{ current: scrollEl }}
+      />,
+    );
+    const stickyNav = container.firstElementChild as HTMLDivElement;
+    stickyNav.getBoundingClientRect = vi.fn(() => rect(0, 120));
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+
+    expect(overview.style.scrollMarginTop).toBe('24px');
+    expect(scrollEl.scrollTo).toHaveBeenCalledWith({ top: 86, behavior: 'smooth' });
+    scrollEl.remove();
+  });
+
   it('returns null when sections is empty', () => {
     const { container } = render(<DetailPanelSectionNav sections={[]} />);
     expect(container.firstChild).toBeNull();

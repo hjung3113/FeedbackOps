@@ -64,6 +64,7 @@ export function DetailPanelSectionNav({
     canScrollRight: false,
   });
   const navRef = React.useRef<HTMLDivElement>(null);
+  const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
   const programmaticRef = React.useRef(false);
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
@@ -94,6 +95,16 @@ export function DetailPanelSectionNav({
   React.useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
+    const root = scrollRef?.current;
+
+    const updateAnchorScrollMargins = () => {
+      if (!root) return;
+      const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
+      for (const section of sections) {
+        const anchor = root.querySelector<HTMLElement>(`[data-anchor="${section.id}"]`);
+        if (anchor) anchor.style.scrollMarginTop = `${stickyHeaderHeight}px`;
+      }
+    };
 
     const updateOverflow = () => {
       const maxScroll = nav.scrollWidth - nav.clientWidth;
@@ -104,6 +115,7 @@ export function DetailPanelSectionNav({
     };
     const updateLayout = () => {
       updateOverflow();
+      updateAnchorScrollMargins();
       revealSection(activeSectionRef.current);
     };
 
@@ -113,6 +125,7 @@ export function DetailPanelSectionNav({
     const resizeObserver =
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateLayout);
     resizeObserver?.observe(nav);
+    if (stickyHeaderRef.current) resizeObserver?.observe(stickyHeaderRef.current);
     for (const tab of nav.children) {
       resizeObserver?.observe(tab);
     }
@@ -121,7 +134,7 @@ export function DetailPanelSectionNav({
       window.removeEventListener('resize', updateLayout);
       resizeObserver?.disconnect();
     };
-  }, [revealSection, sectionKey]);
+  }, [revealSection, scrollRef, sectionKey]);
 
   React.useLayoutEffect(() => {
     revealSection(activeSection);
@@ -190,8 +203,9 @@ export function DetailPanelSectionNav({
       setActiveSection(id);
       const rootRect = root.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
+      const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
       root.scrollTo({
-        top: root.scrollTop + elRect.top - rootRect.top,
+        top: root.scrollTop + elRect.top - rootRect.top - stickyHeaderHeight,
         behavior: 'smooth',
       });
       setTimeout(() => {
@@ -220,6 +234,7 @@ export function DetailPanelSectionNav({
   return (
     <TooltipProvider delayDuration={400}>
       <div
+        ref={stickyHeaderRef}
         className={cn(
           // .panel-section-nav: sticky, flex, horizontal, borderBottom, overflow-x scroll, no scrollbar
           'sticky top-0 z-10 flex items-center gap-0',
