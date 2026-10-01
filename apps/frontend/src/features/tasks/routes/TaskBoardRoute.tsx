@@ -244,7 +244,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const next = task && nextStatus[task.status];
     if (task && next) mutation.mutate({ task, status: next });
   }
-  if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Task 불러오는 중...</div>;
   if (isPermissionDenied(tasksQuery.error)) {
     return (
       <PermissionBlockedPanel
@@ -261,7 +260,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       toolbar={{
         title: (
           <span className="flex items-center gap-2">
-            보드 <OutlineBadge>{filtered.length}건</OutlineBadge>
+            보드
+            {tasksQuery.isSuccess && !tasksQuery.isFetching && !tasksQuery.isError ? (
+              <OutlineBadge>{filtered.length}건</OutlineBadge>
+            ) : null}
           </span>
         ),
         actions: (
@@ -291,6 +293,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
             actorNamesById={actorNames}
             managedSystemNamesById={systemNames}
             view="board"
+            hasActionFooter={selected.status !== 'released'}
             onMoveToNextStatus={moveToNextStatus}
             onClose={() => {
               setSelectedId(null);
@@ -300,8 +303,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
         ) : null
       }
     >
-      <div className="flex h-full min-h-0 flex-col">
-        {tasksQuery.error ? (
+      <div
+        aria-live={tasksQuery.isLoading || tasksQuery.isError ? 'polite' : 'off'}
+        className="flex h-full min-h-0 flex-col"
+      >
+        {tasksQuery.isLoading ? (
+          <div className="p-4 text-sm text-text-muted">Task 불러오는 중...</div>
+        ) : tasksQuery.isError ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-6">
             <ListStateMessage
               variant="error"

@@ -35,7 +35,11 @@ export function SurveyResultsRoute() {
   );
 
   if (isPermissionDenied(survey.error)) {
-    return <SurveyPermissionDeniedState />;
+    return (
+      <ResultsWorkbench>
+        <SurveyPermissionDeniedState />
+      </ResultsWorkbench>
+    );
   }
   if (survey.isError) {
     if (survey.error instanceof ApiError && survey.error.status === 404) {
@@ -78,7 +82,11 @@ export function SurveyResultsRoute() {
     );
   }
   if (!gate.canRead) {
-    return <SurveyPermissionDeniedState />;
+    return (
+      <ResultsWorkbench>
+        <SurveyPermissionDeniedState />
+      </ResultsWorkbench>
+    );
   }
   if (results.isLoading)
     return (
@@ -86,16 +94,42 @@ export function SurveyResultsRoute() {
         <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>
       </ResultsWorkbench>
     );
-  if (results.isError || !results.data) {
+  if (isPermissionDenied(results.error)) {
+    return (
+      <ResultsWorkbench>
+        <SurveyPermissionDeniedState />
+      </ResultsWorkbench>
+    );
+  }
+  if (results.error instanceof ApiError && results.error.status === 404) {
     return (
       <ResultsWorkbench>
         <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />
       </ResultsWorkbench>
     );
   }
+  if (results.isError || !results.data) {
+    return (
+      <ResultsWorkbench>
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <ListStateMessage
+            variant="error"
+            title="결과를 불러오지 못했습니다."
+            body={mapUnknownError(results.error).message}
+            action={{
+              label: '다시 시도',
+              onClick: () => {
+                void results.refetch();
+              },
+            }}
+          />
+        </div>
+      </ResultsWorkbench>
+    );
+  }
   const followUp = survey.data.type === 'outcome' ? (followUpRead.data ?? null) : null;
   return (
-    <ResultsWorkbench>
+    <ResultsWorkbench ariaLive="off">
       <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
       <SurveyResultsSummary followUpRead={followUp} results={results.data} survey={survey.data} />
     </ResultsWorkbench>
@@ -104,22 +138,28 @@ export function SurveyResultsRoute() {
 
 function SurveyPermissionDeniedState() {
   return (
-    <ResultsWorkbench>
-      <div className="p-6">
-        <PermissionBlockedPanel
-          category="Survey Result"
-          reason={PERMISSION_BLOCKED_REASONS.surveyResult}
-          state="denied"
-        />
-      </div>
-    </ResultsWorkbench>
+    <div className="p-6">
+      <PermissionBlockedPanel
+        category="Survey Result"
+        reason={PERMISSION_BLOCKED_REASONS.surveyResult}
+        state="denied"
+      />
+    </div>
   );
 }
 
-function ResultsWorkbench({ children }: { children: ReactNode }) {
+function ResultsWorkbench({
+  children,
+  ariaLive = 'polite',
+}: {
+  children: ReactNode;
+  ariaLive?: 'off' | 'polite';
+}) {
   return (
     <WorkbenchShell>
-      <div className="flex h-full min-h-0 flex-col">{children}</div>
+      <div aria-live={ariaLive} className="flex h-full min-h-0 flex-col">
+        {children}
+      </div>
     </WorkbenchShell>
   );
 }

@@ -50,19 +50,50 @@ export const TASK_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'notes', label: '진행 메모' },
 ];
 
-function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
+function TaskDetailPanelFrame({
+  onClose,
+  children,
+  headerId,
+  headerExtras,
+  loading,
+  ariaLive = 'off',
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+  headerId?: string;
+  headerExtras?: React.ReactNode;
+  loading?: boolean;
+  ariaLive?: 'off' | 'polite';
+}) {
   return (
     <aside
-      aria-busy="true"
-      aria-label="Task 상세 불러오는 중"
+      aria-busy={loading ?? false}
+      {...(loading ? { 'aria-label': 'Task 상세 불러오는 중' } : {})}
       className="flex h-full flex-col bg-surface-detail"
     >
-      <DetailPanelHeader kind="task" onClose={onClose} />
-      <div className="flex shrink-0 gap-4 border-b border-border-subtle px-4 py-3">
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-12" />
+      <DetailPanelHeader
+        kind="task"
+        {...(headerId !== undefined ? { id: headerId } : {})}
+        onClose={onClose}
+        {...(headerExtras !== undefined ? { extras: headerExtras } : {})}
+      />
+      <div aria-live={ariaLive} className="flex min-h-0 flex-1 flex-col">
+        {children}
+      </div>
+    </aside>
+  );
+}
+
+function TaskDetailSkeletonContent({ hasActionFooter }: { hasActionFooter: boolean }) {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className="flex shrink-0 gap-4 border-b border-border-subtle px-4 py-3"
+      >
+        {TASK_DETAIL_SECTIONS.map((section) => (
+          <Skeleton className="h-4 w-12" key={section.id} />
+        ))}
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <Skeleton className="h-4 w-16" />
@@ -74,10 +105,15 @@ function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
         </div>
         <Skeleton className="h-24 w-full" />
       </div>
-      <div className="shrink-0 border-t border-border-subtle p-3">
-        <Skeleton className="h-10 w-full" />
-      </div>
-    </aside>
+      {hasActionFooter ? (
+        <div
+          aria-hidden="true"
+          className="shrink-0 border-t border-border-subtle p-3"
+        >
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -88,6 +124,8 @@ export interface TaskDetailPanelProps {
   managedSystemNamesById: ReadonlyMap<string, string>;
   /** 생략 시 backlog. copy URL과 board 전용 footer의 스위치. */
   view?: 'backlog' | 'my' | 'board';
+  /** Board only: whether the loaded Task can show its action footer. */
+  hasActionFooter?: boolean;
   /** board만 전달. 상태 그래프는 이 컴포넌트가 모른다. */
   onMoveToNextStatus?: (taskId: string) => void;
 }
@@ -98,6 +136,7 @@ export function TaskDetailPanel({
   actorNamesById,
   managedSystemNamesById,
   view = 'backlog',
+  hasActionFooter = false,
   onMoveToNextStatus,
 }: TaskDetailPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -139,7 +178,15 @@ export function TaskDetailPanel({
     me?.actor.role_level === 'admin' || notesManageQuery.data?.state === 'approved';
 
   if (taskQuery.isLoading) {
-    return <TaskDetailSkeleton onClose={onClose} />;
+    return (
+      <TaskDetailPanelFrame
+        loading
+        ariaLive="polite"
+        onClose={onClose}
+      >
+        <TaskDetailSkeletonContent hasActionFooter={hasActionFooter} />
+      </TaskDetailPanelFrame>
+    );
   }
   if (isPermissionDenied(taskQuery.error)) {
     return (
@@ -153,8 +200,10 @@ export function TaskDetailPanel({
   }
   if (taskQuery.error || !taskQuery.data) {
     return (
-      <aside className="flex h-full flex-col bg-surface-detail">
-        <DetailPanelHeader kind="task" onClose={onClose} />
+      <TaskDetailPanelFrame
+        ariaLive="polite"
+        onClose={onClose}
+      >
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <ListStateMessage
             variant="error"
@@ -168,7 +217,7 @@ export function TaskDetailPanel({
             }}
           />
         </div>
-      </aside>
+      </TaskDetailPanelFrame>
     );
   }
 
@@ -177,19 +226,18 @@ export function TaskDetailPanel({
   const sourceFinding = source?.finding;
   const sourceVoc = source?.voc;
   return (
-    <aside className="flex h-full flex-col bg-surface-detail">
-      <DetailPanelHeader
-        kind="task"
-        id={task.display_id}
-        onClose={onClose}
-        extras={
-          <DetailPanelHeaderActions
-            entityKind="task"
-            entityId={task.id}
-            copyUrl={`/tasks?view=${view}&param=${task.id}`}
-          />
-        }
-      />
+    <TaskDetailPanelFrame
+      ariaLive="off"
+      headerId={task.display_id}
+      headerExtras={
+        <DetailPanelHeaderActions
+          entityKind="task"
+          entityId={task.id}
+          copyUrl={`/tasks?view=${view}&param=${task.id}`}
+        />
+      }
+      onClose={onClose}
+    >
       <DetailPanelSectionNav sections={TASK_DETAIL_SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
@@ -360,6 +408,6 @@ export function TaskDetailPanel({
           </Button>
         </div>
       )}
-    </aside>
+    </TaskDetailPanelFrame>
   );
 }

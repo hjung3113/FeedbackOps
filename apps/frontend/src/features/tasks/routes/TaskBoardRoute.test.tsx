@@ -3,8 +3,8 @@ import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { TasksRouteView, tasksSearchSchema } from '@/routes/_authed/tasks';
 import { taskPrioritySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type * as React from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import * as React from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
@@ -127,6 +127,7 @@ describe('TaskBoardRoute', () => {
     for (const link of links) {
       expect(link).toHaveAttribute('href', '/tasks?view=requests&managedSystem=all');
     }
+    expect(screen.getByText('0건')).toBeInTheDocument();
     expect(screen.queryByText('비어있음')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Task 생성' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Task 추가/ })).not.toBeInTheDocument();
@@ -204,23 +205,42 @@ describe('TaskBoardRoute', () => {
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 
-  it('keeps the board toolbar visible and retries a failed task read', async () => {
-    api.listTasks
-      .mockRejectedValueOnce(new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }))
-      .mockResolvedValueOnce({ items: [task] });
+  it('announces a failed task read, hides its unknown count, and retries into the known count', async () => {
+    const firstRead = deferred<{ items: typeof task[] }>();
+    api.listTasks.mockReturnValueOnce(firstRead.promise).mockResolvedValueOnce({ items: [task] });
     renderBoard();
+
+    const loading = await screen.findByText('Task 불러오는 중...');
+    const liveRegion = loading.closest('[aria-live="polite"]');
+    expect(liveRegion).not.toBeNull();
+    expect(screen.queryByText('0건')).not.toBeInTheDocument();
+
+    await act(async () => {
+      firstRead.reject(
+        new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      );
+      await firstRead.promise.catch(() => undefined);
+    });
 
     expect(
       await screen.findByText('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'),
     ).toBeInTheDocument();
+    const error = screen.getByText('Task 보드를 불러오지 못했습니다.');
+    expect(error.closest('[aria-live="polite"]')).toBe(liveRegion);
+    expect(liveRegion).toContainElement(error);
+    expect(screen.queryByText('0건')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '그룹화' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Task Request 검토' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    const retry = screen.getByRole('button', { name: '다시 시도' });
+    expect(liveRegion).toContainElement(retry);
+    fireEvent.click(retry);
 
     expect(
       await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` }),
     ).toBeInTheDocument();
+    expect(screen.getByText('1건')).toBeInTheDocument();
+    expect(screen.queryByText('0건')).not.toBeInTheDocument();
     expect(api.listTasks).toHaveBeenCalledTimes(2);
   });
 
@@ -373,6 +393,25 @@ describe('TaskBoardRoute', () => {
     const skeleton = await screen.findByLabelText('Task 상세 불러오는 중');
     expect(skeleton).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+    const placeholders = skeleton.querySelectorAll(
+      '[aria-live="polite"] > [aria-hidden="true"]',
+    );
+    expect(placeholders).toHaveLength(2);
+    expect(placeholders[0]?.children).toHaveLength(5);
+  });
+
+  it('does not reserve an action footer for a released task skeleton', async () => {
+    const releasedTask = { ...task, status: 'released' as const };
+    api.listTasks.mockResolvedValue({ items: [releasedTask] });
+    api.getTask.mockReturnValue(new Promise(() => {}));
+    renderBoard(task.id);
+
+    const skeleton = await screen.findByLabelText('Task 상세 불러오는 중');
+    const placeholders = skeleton.querySelectorAll(
+      '[aria-live="polite"] > [aria-hidden="true"]',
+    );
+    expect(placeholders).toHaveLength(1);
+    expect(placeholders[0]?.children).toHaveLength(5);
   });
 
   it('shows task detail read errors with a retry that refetches the task', async () => {
@@ -383,7 +422,8 @@ describe('TaskBoardRoute', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` }),
     );
-    expect(await screen.findByText('Task 상세를 불러오지 못했습니다.')).toBeInTheDocument();
+    const error = await screen.findByText('Task 상세를 불러오지 못했습니다.');
+    expect(error.closest('[aria-live="polite"]')).toContainElement(error);
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
