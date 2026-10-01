@@ -75,7 +75,11 @@ export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
 
 // Indicators + badges (Slice 3 #20)
 export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';
-export { SeverityBadge, type SeverityBadgeProps } from './badges/SeverityBadge';
+export {
+  SeverityBadge,
+  SEVERITY_LABELS,
+  type SeverityBadgeProps,
+} from './badges/SeverityBadge';
 export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
 export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';

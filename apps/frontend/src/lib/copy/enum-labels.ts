@@ -17,6 +17,7 @@ import type {
   TaskStatus,
   TriageStateEnum,
 } from '@fops/shared';
+import { SEVERITY_LABELS } from '@fops/ui';
 
 // #613 applies the Korean-first enum-label decisions from #579/#580 over prototype raw values.
 export const TRIAGE_STATE_LABELS: Record<TriageStateEnum, string> = {
@@ -52,12 +53,7 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   urgent: '긴급',
 };
 
-export const FINDING_SEVERITY_LABELS: Record<FindingSeverity, string> = {
-  low: '낮음',
-  medium: '보통',
-  high: '높음',
-  critical: '심각',
-};
+export const FINDING_SEVERITY_LABELS: Record<FindingSeverity, string> = SEVERITY_LABELS;
 
 export const FINDING_CONFIDENCE_LABELS: Record<FindingConfidence, string> = {
   low: '낮음',

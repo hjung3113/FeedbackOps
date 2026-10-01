@@ -548,4 +548,20 @@ describe('useInboxRoute', () => {
       expect(result).not.toHaveProperty('filter.reporter_facing_status');
     });
   });
+
+  it('shows the shared medium severity label in Inbox filters', async () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /필터/ }));
+
+    const mediumOption = await screen.findByRole('checkbox', { name: '중간' });
+    expect(mediumOption).toBeInTheDocument();
+    fireEvent.click(mediumOption);
+
+    const call = navigateMock.mock.calls.at(-1)?.[0] as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(call.search({})['filter.severity']).toBe('medium');
+  });
 });

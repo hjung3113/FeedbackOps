@@ -291,6 +291,12 @@ describe('FindingsListPage', () => {
     },
   );
 
+  it('renders medium Finding severity as "중간" in the list row', async () => {
+    const row = await renderFindingRow({ severity: 'medium' });
+
+    expect(within(row).getByText('중간')).toBeInTheDocument();
+  });
+
   it.each(findingConfidenceSchema.options)(
     'renders Finding confidence %s with its shared label',
     async (confidence) => {
