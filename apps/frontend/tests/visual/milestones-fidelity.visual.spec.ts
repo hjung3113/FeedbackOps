@@ -69,10 +69,10 @@ test.describe('milestone fidelity (final pixel pass)', () => {
           marginBottom: style.marginBottom,
         };
       });
-      const sourceTitle = sections.find((section) => section.label === 'Source');
+      const sourceTitle = sections.find((section) => section.label === '출처');
       if (sourceTitle === undefined) throw new Error('Expected the Source section title');
       const sourceTitleEl = Array.from(root.querySelectorAll('h3')).find(
-        (title) => (title.textContent ?? '').trim() === 'Source',
+        (title) => (title.textContent ?? '').trim() === '출처',
       );
       if (sourceTitleEl === undefined) throw new Error('Expected the Source title element');
       const sourceCard = sourceTitleEl.parentElement?.nextElementSibling;
@@ -204,7 +204,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     // Section titles: 11px, 10px wrapper rhythm (Source title row is mb-0;
     // its 10px gap is asserted on the card below).
     for (const section of captured.sections) {
-      const expectedMargin = section.label === 'Source' ? '0px' : '10px';
+      const expectedMargin = section.label === '출처' ? '0px' : '10px';
       expect.soft(section.fontSize, `section ${section.label} font`).toBe('11px');
       expect
         .soft(section.marginBottom, `section ${section.label} bottom rhythm`)
