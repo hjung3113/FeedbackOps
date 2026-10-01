@@ -1,7 +1,7 @@
 import type { TaskRequestDto } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -113,13 +113,58 @@ describe('useTaskRequestsQueue tab counts (#706)', () => {
         ]);
         return;
       }
-      await waitFor(() => expect(result.current.hasItems).toBe(state === 'loaded'));
+      // Waiting on the badge itself: `hasItems === false` also holds while the
+      // read is pending, so it cannot distinguish loaded-empty from pending.
+      // The badge only appears once the read has succeeded.
       const expected = state === 'loaded-empty' ? 0 : 1;
-      expect(badgeFor(result.current.tabs, 'all')).toBe(expected);
+      await waitFor(() => expect(badgeFor(result.current.tabs, 'all')).toBe(expected));
       expect(badgeFor(result.current.tabs, 'pending_review')).toBe(expected);
       expect(badgeFor(result.current.tabs, 'needs_more_evidence')).toBe(0);
       expect(badgeFor(result.current.tabs, 'approved')).toBe(0);
       expect(badgeFor(result.current.tabs, 'rejected')).toBe(0);
     },
   );
+
+  it('recovers from a failed read through a no-data refetch to real zero counts', async () => {
+    fetchTaskRequestsMock.mockRejectedValueOnce(new Error('read failed'));
+    let releaseRead: (() => void) | undefined;
+    fetchTaskRequestsMock.mockReturnValueOnce(
+      new Promise<{ items: TaskRequestDto[] }>((resolve) => {
+        releaseRead = () => resolve({ items: [] });
+      }),
+    );
+
+    const { result } = renderQueue();
+    await waitFor(() => expect(result.current.hasError).toBe(true));
+    expect(result.current.tabs.map((tab) => tab.badgeCount)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+
+    act(() => result.current.refetch());
+
+    // Post-error refetch resets to pending with no data: the error clears and
+    // the counts stay absent while it is unresolved.
+    await waitFor(() => expect(result.current.hasError).toBe(false));
+    expect(result.current.tabs.map((tab) => tab.badgeCount)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+
+    await act(async () => {
+      releaseRead?.();
+    });
+
+    await waitFor(() => expect(badgeFor(result.current.tabs, 'all')).toBe(0));
+    expect(badgeFor(result.current.tabs, 'pending_review')).toBe(0);
+    expect(badgeFor(result.current.tabs, 'needs_more_evidence')).toBe(0);
+    expect(badgeFor(result.current.tabs, 'approved')).toBe(0);
+    expect(badgeFor(result.current.tabs, 'rejected')).toBe(0);
+  });
 });

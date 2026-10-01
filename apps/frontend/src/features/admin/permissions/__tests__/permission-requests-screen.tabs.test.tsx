@@ -135,4 +135,32 @@ describe('PermissionRequestsScreen tab counts (#706)', () => {
       expect(screen.getByRole('tab', { name: `전체 ${pending}` })).toBeInTheDocument();
     },
   );
+
+  it('recovers from a failed read through a no-data refetch to real zero counts', () => {
+    // One flowing transition — settled error → refetch pending without data →
+    // successful empty read — not a fourth static state.
+    consoleState.isError = true;
+    consoleState.allRequests = [];
+    consoleState.visibleRequests = [];
+    const { rerender } = render(<PermissionRequestsScreen />);
+    expect(screen.getByRole('tablist', { name: '권한 요청 상태' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '대기 중' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^대기 중 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+
+    // Post-error refetch resets to pending with no data: counts stay absent.
+    consoleState.isError = false;
+    consoleState.isPending = true;
+    rerender(<PermissionRequestsScreen />);
+    expect(screen.getByRole('tab', { name: '대기 중' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^대기 중 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^승인됨 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+
+    consoleState.isPending = false;
+    rerender(<PermissionRequestsScreen />);
+    expect(screen.getByRole('tab', { name: '대기 중 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '승인됨 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+  });
 });
