@@ -7,6 +7,8 @@ Date: 2026-10-01
 Accepted 2026-09-30 by the owner (#579; language policy #580). All nine deviations are approved; B2 additionally
 requires the owner to see a rendered design of the first implementation before it merges.
 
+B8 and B9 came from the 2026-10-01 pre-release audit (#685).
+
 ## Context
 
 The 2026-09-30 design review (#578) found places where following the prototype verbatim hurts users. The owner reviewed
@@ -34,6 +36,7 @@ Use Korean for field labels and action buttons on Korean-language surfaces. Keep
 | B5 | One blocked/empty state per region, in the same placement everywhere | #615 |
 | B6 | Managed System marks come from identity tokens everywhere | #615 |
 | B7 | Native `select`/date inputs become the shared Select and a new shared DatePicker | #616 |
+| B8 | Board has no standalone Task creation control; it points to Task Request conversion (owner, 2026-10-01) | #669 |
 | B9 | Internal-sounding prototype copy rewritten (MVP, particle spacing, table names, metric keys) | owner, 2026-10-01, #683 |
 
 ## Consequences

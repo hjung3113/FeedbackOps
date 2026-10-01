@@ -101,8 +101,8 @@ describe('VocDetailPanel Finding creation area handoff', () => {
     // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
     // synthesise convincingly — driving it by keyboard matches this repo's
     // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
-    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
+    // #669: Finding 생성 is a footer button now, not an overflow menu item.
+    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
 
     const modal = screen.getByTestId('create-finding-modal-props');
     expect(modal).toHaveAttribute('data-open', 'true');

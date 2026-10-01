@@ -220,21 +220,23 @@ export function FullDetailView({
 
         <NextActionFooter
           voc={voc}
-          overflowActions={[
-            ...(canRequestTask
-              ? [
-                  {
-                    label: 'Task 요청',
-                    onClick: () => setRequestTaskOpen(true),
-                    testId: 'voc-request-task-button',
-                    afterMenuClose: true,
-                  },
-                ]
-              : []),
-            ...(canCreateFinding
-              ? [{ label: 'Finding 생성', onClick: () => setCreateFindingOpen(true) }]
-              : []),
-          ]}
+          {...(canCreateFinding
+            ? {
+                primaryAction: {
+                  label: 'Finding 생성',
+                  onClick: () => setCreateFindingOpen(true),
+                },
+              }
+            : {})}
+          {...(canRequestTask
+            ? {
+                secondaryAction: {
+                  label: 'Task 요청',
+                  onClick: () => setRequestTaskOpen(true),
+                  testId: 'voc-request-task-button',
+                },
+              }
+            : {})}
         />
       </div>
 

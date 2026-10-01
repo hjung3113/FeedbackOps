@@ -17,8 +17,8 @@ import {
   WorkbenchShell,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { Layers, Plus } from 'lucide-react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { Layers } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
@@ -78,7 +78,16 @@ function BoardColumn({ id, label, tasks, groupBy, selectedId, selectTask, names,
 }) {
   const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
   return <section ref={droppable.setNodeRef} className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`} aria-label={`${label} column`}>
-    <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2"><>{groupBy === 'status' ? <InternalTaskBadge status={id as TaskStatus} /> : <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{label}</span>}</><span className="text-xs tabular-nums text-text-muted">{tasks.length}</span><span className="flex-1" /><Button type="button" variant="ghost" size="sm" className="h-[22px] w-[22px] p-0" disabled title="Task 생성 기능을 사용할 수 없습니다." aria-label={`${label}에 Task 추가`}><Plus className="h-3 w-3" /></Button></header>
+    <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+      {groupBy === 'status' ? (
+        <InternalTaskBadge status={id as TaskStatus} />
+      ) : (
+        <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          {label}
+        </span>
+      )}
+      <span className="text-xs tabular-nums text-text-muted">{tasks.length}</span>
+    </header>
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
       {tasks.map((task) => <DraggableTaskCard key={task.id} task={task} selected={task.id === selectedId} onSelect={() => selectTask(task.id)} enabled={enabled} managedSystemName={names.systems.get(task.primary_managed_system_id) ?? 'Managed System'} assigneeName={task.assignee_actor_id ? names.actors.get(task.assignee_actor_id) : undefined} />)}
       {tasks.length === 0 && <div className="p-3 text-center text-xs text-text-muted">비어있음</div>}
@@ -205,16 +214,104 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   }
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
-  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">보드 <OutlineBadge>{filtered.length}건</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task 생성 기능을 사용할 수 없습니다."><Plus className="h-4 w-4" />Task 생성</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: boardSearch() }); }} /> : null}>
-    <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
-      <StatBlock label="전체 Task" value={items.length} />
-      <StatDivider />
-      <StatBlock label="미배정" value={items.filter((task) => task.assignee_actor_id === null).length} valueClassName="text-accent-warn" />
-      <StatDivider />
-      <StatBlock label="진행 중" value={items.filter((task) => task.status === 'doing').length} valueClassName="text-accent-success" />
-    </div>
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="flex h-full gap-3 overflow-x-auto p-4">{columns.map((column) => <BoardColumn key={column.key} id={column.key} label={column.label} tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)} groupBy={groupBy} selectedId={selectedId} selectTask={selectTask} names={{ systems: systemNames, actors: actorNames }} enabled={groupBy === 'status'} />)}</div></DndContext>
-  </WorkbenchShell>;
+  return (
+    <WorkbenchShell
+      toolbar={{
+        title: (
+          <span className="flex items-center gap-2">
+            보드 <OutlineBadge>{filtered.length}건</OutlineBadge>
+          </span>
+        ),
+        actions: (
+          <>
+            <span className="text-xs text-text-muted">
+              Task는 Task Request에서 전환됩니다.{' '}
+              <Link
+                to="/tasks"
+                search={{
+                  view: 'requests',
+                  ...(managedSystem !== undefined ? { managedSystem } : {}),
+                }}
+                className="font-medium underline underline-offset-2 hover:text-text-secondary"
+              >
+                Task Request 검토
+              </Link>
+            </span>
+            <ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} />
+            <GroupByButton value={groupBy} onChange={setGroupBy} />
+          </>
+        ),
+      }}
+      detailPanel={
+        selected ? (
+          <TaskDetailPanel
+            taskId={selected.id}
+            actorNamesById={actorNames}
+            managedSystemNamesById={systemNames}
+            view="board"
+            onMoveToNextStatus={moveToNextStatus}
+            onClose={() => {
+              setSelectedId(null);
+              void navigate({ to: '/tasks', search: boardSearch() });
+            }}
+          />
+        ) : null
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
+          <StatBlock label="전체 Task" value={items.length} />
+          <StatDivider />
+          <StatBlock
+            label="미배정"
+            value={items.filter((task) => task.assignee_actor_id === null).length}
+            valueClassName="text-accent-warn"
+          />
+          <StatDivider />
+          <StatBlock
+            label="진행 중"
+            value={items.filter((task) => task.status === 'doing').length}
+            valueClassName="text-accent-success"
+          />
+        </div>
+        {items.length === 0 ? (
+          <output className="flex flex-1 items-center justify-center p-6">
+            <p className="text-sm text-text-muted">
+              Task는 Task Request에서 전환됩니다.{' '}
+              <Link
+                to="/tasks"
+                search={{
+                  view: 'requests',
+                  ...(managedSystem !== undefined ? { managedSystem } : {}),
+                }}
+                className="font-medium underline underline-offset-2 hover:text-text-secondary"
+              >
+                Task Request 검토
+              </Link>
+            </p>
+          </output>
+        ) : (
+          <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+            <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+              {columns.map((column) => (
+                <BoardColumn
+                  key={column.key}
+                  id={column.key}
+                  label={column.label}
+                  tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)}
+                  groupBy={groupBy}
+                  selectedId={selectedId}
+                  selectTask={selectTask}
+                  names={{ systems: systemNames, actors: actorNames }}
+                  enabled={groupBy === 'status'}
+                />
+              ))}
+            </div>
+          </DndContext>
+        )}
+      </div>
+    </WorkbenchShell>
+  );
 }
 
 function StatBlock({ label, value, valueClassName = '' }: { label: string; value: number; valueClassName?: string }) {

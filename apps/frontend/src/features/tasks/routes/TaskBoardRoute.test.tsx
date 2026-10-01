@@ -22,6 +22,17 @@ const sensorOptions = vi.hoisted(() => [] as Array<{ Sensor: unknown; options?: 
 const navigate = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, search, children }: {
+    to: string;
+    search: { view: string; managedSystem?: string };
+    children: React.ReactNode;
+  }) => {
+    const params = new URLSearchParams({
+      view: search.view,
+      ...(search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {}),
+    });
+    return <a href={`${to}?${params.toString()}`}>{children}</a>;
+  },
   useNavigate: () => navigate,
   createFileRoute: () => () => ({ useSearch: () => ({}) }),
 }));
@@ -57,9 +68,14 @@ vi.mock('./TaskListRoute', async () => {
 vi.mock('./TaskRequestsRoute', () => ({ TaskRequestsRoute: () => <div>task requests unchanged</div> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 
-function renderBoard(selectedParam?: string) {
+function renderBoard(selectedParam?: string, managedSystem?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const route = <TaskBoardRoute {...(selectedParam !== undefined ? { selectedParam } : {})} />;
+  const route = (
+    <TaskBoardRoute
+      {...(selectedParam !== undefined ? { selectedParam } : {})}
+      {...(managedSystem !== undefined ? { managedSystem } : {})}
+    />
+  );
   return { client, ...render(<QueryClientProvider client={client}>{route}</QueryClientProvider>) };
 }
 
@@ -90,6 +106,30 @@ describe('TaskBoardRoute', () => {
       expect(screen.getByLabelText(`${status[0]!.toUpperCase()}${status.slice(1)} column`)).toBeInTheDocument();
     }
     expect(screen.getAllByText('비어있음').length).toBe(6);
+    expect(screen.getByText('Task는 Task Request에서 전환됩니다.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Task Request 검토' })).toHaveAttribute(
+      'href',
+      '/tasks?view=requests',
+    );
+    expect(screen.queryByRole('button', { name: 'Task 생성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Task 추가/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the conversion guidance in the empty board and preserves Managed System in its link', async () => {
+    const managedSystem = 'all';
+    api.listTasks.mockResolvedValue({ items: [] });
+    renderBoard(undefined, managedSystem);
+
+    const emptyBoard = await screen.findByRole('status');
+    expect(emptyBoard).toHaveTextContent('Task는 Task Request에서 전환됩니다.');
+    const links = screen.getAllByRole('link', { name: 'Task Request 검토' });
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/tasks?view=requests&managedSystem=all');
+    }
+    expect(screen.queryByText('비어있음')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Task 생성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Task 추가/ })).not.toBeInTheDocument();
   });
 
   it('renders localized task count labels in board stats', async () => {
