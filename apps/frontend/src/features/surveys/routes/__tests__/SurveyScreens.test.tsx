@@ -1,5 +1,6 @@
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
-import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
+import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
+import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/index';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -12,7 +13,7 @@ import {
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SurveyStatusBadge } from '../../components/SurveyStatusBadge';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
@@ -20,14 +21,27 @@ import { SurveyList } from '../../components/list/SurveyList';
 import { useSurveys } from '../../hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../types';
 
-const { apiClient, apiRequest, fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } =
-  vi.hoisted(() => ({
-    apiClient: vi.fn(),
-    apiRequest: vi.fn(),
-    fetchAnalyticsAreas: vi.fn(),
-    fetchCapabilityScope: vi.fn(),
-    fetchManagedSystems: vi.fn(),
-  }));
+const {
+  apiClient,
+  apiRequest,
+  fetchAnalyticsAreas,
+  fetchCapabilityScope,
+  fetchManagedSystems,
+  routeQueryStubs,
+} = vi.hoisted(() => ({
+  apiClient: vi.fn(),
+  apiRequest: vi.fn(),
+  fetchAnalyticsAreas: vi.fn(),
+  fetchCapabilityScope: vi.fn(),
+  fetchManagedSystems: vi.fn(),
+  // Query-hook stubs for the real route components in the #706 describe.
+  // Undefined = fall through to the real hook, so the existing suites that
+  // wire useSurveys to the real hook keep their behaviour unchanged.
+  routeQueryStubs: {
+    surveys: undefined as (() => unknown) | undefined,
+    survey: undefined as (() => unknown) | undefined,
+  },
+}));
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   apiClient,
@@ -35,6 +49,38 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   fetchAnalyticsAreas,
   fetchCapabilityScope,
   fetchManagedSystems,
+}));
+vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/surveys/hooks/useSurveys')>();
+  return {
+    ...actual,
+    useSurveys: (managedSystemId?: string) =>
+      routeQueryStubs.surveys ? routeQueryStubs.surveys() : actual.useSurveys(managedSystemId),
+    useSurvey: (surveyId: string) =>
+      routeQueryStubs.survey ? routeQueryStubs.survey() : actual.useSurvey(surveyId),
+  };
+});
+vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+  useSurveyManageGate: () => ({ canManage: false, gateState: 'absent' as const }),
+}));
+vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({
+  useManagedSystemNamesResult: () => ({ namesById: new Map<string, string>(), isSuccess: true }),
+}));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [], isSuccess: true }),
+}));
+// The route components read search/params/match through the router; the #706
+// describe mounts them without a full app router, so pin those reads. The real
+// createRouter/RouterProvider/createRoute stay intact for renderDetailWithRouter.
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  createFileRoute: () => () => ({
+    useParams: () => ({ surveyId: 'survey-1' }),
+    useSearch: () => ({}),
+  }),
+  useSearch: () => ({}),
+  useMatchRoute: () => () => false,
+  useNavigate: () => () => Promise.resolve(),
 }));
 
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
@@ -1169,4 +1215,169 @@ describe('Survey screens', () => {
       expect(screen.queryByText('설문 생성')).not.toBeInTheDocument();
     },
   );
+
+  // #706 — Survey tab counts are unknown until the list read succeeds. These
+  // cases mount the REAL index and detail routes (the hook mocks above fall
+  // through to the real hooks unless a stub is installed below). The routes
+  // pass the list query's `isPending`, so the whole no-data window — including
+  // a paused read, where isPending=true while isLoading=false — renders the
+  // skeleton or the error state instead of tabs rendering 0.
+  describe('Survey routes tab counts (#706)', () => {
+    afterEach(() => {
+      routeQueryStubs.surveys = undefined;
+      routeQueryStubs.survey = undefined;
+    });
+
+    function stubListQuery(state: 'paused' | 'failed' | 'loaded-empty' | 'loaded-populated') {
+      const refetch = vi.fn();
+      switch (state) {
+        case 'paused':
+          // No data and not fetching (e.g. an offline/paused read):
+          // isPending=true while isLoading=false — the one query state the old
+          // `isLoading` mapping rendered as a false empty result.
+          return {
+            data: undefined,
+            error: null,
+            status: 'pending',
+            fetchStatus: 'paused',
+            isPending: true,
+            isLoading: false,
+            isFetching: false,
+            isError: false,
+            isSuccess: false,
+            refetch,
+          };
+        case 'failed':
+          return {
+            data: undefined,
+            error: new Error('read failed'),
+            status: 'error',
+            fetchStatus: 'idle',
+            isPending: false,
+            isLoading: false,
+            isFetching: false,
+            isError: true,
+            isSuccess: false,
+            refetch,
+          };
+        case 'loaded-empty':
+          return {
+            data: [],
+            error: null,
+            status: 'success',
+            fetchStatus: 'idle',
+            isPending: false,
+            isLoading: false,
+            isFetching: false,
+            isError: false,
+            isSuccess: true,
+            refetch,
+          };
+        case 'loaded-populated':
+          return {
+            data: [survey],
+            error: null,
+            status: 'success',
+            fetchStatus: 'idle',
+            isPending: false,
+            isLoading: false,
+            isFetching: false,
+            isError: false,
+            isSuccess: true,
+            refetch,
+          };
+      }
+    }
+
+    it.each([
+      ['index', 'paused'],
+      ['index', 'failed'],
+      ['index', 'loaded-empty'],
+      ['index', 'loaded-populated'],
+      ['detail', 'paused'],
+      ['detail', 'failed'],
+      ['detail', 'loaded-empty'],
+      ['detail', 'loaded-populated'],
+    ] as const)(
+      'real %s route shows Survey tab counts only after the list read succeeds (%s)',
+      async (route, state) => {
+        routeQueryStubs.surveys = () => stubListQuery(state);
+        if (route === 'detail') {
+          routeQueryStubs.survey = () => ({
+            data: survey,
+            error: null,
+            status: 'success',
+            fetchStatus: 'idle',
+            isPending: false,
+            isLoading: false,
+            isFetching: false,
+            isError: false,
+            isSuccess: true,
+            refetch: vi.fn(),
+          });
+        }
+
+        renderWithQuery(route === 'index' ? <SurveysIndexRoute /> : <SurveyDetailRoute />);
+
+        if (state === 'paused') {
+          expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
+          expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+          expect(screen.queryByText('생성된 설문이 없습니다.')).not.toBeInTheDocument();
+          return;
+        }
+        if (state === 'failed') {
+          expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+          expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+          return;
+        }
+        if (state === 'loaded-empty') {
+          expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
+          return;
+        }
+        expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'All 1' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '초안 1' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
+      },
+    );
+
+    it('real index route recovers from a failed read through a no-data refetch to real zero counts', async () => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      routeQueryStubs.surveys = () => stubListQuery('failed');
+      const { rerender } = render(
+        <QueryClientProvider client={client}>
+          <SurveysIndexRoute />
+        </QueryClientProvider>,
+      );
+      expect(screen.getByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+
+      // Post-error refetch resets to pending with no data (paused/non-fetching
+      // pending): counts must stay absent while the refetch is unresolved.
+      routeQueryStubs.surveys = () => stubListQuery('paused');
+      rerender(
+        <QueryClientProvider client={client}>
+          <SurveysIndexRoute />
+        </QueryClientProvider>,
+      );
+      expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+
+      routeQueryStubs.surveys = () => stubListQuery('loaded-empty');
+      rerender(
+        <QueryClientProvider client={client}>
+          <SurveysIndexRoute />
+        </QueryClientProvider>,
+      );
+      expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
+    });
+  });
 });

@@ -474,4 +474,145 @@ describe('integration links route', () => {
     await navigateToSearch({});
     await expectAllFirstPageReloaded(afterThirdLoad);
   });
+
+  // #706 — status tab counts are unknown until the counts read succeeds;
+  // unknown must never render as 0.
+  test.each(['pending', 'failed', 'loaded-empty'] as const)(
+    'shows status tab counts only after the counts read succeeds (%s)',
+    async (state) => {
+      const urls: string[] = [];
+      if (state === 'pending') {
+        // Never resolves: pins the counts read in its pending state. (The
+        // tsconfig lib predates Promise.withResolvers, and no resolver is
+        // needed.)
+        globalThis.fetch = vi.fn(
+          async () => new Promise<Response>(() => undefined),
+        ) as typeof globalThis.fetch;
+      } else if (state === 'failed') {
+        stubFetch(urls, ALL_LINKS, [
+          { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+          { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+        ]);
+      } else {
+        stubFetch(urls, [], undefined, () => ({
+          items: [],
+          page: {
+            has_more: false,
+            status_counts: { active: 0, stale: 0, detached: 0, revoked: 0 },
+          },
+        }));
+      }
+      const { router, qc } = buildHarness('/integration/links');
+
+      render(
+        <QueryClientProvider client={qc}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+
+      if (state === 'pending') {
+        await waitFor(() => expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument());
+        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Active \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'failed') {
+        await waitFor(
+          () =>
+            expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+          { timeout: 4000 },
+        );
+        expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Stale \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      expect(await screen.findByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Stale 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Revoked 0' })).toBeInTheDocument();
+    },
+  );
+
+  test('recovers from a failed read through a no-data refetch to real zero counts', async () => {
+    const urls: string[] = [];
+    let releaseRead: (() => void) | undefined;
+    const refetchBody = {
+      items: [],
+      page: { has_more: false, status_counts: { active: 0, stale: 0, detached: 0, revoked: 0 } },
+    };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      urls.push(url);
+      if (url.includes('/entity-links')) {
+        const attempt = urls.filter((rawUrl) => rawUrl.includes('/entity-links')).length;
+        if (attempt <= 2) {
+          return new Response(
+            JSON.stringify({ code: 'internal.unexpected', message: 'server failed' }),
+            { status: 500, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        // Third read (the refetch) stays pending until the test releases it.
+        return new Promise<Response>((resolve) => {
+          releaseRead = () =>
+            resolve(
+              new Response(JSON.stringify(refetchBody), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              }),
+            );
+        });
+      }
+      if (url.includes('/managed-systems')) {
+        return new Response(JSON.stringify({ items: [], total: 0 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/actors/resolve')) {
+        return new Response(JSON.stringify({ actors: [], teams: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('not mocked', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const { router, qc } = buildHarness('/integration/links');
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(
+      () => expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+
+    const callsBeforeRefetch = urls.filter((rawUrl) => rawUrl.includes('/entity-links')).length;
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    // Post-error refetch resets to pending with no data: the error view clears
+    // and counts stay absent while it is unresolved.
+    await waitFor(() =>
+      expect(urls.filter((rawUrl) => rawUrl.includes('/entity-links')).length).toBeGreaterThan(
+        callsBeforeRefetch,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      releaseRead?.();
+    });
+
+    expect(await screen.findByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Stale 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Revoked 0' })).toBeInTheDocument();
+  });
 });

@@ -30,15 +30,23 @@ export function PermissionRequestsScreen() {
     handleSelect,
     handleClose,
   } = usePermissionRequestsConsole();
+  // #706 — counts are unknown until the requests read succeeds (covers
+  // pending, error, and refetch-after-error without data); unknown must never
+  // render as 0 (ListTabs renders badgeCount only when set).
+  const countsKnown = !isPending && !isError;
   const tabs: ListToolbarTab[] = permissionRequestTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
     id: `permission-request-tab-${tab.value}`,
     controlsId: PERMISSION_REQUESTS_PANEL_ID,
-    badgeCount:
-      tab.value === 'all'
-        ? allRequests.length
-        : allRequests.filter((request) => request.status === tab.value).length,
+    ...(countsKnown
+      ? {
+          badgeCount:
+            tab.value === 'all'
+              ? allRequests.length
+              : allRequests.filter((request) => request.status === tab.value).length,
+        }
+      : {}),
   }));
 
   return (

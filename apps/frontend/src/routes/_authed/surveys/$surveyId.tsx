@@ -99,7 +99,10 @@ export function SurveyDetailRoute() {
       list={
         <SurveyList
           surveys={list.data ?? []}
-          isLoading={list.isLoading}
+          // #706 — isPending keeps the skeleton up through the whole
+          // no-data window (incl. the retry delay), so tabs never render
+          // unknown counts as 0.
+          isLoading={list.isPending}
           error={list.error}
           onRetry={() => void list.refetch()}
           selectedId={surveyId}

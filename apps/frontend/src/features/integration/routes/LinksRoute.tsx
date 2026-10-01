@@ -195,6 +195,10 @@ export function LinksRoute() {
   }, [actorsQuery.data]);
 
   const statusTabs = React.useMemo<ListToolbarTab[]>(() => {
+    // #706 — counts are unknown until the counts read succeeds (covers
+    // pending, error, and refetch-after-error without data); unknown must
+    // never render as 0 (ListTabs renders badgeCount only when set).
+    if (!countInventory.isSuccess) return STATUS_TABS;
     const items = countInventory.data?.pages.flatMap((page) => page.items) ?? [];
     const statusCounts = countInventory.data?.pages[0]?.page?.status_counts;
     const counts = new Map<string, number>([
@@ -217,7 +221,7 @@ export function LinksRoute() {
       ...tab,
       badgeCount: counts.get(tab.value) ?? 0,
     }));
-  }, [countInventory.data]);
+  }, [countInventory.data, countInventory.isSuccess]);
 
   function handleStatusChange(next: string): void {
     void navigate({

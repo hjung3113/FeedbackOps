@@ -100,16 +100,25 @@ export function useTaskRequestsQueue({
 
   const tabs = React.useMemo<ListToolbarTab[]>(
     () =>
-      TAB_ORDER.map((tab) => ({
-        value: tab.value,
-        label: tab.label,
-        badgeCount:
-          tab.value === 'all'
-            ? items.length
-            : items.filter((item) => item.status === tab.value).length,
-        urgent: tab.value === 'pending_review',
-      })),
-    [items],
+      TAB_ORDER.map((tab) => {
+        // #706 — counts are unknown until the read succeeds (covers pending,
+        // error, and refetch-after-error without data); unknown must never
+        // render as 0 (ListTabs renders badgeCount only when set).
+        const base = {
+          value: tab.value,
+          label: tab.label,
+          urgent: tab.value === 'pending_review',
+        };
+        if (!taskRequestsQuery.isSuccess) return base;
+        return {
+          ...base,
+          badgeCount:
+            tab.value === 'all'
+              ? items.length
+              : items.filter((item) => item.status === tab.value).length,
+        };
+      }),
+    [items, taskRequestsQuery.isSuccess],
   );
 
   const shown = React.useMemo(() => {

@@ -125,11 +125,15 @@ function ClusterListBody({
   activeTab: 'all' | 'confirmed' | 'no-finding';
   onTabChange: (tab: 'all' | 'confirmed' | 'no-finding') => void;
 }): React.ReactElement {
+  // #706 — counts are unknown until the list read succeeds (covers pending,
+  // error, and refetch-after-error without data); unknown must never render
+  // as 0 (ListTabs renders badgeCount only when set).
+  const countsKnown = !isPending && !isError;
   const tabs: ListToolbarTab[] = [
     {
       value: 'all',
       label: '전체',
-      badgeCount: allClusters.length,
+      ...(countsKnown ? { badgeCount: allClusters.length } : {}),
       id: 'cluster-tab-all',
       controlsId: 'cluster-list-panel',
       testId: 'cluster-tab-all',
@@ -137,7 +141,9 @@ function ClusterListBody({
     {
       value: 'confirmed',
       label: '확정',
-      badgeCount: allClusters.filter((cluster) => cluster.status === 'confirmed').length,
+      ...(countsKnown
+        ? { badgeCount: allClusters.filter((cluster) => cluster.status === 'confirmed').length }
+        : {}),
       id: 'cluster-tab-confirmed',
       controlsId: 'cluster-list-panel',
       testId: 'cluster-tab-confirmed',
@@ -145,8 +151,13 @@ function ClusterListBody({
     {
       value: 'no-finding',
       label: 'Finding 없음',
-      badgeCount: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0)
-        .length,
+      ...(countsKnown
+        ? {
+            badgeCount: allClusters.filter(
+              (cluster) => (cluster.linked_findings ?? []).length === 0,
+            ).length,
+          }
+        : {}),
       id: 'cluster-tab-no-finding',
       controlsId: 'cluster-list-panel',
       testId: 'cluster-tab-no-finding',

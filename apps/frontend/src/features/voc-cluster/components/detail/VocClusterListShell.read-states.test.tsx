@@ -1,7 +1,7 @@
 import { ApiError } from '@/lib/api';
 import { listVocClustersResponseSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,5 +123,102 @@ describe('VocClusterListShell list states (#609)', () => {
     expect(screen.queryByText(/전체 0|확정 0|Finding 없음 0/)).not.toBeInTheDocument();
     expect(screen.queryByText('0개')).not.toBeInTheDocument();
     expect(screen.queryByTestId('list-state-message')).not.toBeInTheDocument();
+  });
+});
+
+// #706 — tab counts are unknown until the list read succeeds; unknown must
+// never render as 0.
+describe('VocClusterListShell tab counts (#706)', () => {
+  beforeEach(() => {
+    apiRequestMock.mockReset();
+  });
+
+  it.each(['pending', 'failed', 'empty', 'populated'] as const)(
+    'shows tab counts only after the list read succeeds (%s)',
+    async (state) => {
+      if (state === 'pending') {
+        // Never resolves: pins the read in its pending state. (The tsconfig
+        // lib predates Promise.withResolvers, and no resolver is needed.)
+        apiRequestMock.mockReturnValue(new Promise(() => undefined));
+      } else if (state === 'failed') {
+        apiRequestMock.mockRejectedValue(new Error('temporary read failure'));
+      } else if (state === 'empty') {
+        apiRequestMock.mockResolvedValue({ data: emptyList });
+      } else {
+        apiRequestMock.mockResolvedValue({ data: populatedList });
+      }
+
+      renderClusterList();
+
+      if (state === 'pending') {
+        expect(screen.getByTestId('cluster-list-skeleton')).toBeInTheDocument();
+      } else if (state === 'failed') {
+        expect(
+          await screen.findByTestId('list-state-message', {}, { timeout: 5000 }),
+        ).toHaveAttribute('data-variant', 'error');
+      } else if (state === 'empty') {
+        expect(await screen.findByTestId('cluster-empty-state')).toBeInTheDocument();
+      } else {
+        expect(await screen.findByText(draftNoFinding.title)).toBeInTheDocument();
+      }
+
+      if (state === 'pending' || state === 'failed') {
+        expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '확정' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Finding 없음' })).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^확정 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^Finding 없음 \d+$/ })).not.toBeInTheDocument();
+        return;
+      }
+      if (state === 'empty') {
+        expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '확정 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Finding 없음 0' })).toBeInTheDocument();
+        return;
+      }
+      expect(screen.getByRole('tab', { name: '전체 3' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '확정 2' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Finding 없음 2' })).toBeInTheDocument();
+    },
+  );
+
+  it('recovers from a failed read through a no-data refetch to real zero counts', async () => {
+    const user = userEvent.setup();
+    apiRequestMock
+      .mockRejectedValueOnce(new Error('temporary read failure'))
+      .mockRejectedValueOnce(new Error('temporary read failure'));
+    let releaseRead: (() => void) | undefined;
+    apiRequestMock.mockReturnValueOnce(
+      new Promise<{ data: typeof emptyList }>((resolve) => {
+        releaseRead = () => resolve({ data: emptyList });
+      }),
+    );
+
+    renderClusterList();
+
+    expect(await screen.findByTestId('list-state-message', {}, { timeout: 5000 })).toHaveAttribute(
+      'data-variant',
+      'error',
+    );
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    // Post-error refetch resets to pending with no data: the skeleton replaces
+    // the error view and the counts stay absent while it is unresolved.
+    expect(await screen.findByTestId('cluster-list-skeleton')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-state-message')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^확정 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Finding 없음 \d+$/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      releaseRead?.();
+    });
+
+    expect(await screen.findByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '확정 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Finding 없음 0' })).toBeInTheDocument();
   });
 });
