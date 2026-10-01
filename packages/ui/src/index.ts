@@ -97,6 +97,7 @@ export { UserChip, type UserChipProps } from './identity/UserChip';
 
 // Toolbar primitives (Slice 3 #20)
 export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
+export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
 export { ListFilterButton, type ListFilterButtonProps, type FilterCategory } from './toolbar/ListFilterButton';
 export { ListSortButton, type ListSortButtonProps, type SortOption } from './toolbar/ListSortButton';
 // Forms (Slice 3 #20)

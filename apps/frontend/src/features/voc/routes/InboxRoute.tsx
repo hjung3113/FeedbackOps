@@ -20,7 +20,7 @@ import {
   type SortOption,
 } from '@fops/ui';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { ArrowRight, Plus } from 'lucide-react';
+import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
 import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
@@ -72,12 +72,23 @@ interface InboxSearch {
 // wiring live counts is data-deferred (see PR body, follow-up issue). We do not
 // invent counts.
 const INBOX_TABS: ListToolbarTab[] = [
-  { value: 'untriaged', label: 'Untriaged' },
-  { value: 'high', label: 'High' },
-  { value: 'unassigned', label: 'Unassigned', urgent: true },
-  { value: 'no-link', label: VOC_INBOX_NO_LINK_TAB_LABEL },
-  { value: 'high-no-link', label: 'High · no link' },
-  { value: 'no-task', label: 'No task' },
+  { value: 'untriaged', label: 'Untriaged', icon: Flag, tip: '아직 분류되지 않은 VOC' },
+  { value: 'high', label: 'High', icon: TriangleAlert, tip: 'High / Critical severity' },
+  { value: 'unassigned', label: 'Unassigned', urgent: true, icon: User, tip: '담당자 미지정' },
+  {
+    value: 'no-link',
+    label: VOC_INBOX_NO_LINK_TAB_LABEL,
+    icon: LinkIcon,
+    tip: 'Finding / Task 연결 없음',
+  },
+  {
+    value: 'high-no-link',
+    label: 'High · no link',
+    icon: TriangleAlert,
+    tip: 'High 이상인데 Finding / Task 연결 없음',
+  },
+  // The prototype has no No task icon or tip; reuse the link icon without inventing copy.
+  { value: 'no-task', label: 'No task', icon: LinkIcon },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [

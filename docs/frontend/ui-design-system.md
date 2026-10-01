@@ -154,7 +154,8 @@ Shared list pattern for VOC Triage/Inbox, Integration Findings, Tasks, Task inta
 Anatomy:
 
 ```text
-- ListToolbar
+- ListToolbar (composes the reusable ListTabs strip)
+- ListTabs: compact 28px strip with optional bare counts, decorative icons, native title tips, and overflow controls
 - FilterViewTabs
 - ObjectRow[]
 - `ListStateMessage` for application list states, wrapping `@fops/ui` `EmptyState` with `empty`,

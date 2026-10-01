@@ -229,13 +229,16 @@ describe('TriageRoute', () => {
     });
   });
 
-  it('shows the whole queue total and the selected tab count', async () => {
+  it('shows the whole queue total and both loaded tab counts', async () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
       expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
     });
-    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 2');
+    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /미분류/ })).not.toHaveTextContent(/\d/);
+    expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
 
   it('keeps the queue total unavailable while nav counts are delayed', async () => {
@@ -251,6 +254,8 @@ describe('TriageRoute', () => {
     expect(total).toHaveTextContent('— VOC');
     expect(total).toHaveAttribute('aria-label', '전체 대기열 불러오는 중');
     expect(total).not.toHaveTextContent(/\d/);
+    expect(screen.getByRole('tab', { name: '미배정' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '높은 심각도' })).toBeInTheDocument();
 
     await act(async () => {
       resolveCounts({
@@ -264,6 +269,8 @@ describe('TriageRoute', () => {
     });
 
     await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
+    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toBeInTheDocument();
   });
 
   it('shows an unavailable queue total after nav counts fail', async () => {
@@ -285,7 +292,11 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 높은 심각도 1');
+      expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
     });
   });
 
@@ -295,7 +306,7 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await screen.findAllByText('Triage VOC 1');
-    expect(screen.queryByTestId('triage-tab-count')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
 
   it('selecting a tab calls navigate with tab param', async () => {
@@ -304,9 +315,9 @@ describe('TriageRoute', () => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Find a tab trigger (e.g. "미배정" = unassigned)
-    const unassignedTab = screen.getByRole('button', { name: /미배정/i });
-    fireEvent.click(unassignedTab);
+    // Select a different tab so Radix emits a value change.
+    const highTab = screen.getByRole('tab', { name: /높은 심각도/i });
+    fireEvent.mouseDown(highTab);
 
     expect(navigateMock).toHaveBeenCalled();
     const callArg = navigateMock.mock.calls[0]?.[0] as {
@@ -315,7 +326,7 @@ describe('TriageRoute', () => {
     };
     expect(callArg.to).toBe('/vocs');
     const result = callArg.search({});
-    expect(result).toHaveProperty('tab', 'unassigned');
+    expect(result).toHaveProperty('tab', 'high');
   });
 
   it('clicking a row calls navigate with selected param', async () => {

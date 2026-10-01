@@ -77,6 +77,7 @@ AuditTimeline
 ## Implemented Shared Flow Components
 
 - `TaskRequestDraftCard` — inline source request card with the contract fields Evidence Summary and Requested Outcome.
+- `ListTabs` — reusable 28px list tab strip with optional bare counts, icons, native title tips, and overflow controls; composed by `ListToolbar`.
 
 ## Status And Signal Catalog
 

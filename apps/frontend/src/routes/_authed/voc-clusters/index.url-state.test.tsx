@@ -318,11 +318,19 @@ describe('/voc-clusters URL state', () => {
     await waitFor(() => expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument());
     const lengthBefore = router.history.length;
 
+    const allTab = screen.getByRole('tab', { name: /전체/ });
+    const confirmedTab = screen.getByRole('tab', { name: /확정/ });
+    expect(confirmedTab).toHaveAttribute('aria-controls', 'cluster-list-panel');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', allTab.id);
+    expect(document.querySelector('[data-list-toolbar-tabs]')).toBeInTheDocument();
+
     // C1 is a draft; the "confirmed" tab hides it.
-    fireEvent.click(screen.getByTestId('cluster-tab-confirmed'));
+    fireEvent.mouseDown(confirmedTab);
 
     await waitFor(() => expect(router.state.location.search).toEqual({}));
     expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
+    expect(confirmedTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', confirmedTab.id);
     // Replaced, not pushed: history did not grow, so Back cannot re-select it.
     expect(router.history.length).toBe(lengthBefore);
     // The confirmed cluster is still listed (non-vacuous).

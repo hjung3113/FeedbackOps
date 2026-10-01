@@ -7,7 +7,14 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
 import { isPermissionDenied } from '@/lib/api';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { Button, ListShell, ObjectRow, PermissionBlockedPanel, Skeleton } from '@fops/ui';
+import {
+  ListShell,
+  ListToolbar,
+  type ListToolbarTab,
+  ObjectRow,
+  PermissionBlockedPanel,
+  Skeleton,
+} from '@fops/ui';
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -117,17 +124,31 @@ function ClusterListBody({
   activeTab: 'all' | 'confirmed' | 'no-finding';
   onTabChange: (tab: 'all' | 'confirmed' | 'no-finding') => void;
 }): React.ReactElement {
-  const tabs = [
-    { key: 'all' as const, label: '전체', count: allClusters.length },
+  const tabs: ListToolbarTab[] = [
     {
-      key: 'confirmed' as const,
-      label: '확정',
-      count: allClusters.filter((cluster) => cluster.status === 'confirmed').length,
+      value: 'all',
+      label: '전체',
+      badgeCount: allClusters.length,
+      id: 'cluster-tab-all',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-all',
     },
     {
-      key: 'no-finding' as const,
+      value: 'confirmed',
+      label: '확정',
+      badgeCount: allClusters.filter((cluster) => cluster.status === 'confirmed').length,
+      id: 'cluster-tab-confirmed',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-confirmed',
+    },
+    {
+      value: 'no-finding',
       label: 'Finding 없음',
-      count: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0).length,
+      badgeCount: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0)
+        .length,
+      id: 'cluster-tab-no-finding',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-no-finding',
     },
   ];
   const isReadDenied = isError && isPermissionDenied(error);
@@ -135,34 +156,13 @@ function ClusterListBody({
   return (
     <section className="flex min-h-full flex-col">
       {!isReadDenied ? (
-        <div
-          className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
-          data-toolbar-height="50"
-        >
-          <div
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
-            role="tablist"
-            aria-label="클러스터 필터"
-          >
-            {tabs.map((tab) => (
-              <Button
-                key={tab.key}
-                type="button"
-                variant={activeTab === tab.key ? 'secondary' : 'ghost'}
-                size="sm"
-                role="tab"
-                id={`cluster-tab-${tab.key}`}
-                aria-controls="cluster-list-panel"
-                aria-selected={activeTab === tab.key}
-                onClick={() => onTabChange(tab.key)}
-                data-testid={`cluster-tab-${tab.key}`}
-              >
-                {tab.label} {tab.count}
-              </Button>
-            ))}
-          </div>
-          <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
-        </div>
+        <ListToolbar
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={(next) => onTabChange(next as typeof activeTab)}
+          tabsAriaLabel="클러스터 필터"
+          action={<span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>}
+        />
       ) : null}
 
       <div

@@ -254,6 +254,44 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it('renders prototype inbox tab icons and native tips without synthetic counts', () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const expectedTips: Array<[string, string]> = [
+      ['Untriaged', '아직 분류되지 않은 VOC'],
+      ['High', 'High / Critical severity'],
+      ['Unassigned', '담당자 미지정'],
+      ['No link', 'Finding / Task 연결 없음'],
+      ['High · no link', 'High 이상인데 Finding / Task 연결 없음'],
+    ];
+    for (const [label, tip] of expectedTips) {
+      const tab = screen.getByRole('tab', { name: label });
+      expect(tab).toHaveAttribute('title', tip);
+      expect(tab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+      expect(tab).not.toHaveTextContent(/\d/);
+    }
+
+    const noTaskTab = screen.getByRole('tab', { name: 'No task' });
+    expect(noTaskTab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(noTaskTab).not.toHaveAttribute('title');
+    expect(noTaskTab).not.toHaveTextContent(/\d/);
+  });
+
+  it('keeps the selected inbox tab in URL state', () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'High' }));
+
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
+  });
+
   it('renders 3 VocList rows for my view', async () => {
     searchState = { view: 'my' };
     render(<InboxTestHarness view="my" />);

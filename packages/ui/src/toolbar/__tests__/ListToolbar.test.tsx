@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Flag } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
@@ -107,17 +108,54 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.getByText('미배정')).toBeInTheDocument();
   });
 
-  it('renders badgeCount when > 0', () => {
+  it('renders badgeCount as a bare number when defined', () => {
     render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
-    expect(screen.getByText('5')).toBeInTheDocument();
+    const tab = screen.getByRole('tab', { name: '미배정 5' });
+    expect(tab).toBeInTheDocument();
+    expect(screen.getByText('5')).toHaveClass('text-[11px]', 'text-text-muted', 'tabular-nums');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('does not render badgeCount when 0', () => {
-    const tabsWithZero: ListToolbarTab[] = [{ value: 'a', label: '탭A', badgeCount: 0 }];
+  it('renders defined zero counts and omits undefined counts', () => {
+    const tabsWithZero: ListToolbarTab[] = [
+      { value: 'a', label: '탭A', badgeCount: 0 },
+      { value: 'b', label: '탭B' },
+    ];
     render(<ListToolbar tabs={tabsWithZero} activeTab="a" />);
-    // The '0' number should not be in a badge
-    const badge = screen.queryByText('0');
-    expect(badge).toBeNull();
+
+    expect(screen.getByRole('tab', { name: '탭A 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '탭B' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('0')).toHaveClass(
+      'text-[11px]',
+      'text-text-muted',
+      'tabular-nums',
+      'group-data-[state=active]:text-text-secondary',
+    );
+    expect(screen.getByRole('tab', { name: '탭B' }).querySelector('span')).toBeNull();
+  });
+
+  it('renders the icon as decorative and uses a native title for its tip', () => {
+    const iconTab: ListToolbarTab[] = [
+      { value: 'flagged', label: 'Flagged', icon: Flag, tip: 'Items waiting for review' },
+    ];
+    render(<ListToolbar tabs={iconTab} activeTab="flagged" />);
+
+    const tab = screen.getByRole('tab', { name: 'Flagged' });
+    expect(tab).toHaveAttribute('title', 'Items waiting for review');
+    expect(tab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('uses the secondary text token for the active tab count', () => {
+    const countedTabs: ListToolbarTab[] = [
+      { value: 'selected', label: 'Selected', badgeCount: 1 },
+      { value: 'other', label: 'Other', badgeCount: 2 },
+    ];
+    render(<ListToolbar tabs={countedTabs} activeTab="selected" />);
+
+    const selectedCount = screen.getByRole('tab', { name: 'Selected 1' }).querySelector('span');
+    const otherCount = screen.getByRole('tab', { name: 'Other 2' }).querySelector('span');
+    expect(selectedCount).toHaveClass('group-data-[state=active]:text-text-secondary');
+    expect(otherCount).toHaveClass('text-text-muted');
   });
 
   it('calls onTabChange when a tab is clicked', async () => {

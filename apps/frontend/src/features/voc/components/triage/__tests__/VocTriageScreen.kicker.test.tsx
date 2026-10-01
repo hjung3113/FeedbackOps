@@ -67,7 +67,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('VocTriageScreen — V1 inline kicker', () => {
-  it('does not add a pinned out-of-tab VOC to the authoritative tab count', () => {
+  it('renders independently supplied navigation counts on both supported tabs', () => {
     render(
       <Wrapper>
         <VocTriageScreen
@@ -75,14 +75,16 @@ describe('VocTriageScreen — V1 inline kicker', () => {
           selectedId={PINNED_OUT_OF_TAB_VOC.id}
           activeTab="unassigned"
           queueTotal={7}
-          activeTabTotal={1}
+          unassignedTabCount={1}
+          highTabCount={3}
           onSelectVoc={vi.fn()}
           onTabChange={vi.fn()}
         />
       </Wrapper>,
     );
 
-    expect(screen.getByTestId('triage-tab-count')).toHaveTextContent('· 미배정 1');
+    expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /높은 심각도 3/ })).toBeInTheDocument();
   });
 
   it('uses the shared untriaged label for the triage tab', () => {
@@ -98,7 +100,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(screen.getByRole('button', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
   });
 
   it('uses the sidebar labels for the Unassigned and High severity tabs', () => {
@@ -114,10 +116,8 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(
-      screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.unassigned }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.unassigned })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
   });
 
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {

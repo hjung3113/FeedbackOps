@@ -2,7 +2,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
-import { Button, Input, Skeleton, UserAvatar } from '@fops/ui';
+import { Button, Input, ListToolbar, type ListToolbarTab, Skeleton, UserAvatar } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
@@ -73,62 +73,64 @@ export function SurveyList({
     ...(search.length > 0 ? [`검색어: ${search}`] : []),
   ];
   const isFilteredEmpty = surveys.length > 0 && visible.length === 0 && activeConditions.length > 0;
+  const toolbarTabs: ListToolbarTab[] = tabs.map((tab) => ({
+    value: tab.value,
+    label: tab.label,
+    badgeCount:
+      tab.value === 'all'
+        ? surveys.length
+        : surveys.filter((survey) => survey.status === tab.value).length,
+  }));
   return (
     <div data-testid="survey-list">
-      <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <div className="flex gap-1" role="tablist" aria-label="Survey status">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              role="tab"
-              aria-selected={status === tab.value}
-              onClick={() => setStatus(tab.value)}
-              className="rounded px-2 py-1 text-xs hover:bg-surface-card"
-            >
-              {tab.label}
-              <span className="ml-1 text-text-muted">
-                {tab.value === 'all'
-                  ? surveys.length
-                  : surveys.filter((survey) => survey.status === tab.value).length}
-              </span>
-            </button>
-          ))}
-        </div>
-        <Input
-          aria-label="Survey 검색"
-          className="ml-auto max-w-xs"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Survey 검색…"
-        />
-        <div className="flex rounded border border-border-subtle p-0.5">
-          <button
-            type="button"
-            aria-label="목록 보기"
-            aria-pressed={viewMode === 'list'}
-            onClick={() => setViewMode('list')}
-            className={`rounded p-1 ${viewMode === 'list' ? 'bg-surface-card' : ''}`}
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label="카드 보기"
-            aria-pressed={viewMode === 'card'}
-            onClick={() => setViewMode('card')}
-            className={`rounded p-1 ${viewMode === 'card' ? 'bg-surface-card' : ''}`}
-          >
-            <Grid2X2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        {canCreate && onCreate && (
-          <Button variant="primary" size="sm" onClick={onCreate} data-testid="survey-create-button">
-            <Plus className="h-4 w-4" />
-            설문 생성
-          </Button>
-        )}
-      </div>
+      <ListToolbar
+        tabs={toolbarTabs}
+        activeTab={status}
+        onTabChange={(next) => setStatus(next as SurveyStatus | 'all')}
+        tabsAriaLabel="Survey status"
+        action={
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label="Survey 검색"
+              className="max-w-xs"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Survey 검색…"
+            />
+            <div className="flex rounded border border-border-subtle p-0.5">
+              <button
+                type="button"
+                aria-label="목록 보기"
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+                className={`rounded p-1 ${viewMode === 'list' ? 'bg-surface-card' : ''}`}
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="카드 보기"
+                aria-pressed={viewMode === 'card'}
+                onClick={() => setViewMode('card')}
+                className={`rounded p-1 ${viewMode === 'card' ? 'bg-surface-card' : ''}`}
+              >
+                <Grid2X2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {canCreate && onCreate && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onCreate}
+                data-testid="survey-create-button"
+              >
+                <Plus className="h-4 w-4" />
+                설문 생성
+              </Button>
+            )}
+          </div>
+        }
+      />
       {visible.length === 0 ? (
         isFilteredEmpty ? (
           <ListStateMessage
