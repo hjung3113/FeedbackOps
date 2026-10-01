@@ -29,6 +29,7 @@ import { Maximize2, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
 
 import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
+import { formatDate } from '@/lib/format/datetime';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -169,7 +170,7 @@ export function TriagePanel({
           <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>
-            <span>{new Date(voc.created_at).toLocaleDateString('ko-KR')}</span>
+            <span>{formatDate(voc.created_at)}</span>
           </div>
           <div data-testid="triage-description-region">
             {vocDetailQuery.isLoading && !vocDetailQuery.data ? (

@@ -496,7 +496,7 @@ describe('/findings URL state', () => {
     expect(
       screen.getByText('VOC 근거에서 실행 후보로 승격된 Finding이 여기에 표시됩니다.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('0개')).toBeInTheDocument();
+    expect(screen.getByText('0건')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
   });
 
@@ -506,7 +506,7 @@ describe('/findings URL state', () => {
 
     expect(await screen.findByText('현재 조건에 맞는 Finding이 없습니다')).toBeInTheDocument();
     expect(screen.getByText('실행과 연결되지 않은 Finding만 표시 중입니다.')).toBeInTheDocument();
-    expect(screen.getByText('0개')).toBeInTheDocument();
+    expect(screen.getByText('0건')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));

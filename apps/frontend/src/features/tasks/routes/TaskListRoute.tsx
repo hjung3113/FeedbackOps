@@ -5,6 +5,7 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskDto } from '@fops/shared';
 import {
   InternalTaskBadge,
@@ -29,15 +30,6 @@ const PRIORITY_SEVERITY: Record<TaskDto['priority'], ObjectRowSeverity> = {
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
-}
-
-function formatDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(raw));
 }
 
 export function TaskListRoute({
@@ -155,7 +147,7 @@ export function TaskListRoute({
                     {managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
                   </span>
                   {dot()}
-                  <span>{formatDate(task.updated_at)}</span>
+                  <span>{formatShortDateTime(task.updated_at)}</span>
                 </>
               }
             />

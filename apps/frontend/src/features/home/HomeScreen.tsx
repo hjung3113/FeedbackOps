@@ -32,7 +32,7 @@ import {
   formatUnreadBadge,
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
-import { formatRelativeTime } from '@/lib/datetime';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';

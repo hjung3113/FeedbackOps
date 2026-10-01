@@ -37,7 +37,7 @@ import { cn } from '@fops/ui';
 import { Paperclip } from 'lucide-react';
 import type * as React from 'react';
 
-import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
+import { formatRelativeTime } from '@/lib/format/datetime';
 
 // ---------------------------------------------------------------------------
 // Severity → left-bar color token
@@ -104,7 +104,7 @@ export function VocRow({
   className,
 }: VocRowProps) {
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
-  const relTime = formatVocCreatedAt(voc.created_at);
+  const relTime = formatRelativeTime(voc.created_at);
   const showCheckbox = onToggleCheck !== undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {

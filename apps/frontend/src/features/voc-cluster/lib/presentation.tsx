@@ -27,10 +27,3 @@ export function ClusterStatusBadge({
     </OutlineBadge>
   );
 }
-
-export function formatClusterDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-  }).format(new Date(raw));
-}

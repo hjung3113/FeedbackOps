@@ -4,6 +4,7 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 import type { TaskDto, TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
@@ -35,7 +36,6 @@ import * as React from 'react';
 
 import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
 import { type NameMaps, TaskRequestBadge, dot } from './TaskRequestRow';
-import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestConvertedTaskLink } from './useTaskRequestConvertedTaskLink';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
@@ -161,7 +161,9 @@ export function TaskRequestPanel({
                     {requester?.display_name ?? '알 수 없는 사용자'}
                   </strong>
                 </span>
-                <span className="text-xs text-text-muted">· {formatDate(item.created_at)}</span>
+                <span className="text-xs text-text-muted">
+                  · {formatShortDateTime(item.created_at)}
+                </span>
               </>
             }
           />
@@ -178,7 +180,7 @@ export function TaskRequestPanel({
                   <strong className="text-text-secondary">
                     {reviewer?.display_name ?? '알 수 없는 사용자'}
                   </strong>
-                  {item.decided_at && <> · {formatDate(item.decided_at)}</>}
+                  {item.decided_at && <> · {formatShortDateTime(item.decided_at)}</>}
                 </span>
               </div>
               {item.decision_reason && (
@@ -630,7 +632,7 @@ export function TaskRequestPanel({
                 {requester?.display_name ?? '알 수 없는 사용자'}
               </strong>
               {' · 요청 작성 · '}
-              {formatDate(item.created_at)}
+              {formatShortDateTime(item.created_at)}
             </div>
             {item.decided_at && (
               <div className="text-xs text-text-muted">
@@ -640,7 +642,7 @@ export function TaskRequestPanel({
                 {' · '}
                 {TASK_REQUEST_STATUS_LABELS[item.status]}
                 {' · '}
-                {formatDate(item.decided_at)}
+                {formatShortDateTime(item.decided_at)}
               </div>
             )}
           </div>

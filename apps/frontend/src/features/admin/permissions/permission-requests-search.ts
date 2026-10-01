@@ -34,14 +34,3 @@ export const permissionRequestStatusLabel: Record<AdminPermissionRequestRow['sta
   approved: '승인됨',
   rejected: '거절됨',
 };
-
-export function formatPermissionRequestDate(value: string): string {
-  return new Intl.DateTimeFormat('ko-KR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
-export function formatPermissionRequestExpiration(value: string): string {
-  return value.slice(0, 10);
-}

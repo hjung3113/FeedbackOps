@@ -3,9 +3,8 @@ import { ObjectRow, UnassignedBadge } from '@fops/ui';
 import { Fragment, type ReactNode } from 'react';
 
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
-
-import { formatDate } from './predicates';
 
 const STATUS_CLASS: Record<TaskRequestStatus, string> = {
   pending_review: 'border-accent-warn/30 bg-accent-warn/10 text-accent-warn',
@@ -82,7 +81,10 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
     ),
   });
   if (item.created_at) {
-    metaParts.push({ key: 'created-at', node: <span>{formatDate(item.created_at)}</span> });
+    metaParts.push({
+      key: 'created-at',
+      node: <span>{formatShortDateTime(item.created_at)}</span>,
+    });
   }
   const sourceTitle = item.source?.title?.trim() ? item.source.title : null;
 

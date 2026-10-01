@@ -1,6 +1,7 @@
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
 import {
   Button,
@@ -316,13 +317,17 @@ export function MilestoneDetailContent({
               )}
             </FieldRow>
             <FieldRow label="Start" className={milestonePropertyFieldClassName}>
-              <span className="font-mono text-xs text-text-secondary">{milestone.start_date}</span>
+              <span className="font-mono text-xs text-text-secondary">
+                {formatDateOnly(milestone.start_date)}
+              </span>
             </FieldRow>
             <FieldRow label="Target" className={milestonePropertyFieldClassName}>
-              <span className="font-mono text-xs text-text-secondary">{milestone.target_date}</span>
+              <span className="font-mono text-xs text-text-secondary">
+                {formatDateOnly(milestone.target_date)}
+              </span>
             </FieldRow>
             <FieldRow label="Created" className={milestonePropertyFieldClassName}>
-              {milestone.created_at.slice(0, 10)}
+              {formatDate(milestone.created_at)}
             </FieldRow>
           </div>
         </div>

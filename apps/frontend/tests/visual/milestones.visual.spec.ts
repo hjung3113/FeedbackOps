@@ -136,9 +136,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(tasksSection).toContainText('Doing');
     // G-columns (ADR-0050, choice a): due_date occupies the prototype's
     // estimate slot; the word estimate never renders and no Add task exists.
-    await expect(tasksSection).toContainText('2026-06-15');
+    await expect(tasksSection).toContainText('2026. 6. 15.');
     await expect(tasksSection).not.toContainText('estimate');
-    await expect(tasksSection).toContainText('updated 2026-07-21');
+    await expect(tasksSection).toContainText('updated 2026. 7. 21.');
     // Prototype TASK-902 assignee u-4 resolves to 최민서 (data.js:24, :382);
     // the avatar renders the initial.
     await expect(tasksSection).toContainText('최');

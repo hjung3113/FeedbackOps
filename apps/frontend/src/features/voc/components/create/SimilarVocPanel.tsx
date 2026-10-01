@@ -1,9 +1,9 @@
-import { Link } from '@tanstack/react-router';
 import { Card, CardContent } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import type * as React from 'react';
 
-import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
 import { SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL } from '@/lib/copy/voc';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import { useVocPreSubmitPeers } from '../../hooks/useVocPreSubmitPeers';
 
 export interface SimilarVocPanelProps {
@@ -34,7 +34,7 @@ export function SimilarVocPanel({ managedSystemId }: SimilarVocPanelProps): Reac
             >
               <span className="truncate text-xs font-medium text-text-primary">{item.title}</span>
               <span className="font-mono text-[11px] text-text-muted">
-                {item.display_id} · {formatVocCreatedAt(item.created_at)}
+                {item.display_id} · {formatRelativeTime(item.created_at)}
               </span>
             </Link>
           ))}

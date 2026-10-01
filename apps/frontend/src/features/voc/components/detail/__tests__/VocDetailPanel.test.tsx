@@ -45,8 +45,9 @@ vi.mock('@fops/ui', async (importOriginal) => {
     RichContentRenderer: () => <div data-testid="rce" />,
   };
 });
-vi.mock('@/features/voc/lib/format-date', () => ({
-  formatVocCreatedAt: () => '방금 전',
+vi.mock('@/lib/format/datetime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format/datetime')>()),
+  formatRelativeTime: () => '방금 전',
 }));
 
 // EditDescriptionModal uses QueryClient + mutation hooks — stub to isolate VocDetailPanel tests

@@ -137,6 +137,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    expect(screen.getByText('2026. 5. 10.')).toBeInTheDocument();
+    expect(screen.getByText('2026. 6. 15.')).toBeInTheDocument();
     // Existing linked source Finding keeps its display card (approved contract).
     expect(screen.getByText('From finding')).toBeInTheDocument();
     expect(screen.getByText('FIN-181')).toBeInTheDocument();
@@ -547,7 +549,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
-    expect(row).toHaveTextContent('2026-06-15');
+    expect(row).toHaveTextContent('2026. 6. 15.');
     expect(row).not.toHaveTextContent('estimate');
   });
 
@@ -556,7 +558,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
-    expect(row).toHaveTextContent('updated 2026-07-21');
+    expect(row).toHaveTextContent('updated 2026. 7. 21.');
   });
 
   it('renders no Add task control in the Tasks section', async () => {

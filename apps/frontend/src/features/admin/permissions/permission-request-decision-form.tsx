@@ -14,6 +14,7 @@ import * as React from 'react';
 import { type PermissionRequestDecisionAction, useIdempotencyKey } from '@/lib/api';
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { formatDateOnly } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
 import { useWorkspaceSettings } from '../settings/use-workspace-settings.js';
@@ -255,7 +256,7 @@ export function PermissionRequestDecisionForm({
               <label htmlFor="permission-approval-expiration-keep" className="cursor-pointer">
                 요청 만료일 유지 ·{' '}
                 {request.requested_expiration
-                  ? request.requested_expiration.slice(0, 10)
+                  ? formatDateOnly(request.requested_expiration.slice(0, 10))
                   : '만료 없음'}
               </label>
             </div>

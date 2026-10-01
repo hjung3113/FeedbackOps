@@ -1,4 +1,5 @@
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { formatTime } from '@/lib/format/datetime';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { Button, Input, WorkbenchShell } from '@fops/ui';
 import { Check, Megaphone } from 'lucide-react';
@@ -127,7 +128,7 @@ export function SurveyBuilder({
               {dirty
                 ? '저장되지 않은 변경 사항'
                 : savedAt
-                  ? `저장 시각 ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  ? `저장 시각 ${formatTime(savedAt.toISOString())}`
                   : '동기화됨'}
             </span>
             <Button

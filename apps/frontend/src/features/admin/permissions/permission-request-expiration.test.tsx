@@ -108,7 +108,7 @@ describe('permission request expiration visibility and approval', () => {
     });
     render(<PermissionRequestsScreen />);
 
-    expect(screen.getByText('만료 2099-12-31')).toBeInTheDocument();
+    expect(screen.getByText('만료 2099. 12. 31.')).toBeInTheDocument();
     expect(screen.getAllByText(/만료/)).toHaveLength(1);
   });
 
@@ -116,7 +116,7 @@ describe('permission request expiration visibility and approval', () => {
     renderDetail();
 
     expect(screen.getByText('요청 만료일')).toBeInTheDocument();
-    expect(screen.getByText('2099-12-31', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('2099. 12. 31.', { exact: true })).toBeInTheDocument();
   });
 
   it('keeps the requested expiration by default and omits an unchanged approval field', () => {
@@ -124,12 +124,12 @@ describe('permission request expiration visibility and approval', () => {
     chooseApproval();
 
     const keepOption = screen.getByRole('radio', {
-      name: '요청 만료일 유지 · 2099-12-31',
+      name: '요청 만료일 유지 · 2099. 12. 31.',
     });
     expect(keepOption).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('새 만료일')).toHaveValue('2099-12-31');
     expect(screen.getByLabelText('새 만료일')).toBeDisabled();
-    fireEvent.click(screen.getByText('요청 만료일 유지 · 2099-12-31', { exact: true }));
+    fireEvent.click(screen.getByText('요청 만료일 유지 · 2099. 12. 31.', { exact: true }));
     expect(keepOption).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByTestId('permission-decision-submit'));
 

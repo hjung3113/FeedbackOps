@@ -3,9 +3,9 @@
 // compact metadata strip below the body card.
 // Reference: docs/design-prototype/screen-voc.jsx overview panel title.
 
-import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
 import { useMe } from '@/lib/auth/useMe';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocDetailEnvelope } from '@fops/shared';
 import {
   ManagedSystemPill,
@@ -41,7 +41,7 @@ export function IdentitySection({
   const { data: me } = useMe();
   const resolvedReporterDisplayName =
     reporterDisplayName ?? (me?.actor.id === voc.reporter_id ? me.actor.display_name : 'Reporter');
-  const relativeTime = formatVocCreatedAt(voc.created_at);
+  const relativeTime = formatRelativeTime(voc.created_at);
 
   // Title block: prototype .panel-title typography via PanelTitleBlock.
   // Rhythm:

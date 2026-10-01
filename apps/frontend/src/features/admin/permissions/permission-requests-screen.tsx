@@ -3,12 +3,11 @@ import { ListShell, ListTabs, type ListToolbarTab, ObjectRow, OutlineBadge } fro
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDetail } from './permission-request-detail.js';
 import {
-  formatPermissionRequestDate,
-  formatPermissionRequestExpiration,
   permissionRequestStatusLabel,
   permissionRequestTabs,
 } from './permission-requests-search.js';
@@ -141,12 +140,12 @@ function PermissionRequestRow({
             </span>
           )}
           <span>·</span>
-          <span>{formatPermissionRequestDate(request.created_at)}</span>
+          <span>{formatDateTime(request.created_at)}</span>
           {request.requested_expiration ? (
             <>
               <span>·</span>
               {/* #590 adds a compact row hint; the prototype shows the full date in detail. */}
-              <span>만료 {formatPermissionRequestExpiration(request.requested_expiration)}</span>
+              <span>만료 {formatDateOnly(request.requested_expiration.slice(0, 10))}</span>
             </>
           ) : null}
           <span>·</span>
