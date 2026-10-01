@@ -359,3 +359,4 @@ packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx organizeImports --
 apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
 apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
 apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/TimelineEntry.tsx format -- pre-existing on develop (measured 2026-10-01); #684 only swaps the date formatter import
