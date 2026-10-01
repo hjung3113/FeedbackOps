@@ -201,7 +201,9 @@ describe('FindingsListPage', () => {
   // schema (same harness as the reference URL-state tests).
   async function renderFindingsPage(initialPath = '/findings') {
     const findingBeforeLoad = FindingDeepLinkRoute.options.beforeLoad;
+    const findingValidateSearch = FindingDeepLinkRoute.options.validateSearch;
     if (!findingBeforeLoad) throw new Error('Finding deep-link route must register beforeLoad');
+    if (!findingValidateSearch) throw new Error('Finding deep-link route must validate search');
 
     const rootRoute = createRootRoute({ component: () => <Outlet /> });
     const route = createRoute({
@@ -213,7 +215,7 @@ describe('FindingsListPage', () => {
     const deepLinkRoute = createRoute({
       getParentRoute: () => rootRoute,
       path: '/findings/$findingId',
-      validateSearch: (search: Record<string, unknown>) => search,
+      validateSearch: findingValidateSearch,
       // The isolated harness has a different root context; it exercises the real route handler.
       beforeLoad: (context) => findingBeforeLoad(context as never),
       component: () => null,
@@ -281,6 +283,37 @@ describe('FindingsListPage', () => {
     );
     expect(router.state.location.pathname).toBe('/findings');
     expect(router.state.location.search).toEqual({ selected: findingId, returnTo });
+  });
+
+  it('redirects a direct Finding URL without returnTo to the selected list panel', async () => {
+    const findingId = findings[0]?.id;
+    if (!findingId) throw new Error('The selected Finding fixture must exist');
+    const { router } = await renderFindingsPage(`/findings/${findingId}`);
+
+    expect(await screen.findByTestId('finding-detail-panel')).toHaveTextContent(
+      `finding:${findingId}`,
+    );
+    expect(router.state.location.pathname).toBe('/findings');
+    expect(router.state.location.search).toEqual({ selected: findingId });
+  });
+
+  it('keeps a deep-linked Finding selected while the cached list is refetching', async () => {
+    const findingId = '55555555-5555-4555-8555-555555555555';
+    useFindingsListMock.mockReturnValue({
+      data: { items: [] },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: true,
+      error: null,
+    });
+
+    const { router } = await renderFindingsPage(`/findings/${findingId}`);
+
+    expect(await screen.findByTestId('finding-detail-panel')).toHaveTextContent(
+      `finding:${findingId}`,
+    );
+    expect(router.state.location.search).toEqual({ selected: findingId });
   });
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {

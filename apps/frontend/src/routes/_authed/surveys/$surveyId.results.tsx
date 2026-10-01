@@ -48,11 +48,13 @@ export function SurveyResultsRoute() {
   if (!gate.canRead) {
     return (
       <ResultsWorkbench>
-        <PermissionBlockedPanel
-          category="Survey Result"
-          reason={PERMISSION_BLOCKED_REASONS.surveyResult}
-          state="denied"
-        />
+        <div className="p-6">
+          <PermissionBlockedPanel
+            category="Survey Result"
+            reason={PERMISSION_BLOCKED_REASONS.surveyResult}
+            state="denied"
+          />
+        </div>
       </ResultsWorkbench>
     );
   }

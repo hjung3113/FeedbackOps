@@ -167,6 +167,45 @@ describe('/surveys/:surveyId/results route', () => {
     expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument();
   });
 
+  it('keeps the results body in a bounded vertical scroll region below the header', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        status: 'closed',
+        identity_protected: false,
+        response_state: 'visible',
+        anonymity_threshold: 5,
+        questions: [],
+        next_actions: [],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    const summary = await screen.findByTestId('survey-results-summary');
+    expect(summary).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+    expect(screen.getByTestId('survey-result-header')).toHaveClass('h-toolbar');
+  });
+
+  it('keeps the original inset around the denied results state', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: false, gateState: 'error' });
+    useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+
+    const deniedHeading = await screen.findByText('Survey Result');
+    expect(deniedHeading.closest('.p-6')).toBeInTheDocument();
+  });
+
   it('renders not-found state when results cannot be loaded', async () => {
     useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
     mockParentRoute();

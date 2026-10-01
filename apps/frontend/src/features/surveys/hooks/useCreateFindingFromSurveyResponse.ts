@@ -31,6 +31,7 @@ export function useCreateFindingFromSurveyResponse(
       invalidateNavCounts(queryClient);
       onSuccess?.(finding, variables);
       return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['findings'] }),
         queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
         queryClient.invalidateQueries({ queryKey: surveyKeys.outcomeFollowUp(surveyId) }),
       ]);

@@ -221,6 +221,13 @@ describe('Survey screens', () => {
     expect(toolbar).toHaveAttribute('data-shell-header', 'toolbar');
   });
 
+  it('keeps the builder question list scrollable inside the WorkbenchShell body', () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    const questionList = screen.getByTestId('survey-question-row-question-1').closest('section');
+    expect(questionList).toHaveClass('min-h-0', 'overflow-y-auto');
+  });
+
   it('resolves list row names and removes response placeholders and UUIDs', () => {
     const managedSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
     const operatorId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
