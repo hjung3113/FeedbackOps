@@ -793,7 +793,7 @@ Rules:
 Rules:
 
 ```text
-- Lists use skeleton rows.
+- Lists use skeleton rows. Skeleton placeholder fill: bg-surface-blocked (visible on canvas, card, and detail surfaces).
 - DetailPanel uses skeleton sections.
 - Home and Integration queues show independent loading per queue when possible.
 - Avoid full-page spinners after the app shell is loaded.
