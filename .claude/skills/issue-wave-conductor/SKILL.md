@@ -90,5 +90,14 @@ confirm the status bar shows the model/effort. A codex terminal refuses a second
 - zsh: never name a variable `path` (tied to `PATH`) or `status` (read-only).
 - Rebase conflicts between parallel issues are mostly import lists and the biome allowlist: keep both sides. A later
   merge can add a required DTO field that an earlier branch's new test fixture lacks — typecheck after every rebase.
+- `gate:fe-typecheck` checks only the frontend; the root `pnpm typecheck` also builds `packages/ui` with its tests
+  (#661 fixed three test-only TS errors that passed vitest). `verify-fe.sh` runs both.
+- The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
+  `pnpm install --frozen-lockfile` before the final gate there.
+- Orca can hang at `runtimeState: starting`; review without it via
+  `codex exec -m gpt-6.1-sol -c model_reasoning_effort=medium -s workspace-write "<spec>" < /dev/null` (without
+  `< /dev/null` it waits on stdin forever).
+- A FE test that stubs `fetch` for any URL hides a 4xx contract error (#653's query was a 422): parse the sent
+  query/body with the shared Zod schema in the test.
 - The worktree's own `.review/` is gitignored — copy briefs/rules in; `orca worktree create` may fail to return a
   terminal handle (retry `terminal create`).
