@@ -1,6 +1,6 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { EVIDENCE_IMPORTANCE_LABELS, EVIDENCE_SOURCE_TYPE_LABELS } from '@/lib/copy/enum-labels';
-import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
+import { koreanZodErrorMap, zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
@@ -84,6 +84,11 @@ export function AddEvidenceModal({
   });
 
   const watchedSourceType = form.watch('source_type');
+  const sourceIdError = form.formState.errors.source_id;
+  const sourceIdErrorMessage =
+    sourceIdError?.type === 'custom'
+      ? zodIssueMessage({ code: 'custom', path: ['source_id'] })
+      : sourceIdError?.message;
 
   const mutation = useAddEvidenceHighlightMutation({
     findingId,
@@ -168,9 +173,9 @@ export function AddEvidenceModal({
                 aria-invalid={Boolean(form.formState.errors.source_id)}
                 data-testid="evidence-source-id-input"
               />
-              {form.formState.errors.source_id?.message && (
+              {sourceIdErrorMessage && (
                 <p className="text-xs text-text-danger" role="alert">
-                  {form.formState.errors.source_id.message}
+                  {sourceIdErrorMessage}
                 </p>
               )}
             </div>
