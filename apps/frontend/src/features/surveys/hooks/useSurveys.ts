@@ -6,7 +6,7 @@ import {
   surveyDetailDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
 export const surveyKeys = {
@@ -17,10 +17,29 @@ export const surveyKeys = {
   // Sticky results-read denial marker written by the results route when an
   // authoritative denial (403 / denial-shaped 404 on results or Follow-up) is
   // observed; see $surveyId.results.tsx. Carries only `{ at, blocked }` —
-  // never response data.
-  resultsReadDenial: (id: string) => ['surveys', id, 'results-read-denial'] as const,
+  // never response data. The literal precedes the id so the whole family
+  // matches the `resultsReadDenialPrefix` defaults registered at client
+  // setup (`registerSurveyQueryDefaults`).
+  resultsReadDenialPrefix: ['surveys', 'results-read-denial'] as const,
+  resultsReadDenial: (id: string) => ['surveys', 'results-read-denial', id] as const,
   outcomeFollowUp: (id: string) => ['surveys', id, 'outcome-follow-up'] as const,
 };
+
+/**
+ * Registers cache defaults for the sticky results-read denial markers. The
+ * markers have no observer of their own, so without this family default the
+ * standard five-minute gcTime collects a denial while the results and
+ * Follow-up payloads are still cached — pre-denial data could then reappear
+ * once the denial error is replaced by an ordinary error. `Infinity` keeps
+ * each marker until the whole client is cleared on auth login/logout/failure,
+ * exactly like the payloads it protects. Must run once at client setup,
+ * before any marker is written.
+ */
+export function registerSurveyQueryDefaults(queryClient: QueryClient): void {
+  queryClient.setQueryDefaults(surveyKeys.resultsReadDenialPrefix, {
+    gcTime: Number.POSITIVE_INFINITY,
+  });
+}
 
 // Optional managed_system_id filter mirrors the backend GET /surveys query
 // param (uuid | 'all' on the wire; 'all' resolves to no filter = the caller's

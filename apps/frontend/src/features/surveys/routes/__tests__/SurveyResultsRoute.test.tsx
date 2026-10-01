@@ -1,11 +1,15 @@
+import { registerSurveyQueryDefaults, surveyKeys } from '@/features/surveys/hooks/useSurveys';
 import { ApiError } from '@/lib/api/types';
 import { routeTree } from '@/routeTree.gen';
+import type { PermissionBlockedPanelProps } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { type ReactNode, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  permissionPanelProbe,
   useCloseSurvey,
   useOpenSurvey,
   useSurvey,
@@ -15,6 +19,11 @@ const {
   useSurveys,
   useOutcomeFollowUp,
 } = vi.hoisted(() => ({
+  // True from the route body (the useOutcomeFollowUp mock runs before the
+  // route's persistence code) until the deepest mocked panel effect resets
+  // it — that is, exactly during route render passes but not the route's own
+  // effects, which React runs after its children's effects.
+  permissionPanelProbe: { routeRenderActive: false },
   useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useSurvey: vi.fn(),
@@ -56,6 +65,23 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   fetchMe: vi.fn().mockResolvedValue({}),
 }));
+vi.mock('@fops/ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    PermissionBlockedPanel: (props: PermissionBlockedPanelProps) => ReactNode;
+  };
+  const OriginalPermissionBlockedPanel = actual.PermissionBlockedPanel;
+  return {
+    ...actual,
+    // Child effects flush before the parent route's effects: once this runs,
+    // a marker write is attributable to the route's effect, not its render.
+    PermissionBlockedPanel: (props: PermissionBlockedPanelProps) => {
+      useEffect(() => {
+        permissionPanelProbe.routeRenderActive = false;
+      });
+      return OriginalPermissionBlockedPanel(props);
+    },
+  };
+});
 
 const surveyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const survey = {
@@ -79,6 +105,7 @@ const survey = {
 
 function renderSurveyRoute() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  registerSurveyQueryDefaults(queryClient);
   const router = createRouter({
     routeTree,
     context: { queryClient },
@@ -153,8 +180,10 @@ describe('/surveys/:surveyId/results route', () => {
   // memoized router match re-renders only on a real navigation, so each
   // transition walks through the parent route and back; the sticky denial
   // record must live in the shared query client, not in component state.
-  function mountResultsRouteForTransition() {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function mountResultsRouteForTransition(passedQueryClient?: QueryClient) {
+    const queryClient =
+      passedQueryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    registerSurveyQueryDefaults(queryClient);
     const router = createRouter({
       routeTree,
       context: { queryClient },
@@ -166,6 +195,7 @@ describe('/surveys/:surveyId/results route', () => {
       </QueryClientProvider>,
     );
     return {
+      queryClient,
       navigateToResults: () =>
         router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } }),
       remountResultsRoute: async () => {
@@ -1065,5 +1095,237 @@ describe('/surveys/:surveyId/results route', () => {
     expect(await screen.findByText('Survey Result')).toBeInTheDocument();
     expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
     second.unmount();
+  });
+
+  it('records a Follow-up denial observed while survey metadata is in an ordinary error', async () => {
+    useSurvey.mockReturnValue({
+      data: survey,
+      isLoading: false,
+      isError: true,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'metadata failed' }),
+      refetch: vi.fn(),
+    });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+    });
+
+    const { queryClient, navigateToResults, remountResultsRoute } =
+      mountResultsRouteForTransition();
+    await navigateToResults();
+
+    // The metadata ordinary error owns the body and nothing is recorded yet.
+    expect(await screen.findByText('설문을 불러오지 못했습니다.')).toBeInTheDocument();
+    const denialKey = surveyKeys.resultsReadDenial(surveyId);
+    expect(queryClient.getQueryData(denialKey)).toBeUndefined();
+
+    // The Follow-up denial arrives while the metadata is still in error.
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    });
+    await remountResultsRoute();
+    expect(await screen.findByText('설문을 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(queryClient.getQueryData(denialKey)).toMatchObject({ at: 2000, blocked: true });
+
+    // An ordinary error replaces the denial error while metadata stays broken.
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      errorUpdatedAt: 3000,
+    });
+    await remountResultsRoute();
+    expect(await screen.findByText('설문을 불러오지 못했습니다.')).toBeInTheDocument();
+
+    // Metadata recovers: the recorded denial still blocks, with no R/H/C.
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false, refetch: vi.fn() });
+    await remountResultsRoute();
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('12 responses')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained distribution')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained approved excerpt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('survey-result-next-actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outcome-follow-up-callout')).not.toBeInTheDocument();
+    const header = screen.getByTestId('survey-result-header');
+    expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+    expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+  });
+
+  it('keeps the denial marker past the default garbage-collection window', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    });
+
+    // A shortened default gcTime stands in for the five-minute production
+    // default; only the denial family is exempted via the registered defaults.
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 50 } },
+    });
+    registerSurveyQueryDefaults(queryClient);
+    const { navigateToResults, remountResultsRoute } = mountResultsRouteForTransition(queryClient);
+
+    await navigateToResults();
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    const denialKey = surveyKeys.resultsReadDenial(surveyId);
+    expect(queryClient.getQueryData(denialKey)).toMatchObject({ at: 2000, blocked: true });
+
+    // `Promise.withResolvers` needs the es2024 lib, which this repo's
+    // tsconfig does not enable; the executor form stays until it does.
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    expect(queryClient.getQueryData(denialKey)).toMatchObject({ at: 2000, blocked: true });
+
+    // The denial error is replaced by an ordinary error after the window.
+    useOutcomeFollowUp.mockReturnValue({
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      errorUpdatedAt: 3000,
+    });
+    await remountResultsRoute();
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('12 responses')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained distribution')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained approved excerpt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('survey-result-next-actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outcome-follow-up-callout')).not.toBeInTheDocument();
+    const header = screen.getByTestId('survey-result-header');
+    expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+    expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+  });
+
+  it('hides retained data on the first denial frame before the marker is persisted', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    const followUpDenied = {
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    };
+    useOutcomeFollowUp.mockImplementation(() => {
+      // The route calls this hook before its persistence code, so the probe
+      // covers the rest of this render pass.
+      permissionPanelProbe.routeRenderActive = true;
+      return followUpDenied;
+    });
+
+    const { queryClient, navigateToResults } = mountResultsRouteForTransition();
+    const denialKey = surveyKeys.resultsReadDenial(surveyId);
+    expect(queryClient.getQueryData(denialKey)).toBeUndefined();
+
+    await navigateToResults();
+
+    // Nothing was stored before this mount, so the blocked frame can only
+    // come from the current errors, not from the persisted record.
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('12 responses')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retained approved excerpt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('survey-result-next-actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outcome-follow-up-callout')).not.toBeInTheDocument();
+    const header = screen.getByTestId('survey-result-header');
+    expect(within(header).queryByRole('link', { name: /Follow-up/ })).not.toBeInTheDocument();
+    expect(within(header).queryByText('Follow-up · 1')).not.toBeInTheDocument();
+    // The record lands only after render, in the persistence effect.
+    expect(queryClient.getQueryData(denialKey)).toMatchObject({ at: 2000, blocked: true });
+  });
+
+  it('persists the denial marker in an effect, not during render', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: retainedResults(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      dataUpdatedAt: 1000,
+    });
+    const followUpDenied = {
+      data: holderFollowUpData(),
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+      errorUpdatedAt: 2000,
+    };
+    useOutcomeFollowUp.mockImplementation(() => {
+      // The route calls this hook before its persistence code, so the probe
+      // covers the rest of this render pass; the mocked panel effect clears
+      // it before the route's own effects run.
+      permissionPanelProbe.routeRenderActive = true;
+      return followUpDenied;
+    });
+
+    const { queryClient, navigateToResults } = mountResultsRouteForTransition();
+    const denialKey = surveyKeys.resultsReadDenial(surveyId);
+    const originalSetQueryData = queryClient.setQueryData.bind(queryClient);
+    const writesDuringRender: unknown[] = [];
+    const denialWrites: unknown[] = [];
+    vi.spyOn(queryClient, 'setQueryData').mockImplementation(
+      (...args: Parameters<QueryClient['setQueryData']>) => {
+        if (permissionPanelProbe.routeRenderActive) writesDuringRender.push(args[0]);
+        if (Array.isArray(args[0]) && args[0].includes('results-read-denial')) {
+          denialWrites.push(args[0]);
+        }
+        return originalSetQueryData(...args);
+      },
+    );
+
+    await navigateToResults();
+
+    expect(await screen.findByText('Survey Result')).toBeInTheDocument();
+    expect(writesDuringRender).toEqual([]);
+    expect(denialWrites).toHaveLength(1);
+    expect(queryClient.getQueryData(denialKey)).toMatchObject({ at: 2000, blocked: true });
   });
 });

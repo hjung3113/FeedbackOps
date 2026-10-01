@@ -11,7 +11,7 @@ import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/docume
 import { EmptyState, PermissionBlockedPanel, WorkbenchShell } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 
 export const Route = createFileRoute('/_authed/surveys/$surveyId/results')({
   component: SurveyResultsRoute,
@@ -40,6 +40,29 @@ function observedReadDenial(error: unknown): { blocked: boolean } | undefined {
   return undefined;
 }
 
+/**
+ * Merges the stored denial record with denial-shaped errors observed in this
+ * render. Pure: used both for the synchronous effective denial during render
+ * and for the persistence effect, which re-merges against the latest stored
+ * record. Monotonic in `at` and `blocked`: an older observation never lowers
+ * the barrier, and a 403 keeps its stronger copy over a later 404.
+ */
+function mergeReadDenials(
+  stored: SurveyReadDenial | null,
+  observed: SurveyReadDenial[],
+): SurveyReadDenial | null {
+  let denial = stored;
+  for (const next of observed) {
+    if (denial === null || next.at > denial.at || (next.blocked && !denial.blocked)) {
+      denial = {
+        at: Math.max(denial?.at ?? next.at, next.at),
+        blocked: (denial?.blocked ?? false) || next.blocked,
+      };
+    }
+  }
+  return denial;
+}
+
 export function SurveyResultsRoute() {
   const { surveyId } = Route.useParams();
   const queryClient = useQueryClient();
@@ -58,6 +81,55 @@ export function SurveyResultsRoute() {
         })
       : null,
   );
+
+  // Authoritative denials are sticky: once observed, response-derived data
+  // stays hidden until a newer successful results read settles (and, for an
+  // outcome Survey, a newer successful Follow-up read) — an ordinary later
+  // error replaces the denial error in TanStack state and must not reveal
+  // pre-denial data. The record lives in the query cache
+  // (`surveyKeys.resultsReadDenial(surveyId)`) so it also survives route
+  // remounts, and its key family is registered with `gcTime: Infinity` at
+  // client setup (`registerSurveyQueryDefaults`) so it is never collected
+  // while the results and Follow-up payloads are still cached.
+  //
+  // Observation must not depend on the metadata/gate early returns below: a
+  // denial that arrives while the Survey metadata is in an ordinary error or
+  // the gate is unavailable still has to be recorded, or the denial error can
+  // later be replaced before the outer state recovers. The effective denial
+  // is therefore derived synchronously (stored record + current errors)
+  // before every early return, so the first denial frame already hides all
+  // response-derived data; the effect only persists the merged record.
+  const denialKey = surveyKeys.resultsReadDenial(surveyId);
+  const storedDenial = queryClient.getQueryData<SurveyReadDenial>(denialKey) ?? null;
+  const observedDenials: SurveyReadDenial[] = [];
+  const resultsDenial = observedReadDenial(results.error);
+  if (resultsDenial) {
+    // `?? 0` also covers mocked hook results without timestamps in tests.
+    observedDenials.push({ at: results.errorUpdatedAt ?? 0, blocked: resultsDenial.blocked });
+  }
+  if (survey.data?.type === 'outcome') {
+    const followUpDenial = observedReadDenial(followUpRead.error);
+    if (followUpDenial) {
+      observedDenials.push({
+        at: followUpRead.errorUpdatedAt ?? 0,
+        blocked: followUpDenial.blocked,
+      });
+    }
+  }
+  const denial = mergeReadDenials(storedDenial, observedDenials);
+  useEffect(() => {
+    if (observedDenials.length === 0) return;
+    // Merge against the latest stored record: another mount may have
+    // advanced it between this render and this effect.
+    const stored = queryClient.getQueryData<SurveyReadDenial>(denialKey) ?? null;
+    const merged = mergeReadDenials(stored, observedDenials);
+    if (merged === null) return;
+    const changed = stored === null || merged.at !== stored.at || merged.blocked !== stored.blocked;
+    if (changed) {
+      // Persisted in the query cache so the denial also survives route remounts.
+      queryClient.setQueryData(denialKey, merged);
+    }
+  });
 
   if (isPermissionDenied(survey.error)) {
     return (
@@ -112,46 +184,6 @@ export function SurveyResultsRoute() {
         <SurveyPermissionDeniedState />
       </ResultsWorkbench>
     );
-  }
-  // Authoritative denials are sticky: once observed, response-derived data
-  // stays hidden until a newer successful results read settles (and, for an
-  // outcome Survey, a newer successful Follow-up read) — an ordinary later
-  // error replaces the denial error in TanStack state and must not reveal
-  // pre-denial data.
-  const denialKey = surveyKeys.resultsReadDenial(surveyId);
-  const storedDenial = queryClient.getQueryData<SurveyReadDenial>(denialKey) ?? null;
-  let denial = storedDenial;
-  const observedDenials: SurveyReadDenial[] = [];
-  const resultsDenial = observedReadDenial(results.error);
-  if (resultsDenial) {
-    // `?? 0` also covers mocked hook results without timestamps in tests.
-    observedDenials.push({ at: results.errorUpdatedAt ?? 0, blocked: resultsDenial.blocked });
-  }
-  if (survey.data.type === 'outcome') {
-    const followUpDenial = observedReadDenial(followUpRead.error);
-    if (followUpDenial) {
-      observedDenials.push({
-        at: followUpRead.errorUpdatedAt ?? 0,
-        blocked: followUpDenial.blocked,
-      });
-    }
-  }
-  for (const observed of observedDenials) {
-    if (denial === null || observed.at > denial.at || (observed.blocked && !denial.blocked)) {
-      denial = {
-        at: Math.max(denial?.at ?? observed.at, observed.at),
-        blocked: (denial?.blocked ?? false) || observed.blocked,
-      };
-    }
-  }
-  if (
-    denial !== null &&
-    (storedDenial === null ||
-      denial.at !== storedDenial.at ||
-      denial.blocked !== storedDenial.blocked)
-  ) {
-    // Persisted in the query cache so the denial also survives route remounts.
-    queryClient.setQueryData(denialKey, denial);
   }
   const denialRecovered =
     denial !== null &&
