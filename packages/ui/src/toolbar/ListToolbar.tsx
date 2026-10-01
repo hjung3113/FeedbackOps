@@ -65,6 +65,7 @@ export function ListToolbar({
     if (left !== 0) viewport.scrollBy({ left, behavior: 'smooth' });
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tabKey is the rebind trigger when the tab set changes; tabs is read only for presence.
   React.useLayoutEffect(() => {
     const viewport = tabViewportRef.current;
     if (!viewport) return;
@@ -99,6 +100,7 @@ export function ListToolbar({
     };
   }, [revealActiveTab, tabKey]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedTab is the trigger to reveal the newly active tab.
   React.useLayoutEffect(() => {
     revealActiveTab();
   }, [revealActiveTab, selectedTab]);

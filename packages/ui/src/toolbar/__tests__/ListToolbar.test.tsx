@@ -1,8 +1,8 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { ListToolbar } from '../ListToolbar.js';
 import type { ListToolbarTab } from '../ListToolbar.js';
-import { describe, expect, it, vi } from 'vitest';
 
 const tabs: ListToolbarTab[] = [
   { value: 'untriaged', label: '미분류' },
@@ -110,9 +110,7 @@ describe('ListToolbar — tabs mode', () => {
       scrollWidth: { configurable: true, value: 300 },
     });
     tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 120));
-    screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() =>
-      rect(200, 260),
-    );
+    screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() => rect(200, 260));
 
     act(() => window.dispatchEvent(new Event('resize')));
 
