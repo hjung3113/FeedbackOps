@@ -36,6 +36,12 @@ const taskRequest: TaskRequestDto = {
   updated_at: '2026-07-10T00:00:00.000Z',
   source: undefined,
 };
+const otherTaskRequest: TaskRequestDto = {
+  ...taskRequest,
+  id: '10000000-0000-0000-0000-000000000002',
+  display_id: 'REQ-1072',
+  requested_outcome: 'Review the other candidate task',
+};
 
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@fops/ui', async () => {
@@ -56,6 +62,9 @@ vi.mock('@fops/ui', async () => {
 vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
   useFindingDetail: () => ({ data: null }),
 }));
+vi.mock('@/lib/api/entity-links', () => ({
+  fetchTaskRequestEntityLinks: vi.fn(async () => ({ items: [] })),
+}));
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
 }));
@@ -64,7 +73,8 @@ vi.mock('@/lib/api/managed-systems', () => ({
     items: [{ id: taskRequest.primary_managed_system_id, name: 'Billing Ops' }],
   })),
 }));
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
   approveTaskRequest: api.approveTaskRequest,
   convertTaskRequest: vi.fn(),
   fetchMe: api.fetchMe,
@@ -97,6 +107,7 @@ function renderRoute() {
       <TaskRequestsRoute selectedParam={taskRequest.id} />
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
 async function mountRoute() {
@@ -232,6 +243,43 @@ describe('TaskRequestsRoute decision dialogs', () => {
       });
     },
   );
+
+  it('AC-681-1 does not replay an old decision after a converted request is revisited', async () => {
+    const approvedItem: TaskRequestDto = {
+      ...taskRequest,
+      status: 'approved',
+      reviewer_actor_id: reviewerId,
+      decided_at: '2026-07-10T01:00:00.000Z',
+    };
+    const convertedItem: TaskRequestDto = { ...approvedItem, status: 'converted' };
+    api.fetchTaskRequests.mockResolvedValue({ items: [taskRequest, otherTaskRequest] });
+    api.approveTaskRequest.mockResolvedValue(approvedItem);
+    const queryClient = renderRoute();
+    await screen.findByText('검토 결정');
+
+    api.fetchTaskRequests.mockResolvedValue({ items: [approvedItem, otherTaskRequest] });
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 승인' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryState(['task-requests', undefined])?.fetchStatus).toBe('idle');
+    });
+
+    queryClient.setQueryData(['task-requests', undefined], {
+      items: [convertedItem, otherTaskRequest],
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^All/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /REQ-1072/ }));
+    fireEvent.click(screen.getByRole('button', { name: /REQ-1071/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^All/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: /REQ-1071/ })).toHaveTextContent('전환됨');
+    });
+  });
 
   it('trims an approval reason for another actor request', async () => {
     await openDialog('승인', 'Task Request 승인');

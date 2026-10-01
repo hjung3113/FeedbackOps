@@ -268,9 +268,89 @@ describe('FindingDetailPanel', () => {
     );
   });
 
-  it('keeps one primary execution action and groups the remaining actions as secondary', () => {
+  it('AC-681-2 shows an unknown state after a failed read and retries to the existing pending request', async () => {
+    const taskRequestId = '10000000-0000-4000-8000-000000000078';
+    const pendingPayload = {
+      items: [
+        {
+          id: '50000000-0000-4000-8000-000000000078',
+          source_type: 'finding',
+          source_id: mediumFinding.id,
+          target_type: 'task_request',
+          target_id: taskRequestId,
+          relation_type: 'requested_task',
+          visibility: 'internal_only',
+          status: 'active',
+          managed_system_id: mediumFinding.primary_managed_system_id,
+          created_by: '40000000-0000-0000-0000-000000000004',
+          created_at: '2026-07-10T00:00:00.000Z',
+          updated_at: null,
+          visibility_state: 'allowed',
+          target_summary: {
+            type: 'task_request',
+            id: taskRequestId,
+            display_id: 'REQ-682',
+            source_type: 'finding',
+            source_id: mediumFinding.id,
+            evidence_summary: '쿼리 플랜 개선 필요',
+            requested_outcome: '쿼리 플랜을 검토합니다.',
+            status: 'pending_review',
+            primary_managed_system_id: mediumFinding.primary_managed_system_id,
+            requester_actor_id: '40000000-0000-0000-0000-000000000004',
+          },
+        },
+      ],
+    };
+    let settleFailedRead: (response: Response) => void = () => undefined;
+    const failedRead = new Promise<Response>((resolve) => {
+      settleFailedRead = resolve;
+    });
+    let entityLinkReads = 0;
+    globalThis.fetch = vi.fn<typeof fetch>(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/entity-links') {
+        entityLinkReads += 1;
+        if (entityLinkReads === 1) return failedRead;
+        return new Response(JSON.stringify(pendingPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    renderWithClient(<FullFindingDetail finding={mediumFinding} />);
+
+    expect(await screen.findByText('확인 중…')).toBeInTheDocument();
+    settleFailedRead(
+      new Response(JSON.stringify({ message: 'Entity links unavailable.' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    expect(await screen.findByText('Task Request를 확인하지 못했습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '주요 실행' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('request-task-btn')).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: '다시 시도' }));
+
+    const requestLink = await screen.findByRole('link', { name: /REQ-682/ });
+    expect(requestLink).toHaveTextContent(TASK_REQUEST_STATUS_LABELS.pending_review);
+    expect(
+      within(screen.getByRole('group', { name: '주요 실행' })).getByRole('link', {
+        name: 'Task Request 보기',
+      }),
+    ).toHaveAttribute('href', `/tasks?view=requests&param=${taskRequestId}`);
+  });
+
+  it('keeps one primary execution action and groups the remaining actions as secondary', async () => {
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 
+    await screen.findByTestId('request-task-btn');
     const primaryGroup = screen.getByRole('group', { name: '주요 실행' });
     const secondaryGroup = screen.getByRole('group', { name: '보조 작업' });
     expect(within(primaryGroup).getAllByRole('button')).toHaveLength(1);
@@ -296,7 +376,7 @@ describe('FindingDetailPanel', () => {
     apiClientMock.mockResolvedValue({ data: { id: 'task-request-1' } });
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 
-    await user.click(screen.getByTestId('request-task-btn'));
+    await user.click(await screen.findByTestId('request-task-btn'));
     const draft = await screen.findByRole('region', { name: 'Task Request 초안' });
     expect(draft).toHaveTextContent('출처 FIN-179 · Finding');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -332,7 +412,7 @@ describe('FindingDetailPanel', () => {
     );
     const { rerender } = render(panel('10000000-0000-0000-0000-000000000001'));
 
-    await user.click(screen.getByTestId('request-task-btn'));
+    await user.click(await screen.findByTestId('request-task-btn'));
     await user.type(screen.getByTestId('request-task-requested-outcome-input'), 'A only');
     rerender(panel('10000000-0000-0000-0000-000000000002'));
 

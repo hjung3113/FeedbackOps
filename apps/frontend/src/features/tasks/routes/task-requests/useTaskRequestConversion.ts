@@ -52,6 +52,7 @@ export interface UseTaskRequestConversionResult {
   analyticsAreaId: string;
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
+  sourceAnalyticsAreaUnavailable: boolean;
   isPending: boolean;
   /** Last conversion mutation's settled result, independent of toast state. */
   result: TaskDto | null;
@@ -67,6 +68,10 @@ export function useTaskRequestConversion({
   defaultAnalyticsAreaId = null,
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
+  const itemRef = React.useRef(item);
+  itemRef.current = item;
+  const selectedRequestId = item.id;
+  const lastResetRequestIdRef = React.useRef(selectedRequestId);
   const [convertOpen, setConvertOpen] = React.useState(false);
   const [convertTitle, setConvertTitle] = React.useState(() =>
     defaultConvertTitle(item.requested_outcome),
@@ -79,26 +84,21 @@ export function useTaskRequestConversion({
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
   const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
   const analyticsAreaEdited = React.useRef(false);
-  const defaultAnalyticsAreaIdRef = React.useRef(defaultAnalyticsAreaId);
-  defaultAnalyticsAreaIdRef.current = defaultAnalyticsAreaId;
 
   React.useEffect(() => {
-    setConvertTitle(defaultConvertTitle(item.requested_outcome));
+    if (lastResetRequestIdRef.current === selectedRequestId) return;
+    lastResetRequestIdRef.current = selectedRequestId;
+    const selectedItem = itemRef.current;
+    setConvertTitle(defaultConvertTitle(selectedItem.requested_outcome));
     setConvertTitleError(null);
     setConvertPriority('medium');
     setConvertAssigneeId('');
     setConvertDueDate('');
     setConvertMilestoneId('');
-    setConvertAnalyticsAreaId(defaultAnalyticsAreaIdRef.current ?? '');
+    setConvertAnalyticsAreaId('');
     analyticsAreaEdited.current = false;
     setConvertOpen(false);
-  }, [item]);
-
-  React.useEffect(() => {
-    if (!analyticsAreaEdited.current && defaultAnalyticsAreaId !== null) {
-      setConvertAnalyticsAreaId(defaultAnalyticsAreaId);
-    }
-  }, [defaultAnalyticsAreaId]);
+  }, [selectedRequestId]);
 
   const manageCheck = useQuery({
     queryKey: ['permission-check', 'finding.manage', item.primary_managed_system_id],
@@ -123,6 +123,40 @@ export function useTaskRequestConversion({
     enabled: convertOpen,
     staleTime: 10 * 60 * 1000,
   });
+  const activeAnalyticsAreaOptions = React.useMemo(
+    () => analyticsAreasQuery.data?.items.filter((area) => area.archived_at === null),
+    [analyticsAreasQuery.data?.items],
+  );
+  const analyticsAreaOptionsResolved = analyticsAreasQuery.isSuccess || analyticsAreasQuery.isError;
+  const inheritedAnalyticsAreaIsActive =
+    defaultAnalyticsAreaId !== null &&
+    (activeAnalyticsAreaOptions?.some((area) => area.id === defaultAnalyticsAreaId) ?? false);
+  const sourceAnalyticsAreaUnavailable =
+    defaultAnalyticsAreaId !== null &&
+    analyticsAreaOptionsResolved &&
+    !inheritedAnalyticsAreaIsActive;
+
+  React.useEffect(() => {
+    if (
+      itemRef.current.id !== selectedRequestId ||
+      analyticsAreaEdited.current ||
+      !analyticsAreaOptionsResolved
+    ) {
+      return;
+    }
+    setConvertAnalyticsAreaId(
+      inheritedAnalyticsAreaIsActive && defaultAnalyticsAreaId !== null
+        ? defaultAnalyticsAreaId
+        : '',
+    );
+  }, [
+    analyticsAreaOptionsResolved,
+    defaultAnalyticsAreaId,
+    inheritedAnalyticsAreaIsActive,
+    selectedRequestId,
+  ]);
+  const selectedAnalyticsAreaIsActive =
+    activeAnalyticsAreaOptions?.some((area) => area.id === convertAnalyticsAreaId) ?? false;
 
   const milestonesQuery = useQuery({
     queryKey: ['milestones', item.primary_managed_system_id] as const,
@@ -172,7 +206,7 @@ export function useTaskRequestConversion({
           assignee_actor_id: convertAssigneeId.trim() || null,
           due_date: convertDueDate.trim() || null,
           milestone_id: convertMilestoneId || null,
-          analytics_area_id: convertAnalyticsAreaId.trim() || null,
+          analytics_area_id: selectedAnalyticsAreaIsActive ? convertAnalyticsAreaId : null,
         },
         crypto.randomUUID(),
       );
@@ -236,7 +270,8 @@ export function useTaskRequestConversion({
       analyticsAreaEdited.current = true;
       setConvertAnalyticsAreaId(value);
     },
-    analyticsAreas: analyticsAreasQuery.data?.items,
+    analyticsAreas: activeAnalyticsAreaOptions?.map(({ id, name }) => ({ id, name })),
+    sourceAnalyticsAreaUnavailable,
     isPending: convertMutation.isPending,
     result: convertMutation.data ?? null,
     error: convertMutation.error ?? null,

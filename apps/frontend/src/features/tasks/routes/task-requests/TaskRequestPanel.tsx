@@ -64,9 +64,13 @@ export function TaskRequestPanel({
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
 
   const decision = useTaskRequestDecision({ item, currentActorId, currentRole });
+  const deliveredDecisionResultRef = React.useRef<TaskRequestDto | null>(null);
   React.useEffect(() => {
-    if (decision.result?.id === item.id) onDecisionComplete?.(decision.result);
-  }, [decision.result, item.id, onDecisionComplete]);
+    const result = decision.result;
+    if (result === null || result === deliveredDecisionResultRef.current) return;
+    deliveredDecisionResultRef.current = result;
+    onDecisionComplete?.(result);
+  }, [decision.result, onDecisionComplete]);
   const sourceFindingQuery = useFindingDetail(
     item.source_type === 'finding' ? item.source_id : null,
   );
@@ -433,6 +437,12 @@ export function TaskRequestPanel({
                         ))}
                       </SelectContent>
                     </Select>
+                    {conversion.sourceAnalyticsAreaUnavailable && (
+                      <p className="text-xs text-text-muted" aria-live="polite">
+                        원본 Finding의 Analytics Area가 보관되어 있거나 사용할 수 없습니다. 다른
+                        Area를 선택하거나 없음으로 전환하세요.
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1">
                     <FieldLabel htmlFor="task-request-convert-milestone">Milestone</FieldLabel>

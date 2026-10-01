@@ -71,6 +71,8 @@ export interface FindingDetailController {
   linkedVocDisplayId: string | null;
   linkedTaskQuery: UseQueryResult<TaskDetailDto>;
   requestedTaskRequests: RequestedTaskRequestSummary[];
+  requestedTaskRequestsState: 'loading' | 'error' | 'loaded';
+  retryRequestedTaskRequests: () => void;
   canManage: boolean;
   handleMarkNotActionable: () => void;
   markNotActionableDisabled: boolean;
@@ -194,9 +196,17 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     linkedVocTitle,
     linkedVocDisplayId,
     linkedTaskQuery,
-    requestedTaskRequests: requestedTaskRequestQuery.isError
-      ? []
-      : (requestedTaskRequestQuery.data ?? []),
+    requestedTaskRequests: requestedTaskRequestQuery.isSuccess
+      ? (requestedTaskRequestQuery.data ?? [])
+      : [],
+    requestedTaskRequestsState: requestedTaskRequestQuery.isError
+      ? 'error'
+      : requestedTaskRequestQuery.isPending
+        ? 'loading'
+        : 'loaded',
+    retryRequestedTaskRequests: () => {
+      void requestedTaskRequestQuery.refetch();
+    },
     canManage,
     handleMarkNotActionable,
     markNotActionableDisabled,

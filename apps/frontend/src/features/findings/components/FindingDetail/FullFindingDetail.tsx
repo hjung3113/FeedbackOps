@@ -99,6 +99,8 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     linkedVocDisplayId,
     linkedTaskQuery,
     requestedTaskRequests,
+    requestedTaskRequestsState,
+    retryRequestedTaskRequests,
     canManage,
     handleMarkNotActionable,
     markNotActionableDisabled,
@@ -236,7 +238,25 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               )}
             </FieldRow>
             <FieldRow label="Task Request" className="px-0">
-              {requestedTaskRequests.length > 0 ? (
+              {requestedTaskRequestsState === 'loading' ? (
+                <span className="text-text-muted" aria-live="polite">
+                  확인 중…
+                </span>
+              ) : requestedTaskRequestsState === 'error' ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-text-muted" role="alert">
+                    Task Request를 확인하지 못했습니다.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="subtle"
+                    size="sm"
+                    onClick={retryRequestedTaskRequests}
+                  >
+                    다시 시도
+                  </Button>
+                </div>
+              ) : requestedTaskRequests.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {requestedTaskRequests.map((request) => (
                     <Link
@@ -285,26 +305,28 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
 
         {/* CTA Footer */}
         <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-col gap-2">
-          <fieldset className="m-0 min-w-0 border-0 p-0">
-            <legend className="sr-only">주요 실행</legend>
-            {pendingTaskRequest ? (
-              <Button asChild variant="primary" size="sm">
-                <Link to="/tasks" search={{ view: 'requests', param: pendingTaskRequest.id }}>
-                  Task Request 보기
-                </Link>
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setRequestTaskOpen(true)}
-                disabled={!canManage}
-                data-testid="request-task-btn"
-              >
-                Task 요청
-              </Button>
-            )}
-          </fieldset>
+          {requestedTaskRequestsState === 'loaded' && (
+            <fieldset className="m-0 min-w-0 border-0 p-0">
+              <legend className="sr-only">주요 실행</legend>
+              {pendingTaskRequest ? (
+                <Button asChild variant="primary" size="sm">
+                  <Link to="/tasks" search={{ view: 'requests', param: pendingTaskRequest.id }}>
+                    Task Request 보기
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setRequestTaskOpen(true)}
+                  disabled={!canManage}
+                  data-testid="request-task-btn"
+                >
+                  Task 요청
+                </Button>
+              )}
+            </fieldset>
+          )}
           <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
             <legend className="sr-only">보조 작업</legend>
             {pendingTaskRequest && (

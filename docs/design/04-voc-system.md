@@ -348,6 +348,11 @@ Quick Actions:
 - Write Public Update
 ```
 
+Create Finding from VOC detail or Triage starts with the VOC title and severity
+as editable defaults. Triage uses its staged severity, then the saved VOC
+severity, then `medium`; VOC detail uses the saved severity or `medium` when it
+has none. The operator can edit both values before creating the Finding.
+
 Rich content surfaces:
 
 ```text
