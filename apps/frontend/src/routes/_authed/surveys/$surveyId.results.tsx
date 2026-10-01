@@ -88,22 +88,35 @@ export function SurveyResultsRoute() {
       </ResultsWorkbench>
     );
   }
-  const resultsReadUnavailable =
+  const followUpReadDenied =
+    survey.data.type === 'outcome' &&
+    (isPermissionDenied(followUpRead.error) ||
+      (followUpRead.error instanceof ApiError &&
+        followUpRead.error.status === 404 &&
+        followUpRead.error.code === 'not_found.record'));
+  const followUpReadNotFound =
+    followUpReadDenied &&
+    followUpRead.error instanceof ApiError &&
+    followUpRead.error.status === 404;
+  const resultsPermissionDenied =
     isPermissionDenied(results.error) ||
-    (results.error instanceof ApiError && results.error.status === 404);
+    (followUpReadDenied && isPermissionDenied(followUpRead.error));
+  const resultsNotFound =
+    (results.error instanceof ApiError && results.error.status === 404) || followUpReadNotFound;
+  const resultsReadUnavailable = resultsPermissionDenied || resultsNotFound;
   const followUp =
     survey.data.type === 'outcome' && followUpRead.isSuccess && !resultsReadUnavailable
       ? (followUpRead.data ?? null)
       : null;
   let resultsContent: ReactNode;
-  if (results.isLoading) {
-    resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
-  } else if (isPermissionDenied(results.error)) {
+  if (resultsPermissionDenied) {
     resultsContent = <SurveyPermissionDeniedState />;
-  } else if (results.error instanceof ApiError && results.error.status === 404) {
+  } else if (resultsNotFound) {
     resultsContent = (
       <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />
     );
+  } else if (results.isLoading) {
+    resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
   } else if (results.isError || !results.data) {
     resultsContent = (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
