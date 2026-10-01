@@ -10,6 +10,7 @@ const tabs: ListToolbarTab[] = [
   { value: 'unassigned', label: '미배정', badgeCount: 5 },
   { value: 'disabled', label: '비활성', disabled: true },
 ];
+const overflowTabs = tabs.slice(0, 3);
 
 const rect = (left: number, right: number): DOMRect =>
   ({
@@ -39,6 +40,52 @@ function stubResizeObserver() {
   return () => {
     for (const notify of notifyCallbacks) notify();
   };
+}
+
+function setOverflowGeometry(tabViewport: HTMLDivElement) {
+  const scrollWidth = 254;
+  const tabWidths = [88, 48, 102];
+  const controlLabels = ['이전 탭 보기', '다음 탭 보기'];
+  Object.defineProperties(tabViewport, {
+    scrollLeft: { configurable: true, writable: true, value: 0 },
+    scrollWidth: { configurable: true, value: scrollWidth },
+    clientWidth: {
+      configurable: true,
+      get: () => {
+        const reservedControlCount = controlLabels.filter((label) =>
+          tabViewport.parentElement?.querySelector(`button[aria-label="${label}"]`),
+        ).length;
+        return 187 - reservedControlCount * 28;
+      },
+    },
+  });
+  tabViewport.getBoundingClientRect = vi.fn(() => rect(0, tabViewport.clientWidth));
+  tabViewport.scrollBy = vi.fn((options: ScrollToOptions) => {
+    const maxScroll = scrollWidth - tabViewport.clientWidth;
+    tabViewport.scrollLeft = Math.max(
+      0,
+      Math.min(maxScroll, tabViewport.scrollLeft + (options.left ?? 0)),
+    );
+    tabViewport.dispatchEvent(new Event('scroll'));
+  });
+
+  const tabElements = tabViewport.querySelectorAll<HTMLElement>('[role="tab"]');
+  let left = 0;
+  tabElements.forEach((tab, index) => {
+    const tabLeft = left;
+    const tabRight = tabLeft + (tabWidths[index] ?? 0);
+    tab.getBoundingClientRect = vi.fn(() =>
+      rect(tabLeft - tabViewport.scrollLeft, tabRight - tabViewport.scrollLeft),
+    );
+    left = tabRight;
+  });
+}
+
+function expectTabFullyVisible(tab: HTMLElement, tabViewport: HTMLDivElement) {
+  const tabRect = tab.getBoundingClientRect();
+  const viewportRect = tabViewport.getBoundingClientRect();
+  expect(tabRect.left).toBeGreaterThanOrEqual(viewportRect.left);
+  expect(tabRect.right).toBeLessThanOrEqual(viewportRect.right);
 }
 
 afterEach(() => {
@@ -161,6 +208,49 @@ describe('ListToolbar — tabs mode', () => {
       expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
     },
   );
+
+  it('reveals a later selected tab after overflow controls appear on initial mount', () => {
+    const notifyResize = stubResizeObserver();
+    const { container } = render(<ListToolbar tabs={overflowTabs} activeTab="unassigned" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    setOverflowGeometry(tabViewport);
+
+    act(() => notifyResize());
+
+    expectTabFullyVisible(screen.getByRole('tab', { selected: true }), tabViewport);
+  });
+
+  it('reveals a controlled selection change after overflow controls appear', () => {
+    const notifyResize = stubResizeObserver();
+    const { container, rerender } = render(
+      <ListToolbar tabs={overflowTabs} activeTab="untriaged" />,
+    );
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    setOverflowGeometry(tabViewport);
+
+    act(() => notifyResize());
+    rerender(<ListToolbar tabs={overflowTabs} activeTab="unassigned" />);
+
+    expectTabFullyVisible(screen.getByRole('tab', { selected: true }), tabViewport);
+  });
+
+  it('keeps the inactive overflow control disabled and named in its reserved slot', () => {
+    const notifyResize = stubResizeObserver();
+    const { container } = render(<ListToolbar tabs={overflowTabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    setOverflowGeometry(tabViewport);
+
+    act(() => notifyResize());
+
+    const previousControl = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="이전 탭 보기"]',
+    );
+    expect(previousControl).toBeInTheDocument();
+    expect(previousControl).toBeDisabled();
+    expect(previousControl).toHaveAttribute('aria-hidden', 'true');
+    expect(previousControl).toHaveAttribute('aria-label', '이전 탭 보기');
+    expect(tabViewport.clientWidth).toBe(131);
+  });
 
   it.each([
     { direction: 'right' as const, activeTab: 'untriaged', start: 0, control: '다음 탭 보기' },

@@ -44,6 +44,7 @@ export function ListToolbar({
     canScrollLeft: false,
     canScrollRight: false,
   });
+  const hasOverflow = overflowState.canScrollLeft || overflowState.canScrollRight;
   const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState(tabs?.[0]?.value ?? '');
   const tabViewportRef = React.useRef<HTMLDivElement>(null);
   const selectedTab = activeTab ?? uncontrolledActiveTab;
@@ -95,10 +96,10 @@ export function ListToolbar({
     };
   }, [tabKey]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selection or tab-set changes must reveal the active tab.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selection, tab-set, or initial overflow changes must reveal the active tab.
   React.useLayoutEffect(() => {
     revealActiveTab();
-  }, [revealActiveTab, selectedTab, tabKey]);
+  }, [revealActiveTab, selectedTab, tabKey, hasOverflow]);
 
   const handleTabChange = (next: string) => {
     if (activeTab === undefined) setUncontrolledActiveTab(next);
@@ -127,13 +128,18 @@ export function ListToolbar({
     >
       <TooltipProvider delayDuration={400}>
         <div className="flex min-w-0 flex-1 items-center">
-          {overflowState.canScrollLeft && (
+          {hasOverflow && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   aria-label="이전 탭 보기"
-                  className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  aria-hidden={!overflowState.canScrollLeft}
+                  disabled={!overflowState.canScrollLeft}
+                  className={cn(
+                    'mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    !overflowState.canScrollLeft && 'invisible',
+                  )}
                   onClick={() => scrollTabs('left')}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -178,13 +184,18 @@ export function ListToolbar({
               )
             )}
           </div>
-          {overflowState.canScrollRight && (
+          {hasOverflow && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   aria-label="다음 탭 보기"
-                  className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  aria-hidden={!overflowState.canScrollRight}
+                  disabled={!overflowState.canScrollRight}
+                  className={cn(
+                    'ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    !overflowState.canScrollRight && 'invisible',
+                  )}
                   onClick={() => scrollTabs('right')}
                 >
                   <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
