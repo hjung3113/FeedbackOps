@@ -23,7 +23,7 @@ export function QuestionList({
   const [dragIndex, setDragIndex] = React.useState<number | null>(null);
   const [overIndex, setOverIndex] = React.useState<number | null>(null);
   return (
-    <section className="border-r border-border-subtle p-3">
+    <section className="min-h-0 overflow-y-auto border-r border-border-subtle p-3">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium">질문 {questions.length}</span>
         {editable && (

@@ -78,7 +78,7 @@ export function VocDetailPanel({
   if (isLoading) {
     return (
       <div className="flex flex-col h-full overflow-y-auto">
-        <div className="h-12 border-b border-border-subtle flex items-center px-4">
+        <div className="h-toolbar shrink-0 border-b border-border-subtle flex items-center px-4">
           <Skeleton className="h-4 w-24" />
         </div>
         <DetailPanelSkeleton />

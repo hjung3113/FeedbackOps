@@ -27,6 +27,9 @@ export function useCreateFindingFromCluster(args?: {
       );
       return res.data;
     },
-    onSuccess: () => invalidateNavCounts(queryClient),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
+      invalidateNavCounts(queryClient);
+    },
   });
 }

@@ -243,6 +243,15 @@ describe('/surveys/:surveyId/follow-up route', () => {
     idempotencyKeyState.index = 0;
   });
 
+  it('renders the follow-up header in the WorkbenchShell toolbar at 50px', async () => {
+    renderSurveyRoute();
+
+    const header = await screen.findByTestId('survey-result-header');
+    expect(header).toHaveClass('h-toolbar');
+    expect(header).toHaveAttribute('data-shell-header', 'toolbar');
+    expect(header.closest('[data-shell="workbench"]')).toBeInTheDocument();
+  });
+
   it('defaults to Open, shows only open items, counts filters, and renders the selected response detail', async () => {
     renderSurveyRoute();
 

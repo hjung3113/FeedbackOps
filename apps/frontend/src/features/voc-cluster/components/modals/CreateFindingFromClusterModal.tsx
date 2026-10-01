@@ -1,7 +1,7 @@
 // Create a Finding from a VOC Cluster. Local form (not the cross-system
 // CreateFindingModal): this flow is VOC-cluster origin and has its own
-// analytics-free severity picker. No list invalidation on success — the
-// success path navigates away to the new Finding.
+// analytics-free severity picker. Its mutation invalidates the Findings list
+// before the success path navigates to the new Finding.
 
 import type { CreateFindingRequest, FindingSeverity } from '@fops/shared';
 import { createFindingRequestSchema } from '@fops/shared';

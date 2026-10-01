@@ -302,7 +302,10 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
   // tests, which keep the in-body title below.
   const directRender = followUpRead === undefined;
   return (
-    <main className="flex min-h-0 flex-1 flex-col" data-testid="survey-results-summary">
+    <main
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      data-testid="survey-results-summary"
+    >
       <div className="mx-auto w-full max-w-6xl p-6">
         <header className="border-b border-border-subtle pb-5">
           {directRender && (

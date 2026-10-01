@@ -29,12 +29,14 @@ export function SurveyResultHeader({
   return (
     <header
       className={[
-        'flex min-h-[52px] flex-wrap items-center gap-x-4 gap-y-2',
-        'border-b border-border-subtle bg-surface-canvas px-5 py-2',
+        'flex h-toolbar shrink-0 items-center gap-x-4',
+        'border-b border-border-subtle bg-surface-canvas px-5',
       ].join(' ')}
+      data-shell-header="toolbar"
       data-testid="survey-result-header"
+      data-toolbar-height="50"
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      <div className="flex min-w-0 flex-1 items-center gap-x-2 whitespace-nowrap text-sm">
         <Link className="shrink-0 text-text-muted hover:text-text-primary" to="/surveys">
           Surveys /
         </Link>
