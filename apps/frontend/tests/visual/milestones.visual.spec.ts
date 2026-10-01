@@ -70,7 +70,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(summary).toContainText('Tasks in flight');
     await expect(summary).toContainText('Evidence linked');
     await expect(summary).toContainText('Released');
-    await expect(summary).toContainText('Schedule risk · mini-timeline 우측 표시');
+    await expect(summary).not.toContainText('Schedule risk'); // #670: the prototype annotation is gone
     await expect(page.getByTestId('milestone-summary-evidence-linked')).toHaveText('0');
   });
 
