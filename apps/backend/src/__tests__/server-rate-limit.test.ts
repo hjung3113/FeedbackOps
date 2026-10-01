@@ -25,6 +25,7 @@ const RATE_LIMIT_TIER_PROBES = [
   ['read', '/issue-153-read-probe'],
   ['reporterEdit', '/issue-153-reporter-edit-probe'],
   ['attachmentMutation', '/issue-153-attachment-mutation-probe'],
+  ['triage', '/issue-635-triage-probe'],
 ] as const;
 
 function config(): AppConfig {
@@ -195,6 +196,15 @@ describe('global rate limit actor resolution', () => {
     expect(await statusesFor(app, 1, headers, '/issue-153-attachment-mutation-probe')).toEqual([
       200,
     ]);
+    expect(app.rateLimitConfig.triage).toMatchObject({
+      max: 60,
+      timeWindow: '1 minute',
+      routeGroup: 'triage',
+    });
+    expect(await statusesFor(app, 60, headers, '/issue-635-triage-probe')).toEqual(
+      Array(60).fill(200),
+    );
+    expect(await statusesFor(app, 1, headers, '/issue-635-triage-probe')).toEqual([429]);
 
     const rows = dbHandle.rateLimitRows();
     expect(rows.map((row) => row.routeGroup).sort()).toEqual([
@@ -203,9 +213,11 @@ describe('global rate limit actor resolution', () => {
       'read',
       'reporter_edit',
       'sensitive',
+      'triage',
     ]);
     expect(rows.find((row) => row.routeGroup === 'mutation')?.counter).toBe(11);
     expect(rows.find((row) => row.routeGroup === 'read')?.counter).toBe(1);
+    expect(rows.find((row) => row.routeGroup === 'triage')?.counter).toBe(61);
     expect(rows.some((row) => row.routeGroup === 'global')).toBe(false);
   });
 
