@@ -137,6 +137,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    expect(screen.getByText('2026. 5. 10.')).toBeInTheDocument();
+    expect(screen.getByText('2026. 6. 15.')).toBeInTheDocument();
     // Existing linked source Finding keeps its display card (approved contract).
     expect(screen.getByText('From finding')).toBeInTheDocument();
     expect(screen.getByText('FIN-181')).toBeInTheDocument();

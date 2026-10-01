@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const NOW = new Date('2026-10-01T06:05:00.000Z');
 
 beforeEach(() => {
-  vi.stubEnv('TZ', 'Asia/Seoul');
+  vi.stubEnv('TZ', 'UTC');
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
@@ -25,6 +25,10 @@ afterEach(() => {
 describe('formatRelativeTime', () => {
   it.each([
     { input: '2026-10-01T05:50:00.000Z', expected: '15분 전' },
+    { input: '2026-10-01T03:05:00.000Z', expected: '3시간 전' },
+    { input: '2026-09-30T04:05:00.000Z', expected: '어제' },
+    { input: '2026-09-29T06:05:00.000Z', expected: '그저께' },
+    { input: '2026-10-01T06:05:00.000Z', expected: '현재 분' },
     { input: 'invalid', expected: '—' },
   ])('formats $input as $expected', ({ input, expected }) => {
     expect(formatRelativeTime(input)).toBe(expected);
@@ -34,6 +38,7 @@ describe('formatRelativeTime', () => {
 describe('formatDate', () => {
   it.each([
     { input: '2026-10-01T06:05:00.000Z', expected: '2026. 10. 1.' },
+    { input: '2026-09-30T16:30:00.000Z', expected: '2026. 10. 1.' },
     { input: 'invalid', expected: '—' },
   ])('formats $input as $expected', ({ input, expected }) => {
     expect(formatDate(input)).toBe(expected);
@@ -80,6 +85,9 @@ describe('formatDateOnly', () => {
   it.each([
     // Date-only values represent their calendar day at midnight UTC; they must not shift a day.
     { input: '2026-10-01', expected: '2026. 10. 1.' },
+    { input: '2024-02-29', expected: '2024. 2. 29.' },
+    { input: '2026-02-29', expected: '—' },
+    { input: '2026-02-30', expected: '—' },
     { input: 'invalid', expected: '—' },
   ])('formats $input as $expected', ({ input, expected }) => {
     expect(formatDateOnly(input)).toBe(expected);
