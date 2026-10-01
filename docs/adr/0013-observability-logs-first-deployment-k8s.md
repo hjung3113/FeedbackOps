@@ -2,7 +2,7 @@
 
 ## Deployment shape
 
-FeedbackOps deploys to a **Docker container running on the company's internal Kubernetes cluster**. The build artifact is a single OCI image per app (`apps/backend`, `apps/frontend`) plus a migration job image; a Helm chart in `infra/helm/` parameterises namespace, ingress, secrets, ConfigMap, and Postgres connection.
+FeedbackOps deploys to a **Docker container running on the company's internal Kubernetes cluster**. The build artifact is a single OCI image per app (`apps/backend`, `apps/frontend`) plus a migration job image. Deployment manifests (namespace, ingress, secrets, ConfigMap, Postgres connection) are out of scope for this repository; no chart is kept here.
 
 We do not target a serverless platform or a managed PaaS in MVP:
 
