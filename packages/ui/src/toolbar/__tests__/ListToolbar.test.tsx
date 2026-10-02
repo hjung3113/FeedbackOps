@@ -415,13 +415,15 @@ describe('ListToolbar — title-only mode', () => {
 });
 
 describe('ListTabs — edge fade', () => {
-  function renderWithViewportGeometry(clientWidth: number, scrollWidth: number) {
+  function renderWithViewportGeometry(clientWidth: number, scrollWidth: number, scrollLeft = 0) {
     const { container } = render(<ListTabs tabs={overflowTabs} activeTab="untriaged" />);
     const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
     Object.defineProperties(tabViewport, {
+      scrollLeft: { configurable: true, writable: true, value: scrollLeft },
       clientWidth: { configurable: true, value: clientWidth },
       scrollWidth: { configurable: true, value: scrollWidth },
     });
+    tabViewport.scrollBy = vi.fn() as unknown as HTMLDivElement['scrollBy'];
     return tabViewport;
   }
 
@@ -454,37 +456,72 @@ describe('ListTabs — edge fade', () => {
     );
   });
 
-  it('fades the right edge only when the viewport can scroll right', () => {
-    const tabViewport = renderWithViewportGeometry(120, 300);
+  it.each([
+    {
+      fade: 'right-only',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 0,
+      fadeLeft: 'false',
+      fadeRight: 'true',
+      mask: 'linear-gradient(to right, black 0, black calc(100% - 16px), transparent 100%)',
+    },
+    {
+      fade: 'left-only',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 180,
+      fadeLeft: 'true',
+      fadeRight: 'false',
+      mask: 'linear-gradient(to right, transparent 0, black 16px, black 100%)',
+    },
+    {
+      fade: 'both',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 100,
+      fadeLeft: 'true',
+      fadeRight: 'true',
+      mask: 'linear-gradient(to right, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
+    },
+    {
+      fade: 'neither',
+      clientWidth: 300,
+      scrollWidth: 300,
+      scrollLeft: 0,
+      fadeLeft: 'false',
+      fadeRight: 'false',
+      mask: '',
+    },
+  ])(
+    'applies the $fade mask with the matching transparent and opaque edge stops',
+    ({ clientWidth, scrollWidth, scrollLeft, fadeLeft, fadeRight, mask }) => {
+      const tabViewport = renderWithViewportGeometry(clientWidth, scrollWidth, scrollLeft);
 
-    act(() => window.dispatchEvent(new Event('resize')));
+      act(() => window.dispatchEvent(new Event('resize')));
+      if (scrollLeft > 0) act(() => tabViewport.dispatchEvent(new Event('scroll')));
 
-    expect(tabViewport).toHaveAttribute('data-fade-right', 'true');
-    expect(tabViewport).toHaveAttribute('data-fade-left', 'false');
-    expect(tabViewport.style.maskImage).toContain('linear-gradient');
-  });
+      expect(tabViewport).toHaveAttribute('data-fade-left', fadeLeft);
+      expect(tabViewport).toHaveAttribute('data-fade-right', fadeRight);
+      expect(tabViewport.style.maskImage).toBe(mask);
+    },
+  );
 
-  it('fades the left edge only once scrolled to the end', () => {
-    const tabViewport = renderWithViewportGeometry(120, 300);
-    Object.defineProperties(tabViewport, {
-      scrollLeft: { configurable: true, writable: true, value: 180 },
-    });
+  it.each([
+    { side: 'left', activeRect: rect(0, 50), expectedLeft: -16 },
+    { side: 'right', activeRect: rect(50, 100), expectedLeft: 16 },
+  ])(
+    'reveals a selected tab already in the viewport but under the $side fade',
+    ({ activeRect, expectedLeft }) => {
+      const tabViewport = renderWithViewportGeometry(100, 500, 100);
+      const scrollBy = vi.fn();
+      tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 100));
+      tabViewport.scrollBy = scrollBy as unknown as HTMLDivElement['scrollBy'];
+      screen.getByRole('tab', { selected: true }).getBoundingClientRect = vi.fn(() => activeRect);
 
-    act(() => window.dispatchEvent(new Event('resize')));
-    act(() => tabViewport.dispatchEvent(new Event('scroll')));
+      act(() => window.dispatchEvent(new Event('resize')));
 
-    expect(tabViewport).toHaveAttribute('data-fade-left', 'true');
-    expect(tabViewport).toHaveAttribute('data-fade-right', 'false');
-    expect(tabViewport.style.maskImage).toContain('linear-gradient');
-  });
-
-  it('applies no fade when the tab strip fits', () => {
-    const tabViewport = renderWithViewportGeometry(300, 300);
-
-    act(() => window.dispatchEvent(new Event('resize')));
-
-    expect(tabViewport).toHaveAttribute('data-fade-left', 'false');
-    expect(tabViewport).toHaveAttribute('data-fade-right', 'false');
-    expect(tabViewport.style.maskImage).toBe('');
-  });
+      expect(scrollBy).toHaveBeenCalledWith({ left: expectedLeft, behavior: 'smooth' });
+    },
+  );
 });

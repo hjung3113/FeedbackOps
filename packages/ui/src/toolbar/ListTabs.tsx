@@ -73,16 +73,20 @@ export function ListTabs({
 
     const viewportRect = viewport.getBoundingClientRect();
     const activeRect = active.getBoundingClientRect();
+    const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+    const canScrollLeft = viewport.scrollLeft > 1;
+    const canScrollRight = maxScrollLeft - viewport.scrollLeft > 1;
+    const visibleLeft = viewportRect.left + (canScrollLeft ? EDGE_FADE_PX : 0);
+    const visibleRight = viewportRect.right - (canScrollRight ? EDGE_FADE_PX : 0);
     let left = 0;
-    if (activeRect.left < viewportRect.left) {
-      left = activeRect.left - viewportRect.left;
-      if (viewport.scrollLeft + left > 1) left -= EDGE_FADE_PX;
-    } else if (activeRect.right > viewportRect.right) {
-      left = activeRect.right - viewportRect.right;
-      const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
-      if (maxScrollLeft - (viewport.scrollLeft + left) > 1) left += EDGE_FADE_PX;
+    if (activeRect.left < visibleLeft) left = activeRect.left - visibleLeft;
+    else if (activeRect.right > visibleRight) left = activeRect.right - visibleRight;
+
+    if (left !== 0) {
+      const destination = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + left));
+      const scrollDelta = destination - viewport.scrollLeft;
+      if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: 'smooth' });
     }
-    if (left !== 0) viewport.scrollBy({ left, behavior: 'smooth' });
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: tabKey is the rebind trigger when the tab set changes.

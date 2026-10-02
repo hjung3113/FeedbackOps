@@ -52,24 +52,16 @@ describe('ManagedSystemPill', () => {
     expect(container.querySelector('[data-mark]')).toBeNull();
   });
 
-  it('renders the dot muted when archived', () => {
+  it('renders a dot and muted style when archived=true', () => {
     const { container } = render(
       <ManagedSystemPill name="Old System" mark="#aaa" archived={true} />,
     );
     const mark = container.querySelector<HTMLElement>('[data-mark]');
-    // Muting stays on the pill (opacity), so the dot inherits it.
+    const pill = container.querySelector<HTMLElement>('[data-archived="true"]');
     expect(mark).not.toBeNull();
-    expect(mark?.parentElement).toHaveAttribute('data-archived', 'true');
-    expect((mark?.parentElement as HTMLElement).style.opacity).toBe('0.6');
-  });
-
-  it('sets data-archived="true" and muted style when archived=true', () => {
-    const { container } = render(
-      <ManagedSystemPill name="Old System" mark="#aaa" archived={true} />,
-    );
-    const pill = container.querySelector('[data-archived="true"]');
     expect(pill).not.toBeNull();
-    expect((pill as HTMLElement).style.opacity).toBe('0.6');
+    expect(mark?.parentElement).toBe(pill);
+    expect(pill?.style.opacity).toBe('0.6');
   });
 
   it('sets data-archived="false" when archived=false', () => {
