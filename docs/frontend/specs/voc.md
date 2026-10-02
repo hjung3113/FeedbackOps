@@ -323,6 +323,8 @@ VOC verbs registered in `features/voc/command-catalog.ts`:
 
 Per `docs/frontend/interaction-patterns.md` §Command menu: commands resolve via backend route-resolution endpoint when ambiguous (e.g. "Open VOC 2814" must be reachable even when the actor is on `/tasks`). Backend returns `route_intent: { route, params }` and the menu navigates via TanStack Router. Frontend MUST NOT synthesize commands the backend marked `hidden`.
 
+> Shipped in #611 (`apps/frontend/src/lib/layout/command-palette/`, not `features/voc/command-catalog.ts`): the `voc.navigate.*` verbs are derived generically from `RAIL_ITEMS` + `NAV_TREE` (no per-domain catalog yet), `voc.create` ships, and display-id open (`voc.open.<display_id>` on demand via `GET /nav/resolve`) ships. `voc.scope.switch` and the recent-six `voc.open.<id>` rows are deferred. See `docs/frontend/routes-and-layout.md` → Global command palette (#611).
+
 ### 5.3 Optimistic mutation + undo (Triage Console)
 
 Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.

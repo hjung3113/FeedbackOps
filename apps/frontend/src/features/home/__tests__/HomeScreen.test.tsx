@@ -379,8 +379,9 @@ describe('HomeScreen route content', () => {
     render(<AppSidebar entries={homeSidebarEntries(summary, true)} />);
 
     const sidebar = within(screen.getByTestId('app-sidebar'));
-    expect(sidebar.queryByText('Command')).not.toBeInTheDocument();
-    expect(sidebar.queryByText('⌘K')).not.toBeInTheDocument();
+    // #611 restored the Command row as a real action (sidebar-nav-command);
+    // RECENT and the prototype's sample queue rows stay placeholders.
+    expect(sidebar.getByTestId('sidebar-nav-command')).toBeInTheDocument();
     expect(sidebar.queryByText('RECENT')).not.toBeInTheDocument();
     expect(sidebar.queryByText('FIN-181 SSO 재인증')).not.toBeInTheDocument();
     expect(sidebar.queryByText('VOC-2814 사이드 메뉴')).not.toBeInTheDocument();

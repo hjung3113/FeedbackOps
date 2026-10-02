@@ -5,12 +5,19 @@ import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSys
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
+import { CommandPalette } from './command-palette/CommandPalette';
+import type { PaletteNavTree } from './command-palette/commands';
 import { AppRail, type RailDomain } from './AppRail';
-import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
+import { AppSidebar, type SidebarNavItem } from './AppSidebar';
 
 export interface AppFrameProps {
-  sidebarEntries: SidebarNavEntry[];
+  sidebarEntries: SidebarNavItem[];
   activeDomain: RailDomain;
+  /**
+   * NAV_TREE passthrough that arms the global command palette (#611). Routes
+   * that do not pass it (e.g. RouteFallback's error frame) get no palette.
+   */
+  paletteNavTree?: PaletteNavTree;
   managedSystemId?: string;
   /** VOC routes already encode this scope in their strict URL search schema. */
   syncManagedSystemFromUrl?: boolean;
@@ -35,7 +42,7 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
   React.useEffect(() => {
@@ -196,6 +203,9 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
         >
           {slotOpen && slotNode}
         </aside>
+        {paletteNavTree !== undefined && (
+          <CommandPalette navTree={paletteNavTree} canAccessWorkspaceAdmin={canAccessWorkspaceAdmin} />
+        )}
       </div>
     </DetailPanelSlotContext.Provider>
   );

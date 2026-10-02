@@ -38,6 +38,22 @@ export interface SidebarNavEntry {
   trailing?: React.ReactNode;
 }
 
+/**
+ * Sidebar row that runs an action instead of navigating (#611: the Home
+ * Command row opens the palette — an action, not a route). No href, no count.
+ */
+export interface SidebarNavActionEntry {
+  id: string;
+  label: string;
+  section?: string;
+  icon?: React.ReactNode;
+  active?: boolean;
+  trailing?: React.ReactNode;
+  onSelect: () => void;
+}
+
+export type SidebarNavItem = SidebarNavEntry | SidebarNavActionEntry;
+
 export interface SidebarFooterItem {
   id: string;
   label: string;
@@ -53,7 +69,7 @@ export interface ManagedSystemScopeOption {
 }
 
 export interface AppSidebarProps {
-  entries: SidebarNavEntry[];
+  entries: SidebarNavItem[];
   footerItems?: SidebarFooterItem[];
   systemLabel?: string;
   systemSubtitle?: string;
@@ -229,10 +245,16 @@ export function AppSidebar({
         <div className="flex flex-col gap-0.5">
           {entries.map((entry, index) => {
             const showSection = !collapsed && entry.section !== undefined && entry.section !== entries[index - 1]?.section;
-            const count = entry.count ?? (entry.countKey === undefined ? undefined : counts[entry.countKey]);
+            const count = 'onSelect' in entry ? undefined : (entry.count ?? (entry.countKey === undefined ? undefined : counts[entry.countKey]));
             return <React.Fragment key={entry.id}>
               {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
-              {entry.disabled ? (
+              {'onSelect' in entry ? (
+                <button type="button" onClick={entry.onSelect} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined} aria-haspopup="dialog">
+                  {entry.icon && <span className="shrink-0">{entry.icon}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  {!collapsed && entry.trailing}
+                </button>
+              ) : entry.disabled ? (
                 <button type="button" disabled className={cn(navItemClass(collapsed, entry.active, entry.contextActive), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
