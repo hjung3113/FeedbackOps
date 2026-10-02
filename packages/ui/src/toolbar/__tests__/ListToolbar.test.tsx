@@ -290,7 +290,7 @@ describe('ListToolbar — tabs mode', () => {
       rerender(<ListToolbar tabs={nextTabs} activeTab={nextActiveTab} />);
 
       expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
-      expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
+      expect(scrollBy).toHaveBeenCalledWith({ left: 156, behavior: 'smooth' });
     },
   );
 
@@ -424,6 +424,35 @@ describe('ListTabs — edge fade', () => {
     });
     return tabViewport;
   }
+
+  it('keeps a revealed middle tab outside the remaining right fade', () => {
+    const { container, rerender } = render(<ListTabs tabs={tabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    Object.defineProperties(tabViewport, {
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+      scrollWidth: { configurable: true, value: 500 },
+      clientWidth: { configurable: true, value: 100 },
+    });
+    tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 100));
+    tabViewport.scrollBy = vi.fn((options: ScrollToOptions) => {
+      tabViewport.scrollLeft += options.left ?? 0;
+      tabViewport.dispatchEvent(new Event('scroll'));
+    }) as unknown as HTMLDivElement['scrollBy'];
+    screen.getByRole('tab', { name: '미분류' }).getBoundingClientRect = vi.fn(() => rect(0, 40));
+    const middleTab = screen.getByRole('tab', { name: /미배정/ });
+    middleTab.getBoundingClientRect = vi.fn(() =>
+      rect(150 - tabViewport.scrollLeft, 200 - tabViewport.scrollLeft),
+    );
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    rerender(<ListTabs tabs={tabs} activeTab="unassigned" />);
+
+    expect(tabViewport.scrollLeft).toBe(116);
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'true');
+    expect(middleTab.getBoundingClientRect().right).toBe(
+      tabViewport.getBoundingClientRect().right - 16,
+    );
+  });
 
   it('fades the right edge only when the viewport can scroll right', () => {
     const tabViewport = renderWithViewportGeometry(120, 300);

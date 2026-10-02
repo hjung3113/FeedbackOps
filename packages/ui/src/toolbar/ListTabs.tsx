@@ -73,12 +73,15 @@ export function ListTabs({
 
     const viewportRect = viewport.getBoundingClientRect();
     const activeRect = active.getBoundingClientRect();
-    const left =
-      activeRect.left < viewportRect.left
-        ? activeRect.left - viewportRect.left
-        : activeRect.right > viewportRect.right
-          ? activeRect.right - viewportRect.right
-          : 0;
+    let left = 0;
+    if (activeRect.left < viewportRect.left) {
+      left = activeRect.left - viewportRect.left;
+      if (viewport.scrollLeft + left > 1) left -= EDGE_FADE_PX;
+    } else if (activeRect.right > viewportRect.right) {
+      left = activeRect.right - viewportRect.right;
+      const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+      if (maxScrollLeft - (viewport.scrollLeft + left) > 1) left += EDGE_FADE_PX;
+    }
     if (left !== 0) viewport.scrollBy({ left, behavior: 'smooth' });
   }, []);
 
