@@ -1,6 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
+import { CAPABILITY_LABELS } from '@/lib/copy/capabilities';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { Button, Input, ListToolbar, type ListToolbarTab, Skeleton, UserAvatar } from '@fops/ui';
@@ -157,7 +158,7 @@ export function SurveyList({
               body={
                 canCreate
                   ? 'Survey를 만들어 응답을 수집하세요.'
-                  : 'Survey를 만들려면 survey.manage 권한이 필요합니다.'
+                  : `Survey를 만들려면 ${CAPABILITY_LABELS['survey.manage']} 권한이 필요합니다.`
               }
               actionContent={
                 canCreate ? (

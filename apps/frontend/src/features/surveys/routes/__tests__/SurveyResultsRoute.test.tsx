@@ -1,4 +1,5 @@
-import { registerSurveyQueryDefaults, surveyKeys } from '@/features/surveys/hooks/useSurveys';
+import { surveyKeys } from '@/features/surveys/hooks/useSurveys';
+import { registerSurveyQueryDefaults } from '@/features/surveys/policy/resultsReadDenial';
 import { ApiError } from '@/lib/api/types';
 import { routeTree } from '@/routeTree.gen';
 import type { PermissionBlockedPanelProps } from '@fops/ui';
@@ -969,6 +970,104 @@ describe('/surveys/:surveyId/results route', () => {
 
       expect(await screen.findByText(bodyText)).toBeInTheDocument();
       expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      const header = screen.getByTestId('survey-result-header');
+      expect(within(header).queryByRole('link', { name: /후속 조치/ })).not.toBeInTheDocument();
+      expect(within(header).queryByText('후속 조치 · 1')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['results network failure', 'results', new TypeError('network offline')],
+    [
+      'results conflict',
+      'results',
+      new ApiError(409, { code: 'conflict.survey_results_unavailable', message: 'conflict' }),
+    ],
+    ['Follow-up network failure', 'follow-up', new TypeError('network offline')],
+    [
+      'Follow-up conflict',
+      'follow-up',
+      new ApiError(409, { code: 'conflict.survey_results_unavailable', message: 'conflict' }),
+    ],
+  ] as const)(
+    'keeps retained response data hidden after a %s replaces a denial',
+    async (_transition, read, replacementError) => {
+      useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+      mockParentRoute();
+      useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+      useSurveyResults.mockReturnValue(
+        read === 'results'
+          ? {
+              data: retainedResults(),
+              isLoading: false,
+              isError: true,
+              isSuccess: false,
+              error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+              dataUpdatedAt: 1000,
+              errorUpdatedAt: 2000,
+            }
+          : {
+              data: retainedResults(),
+              isLoading: false,
+              isError: false,
+              isSuccess: true,
+              dataUpdatedAt: 1000,
+            },
+      );
+      useOutcomeFollowUp.mockReturnValue(
+        read === 'follow-up'
+          ? {
+              data: holderFollowUpData(),
+              isLoading: false,
+              isError: true,
+              isSuccess: false,
+              error: new ApiError(403, { code: 'permission.denied', message: 'denied' }),
+              dataUpdatedAt: 1000,
+              errorUpdatedAt: 2000,
+            }
+          : {
+              data: holderFollowUpData(),
+              isLoading: false,
+              isError: false,
+              isSuccess: true,
+              dataUpdatedAt: 1000,
+            },
+      );
+
+      const { navigateToResults, remountResultsRoute } = mountResultsRouteForTransition();
+      await navigateToResults();
+      expect(await screen.findByText('Survey 결과')).toBeInTheDocument();
+
+      if (read === 'results') {
+        useSurveyResults.mockReturnValue({
+          data: retainedResults(),
+          isLoading: false,
+          isError: true,
+          isSuccess: false,
+          error: replacementError,
+          dataUpdatedAt: 1000,
+          errorUpdatedAt: 3000,
+        });
+      } else {
+        useOutcomeFollowUp.mockReturnValue({
+          data: holderFollowUpData(),
+          isLoading: false,
+          isError: true,
+          isSuccess: false,
+          error: replacementError,
+          dataUpdatedAt: 1000,
+          errorUpdatedAt: 3000,
+        });
+      }
+      await remountResultsRoute();
+
+      expect(await screen.findByText('Survey 결과')).toBeInTheDocument();
+      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      expect(screen.queryByText('응답 12건')).not.toBeInTheDocument();
+      expect(screen.queryByText('Retained distribution')).not.toBeInTheDocument();
+      expect(screen.queryByText('Retained approved excerpt')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('survey-result-next-actions')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('outcome-follow-up-callout')).not.toBeInTheDocument();
       const header = screen.getByTestId('survey-result-header');
       expect(within(header).queryByRole('link', { name: /후속 조치/ })).not.toBeInTheDocument();
       expect(within(header).queryByText('후속 조치 · 1')).not.toBeInTheDocument();

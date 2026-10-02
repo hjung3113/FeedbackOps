@@ -73,6 +73,16 @@ function FindingNotFound(): React.ReactElement {
     />
   );
 }
+
+type FindingDetailErrorState = 'not-found' | 'blocked' | 'error';
+
+function classifyFindingDetailError(error: unknown): FindingDetailErrorState {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'not_found.record') return 'not-found';
+  if (code === 'permission.denied') return 'blocked';
+  return 'error';
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 export function FindingDetailPanel({
@@ -99,8 +109,8 @@ export function FindingDetailPanel({
 
   // 2. Error
   if (isError) {
-    const code = (error as { code?: string } | null)?.code;
-    if (code === 'not_found.record') {
+    const errorState = classifyFindingDetailError(error);
+    if (errorState === 'not-found') {
       return (
         <FindingPanelLayout headerExtras={headerExtras}>
           <FindingNotFound />
@@ -108,7 +118,7 @@ export function FindingDetailPanel({
       );
     }
     // permission.denied → finding.read blocked
-    if (code === 'permission.denied') {
+    if (errorState === 'blocked') {
       return (
         <FindingPanelLayout headerExtras={headerExtras}>
           <div className="flex h-full items-center justify-center p-6">

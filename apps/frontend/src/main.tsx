@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { registerSurveyQueryDefaults } from './features/surveys/hooks/useSurveys';
+import { registerSurveyQueryDefaults } from './features/surveys/policy/resultsReadDenial';
 import { ApiError } from './lib/api/types';
 import { createAppRouter } from './lib/router/app-router';
 import './styles.css';

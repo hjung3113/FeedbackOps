@@ -31,7 +31,9 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 - `apps/frontend/src/routes/_authed/surveys/index.tsx` — Survey list and selected-detail composition.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route.
-- `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results route.
+- `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results presentation and outer metadata states.
+- `apps/frontend/src/features/surveys/hooks/useSurveyResultsController.ts` — metadata/results/Follow-up reads, capability readiness, denial persistence, safe content selection, and document title.
+- `apps/frontend/src/features/surveys/policy/resultsReadDenial.ts` — sticky denial key/default registration, denial merge, and results-read projection.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.follow-up.tsx` — Survey follow-up route.
 - `apps/frontend/src/routes/_authed/surveys/participate.tsx` — answerable Surveys and response history.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId_.respond.tsx` — respondent form deep link.
