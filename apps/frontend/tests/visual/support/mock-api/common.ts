@@ -83,6 +83,21 @@ export function createCommonHandlers(context: MockApiContext): MockApiHandler[] 
           },
         }),
     },
+    {
+      // #611 command palette display-id resolution. The palette only calls this
+      // on selection; answer generously so specs that do select stay alive.
+      method: 'GET',
+      path: '/nav/resolve',
+      handle: (route, _context, url) => {
+        const displayId = (url.searchParams.get('display_id') ?? 'VOC-1').toUpperCase();
+        return json(route, 200, {
+          entity_type: 'voc',
+          id: IDS.existingVoc,
+          display_id: displayId,
+          route_intent: { route: '/vocs', search: { view: 'inbox', selected: IDS.existingVoc } },
+        });
+      },
+    },
   ];
 }
 
