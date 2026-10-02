@@ -132,7 +132,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
 
   async function cleanupNavResolveFixtures() {
     if (!migrateHandle || !dbHandle || !foreignWorkspaceId) return;
-    const msSub = `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
+    const msSub = 'select id from core.managed_systems where workspace_id = $1 and slug like $2';
     await migrateHandle.pool.query(
       `delete from task_request.task_requests where workspace_id = $1 and primary_managed_system_id in (${msSub})`,
       [WORKSPACE_ID, `${PREFIX}%`],
@@ -155,7 +155,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       [foreignWorkspaceId, `${PREFIX}%`],
     );
     await dbHandle.pool.query(
-      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [foreignWorkspaceId, `${PREFIX}%`],
     );
   }
@@ -274,7 +274,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     return (
       (
         await dbHandle.pool.query<{ id: string }>(
-          `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
+          'select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1',
           [WORKSPACE_ID, `${PREFIX}%`],
         )
       ).rows[0]?.id ?? missingRow()
@@ -393,7 +393,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       const msId =
         (
           await dbHandle.pool.query<{ id: string }>(
-            `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
+            'select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1',
             [WORKSPACE_ID, `${PREFIX}%`],
           )
         ).rows[0]?.id ?? missingRow();
@@ -546,7 +546,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     // same actor, same prefix, deep-equal body, identical cache-control.
     const seed = await seedScenario();
     const missingDisplayId = await unusedDisplayId('VOC', 'voc.vocs');
-    await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [
+    await dbHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [
       seed.vocId,
     ]);
 
