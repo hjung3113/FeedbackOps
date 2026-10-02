@@ -54,7 +54,7 @@ export const RAIL_ITEMS: Array<{
   { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
   { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
   { key: 'integration', label: '연동', href: '/integration', icon: Boxes },
-  { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
+  { key: 'surveys', label: 'Surveys', href: '/surveys/participate', icon: FileBarChart },
   { key: 'admin', label: '관리자', href: '/admin/managed-systems', icon: Shield },
 ];
 

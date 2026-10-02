@@ -1,9 +1,16 @@
 import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
+  type AnswerableSurveysResponse,
+  type MySurveyResponsesResponse,
+  type SurveyResponseSubmission,
   type SurveyResultDto,
+  answerableSurveysResponseSchema,
   listSurveysResponseSchema,
+  mySurveyResponsesResponseSchema,
   surveyDetailDtoSchema,
+  surveyRespondentFormDtoSchema,
+  surveyResponseSubmittedDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +21,9 @@ export const surveyKeys = {
   listScoped: (managedSystemId: string) => ['surveys', { managedSystemId }] as const,
   detail: (id: string) => ['surveys', id] as const,
   results: (id: string) => ['surveys', id, 'results'] as const,
+  answerable: ['surveys', 'participation', 'answerable'] as const,
+  myResponses: ['surveys', 'participation', 'history'] as const,
+  respondentForm: (id: string) => ['surveys', 'participation', id, 'form'] as const,
   // Sticky results-read denial marker written by the results route when an
   // authoritative denial (403 / denial-shaped 404 on results or Follow-up) is
   // observed; see $surveyId.results.tsx. Carries only `{ at, blocked }` —
@@ -24,6 +34,71 @@ export const surveyKeys = {
   resultsReadDenial: (id: string) => ['surveys', 'results-read-denial', id] as const,
   outcomeFollowUp: (id: string) => ['surveys', id, 'outcome-follow-up'] as const,
 };
+
+export function useAnswerableSurveys() {
+  return useQuery<AnswerableSurveysResponse>({
+    queryKey: surveyKeys.answerable,
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest('GET', '/me/answerable-surveys', answerableSurveysResponseSchema, {
+          signal,
+        })
+      ).data,
+    retry: false,
+  });
+}
+
+export function useMySurveyResponses() {
+  return useQuery<MySurveyResponsesResponse>({
+    queryKey: surveyKeys.myResponses,
+    queryFn: async ({ signal }) =>
+      (await apiRequest('GET', '/me/survey-responses', mySurveyResponsesResponseSchema, { signal }))
+        .data,
+    retry: false,
+  });
+}
+
+export function useSurveyRespondentForm(surveyId: string) {
+  return useQuery({
+    queryKey: surveyKeys.respondentForm(surveyId),
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest('GET', `/surveys/${surveyId}/form`, surveyRespondentFormDtoSchema, {
+          signal,
+        })
+      ).data,
+    enabled: Boolean(surveyId),
+    retry: false,
+  });
+}
+
+export function useSubmitSurveyResponse(surveyId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      body,
+      idempotencyKey,
+    }: {
+      body: SurveyResponseSubmission;
+      idempotencyKey: string;
+    }) =>
+      (
+        await apiRequest(
+          'POST',
+          `/surveys/${surveyId}/responses`,
+          surveyResponseSubmittedDtoSchema,
+          {
+            body,
+            idempotencyKey,
+          },
+        )
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.answerable });
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.myResponses });
+    },
+  });
+}
 
 /**
  * Registers cache defaults for the sticky results-read denial markers. The

@@ -27,14 +27,15 @@ import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
 import { GLOSSARY, createLabel } from '../lib/copy/glossary';
+import { SURVEY_PARTICIPATION_COPY } from '../lib/copy/survey-participation';
 import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
+import { AppFrame } from '../lib/layout/AppFrame';
+import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
+import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import {
   AuthenticatedRouteErrorFallback,
   AuthenticatedRoutePendingFallback,
 } from '../lib/layout/RouteFallback';
-import { AppFrame } from '../lib/layout/AppFrame';
-import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
-import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import type { AppRouterContext } from './__root';
 import { VOC_DEFAULT_VIEW } from './_authed/vocs';
 
@@ -167,8 +168,15 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
   ],
   surveys: [
     {
+      id: 'surveys-participate',
+      label: SURVEY_PARTICIPATION_COPY.participate,
+      href: '/surveys/participate',
+      section: 'Survey',
+      icon: <FileBarChart className="h-4 w-4" />,
+    },
+    {
       id: 'surveys',
-      label: GLOSSARY.allSurveys,
+      label: SURVEY_PARTICIPATION_COPY.manage,
       href: '/surveys',
       section: 'Survey',
       icon: <FileBarChart className="h-4 w-4" />,
@@ -216,6 +224,13 @@ export function isSidebarEntryActive(
   pathname: string,
   searchStr: string,
 ): boolean {
+  const participationPath =
+    pathname === '/surveys/participate' || /^\/surveys\/[^/]+\/respond$/.test(pathname);
+  if (entry.id === 'surveys-participate') return participationPath;
+  if (entry.id === 'surveys') {
+    return (pathname === '/surveys' || pathname.startsWith('/surveys/')) && !participationPath;
+  }
+
   const [entryPath = '', entrySearch] = entry.href.split('?');
   if (entryPath !== pathname) {
     if (entry.id === 'integration-dashboard' || !pathname.startsWith(`${entryPath}/`)) {

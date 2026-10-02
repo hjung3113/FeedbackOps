@@ -83,6 +83,12 @@ describe('shipped deep-link contract', () => {
     ).not.toThrow();
   });
 
+  test('matches /surveys/participate to its static route instead of the Survey detail route', () => {
+    const { foundRoute } = router.getMatchedRoutes('/surveys/participate');
+
+    expect(foundRoute?.id).toBe('/_authed/surveys/participate');
+  });
+
   test('rejects a link when route validation drops one of its parameters', () => {
     expect(() => assertResolvable('/vocs?view=inbox&tab=not-a-voc-tab')).toThrow();
   });

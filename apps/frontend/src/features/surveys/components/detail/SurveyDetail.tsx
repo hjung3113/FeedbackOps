@@ -1,4 +1,6 @@
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { SURVEY_PARTICIPATION_COPY } from '@/lib/copy/survey-participation';
 import { Button, DetailPanelHeader, EmptyState, PanelTitleBlock } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
@@ -30,6 +32,14 @@ export function SurveyDetail({
       ? '—'
       : (actorNamesById.get(survey.operator_actor_id) ?? GLOSSARY.unknownUser)
     : '담당자 미지정';
+  const canEditQuestions = canManage && survey.status === 'draft';
+  const builderAction = canEditQuestions ? (
+    <Button asChild variant="primary" size="sm">
+      <Link to="/surveys/$surveyId" params={{ surveyId: survey.id }} search={{ builder: true }}>
+        {SURVEY_PARTICIPATION_COPY.editQuestions}
+      </Link>
+    </Button>
+  ) : undefined;
   return (
     <aside
       className="flex h-full flex-col border-l border-border-subtle bg-surface-detail"
@@ -39,6 +49,7 @@ export function SurveyDetail({
         kind="survey"
         id={survey.display_id}
         {...(onClose !== undefined ? { onClose } : {})}
+        {...(builderAction !== undefined ? { extras: builderAction } : {})}
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="border-b border-border-subtle pb-4">
@@ -70,25 +81,16 @@ export function SurveyDetail({
             </div>
           )}
         </div>
-        <section className="mt-6 px-5">
-          <h2 className="mb-2 text-sm font-medium">Survey 빌더</h2>
-          {canManage && survey.status === 'draft' ? (
-            <Link
-              to="/surveys/$surveyId"
-              params={{ surveyId: survey.id }}
-              search={{ builder: true }}
-              className="inline-flex rounded-md bg-accent-primary px-3 py-2 text-sm font-medium text-white"
-            >
-              이어서 편집
-            </Link>
-          ) : (
+        {!canEditQuestions && (
+          <section className="mt-6 px-5">
+            <h2 className="mb-2 text-sm font-medium">Survey 빌더</h2>
             <p className="text-sm text-text-muted">
               {survey.status === 'draft'
                 ? 'Survey 관리 권한이 없습니다.'
                 : `${surveyStatusLabel(survey.status)} 상태 — 질문 변경은 잠겨 있습니다.`}
             </p>
-          )}
-        </section>
+          </section>
+        )}
         <section className="mt-6 px-5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-sm font-medium">결과 요약</h2>
@@ -116,7 +118,25 @@ export function SurveyDetail({
               ))}
             </ol>
           ) : (
-            <EmptyState size="sm" title="질문이 없습니다." />
+            <EmptyState
+              size="sm"
+              title="질문이 없습니다."
+              {...(canEditQuestions
+                ? {
+                    action: (
+                      <Button asChild size="sm">
+                        <Link
+                          to="/surveys/$surveyId"
+                          params={{ surveyId: survey.id }}
+                          search={{ builder: true }}
+                        >
+                          {SURVEY_PARTICIPATION_COPY.addFirstQuestion}
+                        </Link>
+                      </Button>
+                    ),
+                  }
+                : {})}
+            />
           )}
         </section>
         <section className="mt-6 space-y-3 px-5 pb-5 text-sm">
@@ -149,4 +169,3 @@ export function SurveyDetail({
     </aside>
   );
 }
-import { GLOSSARY } from '@/lib/copy/glossary';

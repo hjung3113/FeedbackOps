@@ -85,6 +85,30 @@ describe('_authed beforeLoad', () => {
 });
 
 describe('_authed sidebar navigation tree', () => {
+  it('puts Survey participation before Survey management', () => {
+    expect(
+      NAV_TREE.surveys.map(({ id, label, href, countKey }) => ({ id, label, href, countKey })),
+    ).toEqual([
+      {
+        id: 'surveys-participate',
+        label: 'Survey 참여',
+        href: '/surveys/participate',
+        countKey: undefined,
+      },
+      { id: 'surveys', label: 'Survey 관리', href: '/surveys', countKey: 'surveys.all' },
+    ]);
+  });
+
+  it.each([
+    ['/surveys', 'surveys'],
+    ['/surveys/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'surveys'],
+    ['/surveys/participate', 'surveys-participate'],
+    ['/surveys/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/respond', 'surveys-participate'],
+  ] as const)('activates one Survey destination for %s', (pathname, expectedId) => {
+    const states = getSidebarEntryStates(NAV_TREE.surveys, pathname, '');
+    expect(states.filter((entry) => entry.active).map((entry) => entry.id)).toEqual([expectedId]);
+  });
+
   it('keeps every shipped destination reachable from exactly one rail tree', () => {
     const entries = SIDEBAR_ENTRIES.map(({ id, label, href, section }) => ({
       id,

@@ -6,6 +6,14 @@ import {
   surveyResultsFollowUpReadVisualFixture,
 } from '../../fixtures/survey-follow-up';
 import {
+  surveyParticipationAnswerableFixture,
+  surveyParticipationEmptyFixture,
+  surveyParticipationHistoryFixture,
+  surveyParticipationId,
+  surveyRespondentFormFixture,
+  surveyResponseSubmittedFixture,
+} from '../../fixtures/survey-participation';
+import {
   surveyResultVisualFixture,
   surveyResultVisualListFixture,
   surveyResultsFixtureFor,
@@ -41,6 +49,45 @@ export function createSurveyActorHandlers(context: MockApiContext): MockApiHandl
 export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
   const handlers: MockApiHandler[] = [];
+
+  if (options.surveyParticipationScenario) {
+    const empty = options.surveyParticipationScenario === 'empty';
+    handlers.push(
+      {
+        method: 'GET',
+        path: '/me/answerable-surveys',
+        handle: (route) =>
+          json(
+            route,
+            200,
+            empty ? surveyParticipationEmptyFixture : surveyParticipationAnswerableFixture,
+          ),
+      },
+      {
+        method: 'GET',
+        path: '/me/survey-responses',
+        handle: (route) =>
+          json(
+            route,
+            200,
+            empty ? { items: [], page: { has_more: false } } : surveyParticipationHistoryFixture,
+          ),
+      },
+      {
+        method: 'GET',
+        path: `/surveys/${surveyParticipationId}/form`,
+        handle: (route) => json(route, 200, surveyRespondentFormFixture),
+      },
+      {
+        method: 'POST',
+        path: `/surveys/${surveyParticipationId}/responses`,
+        handle: (route, mockContext) => {
+          mockContext.postedBodies.push(route.request().postDataJSON());
+          return json(route, 201, surveyResponseSubmittedFixture);
+        },
+      },
+    );
+  }
 
   if (options.surveyScenario) {
     handlers.push({

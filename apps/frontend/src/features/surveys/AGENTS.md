@@ -8,7 +8,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 ## Route Boundary
 
-- Owns `/surveys`, `/surveys/:surveyId`, `/surveys/:surveyId/results`, and `/surveys/:surveyId/follow-up`.
+- Owns `/surveys`, `/surveys/:surveyId`, `/surveys/:surveyId/results`, `/surveys/:surveyId/follow-up`, `/surveys/participate`, and `/surveys/:surveyId/respond`.
 - Survey-derived actions may link into Integration or Tasks through approved API contracts.
 
 ## Invariants
@@ -33,6 +33,10 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.tsx` — Survey builder and detail route.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results route.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.follow-up.tsx` — Survey follow-up route.
+- `apps/frontend/src/routes/_authed/surveys/participate.tsx` — answerable Surveys and response history.
+- `apps/frontend/src/routes/_authed/surveys/$surveyId.respond.tsx` — respondent form deep link.
+- `apps/frontend/src/features/surveys/routes/SurveyParticipationPage.tsx` — participation list and respondent form states.
+- `apps/frontend/src/features/surveys/components/respond/` — shared preview and respondent question rendering/branching.
 - `apps/frontend/src/features/surveys/components/list/SurveyList.tsx` — Survey list rows and list states.
 - `apps/frontend/src/features/surveys/components/detail/SurveyDetail.tsx` — Survey detail fields and actions.
 - `apps/frontend/src/features/surveys/components/builder/SurveyBuilder.tsx` — Survey builder composition.

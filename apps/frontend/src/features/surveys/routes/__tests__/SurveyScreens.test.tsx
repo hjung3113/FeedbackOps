@@ -571,6 +571,33 @@ describe('Survey screens', () => {
     expect(screen.getByRole('heading', { name: '질문' })).toBeInTheDocument();
   });
 
+  it('puts the Builder action in the header and adds a Builder action to an empty question state', async () => {
+    renderDetailWithRouter({ ...survey, questions: [] }, true);
+
+    const header = await screen.findByTestId('detail-panel-header-content');
+    expect(within(header).getByRole('link', { name: '질문 편집' })).toHaveAttribute(
+      'href',
+      '/surveys/survey-1?builder=true',
+    );
+    expect(screen.getAllByRole('link', { name: '질문 편집' })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '새 질문 추가' })).toHaveAttribute(
+      'href',
+      '/surveys/survey-1?builder=true',
+    );
+  });
+
+  it.each([
+    ['no manage permission', { ...survey, status: 'draft' as const }, false],
+    ['non-draft Survey', { ...survey, status: 'open' as const }, true],
+  ])('keeps the muted Builder status for %s', async (_label, item, canManage) => {
+    renderDetailWithRouter(item, canManage);
+
+    expect(
+      await screen.findByText(/질문 변경은 잠겨 있습니다\.|Survey 관리 권한이 없습니다\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '질문 편집' })).not.toBeInTheDocument();
+  });
+
   it('launches a manageable draft survey and returns to detail after success', async () => {
     const onBack = vi.fn();
     apiClient.mockResolvedValue({ data: { ...survey, status: 'open' } });
