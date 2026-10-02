@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneDetailDto } from '@fops/shared';
 import { Button, DirtyConfirmation } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -50,7 +51,7 @@ export function MilestoneSourceSection({
         </div>
         {sourceFinding ? (
           <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
-            <span className="text-xs text-text-muted">Finding에서</span>
+            <span className="text-xs text-text-muted">{GLOSSARY.fromFinding}</span>
             <div className="text-[13px] font-medium text-text-primary">
               <span className="mr-1.5 font-mono text-xs text-text-muted">
                 {sourceFinding.display_id}

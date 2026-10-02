@@ -56,10 +56,10 @@ function makeQuery(
 
 describe('<ReporterCard>', () => {
   it.each([
-    ['admin', 'Admin'],
-    ['developer', 'Developer'],
-    ['user', 'User'],
-  ] as const)('renders the canonical role label for %s', (role_level, label) => {
+    ['admin', '관리자'],
+    ['developer', '개발자'],
+    ['user', '사용자'],
+  ] as const)('renders the Korean role label for %s', (role_level, label) => {
     vi.mocked(useMe).mockReturnValue(
       makeQuery({
         data: {

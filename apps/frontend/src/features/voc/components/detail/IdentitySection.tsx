@@ -4,6 +4,7 @@
 // Reference: docs/design-prototype/screen-voc.jsx overview panel title.
 
 import { useMe } from '@/lib/auth/useMe';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocDetailEnvelope } from '@fops/shared';
@@ -40,7 +41,8 @@ export function IdentitySection({
 }: IdentitySectionProps): React.ReactElement {
   const { data: me } = useMe();
   const resolvedReporterDisplayName =
-    reporterDisplayName ?? (me?.actor.id === voc.reporter_id ? me.actor.display_name : '제출자');
+    reporterDisplayName ??
+    (me?.actor.id === voc.reporter_id ? me.actor.display_name : GLOSSARY.unknownUser);
   const relativeTime = formatRelativeTime(voc.created_at);
 
   // Title block: prototype .panel-title typography via PanelTitleBlock.

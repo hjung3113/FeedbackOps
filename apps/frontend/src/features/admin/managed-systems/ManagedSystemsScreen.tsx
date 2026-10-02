@@ -26,6 +26,7 @@ import { Link } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
 import { useState } from 'react';
 
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 import { scopeMark } from '../lib/scopeMark.js';
@@ -220,7 +221,7 @@ function ManagedSystemsFilter({
       <PopoverTrigger asChild>
         <Button variant="subtle" size="sm" data-testid="ms-filter-button">
           <Filter className="h-4 w-4" />
-          필터
+          {GLOSSARY.filter}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end">

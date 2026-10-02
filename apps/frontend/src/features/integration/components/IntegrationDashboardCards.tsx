@@ -1,7 +1,4 @@
-import {
-  DASHBOARD_ACTION_LABELS,
-  DASHBOARD_QUEUE_ACTION_LABELS,
-} from '@/lib/copy/dashboard-actions';
+import { DASHBOARD_QUEUE_ACTION_LABELS, dashboardActionLabel } from '@/lib/copy/dashboard-actions';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
@@ -107,7 +104,7 @@ export function IntegrationDashboardQueueCard({
             data-testid={`integration-queue-secondary-${queue.id}`}
             href={queue.secondary_action.route}
           >
-            {DASHBOARD_ACTION_LABELS[queue.secondary_action.intent] ?? queue.secondary_action.label}
+            {dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label)}
           </a>
         ) : (
           <span />
@@ -119,8 +116,7 @@ export function IntegrationDashboardQueueCard({
             href={queue.next_action.route}
           >
             {DASHBOARD_QUEUE_ACTION_LABELS[queue.id] ??
-              DASHBOARD_ACTION_LABELS[queue.next_action.intent] ??
-              queue.next_action.label}
+              dashboardActionLabel(queue.next_action.intent, queue.next_action.label)}
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
           </a>
         </Button>

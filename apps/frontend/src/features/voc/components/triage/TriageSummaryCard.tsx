@@ -29,10 +29,10 @@ function ownerLabel(
   return '미지정';
 }
 
-function DiffRow({ label, from, to }: { label: string; from: string; to: string }) {
+function DiffRow({ id, label, from, to }: { id: string; label: string; from: string; to: string }) {
   return (
     <FieldRow label={label}>
-      <span className="flex items-center gap-1.5 text-sm" data-testid={`summary-diff-row-${label}`}>
+      <span className="flex items-center gap-1.5 text-sm" data-testid={`summary-diff-row-${id}`}>
         <span className="text-text-muted line-through">{from}</span>
         <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
         <span className="text-text-primary font-medium">{to}</span>
@@ -69,6 +69,7 @@ export function TriageSummaryCard({
         <>
           {severityChanged && (
             <DiffRow
+              id="Severity"
               label="심각도"
               from={
                 baseline.severity === null
@@ -84,6 +85,7 @@ export function TriageSummaryCard({
           )}
           {ownerChanged && (
             <DiffRow
+              id="Owner"
               label={GLOSSARY.owner}
               from={ownerLabel(baseline.ownerUserId, baseline.ownerTeamId, actorMap, ownerTeamName)}
               to={ownerLabel(
@@ -96,6 +98,7 @@ export function TriageSummaryCard({
           )}
           {areaChanged && (
             <DiffRow
+              id="Analytics Area"
               label="Analytics Area"
               from={
                 baseline.analyticsAreaId === null

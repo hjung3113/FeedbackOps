@@ -3,6 +3,7 @@ import { listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
@@ -137,7 +138,7 @@ export function TaskListRoute({
                   {dot()}
                   <span>
                     {task.assignee_actor_id ? (
-                      (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                      (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
                     ) : (
                       <UnassignedBadge />
                     )}

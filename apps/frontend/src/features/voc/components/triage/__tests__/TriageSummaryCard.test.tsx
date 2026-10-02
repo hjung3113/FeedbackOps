@@ -39,7 +39,7 @@ describe('TriageSummaryCard', () => {
         currentReporterStatus="received"
       />,
     );
-    const row = screen.getByTestId('summary-diff-row-심각도');
+    const row = screen.getByTestId('summary-diff-row-Severity');
     expect(row).toHaveTextContent('중간');
     expect(row).toHaveTextContent('심각');
     expect(row.querySelector('.line-through')).toHaveTextContent('중간');
@@ -62,7 +62,7 @@ describe('TriageSummaryCard', () => {
         currentReporterStatus="received"
       />,
     );
-    const row = screen.getByTestId('summary-diff-row-담당자');
+    const row = screen.getByTestId('summary-diff-row-Owner');
     expect(row).toHaveTextContent('미지정');
     expect(row).toHaveTextContent('김철수');
     expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
@@ -80,14 +80,14 @@ describe('TriageSummaryCard', () => {
       <TriageSummaryCard panelState={panelState} baseline={BASE_STATE} actorMap={new Map()} />,
     );
 
-    expect(screen.getByTestId('summary-diff-row-담당자')).toHaveTextContent(GLOSSARY.unknownUser);
+    expect(screen.getByTestId('summary-diff-row-Owner')).toHaveTextContent(GLOSSARY.unknownUser);
   });
 
   it('uses the neutral Owner team label without leaking an unresolved team id', () => {
     const baseline = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
     const panelState = { ...BASE_STATE, ownerTeamId: null };
     const { container } = render(<TriageSummaryCard panelState={panelState} baseline={baseline} />);
-    const row = screen.getByTestId('summary-diff-row-담당자');
+    const row = screen.getByTestId('summary-diff-row-Owner');
     expect(within(row).getByText('알 수 없는 팀')).toBeInTheDocument();
     expect(row).toHaveTextContent('미지정');
     expect(container).not.toHaveTextContent('00000000');

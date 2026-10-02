@@ -113,9 +113,9 @@ export function TaskRequestPanel({
         : UNRESOLVED_ANALYTICS_AREA;
   const analyticsAreaHint =
     conversion.analyticsAreaUnresolvedReason === 'source-unavailable'
-      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.'
       : conversion.analyticsAreaUnresolvedReason === 'selection-unavailable'
-        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.'
         : null;
   const link = useTaskRequestLink({ item, currentRole });
   const resultingTask: TaskDto | null =

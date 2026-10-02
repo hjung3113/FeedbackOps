@@ -4,6 +4,7 @@ import {
   EVIDENCE_SENTIMENT_LABELS,
   EVIDENCE_SOURCE_TYPE_LABELS,
 } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { koreanZodErrorMap, zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import {
   type AddEvidenceHighlightRequest,
@@ -129,7 +130,7 @@ export function AddEvidenceModal({
     >
       <DialogContent className="max-w-lg" data-testid="add-evidence-modal">
         <DialogHeader>
-          <DialogTitle>Evidence 추가</DialogTitle>
+          <DialogTitle>{GLOSSARY.addEvidence}</DialogTitle>
         </DialogHeader>
 
         <form

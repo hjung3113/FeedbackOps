@@ -399,7 +399,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               disabled={!canManage}
               data-testid="add-evidence-btn"
             >
-              Evidence 추가
+              {GLOSSARY.addEvidence}
             </Button>
 
             {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}

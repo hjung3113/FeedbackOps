@@ -298,6 +298,32 @@ describe('integration action dashboard route', () => {
     ).toHaveClass('bg-accent-warn');
   });
 
+  test.each(['__proto__', 'constructor', 'unrecognized_intent'] as const)(
+    'preserves the server label and route for the unknown %s action intent',
+    async (intent) => {
+      const fallbackRoute = '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=keep';
+      const fallbackLabel = 'Keep this server action label';
+      const firstQueue = {
+        ...queueFixtures[0],
+        secondary_action: { label: fallbackLabel, route: fallbackRoute, intent },
+      };
+      const summary = dashboardSummarySchema.parse({
+        ...SUMMARY,
+        action_queues: [firstQueue, ...queueFixtures.slice(1)],
+      });
+      await renderDashboard('/integration', async (input) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('/dashboard/summary')) return response(summary);
+        if (url.includes('/managed-systems')) return managedSystemsResponse();
+        return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+      });
+
+      const action = await screen.findByTestId('integration-queue-secondary-unassigned-voc');
+      expect(action).toHaveTextContent(fallbackLabel);
+      expect(action).toHaveAttribute('href', fallbackRoute);
+    },
+  );
+
   test('omits an absent queue while preserving an explicit zero count', async () => {
     const summary = dashboardSummarySchema.parse({
       ...SUMMARY,

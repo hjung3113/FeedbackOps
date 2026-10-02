@@ -1,11 +1,12 @@
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
+import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import {
   formatUnreadBadge,
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
-import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import type { RoleLevel } from '@fops/shared';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -185,7 +186,8 @@ export function AppRail({
               /me shape; logout below stays reachable either way. */}
           {me?.actor && (
             <DropdownMenuLabel>
-              {me.actor.display_name} · {ROLE_LEVEL_LABELS[me.actor.role_level as RoleLevel]}
+              {me.actor.display_name} ·{' '}
+              {ROLE_LEVEL_DISPLAY_LABELS[me.actor.role_level as RoleLevel]}
             </DropdownMenuLabel>
           )}
           <DropdownMenuItem disabled={isLoggingOut} onSelect={handleLogout}>

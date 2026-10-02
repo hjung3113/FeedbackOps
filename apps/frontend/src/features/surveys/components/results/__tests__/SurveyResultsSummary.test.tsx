@@ -307,7 +307,7 @@ describe('SurveyResultsSummary', () => {
 
     const row = screen.getByTestId(`survey-result-suppressed-${ids.suppressed}`);
     expect(row).toHaveTextContent('익명 보호를 위해 이 질문의 결과는 숨겨집니다.');
-    expect(row).not.toHaveTextContent(/0 responses|12 responses|response count/i);
+    expect(row).not.toHaveTextContent(/0 responses|12 responses|response count|응답\s*\d+\s*건/i);
   });
 
   it('shows the zero-response state with the configured threshold and no new action', () => {

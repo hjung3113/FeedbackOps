@@ -209,7 +209,9 @@ export function PublicUpdateReviewModal({
               </Select>
             </div>
             <div className="grid gap-1.5 text-sm">
-              <FieldLabel htmlFor="public-update-review-dismissal-reason">기각 사유</FieldLabel>
+              <FieldLabel htmlFor="public-update-review-dismissal-reason">
+                {GLOSSARY.dismissReason}
+              </FieldLabel>
               <Input
                 id="public-update-review-dismissal-reason"
                 value={dismissalReason}
@@ -225,16 +227,16 @@ export function PublicUpdateReviewModal({
             onClick={dismiss}
             disabled={!dismissalReason.trim() || resolve.isPending}
           >
-            기각
+            {GLOSSARY.dismiss}
           </Button>
           <Button
             onClick={apply}
             disabled={!candidateId || !status || !message.trim() || resolve.isPending}
           >
-            공개 업데이트 적용
+            {GLOSSARY.applyPublicUpdate}
           </Button>
           <Button variant="secondary" onClick={close} disabled={resolve.isPending}>
-            취소
+            {GLOSSARY.cancel}
           </Button>
         </DialogFooter>
       </DialogContent>

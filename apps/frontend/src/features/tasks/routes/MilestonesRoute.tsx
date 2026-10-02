@@ -358,7 +358,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                   {/* Filter intentionally opens no menu in this slice. */}
                   <Button variant="subtle" size="sm" className="shrink-0 gap-1.5 px-2">
                     <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                    필터
+                    {GLOSSARY.filter}
                   </Button>
                   {/* B2e — opens the property block in a create state in the
                     detail slot; no separate create screen. */}

@@ -222,11 +222,22 @@ describe('AppRail account menu', () => {
     );
   });
 
-  it('shows the Actor display name and Role Level in the account menu', () => {
-    renderRail();
-    openAccountMenu();
-    expect(screen.getByText('김지원 · Admin')).toBeInTheDocument();
-  });
+  it.each([
+    ['admin', '관리자'],
+    ['developer', '개발자'],
+    ['user', '사용자'],
+  ] as const)(
+    'shows the Korean Role Level label for %s in the account menu',
+    (role_level, label) => {
+      useMe.mockReturnValue({
+        data: { ...ACTOR, actor: { ...ACTOR.actor, role_level } },
+      });
+      renderRail();
+      openAccountMenu();
+      expect(screen.getByText(`김지원 · ${label}`)).toBeInTheDocument();
+      expect(screen.queryByText(/· (Admin|Developer|User)$/)).not.toBeInTheDocument();
+    },
+  );
 
   // Both /me shapes that omit an actor, not just the unresolved one. The
   // second case is the one that actually crashed the frame: `data` present,
@@ -239,6 +250,6 @@ describe('AppRail account menu', () => {
     renderRail();
     openAccountMenu();
     expect(screen.getByRole('menuitem', { name: '로그아웃' })).toBeInTheDocument();
-    expect(screen.queryByText('김지원 · Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('김지원 · 관리자')).not.toBeInTheDocument();
   });
 });

@@ -499,7 +499,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
   // B2d fixup F2 — a non-null assignee id missing from the actor directory
   // (lookup pending or failed) still shows an explicit assigned indication:
-  // the Task list/detail fallback '담당자 지정됨' (TaskListRoute), never a
+  // the Task list/detail fallback '알 수 없는 사용자' (TaskListRoute), never a
   // bare row. Resolving the map replaces the fallback with the avatar.
   it('uses the localized fallback while the actor name is unresolved, then the avatar once resolved', async () => {
     vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
@@ -521,7 +521,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     if (!row) throw new Error('tasks section not found');
     // The avatar renders the Korean assigned fallback; the badge stays
     // specific to a genuinely null assignment.
-    expect(within(row as HTMLElement).getByText('담')).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText('알')).toBeInTheDocument();
     expect(within(row as HTMLElement).queryByText('담당자 없음')).not.toBeInTheDocument();
 
     view.rerender(

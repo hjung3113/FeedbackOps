@@ -371,11 +371,11 @@ export function MilestoneDetailContent({
                   task={task}
                   // B2d fixup F2 — a non-null assignee id missing from the
                   // directory (lookup pending or failed) keeps the explicit
-                  // '담당자 지정됨' fallback from the Task list/detail; the avatar
+                  // glossary unknown-user fallback from the Task list/detail; the avatar
                   // slot renders it until the name resolves.
                   assigneeName={
                     task.assignee_actor_id !== null
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                      ? (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
                       : undefined
                   }
                 />

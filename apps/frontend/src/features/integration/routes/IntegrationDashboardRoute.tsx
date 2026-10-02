@@ -100,7 +100,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               data-testid="integration-dashboard-refresh"
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              새로고침
+              {GLOSSARY.refresh}
             </Button>
           </div>
         </header>

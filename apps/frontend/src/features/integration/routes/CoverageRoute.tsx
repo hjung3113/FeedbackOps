@@ -236,7 +236,7 @@ export function CoverageRoute(): React.ReactElement {
             </Popover>
             <Button variant="subtle" size="sm" onClick={refresh} data-testid="coverage-refresh">
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              새로고침
+              {GLOSSARY.refresh}
             </Button>
           </div>
         </header>

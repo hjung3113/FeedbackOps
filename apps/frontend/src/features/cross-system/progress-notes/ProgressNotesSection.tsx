@@ -11,6 +11,7 @@
 // authoritative — a denied read renders a permission-blocked panel).
 
 import { ApiError } from '@/lib/api/types';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { FindingStatus, TaskStatus } from '@fops/shared';
 import { Button, EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import type * as React from 'react';
@@ -26,7 +27,7 @@ const COPY = {
     loadingMore: '불러오는 중…',
     loadError: '진행 메모를 불러올 수 없습니다.',
     blockedCategory: '진행 메모',
-    actorFallback: '진행 메모 작성자',
+    actorFallback: GLOSSARY.unknownUser,
     kindBadge: { note: '메모', status_change: '상태 변경' } as const,
   },
   task: {
@@ -36,7 +37,7 @@ const COPY = {
     loadingMore: '불러오는 중…',
     loadError: '진행 메모를 불러올 수 없습니다.',
     blockedCategory: '진행 메모',
-    actorFallback: '진행 메모 작성자',
+    actorFallback: GLOSSARY.unknownUser,
     kindBadge: { note: '메모', status_change: '상태 변경' } as const,
   },
 } as const;
