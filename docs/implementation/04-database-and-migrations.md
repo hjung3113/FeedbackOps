@@ -21,15 +21,20 @@ Applied migrations are the final database authority.
 - Inline images are stored as governed attachment records and referenced from rich content; never store base64 body images.
 - Survey response and answer tables remain outside direct `fops_app` read
   access. Aggregate projections use narrow `SECURITY DEFINER` functions owned
-  by `fops_survey_aggregate_owner`. The `survey.read_approved_result_excerpts_personal`
-  and `survey.read_my_survey_response_history` functions are narrow
+  by `fops_survey_aggregate_owner`. The `survey.read_approved_result_excerpts_personal`,
+  `survey.read_my_survey_response_history`, and `survey.read_my_answerable_surveys`
+  functions are narrow
   `SECURITY DEFINER` projections owned by `fops_survey_evidence_reader_owner`:
-  the former returns `response_id` and is called by the app only behind
+  the first returns `response_id` and is called by the app only behind
   `survey.read_personal_responses` (an app-layer gate),
-  and the latter returns only `survey_id`, Survey title, `submitted_at`, and
+  the second returns only `survey_id`, Survey title, `submitted_at`, and
   `identity_protected` for the session Actor's responses after the Surveys
-  service supplies the session `workspace_id` and `actor_id`. The latter does
-  not return a response ID. Neither function returns answer bodies or
+  service supplies the session `workspace_id` and `actor_id`, and does
+  not return a response ID. The third returns Survey-level fields
+  (`survey_id`, `display_id`, `title`, `type`, `question_count`, `opened_at`)
+  for open Surveys in the session Workspace that have no response from the
+  session Actor, so the respondent-discovery filter never exposes the response
+  table to `fops_app`. None of these functions return answer bodies or
   respondent Actor IDs.
 ```
 
