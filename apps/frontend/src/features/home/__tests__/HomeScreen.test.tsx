@@ -376,12 +376,16 @@ describe('HomeScreen route content', () => {
     { name: 'without queue data', summary: undefined },
     { name: 'with queue data', summary: dashboardSummarySchema.parse(response) },
   ])('omits prototype navigation placeholders $name', ({ summary }) => {
-    render(<AppSidebar entries={homeSidebarEntries(summary, true)} />);
+    const openCommandPalette = vi.fn();
+    render(<AppSidebar entries={homeSidebarEntries(summary, true, openCommandPalette)} />);
 
     const sidebar = within(screen.getByTestId('app-sidebar'));
     // #611 restored the Command row as a real action (sidebar-nav-command);
     // RECENT and the prototype's sample queue rows stay placeholders.
-    expect(sidebar.getByTestId('sidebar-nav-command')).toBeInTheDocument();
+    const commandRow = sidebar.getByTestId('sidebar-nav-command');
+    expect(commandRow).toBeInTheDocument();
+    fireEvent.click(commandRow);
+    expect(openCommandPalette).toHaveBeenCalledOnce();
     expect(sidebar.queryByText('RECENT')).not.toBeInTheDocument();
     expect(sidebar.queryByText('FIN-181 SSO 재인증')).not.toBeInTheDocument();
     expect(sidebar.queryByText('VOC-2814 사이드 메뉴')).not.toBeInTheDocument();

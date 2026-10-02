@@ -38,6 +38,13 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
   const [resolvingDisplayId, setResolvingDisplayId] = React.useState<string | null>(null);
   const [resolveError, setResolveError] = React.useState<string | null>(null);
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
+  const resolveSessionRef = React.useRef(0);
+  const resolveRequestIdRef = React.useRef(0);
+  const resolveRequestRef = React.useRef<{
+    id: number;
+    session: number;
+    controller: AbortController;
+  } | null>(null);
 
   useCommandPaletteShortcut(toggle);
 
@@ -49,6 +56,19 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
   // Reset the query per open (prototype: query + active index reset), capture
   // the opener for focus return — Radix has no DialogTrigger here, so its
   // built-in close-focus restore is a no-op and we own it (#611 acceptance).
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const session = ++resolveSessionRef.current;
+    return () => {
+      if (resolveSessionRef.current === session) resolveSessionRef.current += 1;
+      const activeRequest = resolveRequestRef.current;
+      if (activeRequest?.session === session) {
+        resolveRequestRef.current = null;
+        activeRequest.controller.abort();
+      }
+    };
+  }, [open]);
+
   React.useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -75,14 +95,25 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
 
   const openRecord = React.useCallback(
     async (normalizedId: string) => {
+      const session = resolveSessionRef.current;
+      const requestId = ++resolveRequestIdRef.current;
+      const controller = new AbortController();
+      resolveRequestRef.current?.controller.abort();
+      resolveRequestRef.current = { id: requestId, session, controller };
+      const isCurrentRequest = () =>
+        resolveSessionRef.current === session && resolveRequestRef.current?.id === requestId;
+
       setResolveError(null);
       setResolvingDisplayId(normalizedId);
       try {
-        const resolved = await fetchNavResolve(normalizedId);
+        const resolved = await fetchNavResolve(normalizedId, { signal: controller.signal });
+        if (!isCurrentRequest()) return;
         const { route, search } = resolved.route_intent;
         await navigate({ to: route, search } as never);
+        if (!isCurrentRequest()) return;
         setOpen(false);
       } catch (error) {
+        if (!isCurrentRequest()) return;
         // navigation.md: missing / foreign-workspace / not-readable are the same
         // 404 not_found.record — one inline message, palette stays open.
         setResolveError(
@@ -91,7 +122,10 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
             : mapUnknownError(error).message,
         );
       } finally {
-        setResolvingDisplayId(null);
+        if (isCurrentRequest()) {
+          resolveRequestRef.current = null;
+          setResolvingDisplayId(null);
+        }
       }
     },
     [navigate, setOpen],
@@ -105,11 +139,12 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
       onOpenChange={setOpen}
       loop
       label={COMMAND_PALETTE_COPY.accessibleName}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
       overlayClassName="fixed inset-0 z-[60] bg-[rgba(20,40,160,0.16)] backdrop-blur-[4px]"
       contentClassName="fixed left-1/2 top-[14vh] z-[60] flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl"
       data-testid="command-palette-dialog"
     >
-      <div className="flex items-center gap-2.5 border-b border-border-subtle px-4 py-3.5">
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-border-subtle px-4 py-3.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden />
         <Command.Input
           value={query}
@@ -153,7 +188,7 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
               <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted">
                 {COMMAND_PALETTE_COPY.verbs.open}
               </span>
-              <span className="truncate">{`${displayId} 열기`}</span>
+              <span className="truncate">{`${displayId} ${COMMAND_PALETTE_COPY.verbs.open}`}</span>
             </Command.Item>
           </CommandGroup>
         )}
@@ -189,13 +224,13 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
         <p
           role="alert"
           data-testid="command-palette-error"
-          className="border-t border-border-subtle px-4 py-2 text-xs text-accent-danger"
+          className="shrink-0 border-t border-border-subtle px-4 py-2 text-xs text-accent-danger"
         >
           {resolveError}
         </p>
       )}
 
-      <div className="flex items-center gap-3 border-t border-border-subtle bg-surface-canvas px-3.5 py-2">
+      <div className="flex shrink-0 items-center gap-3 border-t border-border-subtle bg-surface-canvas px-3.5 py-2">
         <span className="flex items-center gap-1">
           <span className={KBD_CLASS}>↑</span>
           <span className={KBD_CLASS}>↓</span>

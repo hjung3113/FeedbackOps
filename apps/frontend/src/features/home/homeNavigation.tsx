@@ -29,19 +29,28 @@ export function homeSidebarEntries(
     count: queue.count,
     urgent: queue.severity === 'urgent',
   })) ?? [];
-  // #585 removed the prototype Command/RECENT placeholders. The Command row is
-  // back for real in #611 (opens the palette — an action, not a route, hint
-  // from shortcutLabel()); actor-safe backend queues stay, RECENT stays out.
+  // #611 exposes the action only in frames that can open the mounted palette.
+  const commandRow: SidebarNavItem[] =
+    onOpenCommandPalette === undefined
+      ? []
+      : [
+          {
+            id: 'command',
+            label: COMMAND_PALETTE_COPY.rowLabel,
+            section: 'FEEDBACKOPS',
+            icon: <CommandIcon className="h-4 w-4" />,
+            trailing: (
+              <span className="rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted">
+                {shortcutLabel()}
+              </span>
+            ),
+            onSelect: onOpenCommandPalette,
+          },
+        ];
+
   return [
     { id: 'home', label: '홈', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
-    {
-      id: 'command',
-      label: COMMAND_PALETTE_COPY.rowLabel,
-      section: 'FEEDBACKOPS',
-      icon: <CommandIcon className="h-4 w-4" />,
-      trailing: <span className="rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted">{shortcutLabel()}</span>,
-      onSelect: () => onOpenCommandPalette?.(),
-    },
+    ...commandRow,
     ...queues,
   ];
 }

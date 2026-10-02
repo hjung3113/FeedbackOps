@@ -32,10 +32,20 @@ export function buildPaletteCommands({
   canAccessWorkspaceAdmin: boolean;
 }): PaletteCommandDescriptor[] {
   const commands: PaletteCommandDescriptor[] = [];
-  const seen = new Set<string>();
-  const push = (command: PaletteCommandDescriptor) => {
-    if (seen.has(command.href)) return;
-    seen.add(command.href);
+  const commandIndexByHref = new Map<string, number>();
+  const treeLabelHrefs = new Set<string>();
+  const push = (command: PaletteCommandDescriptor, fromTree = false) => {
+    const existingIndex = commandIndexByHref.get(command.href);
+    if (existingIndex !== undefined) {
+      if (fromTree && !treeLabelHrefs.has(command.href)) {
+        const existing = commands[existingIndex];
+        if (existing) commands[existingIndex] = { ...existing, label: command.label };
+        treeLabelHrefs.add(command.href);
+      }
+      return;
+    }
+    commandIndexByHref.set(command.href, commands.length);
+    if (fromTree) treeLabelHrefs.add(command.href);
     commands.push(command);
   };
 
@@ -55,16 +65,30 @@ export function buildPaletteCommands({
   for (const domain of Object.keys(navTree) as Array<keyof PaletteNavTree>) {
     // ADR-0056: Admin discovery is capability-based, same gate the sidebar uses.
     if (domain === 'admin' && !canAccessWorkspaceAdmin) continue;
+    const railItem = RAIL_ITEMS.find((item) => item.key === domain);
+    if (!railItem) continue;
     for (const entry of navTree[domain]) {
       if (entry.href === VOC_CREATE_HREF) continue;
-      push({
-        id: `nav-${entry.id}`,
-        group: 'navigate',
-        verb: COMMAND_PALETTE_COPY.verbs.navigate,
-        label: entry.label,
-        href: entry.href,
-        ...(entry.icon !== undefined ? { icon: entry.icon } : {}),
-      });
+      let entryLabel = entry.label;
+      if (entryLabel === railItem.label) {
+        const view = new URLSearchParams(entry.href.split('?')[1] ?? '').get('view');
+        // NAV_TREE reuses the rail's generic Tasks label for its board route;
+        // the route's own view key supplies the specific label shown in the prototype.
+        if (view === 'board') entryLabel = 'Board';
+      }
+      const label =
+        entryLabel === railItem.label ? railItem.label : `${railItem.label} · ${entryLabel}`;
+      push(
+        {
+          id: `nav-${entry.id}`,
+          group: 'navigate',
+          verb: COMMAND_PALETTE_COPY.verbs.navigate,
+          label,
+          href: entry.href,
+          ...(entry.icon !== undefined ? { icon: entry.icon } : {}),
+        },
+        true,
+      );
     }
   }
 
