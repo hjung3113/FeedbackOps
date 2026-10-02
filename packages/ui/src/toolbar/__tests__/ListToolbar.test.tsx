@@ -305,6 +305,31 @@ describe('ListToolbar — tabs mode', () => {
     expectTabFullyVisible(screen.getByRole('tab', { selected: true }), tabViewport);
   });
 
+  it('remeasures tab overflow when tabs become fitting without a resize notification', () => {
+    const notifyResize = stubResizeObserver();
+    const { container, rerender } = render(<ListTabs tabs={overflowTabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    setOverflowGeometry(tabViewport);
+
+    act(() => notifyResize());
+    expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeInTheDocument();
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'true');
+    expect(tabViewport.style.maskImage).not.toBe('');
+
+    Object.defineProperty(tabViewport, 'scrollWidth', {
+      configurable: true,
+      get: () => (tabViewport.querySelectorAll('[role="tab"]').length === 1 ? 88 : 254),
+    });
+    rerender(<ListTabs tabs={overflowTabs.slice(0, 1)} activeTab="untriaged" />);
+
+    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('미분류');
+    expect(screen.queryByRole('button', { name: '이전 탭 보기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다음 탭 보기' })).not.toBeInTheDocument();
+    expect(tabViewport).toHaveAttribute('data-fade-left', 'false');
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'false');
+    expect(tabViewport.style.maskImage).toBe('');
+  });
+
   it('reveals a controlled selection change after overflow controls appear', () => {
     const notifyResize = stubResizeObserver();
     const { container, rerender } = render(

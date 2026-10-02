@@ -6,8 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -69,9 +69,9 @@ function OwnerSelect({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={testId} className="text-text-secondary">
+      <FieldLabel htmlFor={testId} className="text-text-secondary">
         기본 담당자 (선택)
-      </Label>
+      </FieldLabel>
       <Select
         value={ownerSelectionValue(value)}
         onValueChange={(next) => onChange(parseOwnerSelection(next))}
@@ -164,9 +164,9 @@ function RegisterDialog({
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor="ms-create-slug" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-slug" className="text-text-secondary">
               슬러그 <span className="text-accent-danger">· 필수</span>
-            </Label>
+            </FieldLabel>
             <Input
               id="ms-create-slug"
               ref={slugRef}
@@ -184,9 +184,9 @@ function RegisterDialog({
             )}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ms-create-name" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-name" className="text-text-secondary">
               이름 <span className="text-accent-danger">· 필수</span>
-            </Label>
+            </FieldLabel>
             <Input
               id="ms-create-name"
               ref={nameRef}
@@ -204,9 +204,9 @@ function RegisterDialog({
             )}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ms-create-external-key" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-external-key" className="text-text-secondary">
               외부 키 (선택)
-            </Label>
+            </FieldLabel>
             <Input
               id="ms-create-external-key"
               value={externalKey}
@@ -322,9 +322,9 @@ function EditForm({
         }}
       >
         <div className="space-y-1">
-          <Label htmlFor={`ms-edit-name-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`ms-edit-name-${target.slug}`} className="text-text-secondary">
             이름
-          </Label>
+          </FieldLabel>
           <Input
             id={`ms-edit-name-${target.slug}`}
             value={name}
@@ -340,9 +340,9 @@ function EditForm({
           testId={`edit-default-owner-${target.slug}`}
         />
         <div className="space-y-1">
-          <Label htmlFor={`ms-edit-key-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`ms-edit-key-${target.slug}`} className="text-text-secondary">
             외부 키
-          </Label>
+          </FieldLabel>
           <Input
             id={`ms-edit-key-${target.slug}`}
             value={externalKey}

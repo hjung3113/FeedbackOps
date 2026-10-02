@@ -5,6 +5,7 @@ import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import {
   InternalTaskBadge,
@@ -103,7 +104,7 @@ export function TaskListRoute({
         title: (
           <span className="flex items-center gap-2">
             {view === 'my' ? '내 Task' : 'Tasks'}
-            <OutlineBadge>{items.length}건</OutlineBadge>
+            <OutlineBadge>{formatCount(items.length)}</OutlineBadge>
           </span>
         ),
       }}

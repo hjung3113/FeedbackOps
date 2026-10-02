@@ -34,6 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/shadcn/tooltip.js';
+import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
 
 export interface PanelSection {
@@ -59,10 +60,6 @@ export function DetailPanelSectionNav({
 }: DetailPanelSectionNavProps): React.ReactElement | null {
   const firstSection = sections[0]?.id ?? '';
   const [activeSection, setActiveSection] = React.useState(firstSection);
-  const [overflowState, setOverflowState] = React.useState({
-    canScrollLeft: false,
-    canScrollRight: false,
-  });
   const navRef = React.useRef<HTMLDivElement>(null);
   const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
   const programmaticRef = React.useRef(false);
@@ -106,40 +103,15 @@ export function DetailPanelSectionNav({
     updateAnchorScrollMargins();
   }, [updateAnchorScrollMargins]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Rebind when section IDs replace tab elements.
-  React.useLayoutEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    const updateOverflow = () => {
-      const maxScroll = nav.scrollWidth - nav.clientWidth;
-      setOverflowState({
-        canScrollLeft: nav.scrollLeft > 1,
-        canScrollRight: maxScroll - nav.scrollLeft > 1,
-      });
-    };
-    const updateLayout = () => {
-      updateOverflow();
-      updateAnchorScrollMargins();
-      revealSection(activeSectionRef.current);
-    };
-
-    updateLayout();
-    nav.addEventListener('scroll', updateOverflow, { passive: true });
-    window.addEventListener('resize', updateLayout);
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateLayout);
-    resizeObserver?.observe(nav);
-    if (stickyHeaderRef.current) resizeObserver?.observe(stickyHeaderRef.current);
-    for (const tab of nav.children) {
-      resizeObserver?.observe(tab);
-    }
-    return () => {
-      nav.removeEventListener('scroll', updateOverflow);
-      window.removeEventListener('resize', updateLayout);
-      resizeObserver?.disconnect();
-    };
-  }, [revealSection, sectionKey, updateAnchorScrollMargins]);
+  const updateNavigationLayout = React.useCallback(() => {
+    updateAnchorScrollMargins();
+    revealSection(activeSectionRef.current);
+  }, [revealSection, updateAnchorScrollMargins]);
+  const overflowState = useHorizontalOverflow(navRef, {
+    contentKey: sectionKey,
+    observeRef: stickyHeaderRef,
+    onResize: updateNavigationLayout,
+  });
 
   React.useLayoutEffect(() => {
     revealSection(activeSection);
