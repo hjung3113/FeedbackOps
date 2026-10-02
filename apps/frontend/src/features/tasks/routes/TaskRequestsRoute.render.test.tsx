@@ -27,7 +27,7 @@ vi.mock('@fops/ui', async () => {
   };
 });
 
-vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
+vi.mock('@/features/findings/public', () => ({
   useFindingDetail: () => ({
     data: {
       id: '40000000-0000-0000-0000-000000000004',

@@ -44,6 +44,7 @@ Code ownership and URL mount are not the same thing here:
 - `apps/frontend/src/features/integration/routes/LinksRoute.tsx` — Links list filters, tabs, and selected state.
 - `apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx` — Entity Link inventory rows and permission state.
 - `apps/frontend/src/features/integration/components/EntityRelationRow.tsx` — relation summary within an inventory row.
+- Entity-link rows accept Entity Link DTOs only. VOC Cluster member presentation belongs to `apps/frontend/src/features/voc-cluster/components/detail/VocClusterMemberRow.tsx`.
 - `apps/frontend/src/features/integration/components/LinkStatusBadge.tsx` — Entity Link status labels and badge styles.
 - `apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts` — Entity Link inventory query.
 - `apps/frontend/src/lib/copy/home.ts` — shared wording used by Coverage.

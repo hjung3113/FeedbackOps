@@ -114,7 +114,7 @@ vi.mock('@fops/ui', async () => {
 });
 vi.mock('sonner', () => ({ toast }));
 
-vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
+vi.mock('@/features/findings/public', () => ({
   useFindingDetail: api.useFindingDetail,
 }));
 vi.mock('@/lib/api/analytics-areas', () => ({

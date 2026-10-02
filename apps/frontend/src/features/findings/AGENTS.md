@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This folder owns Finding screens and hooks: `FindingDetailPanel` and its panel tree (`FullFindingDetail`, the evidence/link modals, the Finding host of the Task Request draft card (the card itself lives in `features/tasks`), `useFindingDetailController`), plus the Finding read/mutation hooks (`useFindingsList`, `useFindingDetail`, `useFindingStatusMutation`, `useEvidenceHighlights`, `useEvidenceMutations`, `useRequestTaskFromFinding`).
+This folder owns Finding screens and hooks: `FindingDetailPanel` and its panel tree (`FullFindingDetail`, `FindingExecutionSection`, the evidence/link modals, the Finding-owned Request Task draft host, `useFindingDetailController`), plus the Finding read/mutation hooks (`useFindingsList`, `useFindingDetail`, `useFindingStatusMutation`, `useEvidenceHighlights`, `useEvidenceMutations`, `useRequestTaskFromFinding`). The neutral `TaskRequestDraftCard` form and read presentation lives in `features/cross-system/request-task/`.
 
 It does not own source object lifecycles or backend authorization truth.
 
@@ -16,7 +16,8 @@ It does not own source object lifecycles or backend authorization truth.
 ## Rules
 
 - Finding detail is evidence-first and keeps execution links visible.
-- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController`; shared UI and hooks are under `apps/frontend/src/features/cross-system/` and `apps/frontend/src/lib/cross-system/`.
+- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` with separate detail and execution section controllers. Requested-link selection, retry/focus handling, and the draft host belong to `FindingExecutionSection`.
+- Other features may use Finding source reads and the Finding-owned Request Task draft host through `features/findings/public.ts`; do not import Finding hook internals across feature boundaries. Survey retains selected-Finding load/ready/error orchestration, and Tasks uses the public Finding read for Task Request source defaults.
 - Finding bridges evidence to execution, but backend permission checks remain authoritative; permission-limited content renders approved summaries or a request path.
 
 ## Key files
@@ -27,7 +28,10 @@ It does not own source object lifecycles or backend authorization truth.
 - `apps/frontend/src/features/findings/hooks/useFindingsList.ts` — Finding list query.
 - `apps/frontend/src/features/findings/components/FindingDetail/FindingDetailPanel.tsx` — loading, blocked, error, and full-detail branches; includes inline blocked copy.
 - `apps/frontend/src/features/findings/components/FindingDetail/FullFindingDetail.tsx` — detail fields, actions, and status labels.
-- `apps/frontend/src/features/findings/components/FindingDetail/useFindingDetailController.ts` — detail action and status state.
+- `apps/frontend/src/features/findings/components/FindingDetail/FindingExecutionSection.tsx` — requested Task Request links, retry/focus state, and section actions.
+- `apps/frontend/src/features/findings/components/FindingDetail/FindingRequestTaskDraftHost.tsx` — Finding-owned Task Request form host used by Finding and Survey.
+- `apps/frontend/src/features/findings/public.ts` — supported source-read and Request Task host edge for other features.
+- `apps/frontend/src/features/findings/components/FindingDetail/useFindingDetailController.ts` — detail action and status state, excluding execution-section state.
 - `apps/frontend/src/features/findings/hooks/useFindingStatusMutation.ts` — Finding status mutation.
 - `apps/frontend/src/features/findings/components/FindingDetail/AddEvidenceModal.tsx` — add-evidence (highlight) dialog.
 - `apps/frontend/src/features/findings/hooks/useEvidenceMutations.ts` — evidence link mutations.

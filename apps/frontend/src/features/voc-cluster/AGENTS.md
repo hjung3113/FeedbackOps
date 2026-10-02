@@ -6,6 +6,8 @@ VOC Cluster owns frontend route composition and mutations for VOC Cluster list, 
 
 Screen components live in this feature folder: `components/detail/VocClusterListShell.tsx`, `components/detail/VocClusterDetailPanel.tsx`, and `components/modals/` (`AddVocModal`, `LinkExistingFindingModal`, `CreateFindingFromClusterModal`). The route files under `src/routes/_authed/voc-clusters/` own URL wiring only — path/search params in, shell callbacks out (plus `CreateClusterModal`, which stays in `index.tsx`).
 
+Cluster detail owns `components/detail/VocClusterMemberRow.tsx` for its VOC member presentation. `EntityRelationRow` in Integration is reserved for Entity Link DTOs. The Request Task draft form itself is shared from `features/cross-system/request-task/`; Cluster keeps its source-specific mutation here.
+
 It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Task persistence — those belong to VOC, Findings, and Tasks respectively.
 
 ## Route Boundary
@@ -30,6 +32,7 @@ It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Tas
 - `apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx` — selected cluster route.
 - `apps/frontend/src/features/voc-cluster/components/detail/VocClusterListShell.tsx` — cluster list and selected-detail shell.
 - `apps/frontend/src/features/voc-cluster/components/detail/VocClusterDetailPanel.tsx` — cluster detail and actions.
+- `apps/frontend/src/features/voc-cluster/components/detail/VocClusterMemberRow.tsx` — Cluster-local VOC member row.
 - `apps/frontend/src/features/voc-cluster/lib/presentation.tsx` — cluster status labels and badges.
 - `apps/frontend/src/features/voc-cluster/hooks/useVocClusterList.ts` — cluster list query.
 - `apps/frontend/src/features/voc-cluster/hooks/useVocClusterDetail.ts` — selected cluster query.

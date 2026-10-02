@@ -11,19 +11,17 @@ import {
   OutlineBadge,
   type PanelSection,
   PanelSectionTitle,
-  type ReporterStatusBadge,
   SeverityBadge,
   Skeleton,
   UnassignedBadge,
 } from '@fops/ui';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { EntityRelationRow } from '@/features/integration/components/EntityRelationRow';
-import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
+import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
@@ -46,6 +44,7 @@ import { AddVocModal } from '../modals/AddVocModal';
 import { CreateFindingFromClusterModal } from '../modals/CreateFindingFromClusterModal';
 import { LinkExistingFindingModal } from '../modals/LinkExistingFindingModal';
 import type { VocClusterDetailPresentation, VocClusterMemberPresentation } from '../types';
+import { VocClusterMemberRow } from './VocClusterMemberRow';
 
 function SectionDivider(): React.ReactElement {
   return <hr className="border-border-subtle" />;
@@ -56,22 +55,6 @@ function clusterDisplayId(data: {
   display_id?: string | null;
 }): string {
   return data.display_id?.trim() ? data.display_id : 'VOC Cluster';
-}
-
-function memberDisplay(member: VocClusterMemberPresentation): {
-  primary: string;
-  secondary: string | null;
-} {
-  if (member.title?.trim()) {
-    return {
-      primary: member.title,
-      secondary: member.display_id?.trim() ? member.display_id : shortId(member.voc_id),
-    };
-  }
-  if (member.display_id?.trim()) {
-    return { primary: member.display_id, secondary: shortId(member.voc_id) };
-  }
-  return { primary: 'VOC', secondary: shortId(member.voc_id) };
 }
 
 // ADR-0057 A2 amendment localizes Korean navigation and preserves domain nouns.
@@ -380,7 +363,7 @@ export function VocClusterDetailPanel({
                 className="overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               >
                 {members.slice(0, 4).map((member, i) => (
-                  <MemberRow
+                  <VocClusterMemberRow
                     key={member.voc_id}
                     member={member}
                     last={i === Math.min(members.length, 4) - 1}
@@ -533,59 +516,4 @@ export function VocClusterDetailPanel({
   );
 }
 
-// ── Member row ────────────────────────────────────────────────────────────────
-
-function MemberRow({
-  member,
-  last,
-  canRemove,
-  onRemove,
-  isRemoving,
-}: {
-  member: VocClusterMemberPresentation;
-  last: boolean;
-  canRemove: boolean;
-  onRemove: () => void;
-  isRemoving: boolean;
-}): React.ReactElement {
-  const display = memberDisplay(member);
-
-  return (
-    <EntityRelationRow
-      testId={`cluster-member-row-${member.voc_id}`}
-      {...(last ? {} : { className: 'border-b border-border-subtle' })}
-      member={{
-        vocId: member.voc_id,
-        displayId: display.secondary,
-        title: (
-          <Link
-            to="/vocs"
-            search={{ view: 'inbox', selected: member.voc_id }}
-            className="text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
-            data-testid={`cluster-member-link-${member.voc_id}`}
-          >
-            {display.primary}
-          </Link>
-        ),
-        severity: member.severity ?? null,
-        reporterStatus:
-          (member.reporter_facing_status as
-            | Parameters<typeof ReporterStatusBadge>[0]['status']
-            | undefined) ?? null,
-        trailing: canRemove ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRemove}
-            disabled={isRemoving}
-            data-testid={`cluster-member-remove-${member.voc_id}`}
-            aria-label="VOC 제거"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-text-muted" />
-          </Button>
-        ) : null,
-      }}
-    />
-  );
-}
 import { GLOSSARY } from '@/lib/copy/glossary';

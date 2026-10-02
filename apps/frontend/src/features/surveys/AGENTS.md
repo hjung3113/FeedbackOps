@@ -23,6 +23,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 - Keep builder and result views simple for MVP.
 - Result summaries should expose Create Finding and Request Task where permitted; Link Finding is deferred out of MVP scope (ADR-0037).
+- Selected-Finding load/ready/error orchestration stays in Survey; source reads and the Finding-owned Request Task draft host come through `features/findings/public.ts`.
 - Permission-limited responses must show approved summaries or request-access paths.
 - Preserve Survey context during linked object creation.
 
@@ -37,6 +38,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 - `apps/frontend/src/features/surveys/components/builder/SurveyBuilder.tsx` — Survey builder composition.
 - `apps/frontend/src/features/surveys/components/SurveyStatusBadge.tsx` — Survey status labels and badge styles.
 - `apps/frontend/src/features/surveys/components/results/SurveyResultsSummary.tsx` — result summary and follow-up actions.
+- `apps/frontend/src/features/findings/public.ts` — supported Finding source-read and Request Task host edge used by Survey results.
 - `apps/frontend/src/features/surveys/components/results/CreateFindingDraftPanel.tsx` — Finding draft from response excerpts.
 - `apps/frontend/src/features/surveys/routes/SurveyFollowUpRoute.tsx` — follow-up decisions view.
 - `apps/frontend/src/features/surveys/hooks/useSurveys.ts` — Survey, result, and mutation queries.

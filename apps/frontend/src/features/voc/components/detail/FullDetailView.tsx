@@ -4,7 +4,7 @@ import type { PanelSection } from '@fops/ui';
 import type * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
-import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
+import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { SAME_MANAGED_SYSTEM_VOC_LABEL } from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';

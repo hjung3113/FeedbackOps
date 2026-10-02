@@ -1,15 +1,8 @@
-import type { EntityLinkDto, FindingSeverity } from '@fops/shared';
-import {
-  EntityIconBadge,
-  type EntityIconType,
-  type ReporterFacingStatusEnum,
-  ReporterStatusBadge,
-  cn,
-} from '@fops/ui';
+import type { EntityLinkDto } from '@fops/shared';
+import { EntityIconBadge, type EntityIconType, cn } from '@fops/ui';
 import { ArrowRight, Lock } from 'lucide-react';
-import type * as React from 'react';
 
-import { ENTITY_LINK_RELATION_LABELS, FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 
 type AllowedEntityLinkDto = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
@@ -54,46 +47,14 @@ function iconTypeFor(type: EntityLinkDto['source_type']): EntityIconType {
 export function EntityRelationRow({
   link,
   compact = false,
-  member,
   className,
   testId,
 }: {
-  link?: EntityLinkDto;
+  link: EntityLinkDto;
   compact?: boolean;
   className?: string;
   testId?: string;
-  member?: {
-    vocId: string;
-    displayId?: string | null;
-    title?: React.ReactNode;
-    severity?: FindingSeverity | null;
-    reporterStatus?: ReporterFacingStatusEnum | null;
-    trailing?: React.ReactNode;
-  };
 }) {
-  if (member) {
-    return (
-      <div
-        className={cn('flex items-center justify-between gap-3 px-4 py-2.5', className)}
-        data-testid={testId}
-      >
-        <div className="min-w-0">
-          <div className="truncate text-sm text-text-primary">
-            {member.title || member.displayId || 'VOC'}
-          </div>
-          <p className="text-xs text-text-muted">
-            {member.displayId ?? shortId(member.vocId)}
-            {member.severity ? ` · ${FINDING_SEVERITY_LABELS[member.severity]}` : ''}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {member.reporterStatus && <ReporterStatusBadge status={member.reporterStatus} />}
-          {member.trailing}
-        </div>
-      </div>
-    );
-  }
-  if (!link) return null;
   if (link.visibility_state !== 'allowed') {
     return (
       <div

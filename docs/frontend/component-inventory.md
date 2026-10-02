@@ -78,7 +78,7 @@ AuditTimeline
 
 ## Implemented Shared Flow Components
 
-- `TaskRequestDraftCard` — inline source request card with the contract fields Evidence Summary and Requested Outcome.
+- `apps/frontend/src/features/cross-system/request-task/TaskRequestDraftCard.tsx` — neutral inline source request form and pending-source read presentation with the contract fields Evidence Summary and Requested Outcome; source mutations stay in their owning features.
 - `ListTabs` — reusable 28px list tab strip with optional bare counts, icons, native title tips, and overflow controls; composed by `ListToolbar`.
 
 ## Status And Signal Catalog

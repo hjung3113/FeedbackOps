@@ -361,7 +361,7 @@ vi.mock('@/features/voc-cluster/hooks/useRequestTaskFromCluster', () => ({
   }),
 }));
 
-vi.mock('@/features/tasks/components/TaskRequestDraftCard', () => ({
+vi.mock('@/features/cross-system/request-task/TaskRequestDraftCard', () => ({
   TaskRequestDraftCard: ({
     sourceKind,
     sourceDisplayId,
