@@ -58,6 +58,7 @@ import {
   type TaskCommentRow,
   type TaskRow,
   findTaskById,
+  findTaskIdByDisplayId,
   insertTask,
   insertTaskComment,
   listTaskComments as listTaskCommentRows,
@@ -381,6 +382,29 @@ export function createTasksService(deps: TasksServiceDeps) {
       : null;
     await attachSourceVoc(args.actor, resolved);
     return { ...taskToDto(row), source: resolved?.source ?? null };
+  }
+
+  // Display id → id for /nav/resolve (#731). Same read authority as getTask
+  // above, in the same order: elevated Finding role gate, workspace row, then
+  // checkFindingManage; missing and unreadable both map to null so the route
+  // answers a single identical 404.
+  async function resolveDisplayId(args: {
+    actor: TasksActor;
+    displayId: string;
+  }): Promise<{ id: string } | null> {
+    if (!hasElevatedFindingRole(args.actor)) return null;
+    const row = await findTaskIdByDisplayId(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      displayId: args.displayId,
+    });
+    if (!row) return null;
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
+    ).allow;
+    if (!canManage) return null;
+    return { id: row.id };
   }
 
   async function getTaskComments(args: {
@@ -1012,6 +1036,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     patchTaskStatus,
     assignTaskMilestone,
     listTasks,
+    resolveDisplayId,
   };
 }
 

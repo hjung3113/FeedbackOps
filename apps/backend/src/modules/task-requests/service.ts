@@ -32,6 +32,7 @@ import { selectVocForUpdate } from '../voc/index.js';
 import {
   type TaskRequestRow,
   findTaskRequestById,
+  findTaskRequestIdByDisplayId,
   insertTaskRequest,
   listTaskRequestsByWorkspace,
   lockTaskRequestById,
@@ -538,6 +539,30 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     return { items };
   }
 
+  // Display id → id for /nav/resolve (#731). Same read authority as
+  // listTaskRequests above: elevated Finding role gate, then per-row
+  // checkFindingManage (the module has no single-record detail route; the list
+  // read is its detail authority). Missing and unreadable both map to null so
+  // the route answers a single identical 404.
+  async function resolveDisplayId(args: {
+    actor: TaskRequestsActor;
+    displayId: string;
+  }): Promise<{ id: string } | null> {
+    if (!hasElevatedFindingRole(args.actor)) return null;
+    const row = await findTaskRequestIdByDisplayId(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      displayId: args.displayId,
+    });
+    if (!row) return null;
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
+    ).allow;
+    if (!canManage) return null;
+    return { id: row.id };
+  }
+
   async function recordSelfApprovalDenied(args: {
     actor: TaskRequestsActor;
     taskRequest: TaskRequestRow;
@@ -699,6 +724,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     listTaskRequests,
     decideTaskRequest,
     resolveEndpoint,
+    resolveDisplayId,
   };
 }
 

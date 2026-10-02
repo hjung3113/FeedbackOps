@@ -23,12 +23,12 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId/follow-up
 /surveys/participate
 /surveys/:surveyId/respond
-/tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
+/tasks?view=my&managedSystem=:managedSystemId|all&param=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
-/tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&selected=:requestId
-/tasks?view=backlog&managedSystem=:managedSystemId|all&selected=:taskId
-/tasks?view=board&managedSystem=:managedSystemId|all&selected=:taskId
-/tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
+/tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&param=:requestId
+/tasks?view=backlog&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
 /integration
 /findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
@@ -119,6 +119,12 @@ entry in the slice that owns it. The Home rail's entries come from `homeSidebarE
 (`apps/frontend/src/features/home/homeNavigation.tsx`).
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login clears prior Actor data and seeds the `['me']` identity from the login response before routing so a new Actor never sees prior Actor data.
+
+### Global command palette (#611)
+
+`Ctrl+K` on Windows/Linux, `⌘K` on macOS (owner decision: most users are on Windows) toggles the palette mounted once in `AppFrame` (`apps/frontend/src/lib/layout/command-palette/`). `platform.ts` (`isMacPlatform`/`shortcutLabel`) drives the binding and every visible hint — the Home sidebar `명령 메뉴` row (a `SidebarNavActionEntry`, an action not a route), and the palette footer — never a hard-coded `⌘`. The shortcut is ignored while an IME composition is active and `preventDefault`s the browser's own Ctrl+K binding.
+
+Commands derive from the existing nav sources (`AppRail.RAIL_ITEMS` + `NAV_TREE`) so labels never drift; Admin entries use the same `workspace.admin` approval as the sidebar (ADR-0056). The only create verb is `VOC 생성` (`/vocs?action=create`). A query matching `^(VOC|FIN|REQ|TASK)-[1-9][0-9]*$` shows one `열기` row that resolves `GET /nav/resolve?display_id=` (typed client `fetchNavResolve`, `navResolveResponseSchema`) and navigates to the returned route intent; missing/unreadable records show an inline `해당 항목을 찾을 수 없거나 접근 권한이 없습니다.` and keep the palette open. The palette does not synthesize commands the backend does not resolve; scope switching and recent records are out of scope for the first version.
 
 In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
 

@@ -28,3 +28,15 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
     writable: true,
   });
 }
+
+// jsdom has no ResizeObserver; cmdk's CommandList observes its sizer to keep
+// the selected row scrolled into view (#611). Same class of gap as
+// scrollIntoView above — real browsers have it.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+}

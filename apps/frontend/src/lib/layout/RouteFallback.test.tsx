@@ -22,8 +22,23 @@ import {
 } from './RouteFallback';
 
 vi.mock('./AppFrame', () => ({
-  AppFrame: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="app-frame">{children}</div>
+  AppFrame: ({
+    children,
+    sidebarEntries = [],
+  }: {
+    children: React.ReactNode;
+    sidebarEntries?: Array<{ id: string; label: string }>;
+  }) => (
+    <div data-testid="app-frame">
+      <nav aria-label="fallback navigation">
+        {sidebarEntries.map((entry) => (
+          <div key={entry.id} data-testid={`fallback-sidebar-nav-${entry.id}`}>
+            {entry.label}
+          </div>
+        ))}
+      </nav>
+      {children}
+    </div>
   ),
 }));
 
@@ -123,6 +138,7 @@ describe('router fallback screens', () => {
 
     expect(await screen.findByText('페이지를 찾을 수 없습니다')).toBeInTheDocument();
     expect(screen.getByTestId('app-frame')).toBeInTheDocument();
+    expect(screen.queryByTestId('fallback-sidebar-nav-command')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '홈으로' })).toHaveAttribute('href', '/home');
     expect(screen.getByRole('button', { name: '뒤로' })).toBeInTheDocument();
   });

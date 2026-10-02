@@ -27,3 +27,18 @@ body,
     line-height: var(--leading-normal);
   }
 }
+
+/* #611 command palette — cmdk internals that take no className. Everything
+   else (panel, input row, items, footer) is styled inline in
+   CommandPalette.tsx; these mirror prototype styles.css .cmdk-group-title. */
+[cmdk-group-heading] {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+[cmdk-group] + [cmdk-group] {
+  margin-top: 4px;
+}

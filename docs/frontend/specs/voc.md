@@ -308,7 +308,9 @@ Prototype hardcodes the matrix in `data.js · REPORTER_STATUS_TRANSITIONS`. Prod
 
 **Group by:** **NOT supported on VOC surfaces in Slice 3** (group-by lives on Tasks board). State explicitly that the prototype Sort button is single-axis Sort only.
 
-### 5.2 Command palette (⌘K)
+### 5.2 Command palette (Ctrl+K / ⌘K)
+
+The shortcut is Ctrl+K on Windows/Linux and ⌘K on macOS.
 
 VOC verbs registered in `features/voc/command-catalog.ts`:
 
@@ -318,10 +320,12 @@ VOC verbs registered in `features/voc/command-catalog.ts`:
 | `voc.navigate.triage` | Navigate | "Go to · VOC · Triage" | `/vocs?view=triage` |
 | `voc.navigate.my` | Navigate | "Go to · VOC · My VOCs" | `/vocs?view=my` |
 | `voc.create` | Create | "Create · New VOC" (`kbd: 'C'`) | `/vocs?action=create` |
-| `voc.scope.switch` | Switch scope | "Switch · Managed System scope" | writes `managedSystem=:msId` |
-| `voc.open.<id>` (recent 6) | Open | `${id} · ${title}` | `/vocs?view=inbox&selected=<id>` |
+| `voc.scope.switch` (planned) | Switch scope | "Switch · Managed System scope" | writes `managedSystem=:msId` |
+| `voc.open.<id>` (recent 6, planned) | Open | `${id} · ${title}` | `/vocs?view=inbox&selected=<id>` |
 
-Per `docs/frontend/interaction-patterns.md` §Command menu: commands resolve via backend route-resolution endpoint when ambiguous (e.g. "Open VOC 2814" must be reachable even when the actor is on `/tasks`). Backend returns `route_intent: { route, params }` and the menu navigates via TanStack Router. Frontend MUST NOT synthesize commands the backend marked `hidden`.
+Per `docs/frontend/interaction-patterns.md` §Command menu: commands resolve via backend route-resolution endpoint when ambiguous (e.g. "Open VOC 2814" must be reachable even when the actor is on `/tasks`). Backend returns `route_intent: { route, search }` and the menu navigates via TanStack Router. VOC and Finding search intents use `selected`; Task Request and Task intents use `/tasks` `param` (`view=requests` or `view=board`). Frontend MUST NOT synthesize commands the backend marked `hidden`.
+
+> Shipped in #611 (`apps/frontend/src/lib/layout/command-palette/`, not `features/voc/command-catalog.ts`): the `voc.navigate.*` verbs are derived generically from `RAIL_ITEMS` + `NAV_TREE` (no per-domain catalog yet), `voc.create` ships, and display-id open (`voc.open.<display_id>` on demand via `GET /nav/resolve`) ships. `voc.scope.switch` and the recent-six `voc.open.<id>` rows are deferred. See `docs/frontend/routes-and-layout.md` → Global command palette (#611).
 
 ### 5.3 Optimistic mutation + undo (Triage Console)
 

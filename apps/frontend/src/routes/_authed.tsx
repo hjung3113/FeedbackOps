@@ -31,6 +31,7 @@ import { GLOSSARY, createLabel } from '../lib/copy/glossary';
 import { SURVEY_PARTICIPATION_COPY } from '../lib/copy/survey-participation';
 import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
 import { AppFrame } from '../lib/layout/AppFrame';
+import { CommandPaletteProvider, useCommandPalette } from '../lib/layout/command-palette/CommandPaletteContext';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import {
@@ -318,6 +319,16 @@ export async function authenticatedBeforeLoad({
 }
 
 export function AuthedLayout() {
+  // #611: palette state lives above AppFrame so the Home sidebar Command row
+  // (built here) can open the palette AppFrame hosts.
+  return (
+    <CommandPaletteProvider>
+      <AuthedShell />
+    </CommandPaletteProvider>
+  );
+}
+
+function AuthedShell() {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate({ from: '/vocs' });
   const queryClient = useQueryClient();
@@ -353,12 +364,14 @@ export function AuthedLayout() {
       }),
     retry: false,
   });
+  const { setOpen: setCommandPaletteOpen } = useCommandPalette();
+  const openCommandPalette = React.useCallback(() => setCommandPaletteOpen(true), [setCommandPaletteOpen]);
   const entries = React.useMemo(
     () =>
       activeDomain === 'home'
-        ? homeSidebarEntries(homeSummary.data, location.pathname === '/home')
+        ? homeSidebarEntries(homeSummary.data, location.pathname === '/home', openCommandPalette)
         : getSidebarEntryStates(NAV_TREE[activeDomain], location.pathname, location.searchStr),
-    [activeDomain, homeSummary.data, location.pathname, location.searchStr],
+    [activeDomain, homeSummary.data, location.pathname, location.searchStr, openCommandPalette],
   );
   const changeManagedSystem = React.useCallback(
     (managedSystemId: string | undefined) => {
@@ -423,6 +436,7 @@ export function AuthedLayout() {
     <AppFrame
       sidebarEntries={entries}
       activeDomain={activeDomain}
+      paletteNavTree={NAV_TREE}
       {...(managedSystemId !== undefined ? { managedSystemId } : {})}
       syncManagedSystemFromUrl={supportsManagedSystemScope}
       scopeControlEnabled={supportsManagedSystemScope}

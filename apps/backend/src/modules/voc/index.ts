@@ -9,6 +9,7 @@ export type {
   CountVocsQuery,
   VocCountReader,
   VocDetailReader,
+  VocDisplayIdReader,
   VocGroupedCountArgs,
   VocGroupedCountReader,
   VocGroupedCountRow,
