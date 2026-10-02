@@ -100,3 +100,27 @@ export const mySurveyResponsesResponseSchema = z
   })
   .strict();
 export type MySurveyResponsesResponse = z.infer<typeof mySurveyResponsesResponseSchema>;
+
+const answerableSurveyItemSchema = z
+  .object({
+    survey_id: z.string().uuid(),
+    display_id: z.string(),
+    title: z.string(),
+    type: surveyTypeSchema,
+    question_count: z.number().int().nonnegative(),
+    opened_at: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export const answerableSurveysResponseSchema = z
+  .object({
+    items: z.array(answerableSurveyItemSchema),
+    page: z
+      .object({
+        has_more: z.boolean(),
+        cursor: z.string().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+export type AnswerableSurveysResponse = z.infer<typeof answerableSurveysResponseSchema>;

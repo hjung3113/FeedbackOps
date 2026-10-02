@@ -131,6 +131,12 @@ Acceptance Criteria:
   submission time, and identity-protection flag; it never returns a response
   ID or answers. The respondent form endpoint `GET /surveys/:id/form` returns an
   open, same-Workspace Survey with only a respondent-safe form DTO.
+- Respondent discovery: an authenticated Actor lists open, same-Workspace
+  Surveys they have not yet answered through `GET /me/answerable-surveys`,
+  without `survey.read`. The list carries Survey-level fields only (ID,
+  display ID, title, type, question count, open time); drafts, closed Surveys,
+  other-Workspace Surveys, and Surveys the caller already answered are
+  excluded.
 ```
 
 ### FR-SURVEY-004: Analyze Results

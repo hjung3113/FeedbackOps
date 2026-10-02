@@ -195,12 +195,13 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
          left join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl on true
          left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
         where n.nspname = 'survey'
-          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts', 'read_approved_result_excerpts_personal', 'read_my_survey_response_history')
+          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts', 'read_approved_result_excerpts_personal', 'read_my_survey_response_history', 'read_my_answerable_surveys')
         group by p.proname, owner_role.rolname, p.prosecdef, p.proconfig, p.provolatile
         order by p.proname`,
     );
     // #548 adds read_my_survey_response_history (respondent-owned history, no response id).
-    expect(functions).toHaveLength(5);
+    // #718 adds read_my_answerable_surveys (open, not-yet-answered Survey discovery).
+    expect(functions).toHaveLength(6);
     for (const fn of functions) {
       expect(fn.owner).toBe('fops_survey_evidence_reader_owner');
       expect(fn.prosecdef).toBe(true);
@@ -212,6 +213,7 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
       ['lock_response_evidence_subject', 'v'],
       ['read_approved_result_excerpts', 's'],
       ['read_approved_result_excerpts_personal', 's'],
+      ['read_my_answerable_surveys', 's'],
       ['read_my_survey_response_history', 's'],
       ['read_response_text_candidate', 's'],
     ]);

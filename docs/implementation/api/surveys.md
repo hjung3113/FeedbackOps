@@ -18,6 +18,7 @@ POST /surveys/:id/close
 GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /me/survey-responses
+GET /me/answerable-surveys
 GET /surveys/:id/results
 GET /surveys/:id/outcome-follow-up
 POST /survey-responses/:id/evidence-excerpt-candidates
@@ -136,6 +137,34 @@ counts. Self-history reads write no audit events because the reader is the
 data subject. An Actor with no responses receives
 `200 { items: [], page: { has_more: false } }`, which confirms zero responses.
 Errors: `validation.failed`, `auth.session_invalid`, and `rate_limited.actor`.
+
+### GET /me/answerable-surveys — open Surveys the session Actor has not answered
+
+This read-only endpoint requires a session and matching workspace context and
+uses the Survey read rate-limit tier. It has no `survey.read` capability check,
+matching `GET /surveys/:id/form`: any authenticated Actor in the same Workspace
+may discover open Surveys they can answer. The SQL projection
+`survey.read_my_answerable_surveys` filters on
+`workspace_id = session.workspace_id`, `status = 'open'`, and the absence of a
+`survey_responses` row for `session.actor_id`, so it returns only open,
+same-Workspace Surveys the caller has not yet answered. Unknown query keys are
+rejected. The strict query is `{ limit?: integer 1..100, cursor?: opaque
+string }`; `limit` defaults to `50`. An invalid cursor returns `422
+validation.failed` with `fields: [{ path: ['cursor'], code: 'invalid_cursor'
+}]`. The response sets `cache-control: private, no-cache`.
+
+Items are ordered by `opened_at DESC, survey_id DESC`. The opaque cursor
+contains the last returned `(opened_at, survey_id)` pair, so equal open
+timestamps remain ordered without gaps. The strict response shape is
+`{ items: [{ survey_id, display_id, title, type, question_count, opened_at }],
+page: { has_more, cursor? } }`; `page.cursor` is present only when `has_more`
+is true. `question_count` counts the Survey's question rows, the same count the
+`survey_opened` audit event records. This route returns no respondent data,
+answers, operator fields, or other actors' state; a Survey leaves the list for
+an Actor once they submit a response and re-enters never (responses are
+immutable). An Actor with no answerable Surveys receives
+`200 { items: [], page: { has_more: false } }`. Errors: `validation.failed`,
+`auth.session_invalid`, and `rate_limited.actor`.
 
 ### GET /surveys/:id/results — aggregate-only safe result summary
 
