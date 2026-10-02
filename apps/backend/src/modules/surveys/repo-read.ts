@@ -6,9 +6,18 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
 
+const postgresTimestampCursorSchema = z
+  .string()
+  .datetime({ offset: true })
+  .refine((timestamp) => {
+    if (timestamp.endsWith('Z')) return true;
+    const offset = /[+-](\d{2})(?::?(\d{2}))?$/.exec(timestamp);
+    return offset !== null && Number(offset[1]) <= 15 && Number(offset[2] ?? '0') <= 59;
+  });
+
 const surveyResponseHistoryCursorSchema = z
   .object({
-    submittedAt: z.string().datetime({ offset: true }),
+    submittedAt: postgresTimestampCursorSchema,
     surveyId: z.string().uuid(),
   })
   .strict();
@@ -16,26 +25,12 @@ const surveyResponseHistoryCursorSchema = z
 export type SurveyResponseHistoryCursor = z.infer<typeof surveyResponseHistoryCursorSchema>;
 
 export function decodeSurveyResponseHistoryCursor(raw: string): SurveyResponseHistoryCursor {
-  const fail = () =>
-    new HttpError('validation.failed', 'invalid cursor', {
-      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
-    });
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw fail();
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
-  } catch {
-    throw fail();
-  }
-  const result = surveyResponseHistoryCursorSchema.safeParse(parsed);
-  if (!result.success) throw fail();
-  return result.data;
+  return decodeTimestampIdCursor(raw, surveyResponseHistoryCursorSchema);
 }
 
 const answerableSurveysCursorSchema = z
   .object({
-    openedAt: z.string().datetime({ offset: true }),
+    openedAt: postgresTimestampCursorSchema,
     surveyId: z.string().uuid(),
   })
   .strict();
@@ -43,6 +38,13 @@ const answerableSurveysCursorSchema = z
 export type AnswerableSurveysCursor = z.infer<typeof answerableSurveysCursorSchema>;
 
 export function decodeAnswerableSurveysCursor(raw: string): AnswerableSurveysCursor {
+  return decodeTimestampIdCursor(raw, answerableSurveysCursorSchema);
+}
+
+function decodeTimestampIdCursor<Cursor extends { surveyId: string }>(
+  raw: string,
+  schema: z.ZodType<Cursor>,
+): Cursor {
   const fail = () =>
     new HttpError('validation.failed', 'invalid cursor', {
       fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
@@ -55,7 +57,7 @@ export function decodeAnswerableSurveysCursor(raw: string): AnswerableSurveysCur
   } catch {
     throw fail();
   }
-  const result = answerableSurveysCursorSchema.safeParse(parsed);
+  const result = schema.safeParse(parsed);
   if (!result.success) throw fail();
   return result.data;
 }

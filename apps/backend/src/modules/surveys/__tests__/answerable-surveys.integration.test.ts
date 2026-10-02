@@ -16,6 +16,13 @@ const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const SLUG = 'it-answerable-surveys-718';
+const invalidOffsetCursor = Buffer.from(
+  JSON.stringify({
+    openedAt: '2026-09-30T13:00:00+99:99',
+    surveyId: 'c3333333-3333-4333-8333-333333333333',
+  }),
+  'utf8',
+).toString('base64');
 
 type ActorFixture = { id: string; cookie: string; externalId: string };
 type SeededSurvey = { id: string; msId: string; title: string };
@@ -395,19 +402,22 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
     expect(new Set(seen).size).toBe(3);
   });
 
-  it.each(['limit=0', 'limit=101', 'unknown=1', 'cursor=not-a-cursor'])(
-    'rejects invalid query %s with a field validation error',
-    async (query) => {
-      const response = await get(actorA.cookie, `?${query}`);
+  it.each([
+    'limit=0',
+    'limit=101',
+    'unknown=1',
+    'cursor=not-a-cursor',
+    `cursor=${encodeURIComponent(invalidOffsetCursor)}`,
+  ])('rejects invalid query %s with a field validation error', async (query) => {
+    const response = await get(actorA.cookie, `?${query}`);
 
-      expect(response.statusCode).toBe(422);
-      const body = response.json() as {
-        code: string;
-        detail?: { fields?: Array<{ path: string[]; code: string }> };
-      };
-      expect(body.code).toBe('validation.failed');
-      if (query === 'cursor=not-a-cursor')
-        expect(body.detail?.fields).toContainEqual({ path: ['cursor'], code: 'invalid_cursor' });
-    },
-  );
+    expect(response.statusCode).toBe(422);
+    const body = response.json() as {
+      code: string;
+      detail?: { fields?: Array<{ path: string[]; code: string }> };
+    };
+    expect(body.code).toBe('validation.failed');
+    if (query.startsWith('cursor='))
+      expect(body.detail?.fields).toContainEqual({ path: ['cursor'], code: 'invalid_cursor' });
+  });
 });
