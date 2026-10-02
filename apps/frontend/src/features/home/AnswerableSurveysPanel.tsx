@@ -3,7 +3,7 @@ import { useAnswerableSurveys } from '@/features/surveys/hooks/useSurveys';
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_PARTICIPATION_COPY } from '@/lib/copy/survey-participation';
 import { formatDate } from '@/lib/format/datetime';
-import { Skeleton } from '@fops/ui';
+import { Button, Skeleton } from '@fops/ui';
 import { Link, useRouter } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -55,17 +55,26 @@ export function AnswerableSurveysPanel() {
         >
           {surveys.slice(0, 5).map((survey) => (
             <li key={survey.survey_id} className="border-b border-border-subtle last:border-b-0">
-              <SurveyParticipationLink
-                surveyId={survey.survey_id}
-                className="block px-4 py-3 hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-              >
-                <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
-                <span className="mt-1 block text-xs text-text-muted">
-                  {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
-                  {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
-                  {formatDate(survey.opened_at)}
-                </span>
-              </SurveyParticipationLink>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <SurveyParticipationLink
+                  surveyId={survey.survey_id}
+                  className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                >
+                  <span className="block text-sm font-medium text-text-primary">
+                    {survey.title}
+                  </span>
+                  <span className="mt-1 block text-xs text-text-muted">
+                    {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
+                    {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
+                    {formatDate(survey.opened_at)}
+                  </span>
+                </SurveyParticipationLink>
+                <Button asChild variant="primary" size="sm">
+                  <SurveyParticipationLink surveyId={survey.survey_id} className="shrink-0">
+                    {SURVEY_PARTICIPATION_COPY.respond}
+                  </SurveyParticipationLink>
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

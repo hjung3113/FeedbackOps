@@ -1,9 +1,11 @@
 export const SURVEY_PARTICIPATION_COPY = {
   participate: 'Survey 참여',
+  subtitle: '응답할 Survey에 참여하고 내가 제출한 응답을 확인합니다.',
   manage: 'Survey 관리',
   editQuestions: '질문 편집',
   addFirstQuestion: '새 질문 추가',
   answerableSurveys: '응답할 Survey',
+  respond: '응답하기',
   responseHistory: '내 응답 이력',
   noAnswerableSurveys: '응답할 Survey가 없습니다.',
   noSurveyResponses: '응답한 Survey가 없습니다.',

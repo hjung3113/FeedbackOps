@@ -34,12 +34,13 @@ export function SurveyParticipationPage() {
   const history = useMySurveyResponses();
 
   return (
-    <PageShell contentClassName="max-w-5xl">
+    <PageShell contentClassName="max-w-none">
       <main className="space-y-8" data-testid="survey-participation-page">
         <header>
           <h1 className="text-xl font-semibold tracking-tight text-text-primary">
             {SURVEY_PARTICIPATION_COPY.participate}
           </h1>
+          <p className="mt-1 text-sm text-text-muted">{SURVEY_PARTICIPATION_COPY.subtitle}</p>
         </header>
         <section aria-labelledby="answerable-surveys-heading">
           <h2
@@ -107,18 +108,25 @@ function AnswerableSurveysRegion({
     <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
       {data.map((survey) => (
         <li key={survey.survey_id} className="border-b border-border-subtle last:border-b-0">
-          <Link
-            to="/surveys/$surveyId/respond"
-            params={{ surveyId: survey.survey_id }}
-            className="block px-4 py-3 hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-          >
-            <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
-            <span className="mt-1 block text-xs text-text-muted">
-              {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
-              {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
-              {formatDate(survey.opened_at)}
-            </span>
-          </Link>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Link
+              to="/surveys/$surveyId/respond"
+              params={{ surveyId: survey.survey_id }}
+              className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
+              <span className="mt-1 block text-xs text-text-muted">
+                {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
+                {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
+                {formatDate(survey.opened_at)}
+              </span>
+            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/surveys/$surveyId/respond" params={{ surveyId: survey.survey_id }}>
+                {SURVEY_PARTICIPATION_COPY.respond}
+              </Link>
+            </Button>
+          </div>
         </li>
       ))}
     </ul>
@@ -163,7 +171,7 @@ function SurveyResponseHistoryRegion({
             {response.survey_title}
           </span>
           <span className="mt-1 block text-xs text-text-muted">
-            {formatDate(response.submitted_at)}
+            제출 {formatDate(response.submitted_at)}
           </span>
         </li>
       ))}

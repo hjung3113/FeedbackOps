@@ -34,7 +34,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.results.tsx` — Survey results route.
 - `apps/frontend/src/routes/_authed/surveys/$surveyId.follow-up.tsx` — Survey follow-up route.
 - `apps/frontend/src/routes/_authed/surveys/participate.tsx` — answerable Surveys and response history.
-- `apps/frontend/src/routes/_authed/surveys/$surveyId.respond.tsx` — respondent form deep link.
+- `apps/frontend/src/routes/_authed/surveys/$surveyId_.respond.tsx` — respondent form deep link.
 - `apps/frontend/src/features/surveys/routes/SurveyParticipationPage.tsx` — participation list and respondent form states.
 - `apps/frontend/src/features/surveys/components/respond/` — shared preview and respondent question rendering/branching.
 - `apps/frontend/src/features/surveys/components/list/SurveyList.tsx` — Survey list rows and list states.

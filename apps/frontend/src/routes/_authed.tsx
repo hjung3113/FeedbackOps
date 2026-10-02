@@ -16,6 +16,7 @@ import {
   Link2,
   ListChecks,
   ListTodo,
+  PenLine,
   Plus,
   Settings,
   Shield,
@@ -172,7 +173,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       label: SURVEY_PARTICIPATION_COPY.participate,
       href: '/surveys/participate',
       section: 'Survey',
-      icon: <FileBarChart className="h-4 w-4" />,
+      icon: <PenLine className="h-4 w-4" />,
     },
     {
       id: 'surveys',

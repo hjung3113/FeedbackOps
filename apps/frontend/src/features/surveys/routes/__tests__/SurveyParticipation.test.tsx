@@ -268,8 +268,15 @@ describe('Survey participation page', () => {
       'href',
       `/surveys/${surveyId}/respond`,
     );
+    expect(screen.getByRole('link', { name: '응답하기' })).toHaveAttribute(
+      'href',
+      `/surveys/${surveyId}/respond`,
+    );
+    expect(
+      screen.getByText('응답할 Survey에 참여하고 내가 제출한 응답을 확인합니다.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('내 응답 이력')).toBeInTheDocument();
-    expect(screen.getByText('2026. 7. 21.')).toBeInTheDocument();
+    expect(screen.getByText('제출 2026. 7. 21.')).toBeInTheDocument();
   });
 
   it('shows loading states for both participation regions', async () => {
@@ -502,7 +509,7 @@ describe('respondent form', () => {
 });
 
 describe('Home answerable Survey panel', () => {
-  it('limits the populated list to five respondent links', async () => {
+  it('limits the populated list to five answerable Surveys with response actions', async () => {
     const items = Array.from({ length: 6 }, (_, index) => ({
       ...answerableSurvey,
       survey_id: `${String(index + 1).padStart(8, '0')}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
@@ -513,7 +520,9 @@ describe('Home answerable Survey panel', () => {
     renderWithQuery(<AnswerableSurveysPanel />);
 
     const list = await screen.findByTestId('home-answerable-surveys-list');
-    expect(within(list).getAllByRole('link')).toHaveLength(5);
+    const responseActions = within(list).getAllByRole('link', { name: '응답하기' });
+    expect(responseActions).toHaveLength(5);
+    expect(responseActions[0]).toHaveAttribute('href', `/surveys/${items[0]?.survey_id}/respond`);
     expect(screen.getByRole('link', { name: 'Survey 참여에서 모두 보기' })).toHaveAttribute(
       'href',
       '/surveys/participate',
