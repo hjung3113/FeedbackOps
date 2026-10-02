@@ -154,7 +154,8 @@ export function createNavResolveService(deps: NavResolveDeps): NavResolveService
             entity_type: 'task_request',
             id: hit.id,
             display_id: displayId,
-            route_intent: { route: '/tasks', search: { view: 'requests', selected: hit.id } },
+            // `/tasks` reads `param` (tasksSearchSchema), unlike `/vocs` + `/findings`.
+            route_intent: { route: '/tasks', search: { view: 'requests', param: hit.id } },
           }
         : null;
     }
@@ -166,7 +167,7 @@ export function createNavResolveService(deps: NavResolveDeps): NavResolveService
           entity_type: 'task',
           id: hit.id,
           display_id: displayId,
-          route_intent: { route: '/tasks', search: { view: 'board', selected: hit.id } },
+          route_intent: { route: '/tasks', search: { view: 'board', param: hit.id } },
         }
       : null;
   }

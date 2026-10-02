@@ -12,10 +12,14 @@ import { loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { grantCapability, denyCapability } from '../../../test-support/permissions-fixtures.js';
 import { seedSecondWorkspace } from '../../../test-support/seed-second-workspace.js';
 import { insertTaskRequestRow, insertTaskRow } from '../../../test-support/task-fixtures.js';
-import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import {
+  cleanupReadTestTables,
+  cleanupTestActorsByExternalIdPrefix,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -54,10 +58,12 @@ function routeIntentFor(entityType: EntityType, id: string) {
   if (entityType === 'finding') {
     return { route: '/findings', search: { selected: id } };
   }
+  // The shipped `/tasks` schema reads `param` (tasksSearchSchema), so REQ/TASK
+  // intents carry the id there; VOC and Finding routes read `selected`.
   if (entityType === 'task_request') {
-    return { route: '/tasks', search: { view: 'requests', selected: id } };
+    return { route: '/tasks', search: { view: 'requests', param: id } };
   }
-  return { route: '/tasks', search: { view: 'board', selected: id } };
+  return { route: '/tasks', search: { view: 'board', param: id } };
 }
 
 describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
@@ -72,6 +78,17 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
   let foreignUserActorId: string;
 
   const headers = (cookie: string) => ({ cookie: `${SESSION_COOKIE_NAME}=${cookie}` });
+  // The single 404 envelope every hidden/missing outcome returns (nav/routes.ts
+  // sendError) — asserted verbatim on every denial case below.
+  const NOT_FOUND_BODY = { code: 'not_found.record', message: 'record not found' };
+  const expectNotFound = (
+    response: { statusCode: number; headers: Record<string, unknown> },
+    body: unknown,
+  ) => {
+    expect(response.statusCode).toBe(404);
+    expect(body).toEqual(NOT_FOUND_BODY);
+    expect(response.headers['cache-control']).toBe('private, no-cache');
+  };
   const resolveVia = async (cookie: string, displayId: string) => {
     const response = await app.inject({
       method: 'GET',
@@ -122,6 +139,9 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       [WORKSPACE_ID, `${PREFIX}%`],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, PREFIX);
+    // This suite's plain-User cohort (mock-user-plain-*) — the mock-dev-read-*
+    // cleanup above does not cover it (#731 FIX1 R4).
+    await cleanupTestActorsByExternalIdPrefix(dbHandle, WORKSPACE_ID, 'mock-user-plain-');
     await dbHandle.pool.query(
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in (${msSub})`,
       [foreignWorkspaceId, `${PREFIX}%`],
@@ -204,6 +224,50 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
   async function blindDeveloperCookie(): Promise<string> {
     const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('blind'));
     return loginAs(app, externalId);
+  }
+
+  /** Fresh dev actor with exactly the given capabilities granted on one Managed System. */
+  async function developerCookieWithGrants(msId: string, capabilities: string[]): Promise<string> {
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('matrix'));
+    for (const capability of capabilities) {
+      await grantCapability(dbHandle, WORKSPACE_ID, devId, capability, msId, adminActorId);
+    }
+    return loginAs(app, externalId);
+  }
+
+  /** Fresh plain user with exactly the given capabilities granted on one Managed System. */
+  async function plainUserCookieWithGrants(msId: string, capabilities: string[]): Promise<string> {
+    const externalId = `mock-user-plain-${uid('plain')}`;
+    const { id: actorId } = await insertActorRow(dbHandle, {
+      workspaceId: WORKSPACE_ID,
+      externalId,
+      roleLevel: 'user',
+    });
+    for (const capability of capabilities) {
+      await grantCapability(dbHandle, WORKSPACE_ID, actorId, capability, msId, adminActorId);
+    }
+    return loginAs(app, externalId);
+  }
+
+  /**
+   * Fresh dev actor whose one capability is granted AND explicitly denied on
+   * the same Managed System (permission_denies precedes grants — 05-permission-policy).
+   */
+  async function deniedDeveloperCookie(msId: string, capability: string): Promise<string> {
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('denied'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, capability, msId, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, capability, msId, adminActorId);
+    return loginAs(app, externalId);
+  }
+
+  /** Id of the single Managed System the latest seedScenario created (PREFIX slug). */
+  async function scenarioMsId(): Promise<string> {
+    return (
+      await dbHandle.pool.query<{ id: string }>(
+        `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
+        [WORKSPACE_ID, `${PREFIX}%`],
+      )
+    ).rows[0]!.id;
   }
 
   /**
@@ -307,6 +371,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     expect(unreadable.response.statusCode).toBe(404);
     expect(missing.body).toEqual(crossWorkspace.body);
     expect(missing.body).toEqual(unreadable.body);
+    expect(missing.body).toEqual(NOT_FOUND_BODY);
     expect(missing.response.headers['cache-control']).toBe('private, no-cache');
   });
 
@@ -334,9 +399,9 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       const seed = await seedScenario();
       const cookie = await blindDeveloperCookie();
 
-      const { response } = await resolveVia(cookie, c.display(seed));
+      const { response, body } = await resolveVia(cookie, c.display(seed));
 
-      expect(response.statusCode).toBe(404);
+      expectNotFound(response, body);
     },
   );
 
@@ -345,11 +410,146 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     async (c) => {
       const seed = await seedScenario();
 
-      const { response } = await resolveVia(await plainUserCookie(), c.display(seed));
+      const { response, body } = await resolveVia(await plainUserCookie(), c.display(seed));
 
-      expect(response.statusCode).toBe(404);
+      expectNotFound(response, body);
     },
   );
+
+  // ── R3: authority matrix — one row per capability subset, expectations
+  // derived from each prefix's detail-read authority, not intuition.
+  it.each(CASES)(
+    'resolves only what just finding.read covers for a developer: $entity_type',
+    async (c) => {
+      // VOC — resolveVocAccess: no voc.read/voc.triage grant, not the reporter
+      //   → outside read + effective scope → hidden.
+      // FIN — checkFindingRead(requireElevatedRole) for a Developer IS the
+      //   finding.read point grant → resolves.
+      // TASK/REQ — checkFindingManage(requireElevatedRole) needs finding.manage
+      //   → hidden.
+      const seed = await seedScenario();
+      const cookie = await developerCookieWithGrants(await scenarioMsId(), ['finding.read']);
+
+      const { response, body } = await resolveVia(cookie, c.display(seed));
+
+      if (c.entity_type === 'finding') {
+        expect(response.statusCode).toBe(200);
+        expect(navResolveResponseSchema.parse(body)).toEqual({
+          entity_type: c.entity_type,
+          id: c.id(seed),
+          display_id: c.display(seed),
+          route_intent: routeIntentFor(c.entity_type, c.id(seed)),
+        });
+      } else {
+        expectNotFound(response, body);
+      }
+    },
+  );
+
+  it.each(CASES)(
+    'resolves only what just finding.manage covers for a developer: $entity_type',
+    async (c) => {
+      // VOC — no voc.read/voc.triage grant → hidden.
+      // FIN — finding.manage does NOT satisfy checkFindingRead → hidden.
+      // TASK/REQ — checkFindingManage(requireElevatedRole) IS the finding.manage
+      //   point grant → resolves.
+      const seed = await seedScenario();
+      const cookie = await developerCookieWithGrants(await scenarioMsId(), ['finding.manage']);
+
+      const { response, body } = await resolveVia(cookie, c.display(seed));
+
+      if (c.entity_type === 'task' || c.entity_type === 'task_request') {
+        expect(response.statusCode).toBe(200);
+        expect(navResolveResponseSchema.parse(body)).toEqual({
+          entity_type: c.entity_type,
+          id: c.id(seed),
+          display_id: c.display(seed),
+          route_intent: routeIntentFor(c.entity_type, c.id(seed)),
+        });
+      } else {
+        expectNotFound(response, body);
+      }
+    },
+  );
+
+  it.each([
+    ['finding', (s: Scenario) => s.findingDisplay],
+    ['task', (s: Scenario) => s.taskDisplay],
+    ['task_request', (s: Scenario) => s.requestDisplay],
+  ] as const)(
+    'keeps hiding %s display ids from a plain user even with explicit grants',
+    async (_prefix, display) => {
+      // Elevated-role gate: checkFindingRead/checkFindingManage return
+      // findingRoleDenied for role_level='user' BEFORE any grant is consulted,
+      // so explicit finding.read/finding.manage grants buy a User nothing.
+      const seed = await seedScenario();
+      const cookie = await plainUserCookieWithGrants(await scenarioMsId(), [
+        'finding.read',
+        'finding.manage',
+      ]);
+
+      const { response, body } = await resolveVia(cookie, display(seed));
+
+      expectNotFound(response, body);
+    },
+  );
+
+  it('lets a triage-only actor resolve a VOC through the SUMMARY arm', async () => {
+    // resolveVocAccess: no voc.read scope and not the reporter, but the
+    // voc.triage grant puts the MS in the effective scope → SUMMARY verdict,
+    // which /nav/resolve counts as readable (same as GET /vocs/:id's summary).
+    const seed = await seedScenario();
+    const cookie = await developerCookieWithGrants(await scenarioMsId(), ['voc.triage']);
+
+    const { response, body } = await resolveVia(cookie, seed.vocDisplay);
+
+    expect(response.statusCode).toBe(200);
+    expect(navResolveResponseSchema.parse(body)).toEqual({
+      entity_type: 'voc',
+      id: seed.vocId,
+      display_id: seed.vocDisplay,
+      route_intent: routeIntentFor('voc', seed.vocId),
+    });
+  });
+
+  it.each([
+    ['voc', 'voc.read'],
+    ['finding', 'finding.read'],
+  ] as const)('lets an explicit deny override a %s grant (%s)', async (_prefix, capability) => {
+    // check-service consults permission_denies before grants (05-policy:33);
+    // actorScopeForCapability subtracts denied MSs from the resolved scope, so
+    // the granted-then-denied actor lands back in the hidden arm.
+    const seed = await seedScenario();
+    const display = capability === 'voc.read' ? seed.vocDisplay : seed.findingDisplay;
+    const cookie = await deniedDeveloperCookie(await scenarioMsId(), capability);
+
+    const { response, body } = await resolveVia(cookie, display);
+
+    expectNotFound(response, body);
+  });
+
+  it('returns the identical 404 for an archived VOC and a missing one (same actor)', async () => {
+    // Archived rows are excluded by both VOC reads (selectVocIdByDisplayId and
+    // selectVocByIdForRead), so archival hides exactly like a missing row —
+    // same actor, same prefix, deep-equal body, identical cache-control.
+    const seed = await seedScenario();
+    const missingDisplayId = await unusedDisplayId('VOC', 'voc.vocs');
+    await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [
+      seed.vocId,
+    ]);
+
+    const missing = await resolveVia(adminCookie, missingDisplayId);
+    const archived = await resolveVia(adminCookie, seed.vocDisplay);
+
+    expect(missing.response.statusCode).toBe(404);
+    expect(archived.response.statusCode).toBe(404);
+    expect(missing.body).toEqual(archived.body);
+    expect(missing.body).toEqual(NOT_FOUND_BODY);
+    expect(archived.response.headers['cache-control']).toBe(
+      missing.response.headers['cache-control'],
+    );
+    expect(missing.response.headers['cache-control']).toBe('private, no-cache');
+  });
 
   it('lets the VOC reporter resolve their own VOC without any grant', async () => {
     const seed = await seedScenario();

@@ -23,12 +23,12 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId/follow-up
 /surveys/participate
 /surveys/:surveyId/respond
-/tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
+/tasks?view=my&managedSystem=:managedSystemId|all&param=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
-/tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&selected=:requestId
-/tasks?view=backlog&managedSystem=:managedSystemId|all&selected=:taskId
-/tasks?view=board&managedSystem=:managedSystemId|all&selected=:taskId
-/tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
+/tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&param=:requestId
+/tasks?view=backlog&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
 /integration
 /findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)

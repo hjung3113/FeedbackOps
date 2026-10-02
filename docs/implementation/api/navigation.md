@@ -49,10 +49,16 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
   detail payload (e.g. the VOC summary envelope) counts as readable. Authorization-absence
   outcomes (`permission.denied`, `permission.scope_required`) are treated like not-found;
   unexpected errors propagate.
+- Existence and timing: display ids are per-workspace sequential counters, so the
+  existence of an id is not treated as confidential — any actor who can create a VOC
+  learns the counter, and plain users are stopped by the elevated-role gate before any
+  TASK/REQ lookup. The endpoint guarantees an identical status, body, and headers for
+  missing and unreadable records; it does **not** equalise latency.
 - Success response (shared schema `navResolveResponseSchema` in `@fops/shared`):
   `{ entity_type: 'voc' | 'finding' | 'task_request' | 'task', id: <uuid>,
   display_id: <normalised id>, route_intent: { route, search } }` — `route` is the path
   (`/vocs`, `/findings`, `/tasks`), `search` the deep-link query keys:
   VOC → `/vocs?view=inbox&selected=:id`; Finding → `/findings?selected=:id`;
-  Task Request → `/tasks?view=requests&selected=:id`; Task → `/tasks?view=board&selected=:id`.
+  Task Request → `/tasks?view=requests&param=:id`; Task → `/tasks?view=board&param=:id`
+  (the `/tasks` search schema reads `param`; `/vocs` and `/findings` read `selected`).
   No title or other record content is returned.
