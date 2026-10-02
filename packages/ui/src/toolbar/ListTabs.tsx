@@ -34,6 +34,9 @@ export interface ListTabsProps {
   className?: string;
 }
 
+/** Edge fade width (px) that masks a partially clipped tab on a scrollable side. */
+const EDGE_FADE_PX = 16;
+
 export function ListTabs({
   tabs,
   activeTab,
@@ -47,6 +50,17 @@ export function ListTabs({
     canScrollRight: false,
   });
   const hasOverflow = overflowState.canScrollLeft || overflowState.canScrollRight;
+  // CSS mask-image fade on each scrollable side so a partially clipped tab does not
+  // show as a stray fragment.
+  const viewportStyle = React.useMemo(() => {
+    const { canScrollLeft, canScrollRight } = overflowState;
+    if (!canScrollLeft && !canScrollRight) return undefined;
+    const fade = `${EDGE_FADE_PX}px`;
+    const image = `linear-gradient(to right, ${
+      canScrollLeft ? `transparent 0, black ${fade}` : 'black 0'
+    }, ${canScrollRight ? `black calc(100% - ${fade}), transparent 100%` : 'black 100%'})`;
+    return { maskImage: image, WebkitMaskImage: image };
+  }, [overflowState]);
   const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState(tabs[0]?.value ?? '');
   const tabViewportRef = React.useRef<HTMLDivElement>(null);
   const selectedTab = activeTab ?? uncontrolledActiveTab;
@@ -146,6 +160,9 @@ export function ListTabs({
             ref={tabViewportRef}
             className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             data-list-toolbar-tabs
+            data-fade-left={overflowState.canScrollLeft ? 'true' : 'false'}
+            data-fade-right={overflowState.canScrollRight ? 'true' : 'false'}
+            style={viewportStyle}
           >
             <Tabs
               className={cn(align === 'end' && 'ml-auto')}

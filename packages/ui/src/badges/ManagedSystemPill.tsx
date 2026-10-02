@@ -1,5 +1,5 @@
 /**
- * ManagedSystemPill — outline pill: border + rounded-full + name + 12 px color square.
+ * ManagedSystemPill — outline pill: border + rounded-full + name + 6 px round color dot.
  *
  * C1 design contract: this component takes the RESOLVED data directly.
  * Callers resolve `mark` from the Managed System slug with
@@ -13,7 +13,7 @@ import { cn } from '../utils/cn.js';
 
 export interface ManagedSystemPillProps {
   name: string;
-  /** CSS color string for the 12 px square "mark", resolved by slug in the caller. */
+  /** CSS color string for the 6 px round "mark" dot, resolved by slug in the caller. */
   mark?: string;
   /** When true, renders in a muted style (e.g. archived or unknown system). */
   archived?: boolean;
@@ -22,7 +22,7 @@ export interface ManagedSystemPillProps {
 
 /**
  * Outline pill for a Managed System reference.
- * Renders a small 12 px colored square prefix ("mark") when `mark` is provided.
+ * Renders a small 6 px round colored dot prefix ("mark") when `mark` is provided.
  * Passes `archived` as a data attribute for testability.
  */
 export function ManagedSystemPill({ name, mark, archived, className }: ManagedSystemPillProps) {
@@ -44,9 +44,9 @@ export function ManagedSystemPill({ name, mark, archived, className }: ManagedSy
         <span
           style={{
             display: 'inline-block',
-            width: 12,
-            height: 12,
-            borderRadius: 2,
+            width: 6,
+            height: 6,
+            borderRadius: 9999,
             backgroundColor: mark,
             flexShrink: 0,
           }}

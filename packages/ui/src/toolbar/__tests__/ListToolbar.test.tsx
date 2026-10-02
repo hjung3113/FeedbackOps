@@ -413,3 +413,49 @@ describe('ListToolbar — title-only mode', () => {
     expect(screen.getByTestId('action-slot')).toBeInTheDocument();
   });
 });
+
+describe('ListTabs — edge fade', () => {
+  function renderWithViewportGeometry(clientWidth: number, scrollWidth: number) {
+    const { container } = render(<ListTabs tabs={overflowTabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    Object.defineProperties(tabViewport, {
+      clientWidth: { configurable: true, value: clientWidth },
+      scrollWidth: { configurable: true, value: scrollWidth },
+    });
+    return tabViewport;
+  }
+
+  it('fades the right edge only when the viewport can scroll right', () => {
+    const tabViewport = renderWithViewportGeometry(120, 300);
+
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'true');
+    expect(tabViewport).toHaveAttribute('data-fade-left', 'false');
+    expect(tabViewport.style.maskImage).toContain('linear-gradient');
+  });
+
+  it('fades the left edge only once scrolled to the end', () => {
+    const tabViewport = renderWithViewportGeometry(120, 300);
+    Object.defineProperties(tabViewport, {
+      scrollLeft: { configurable: true, writable: true, value: 180 },
+    });
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    act(() => tabViewport.dispatchEvent(new Event('scroll')));
+
+    expect(tabViewport).toHaveAttribute('data-fade-left', 'true');
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'false');
+    expect(tabViewport.style.maskImage).toContain('linear-gradient');
+  });
+
+  it('applies no fade when the tab strip fits', () => {
+    const tabViewport = renderWithViewportGeometry(300, 300);
+
+    act(() => window.dispatchEvent(new Event('resize')));
+
+    expect(tabViewport).toHaveAttribute('data-fade-left', 'false');
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'false');
+    expect(tabViewport.style.maskImage).toBe('');
+  });
+});

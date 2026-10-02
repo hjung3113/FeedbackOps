@@ -54,7 +54,8 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 ## Tokens — Typography
 
 ### Inter — Primary UI typeface for all content including headings, body text, and interactive elements. · `--font-sans`
-- **CSS stack:** `'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+- **CSS stack:** `'Inter Variable', 'Inter', 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+- **Loading:** `@fontsource-variable/inter` (family `Inter Variable`), imported in `apps/frontend/src/styles.css`. Inter has no Hangul, so Korean glyphs fall through per glyph to `Pretendard Variable` (owner choice, 2026-10-02), then to the system faces.
 - **Weights:** 300, 400, 510, 590
 - **Sizes:** 8px, 10px, 11px, 12px, 13px, 14px, 15px, 17px, 20px, 24px, 32px, 48px
 - **Line height:** 1.20, 1.40, 1.60
@@ -62,12 +63,17 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 - **Role:** Primary UI typeface for all content including headings, body text, and interactive elements.
 
 ### JetBrains Mono — Monospaced font for code snippets, technical details, and certain data displays, ensuring consistent character alignment and technical clarity. · `--font-mono`
-- **CSS stack:** `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
+- **CSS stack:** `'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
+- **Loading:** `@fontsource-variable/jetbrains-mono` (family `JetBrains Mono Variable`), imported in `apps/frontend/src/styles.css`.
 - **Weights:** 400
 - **Sizes:** 12px, 13px, 14px
 - **Line height:** 1.30, 1.40, 1.50, 1.71
 - **Letter spacing:** -0.15
 - **Role:** Monospaced font for code snippets, technical details, and certain data displays, ensuring consistent character alignment and technical clarity.
+
+### Pretendard — Korean fallback typeface for Hangul text.
+
+- **Loading:** `pretendard` package, dynamic-subset CSS (`pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css`, family `Pretendard Variable` with unicode-range subsets), imported in `apps/frontend/src/styles.css`. It is not first in `--font-sans`: Latin renders in Inter, Hangul falls through to Pretendard per glyph.
 
 ### Type Scale
 
