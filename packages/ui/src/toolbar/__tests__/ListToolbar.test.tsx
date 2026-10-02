@@ -290,7 +290,7 @@ describe('ListToolbar — tabs mode', () => {
       rerender(<ListToolbar tabs={nextTabs} activeTab={nextActiveTab} />);
 
       expect(screen.getByRole('button', { name: '다음 탭 보기' })).toBeVisible();
-      expect(scrollBy).toHaveBeenCalledWith({ left: 140, behavior: 'smooth' });
+      expect(scrollBy).toHaveBeenCalledWith({ left: 156, behavior: 'smooth' });
     },
   );
 
@@ -412,4 +412,116 @@ describe('ListToolbar — title-only mode', () => {
     render(<ListToolbar title="My List" action={<span data-testid="action-slot">CTA</span>} />);
     expect(screen.getByTestId('action-slot')).toBeInTheDocument();
   });
+});
+
+describe('ListTabs — edge fade', () => {
+  function renderWithViewportGeometry(clientWidth: number, scrollWidth: number, scrollLeft = 0) {
+    const { container } = render(<ListTabs tabs={overflowTabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    Object.defineProperties(tabViewport, {
+      scrollLeft: { configurable: true, writable: true, value: scrollLeft },
+      clientWidth: { configurable: true, value: clientWidth },
+      scrollWidth: { configurable: true, value: scrollWidth },
+    });
+    tabViewport.scrollBy = vi.fn() as unknown as HTMLDivElement['scrollBy'];
+    return tabViewport;
+  }
+
+  it('keeps a revealed middle tab outside the remaining right fade', () => {
+    const { container, rerender } = render(<ListTabs tabs={tabs} activeTab="untriaged" />);
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
+    Object.defineProperties(tabViewport, {
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+      scrollWidth: { configurable: true, value: 500 },
+      clientWidth: { configurable: true, value: 100 },
+    });
+    tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 100));
+    tabViewport.scrollBy = vi.fn((options: ScrollToOptions) => {
+      tabViewport.scrollLeft += options.left ?? 0;
+      tabViewport.dispatchEvent(new Event('scroll'));
+    }) as unknown as HTMLDivElement['scrollBy'];
+    screen.getByRole('tab', { name: '미분류' }).getBoundingClientRect = vi.fn(() => rect(0, 40));
+    const middleTab = screen.getByRole('tab', { name: /미배정/ });
+    middleTab.getBoundingClientRect = vi.fn(() =>
+      rect(150 - tabViewport.scrollLeft, 200 - tabViewport.scrollLeft),
+    );
+
+    act(() => window.dispatchEvent(new Event('resize')));
+    rerender(<ListTabs tabs={tabs} activeTab="unassigned" />);
+
+    expect(tabViewport.scrollLeft).toBe(116);
+    expect(tabViewport).toHaveAttribute('data-fade-right', 'true');
+    expect(middleTab.getBoundingClientRect().right).toBe(
+      tabViewport.getBoundingClientRect().right - 16,
+    );
+  });
+
+  it.each([
+    {
+      fade: 'right-only',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 0,
+      fadeLeft: 'false',
+      fadeRight: 'true',
+      mask: 'linear-gradient(to right, black 0, black calc(100% - 16px), transparent 100%)',
+    },
+    {
+      fade: 'left-only',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 180,
+      fadeLeft: 'true',
+      fadeRight: 'false',
+      mask: 'linear-gradient(to right, transparent 0, black 16px, black 100%)',
+    },
+    {
+      fade: 'both',
+      clientWidth: 120,
+      scrollWidth: 300,
+      scrollLeft: 100,
+      fadeLeft: 'true',
+      fadeRight: 'true',
+      mask: 'linear-gradient(to right, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
+    },
+    {
+      fade: 'neither',
+      clientWidth: 300,
+      scrollWidth: 300,
+      scrollLeft: 0,
+      fadeLeft: 'false',
+      fadeRight: 'false',
+      mask: '',
+    },
+  ])(
+    'applies the $fade mask with the matching transparent and opaque edge stops',
+    ({ clientWidth, scrollWidth, scrollLeft, fadeLeft, fadeRight, mask }) => {
+      const tabViewport = renderWithViewportGeometry(clientWidth, scrollWidth, scrollLeft);
+
+      act(() => window.dispatchEvent(new Event('resize')));
+      if (scrollLeft > 0) act(() => tabViewport.dispatchEvent(new Event('scroll')));
+
+      expect(tabViewport).toHaveAttribute('data-fade-left', fadeLeft);
+      expect(tabViewport).toHaveAttribute('data-fade-right', fadeRight);
+      expect(tabViewport.style.maskImage).toBe(mask);
+    },
+  );
+
+  it.each([
+    { side: 'left', activeRect: rect(0, 50), expectedLeft: -16 },
+    { side: 'right', activeRect: rect(50, 100), expectedLeft: 16 },
+  ])(
+    'reveals a selected tab already in the viewport but under the $side fade',
+    ({ activeRect, expectedLeft }) => {
+      const tabViewport = renderWithViewportGeometry(100, 500, 100);
+      const scrollBy = vi.fn();
+      tabViewport.getBoundingClientRect = vi.fn(() => rect(0, 100));
+      tabViewport.scrollBy = scrollBy as unknown as HTMLDivElement['scrollBy'];
+      screen.getByRole('tab', { selected: true }).getBoundingClientRect = vi.fn(() => activeRect);
+
+      act(() => window.dispatchEvent(new Event('resize')));
+
+      expect(scrollBy).toHaveBeenCalledWith({ left: expectedLeft, behavior: 'smooth' });
+    },
+  );
 });

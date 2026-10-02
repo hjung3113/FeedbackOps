@@ -179,11 +179,11 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   // --- Typography: font families ---
   {
     tokenName: '--font-sans',
-    raw: '\'Inter\', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    raw: "'Inter Variable', 'Inter', 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
   },
   {
     tokenName: '--font-mono',
-    raw: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    raw: "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   },
 
   // --- Typography: sizes ---

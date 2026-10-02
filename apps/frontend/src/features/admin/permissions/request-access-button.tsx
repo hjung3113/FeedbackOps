@@ -225,7 +225,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
             <>
               <DialogHeader>
                 <DialogTitle>권한 요청</DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-pretty">
                   Confirm the permission and explain why you need the least access required.
                 </DialogDescription>
               </DialogHeader>

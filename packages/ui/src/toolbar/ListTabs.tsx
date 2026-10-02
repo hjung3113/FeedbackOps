@@ -34,6 +34,9 @@ export interface ListTabsProps {
   className?: string;
 }
 
+/** Edge fade width (px) that masks a partially clipped tab on a scrollable side. */
+const EDGE_FADE_PX = 16;
+
 export function ListTabs({
   tabs,
   activeTab,
@@ -47,6 +50,17 @@ export function ListTabs({
     canScrollRight: false,
   });
   const hasOverflow = overflowState.canScrollLeft || overflowState.canScrollRight;
+  // CSS mask-image fade on each scrollable side so a partially clipped tab does not
+  // show as a stray fragment.
+  const viewportStyle = React.useMemo(() => {
+    const { canScrollLeft, canScrollRight } = overflowState;
+    if (!canScrollLeft && !canScrollRight) return undefined;
+    const fade = `${EDGE_FADE_PX}px`;
+    const image = `linear-gradient(to right, ${
+      canScrollLeft ? `transparent 0, black ${fade}` : 'black 0'
+    }, ${canScrollRight ? `black calc(100% - ${fade}), transparent 100%` : 'black 100%'})`;
+    return { maskImage: image, WebkitMaskImage: image };
+  }, [overflowState]);
   const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState(tabs[0]?.value ?? '');
   const tabViewportRef = React.useRef<HTMLDivElement>(null);
   const selectedTab = activeTab ?? uncontrolledActiveTab;
@@ -59,13 +73,20 @@ export function ListTabs({
 
     const viewportRect = viewport.getBoundingClientRect();
     const activeRect = active.getBoundingClientRect();
-    const left =
-      activeRect.left < viewportRect.left
-        ? activeRect.left - viewportRect.left
-        : activeRect.right > viewportRect.right
-          ? activeRect.right - viewportRect.right
-          : 0;
-    if (left !== 0) viewport.scrollBy({ left, behavior: 'smooth' });
+    const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+    const canScrollLeft = viewport.scrollLeft > 1;
+    const canScrollRight = maxScrollLeft - viewport.scrollLeft > 1;
+    const visibleLeft = viewportRect.left + (canScrollLeft ? EDGE_FADE_PX : 0);
+    const visibleRight = viewportRect.right - (canScrollRight ? EDGE_FADE_PX : 0);
+    let left = 0;
+    if (activeRect.left < visibleLeft) left = activeRect.left - visibleLeft;
+    else if (activeRect.right > visibleRight) left = activeRect.right - visibleRight;
+
+    if (left !== 0) {
+      const destination = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + left));
+      const scrollDelta = destination - viewport.scrollLeft;
+      if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: 'smooth' });
+    }
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: tabKey is the rebind trigger when the tab set changes.
@@ -146,6 +167,9 @@ export function ListTabs({
             ref={tabViewportRef}
             className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             data-list-toolbar-tabs
+            data-fade-left={overflowState.canScrollLeft ? 'true' : 'false'}
+            data-fade-right={overflowState.canScrollRight ? 'true' : 'false'}
+            style={viewportStyle}
           >
             <Tabs
               className={cn(align === 'end' && 'ml-auto')}
