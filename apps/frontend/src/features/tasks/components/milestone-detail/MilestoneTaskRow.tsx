@@ -1,7 +1,7 @@
 import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { TaskDto } from '@fops/shared';
 import { InternalTaskBadge, SeverityIndicator, UnassignedBadge, UserAvatar } from '@fops/ui';
-import { PRIORITY_SEVERITY } from './constants';
+import { taskPriorityToSeverity } from '../../adapters/taskDisplayAdapters';
 
 // Read-only child Task row mirroring screen-milestones.jsx:214-238.
 export function MilestoneTaskRow({
@@ -16,7 +16,7 @@ export function MilestoneTaskRow({
     // renders the Task due_date; no estimate field exists.
     // Nested card geometry per prototype .card-nested: radius 6, borderless, 10/12 padding.
     <div className="flex items-center gap-2.5 rounded-md bg-surface-canvas px-3 py-2.5">
-      <SeverityIndicator severity={PRIORITY_SEVERITY[task.priority]} />
+      <SeverityIndicator severity={taskPriorityToSeverity(task.priority)} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-xs text-text-muted">{task.display_id}</span>

@@ -114,3 +114,5 @@ export function useMilestoneTitleEdit(
     submitTitleEdit,
   };
 }
+
+export type UseMilestoneTitleEditResult = ReturnType<typeof useMilestoneTitleEdit>;

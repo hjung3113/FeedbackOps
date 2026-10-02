@@ -1,41 +1,15 @@
-import { listTasks } from '@/lib/api/tasks';
-import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY } from '@/lib/copy/glossary';
-import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
-import {
-  Button,
-  DetailPanelSectionNav,
-  FieldRow,
-  Input,
-  NestedTextBlock,
-  PanelTitleBlock,
-  PermissionBlockedPanel,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { DetailPanelSectionNav, NestedTextBlock } from '@fops/ui';
 import type * as React from 'react';
-import {
-  MilestoneManagedSystemPill,
-  MilestoneOutlineBadge,
-  MilestoneOwnerChip,
-  MilestonePanelSectionTitle,
-} from '../MilestoneIdentity';
-import { MilestoneStatusBadge } from '../MilestoneStatusBadge';
+
+import { MilestonePanelSectionTitle } from '../MilestoneIdentity';
+import { MilestonePropertiesPresenter } from './MilestonePropertiesPresenter';
 import { MilestoneSourceSection } from './MilestoneSourceSection';
-import { MilestoneTaskRow } from './MilestoneTaskRow';
-import {
-  SECTIONS,
-  STATUS_OPTIONS,
-  milestonePropertyFieldClassName,
-  selectClassName,
-} from './constants';
+import { MilestoneTasksSection } from './MilestoneTasksSection';
+import { MilestoneTitlePresenter } from './MilestoneTitlePresenter';
+import { SECTIONS } from './constants';
+import { useMilestoneChildTasks } from './useMilestoneChildTasks';
 import { useMilestoneStatusEdit } from './useMilestoneStatusEdit';
 import { useMilestoneTitleEdit } from './useMilestoneTitleEdit';
 
@@ -58,20 +32,8 @@ export function MilestoneDetailContent({
   onTitleDirtyChange,
 }: MilestoneDetailContentProps) {
   const sourceFinding = milestone.source_finding;
-
-  // #514 B2d-tasks — the section reads the milestone's child rows through the
-  // existing tasks client (GET /tasks?milestone_id=); the header count is the
-  // real row count, not the prototype's plannedTasks-derived totalPlanned.
-  const childTasksQuery = useQuery({
-    queryKey: ['tasks', { milestone_id: milestone.id }] as const,
-    queryFn: ({ signal }) => listTasks({ milestone_id: milestone.id, signal }),
-    staleTime: 30 * 1000,
-  });
-  // B2d fixup F1 — the child read has its own lifetime, so a terminal error
-  // (e.g. a denied refetch after a permission change) must win over the data
-  // React Query retains: no count in the nav or section title, no rows. Same
-  // contract as the milestone read above (R2-1).
-  const childTasks = childTasksQuery.error == null ? childTasksQuery.data?.items : undefined;
+  // This one safe projection feeds both the navigation count and the section rows/error barrier.
+  const { childTasks, error: childTasksError } = useMilestoneChildTasks(milestone.id);
 
   const titleEdit = useMilestoneTitleEdit(milestone, onTitleDirtyChange);
   const statusEdit = useMilestoneStatusEdit({
@@ -80,20 +42,6 @@ export function MilestoneDetailContent({
     setTitleEditVersion: titleEdit.setTitleEditVersion,
     discardTitleEdit: titleEdit.discardTitleEdit,
   });
-  const {
-    editingTitle,
-    titleDraft,
-    setTitleDraft,
-    titleError,
-    setTitleError,
-    titleDirty,
-    titleMutation,
-    startTitleEdit,
-    cancelTitleEdit,
-    discardTitleEdit,
-    submitTitleEdit,
-  } = titleEdit;
-  const { statusError, statusMutation, handleStatusChange } = statusEdit;
 
   const areaName =
     milestone.analytics_area_id !== null
@@ -127,81 +75,15 @@ export function MilestoneDetailContent({
             Feature-local classes only; shared panel components are consumed,
             not redesigned. The 24px scroll padding owns all horizontal insets. */}
         <div data-anchor="overview">
-          <PanelTitleBlock
-            className="mb-6 p-0"
-            title={milestone.title}
-            badges={
-              <>
-                <MilestoneStatusBadge status={milestone.status} />
-                <MilestoneManagedSystemPill name={managedSystemName} />
-                {areaName !== undefined && (
-                  <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>
-                )}
-              </>
-            }
+          <MilestoneTitlePresenter
+            milestone={milestone}
+            managedSystemName={managedSystemName}
+            areaName={areaName}
+            titleEdit={titleEdit}
+            statusEdit={statusEdit}
           />
 
-          {/* B2e — title-only edit control; distinct from the toolbar's create
-              control. Only the title becomes an input; a stale If-Match
-              refetches and shows the server title. */}
-          {editingTitle ? (
-            <form
-              className="mb-4 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3"
-              onSubmit={(event) => submitTitleEdit(event, statusMutation.isPending)}
-            >
-              <div className="flex flex-col gap-1 text-xs text-text-muted">
-                <span>제목</span>
-                <Input
-                  aria-label="제목"
-                  disabled={titleMutation.isPending}
-                  value={titleDraft}
-                  onChange={(event) => {
-                    setTitleDraft(event.target.value);
-                    setTitleError(null);
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={titleMutation.isPending || statusMutation.isPending}
-                >
-                  {GLOSSARY.save}
-                </Button>
-                <Button type="button" variant="subtle" size="sm" onClick={cancelTitleEdit}>
-                  {GLOSSARY.cancel}
-                </Button>
-                {titleError !== null && (
-                  <span className="text-sm text-accent-danger">{titleError}</span>
-                )}
-              </div>
-            </form>
-          ) : (
-            <div className="mb-4 flex justify-end">
-              {/* R4 followup — titleMutation and statusMutation both stay
-                  pending through their onSuccess invalidateQueries await;
-                  reopening the editor in that window captures the stale
-                  cached row's title/version, so the button locks while either
-                  mutation is pending and the handler refuses the race. */}
-              <Button
-                variant="subtle"
-                size="sm"
-                className="gap-1.5"
-                disabled={titleMutation.isPending || statusMutation.isPending}
-                onClick={() => startTitleEdit(statusMutation.isPending)}
-              >
-                <Pencil className="h-3 w-3" aria-hidden="true" />
-                {GLOSSARY.editTitle}
-              </Button>
-            </div>
-          )}
-
-          {/* Progress strip — real child-Task buckets from progress (B1c);
-              no planned bucket, planned tasks are prototype-only. Nested card
-              per finding 3: 12px pad, no extra horizontal inset (the 24px
-              scroll padding owns alignment). */}
+          {/* Progress strip — real child-Task buckets from progress (B1c); planned tasks are prototype-only. */}
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-medium text-text-primary">
@@ -242,11 +124,7 @@ export function MilestoneDetailContent({
             </div>
           </div>
 
-          {/* Why this milestone exists — required by FR-TASK-004. The prototype
-              nests the plain-text why in NestedTextBlock (screen-milestones.jsx):
-              plain text, no rich content in the DTO. The shared block keeps its
-              border (shown in the reference baseline); only the type scale is
-              corrected to the prototype 13px/1.6 (finding P3-1). */}
+          {/* Why this milestone exists — keep the plain-text contract in NestedTextBlock. */}
           <div className="mb-8">
             <MilestonePanelSectionTitle>
               {GLOSSARY.whyThisMilestoneExists}
@@ -258,136 +136,29 @@ export function MilestoneDetailContent({
 
           <MilestoneSourceSection
             sourceFinding={sourceFinding}
-            titleDirty={titleDirty}
-            discardTitleEdit={discardTitleEdit}
+            titleDirty={titleEdit.titleDirty}
+            discardTitleEdit={titleEdit.discardTitleEdit}
           />
 
-          <div className="mb-8">
-            <MilestonePanelSectionTitle>속성</MilestonePanelSectionTitle>
-            {/* The scroll container owns horizontal padding. These local rows
-                use the prototype's 120px value column and left alignment. */}
-            <FieldRow label="상태" className={milestonePropertyFieldClassName}>
-              {/* B2e-status (ADR-0050): the closed set is accepted, so the
-                  control offers exactly these four values; PATCH is free
-                  among them. The title-block badge above stays read-only. */}
-              <span className="flex items-center justify-end gap-2">
-                <Select
-                  value={milestone.status}
-                  disabled={statusMutation.isPending || titleMutation.isPending}
-                  onValueChange={(value) => handleStatusChange(value, titleMutation.isPending)}
-                >
-                  <SelectTrigger
-                    aria-label="상태"
-                    value={milestone.status}
-                    className={`${selectClassName} h-8 px-2 py-1`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {statusError !== null && (
-                  <span className="text-sm text-accent-danger">{statusError}</span>
-                )}
-              </span>
-            </FieldRow>
-            {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
-            <FieldRow label="Managed System" className={milestonePropertyFieldClassName}>
-              <MilestoneManagedSystemPill name={managedSystemName} />
-            </FieldRow>
-            <FieldRow label="Analytics Area" className={milestonePropertyFieldClassName}>
-              {areaName !== undefined ? (
-                <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </FieldRow>
-            {/* Owner per finding 4: the prototype renders a UserChip here
-                (screen-milestones.jsx Properties) — the milestone-local chip
-                keeps avatar + display name at the prototype 18px/9px avatar
-                geometry; an actor missing from the directory keeps the
-                explicit — fallback (missing-actor handling preserved). */}
-            <FieldRow label={GLOSSARY.owner} className={milestonePropertyFieldClassName}>
-              {ownerName !== undefined ? (
-                <MilestoneOwnerChip name={ownerName} />
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </FieldRow>
-            <FieldRow label={GLOSSARY.start} className={milestonePropertyFieldClassName}>
-              <span className="font-mono text-xs text-text-secondary">
-                {formatDateOnly(milestone.start_date)}
-              </span>
-            </FieldRow>
-            <FieldRow label={GLOSSARY.target} className={milestonePropertyFieldClassName}>
-              <span className="font-mono text-xs text-text-secondary">
-                {formatDateOnly(milestone.target_date)}
-              </span>
-            </FieldRow>
-            <FieldRow label="생성일" className={milestonePropertyFieldClassName}>
-              {formatDate(milestone.created_at)}
-            </FieldRow>
-          </div>
+          <MilestonePropertiesPresenter
+            milestone={milestone}
+            managedSystemName={managedSystemName}
+            areaName={areaName}
+            ownerName={ownerName}
+            titleEdit={titleEdit}
+            statusEdit={statusEdit}
+          />
         </div>
 
-        {/* #514 B2d-tasks — flat child Task list (screen-milestones.jsx:402-416).
-            The prototype's Add task action has no #514 writer behind it, so the
-            section ships read-only; assign/unassign lives on the Task detail. */}
-        <div data-anchor="tasks" className="mb-8">
-          <MilestonePanelSectionTitle>
-            {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
-          </MilestonePanelSectionTitle>
-          {childTasksQuery.error !== null ? (
-            isPermissionDenied(childTasksQuery.error) ? (
-              // B2d fixup F1 — a denied child-list read is the permission
-              // contract, not an outage: the same classification as the
-              // milestone read and TaskListRoute drives the blocked panel
-              // with domain-safe copy.
-              <PermissionBlockedPanel
-                state="denied"
-                category="Task 목록"
-                reason={PERMISSION_BLOCKED_REASONS.milestoneTasks}
-              />
-            ) : (
-              // Same terminal copy as the Tasks list route (TaskListRoute).
-              <div className="py-3 text-center text-xs text-text-muted">
-                Task 목록을 표시할 수 없습니다.
-              </div>
-            )
-          ) : childTasks !== undefined && childTasks.length === 0 ? (
-            <div className="py-3 text-center text-xs text-text-muted">
-              아직 연결된 Task 가 없습니다.
-            </div>
-          ) : childTasks !== undefined ? (
-            <div className="flex flex-col gap-1.5">
-              {childTasks.map((task) => (
-                <MilestoneTaskRow
-                  key={task.id}
-                  task={task}
-                  // B2d fixup F2 — a non-null assignee id missing from the
-                  // directory (lookup pending or failed) keeps the explicit
-                  // glossary unknown-user fallback from the Task list/detail; the avatar
-                  // slot renders it until the name resolves.
-                  assigneeName={
-                    task.assignee_actor_id !== null
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <MilestoneTasksSection
+          childTasks={childTasks}
+          error={childTasksError}
+          actorNamesById={actorNamesById}
+        />
 
         <div data-anchor="evidence" className="mb-8 last:mb-0">
           <MilestonePanelSectionTitle>Evidence</MilestonePanelSectionTitle>
-          {/* No evidence read path in these slices (manual linking is §7 item 14);
-              empty copy only — no Outcome survey controls (FOP-OUT-014). */}
+          {/* No evidence read path in these slices (manual linking is §7 item 14); empty copy only. */}
           <div className="py-3 text-center text-xs text-text-muted">
             연결된 {GLOSSARY.evidenceHighlight}가 없습니다.
           </div>
