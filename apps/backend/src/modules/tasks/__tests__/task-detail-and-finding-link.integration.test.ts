@@ -8,20 +8,19 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { taskDetailDtoSchema } from '@fops/shared';
+
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
+import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -139,7 +138,10 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 
-  async function seedFinding(msId: string, title = 'Source finding'): Promise<string> {
+  async function seedFinding(
+    msId: string,
+    title = 'Source finding',
+  ): Promise<{ id: string; display_id: string }> {
     const row = await insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msId,
@@ -151,7 +153,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       status: 'active',
       createdBy: adminActorId,
     });
-    return row.id;
+    return row;
   }
 
   async function seedTask(msId: string, input: { sourceTaskRequestId?: string | null } = {}) {
@@ -165,13 +167,9 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
   }
 
   async function seedConvertedTask() {
-    const msId = await insertMsDirectly(
-      dbHandle,
-      WORKSPACE_ID,
-      uid(SLUG_PREFIX),
-      'Task Detail MS',
-    );
-    const findingId = await seedFinding(msId, 'Export failure finding');
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Detail MS');
+    const finding = await seedFinding(msId, 'Export failure finding');
+    const findingId = finding.id;
     const request = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       sourceId: findingId,
@@ -195,7 +193,14 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       [WORKSPACE_ID, findingId, requestId, msId, adminActorId],
     );
     const taskId = await seedTask(msId, { sourceTaskRequestId: requestId });
-    return { msId, findingId, requestId, taskId };
+    return {
+      msId,
+      findingId,
+      findingDisplayId: finding.display_id,
+      requestId,
+      requestDisplayId: request.display_id,
+      taskId,
+    };
   }
 
   function getTask(cookie: string, taskId: string) {
@@ -225,19 +230,26 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     const res = await getTask(adminCookie, seed.taskId);
 
     expect(res.statusCode).toBe(200);
+    const taskDetail = taskDetailDtoSchema.parse(res.json());
     expect(res.json()).toMatchObject({
       id: seed.taskId,
       source_task_request_id: seed.requestId,
       source: {
-        task_request: { id: seed.requestId, status: 'converted' },
+        task_request: {
+          id: seed.requestId,
+          display_id: seed.requestDisplayId,
+          status: 'converted',
+        },
         finding: {
           id: seed.findingId,
+          display_id: seed.findingDisplayId,
           title: 'Export failure finding',
           summary: 'Finding source summary',
           evidence_count: 2,
         },
       },
     });
+    expect(taskDetail.source?.finding?.display_id).toBe(seed.findingDisplayId);
   });
 
   it('GET /tasks/:id task-detail returns null source for a standalone task', async () => {
@@ -275,7 +287,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
 
   it('POST /findings/:id/link-task links an in-scope task and audits finding_task_linked', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Link Task MS');
-    const findingId = await seedFinding(msId);
+    const findingId = (await seedFinding(msId)).id;
     const taskId = await seedTask(msId);
 
     const res = await linkFindingTask(adminCookie, findingId, taskId);
@@ -284,7 +296,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     expect(res.json()).toMatchObject({ id: findingId, linked_task_id: taskId });
 
     const linked = await dbHandle.pool.query<{ linked_task_id: string | null }>(
-      `select linked_task_id from finding.findings where id = $1`,
+      'select linked_task_id from finding.findings where id = $1',
       [findingId],
     );
     expect(linked.rows[0]?.linked_task_id).toBe(taskId);
@@ -322,7 +334,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
   it('POST /findings/:id/link-task denies a task from another Managed System', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Finding MS');
     const otherMsId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task MS');
-    const findingId = await seedFinding(msId);
+    const findingId = (await seedFinding(msId)).id;
     const taskId = await seedTask(otherMsId);
 
     const res = await linkFindingTask(adminCookie, findingId, taskId);
@@ -333,7 +345,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
 
   it('POST /findings/:id/link-task rejects already-linked findings and replays idempotently', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Replay MS');
-    const findingId = await seedFinding(msId);
+    const findingId = (await seedFinding(msId)).id;
     const taskId = await seedTask(msId);
     const otherTaskId = await seedTask(msId);
     const key = randomUUID();

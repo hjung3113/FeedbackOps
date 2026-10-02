@@ -4,7 +4,10 @@
 // C9 of Slice 3 #20.
 
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
-import { ApiError } from '@/lib/api/types';
+import { isPermissionDenied } from '@/lib/api/types';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
 import {
   Button,
   type FilterCategory,
@@ -13,11 +16,12 @@ import {
   ListToolbar,
   type ListToolbarTab,
   PermissionBlockedPanel,
+  SEVERITY_LABELS,
   SearchInput,
   type SortOption,
 } from '@fops/ui';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'lucide-react';
 import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
@@ -31,7 +35,14 @@ export interface InboxRouteProps {
 
 // ── URL state shape (subset of VocSearch) ────────────────────────────────────
 
-type InboxTab = 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link';
+type InboxTab =
+  | 'untriaged'
+  | 'high'
+  | 'unassigned'
+  | 'similar'
+  | 'no-link'
+  | 'high-no-link'
+  | 'no-task';
 type InboxSort =
   | 'created_at:desc'
   | 'created_at:asc'
@@ -45,39 +56,53 @@ interface InboxSearch {
   'filter.severity'?: string;
   'filter.reporterStatus'?: string;
   'filter.owner'?: string;
+  'filter.analytics_area'?: 'unset';
   sort?: InboxSort;
   selected?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Tab labels mirror docs/design-prototype/screen-voc.jsx (VOC_TABS) verbatim —
-// prototype uses English labels for the inbox tabs. The `urgent` flag flips the
-// Unassigned tab to the danger token (red) per prototype.
+// Tab labels mirror screen-voc.jsx `VOC_TABS` verbatim except `similar` (#592 / ADR-0031):
+// its URL key stays accepted for old links and saved views, but the tab is hidden until its
+// predicate exists (see 04-voc-system, “Similar VOC Suggested”).
+// The `urgent` flag flips the Unassigned tab to the danger token (red) per prototype.
 //
 // badgeCount is intentionally absent: the prototype's counts (9/7/12/4/5) are
 // synthetic local-data aggregates. GET /vocs returns no per-tab count facet, so
 // wiring live counts is data-deferred (see PR body, follow-up issue). We do not
 // invent counts.
 const INBOX_TABS: ListToolbarTab[] = [
-  { value: 'untriaged', label: 'Untriaged' },
-  { value: 'high', label: 'High' },
-  { value: 'unassigned', label: 'Unassigned', urgent: true },
-  { value: 'similar', label: 'Similar' },
-  { value: 'no-link', label: 'No link' },
-  { value: 'high-no-link', label: 'High · no link' },
+  { value: 'untriaged', label: GLOSSARY.untriaged, icon: Flag, tip: '아직 분류되지 않은 VOC' },
+  { value: 'high', label: GLOSSARY.high, icon: TriangleAlert, tip: '높음 · 심각 심각도' },
+  {
+    value: 'unassigned',
+    label: GLOSSARY.unassigned,
+    urgent: true,
+    icon: User,
+    tip: '담당자 미지정',
+  },
+  {
+    value: 'no-link',
+    label: VOC_INBOX_NO_LINK_TAB_LABEL,
+    icon: LinkIcon,
+    tip: 'Finding / Task 연결 없음',
+  },
+  {
+    value: 'high-no-link',
+    label: GLOSSARY.highNoLink,
+    icon: TriangleAlert,
+    tip: '높음 이상인데 Finding / Task 연결 없음',
+  },
+  // The prototype has no No task icon or tip; reuse the link icon without inventing copy.
+  { value: 'no-task', label: GLOSSARY.noTask, icon: LinkIcon },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [
   {
     key: 'filter.severity',
     label: '심각도',
-    options: [
-      { value: 'low', label: '낮음' },
-      { value: 'medium', label: '중간' },
-      { value: 'high', label: '높음' },
-      { value: 'critical', label: '심각' },
-    ],
+    options: Object.entries(SEVERITY_LABELS).map(([value, label]) => ({ value, label })),
   },
   {
     // Unified on the single URL/UI key `filter.reporterStatus` (#89). The
@@ -158,7 +183,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
-  const activeTab = search.tab ?? 'untriaged';
+  const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
+  const activeTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged');
+  const apiTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged');
   const currentSort = search.sort ?? DEFAULT_SORT;
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
@@ -173,15 +200,26 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     return out;
   }, [search]);
 
+  const apiFilters = React.useMemo(() => {
+    const analyticsArea = search['filter.analytics_area'];
+    return analyticsArea === 'unset'
+      ? { ...currentFilters, 'filter.analytics_area': [analyticsArea] }
+      : currentFilters;
+  }, [currentFilters, search['filter.analytics_area']]);
+
   // ── useVocList params ─────────────────────────────────────────────────────
 
   const vocList = useVocList({
     view,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-    ...(view === 'inbox' ? { tab: activeTab } : {}),
-    filters: currentFilters,
+    ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
+    filters: apiFilters,
     sort: currentSort,
   });
+  // Captured outside JSX: property narrowing does not survive into the renderTrigger callback.
+  const deniedMsScoped =
+    isPermissionDenied(vocList.error) &&
+    typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -270,7 +308,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               activeTab,
               onTabChange: handleTabChange,
             }
-          : { title: 'My VOCs' })}
+          : { title: GLOSSARY.myVocs })}
         action={
           <div className="flex items-center gap-2">
             {/* Prototype placeholder verbatim (screen-voc.jsx). value/onChange is
@@ -288,11 +326,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               defaultValue={DEFAULT_SORT}
               onChange={handleSortChange}
             />
-            {/* Prototype: primary Button (not a text link). Label verbatim "New VOC". */}
+            {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
             <Button asChild variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                New VOC
+                {createLabel('VOC')}
               </Link>
             </Button>
           </div>
@@ -301,11 +339,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       {outOfScopeBanner}
       {isPermissionDenied(vocList.error) ? (
         <div className="m-4 space-y-3">
-          <PermissionBlockedPanel
-            state="denied"
-            category="VOC Inbox"
-            reason={vocList.error.message}
-          />
           {vocList.error.envelope.requestable_permission ? (
             <RequestAccessButton
               capability={vocList.error.envelope.requestable_permission.permission}
@@ -317,7 +350,44 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                       vocList.error.envelope.requestable_permission.managed_system_id,
                   }
                 : {})}
+              renderTrigger={(onRequestAccess) => (
+                <PermissionBlockedPanel
+                  // The server marks the capability requestable, so its panel state owns the CTA.
+                  state="request_access"
+                  category="VOC 수신함"
+                  // #562 copy: a named Managed System means this selected scope is out of reach.
+                  reason={
+                    deniedMsScoped
+                      ? PERMISSION_BLOCKED_REASONS.vocInboxManagedSystem
+                      : PERMISSION_BLOCKED_REASONS.vocInbox
+                  }
+                  onRequestAccess={onRequestAccess}
+                />
+              )}
             />
+          ) : (
+            <PermissionBlockedPanel
+              // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
+              // -> blocked_not_requestable (#562).
+              state="blocked_not_requestable"
+              category="VOC 수신함"
+              reason={PERMISSION_BLOCKED_REASONS.vocInbox}
+            />
+          )}
+          {view === 'inbox' &&
+          typeof vocList.error.envelope.requestable_permission?.managed_system_id !== 'string' ? (
+            <Button
+              asChild
+              variant="subtle"
+              size="sm"
+              className="gap-1.5"
+              data-testid="voc-inbox-denied-my-vocs"
+            >
+              <Link to="/vocs" search={{ view: 'my' }}>
+                {GLOSSARY.myVocs}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
           ) : null}
         </div>
       ) : (
@@ -331,6 +401,12 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           onRetry={() => {
             void vocList.refetch();
           }}
+          onCreate={() =>
+            void navigate({
+              to: '/vocs',
+              search: (previous) => ({ ...previous, action: 'create' }),
+            })
+          }
         />
       )}
     </>
@@ -346,12 +422,4 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     ) : undefined;
 
   return { list, detailPanel };
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
-  );
 }

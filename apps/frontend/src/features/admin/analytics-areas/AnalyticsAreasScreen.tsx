@@ -22,16 +22,17 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
+import { createLabel } from '@/lib/copy/glossary';
 import { PermissionGate } from '../permissions/permission-gate.js';
 import { AnalyticsAreasBody } from './AnalyticsAreasContainer.js';
 import { AnalyticsAreasFilter } from './AnalyticsAreasList.js';
 import type { AnalyticsAreasSearch } from './search.js';
 
 const SUBTITLE =
-  'Analytics Area 는 Managed System 하위의 분류 라벨입니다. 권한 경계가 아니라 dashboard·triage 의 필터 차원입니다.';
-const GUARDRAIL_TITLE = 'Analytics Area 는 MVP 권한 경계가 아닙니다';
+  'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.';
+const GUARDRAIL_TITLE = 'Analytics Area는 권한 경계가 아닙니다';
 const GUARDRAIL_BODY =
-  'AA 는 Managed System 안에서의 분류·집계 단위로만 사용됩니다. AA 별 권한 분기는 MVP 범위 밖이며, scope 결정은 Managed System 만으로 이루어집니다.';
+  'Analytics Area는 Managed System 안에서 분류와 집계에만 쓰입니다. 권한 범위는 Managed System으로만 정해집니다.';
 
 export function AnalyticsAreasAdminPage() {
   const search = useSearch({ strict: false }) as AnalyticsAreasSearch;
@@ -91,7 +92,7 @@ export function AnalyticsAreasAdminPage() {
   return (
     <PageShell
       header={{
-        title: 'Analytics areas',
+        title: 'Analytics Area',
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
@@ -108,7 +109,7 @@ export function AnalyticsAreasAdminPage() {
               data-testid="aa-new-area-button"
             >
               <Plus className="h-4 w-4" />
-              New area
+              {createLabel('Analytics Area')}
             </Button>
           </PermissionGate>
         ),

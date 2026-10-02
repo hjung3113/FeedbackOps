@@ -17,7 +17,7 @@ test.describe('permission request composition and Managed System owner', () => {
     await installMockApi(page, { permissionRequestCompose: true, role: 'user' });
     await page.goto('/admin/managed-systems');
 
-    await page.getByRole('button', { name: 'Request access' }).click();
+    await page.getByRole('button', { name: '권한 요청' }).click();
 
     const dialog = page.getByTestId('permission-request-dialog');
     // The point of #274 is that the request is composed, not fired on click:

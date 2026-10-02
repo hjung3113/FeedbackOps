@@ -199,7 +199,7 @@ findings
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
 - linked_task_id: uuid, nullable
-- linked_milestone_id: uuid, nullable
+- linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
 - created_at: timestamp, required
 - updated_at: timestamp, required
@@ -335,18 +335,17 @@ Owner: Task
 task_requests
 - id: uuid, required
 - workspace_id: uuid, required
+- display_id: text, required; unique per workspace
+- source_type: enum(finding, voc, voc_cluster), required
+- source_id: uuid, required
 - primary_managed_system_id: uuid, required
-- title: text, required
-- summary: text, required
-- source_type: enum(voc, voc_cluster, finding, survey_finding, manual), required
-- source_id: uuid, nullable when source_type=manual
+- evidence_summary: text, required
+- requested_outcome: text, required
+- requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- priority: enum(low, medium, high, urgent), nullable
-- analytics_area_id: uuid, nullable
-- requested_by: uuid, required
-- reviewer_id: uuid, nullable
+- reviewer_actor_id: uuid, nullable
+- decision_reason: text, nullable
 - decided_at: timestamp, nullable
-- converted_task_id: uuid, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -365,7 +364,7 @@ Rules:
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
-- reviewer_id may be resolved from Managed System defaults.
+- Managed System default resolution for `reviewer_actor_id` is not implemented.
 ```
 
 ## Task
@@ -382,7 +381,7 @@ tasks
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
 - due_date: date, nullable
-- milestone_id: uuid, nullable, no FK until Milestone domain lands
+- milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable
 - source_task_request_id: uuid, nullable
 - created_by: uuid, required
@@ -423,6 +422,37 @@ Rules:
 - source is null for standalone Tasks.
 - source.task_request is derived from source_task_request_id.
 - source.finding is derived from the active (finding, task_request, requested_task) link.
+```
+
+## Milestone
+
+Owner: Task
+
+```text
+milestones
+- id: uuid, required
+- workspace_id: uuid, required
+- display_id: text, required, unique per workspace (MLS- prefix)
+- primary_managed_system_id: uuid, required, immutable after create
+- title: text, required
+- why: text, required
+- status: text, required, default 'planning'; CHECK restricts values to
+  planning | in_progress | blocked | released (ADR-0050)
+- owner_actor_id: uuid, required
+- analytics_area_id: uuid, nullable
+- start_date: date, required
+- target_date: date, required
+- created_by: uuid, required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Rules:
+
+```text
+- task.tasks.milestone_id references milestones.id ON DELETE RESTRICT; fops_app has no DELETE grant.
+- finding.findings.linked_milestone_id references milestones.id ON DELETE RESTRICT; application code has no writer yet.
+- primary_managed_system_id is set at create and is not a PATCH field.
 ```
 
 ## Permission Request
@@ -496,20 +526,20 @@ Owner: VOC
 
 ```text
 enum:
-- 접수됨
-- 검토 중
-- 담당자 배정됨
-- 처리 중
-- 해결 준비 중
-- 해결됨
-- 다시 처리 중
-- 종료됨
+- received
+- reviewing
+- assigned
+- progress
+- prep
+- resolved
+- reopened
+- closed
 ```
 
 Rules:
 
 ```text
-- Task Done does not automatically map to 해결됨.
+- Task status `done` does not automatically map to Reporter-Facing VOC Status `resolved`.
 - Released can create a review candidate for Admin or same-scope Developer to write a Public Update.
 - Reporter-Facing VOC Status must not expose raw Task Status.
 ```
@@ -520,21 +550,21 @@ Owner: Task
 
 ```text
 enum:
-- Backlog
-- Todo
-- Doing
-- Review
-- Done
-- Released
-- Reopened
+- backlog
+- todo
+- doing
+- review
+- done
+- released
+- reopened
 ```
 
 Rules:
 
 ```text
 - Task status is internal.
-- Converted Task starts in Backlog.
-- Backlog Task may have an assignee, but execution starts at Todo or Doing.
+- Converted Task starts in `backlog`.
+- A `backlog` Task may have an assignee, but execution starts at `todo` or `doing`.
 - Reporter-visible summaries use explicit summary contracts, not raw Task internals.
 ```
 
@@ -553,10 +583,11 @@ Rules:
 - Large spreadsheet-like data should be attachments.
 ```
 
-## VOC Similarity Projection
+## VOC Same-Managed-System Peer Projection
 
-`similar_count` on every VOC list/detail item is the authorized total of active
-same-workspace, same-primary-Managed-System peers, excluding the source VOC.
+`similar_count` (the retained DTO field name) on every VOC list/detail item is
+the authorized total of active same-workspace, same-primary-Managed-System
+peers, excluding the source VOC.
 Detail additionally includes `similar.items`, capped at three and ordered by
 `created_at DESC, id DESC`, with `id`, `display_id`, `title`,
 `reporter_facing_status`, and nullable `severity`. It is not a second count.

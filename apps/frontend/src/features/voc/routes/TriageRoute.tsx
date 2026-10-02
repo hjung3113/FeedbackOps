@@ -19,13 +19,17 @@
 // (enabled:false on the useVocList query) so a blocked actor never triggers
 // a queue query.
 
-import * as React from 'react';
-import { useSearch, useNavigate } from '@tanstack/react-router';
-import { PermissionBlockedPanel } from '@fops/ui';
+import { fetchNavCounts } from '@/lib/api/nav';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
+import { PermissionBlockedPanel } from '@fops/ui';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import type * as React from 'react';
+import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
 import { useVocList } from '../hooks/useVocList';
-import { VocTriageScreen, type TriageTab } from '../components/triage/VocTriageScreen';
 
 // ── URL state shape ───────────────────────────────────────────────────────────
 
@@ -53,6 +57,16 @@ export function TriageRoute(): React.ReactElement {
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
   const isApproved = capCheck.data?.state === 'approved';
+  const navCountsQuery = useQuery({
+    queryKey: [...NAV_COUNTS_QUERY_KEY, search.managedSystem] as const,
+    queryFn: ({ signal }) =>
+      fetchNavCounts({
+        signal,
+        ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+      }),
+    enabled: isApproved,
+    retry: false,
+  });
 
   // Fetch triage queue — server-pinned sort, no sort param sent (D-1.2).
   // REV-2 #9: gate BEFORE fetch via enabled:false so a blocked actor doesn't
@@ -71,6 +85,11 @@ export function TriageRoute(): React.ReactElement {
 
   const items = data?.items ?? [];
   const outOfScopeSummary = data?.out_of_scope_summary;
+  const navCounts = navCountsQuery.data?.counts;
+  const queueTotal = navCounts?.['voc.triage'];
+  const unassignedTabCount = navCounts?.['voc.tab.unassigned'];
+  const highTabCount = navCounts?.['voc.tab.high'];
+  const queueTotalUnavailableState = navCountsQuery.isPending ? 'loading' : 'unavailable';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -104,7 +123,7 @@ export function TriageRoute(): React.ReactElement {
         <PermissionBlockedPanel
           state={mapToPanelState(capCheck.data?.state)}
           category="Triage"
-          reason="VOC triage 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요."
+          reason={PERMISSION_BLOCKED_REASONS.vocTriage}
         />
       </div>
     );
@@ -124,6 +143,10 @@ export function TriageRoute(): React.ReactElement {
       items={items}
       selectedId={search.selected ?? null}
       activeTab={activeTab}
+      {...(queueTotal !== undefined ? { queueTotal } : {})}
+      {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
+      {...(unassignedTabCount !== undefined ? { unassignedTabCount } : {})}
+      {...(highTabCount !== undefined ? { highTabCount } : {})}
       {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
       onSelectVoc={handleSelectVoc}
       onTabChange={handleTabChange}

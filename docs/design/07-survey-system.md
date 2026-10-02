@@ -116,16 +116,27 @@ Acceptance Criteria:
 ```text
 - Responses are stored in Survey System.
 - Responses are not converted into VOC.
-- Personal response visibility follows permission rules.
+- Personal response visibility follows permission rules. An authenticated
+  respondent can read only their own response metadata through
+  `GET /me/survey-responses`; other personal response reads still require
+  `survey.read_personal_responses`.
 - Response submission through `POST /surveys/:id/responses` creates one immutable
   response per respondent per Survey, enforced by the unique index
   `(survey_id, respondent_actor_id)`.
 - The database boundary is INSERT-only for responses and answers; it grants no
   UPDATE or DELETE, and `identity_protected` is propagated from the Survey into
   the submission acknowledgement and stored response.
-- No personal-response read surface is exposed. The respondent form endpoint
-  `GET /surveys/:id/form` returns an open, same-Workspace Survey with only a
-  respondent-safe form DTO.
+- No general personal-response read surface is exposed. The respondent
+  history endpoint returns only the session Actor's own Survey ID and title,
+  submission time, and identity-protection flag; it never returns a response
+  ID or answers. The respondent form endpoint `GET /surveys/:id/form` returns an
+  open, same-Workspace Survey with only a respondent-safe form DTO.
+- Respondent discovery: an authenticated Actor lists open, same-Workspace
+  Surveys they have not yet answered through `GET /me/answerable-surveys`,
+  without `survey.read`. The list carries Survey-level fields only (ID,
+  display ID, title, type, question count, open time); drafts, closed Surveys,
+  other-Workspace Surveys, and Surveys the caller already answered are
+  excluded.
 ```
 
 ### FR-SURVEY-004: Analyze Results
@@ -237,6 +248,9 @@ or Analytics Area filter would reduce visible aggregate counts below the
 configured anonymity threshold, the UI must hide the aggregate or merge buckets
 for actors without personal response viewing permission. MVP default threshold
 is 5 responses.
+
+A zero-response result may disclose a survey-level `none` state because no individual response can
+be inferred, while one through the configured threshold minus one remains suppressed.
 
 Workspace Admin does not bypass Survey anonymity thresholds by role alone.
 Viewing below-threshold personal response detail requires explicit personal

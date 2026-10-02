@@ -15,7 +15,9 @@
   --color-gunmetal: 148 163 184;      /* #94a3b8 */
   --color-porcelain: 16 24 40;        /* #101828 — primary text */
   --color-light-steel: 55 65 81;      /* #374151 — secondary text */
-  --color-storm-cloud: 104 115 134;   /* #687386 — muted text */
+  /* #525: was 104 115 134 / #687386 — 4.457:1 on canvas, just under WCAG AA
+   * 4.5:1. Nudged darker (hue/saturation unchanged) to 4.64:1. */
+  --color-storm-cloud: 102 112 131;   /* #667083 — muted text */
   --color-fog-grey: 152 162 179;      /* #98a2b3 — disabled text */
   --color-alabaster: 229 229 230;     /* #e5e5e6 */
   --color-neon-lime: 20 40 160;       /* #1428a0 — Samsung blue; name historical per ADR-0021 */
@@ -61,14 +63,31 @@
   --focus-ring-danger: var(--color-warning-red);
 
   /* --- Status tokens (Reporter-facing VOC status) --- */
+  /* Use the base token for the dot/tint (vivid, scannable); use the paired
+   * `-label` token for text foreground. #525: the base hues measured
+   * 2.25:1–3.91:1 on their own 14% tint — below WCAG AA 4.5:1 — because a
+   * status color chosen for a small dot/tint is not automatically legible as
+   * running text at the same value. `-label` is the same hue darkened
+   * (HLS lightness only; hue/saturation unchanged) until it clears 4.5:1
+   * against that 14% tint, so the label reads as "the same color, dialed
+   * for text" rather than an unrelated substitute. `reviewing`/`assigned`
+   * already cleared 4.5:1 (8.20:1 / 4.63:1) — their `-label` is unchanged. */
   --status-reporter-received: var(--color-cyan-spark);    /* 접수됨 */
+  --status-reporter-received-label: 0 106 141;            /* #006a8d — 4.63:1 */
   --status-reporter-reviewing: var(--color-aether-blue);  /* 검토 중 */
+  --status-reporter-reviewing-label: var(--color-aether-blue);
   --status-reporter-assigned: var(--color-deep-violet);   /* 담당자 배정됨 */
+  --status-reporter-assigned-label: var(--color-deep-violet);
   --status-reporter-progress: var(--color-amethyst);      /* 처리 중 */
+  --status-reporter-progress-label: 16 72 255;            /* #1048ff — 4.63:1 */
   --status-reporter-prep: var(--color-amber);             /* 해결 준비 중 */
+  --status-reporter-prep-label: 142 85 0;                 /* #8e5500 — 4.65:1 */
   --status-reporter-resolved: var(--color-emerald);       /* 해결됨 */
+  --status-reporter-resolved-label: 16 113 72;            /* #107148 — 4.61:1 */
   --status-reporter-reopened: var(--color-warning-red);   /* 다시 처리 중 */
+  --status-reporter-reopened-label: 187 34 45;            /* #bb222d — 4.61:1 */
   --status-reporter-closed: var(--color-fog-grey);        /* 종료됨 */
+  --status-reporter-closed-label: 89 100 120;             /* #596478 — 4.61:1 */
 
   /* --- Status tokens (Internal Task status) --- */
   --status-internal-backlog: var(--color-fog-grey);
@@ -80,10 +99,16 @@
   --status-internal-reopened: var(--color-warning-red);
 
   /* --- Severity / signal tokens --- */
+  /* `-label` pairs follow the same #525 rationale as the reporter-status
+   * tokens above: same hue, darkened only, until >=4.5:1 on a 12% tint. */
   --severity-low: var(--color-storm-cloud);
+  --severity-low-label: 92 102 119;    /* #5c6677 — 4.61:1 */
   --severity-medium: var(--color-amber);
+  --severity-medium-label: 146 87 0;   /* #925700 — 4.62:1 */
   --severity-high: 240 138 74;         /* #f08a4a */
+  --severity-high-label: 166 72 14;    /* #a6480e — 4.63:1 */
   --severity-critical: var(--color-warning-red);
+  --severity-critical-label: 191 35 46; /* #bf232e — 4.61:1 */
   --confidence-low: var(--color-storm-cloud);
   --confidence-medium: var(--color-cyan-spark);
   --confidence-high: var(--color-emerald);
@@ -93,7 +118,7 @@
   --managed-system-power-bi: 242 196 109; /* #f2c46d */
   --managed-system-looker: 2 184 204;    /* #02b8cc */
   --managed-system-metabase: 39 166 68;  /* #27a644 */
-  --managed-system-default: var(--color-aether-blue);
+  --managed-system-default: var(--color-storm-cloud);
 
   /* --- Layout tokens --- */
   --sidebar-width: 240px;
@@ -145,8 +170,8 @@
   --shadow-focus: 0 0 0 2px #ffffff, 0 0 0 4px var(--color-neon-lime);
 
   /* --- Typography: font families --- */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Inter Variable', 'Inter', 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* --- Typography: sizes --- */
   --text-caption: 10px;

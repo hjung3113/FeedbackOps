@@ -144,6 +144,7 @@ export interface AdminPermissionRequestRow {
   requester_actor_id: string;
   requested_capability: string;
   requested_managed_system_id: string | null;
+  requested_expiration: string | null;
   reason: string;
   status: 'pending' | 'needs_more_info' | 'approved' | 'rejected';
   created_at: string;
@@ -182,12 +183,14 @@ export async function decidePermissionRequest(
   reason: string,
   idempotencyKey: string,
   selfApproval?: ApprovePermissionRequest['self_approval'],
+  expiration?: ApprovePermissionRequest['expiration'],
 ): Promise<PermissionDecisionResult> {
   const body =
     action === 'need-more-info'
       ? { note: reason || undefined }
       : {
           reason: reason || undefined,
+          ...(action === 'approve' && expiration !== undefined ? { expiration } : {}),
           ...(action === 'approve' && selfApproval !== undefined ? { self_approval: selfApproval } : {}),
         };
   const response = await apiClient<PermissionDecisionResult>(

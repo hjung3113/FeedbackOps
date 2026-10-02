@@ -131,8 +131,12 @@ export const savedViews = coreSchema.table(
   'saved_views',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
-    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     surface: text('surface').notNull(),
     name: text('name').notNull(),
     filterPayload: jsonb('filter_payload').notNull(),
@@ -231,6 +235,49 @@ export const auditLog = coreSchema.table(
     workspaceEventCreatedAtIdx: index('audit_log_workspace_event_created_at_idx').on(
       t.workspaceId,
       t.eventType,
+      t.createdAt.desc(),
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// core.notifications — ADR-0014 per-Actor inbox rows. The application may
+// update only read/archive/delivery state; the summary and identity fields
+// stay frozen at insertion by column-scoped grants.
+// ─────────────────────────────────────────────────────────────────────────
+export const notifications = coreSchema.table(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    eventType: text('event_type').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectId: uuid('subject_id').notNull(),
+    summary: text('summary').notNull(),
+    detail: jsonb('detail').notNull().default(sql`'{}'::jsonb`),
+    correlationId: uuid('correlation_id').notNull(),
+    emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+  },
+  (t) => ({
+    idempotencyKeyUq: unique('notifications_idempotency_key_uq').on(
+      t.workspaceId,
+      t.actorId,
+      t.eventType,
+      t.subjectId,
+      t.correlationId,
+    ),
+    workspaceActorReadCreatedIdx: index('notifications_workspace_actor_read_created_idx').on(
+      t.workspaceId,
+      t.actorId,
+      t.readAt,
       t.createdAt.desc(),
     ),
   }),

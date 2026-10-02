@@ -1,9 +1,17 @@
+import type { ManagedSystemDto } from '@/lib/api/managed-systems';
+import {
+  listActorsResponseSchema,
+  surveyDetailDtoSchema,
+  surveyQuestionKindSchema,
+  surveyTypeSchema,
+} from '@fops/shared';
 import { z } from 'zod';
+import { managedSystemVisualSchema } from './managed-system-owner';
 
 const questionSchema = z.object({
   id: z.string().uuid(),
   survey_id: z.string().uuid(),
-  kind: z.enum(['single_choice', 'multiple_choice', 'rating', 'text']),
+  kind: surveyQuestionKindSchema,
   prompt: z.string(),
   is_required: z.boolean(),
   options: z.array(z.object({ key: z.string(), label: z.string() })).nullable(),
@@ -20,7 +28,7 @@ export const surveyVisualFixtureSchema = z.object({
   id: z.string().uuid(),
   display_id: z.string(),
   title: z.string(),
-  type: z.enum(['discovery', 'validation', 'outcome']),
+  type: surveyTypeSchema,
   status: z.enum(['draft', 'open', 'closed']),
   description: z.string().nullable(),
   primary_managed_system_id: z.string().uuid(),
@@ -37,7 +45,9 @@ export const surveyVisualFixtureSchema = z.object({
 export type SurveyVisualScenario =
   | 'list'
   | 'detail'
+  | 'detail-empty'
   | 'builder'
+  | 'builder-empty'
   | 'builder-dirty'
   | 'builder-drag-over'
   | 'create-dialog'
@@ -50,7 +60,9 @@ export const surveyVisualScenarios = z
     z.enum([
       'list',
       'detail',
+      'detail-empty',
       'builder',
+      'builder-empty',
       'builder-dirty',
       'builder-drag-over',
       'create-dialog',
@@ -63,7 +75,9 @@ export const surveyVisualScenarios = z
   .parse([
     'list',
     'detail',
+    'detail-empty',
     'builder',
+    'builder-empty',
     'builder-dirty',
     'builder-drag-over',
     'create-dialog',
@@ -115,6 +129,41 @@ export const surveyDetailVisualFixture = surveyVisualFixtureSchema.parse({
   ...surveyVisualFixture,
   status: 'open',
   opened_at: '2026-07-21T00:00:00.000Z',
+});
+
+export const surveyEmptyBuilderVisualFixture = surveyDetailDtoSchema.parse({
+  ...surveyVisualFixture,
+  questions: [],
+});
+
+const surveyVisualManagedSystem = managedSystemVisualSchema.parse({
+  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  workspace_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  slug: 'revenue-analytics',
+  name: 'Revenue Analytics',
+  external_key: null,
+  default_owner_actor_id: null,
+  default_owner_team_id: null,
+  archived_at: null,
+  archived_by_actor_id: null,
+  created_at: '2026-07-20T00:00:00.000Z',
+  updated_at: '2026-07-20T00:00:00.000Z',
+});
+
+export const surveyVisualManagedSystemsFixture = {
+  items: [surveyVisualManagedSystem] satisfies ManagedSystemDto[],
+  total: 1,
+};
+
+export const surveyVisualActorsFixture = listActorsResponseSchema.parse({
+  actors: [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      display_name: 'Dana Rivera',
+      email: 'survey.operator@example.test',
+      role_level: 'developer',
+    },
+  ],
 });
 
 export const surveyBuilderDragOverVisualFixture = surveyVisualFixtureSchema.parse({

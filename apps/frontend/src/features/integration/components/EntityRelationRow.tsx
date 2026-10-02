@@ -1,29 +1,40 @@
 import type { EntityLinkDto } from '@fops/shared';
-import {
-  EntityIconBadge,
-  type EntityIconType,
-  type ReporterFacingStatusEnum,
-  ReporterStatusBadge,
-  cn,
-} from '@fops/ui';
+import { EntityIconBadge, type EntityIconType, cn } from '@fops/ui';
 import { ArrowRight, Lock } from 'lucide-react';
-import type * as React from 'react';
+
+import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
+import { shortId } from '@/lib/identity';
 
 type AllowedEntityLinkDto = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
 
-function shortId(id: string): string {
-  return id.slice(0, 8);
+const ENTITY_TYPE_LABEL: Record<EntityLinkDto['source_type'], string> = {
+  voc: 'VOC',
+  survey_response: 'Survey 응답',
+  finding: 'Finding',
+  voc_cluster: 'VOC Cluster',
+  task_request: 'Task Request',
+  task: 'Task',
+};
+
+function endpointIdentity(
+  type: EntityLinkDto['source_type'],
+  id: string,
+  summary: AllowedEntityLinkDto['source_summary'],
+): { label: string; displayId: boolean } {
+  if (summary?.type === type && summary.id === id) {
+    return { label: summary.display_id, displayId: true };
+  }
+  return { label: ENTITY_TYPE_LABEL[type], displayId: false };
 }
 
-function targetDisplayId(link: AllowedEntityLinkDto): string {
-  if (
-    link.visibility_state === 'allowed' &&
-    link.target_summary?.id === link.target_id &&
-    link.target_summary.type === link.target_type
-  ) {
-    return link.target_summary.display_id;
+export function entityLinkEndpointPrimaryLabels(link: EntityLinkDto): [string, string] {
+  if (link.visibility_state !== 'allowed') {
+    return ['접근할 수 없는 항목', '접근할 수 없는 항목'];
   }
-  return shortId(link.target_id);
+  return [
+    endpointIdentity(link.source_type, link.source_id, link.source_summary).label,
+    endpointIdentity(link.target_type, link.target_id, link.target_summary).label,
+  ];
 }
 
 function iconTypeFor(type: EntityLinkDto['source_type']): EntityIconType {
@@ -36,46 +47,14 @@ function iconTypeFor(type: EntityLinkDto['source_type']): EntityIconType {
 export function EntityRelationRow({
   link,
   compact = false,
-  member,
   className,
   testId,
 }: {
-  link?: EntityLinkDto;
+  link: EntityLinkDto;
   compact?: boolean;
   className?: string;
   testId?: string;
-  member?: {
-    vocId: string;
-    displayId?: string | null;
-    title?: React.ReactNode;
-    severity?: string | null;
-    reporterStatus?: ReporterFacingStatusEnum | null;
-    trailing?: React.ReactNode;
-  };
 }) {
-  if (member) {
-    return (
-      <div
-        className={cn('flex items-center justify-between gap-3 px-4 py-2.5', className)}
-        data-testid={testId}
-      >
-        <div className="min-w-0">
-          <div className="truncate text-sm text-text-primary">
-            {member.title || member.displayId || 'VOC'}
-          </div>
-          <p className="text-xs text-text-muted">
-            {member.displayId ?? shortId(member.vocId)}
-            {member.severity ? ` · ${member.severity}` : ''}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {member.reporterStatus && <ReporterStatusBadge status={member.reporterStatus} />}
-          {member.trailing}
-        </div>
-      </div>
-    );
-  }
-  if (!link) return null;
   if (link.visibility_state !== 'allowed') {
     return (
       <div
@@ -86,10 +65,16 @@ export function EntityRelationRow({
           <Lock className="h-3 w-3" aria-hidden="true" />
           권한 제한
         </span>
-        <span className="font-mono text-xs text-text-muted">{link.relation_type}</span>
+        <span className="text-xs text-text-muted">접근할 수 없는 항목</span>
+        <span className="font-mono text-xs text-text-muted">
+          {ENTITY_LINK_RELATION_LABELS[link.relation_type]}
+        </span>
       </div>
     );
   }
+
+  const source = endpointIdentity(link.source_type, link.source_id, link.source_summary);
+  const target = endpointIdentity(link.target_type, link.target_id, link.target_summary);
 
   return (
     <div
@@ -102,16 +87,38 @@ export function EntityRelationRow({
     >
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <EntityIconBadge type={iconTypeFor(link.source_type)} size={18} />
-        <span className="font-mono text-xs text-text-primary">{shortId(link.source_id)}</span>
+        <span
+          className={
+            source.displayId
+              ? 'font-mono text-xs text-text-primary'
+              : 'text-xs font-medium text-text-primary'
+          }
+        >
+          {source.label}
+        </span>
+        {!source.displayId && (
+          <span className="font-mono text-xs text-text-muted">{shortId(link.source_id)}</span>
+        )}
       </span>
       <span className="inline-flex items-center gap-1 text-xs text-text-muted">
         <ArrowRight className="h-3 w-3" aria-hidden="true" />
-        {link.relation_type}
+        {ENTITY_LINK_RELATION_LABELS[link.relation_type]}
         <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <EntityIconBadge type={iconTypeFor(link.target_type)} size={18} />
-        <span className="font-mono text-xs text-text-primary">{targetDisplayId(link)}</span>
+        <span
+          className={
+            target.displayId
+              ? 'font-mono text-xs text-text-primary'
+              : 'text-xs font-medium text-text-primary'
+          }
+        >
+          {target.label}
+        </span>
+        {!target.displayId && (
+          <span className="font-mono text-xs text-text-muted">{shortId(link.target_id)}</span>
+        )}
       </span>
     </div>
   );

@@ -20,7 +20,7 @@ Neither an entity-link management surface nor a `My Work` view is in MVP scope.
 
 **Entity links.** No link lifecycle view, no link history surface, and no detach action ship in MVP. Per-record projections remain the only way to read connections. A future implementation must not widen any read-scope boundary to assemble a cross-record link view — it splits the query instead, as `create_finding` does (ADR-0037) — and a detach action must require a reason and preserve history rather than deleting rows.
 
-**My Work.** The disabled `My Work` cue is removed from Home and the sidebar rather than left inert. `My Tasks` and `My VOCs`, which are implemented, are the personal-work entry points until a dedicated view exists.
+**My Work.** The disabled `My Work` cue is removed from Home and the sidebar rather than left inert. `My Tasks` (`/tasks?view=my`) shows Tasks assigned to the current actor; `My VOCs` remains the other implemented personal-work entry point until a dedicated view exists.
 
 A disabled control that points at an unbuilt feature is a promise, not a state. Where a capability does not exist, the UI omits the entry; where a capability exists but the actor lacks permission, the UI renders the permission state established in #284.
 
@@ -30,3 +30,14 @@ A disabled control that points at an unbuilt feature is a promise, not a state. 
 - Home and the sidebar lose the `My Work` entry; the Home action row no longer advertises a route that cannot resolve. This is a deviation from the Home prototype and is recorded here.
 - The execution chain remains readable but not manageable: an incorrect link cannot be detached through the product in MVP.
 - A future slice that implements either surface starts from this ADR, not from the black-box issues, which describe symptoms rather than the boundary.
+
+## Amendment 2026-09-30 (#594)
+
+Before this ADR was accepted on 2026-08-02, issues #113 and #114 (PRs #117
+and #118, merged 2026-06-18 and 2026-06-20) had already shipped a
+reason-required `PATCH /entity-links/:id` detach endpoint and a read-only
+Integration Links inventory with status filters. The Context's "no detach
+action exists" was therefore inaccurate for the API at the time. No product
+UI invokes the detach endpoint, so the Consequence that an incorrect link
+cannot be detached through the product in MVP remains true. The `My Work`
+exclusion remains in force.

@@ -82,3 +82,9 @@ task_request_needs_more_evidence
 - Task Request list/read filtering uses per-row Managed System review authority.
 - The frontend may show disabled Convert to Task and Link existing controls
   tagged for S6-4, but it must not wire them in issue #133.
+
+## Amendment 2026-09-30 (#594)
+
+The issue #134 deferral of conversion and link-existing-Task above is
+historical; ADR-0027 records those shipped paths. ADR-0043 later amends
+ADR-0027's Finding-source conversion consequences.

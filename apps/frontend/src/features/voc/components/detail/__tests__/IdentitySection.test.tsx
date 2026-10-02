@@ -1,14 +1,16 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
-vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
-vi.mock('@/features/voc/lib/format-date', () => ({
-  formatVocCreatedAt: (_iso: string) => '방금 전',
+vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
+vi.mock('@/lib/format/datetime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format/datetime')>()),
+  formatRelativeTime: (_iso: string) => '방금 전',
 }));
 
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { useMe } from '@/lib/auth/useMe';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { IdentityMetadataStrip, IdentitySection } from '../IdentitySection';
 import { DETAIL_ENVELOPE, ME_RESPONSE, OTHER_ACTOR_ID } from './_fixtures';
 
@@ -79,6 +81,12 @@ describe('<IdentitySection>', () => {
     );
     expect(screen.getByText('박운영')).toBeInTheDocument();
     expect(screen.queryByText(`Actor ${OTHER_ACTOR_ID.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
+  it('uses the glossary unknown-user label when the reporter name is unresolved', () => {
+    render(<IdentitySection voc={{ ...DETAIL_ENVELOPE, reporter_id: OTHER_ACTOR_ID }} />);
+
+    expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
   });
 
   it('IdentityMetadataStrip renders analytics area name when provided', () => {

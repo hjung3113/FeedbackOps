@@ -1,5 +1,9 @@
 # RESEARCH-1 — Notification Rule (pre-issue)
 
+## Status
+
+Implemented by Issue #509 under ADR-0014 (code-driven catalogue; amendments 2026-09-29).
+
 Date: 2026-09-26. Read-only survey. Nothing in `apps/` or `docs/` was edited.
 
 The roadmap item is named "Notification Rule" (`docs/design/13-mvp-roadmap.md`, Phase 1). ADR-0014 already rejected a rules engine. This note does not reopen that decision. The slice to build is the code-driven catalogue ADR-0014 locked, not user-configurable rules.
@@ -122,7 +126,7 @@ The notification catalogue is a different language: dotted, audience-shaped (`vo
 | `task.assigned_to_me` | none | Assignee is `task.tasks.assignee_actor_id`, written only when `convertTaskRequest` inserts the Task (`tasks/service.ts`). The service returns `getTask`, `getTaskComments`, `createTaskComment`, `convertTaskRequest`, `linkExistingTask`, `patchTaskStatus`, `listTasks` — no reassignment method, so "changed" has no call site. Task audit verbs are only `task_status_changed` and `task_comment_created`. |
 | `task.released` | `task_status_changed` to `released`, then `public_update_review_candidate_created` | Must **not** fire on the status transition. One notification per newly inserted candidate, keyed by the release `correlation_id`. |
 | `permission_request.submitted` | `permission_requested` | Recipients are workspace Admins, not the requester. |
-| `permission_request.decided` | `permission_approved` / `permission_rejected` | One catalogue row covers two audit verbs. See the open question on `needs_more_info` / `permission_denied`. |
+| `permission_request.decided` | `permission_approved` / `permission_rejected` / `permission_denied` | One catalogue row covers three audit verbs; `needs_more_info` does not notify. See open question 5 (resolved 2026-09-29). |
 | `survey.assigned_to_me` | none | No assignment column. `survey.surveys` has `operator_actor_id` only. `respondent_actor_id` exists on `survey_responses` after submit. |
 
 Recommendation: keep the catalogue strings. Do not add them to `AUDIT_EVENT_TYPES`. Do not poll or listen to `core.audit_log`. The producer calls `notify(...)` in the same transaction as `auditService.record(...)`, the way `apps/backend/src/modules/tasks/service.ts` already enqueues `tasks.create_public_update_review_candidates` via `boss.send(..., { db: fromDrizzle(tx, sql) })` beside the audit write (around lines 838–876).
@@ -304,7 +308,7 @@ Five issues. Each is shippable alone. 2a and 2b are split because each has its o
 
 2b. **Task, Task Request, and Permission call sites.** Same enqueue rule as 2a. Not blocked by questions 2 or 3.
    - Task: `assignee_actor_id` set at conversion (`convertTaskRequest` only). Not "set or changed". No reassignment endpoint exists.
-   - Task Request: `approved` and `rejected` only. Creator = `requester_actor_id`. Do not wire `task_request.assigned_to_me` (open question 6 — no producer). Do not wire `needs_more_evidence` or `task_request_self_approval_denied` until open question 7.
+   - Task Request: `approved` and `rejected` only. Creator = `requester_actor_id`. Do not wire `task_request.assigned_to_me` (open question 6 — no producer). Do not wire `needs_more_evidence` or `task_request_self_approval_denied` until open question 7 (resolved 2026-09-29: new `task_request.needs_more_evidence` row, see ADR-0014 amendment).
    - Permission Request: submitted, decided (which outcomes count is open question 5).
    Blocked by open questions 5 and 7. Test-harness blast radius is the tasks, task-requests, and permissions integration suites. Self-notification is open question 9: do not add a global "never notify the actor who clicked" rule in this issue. ADR-0014 already excludes specific actors for `task.released` only; that exclusion stays.
 
@@ -328,7 +332,11 @@ These block implementation of the piece named. Everything in §1 is settled and 
 
 4. **`survey.assigned_to_me` has no producer — drop it from the first catalogue PR.** Design text says a basic User can answer an assigned Survey (`docs/design/07-survey-system.md`), but the table has an operator, not an assignee list, and a respondent id appears only after submit. Shipping the catalogue row would be dead code. Leave it out until a real assignment write exists. That does not require reopening the ADR; the ADR says the catalogue file may add rows later.
 
-5. **Which permission outcomes count as `permission_request.decided`.** Audit verbs are `permission_approved`, `permission_rejected`, `permission_needs_more_info`, and `permission_denied` (the last is the self-approval denial, which does not change the pending request). Recommended: approved and rejected only. `needs_more_info` is not a decision; `permission_denied` in the self-approval path is not a decision either. Confirm before sub-scope 2b, because those two are easy to wire by mistake and they are `email: Y` if someone folds them into `decided`.
+5. **Which permission outcomes count as `permission_request.decided`.** Audit verbs are `permission_approved`, `permission_rejected`, `permission_needs_more_info`, and `permission_denied` (the explicit admin-deny action). Recommended: approved and rejected only. `needs_more_info` is not a decision; whether the explicit `permission_denied` action should notify remains unresolved. Confirm before sub-scope 2b, because those two are easy to wire by mistake and they are `email: Y` if someone folds them into `decided`.
+
+   Correction 2026-09-29: `POST /permissions/requests/:id/deny` sets the request to `rejected` and inserts a `permission_denies` row. Self-approval denial instead throws `permission.denied` and writes no audit row.
+
+   Resolved 2026-09-29: explicit deny notifies as outcome `rejected`; needs_more_info does not.
 
 6. **`task_request.assigned_to_me` has no producer — drop it from the first catalogue PR, same treatment as question 4.** `reviewer_actor_id` is nullable and is written only at decision time, to the actor who decided (`updateTaskRequestDecision` in `task-requests/repo.ts`, called from `task-requests/service.ts` with `reviewerActorId: args.actor.actor_id`). There is no pre-decision assignment, so "resolved reviewer" has nothing to resolve. Recommended: omit the row until a real assignment write exists. The ADR says the catalogue file may add rows later; omitting this one does not reopen ADR-0014. The other reading — "reviewer" means every Actor who holds `task_request.review` on the Primary Managed System — is a new recipient policy, not wiring, and it changes who the ADR's "resolved reviewer" line names. That reading needs its own decision, and an ADR amendment if the audience is no longer one resolved reviewer. Do not pick it inside sub-scope 2b.
 

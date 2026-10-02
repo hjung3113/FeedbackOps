@@ -1,13 +1,15 @@
 // LinkedExecutionSection — linked finding/task block (Slice 3 always empty).
 
-import * as React from 'react';
-import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, EmptyState, PermissionBlockedPanel, OutlineBadge } from '@fops/ui';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import type { TaskStatus, VocDetailEnvelope } from '@fops/shared';
+import { EmptyState, OutlineBadge, PanelSectionTitle, PermissionBlockedPanel } from '@fops/ui';
+import type * as React from 'react';
+
+import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
-  linkedTask?: { title: string; status: string } | null;
+  linkedTask?: { title: string; status: TaskStatus } | null;
   /** A reporter-safe Task summary renders in the following related-entity section. */
   hasReporterTaskSummary?: boolean;
 }
@@ -17,23 +19,26 @@ export function LinkedExecutionSection({
   linkedTask = null,
   hasReporterTaskSummary = false,
 }: LinkedExecutionSectionProps): React.ReactElement {
-  const linkedFindingDecision = usePermissionDecision(voc, 'linkedFinding');
+  const linkedFindingDecision = getPermissionDecision(voc, 'linkedFinding');
 
   if (linkedFindingDecision !== null) {
     return (
-      <div>
+      <div className="mt-8">
         <PanelSectionTitle>연결된 실행</PanelSectionTitle>
         <PermissionBlockedPanel
           state={linkedFindingDecision.state}
-          category="Linked Finding"
-          {...(linkedFindingDecision.reason !== undefined
+          category="연결된 Finding"
+          // #564: request_access now renders reason, and this decision's reason is a
+          // machine code (e.g. developer_outside_managed_system_scope), so keep it out there.
+          {...(linkedFindingDecision.reason !== undefined &&
+          linkedFindingDecision.state !== 'request_access'
             ? { reason: linkedFindingDecision.reason }
             : {})}
-          {...(linkedFindingDecision.requiredScope !== undefined
-            ? { requiredScope: linkedFindingDecision.requiredScope }
+          {...(linkedFindingDecision.required_scope !== undefined
+            ? { requiredScope: linkedFindingDecision.required_scope }
             : {})}
-          {...(linkedFindingDecision.decisionId !== undefined
-            ? { decisionId: linkedFindingDecision.decisionId }
+          {...(linkedFindingDecision.decision_id !== undefined
+            ? { decisionId: linkedFindingDecision.decision_id }
             : {})}
         />
       </div>
@@ -41,12 +46,12 @@ export function LinkedExecutionSection({
   }
 
   return (
-    <div>
+    <div className="mt-8">
       <PanelSectionTitle>연결된 실행</PanelSectionTitle>
       {linkedTask !== null ? (
         <div className="flex items-center justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card px-3 py-2">
           <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
-          <OutlineBadge>{linkedTask.status}</OutlineBadge>
+          <OutlineBadge>{TASK_STATUS_LABELS[linkedTask.status]}</OutlineBadge>
         </div>
       ) : !hasReporterTaskSummary ? (
         <EmptyState size="sm" title="연결된 실행 없음" />

@@ -154,6 +154,160 @@ runCase(
   'apps/backend/src/modules/surveys/results.ts:2',
 );
 
+runCase(
+  'rule 8 rejects VOC hook imports through the feature alias',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'findings', 'x.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+  },
+  false,
+  'apps/frontend/src/features/findings/x.ts:1',
+);
+
+runCase(
+  'rule 8 rejects relative VOC lib imports from src/lib',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'lib', 'x.ts')]:
+      "import { helper } from '../features/voc/lib/helper';\n",
+  },
+  false,
+  'apps/frontend/src/lib/x.ts:1',
+);
+
+runCase(
+  'rule 8 treats voc-cluster as a non-VOC feature',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'voc-cluster', 'x.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+  },
+  false,
+  'apps/frontend/src/features/voc-cluster/x.ts:1',
+);
+
+runCase(
+  'rule 8 excludes frontend tests and allows VOC feature internals',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'findings', '__tests__', 'x.test.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+    [join('apps', 'frontend', 'src', 'features', 'voc', 'components', 'x.tsx')]:
+      "import { helper } from '@/features/voc/lib/helper';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 9 rejects foreign imports of VOC seed helpers',
+  {
+    ...zero,
+    [join(MODULES, 'voc-clusters', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../voc/__tests__/_seed-helpers.js';\n",
+  },
+  false,
+  'apps/backend/src/modules/voc-clusters/__tests__/a.test.ts:1',
+);
+
+runCase(
+  'rule 9 rejects any cross-module seed-helper import (#574)',
+  {
+    ...zero,
+    [join(MODULES, 'tasks', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../findings/__tests__/_seed-helpers.js';\n",
+  },
+  false,
+  'apps/backend/src/modules/tasks/__tests__/a.test.ts:1',
+);
+
+runCase(
+  'rule 9 allows same-module VOC jobs seed-helper imports',
+  {
+    ...zero,
+    [join(MODULES, 'voc', 'jobs', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../__tests__/_seed-helpers.js';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+const ownerTableSql = {
+  ...zero,
+  [join(MODULES, 'managed-systems', 'repo.ts')]:
+    'const result = await tx.execute(sql`select * from core.managed_systems`);\n',
+  [join(MODULES, 'analytics-areas', 'repo.ts')]:
+    'const result = await tx.execute(sql`select * from core.analytics_areas`);\n',
+  [join(MODULES, 'tasks', '__tests__', 'fixture.integration.test.ts')]:
+    'const result = await tx.execute(sql`select * from core.managed_systems`);\n',
+};
+
+runCase(
+  'rule 10 allows owner-table SQL in owner modules and skips tests',
+  ownerTableSql,
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 10 rejects Core owner-table imports outside owner modules and in test-support',
+  {
+    ...zero,
+    [join(MODULES, 'findings', 'creation.ts')]:
+      "import { managedSystems as coreManagedSystems } from '../../db/schema/core.js';\n",
+    [join('apps', 'backend', 'src', 'test-support', 'seed.ts')]:
+      "import { analyticsAreas } from '../db/schema/core';\n",
+  },
+  false,
+  ['apps/backend/src/modules/findings/creation.ts:1', 'apps/backend/src/test-support/seed.ts:1'],
+);
+
+runCase(
+  'rule 10 allows Core owner-table imports in owner modules and skips tests',
+  {
+    ...zero,
+    [join(MODULES, 'analytics-areas', 'schema-import.ts')]:
+      "import { analyticsAreas } from '../../db/schema/core.js';\n",
+    [join(MODULES, 'tasks', '__tests__', 'fixture.test.ts')]:
+      "import { managedSystems } from '../../../db/schema/core.js';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 10 rejects raw Core owner-table SQL outside the owner modules',
+  {
+    ...ownerTableSql,
+    [join(MODULES, 'findings', 'creation.ts')]:
+      'const result = await tx.execute(sql`select * from core.analytics_areas`);\n',
+    [join(MODULES, 'tasks', 'service.ts')]: [
+      'const rows = await tx.execute(sql`select * from core.managed_systems`);',
+      'await tx.execute(sql`update core.managed_systems set archived_at = now()`);',
+    ].join('\n'),
+  },
+  false,
+  [
+    'apps/backend/src/modules/findings/creation.ts:1',
+    'apps/backend/src/modules/tasks/service.ts:1',
+    'apps/backend/src/modules/tasks/service.ts:2',
+  ],
+);
+
+runCase(
+  'rule 10 rejects comma joins and USING references to Core owner tables',
+  {
+    ...zero,
+    [join(MODULES, 'tasks', 'comma-join.ts')]:
+      'const rows = await tx.execute(sql`select * from voc.vocs v, core.managed_systems ms`);\n',
+    [join(MODULES, 'tasks', 'using.ts')]:
+      'await tx.execute(sql`delete from voc.vocs using core.analytics_areas`);\n',
+  },
+  false,
+  ['apps/backend/src/modules/tasks/comma-join.ts:1', 'apps/backend/src/modules/tasks/using.ts:1'],
+);
+
 if (failures > 0) {
   console.error(`\n${failures} test case(s) failed`);
   process.exit(1);

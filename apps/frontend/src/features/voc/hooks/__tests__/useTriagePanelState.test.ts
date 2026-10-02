@@ -2,10 +2,10 @@
 // Covers: dirty derivation on field change, reset on voc.id change.
 // TDD RED: these tests are written before the implementation file exists.
 
-import { describe, expect, it } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useTriagePanelState } from '../useTriagePanelState';
 import type { VocListItem } from '@fops/shared';
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { useTriagePanelState } from '../useTriagePanelState';
 
 const BASE_VOC: VocListItem = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -33,6 +33,7 @@ describe('useTriagePanelState', () => {
     expect(result.current.panelState.ownerUserId).toBeNull();
     expect(result.current.panelState.ownerTeamId).toBeNull();
     expect(result.current.panelState.analyticsAreaId).toBeNull();
+    expect(result.current.baseline).toEqual(result.current.panelState);
     expect(result.current.dirty).toBe(false);
   });
 
@@ -63,10 +64,9 @@ describe('useTriagePanelState', () => {
       severity: 'high',
     };
 
-    const { result, rerender } = renderHook(
-      ({ voc }) => useTriagePanelState(voc),
-      { initialProps: { voc: BASE_VOC } },
-    );
+    const { result, rerender } = renderHook(({ voc }) => useTriagePanelState(voc), {
+      initialProps: { voc: BASE_VOC },
+    });
 
     // Mutate state on first voc
     act(() => {

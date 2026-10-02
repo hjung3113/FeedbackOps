@@ -17,15 +17,20 @@ POST /surveys/:id/open
 POST /surveys/:id/close
 GET /surveys/:id/form
 POST /surveys/:id/responses
+GET /me/survey-responses
+GET /me/answerable-surveys
 GET /surveys/:id/results
+GET /surveys/:id/outcome-follow-up
 POST /survey-responses/:id/evidence-excerpt-candidates
 POST /survey-responses/:id/approved-excerpts
 DELETE /survey-responses/:id/approved-excerpts/:approved_excerpt_id
 POST /survey-responses/:id/create-finding
-POST /survey-findings/:id/request-task (not implemented)
-POST /survey-findings/:id/link-task (not implemented)
-# future: POST /survey-findings/:id/link-milestone
+POST /survey-responses/:id/mark-no-follow-up
+POST /survey-responses/:id/reopen-follow-up
 ```
+
+`GET /me/survey-responses` exists for the external analytics platform (#548); it
+is not a FeedbackOps screen surface.
 
 Current reachable Finding task paths are in the `/findings/:id` family.
 
@@ -105,6 +110,62 @@ validation.failed` matrix covers malformed or duplicate question IDs, unknown
 or inactive-branch answers, missing required answers, answer-kind/value and
 choice mismatches, rating bounds, and trimmed text length.
 
+### GET /me/survey-responses — the session Actor's own response history
+
+This read-only endpoint requires a session and matching workspace context and
+uses the Survey read rate-limit tier. It has no `survey.read` capability check:
+the SQL projection filters on both `workspace_id = session.workspace_id` and
+`respondent_actor_id = session.actor_id`, so it returns only rows submitted by
+the caller. Unknown query keys are rejected. The strict query is
+`{ limit?: integer 1..100, cursor?: opaque string }`; `limit` defaults to `50`.
+An invalid cursor returns `422 validation.failed` with
+`fields: [{ path: ['cursor'], code: 'invalid_cursor' }]`. The response sets
+`cache-control: private, no-cache`.
+
+Items are ordered by `submitted_at DESC, survey_id DESC`. The opaque cursor
+contains the last returned `(submitted_at, survey_id)` pair, so equal
+submission timestamps remain ordered without gaps. The strict response shape
+is `{ items: [{ survey_id, survey_title, submitted_at, identity_protected }],
+page: { has_more, cursor? } }`; `page.cursor` is present only when `has_more`
+is true. The list includes responses for Surveys in any status (currently open
+or closed; a response cannot exist for a draft).
+
+The respondent can see their own row even when `identity_protected` is true;
+that flag is returned as `true` and does not reveal the respondent to another
+reader. This route returns no answers, operator data, other respondents, or
+counts. Self-history reads write no audit events because the reader is the
+data subject. An Actor with no responses receives
+`200 { items: [], page: { has_more: false } }`, which confirms zero responses.
+Errors: `validation.failed`, `auth.session_invalid`, and `rate_limited.actor`.
+
+### GET /me/answerable-surveys — open Surveys the session Actor has not answered
+
+This read-only endpoint requires a session and matching workspace context and
+uses the Survey read rate-limit tier. It has no `survey.read` capability check,
+matching `GET /surveys/:id/form`: any authenticated Actor in the same Workspace
+may discover open Surveys they can answer. The SQL projection
+`survey.read_my_answerable_surveys` filters on
+`workspace_id = session.workspace_id`, `status = 'open'`, and the absence of a
+`survey_responses` row for `session.actor_id`, so it returns only open,
+same-Workspace Surveys the caller has not yet answered. Unknown query keys are
+rejected. The strict query is `{ limit?: integer 1..100, cursor?: opaque
+string }`; `limit` defaults to `50`. An invalid cursor returns `422
+validation.failed` with `fields: [{ path: ['cursor'], code: 'invalid_cursor'
+}]`. The response sets `cache-control: private, no-cache`.
+
+Items are ordered by `opened_at DESC, survey_id DESC`. The opaque cursor
+contains the last returned `(opened_at, survey_id)` pair, so equal open
+timestamps remain ordered without gaps. The strict response shape is
+`{ items: [{ survey_id, display_id, title, type, question_count, opened_at }],
+page: { has_more, cursor? } }`; `page.cursor` is present only when `has_more`
+is true. `question_count` counts the Survey's question rows, the same count the
+`survey_opened` audit event records. This route returns no respondent data,
+answers, operator fields, or other actors' state; a Survey leaves the list for
+an Actor once they submit a response and re-enters never (responses are
+immutable). An Actor with no answerable Surveys receives
+`200 { items: [], page: { has_more: false } }`. Errors: `validation.failed`,
+`auth.session_invalid`, and `rate_limited.actor`.
+
 ### GET /surveys/:id/results — aggregate-only safe result summary
 
 This read-only endpoint requires a session and matching workspace context. It first looks up the Survey by `(workspace_id, survey_id)`, then checks `survey.read` on the Survey's primary Managed System. A missing, cross-workspace, or denied Survey returns `404 not_found.record`; an explicit deny also returns 404 so the route does not disclose existence. Admin role may satisfy `survey.read` under the normal Survey authorization rule, but does not bypass the anonymity policy.
@@ -113,9 +174,23 @@ This read-only endpoint requires a session and matching workspace context. It fi
 
 The query schema is a strict empty object. Result filters are deferred because responses do not retain immutable cohort dimensions and overlapping filtered cohorts would permit subtraction attacks. Future filters require stored cohort snapshots plus an explicit privacy policy.
 
-For a non-holder, the resolved workspace `survey_anonymity_threshold` controls suppression (default `5` when no workspace-settings row exists). A response cohort below that threshold suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through `threshold - 1` responses are indistinguishable. At or above the threshold, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is below it. Text is suppressed when its positive answer count is below it. Zero-count buckets do not trigger low-bucket suppression.
+Every result includes `response_state: "none" | "below_threshold" | "visible"` and the resolved positive-integer `anonymity_threshold`. A total response count of zero returns `"none"` for every actor because no individual response can be inferred; non-holders still receive the existing suppressed question shape, while holders retain visible questions with zero answer counts. For a non-holder with one through `anonymity_threshold - 1` responses, the state is `"below_threshold"` and every question stays suppressed using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`, without a numeric cohort count. A holder of `survey.read_personal_responses` receives `"visible"` for a nonzero cohort below the threshold; cohorts at or above the threshold are `"visible"` for every actor. The configured workspace threshold defaults to `5` when no workspace-settings row exists. At or above the threshold, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is below it. Text is suppressed when its positive answer count is below it. Zero-count buckets do not trigger low-bucket suppression.
 
 Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and active approved `excerpts: [{ id, text }]`; holders of `survey.read_personal_responses` additionally receive excerpt `response_id`. Non-holders never receive that key. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
+
+### GET /surveys/:id/outcome-follow-up — outcome follow-up read (ADR-0055 part C)
+
+This read-only endpoint requires a session and matching workspace context and follows the results read path: the Survey is looked up by `(workspace_id, survey_id)`, then `survey.read` is checked on the Survey's primary Managed System. A missing, cross-workspace, or denied Survey returns `404 not_found.record`; a malformed `:id` returns `422 validation.failed`. A Survey whose type is not `outcome` returns `404 not_found.record`; a draft Survey returns `409 conflict.survey_results_unavailable`. The query schema is a strict empty object and the route takes no `Idempotency-Key`.
+
+The response is the strict object `{ survey_id, classifiable, follow_up_needed, personal_access, items }`. `classifiable` is true when the Survey is closed and its total response count meets the workspace `survey_anonymity_threshold`; `follow_up_needed` is true when the Survey is classifiable and at least one poor response currently has resolution `open`. These two booleans are the only classification data an actor without `survey.read_personal_responses` receives — no numeric counts, no response ids, no per-response flags, so the payload cannot become a subtraction oracle. Admin role may satisfy `survey.read` but never grants personal access; `personal_access` mirrors an explicit `survey.read_personal_responses` grant on the Survey's primary Managed System.
+
+`items` is `null` for a non-holder. For a holder it is an array ordered by `response_number`, containing exactly the poor responses at every resolution (the UI filters Open / 해소됨 / 후속 없음). Each item is `{ response_id, response_number, submitted_at, low_answers, resolution, finding, decision, next_actions }`: `response_number` is the 1-based ordinal by `(submitted_at, id)` over all responses of the Survey (displayed as "응답 #n"); `low_answers` lists only the low-band rating answers as `{ question_id, question_label, value, rating_min, rating_max }` — mid-band answers on the same response never appear; `resolution` is `open` | `finding` | `no_follow_up` with the ADR-0055 precedence (an active `generated_finding` link to a `draft`/`active`/`converted` Finding wins, then a current `no_follow_up` decision); `finding` is the qualifying Finding `{ id, display_id, status }` or null — it is returned only when the caller's Finding read scope (`finding.read`, elevated-role rule, Admin bypass) includes that Finding's own primary Managed System, otherwise `finding` is null while `resolution` still reports `finding`; `decision` is the current decision row `{ state: 'no_follow_up' | 'reopened', reason, updated_at }` or null.
+
+`next_actions` per item: `create_finding` plus `mark_no_follow_up` when `resolution` is `open`; `reopen_follow_up` when `resolution` is `no_follow_up`; none when `resolution` is `finding`. Each action is `availability: 'allowed'` when the caller passes `finding.manage` (Admin role bypass intact) on the Survey's primary Managed System, otherwise `blocked_requestable` with `requestable_permission: { permission: 'finding.manage', managed_system_id }` when the capability is requestable, or null.
+
+Items are personal data: the survey-grain booleans come from the aggregate-only definer `survey.read_outcome_follow_up_survey_state`, and item rows come from `survey.read_outcome_follow_up_items_personal` (migration 0053), called only after the personal gate. A holder read writes one `survey_response_personal_read` audit event per exposed `(response, low-answer question)` pair in the same transaction, with strict detail `{ survey_id, survey_response_id, question_id }`; a non-holder read writes none. No entity links are created and no dashboard queue state changes; the `bad-outcome-no-followup` count already follows ADR-0055.
+
+Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, and `rate_limited.actor`.
 
 ### Survey response evidence approval
 
@@ -132,6 +207,69 @@ The Finding has database provenance `source_type='survey_response'` and stores t
 Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
 
 Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+
+### POST /survey-responses/:id/mark-no-follow-up and /reopen-follow-up — outcome follow-up decisions (ADR-0055)
+
+Both commands record or reverse an outcome follow-up decision on one survey
+response. They require a session and matching workspace context, a required
+`Idempotency-Key` UUIDv4 header (missing → `422 validation.failed` with
+`fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`;
+malformed → `422 validation.malformed_idempotency_key`), mutation rate
+limiting, and a strict body `{ reason }` that is non-empty after trimming and
+at most 2000 characters (blank or over-long → `422 validation.failed`).
+
+Authorization follows create-finding's order exactly. The command first
+resolves the response through the Survey evidence seam: source existence,
+workspace scope, `survey.read`, and explicit `survey.read_personal_responses`
+all collapse missing, foreign, denied-read, and denied-personal into the same
+`404 not_found.record`, and Admin role never bypasses the personal-response
+gate. It then requires `finding.manage` on the survey's primary Managed
+System; denial returns `403 permission.denied` (Admin role bypass intact).
+
+Classification is evaluated inside the transaction through the
+`SECURITY DEFINER` classifier `survey.read_outcome_follow_up_state`: a
+response is classifiable as poor only when its survey has `type: 'outcome'`
+and `status: 'closed'`, the survey's total response count meets the workspace
+`survey_anonymity_threshold`, and at least one rating answer falls in the
+`getRatingBandForValue` low band. The two commands have separate
+preconditions. **Mark** requires the subject to be classifiable as poor and
+its resolution to be `open`; a subject that is not poor, or whose gap is
+already cleared by an active `generated_finding` link to a
+`draft`/`active`/`converted` Finding or by a current `no_follow_up` decision,
+rejects with `409 conflict.stale_write` carrying `detail.failure_code`
+`action_no_longer_available` or `recovery_item_resolved` respectively.
+**Reopen** requires only that the current decision row is `no_follow_up`; it
+does not re-run the classifier, and any other row state (or no row) rejects
+with `action_no_longer_available`. After a reopen the response re-enters the
+`bad-outcome-no-followup` queue only if it is still poor and above the
+threshold and no qualifying Finding link exists. Rejected commands write no
+state row and no audit row.
+
+`mark-no-follow-up` upserts the single current row in
+`survey.outcome_follow_up_decisions` to `no_follow_up` with the trimmed
+reason, the deciding actor, and the survey's primary Managed System, and
+returns `200 { response_id, resolution: 'no_follow_up', updated_at }`.
+`reopen-follow-up` is legal only on a current `no_follow_up` row; it sets
+`reopened` and returns `200 { response_id, resolution: 'open', updated_at }`.
+There is no `DELETE`: history lives in `core.audit_log`.
+
+Audit events (same transaction, subject `survey_response`): mark writes
+`survey_outcome_no_follow_up_marked` with strict detail
+`{ survey_id, managed_system_id, reason }`; reopen writes
+`survey_outcome_follow_up_reopened` with
+`{ survey_id, managed_system_id, reason, previous_reason }`. Neither detail
+ever contains answer values or respondent identity. Dashboard queues
+affected: `bad-outcome-no-followup` (marked responses leave the count;
+reopened responses re-enter it). Same actor/key/body replays the stored `200`
+response with no second audit row; changed reuse returns `409
+conflict.idempotency_key_reuse`. Entity links are neither created nor
+detached by these commands.
+
+Error codes: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.stale_write`,
+`conflict.survey_results_unavailable` (draft survey, raised by the evidence
+seam before the manage check), `conflict.idempotency_key_reuse`, and
+`rate_limited.actor`.
 
 ## Forbidden Endpoint
 

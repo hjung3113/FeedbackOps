@@ -21,7 +21,9 @@ The following directories are the server-registered module surfaces (with
 | Entity Linking | `apps/backend/src/modules/entity-links` |
 | Finding | `apps/backend/src/modules/findings` |
 | Managed System Registry | `apps/backend/src/modules/managed-systems` |
+| Milestones | `apps/backend/src/modules/milestones` |
 | Navigation | `apps/backend/src/modules/nav` |
+| Notifications | `apps/backend/src/modules/notifications` |
 | Permission | `apps/backend/src/modules/permissions` |
 | Saved Views | `apps/backend/src/modules/saved-views` |
 | Survey | `apps/backend/src/modules/surveys` |
@@ -66,6 +68,7 @@ Core owns:
 - Customer / Account reference data only if explicitly retained by data contracts
 - Contact reference data only if explicitly retained by data contracts; never Reporter identity
 - Analytics Area
+- Notification concept and shared notification storage contract
 - Attachment governance and storage interfaces when shared across modules
 - Audit Log
 
@@ -94,6 +97,8 @@ Attachments owns:
 - the shared attachment storage seam and its upload/download commands
 - filename and MIME allowlist
 This is the implementation of Core's attachment-governance bullet, not a second owner. Other modules reference attachments; they do not own the storage seam.
+VOC owns the read projections of its own attachment links (`selectVocAttachments`,
+`selectAttachmentsForComments` in `voc/repo-read.ts`); Attachments does not provide a read projection for them.
 
 Navigation owns:
 - the read-only sidebar badge-count aggregation
@@ -110,6 +115,10 @@ Consumers read the barrel seam (`getResolvedWorkspaceSettings`, `getResolvedWork
 
 The fence above is ownership. The table above it is the directory. They differ where a domain is implemented outside the owner's folder: Core's Managed System Registry, Analytics Area, and attachment governance live in `managed-systems/`, `analytics-areas/`, and `attachments/`; VOC's clusters, recommendations, and pre-submit peers live in `voc-clusters/` and under `voc/recommendations/` and `voc/pre-submit-peers/`; Task's Task Request lives in `task-requests/`. Authentication, Navigation, Saved Views, and Workspace Settings match in both places.
 
+Core owns the Notification concept and shared storage contract. The
+`modules/notifications` directory owns its catalogue, dispatch, delivery job,
+and actor-scoped in-app read model; it does not own domain event production.
+
 ## Cross-Module Access Rules
 
 ```text
@@ -120,9 +129,12 @@ The fence above is ownership. The table above it is the directory. They differ w
 - Dashboard must not mutate source records directly.
 - A row-lock helper is exported by the module that owns the row, from that module's public barrel (`index.ts`). Callers do not import another module's `repo.ts` to lock its rows.
 - `lockManagedSystem` is exported from `managed-systems/index.ts`. `lockAnalyticsArea` is exported from `analytics-areas/index.ts`. VOC keeps `selectVocForUpdate` for its own rows.
+- `assertActiveAnalyticsAreaForManagedSystem` (lock + exists/scope/archived check) is exported from `analytics-areas/index.ts`; callers do not repeat the check.
 ```
 
 M7 (cycle-1 review) rejected selecting `core.managed_systems` from inside the VOC repo. The approved read of non-archived Managed System ids for a workspace is `allManagedSystemIds`. That function moved from `core/managed-systems/read-projections.ts` to `managed-systems/read-projections.ts` (#462); the core file is gone. Foreign modules still must not select the table themselves. Callers import `managed-systems/read-projections.ts` directly. The function is not on the `managed-systems` barrel: that barrel loads `managed-system-service.ts`, and `permissions/check-service.ts` importing the barrel cycles. Do not re-export it from the barrel unless that cycle is removed first.
+
+The same read-projections file owns the approved `managedSystemExists` and `allManagedSystemWorkspacePairs` reads. Foreign modules import these reads directly rather than selecting `core.managed_systems`; they are not re-exported from the barrel.
 
 ### Approved cross-module surfaces
 
@@ -135,9 +147,11 @@ Another module is reached only through one of these:
 
 Importing another module's `repo.ts` or `repo-read.ts` is not a surface. A module reading its own repo, including `voc/jobs` reading `voc/embedding/repo.ts`, is internal.
 
-These imports are read surfaces, not repo bypasses, and the repo-import lint must leave them alone: Surveys importing `findings/authorization.ts`; Dashboard importing `findings/authorization.ts`, `surveys/authorization.ts`, and `voc/read-service.ts`.
+These imports are read surfaces, not repo bypasses, and the repo-import lint must leave them alone: Surveys importing `findings/authorization.ts`; Dashboard importing `findings/authorization.ts`, `surveys/authorization.ts`, and the VOC barrel's reader contract types (`voc/read-contract.ts`).
 
-Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone.
+Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone. Rule 7 (`outside-voc-imports-voc-jobs`, #517) rejects imports of `modules/voc/jobs/*` from outside VOC; reach job behavior through the VOC barrel (`enqueueReleasedTaskReviewCandidates`, `registerVocJobs`). Rule 9 (`foreign-test-seed-helpers`, #517, widened in #574) rejects any import of another module's `__tests__/_seed-helpers`; helpers shared across modules live in `src/test-support`.
+
+When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas` outside their owner modules; tests and migrations are excluded.
 
 ## Core Boundary
 
@@ -160,6 +174,7 @@ Allowed:
 - Analytics Area tree, with each Analytics Area belonging to one Managed System
 - shared attachment governance
 - Audit log append API
+- Notification concept and shared notification storage contract
 - shared identifiers and base types
 ```
 

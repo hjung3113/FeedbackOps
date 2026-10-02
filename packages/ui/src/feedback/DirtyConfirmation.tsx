@@ -44,7 +44,12 @@ export function DirtyConfirmation({
           <AlertDialogDescription>{message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel
+            className={buttonVariants({ variant: 'secondary' })}
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             className={cn(buttonVariants({ variant: 'destructive' }))}
             onClick={onConfirm}

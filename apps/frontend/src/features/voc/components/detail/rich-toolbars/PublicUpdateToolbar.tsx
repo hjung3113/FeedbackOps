@@ -79,7 +79,7 @@ export function PublicUpdateToolbar({
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={disabled}
-        title="Bold"
+        title="굵게"
       >
         <Bold size={14} />
       </ToolbarButton>
@@ -88,7 +88,7 @@ export function PublicUpdateToolbar({
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={disabled}
-        title="Italic"
+        title="기울임"
       >
         <Italic size={14} />
       </ToolbarButton>
@@ -97,7 +97,7 @@ export function PublicUpdateToolbar({
         onClick={() => editor?.chain().focus().toggleBulletList().run()}
         isActive={editor?.isActive('bulletList') ?? false}
         disabled={disabled}
-        title="Bullet list"
+        title="글머리 기호"
       >
         <List size={14} />
       </ToolbarButton>

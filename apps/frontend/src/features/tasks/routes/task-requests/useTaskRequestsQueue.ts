@@ -1,8 +1,12 @@
-import { fetchMe, fetchTaskRequests, resolveActors } from '@/lib/api';
+import { fetchTaskRequests, resolveActors } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { useMe } from '@/lib/auth/useMe';
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { NameMaps } from './TaskRequestRow';
@@ -11,16 +15,17 @@ import { isPermissionDenied } from './predicates';
 export type TaskRequestTab = TaskRequestStatus | 'all';
 
 const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
-  { value: 'pending_review', label: 'Pending' },
-  { value: 'needs_more_evidence', label: 'Needs evidence' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'all', label: 'All' },
+  { value: 'pending_review', label: TASK_REQUEST_STATUS_LABELS.pending_review },
+  { value: 'needs_more_evidence', label: TASK_REQUEST_STATUS_LABELS.needs_more_evidence },
+  { value: 'approved', label: TASK_REQUEST_STATUS_LABELS.approved },
+  { value: 'rejected', label: TASK_REQUEST_STATUS_LABELS.rejected },
+  { value: 'all', label: GLOSSARY.all },
 ];
 
 export interface UseTaskRequestsQueueResult {
   activeTab: TaskRequestTab;
   setActiveTab: (tab: TaskRequestTab) => void;
+  hasItems: boolean;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   tabs: ListToolbarTab[];
@@ -32,6 +37,8 @@ export interface UseTaskRequestsQueueResult {
   isLoading: boolean;
   permissionDeniedError: { message: string } | null;
   hasError: boolean;
+  refetch: () => void;
+  onDecisionComplete: (item: TaskRequestDto) => void;
 }
 
 export function useTaskRequestsQueue({
@@ -41,6 +48,7 @@ export function useTaskRequestsQueue({
   selectedParam?: string | undefined;
   managedSystem?: string | undefined;
 }): UseTaskRequestsQueueResult {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
@@ -52,11 +60,7 @@ export function useTaskRequestsQueue({
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
   });
-  const meQuery = useQuery({
-    queryKey: ['me'] as const,
-    queryFn: ({ signal }) => fetchMe(signal),
-    staleTime: 60 * 1000,
-  });
+  const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
@@ -97,16 +101,25 @@ export function useTaskRequestsQueue({
 
   const tabs = React.useMemo<ListToolbarTab[]>(
     () =>
-      TAB_ORDER.map((tab) => ({
-        value: tab.value,
-        label: tab.label,
-        badgeCount:
-          tab.value === 'all'
-            ? items.length
-            : items.filter((item) => item.status === tab.value).length,
-        urgent: tab.value === 'pending_review',
-      })),
-    [items],
+      TAB_ORDER.map((tab) => {
+        // #706 — counts are unknown until the read succeeds (covers pending,
+        // error, and refetch-after-error without data); unknown must never
+        // render as 0 (ListTabs renders badgeCount only when set).
+        const base = {
+          value: tab.value,
+          label: tab.label,
+          urgent: tab.value === 'pending_review',
+        };
+        if (!taskRequestsQuery.isSuccess) return base;
+        return {
+          ...base,
+          badgeCount:
+            tab.value === 'all'
+              ? items.length
+              : items.filter((item) => item.status === tab.value).length,
+        };
+      }),
+    [items, taskRequestsQuery.isSuccess],
   );
 
   const shown = React.useMemo(() => {
@@ -125,9 +138,30 @@ export function useTaskRequestsQueue({
     ? (items.find((item) => item.id === selectedId) ?? shown[0] ?? null)
     : null;
 
+  const onDecisionComplete = React.useCallback(
+    (updatedItem: TaskRequestDto) => {
+      queryClient.setQueryData<{ items: TaskRequestDto[] }>(
+        ['task-requests', managedSystem],
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.id === updatedItem.id ? updatedItem : item,
+                ),
+              }
+            : current,
+      );
+      setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
+      setSelectedId(updatedItem.id);
+    },
+    [managedSystem, queryClient],
+  );
+
   return {
     activeTab,
     setActiveTab,
+    hasItems: items.length > 0,
     selectedId,
     setSelectedId,
     tabs,
@@ -138,8 +172,12 @@ export function useTaskRequestsQueue({
     currentRole: meQuery.data?.actor.role_level ?? null,
     isLoading: taskRequestsQuery.isLoading,
     permissionDeniedError: isPermissionDenied(taskRequestsQuery.error)
-      ? { message: taskRequestsQuery.error.message }
+      ? { message: mapUnknownError(taskRequestsQuery.error).message }
       : null,
     hasError: taskRequestsQuery.error !== null,
+    refetch: () => {
+      void taskRequestsQuery.refetch();
+    },
+    onDecisionComplete,
   };
 }

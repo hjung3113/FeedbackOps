@@ -1,25 +1,43 @@
 import type { TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
-vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({ usePermissionDecision: vi.fn() }));
-vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
+const apiClientMock = vi.hoisted(() => vi.fn());
+const permissionStates = new Map<string, string>();
+
+vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
+vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/cross-system/getPermissionDecision')>();
+  return { ...actual, getPermissionDecision: vi.fn() };
+});
+vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
-  return { ...actual, useNavigate: () => navigate };
+  // #587: CreateFindingModal reads the router location to build its return link.
+  return {
+    ...actual,
+    useNavigate: () => navigate,
+    useLocation: () => ({ pathname: '/vocs', href: '/vocs?view=inbox' }),
+  };
 });
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
-  return { ...actual, getTask: vi.fn() };
+  return {
+    ...actual,
+    apiClient: apiClientMock,
+    fetchTaskRequests: vi.fn(async () => ({ items: [] })),
+    getTask: vi.fn(),
+  };
 });
 vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({ usePermissionCheck: vi.fn() }));
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
   return {
@@ -27,8 +45,9 @@ vi.mock('@fops/ui', async (importOriginal) => {
     RichContentRenderer: () => <div data-testid="rce" />,
   };
 });
-vi.mock('@/features/voc/lib/format-date', () => ({
-  formatVocCreatedAt: () => '방금 전',
+vi.mock('@/lib/format/datetime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format/datetime')>()),
+  formatRelativeTime: () => '방금 전',
 }));
 
 // EditDescriptionModal uses QueryClient + mutation hooks — stub to isolate VocDetailPanel tests
@@ -62,14 +81,15 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
   ),
 }));
 
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
+import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,
@@ -91,23 +111,40 @@ function renderWithClient(ui: React.ReactElement, queryClient = createQueryClien
 }
 
 beforeEach(() => {
+  permissionStates.clear();
   navigate.mockReset();
+  apiClientMock.mockReset();
+  apiClientMock.mockImplementation(async (_method: string, path: string) =>
+    path.endsWith('/request-task') ? { data: { id: 'task-request-1' } } : { data: { items: [] } },
+  );
   vi.mocked(getTask).mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
-  vi.mocked(usePermissionDecision).mockReturnValue(null);
+  vi.mocked(getPermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
   vi.mocked(useWorkspaceActors).mockReturnValue({
     actors: [
       {
         id: DETAIL_ENVELOPE.reporter_id,
         display_name: ME_RESPONSE.actor.display_name,
-        kind: 'user',
+        email: 'reporter@example.test',
+        role_level: 'user' as const,
       },
-      { id: '00000000-0000-0000-0000-000000000002', display_name: '박운영', kind: 'user' },
+      {
+        id: '00000000-0000-0000-0000-000000000002',
+        display_name: '박운영',
+        email: 'park@example.test',
+        role_level: 'admin' as const,
+      },
     ],
   } as ReturnType<typeof useWorkspaceActors>);
   vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(useMe).mockReturnValue(makeMeQuery());
+  vi.mocked(usePermissionCheck).mockImplementation(
+    ({ capability }) =>
+      ({
+        data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
+      }) as unknown as ReturnType<typeof usePermissionCheck>,
+  );
 });
 
 describe('<VocDetailPanel>', () => {
@@ -155,6 +192,24 @@ describe('<VocDetailPanel>', () => {
     updated_at: '2026-07-18T09:00:00.000Z',
     source: null,
   };
+
+  it('uses the 50px toolbar height while the VOC detail is loading', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: undefined,
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('.h-toolbar')).toBeInTheDocument();
+  });
 
   it('fails closed while /me is unresolved: no Task fetch or allowed Task fields', () => {
     vi.mocked(useVocDetail).mockReturnValue(
@@ -257,7 +312,7 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
 
     expect(screen.getByText('캐시된 내부 Task 제목')).toBeInTheDocument();
-    expect(screen.getByText('done')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
     expect(getTask).not.toHaveBeenCalled();
   });
 
@@ -265,6 +320,58 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('테스트 VOC 제목')).toBeInTheDocument();
+  });
+
+  it('hides the internal conversation tab when the reporter has no operator capability', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, role_level: 'user' },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+  });
+
+  it('does not show the internal conversation tab for a viewer with voc.read only', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    permissionStates.set('voc.read', 'approved');
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the internal conversation tab for a viewer with approved voc.triage', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    permissionStates.set('voc.triage', 'approved');
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
+    expect(usePermissionCheck).toHaveBeenCalledWith({
+      capability: 'voc.triage',
+      managedSystemId: DETAIL_ENVELOPE.primary_managed_system_id,
+    });
   });
 
   it('closes a mounted detail when the Managed System scope changes outside its envelope', async () => {
@@ -391,16 +498,55 @@ describe('<VocDetailPanel>', () => {
       primary_managed_system_id: 'ms-1',
       reporter_facing_status: 'received',
       created_at: '2026-05-01T00:00:00Z',
-      permission_decisions: { _self: { state: 'denied' } },
+      permission_decisions: {
+        _self: { state: 'blocked_not_requestable', reason: 'explicit_deny' },
+      },
     };
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: summaryData as unknown as typeof DETAIL_ENVELOPE }),
     );
-    vi.mocked(usePermissionDecision).mockReturnValue({ state: 'denied' });
     vi.mocked(useMe).mockReturnValue(makeMeQuery());
 
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     // PermissionBlockedPanel renders; title should NOT be present
+    expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
+  });
+
+  it('summary envelope: live read-service _self renders request_access, not a scope line', () => {
+    const managedSystemId = '01919b8c-0000-7000-8000-0000000000aa';
+    // Exact object built by apps/backend/src/modules/voc/read-service.ts (summary path).
+    // Adapter is the real getSummarySelfDecision — this file's mock only replaces
+    // getPermissionDecision, which the summary view does not call.
+    const summaryData = {
+      id: '01919b8c-0000-7000-8000-0000000000bb',
+      display_id: 'VOC-0001',
+      primary_managed_system_id: managedSystemId,
+      reporter_facing_status: 'received',
+      created_at: '2026-05-01T00:00:00.000Z',
+      permission_decisions: {
+        _self: {
+          state: 'request_access',
+          requestable_permission: {
+            permission: 'voc.read',
+            managed_system_id: managedSystemId,
+            reason_required: false,
+          },
+        },
+      },
+    };
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: summaryData as unknown as typeof DETAIL_ENVELOPE }),
+    );
+
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId="01919b8c-0000-7000-8000-0000000000bb" onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('[data-state="request_access"]')).not.toBeNull();
+    expect(screen.getByText('이 항목에 접근하려면 권한 요청이 필요합니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '권한 요청하기' })).not.toBeInTheDocument();
+    expect(screen.queryByText('voc.read')).not.toBeInTheDocument();
+    expect(screen.queryByText('권한 결정 데이터를 해석할 수 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
   });
 
@@ -425,22 +571,24 @@ describe('<VocDetailPanel>', () => {
   it('does not render an empty related-entity section in the happy path', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
-    // Description section now uses an English 'BODY' label per the
-    // reference image (see .review/title-reference.png + relaxed copy rule).
-    expect(screen.getByText('BODY')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
+    // #679 FIX2: the reference's relaxed 'BODY' variance is superseded by the
+    // Korean-chrome policy; the label is 본문.
+    expect(screen.getByText('본문')).toBeInTheDocument();
     expect(screen.getByText('연결된 실행')).toBeInTheDocument();
     expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
     expect(screen.getByText('대화')).toBeInTheDocument();
   });
 
-  it('only renders the Similar section navigation entry and anchor when similar VOCs render', () => {
+  it('only renders the same-Managed-System section navigation entry and anchor when peers render', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     const { container, rerender } = renderWithClient(
       <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).toBeNull();
 
     vi.mocked(useVocDetail).mockReturnValue(
@@ -468,8 +616,89 @@ describe('<VocDetailPanel>', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' })).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
+  });
+
+  it('puts 설명 and 대화 in overflow while keeping the dead Internal anchor absent', async () => {
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('[data-anchor="internal"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Description' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Conversation' })).toBeNull();
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — fireEvent.click leaves aria-expanded="false".
+    // Driving it by keyboard matches this repo's established pattern (see
+    // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: '설명' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '대화' })).toBeInTheDocument();
+  });
+
+  it('submits an inline Task Request draft from the footer button for an admin actor', async () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    // Exactly one bottom action bar — the old design rendered NextActionFooter
+    // and a second bordered CTA row as two separate stacked footers (#519).
+    expect(container.querySelectorAll('.sticky.bottom-0')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Finding 생성' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Task 요청' }));
+    const draft = await screen.findByRole('region', { name: 'Task Request 초안' });
+    expect(draft).toHaveTextContent('출처 VOC-0001 · VOC');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
+      target: { value: 'Reduce repeated support contacts' },
+    });
+    fireEvent.click(screen.getByTestId('request-task-submit'));
+    await waitFor(() =>
+      expect(apiClientMock).toHaveBeenCalledWith(
+        'POST',
+        `/vocs/${DETAIL_ENVELOPE.id}/request-task`,
+        expect.objectContaining({
+          body: {
+            evidence_summary: `VOC ${DETAIL_ENVELOPE.display_id}: ${DETAIL_ENVELOPE.title}`,
+            requested_outcome: 'Reduce repeated support contacts',
+          },
+          idempotencyKey: expect.any(String),
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
+  });
+
+  it('opens the Create Finding flow from the primary footer button for an admin actor', () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
+    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
+  });
+
+  it('omits footer actions for a plain user actor', () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'user' } },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Finding 생성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Task 요청' })).not.toBeInTheDocument();
+    expect(screen.queryByText('다음 액션 없음')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '추가 작업' })).toBeNull();
   });
 
   it('#337: reporter-arm envelope omits Triage, Similar, and their navigation entries', async () => {
@@ -486,10 +715,12 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('유사 VOC')).not.toBeInTheDocument();
+    expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/같은 Managed System의 VOC/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
   });
 
   it('#337: treats a half-redacted envelope as the reporter arm', async () => {
@@ -502,11 +733,12 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
   });
 
   it('#337: scoped envelope renders Triage and Similar with their navigation entries', async () => {
+    const user = userEvent.setup();
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({
         data: {
@@ -527,13 +759,37 @@ describe('<VocDetailPanel>', () => {
       }),
     );
 
-    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
-    expect(screen.getByLabelText('유사 VOC')).toBeInTheDocument();
+    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    for (const label of ['요약', 'Triage', '이력', '작성']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
+    ).not.toBeInTheDocument();
+    const moreButton = screen.getByRole('button', { name: /더보기/ });
+    expect(moreButton).toBeInTheDocument();
+    const scrollContainer = container.querySelector<HTMLElement>(
+      '[data-testid="voc-detail-panel"] .overflow-y-auto',
+    );
+    if (!scrollContainer) throw new Error('detail scroll container not found');
+    const scrollTo = vi.fn();
+    Object.defineProperty(scrollContainer, 'scrollTo', { configurable: true, value: scrollTo });
+
+    fireEvent.keyDown(moreButton, { key: 'Enter' });
+    const descriptionItem = screen.getByRole('menuitem', { name: '설명' });
+    const similarItem = screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' });
+    expect(descriptionItem).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(similarItem).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(scrollTo).toHaveBeenCalledOnce();
   });
 
   it('renders me.display_name when me matches reporter', () => {

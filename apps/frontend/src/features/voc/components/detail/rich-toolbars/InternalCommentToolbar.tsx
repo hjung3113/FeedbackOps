@@ -85,7 +85,7 @@ export function InternalCommentToolbar({
         onClick={() => editor?.chain().focus().toggleBold().run()}
         isActive={editor?.isActive('bold') ?? false}
         disabled={editorDisabled}
-        title="Bold"
+        title="굵게"
       >
         <Bold size={14} />
       </ToolbarButton>
@@ -94,7 +94,7 @@ export function InternalCommentToolbar({
         onClick={() => editor?.chain().focus().toggleItalic().run()}
         isActive={editor?.isActive('italic') ?? false}
         disabled={editorDisabled}
-        title="Italic"
+        title="기울임"
       >
         <Italic size={14} />
       </ToolbarButton>
@@ -103,7 +103,7 @@ export function InternalCommentToolbar({
         onClick={() => editor?.chain().focus().toggleCode().run()}
         isActive={editor?.isActive('code') ?? false}
         disabled={editorDisabled}
-        title="Code"
+        title="코드"
       >
         <Code size={14} />
       </ToolbarButton>
@@ -112,7 +112,7 @@ export function InternalCommentToolbar({
         onClick={() => editor?.chain().focus().toggleBulletList().run()}
         isActive={editor?.isActive('bulletList') ?? false}
         disabled={editorDisabled}
-        title="Bullet list"
+        title="글머리 기호"
       >
         <List size={14} />
       </ToolbarButton>
@@ -120,7 +120,7 @@ export function InternalCommentToolbar({
       <ToolbarButton
         onClick={() => {
           const previousUrl = editor?.getAttributes('link').href ?? '';
-          const url = window.prompt('Link URL', previousUrl);
+          const url = window.prompt('링크 URL', previousUrl);
           if (url === null) return;
           if (url === '') {
             editor?.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -130,7 +130,7 @@ export function InternalCommentToolbar({
         }}
         isActive={editor?.isActive('link') ?? false}
         disabled={editorDisabled}
-        title="Link"
+        title="링크"
       >
         <Link size={14} />
       </ToolbarButton>
@@ -143,7 +143,7 @@ export function InternalCommentToolbar({
         onClick={onInsertMention}
         isActive={false}
         disabled={editorDisabled}
-        title="@Mention"
+        title="@멘션"
       >
         <AtSign size={14} />
       </ToolbarButton>

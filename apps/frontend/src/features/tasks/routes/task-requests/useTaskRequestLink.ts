@@ -1,5 +1,7 @@
 import { fetchPermissionCheck, linkExistingTask, listTasks } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskDto, TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -20,6 +22,8 @@ export interface UseTaskRequestLinkResult {
   isPending: boolean;
   /** Last link mutation's settled result, independent of toast state. */
   result: TaskDto | null;
+  /** Request that produced the last link result, so selection changes cannot leak it. */
+  resultTaskRequestId: string | null;
   /** Last link mutation's settled error, independent of toast state. */
   error: ApiError | null;
   canLinkExisting: boolean;
@@ -66,18 +70,19 @@ export function useTaskRequestLink({
     [tasksQuery.data?.items, item.primary_managed_system_id],
   );
 
-  const linkMutation = useMutation<TaskDto, ApiError, string>({
-    mutationFn: async (taskId) => {
-      return linkExistingTask(item.id, { task_id: taskId }, crypto.randomUUID());
+  const linkMutation = useMutation<TaskDto, ApiError, { taskId: string; taskRequestId: string }>({
+    mutationFn: async ({ taskId, taskRequestId }) => {
+      return linkExistingTask(taskRequestId, { task_id: taskId }, crypto.randomUUID());
     },
     onSuccess: (task) => {
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast(`Linked Task ${task.display_id}.`);
+      toast.success(`Task ${task.display_id}을 연결했습니다.`);
       setLinkOpen(false);
     },
     onError: (err) => {
-      toast.error(err.envelope.message);
+      toast.error(mapUnknownError(err).message);
     },
   });
 
@@ -88,10 +93,11 @@ export function useTaskRequestLink({
     inScopeTasks,
     isPending: linkMutation.isPending,
     result: linkMutation.data ?? null,
+    resultTaskRequestId: linkMutation.variables?.taskRequestId ?? null,
     error: linkMutation.error ?? null,
     canLinkExisting: canLinkExistingTaskRequest(item.status) && canManage,
     link: (taskId) => {
-      if (!linkMutation.isPending) linkMutation.mutate(taskId);
+      if (!linkMutation.isPending) linkMutation.mutate({ taskId, taskRequestId: item.id });
     },
   };
 }

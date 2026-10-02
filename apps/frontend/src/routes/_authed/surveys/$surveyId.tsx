@@ -3,13 +3,24 @@ import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail'
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
 import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { parseRouteSearch } from '@/lib/router/search';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
+import { useMemo } from 'react';
 import { z } from 'zod';
 
 const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
+
+export function validateSurveyDetailSearch(raw: unknown) {
+  return parseRouteSearch(searchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/surveys/$surveyId')({
-  validateSearch: (raw) => searchSchema.parse(raw),
+  validateSearch: validateSurveyDetailSearch,
   component: SurveyDetailRoute,
 });
 
@@ -23,15 +34,44 @@ export function SurveyDetailRoute() {
     params: { surveyId },
     fuzzy: false,
   });
+  const isFollowUpRoute = matchRoute({
+    to: '/surveys/$surveyId/follow-up',
+    params: { surveyId },
+    fuzzy: false,
+  });
+  const isOutcomeReviewRoute = isResultsRoute || isFollowUpRoute;
   const query = useSurvey(surveyId);
   const gate = useSurveyManageGate(query.data?.primary_managed_system_id);
+  const documentTitleRecord =
+    !isOutcomeReviewRoute &&
+    query.isSuccess &&
+    !query.isFetching &&
+    (!search.builder || gate.canManage)
+      ? formatRecordDocumentTitle({
+          displayId: query.data.display_id,
+          title: query.data.title,
+        })
+      : null;
+  useDocumentTitle(documentTitleRecord);
   const list = useSurveys();
+  const managedSystemNames = useManagedSystemNamesResult({ enabled: !isOutcomeReviewRoute });
+  const managedSystemNamesById = managedSystemNames.isSuccess
+    ? managedSystemNames.namesById
+    : undefined;
+  const actorsQuery = useWorkspaceActors({ enabled: !isOutcomeReviewRoute });
+  const actorNamesById = useMemo(
+    () =>
+      actorsQuery.isSuccess
+        ? new Map((actorsQuery.actors ?? []).map((actor) => [actor.id, actor.display_name]))
+        : undefined,
+    [actorsQuery.actors, actorsQuery.isSuccess],
+  );
 
-  if (isResultsRoute) return <Outlet />;
+  if (isOutcomeReviewRoute) return <Outlet />;
   if (query.isLoading) return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;
   if (query.isError || !query.data)
     return (
-      <EmptyState title="설문을 찾을 수 없습니다." body="삭제되었거나 접근 권한이 없습니다." />
+      <EmptyState title="Survey를 찾을 수 없습니다." body="삭제되었거나 접근 권한이 없습니다." />
     );
   if (search.builder) {
     if (!gate.canManage)
@@ -39,8 +79,8 @@ export function SurveyDetailRoute() {
         <div className="p-6">
           <PermissionBlockedPanel
             state="blocked_not_requestable"
-            category="Survey Builder"
-            reason="설문 관리 권한이 없습니다."
+            category="Survey 빌더"
+            reason={PERMISSION_BLOCKED_REASONS.surveyBuilder}
           />
         </div>
       );
@@ -48,6 +88,7 @@ export function SurveyDetailRoute() {
       <SurveyBuilder
         survey={query.data}
         canManage
+        managedSystemNamesById={managedSystemNamesById}
         {...(gate.gateState ? { gateState: gate.gateState } : {})}
         onBack={() => void navigate({ to: '/surveys/$surveyId', params: { surveyId } })}
       />
@@ -58,9 +99,15 @@ export function SurveyDetailRoute() {
       list={
         <SurveyList
           surveys={list.data ?? []}
-          isLoading={list.isLoading}
+          // #706 — isPending keeps the skeleton up through the whole
+          // no-data window (incl. the retry delay), so tabs never render
+          // unknown counts as 0.
+          isLoading={list.isPending}
           error={list.error}
+          onRetry={() => void list.refetch()}
           selectedId={surveyId}
+          managedSystemNamesById={managedSystemNamesById}
+          actorNamesById={actorNamesById}
           onSelect={(id) =>
             void navigate({
               to: '/surveys/$surveyId',
@@ -74,6 +121,8 @@ export function SurveyDetailRoute() {
           survey={query.data}
           canManage={gate.canManage}
           onClose={() => void navigate({ to: '/surveys' })}
+          managedSystemNamesById={managedSystemNamesById}
+          actorNamesById={actorNamesById}
         />
       }
     />

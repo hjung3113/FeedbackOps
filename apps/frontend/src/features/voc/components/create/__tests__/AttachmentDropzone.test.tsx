@@ -63,6 +63,16 @@ describe('<AttachmentDropzone> (C6 active upload)', () => {
     expect(screen.getByText('최대 25MB · 다중 선택')).toBeInTheDocument();
   });
 
+  it('renders the attachment label with the FieldLabel help tip', () => {
+    render(<AttachmentDropzone />);
+
+    const label = screen.getByText('첨부').closest('label');
+    expect(label).not.toBeNull();
+    expect(
+      screen.getByTestId('field-label-tip-trigger').querySelector('.sr-only'),
+    ).toHaveTextContent('최대 25MB. 큰 스프레드시트는 본문이 아니라 파일 첨부로 저장됩니다.');
+  });
+
   it('drop file → POST /attachments → row shows uploaded state and onChange emits server id', async () => {
     const spy = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(FAKE_ATTACHMENT);
     const onChange = vi.fn();

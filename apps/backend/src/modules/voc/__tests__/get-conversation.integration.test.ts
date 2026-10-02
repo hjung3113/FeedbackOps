@@ -12,20 +12,17 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { randomUUID, uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import {
-  SESSION_COOKIE_NAME,
   cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertInternalComment,
-  insertMsDirectly,
   insertPublicUpdate,
-  insertReporterReply,
   insertVocDirectly,
-  loginAs,
-  randomUUID,
-  uid,
-} from './_seed-helpers.js';
+} from '../../../test-support/voc-fixtures.js';
+import { insertInternalComment, insertReporterReply } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -83,7 +80,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC1: Cursor-based pagination of conversation tail ─────────────────────
 
   it('AC1: 65 entries; inline 50 from detail → cursor → conversation returns 15, has_more=false', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-tail`, 'Conv Tail MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-tail`,
+      'Conv Tail MS',
+    );
     const voc = await insertVoc(msId, 'Conv Tail VOC');
 
     // Insert 65 internal_comments
@@ -126,7 +128,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC2: kind=public_update filter ───────────────────────────────────────
 
   it('AC2: kind=public_update narrows results to only public_updates', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-kind-pub`, 'Kind Pub MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-kind-pub`,
+      'Kind Pub MS',
+    );
     const voc = await insertVoc(msId, 'Kind Pub VOC');
 
     // Insert 55 public_updates, 5 reporter_replies, 5 internal_comments (65 total)
@@ -168,7 +175,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC3: kind=reporter_reply filter ──────────────────────────────────────
 
   it('AC3: kind=reporter_reply filter works', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-kind-rep`, 'Kind Rep MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-kind-rep`,
+      'Kind Rep MS',
+    );
     const voc = await insertVoc(msId, 'Kind Rep VOC');
 
     // 51 public_updates + 5 reporter_replies = 56 total → 50 inline, 6 tail
@@ -205,7 +217,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC4: Visibility — reporter sees only own replies ─────────────────────
 
   it('AC4: reporter sees own replies; cross-reporter replies excluded', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rep-own`, 'Rep Own MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-rep-own`,
+      'Rep Own MS',
+    );
     const voc = await insertVoc(msId, 'Rep Own VOC');
 
     // Insert 52 public_updates + 3 reporter_replies (own) = 55 total → cursor exists
@@ -253,7 +270,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // 422 on every detail-panel open in production.
 
   it('AC5: first page (no cursor) returns 200 with items + next_cursor when has_more', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-first-page`, 'First Page MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-first-page`,
+      'First Page MS',
+    );
     const voc = await insertVoc(msId, 'First Page VOC');
 
     // Seed 3 entries — under the page limit so has_more=false on first page.
@@ -274,7 +296,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   });
 
   it('AC5b: first page (no cursor) emits next_cursor when more entries exist', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-first-more`, 'First More MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-first-more`,
+      'First More MS',
+    );
     const voc = await insertVoc(msId, 'First More VOC');
 
     // Seed 60 entries; request limit=50 → has_more=true on first page.
@@ -297,7 +324,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC6: Invalid cursor (bad base64) → 422 ───────────────────────────────
 
   it('AC6: invalid cursor (bad base64) → 422 validation.failed', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-bad-cursor`, 'Bad Cursor MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-bad-cursor`,
+      'Bad Cursor MS',
+    );
     const voc = await insertVoc(msId, 'Bad Cursor VOC');
 
     // A string that decodes from base64 to non-JSON
@@ -314,7 +346,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC6b: Malformed JSON cursor (M5 fix) ─────────────────────────────────
 
   it('AC6b: cursor decodes to JSON but with wrong field types → 422 invalid_cursor (M5 fix)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-bad-shape`, 'Bad Shape MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-bad-shape`,
+      'Bad Shape MS',
+    );
     const voc = await insertVoc(msId, 'Bad Shape VOC');
 
     // Cursor is valid base64 of valid JSON, but fields are wrong types.
@@ -330,7 +367,10 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
     });
     expect(res.statusCode).toBe(422);
-    const body = res.json<{ code: string; detail?: { fields?: Array<{ path: string[]; code: string }> } }>();
+    const body = res.json<{
+      code: string;
+      detail?: { fields?: Array<{ path: string[]; code: string }> };
+    }>();
     expect(body.code).toBe('validation.failed');
     if (body.detail?.fields) {
       const cursorField = body.detail.fields.find((f) => f.path.includes('cursor'));
@@ -341,7 +381,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
   // ── AC7: Summary-territory actor → 403 ───────────────────────────────────
 
   it('AC7: actor in summary-only state (voc.triage, no voc.read) → 403 permission.denied on conversation endpoint', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sum-403`, 'Sum 403 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-sum-403`,
+      'Sum 403 MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac7'));
     // voc.triage only → effectiveScope has MS, but no readScope → summary territory
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
@@ -386,7 +431,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
     expect(routes).toContain('/conversation');
 
     // Verify the route accepts requests with a valid cursor (not 404).
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rl-v2`, 'RL V2 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-rl-v2`,
+      'RL V2 MS',
+    );
     const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'RL V2 VOC');
 
     // Valid cursor: base64 of { createdAt, id } in ISO/UUID format.

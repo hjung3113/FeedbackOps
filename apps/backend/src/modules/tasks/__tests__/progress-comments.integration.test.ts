@@ -7,14 +7,13 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import {
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  loginAs,
-  paragraphDoc,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
+import { seedSecondWorkspace } from '../../../test-support/seed-second-workspace.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -28,6 +27,7 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let adminActorId: string;
+  let otherWorkspaceAdminActorId = '';
   let readActor: { id: string; externalId: string };
   let manageActor: { id: string; externalId: string };
   let readCookie: string;
@@ -48,6 +48,7 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
     adminActorId = admin.rows[0]?.id ?? '';
     if (!adminActorId) throw new Error('seed admin actor not found');
 
+    otherWorkspaceAdminActorId = (await seedSecondWorkspace(dbHandle)).adminActorId;
     readActor = await insertDevActor(dbHandle, WORKSPACE_ID, uid('progress-task-read'));
     manageActor = await insertDevActor(dbHandle, WORKSPACE_ID, uid('progress-task-manage'));
     readCookie = await loginAs(app, readActor.externalId);
@@ -314,6 +315,32 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
       'cursor=not-a-cursor',
     );
     expect(invalidCursor.statusCode).toBe(422);
+  });
+
+  it.each<[string, () => string]>([
+    ['unknown actor', () => randomUUID()],
+    ['actor seeded in another workspace', () => otherWorkspaceAdminActorId],
+  ])('rejects a mention actor outside the workspace (%s)', async (_label, getActorId) => {
+    const actorId = getActorId();
+    const task = await seedTask();
+    const response = await commentsRequest(manageCookie, 'POST', task.id, {
+      body_rich_content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'mention', attrs: { actor_id: actorId } }],
+          },
+        ],
+      },
+      mentions: [actorId],
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['mentions'], code: 'cross_workspace' }] },
+    });
   });
 
   it('review follow-up: cursor pagination does not skip a row sharing the same millisecond as the cursor boundary', async () => {

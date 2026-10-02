@@ -11,8 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
-import { insertDevActor, insertMsDirectly, uid } from '../../voc/__tests__/_seed-helpers.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import {
   createFindingFromVocCluster,
   linkTaskToFinding,

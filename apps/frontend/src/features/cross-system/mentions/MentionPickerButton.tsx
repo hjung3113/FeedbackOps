@@ -64,7 +64,7 @@ export function MentionPickerButton({
         <button
           type="button"
           disabled={disabled}
-          aria-label="@Mention"
+          aria-label="@멘션"
           aria-haspopup="listbox"
           aria-expanded={open}
           onMouseDown={(e) => {
@@ -83,7 +83,7 @@ export function MentionPickerButton({
           )}
         >
           <AtSign size={12} aria-hidden="true" />
-          <span>@</span>
+          <span>멘션</span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -113,7 +113,7 @@ export function MentionPickerButton({
               // biome-ignore lint/a11y/useKeyWithClickEvents: pointer selection; keyboard handled by search input
               <li
                 key={actor.id}
-                // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <li role="option">; native <option> only works inside <select>
+                // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <li role="option">; native option elements are limited to native pickers.
                 // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <li role="option"> is canonical ARIA listbox option per APG §combobox
                 role="option"
                 aria-selected={false}

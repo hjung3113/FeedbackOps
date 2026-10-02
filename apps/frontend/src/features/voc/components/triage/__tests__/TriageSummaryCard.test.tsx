@@ -1,76 +1,118 @@
-import { render, screen } from '@testing-library/react';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TriagePanelLocalState } from '../../../hooks/useTriagePanelState';
 import { TriageSummaryCard } from '../TriageSummaryCard';
 
 const BASE_STATE: TriagePanelLocalState = {
-  severity: null,
+  severity: 'medium',
   ownerUserId: null,
   ownerTeamId: null,
   analyticsAreaId: null,
 };
 
 describe('TriageSummaryCard', () => {
-  it('shows "미지정" for each field when state is empty', () => {
-    render(<TriageSummaryCard panelState={BASE_STATE} />);
-    // Severity row and Owner row both show 미지정
-    const missingTexts = screen.getAllByText('미지정');
-    expect(missingTexts.length).toBeGreaterThanOrEqual(2);
-    // Analytics Area shows "없음"
-    expect(screen.getByText('없음')).toBeInTheDocument();
+  it('shows the clean-state message without diff rows and includes the status transition', () => {
+    render(
+      <TriageSummaryCard
+        panelState={BASE_STATE}
+        baseline={BASE_STATE}
+        currentReporterStatus="received"
+      />,
+    );
+    expect(screen.getByText('변경 없음 — 현재 값 그대로 확정됩니다.')).toBeInTheDocument();
+    expect(screen.queryByTestId(/^summary-diff-row-/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
+      '확정 시 공개 상태:',
+    );
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('접수됨');
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
+    expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
   });
 
-  it('shows SeverityBadge when severity is set', () => {
-    const state = { ...BASE_STATE, severity: 'high' };
-    render(<TriageSummaryCard panelState={state} />);
-    // SeverityBadge renders Korean label '높음' for 'high'
-    expect(screen.getByText('높음')).toBeInTheDocument();
+  it('shows only the changed Severity diff and keeps the status transition', () => {
+    const panelState = { ...BASE_STATE, severity: 'critical' };
+    render(
+      <TriageSummaryCard
+        panelState={panelState}
+        baseline={BASE_STATE}
+        currentReporterStatus="received"
+      />,
+    );
+    const row = screen.getByTestId('summary-diff-row-Severity');
+    expect(row).toHaveTextContent('중간');
+    expect(row).toHaveTextContent('심각');
+    expect(row.querySelector('.line-through')).toHaveTextContent('중간');
+    expect(row.querySelector('.text-text-primary')).toHaveTextContent('심각');
+    expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
+      '확정 시 공개 상태:',
+    );
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
   });
 
-  it('shows owner display_name when ownerUserId is set and actorMap provided', () => {
-    const state = { ...BASE_STATE, ownerUserId: 'u-1' };
+  it('shows an Owner diff from unset to the actor display name', () => {
+    const panelState = { ...BASE_STATE, ownerUserId: 'u-1' };
     const actorMap = new Map([['u-1', { display_name: '김철수' }]]);
-    render(<TriageSummaryCard panelState={state} actorMap={actorMap} />);
-    expect(screen.getByText('김철수')).toBeInTheDocument();
+    render(
+      <TriageSummaryCard
+        panelState={panelState}
+        baseline={BASE_STATE}
+        actorMap={actorMap}
+        currentReporterStatus="received"
+      />,
+    );
+    const row = screen.getByTestId('summary-diff-row-Owner');
+    expect(row).toHaveTextContent('미지정');
+    expect(row).toHaveTextContent('김철수');
+    expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
+    expect(row.querySelector('.text-text-primary')).toHaveTextContent('김철수');
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
+      '확정 시 공개 상태:',
+    );
+    expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('담당자 배정됨');
+    expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
   });
 
-  it('uses a neutral owner label when a team id cannot be resolved', () => {
-    const state = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
-    render(<TriageSummaryCard panelState={state} />);
-    expect(screen.getByText('Owner team')).toBeInTheDocument();
-    expect(screen.queryByText(/Team 00000000/)).not.toBeInTheDocument();
+  it('uses the glossary unknown-user label when the owner actor cannot be resolved', () => {
+    const panelState = { ...BASE_STATE, ownerUserId: 'unresolved-actor' };
+    render(
+      <TriageSummaryCard panelState={panelState} baseline={BASE_STATE} actorMap={new Map()} />,
+    );
+
+    expect(screen.getByTestId('summary-diff-row-Owner')).toHaveTextContent(GLOSSARY.unknownUser);
   });
 
-  it('shows analytics area name instead of id slice', () => {
-    const state = {
-      ...BASE_STATE,
-      analyticsAreaId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-    };
-    render(<TriageSummaryCard panelState={state} analyticsAreaName="결제 경험" />);
-    expect(screen.getByText('결제 경험')).toBeInTheDocument();
-    expect(screen.queryByText('aaaaaaaa')).not.toBeInTheDocument();
+  it('uses the neutral Owner team label without leaking an unresolved team id', () => {
+    const baseline = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
+    const panelState = { ...BASE_STATE, ownerTeamId: null };
+    const { container } = render(<TriageSummaryCard panelState={panelState} baseline={baseline} />);
+    const row = screen.getByTestId('summary-diff-row-Owner');
+    expect(within(row).getByText('알 수 없는 팀')).toBeInTheDocument();
+    expect(row).toHaveTextContent('미지정');
+    expect(container).not.toHaveTextContent('00000000');
   });
 
-  // Prototype ref: screen-voc-create.jsx:561-567 — "Reporter status 변경" row.
-  it('omits the reporter-status transition row when currentReporterStatus is undefined', () => {
-    render(<TriageSummaryCard panelState={BASE_STATE} />);
+  it('omits the reporter-status line when the caller has no status', () => {
+    render(<TriageSummaryCard panelState={BASE_STATE} baseline={BASE_STATE} />);
     expect(screen.queryByTestId('reporter-status-transition')).not.toBeInTheDocument();
   });
 
-  it('renders current → reviewing when an owner is NOT staged', () => {
-    render(<TriageSummaryCard panelState={BASE_STATE} currentReporterStatus="received" />);
-    const row = screen.getByTestId('reporter-status-transition');
-    expect(row).toBeInTheDocument();
-    // current 접수됨 → target 검토 중 (no owner)
-    expect(row).toHaveTextContent('접수됨');
-    expect(row).toHaveTextContent('검토 중');
-  });
-
-  it('renders current → assigned when an owner IS staged', () => {
-    const state = { ...BASE_STATE, ownerUserId: 'u-1' };
-    render(<TriageSummaryCard panelState={state} currentReporterStatus="received" />);
-    const row = screen.getByTestId('reporter-status-transition');
-    // current 접수됨 → target 담당자 배정됨 (owner present)
-    expect(row).toHaveTextContent('담당자 배정됨');
+  it('shows Analytics Area names rather than id fragments in a changed-field diff', () => {
+    const baseline = { ...BASE_STATE, analyticsAreaId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' };
+    const panelState = { ...BASE_STATE, analyticsAreaId: 'ffffffff-1111-2222-3333-444444444444' };
+    render(
+      <TriageSummaryCard
+        panelState={panelState}
+        baseline={baseline}
+        baselineAnalyticsAreaName="결제 경험"
+        analyticsAreaName="구독 분석"
+      />,
+    );
+    const row = screen.getByTestId('summary-diff-row-Analytics Area');
+    expect(row).toHaveTextContent('결제 경험');
+    expect(row).toHaveTextContent('구독 분석');
+    expect(row).not.toHaveTextContent('aaaaaaaa');
+    expect(row).not.toHaveTextContent('ffffffff');
   });
 });

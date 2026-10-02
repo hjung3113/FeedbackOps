@@ -73,32 +73,46 @@ export function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): R
           <DialogTitle>Task 연결</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <FieldLabel htmlFor="link-task-select">Task</FieldLabel>
-          <Select value={selectedTaskId} onValueChange={setSelectedTaskId}>
-            <SelectTrigger id="link-task-select">
-              <SelectValue
-                placeholder={tasksQuery.isLoading ? 'Task 불러오는 중...' : '기존 Task 선택'}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {candidates.map((task) => (
-                <SelectItem key={task.id} value={task.id}>
-                  {task.title} · {task.display_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {tasksQuery.isError && (
-            <p className="text-sm text-feedback-error">Task 목록을 불러오지 못했습니다.</p>
-          )}
-          {!tasksQuery.isLoading && candidates.length === 0 && (
+          {tasksQuery.isLoading ? (
+            <p className="text-sm text-text-muted">Task 불러오는 중...</p>
+          ) : tasksQuery.isError ? (
+            <div className="grid gap-2" role="alert">
+              <p className="text-sm text-text-danger">Task 목록을 불러오지 못했습니다.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void tasksQuery.refetch();
+                }}
+              >
+                다시 시도
+              </Button>
+            </div>
+          ) : candidates.length === 0 ? (
             <p className="text-sm text-text-muted">
               연결 가능한 같은 Managed System Task가 없습니다.
             </p>
+          ) : (
+            <>
+              <FieldLabel htmlFor="link-task-select">Task</FieldLabel>
+              <Select value={selectedTaskId} onValueChange={setSelectedTaskId}>
+                <SelectTrigger id="link-task-select">
+                  <SelectValue placeholder="기존 Task 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {candidates.map((task) => (
+                    <SelectItem key={task.id} value={task.id}>
+                      {task.title} · {task.display_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={mutation.isPending}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
             취소
           </Button>
           <Button

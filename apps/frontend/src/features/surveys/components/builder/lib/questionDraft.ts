@@ -1,18 +1,25 @@
 import type { QuestionInput, QuestionKind, SurveyQuestion } from '../../../types';
 
-export function newQuestion(surveyId: string, sortOrder: number): SurveyQuestion {
+export function newQuestion(
+  surveyId: string,
+  sortOrder: number,
+  kind: QuestionKind = 'single_choice',
+): SurveyQuestion {
+  const choice = kind === 'single_choice' || kind === 'multiple_choice';
   return {
     id: `local-${crypto.randomUUID()}`,
     survey_id: surveyId,
-    kind: 'single_choice',
+    kind,
     prompt: '새 질문',
     is_required: false,
-    options: [
-      { key: 'option-1', label: 'Option 1' },
-      { key: 'option-2', label: 'Option 2' },
-    ],
-    rating_min: null,
-    rating_max: null,
+    options: choice
+      ? [
+          { key: 'option-1', label: '옵션 1' },
+          { key: 'option-2', label: '옵션 2' },
+        ]
+      : null,
+    rating_min: kind === 'rating' ? 1 : null,
+    rating_max: kind === 'rating' ? 5 : null,
     rating_low_label: null,
     rating_high_label: null,
     sort_order: sortOrder,
@@ -71,8 +78,8 @@ export function questionForKind(
     kind,
     options: choice
       ? (question.options ?? [
-          { key: 'option-1', label: 'Option 1' },
-          { key: 'option-2', label: 'Option 2' },
+          { key: 'option-1', label: '옵션 1' },
+          { key: 'option-2', label: '옵션 2' },
         ])
       : null,
     rating_min: kind === 'rating' ? 1 : null,

@@ -4,9 +4,7 @@
  * Prototype ref: screen-voc-create.jsx:363-391 (TriageQueueRow)
  * Layout: SeverityIndicator | row-body[title + row-meta] | row-trailing[createdAt]
  *
- * Prototype verbatim copy keys preserved:
- *   "Owner 없음"   — when owner_user_id and owner_team_id are both null
- *   "Area 미지정"  — when analytics_area_id is null
+ * Missing owners use the shared danger badge; the missing-area label stays neutral.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.8):
  *   .object-row.expanded → min-h-[96px] py-3.5 px-5
@@ -16,30 +14,19 @@
  *   .row-meta → text-[12px] text-text-muted flex items-center gap-2 flex-wrap
  *   .row-meta .dot → w-0.5 h-0.5 rounded-full bg-text-disabled
  *   .row-trailing → flex items-center gap-2 shrink-0
- *   "Owner 없음" color: var(--color-warning-red) → text-text-danger
- *   "Area 미지정" color: var(--color-amber) → text-text-warning
+ *   Semantic row color is limited to SeverityIndicator and ReporterStatusBadge.
  */
 
-import * as React from 'react';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocListItem } from '@fops/shared';
-import { SeverityIndicator, ReporterStatusBadge, cn } from '@fops/ui';
+import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fops/ui';
+import type * as React from 'react';
+
+import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatRelativeTime(iso: string): string {
-  const now = Date.now();
-  const then = new Date(iso).getTime();
-  const diffMs = then - now;
-  const diffMin = Math.round(diffMs / 60000);
-  const rtf = new Intl.RelativeTimeFormat('ko', { numeric: 'auto' });
-  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, 'minute');
-  const diffHour = Math.round(diffMin / 60);
-  if (Math.abs(diffHour) < 24) return rtf.format(diffHour, 'hour');
-  const diffDay = Math.round(diffHour / 24);
-  return rtf.format(diffDay, 'day');
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -119,22 +106,33 @@ export function TriageRow({
 
           {areaMissing && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
-              <span className="text-text-warning">Area 미지정</span>
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
+              <span className="text-text-muted">Analytics Area 미지정</span>
             </>
           )}
 
           {ownerMissing && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
-              <span className="text-text-danger">Owner 없음</span>
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
+              <UnassignedBadge />
             </>
           )}
 
           {voc.similar_count > 0 && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
-              <span className="text-accent-primary">↔ similar {voc.similar_count}</span>
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
+              <span className="text-text-muted">
+                {formatSameManagedSystemVocCount(voc.similar_count)}
+              </span>
             </>
           )}
         </div>

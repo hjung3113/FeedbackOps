@@ -1,14 +1,14 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Scope } from '../permissions/scope-service.js';
 
-function sqlUuidArray(ids: readonly string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  return sql`ARRAY[${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)}]::uuid[]`;
-}
-
-function scopePredicate(column: string, scope: Scope, managedSystemId?: string): ReturnType<typeof sql> {
+function scopePredicate(
+  column: string,
+  scope: Scope,
+  managedSystemId?: string,
+): ReturnType<typeof sql> {
   const columnRef = sql.raw(column);
   if (managedSystemId !== undefined) return sql`${columnRef} = ${managedSystemId}::uuid`;
   if (scope.kind === 'all') return sql`TRUE`;
@@ -21,8 +21,15 @@ async function count(db: Db, query: ReturnType<typeof sql>): Promise<number> {
   return Number(result.rows[0]?.count ?? 0);
 }
 
-export async function countActiveFindingsWithoutExecution(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  return count(db, sql`
+export async function countActiveFindingsWithoutExecution(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(
+    db,
+    sql`
     SELECT count(*)::int AS count FROM finding.findings f
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
@@ -30,32 +37,65 @@ export async function countActiveFindingsWithoutExecution(db: Db, workspaceId: s
       AND NOT EXISTS (SELECT 1 FROM core.entity_links el WHERE el.workspace_id = f.workspace_id
         AND el.status = 'active' AND el.source_type = 'finding' AND el.source_id = f.id
         AND el.target_type = 'task_request' AND el.relation_type = 'requested_task')
-  `);
+  `,
+  );
 }
 
-export async function countActiveFindings(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  return count(db, sql`SELECT count(*)::int AS count FROM finding.findings f
+export async function countActiveFindings(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(
+    db,
+    sql`SELECT count(*)::int AS count FROM finding.findings f
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
-      AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}`);
+      AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}`,
+  );
 }
 
-export async function countActiveFindingsWithExecution(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  return count(db, sql`SELECT count(*)::int AS count FROM finding.findings f
+export async function countActiveFindingsWithExecution(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(
+    db,
+    sql`SELECT count(*)::int AS count FROM finding.findings f
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
       AND (f.linked_task_id IS NOT NULL OR EXISTS (SELECT 1 FROM core.entity_links el
         WHERE el.workspace_id = f.workspace_id AND el.status = 'active' AND el.source_type = 'finding'
-          AND el.source_id = f.id AND el.target_type = 'task_request' AND el.relation_type = 'requested_task'))`);
+          AND el.source_id = f.id AND el.target_type = 'task_request' AND el.relation_type = 'requested_task'))`,
+  );
 }
 
-export async function countTasksInFlight(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  return count(db, sql`SELECT count(*)::int AS count FROM task.tasks t WHERE t.workspace_id = ${workspaceId}
-    AND t.status IN ('todo', 'doing', 'review') AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}`);
+export async function countTasksInFlight(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(
+    db,
+    sql`SELECT count(*)::int AS count FROM task.tasks t WHERE t.workspace_id = ${workspaceId}
+    AND t.status IN ('todo', 'doing', 'review') AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}`,
+  );
 }
 
-export async function countPendingTaskRequests(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  return count(db, sql`SELECT count(*)::int AS count FROM task_request.task_requests tr WHERE tr.workspace_id = ${workspaceId}
-    AND tr.status = 'pending_review' AND ${scopePredicate('tr.primary_managed_system_id', scope, managedSystemId)}`);
+export async function countPendingTaskRequests(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(
+    db,
+    sql`SELECT count(*)::int AS count FROM task_request.task_requests tr WHERE tr.workspace_id = ${workspaceId}
+    AND tr.status = 'pending_review' AND ${scopePredicate('tr.primary_managed_system_id', scope, managedSystemId)}`,
+  );
 }
 
 export async function countReleasedTasksWithUnresolvedVoc(
@@ -64,7 +104,9 @@ export async function countReleasedTasksWithUnresolvedVoc(
   scope: Scope,
   managedSystemId?: string,
 ) {
-  return count(db, sql`
+  return count(
+    db,
+    sql`
     SELECT count(*)::int AS count
     FROM task.tasks t
     WHERE t.workspace_id = ${workspaceId}
@@ -85,7 +127,8 @@ export async function countReleasedTasksWithUnresolvedVoc(
           AND link.status = 'active'
           AND voc.reporter_facing_status NOT IN ('resolved', 'closed')
       )
-  `);
+  `,
+  );
 }
 
 /**
@@ -141,30 +184,25 @@ export async function countReleasedTasksWithPublicUpdate(
   return { value: Number(result.rows[0]?.value ?? 0), total: Number(result.rows[0]?.total ?? 0) };
 }
 
-export async function countSurveyGaps(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
+export async function countSurveyGaps(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
   const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
-  const managedSystemIds = selectedManagedSystemId === undefined
-    ? (scope.kind === 'all' ? undefined : scope.managedSystemIds)
-    : [selectedManagedSystemId];
-  const filter = managedSystemIds === undefined ? sql`NULL::uuid[]` : sqlUuidArray(managedSystemIds);
-  return count(db, sql`SELECT survey.count_negative_outcome_without_followup(
+  const managedSystemIds =
+    selectedManagedSystemId === undefined
+      ? scope.kind === 'all'
+        ? undefined
+        : scope.managedSystemIds
+      : [selectedManagedSystemId];
+  const filter =
+    managedSystemIds === undefined ? sql`NULL::uuid[]` : sqlUuidArray(managedSystemIds);
+  return count(
+    db,
+    sql`SELECT survey.count_negative_outcome_without_followup(
     ${workspaceId}::uuid, ${filter}
-  )::int AS count`);
-}
-
-export async function countAnalyticsAreaVocCoverage(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  const result = await db.execute<{ value: number | string; total: number | string }>(sql`
-    SELECT count(*) FILTER (WHERE v.analytics_area_id IS NOT NULL)::int AS value, count(*)::int AS total
-    FROM voc.vocs v WHERE v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
-      AND ${scopePredicate('v.primary_managed_system_id', scope, managedSystemId)}`);
-  return { value: Number(result.rows[0]?.value ?? 0), total: Number(result.rows[0]?.total ?? 0) };
-}
-
-export async function countVocsWithTask(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
-  const result = await db.execute<{ value: number | string; total: number | string }>(sql`
-    SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM core.entity_links el WHERE el.workspace_id = v.workspace_id
-      AND el.status = 'active' AND el.source_type = 'voc' AND el.source_id = v.id AND el.target_type = 'task'))::int AS value,
-      count(*)::int AS total FROM voc.vocs v WHERE v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
-      AND ${scopePredicate('v.primary_managed_system_id', scope, managedSystemId)}`);
-  return { value: Number(result.rows[0]?.value ?? 0), total: Number(result.rows[0]?.total ?? 0) };
+  )::int AS count`,
+  );
 }

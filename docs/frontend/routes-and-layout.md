@@ -11,6 +11,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 ```text
 /
+/home?tab=dashboard|inbox&managedSystem=:managedSystemId
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
@@ -19,6 +20,9 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId
 /surveys/:surveyId?builder=true
 /surveys/:surveyId/results
+/surveys/:surveyId/follow-up
+/surveys/participate
+/surveys/:surveyId/respond
 /tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
 /tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&selected=:requestId
@@ -26,8 +30,8 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=board&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
 /integration
-/findings?managedSystem=:managedSystemId|all&selected=:findingId
-/integration/evidence?managedSystem=:managedSystemId|all
+/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
+/findings/:findingId (redirects to /findings?selected=:findingId)
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
 /admin/managed-systems
@@ -38,7 +42,11 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 | Deep-link route | Search keys | Omitted defaults |
 |---|---|---|
+| `/findings` | `managedSystem`, `selected`, `execution`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
+| `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/surveys/participate` | — | No search state |
+| `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
 | `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
@@ -46,9 +54,9 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 Route naming rules:
 
 ```text
-- Home is the user-facing navigation label for `/`.
+- Home is the user-facing navigation label for `/home`; `/` is an entry-only redirect.
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
-- Evidence, Coverage, and Links stay under `/integration/*`.
+- The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas and Permission Requests are Admin routes, not top-level work routes.
 - Managed Systems are MVP scope, filters, defaults, and dashboard grouping; they do not create per-Managed-System route trees.
@@ -59,6 +67,14 @@ Route naming rules:
 - `/my-work` is not an MVP route (ADR-0038, ADR-0040). No route is registered. `apps/frontend/src/features/my-work/` is the future implementation location only.
 ```
 
+## Document Titles
+
+The root `DocumentTitleProvider` synchronizes `document.title` once, combining
+the active screen title with `FeedbackOps`. A detail may replace the screen
+title with `<display_id> · <title>` only after its matching read succeeds for
+the current viewer. Loading, blocked, failed, not-found, and cleared selections
+restore the screen title; unmounting the provider restores `FeedbackOps`.
+
 VOC route views:
 
 ```text
@@ -67,44 +83,62 @@ VOC route views:
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
 - `/vocs?view=list` or saved list views may support broader browsing after the Inbox and Triage workspaces are defined.
 - `/voc-clusters` owns cluster-specific list/detail behavior.
+- The global VOC rail uses loaded navigation counts for its landing: a `voc.inbox` key, including zero, links to `/vocs?view=inbox`; an omitted key links to `/vocs?view=my`. While counts are loading or unavailable after an error, keep the Inbox destination. This landing hint does not replace route or backend authorization.
 ```
 
 Task route views:
 
 ```text
 - `/tasks?view=requests` is Task Requests. `/tasks?view=board` is the board.
-- `/tasks?view=backlog`, `/tasks?view=inbox`, `/tasks?view=my`, and `/tasks` with no `view` all render `TaskListRoute`. `view=my` does not filter `assignee=me`. It is an unfiltered backlog alias (ADR-0040). The Tasks rail still labels that URL "My Tasks".
+- `/tasks?view=backlog`, `/tasks?view=inbox`, and `/tasks` with no `view` render `TaskListRoute` in backlog mode. `/tasks?view=my` also renders `TaskListRoute`, filtered to Tasks assigned to the current actor (`assignee=me`). The Tasks rail labels that destination "My Tasks".
 - `managedSystem` and `param` on that URL are the list's scope and selection, not a personal filter.
 ```
 
-## Role Level Navigation Contract
+## Capability-Based Admin Navigation Contract
 
-Navigation is Role Level-based display only; backend permission checks remain authoritative.
+Navigation is a discovery surface; backend permission checks remain authoritative (ADR-0056).
 
 ```text
-User:
-- Primary nav: Submit VOC, My VOCs, Surveys.
-- Hidden by default: Triage, Findings, Task Requests, Tasks, Integration, Admin.
-- Home may show only backend-provided user-safe queues.
-
-Developer:
-- Primary nav: Home, VOC Triage, Tasks intake, Tasks, Integration, Surveys when assigned. My Work is not a nav entry (ADR-0038).
-- Linked VOC/Finding context appears only as backend-approved summaries.
-- Managed System scope controls which work is visible and actionable.
-
-Admin:
-- Primary nav includes Admin, Managed System Registry, Analytics Areas, Permission Requests, and settings.
+- Domain destinations (Home, VOC, Findings, Tasks, Integration, Surveys) stay visible to every Actor.
+  Their route data and actions remain permission-gated by their owning contracts.
+- The Admin rail entry, ADMIN sidebar entries (Managed Systems, Analytics Areas, Permission requests,
+  Workspace settings), and Workspace settings footer link appear only after `workspace.admin` is
+  approved by `/me/permissions/check`.
+- Keep those Admin entries hidden while the capability check is pending, failed, or not approved.
+- Direct links to Admin routes still render their route-level blocked panel when the Actor is not approved; navigation visibility does not replace `PermissionGate`.
 ```
 
-Current sidebar entries live in `SIDEBAR_ENTRIES` (`apps/frontend/src/routes/_authed.tsx`) — that array is authoritative; this paragraph describes it. Entries are grouped under the section labels `VOC` (Inbox, Triage, My VOCs, Clusters, Findings, New VOC), `TASKS` (Task Requests, Tasks, My Tasks), and `MANAGED SYSTEMS` (Managed Systems, Analytics Areas). Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
+Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which owns route
+labels and destinations. `AppFrame` filters its `ADMIN` entries using the same `workspace.admin` check
+as the Admin page gates. The other section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including
+Milestones), `INTEGRATION`, and `Survey`. The Survey sidebar has `Survey 참여`
+at `/surveys/participate` followed by `Survey 관리` at `/surveys`; the active
+entry follows the participation and respondent routes versus the management
+routes. The Surveys rail destination opens `/surveys/participate`. Per the AGENTS.md two-consumer rule, each feature adds its
+entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries`
+(`apps/frontend/src/features/home/homeNavigation.tsx`).
 
-The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
+The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login clears prior Actor data and seeds the `['me']` identity from the login response before routing so a new Actor never sees prior Actor data.
 
 In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
 
-Count badges and global Managed System scope selection shipped in #143 (GlobalRail multi-domain IA, closed). Counts: backend aggregation in `apps/backend/src/modules/nav/service.ts`, fetched via `apps/frontend/src/lib/api/nav.ts` and passed through `AppFrame`, rendered as badges in `AppSidebar` (`SIDEBAR_ENTRIES` count keys). Scope selector: `AppSidebar`'s `ManagedSystemScopeOption` control (`data-testid="scope-selector"`), backed by the `['managed-systems', 'scope-selector']` query in `AppFrame`.
+The authenticated route guard reuses the shared `['me']` cache while it is fresh and revalidates it in the background on an authenticated entry when the cached identity is older than five minutes. A background 401 clears the client query cache and routes to `/login`, preserving the current URL in `redirectTo`.
+
+Count badges and global Managed System scope selection shipped in #143 (GlobalRail multi-domain IA, closed). Counts: backend aggregation in `apps/backend/src/modules/nav/service.ts`, fetched via `apps/frontend/src/lib/api/nav.ts` and passed through `AppFrame`, rendered as badges in `AppSidebar` (`NAV_TREE` count keys). Scope selector: `AppSidebar`'s `ManagedSystemScopeOption` control (`data-testid="scope-selector"`), backed by the `['managed-systems', 'scope-selector']` query in `AppFrame`.
 
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
+
+### Unknown routes and route errors
+
+- Authenticated unknown paths, including an unmatched suffix under a known route, render a centered `PageShell` inside the existing `AppFrame`, with a localized not-found message, Home link, and back action.
+- Unknown paths check the current identity before showing AppShell; a 401 still redirects to `/login` and preserves the requested URL.
+- Route errors render a localized `ListStateMessage` inside AppShell when identity is available, offer
+  retry, and keep raw error details in the console only. Standalone error content keeps the viewport-height
+  centering of the pending state; in-shell errors center within `AppFrame`. A `/me` rate-limit error uses the
+  existing "잠시 후 다시 시도하세요." message in a standalone state, and retry resets the identity query
+  before invalidating the router.
+- While the authenticated guard is resolving, the route shows a centered "불러오는 중…" state after the router's pending delay.
+- Search validation drops invalid and unrecognized fields independently, preserves valid fields, and clears dropped values from TanStack's merged search and the URL so each route uses its omitted defaults.
 
 ## Home Queue Contract
 
@@ -135,6 +169,10 @@ Frontend Home renders only backend-provided queue groups. It may choose layout,
 empty states, and ordering affordances, but it must not infer hidden queues from
 role labels alone.
 
+The Home Surveys panel shows up to five backend-provided answerable surveys and
+links to the full participation list. Its list, loading, empty, and retry states
+use the same answerable-surveys query as `/surveys/participate`.
+
 Home may show the same recovery item as Dashboard or Integration only when the
 current actor can personally act on it now, such as owner, reviewer, assignee,
 or scoped actor with the required capability. It uses the same recovery identity
@@ -155,6 +193,8 @@ as the other surfaces.
 - In `view=milestones`, desktop selection opens Milestone Detail in RightDetailPanel; the list remains the primary context.
 - Mobile selection uses a drill-in route; back returns to the previous list filters.
 - Browser refresh on a selected URL restores AppShell, list context, and selected detail when data is accessible.
+- Finding creation from a selected VOC may carry `returnTo` with the same-origin `/vocs` URL; the selected Finding detail offers an action that restores the VOC view, scope, filters, and selection.
+- The `/findings/$findingId` deep link redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied.
 - Closing a detail panel preserves filters, sort, and scroll position when possible.
 - CommandMenu actions must route to the same panel, drawer, or page as visible UI buttons.
 ```
@@ -168,6 +208,8 @@ as the other surfaces.
 - Developer: `all` may appear on VOC, Tasks, Dashboard, and Integration views only when the actor has access to more than one Managed System; it means the union of the actor's effective Managed System scopes.
 - User: `all` is hidden on Home, My VOCs, Survey response, and other own-work views; the backend returns only actor-safe own work.
 - Survey respondent surfaces do not show Managed System `all`.
+- `/surveys/participate` lists answerable Surveys and the current Actor's
+  response history; `/surveys/:surveyId/respond` renders the respondent form.
 - A Developer with one Managed System scope should see that scope directly, not a redundant `all` option.
 ```
 
@@ -252,7 +294,7 @@ Example:
 Desktop >= 1024px:
 - LeftSidebar: 240px default, 56px collapsed.
 - MainRegion: fills remaining width.
-- RightDetailPanel: 420px default, 360px min, 520px max.
+- RightDetailPanel: 440px default, 360px min, 520px max.
 
 Tablet 768px-1023px:
 - LeftSidebar may collapse by default.

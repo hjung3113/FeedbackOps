@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import type { SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import {
   actorSurveyReadScope,
   checkSurveyManage,
@@ -32,7 +35,7 @@ import {
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
 
 export type CreateSurveyInput = {
-  type: 'discovery' | 'validation' | 'outcome';
+  type: SurveyType;
   title: string;
   description?: string;
   primary_managed_system_id: string;
@@ -315,14 +318,11 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
         a.idempotencyKey,
         a.requestHash,
         async () => {
-          const ms = await tx.execute<{
-            id: string;
-            archived_at: Date | null;
-            default_survey_operator_actor_id: string | null;
-          }>(
-            sql`select id,archived_at,default_survey_operator_actor_id from core.managed_systems where id=${a.input.primary_managed_system_id} and workspace_id=${a.actor.workspace_id} for update`,
+          const m = await lockManagedSystem(
+            tx,
+            a.actor.workspace_id,
+            a.input.primary_managed_system_id,
           );
-          const m = ms.rows[0];
           if (!m) throw new HttpError('not_found.record', 'managed system not found');
           if (m.archived_at)
             throw new HttpError('conflict.parent_archived', 'managed system archived');
@@ -330,17 +330,20 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
           if (!manage.allow)
             throw new HttpError('permission.denied', 'survey.manage capability required');
           if (a.input.analytics_area_id) {
-            const aa = await tx.execute<{ managed_system_id: string; archived_at: Date | null }>(
-              sql`select managed_system_id,archived_at from core.analytics_areas where id=${a.input.analytics_area_id} and workspace_id=${a.actor.workspace_id} for update`,
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              a.actor.workspace_id,
+              m.id,
+              a.input.analytics_area_id,
+              {
+                onInvalid: () =>
+                  new HttpError(
+                    'validation.failed',
+                    'analytics area must be active and belong to managed system',
+                    { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+                  ),
+              },
             );
-            const r = aa.rows[0];
-            if (!r) throw new HttpError('not_found.record', 'analytics area not found');
-            if (r.managed_system_id !== m.id || r.archived_at)
-              throw new HttpError(
-                'validation.failed',
-                'analytics area must be active and belong to managed system',
-                { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
-              );
           }
           const operator =
             a.input.operator_actor_id ?? m.default_survey_operator_actor_id ?? a.actor.actor_id;
@@ -599,13 +602,7 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
           draft(s);
           const primaryManagedSystemId =
             a.input.primary_managed_system_id ?? s.primary_managed_system_id;
-          const managedSystem = await tx.execute<{
-            id: string;
-            archived_at: Date | null;
-          }>(
-            sql`select id,archived_at from core.managed_systems where id=${primaryManagedSystemId} and workspace_id=${a.actor.workspace_id} for update`,
-          );
-          const m = managedSystem.rows[0];
+          const m = await lockManagedSystem(tx, a.actor.workspace_id, primaryManagedSystemId);
           if (!m) throw new HttpError('not_found.record', 'managed system not found');
           if (m.archived_at)
             throw new HttpError('conflict.parent_archived', 'managed system archived');
@@ -618,20 +615,20 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
           }
           const analyticsAreaId = a.input.analytics_area_id ?? s.analytics_area_id;
           if (analyticsAreaId) {
-            const analyticsArea = await tx.execute<{
-              managed_system_id: string;
-              archived_at: Date | null;
-            }>(
-              sql`select managed_system_id,archived_at from core.analytics_areas where id=${analyticsAreaId} and workspace_id=${a.actor.workspace_id} for update`,
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              a.actor.workspace_id,
+              m.id,
+              analyticsAreaId,
+              {
+                onInvalid: () =>
+                  new HttpError(
+                    'validation.failed',
+                    'analytics area must be active and belong to managed system',
+                    { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+                  ),
+              },
             );
-            const area = analyticsArea.rows[0];
-            if (!area) throw new HttpError('not_found.record', 'analytics area not found');
-            if (area.managed_system_id !== m.id || area.archived_at)
-              throw new HttpError(
-                'validation.failed',
-                'analytics area must be active and belong to managed system',
-                { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
-              );
           }
           const operatorActorId = a.input.operator_actor_id ?? s.operator_actor_id;
           if (a.input.operator_actor_id) {

@@ -1,7 +1,5 @@
 // VOC Cluster detail panel: detail query, role gate, Execution / Members /
-// Properties sections, CTA footer, and the cross-system modal mounts. Modal
-// hooks stay inside the modals — lifting them would fetch pickers before the
-// detail data loads and change mount behavior.
+// Properties sections, CTA footer, and cross-system flow mounts.
 
 import type { LinkedFindingDto } from '@fops/shared';
 import {
@@ -11,32 +9,42 @@ import {
   FieldRow,
   ManagedSystemPill,
   OutlineBadge,
+  type PanelSection,
   PanelSectionTitle,
-  type ReporterStatusBadge,
   SeverityBadge,
   Skeleton,
+  UnassignedBadge,
 } from '@fops/ui';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { EntityRelationRow } from '@/features/integration/components/EntityRelationRow';
-import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
+import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import {
+  FINDING_CONFIDENCE_LABELS,
+  FINDING_SEVERITY_LABELS,
+  FINDING_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatShortDate } from '@/lib/format/datetime';
+import { shortId } from '@/lib/identity';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 
-import { ClusterStatusBadge, formatClusterDate, shortId } from '../../lib/presentation';
+import { ClusterStatusBadge } from '../../lib/presentation';
 import { AddVocModal } from '../modals/AddVocModal';
 import { CreateFindingFromClusterModal } from '../modals/CreateFindingFromClusterModal';
 import { LinkExistingFindingModal } from '../modals/LinkExistingFindingModal';
 import type { VocClusterDetailPresentation, VocClusterMemberPresentation } from '../types';
+import { VocClusterMemberRow } from './VocClusterMemberRow';
 
 function SectionDivider(): React.ReactElement {
   return <hr className="border-border-subtle" />;
@@ -46,23 +54,18 @@ function clusterDisplayId(data: {
   id: string;
   display_id?: string | null;
 }): string {
-  return data.display_id?.trim() ? data.display_id : shortId(data.id);
+  return data.display_id?.trim() ? data.display_id : 'VOC Cluster';
 }
 
-function memberDisplay(member: VocClusterMemberPresentation): {
-  primary: string;
-  secondary: string | null;
-} {
-  if (member.title?.trim()) {
-    return {
-      primary: member.title,
-      secondary: member.display_id?.trim() ? member.display_id : shortId(member.voc_id),
-    };
-  }
-  if (member.display_id?.trim()) {
-    return { primary: member.display_id, secondary: shortId(member.voc_id) };
-  }
-  return { primary: 'VOC', secondary: shortId(member.voc_id) };
+// ADR-0057 A2 amendment localizes Korean navigation and preserves domain nouns.
+export function buildVocClusterDetailSections(memberCount: number): PanelSection[] {
+  return [
+    { id: 'overview', label: '요약' },
+    { id: 'why', label: '근거' },
+    { id: 'execution', label: '실행' },
+    { id: 'members', label: '멤버', count: memberCount },
+    { id: 'properties', label: '속성' },
+  ];
 }
 
 export function VocClusterDetailPanel({
@@ -72,10 +75,21 @@ export function VocClusterDetailPanel({
   clusterId: string;
   onClose?: () => void;
 }): React.ReactElement {
-  const { data, isLoading, isError, error } = useVocClusterDetail(clusterId);
+  const { data, isLoading, isError, isSuccess, isFetching, error } = useVocClusterDetail(clusterId);
+  useDocumentTitle(
+    isSuccess && !isFetching && data?.id === clusterId
+      ? formatRecordDocumentTitle({ displayId: data.display_id, title: data.title })
+      : null,
+  );
   const presentation = data as (typeof data & VocClusterDetailPresentation) | undefined;
   const managedSystem = useManagedSystem(data?.primary_managed_system_id);
   const { data: me } = useMe();
+  const workspaceActors = useWorkspaceActors({ retry: false, staleTime: 0 });
+  const actorNamesById = Object.fromEntries(
+    (workspaceActors.actors ?? []).map((actor) => [actor.id, actor.display_name]),
+  );
+  const ownerName = data?.owner_user_id ? actorNamesById[data.owner_user_id] : undefined;
+  const confirmerName = data?.confirmed_by ? actorNamesById[data.confirmed_by] : undefined;
   const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   const [addVocOpen, setAddVocOpen] = useState(false);
@@ -99,7 +113,7 @@ export function VocClusterDetailPanel({
     return (
       <div
         className="flex flex-col gap-4 p-6"
-        aria-label="클러스터 상세 불러오는 중"
+        aria-label="Cluster 상세 불러오는 중"
         data-testid="cluster-detail-skeleton"
       >
         <Skeleton className="h-7 w-1/2" />
@@ -117,9 +131,9 @@ export function VocClusterDetailPanel({
         className="flex flex-col items-center justify-center py-16 px-6 text-center"
         data-testid="cluster-detail-error"
       >
-        <p className="text-sm text-feedback-error">
+        <p className="text-sm text-text-danger">
           {code === 'not_found.record'
-            ? '클러스터를 찾을 수 없습니다.'
+            ? 'Cluster를 찾을 수 없습니다.'
             : '데이터를 불러오지 못했습니다.'}
         </p>
         <Button
@@ -139,7 +153,7 @@ export function VocClusterDetailPanel({
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
-      onSuccess: () => toast.success('클러스터가 확정되었습니다.'),
+      onSuccess: () => toast.success('Cluster가 확정되었습니다.'),
       onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
     });
   }
@@ -148,13 +162,13 @@ export function VocClusterDetailPanel({
     removeMemberMutation.mutate(
       { clusterId, vocId },
       {
-        onSuccess: () => toast.success('VOC가 클러스터에서 제거되었습니다.'),
+        onSuccess: () => toast.success('VOC가 Cluster에서 제거되었습니다.'),
         onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
       },
     );
   }
 
-  function closeRequestTaskModal(): void {
+  function closeRequestTaskDraft(): void {
     requestTaskMutation.reset();
     setRequestTaskOpen(false);
   }
@@ -171,13 +185,7 @@ export function VocClusterDetailPanel({
       />
       <DetailPanelSectionNav
         scrollRef={sectionScrollRef}
-        sections={[
-          { id: 'overview', label: 'Overview' },
-          { id: 'why', label: 'Why' },
-          { id: 'execution', label: 'Execution' },
-          { id: 'members', label: 'Members', count: data.member_count },
-          { id: 'properties', label: 'Properties' },
-        ]}
+        sections={buildVocClusterDetailSections(data.member_count)}
       />
       <div ref={sectionScrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="flex flex-col gap-6">
@@ -186,10 +194,15 @@ export function VocClusterDetailPanel({
               <div className="flex items-center gap-2 mb-1">
                 <OutlineBadge>VOC Cluster</OutlineBadge>
                 <ClusterStatusBadge status={data.status} surface="detail" />
-                {data.severity && <SeverityBadge severity={data.severity} />}
+                {data.severity && (
+                  <SeverityBadge
+                    severity={data.severity}
+                    label={FINDING_SEVERITY_LABELS[data.severity]}
+                  />
+                )}
                 {data.confidence && (
                   <OutlineBadge data-testid="cluster-detail-confidence-badge">
-                    Confidence · {data.confidence}
+                    신뢰도 · {FINDING_CONFIDENCE_LABELS[data.confidence]}
                   </OutlineBadge>
                 )}
               </div>
@@ -220,7 +233,7 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <section data-anchor="why" className="flex flex-col gap-1">
-            <PanelSectionTitle>Why grouped</PanelSectionTitle>
+            <PanelSectionTitle>그룹화 사유</PanelSectionTitle>
             {data.rationale ? (
               <p
                 className="rounded-md border border-border-subtle bg-surface-card p-3 text-sm text-text-primary whitespace-pre-wrap"
@@ -249,7 +262,7 @@ export function VocClusterDetailPanel({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <OutlineBadge data-testid={`finding-status-badge-${finding.status}`}>
-                        {finding.status}
+                        {FINDING_STATUS_LABELS[finding.status]}
                       </OutlineBadge>
                     </div>
                     <div className="min-w-0">
@@ -296,6 +309,26 @@ export function VocClusterDetailPanel({
                 </Button>
               </div>
             )}
+            {canMutate && requestTaskOpen && (
+              <TaskRequestDraftCard
+                sourceKind="VOC Cluster"
+                sourceDisplayId={data.display_id}
+                evidenceSummaryDefault={data.summary ?? data.title}
+                isSubmitting={requestTaskMutation.isPending}
+                source={{ type: 'voc_cluster', id: clusterId }}
+                onClose={closeRequestTaskDraft}
+                onSubmit={(values) => {
+                  requestTaskMutation.mutate(values, {
+                    onSuccess: () => {
+                      markRequestTaskConsumed();
+                      setRequestTaskOpen(false);
+                      requestTaskMutation.reset();
+                      toast.success('Task Request가 생성되었습니다.');
+                    },
+                  });
+                }}
+              />
+            )}
           </section>
 
           <SectionDivider />
@@ -330,7 +363,7 @@ export function VocClusterDetailPanel({
                 className="overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               >
                 {members.slice(0, 4).map((member, i) => (
-                  <MemberRow
+                  <VocClusterMemberRow
                     key={member.voc_id}
                     member={member}
                     last={i === Math.min(members.length, 4) - 1}
@@ -357,7 +390,7 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <section className="flex flex-col gap-2" data-anchor="properties">
-            <PanelSectionTitle>Properties</PanelSectionTitle>
+            <PanelSectionTitle>속성</PanelSectionTitle>
             <FieldRow label="Managed System" className="px-0">
               <span data-testid="cluster-detail-managed-system">
                 <ManagedSystemPill
@@ -367,23 +400,43 @@ export function VocClusterDetailPanel({
                 />
               </span>
             </FieldRow>
-            <FieldRow label="Severity" className="px-0">
-              <span data-testid="cluster-detail-severity">{data.severity ?? '미지정'}</span>
-            </FieldRow>
-            <FieldRow label="Confidence" className="px-0">
-              <span data-testid="cluster-detail-confidence">{data.confidence ?? '미지정'}</span>
-            </FieldRow>
-            <FieldRow label="Owner" className="px-0">
-              <span data-testid="cluster-detail-owner">{data.owner_user_id ?? '담당자 없음'}</span>
-            </FieldRow>
-            <FieldRow label="Confirmed by" className="px-0">
-              <span data-testid="cluster-detail-confirmed-by">
-                {data.confirmed_by ?? '대기 중'}
+            <FieldRow label="심각도" className="px-0">
+              <span data-testid="cluster-detail-severity">
+                {data.severity ? FINDING_SEVERITY_LABELS[data.severity] : '미지정'}
               </span>
             </FieldRow>
-            <FieldRow label="Confirmed at" className="px-0">
+            <FieldRow label="신뢰도" className="px-0">
+              <span data-testid="cluster-detail-confidence">
+                {data.confidence ? FINDING_CONFIDENCE_LABELS[data.confidence] : '미지정'}
+              </span>
+            </FieldRow>
+            <FieldRow label="담당자" className="px-0">
+              <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
+                <span>
+                  {data.owner_user_id ? (ownerName ?? GLOSSARY.unknownUser) : <UnassignedBadge />}
+                </span>
+                {data.owner_user_id && !ownerName && (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(data.owner_user_id)}
+                  </span>
+                )}
+              </span>
+            </FieldRow>
+            <FieldRow label="확정자" className="px-0">
+              <span className="flex flex-col gap-0.5" data-testid="cluster-detail-confirmed-by">
+                <span>
+                  {data.confirmed_by ? (confirmerName ?? GLOSSARY.unknownUser) : '대기 중'}
+                </span>
+                {data.confirmed_by && !confirmerName && (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(data.confirmed_by)}
+                  </span>
+                )}
+              </span>
+            </FieldRow>
+            <FieldRow label="확정일" className="px-0">
               <span data-testid="cluster-detail-confirmed-at">
-                {data.confirmed_at ? formatClusterDate(data.confirmed_at) : '대기 중'}
+                {data.confirmed_at ? formatShortDate(data.confirmed_at) : '대기 중'}
               </span>
             </FieldRow>
           </section>
@@ -429,7 +482,7 @@ export function VocClusterDetailPanel({
           </>
         ) : (
           <span className="text-xs text-text-muted" data-testid="cluster-cta-hint">
-            Admin 또는 Developer 권한이 있어야 클러스터를 관리할 수 있습니다.
+            관리자 또는 개발자 권한이 있어야 Cluster를 관리할 수 있습니다.
           </span>
         )}
       </div>
@@ -459,81 +512,8 @@ export function VocClusterDetailPanel({
           onClose={() => setLinkFindingOpen(false)}
         />
       )}
-      {canMutate && (
-        <RequestTaskModal
-          open={requestTaskOpen}
-          evidenceSummaryDefault={data.summary ?? data.title}
-          isSubmitting={requestTaskMutation.isPending}
-          source={{ type: 'voc_cluster', id: clusterId }}
-          onClose={closeRequestTaskModal}
-          onSubmit={(values) => {
-            requestTaskMutation.mutate(values, {
-              onSuccess: () => {
-                markRequestTaskConsumed();
-                setRequestTaskOpen(false);
-                requestTaskMutation.reset();
-                toast.success('Task Request가 생성되었습니다.');
-              },
-            });
-          }}
-        />
-      )}
     </aside>
   );
 }
 
-// ── Member row ────────────────────────────────────────────────────────────────
-
-function MemberRow({
-  member,
-  last,
-  canRemove,
-  onRemove,
-  isRemoving,
-}: {
-  member: VocClusterMemberPresentation;
-  last: boolean;
-  canRemove: boolean;
-  onRemove: () => void;
-  isRemoving: boolean;
-}): React.ReactElement {
-  const display = memberDisplay(member);
-
-  return (
-    <EntityRelationRow
-      testId={`cluster-member-row-${member.voc_id}`}
-      {...(last ? {} : { className: 'border-b border-border-subtle' })}
-      member={{
-        vocId: member.voc_id,
-        displayId: display.secondary,
-        title: (
-          <Link
-            to="/vocs"
-            search={{ view: 'inbox', selected: member.voc_id }}
-            className="text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
-            data-testid={`cluster-member-link-${member.voc_id}`}
-          >
-            {display.primary}
-          </Link>
-        ),
-        severity: member.severity ?? null,
-        reporterStatus:
-          (member.reporter_facing_status as
-            | Parameters<typeof ReporterStatusBadge>[0]['status']
-            | undefined) ?? null,
-        trailing: canRemove ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRemove}
-            disabled={isRemoving}
-            data-testid={`cluster-member-remove-${member.voc_id}`}
-            aria-label="VOC 제거"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-text-muted" />
-          </Button>
-        ) : null,
-      }}
-    />
-  );
-}
+import { GLOSSARY } from '@/lib/copy/glossary';

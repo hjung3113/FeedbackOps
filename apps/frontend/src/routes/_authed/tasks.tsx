@@ -1,32 +1,52 @@
-import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
+import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
+import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
+import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
-const tasksSearchSchema = z
+export const tasksSearchSchema = z
   .object({
-    view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox']).optional(),
+    view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    public_update: z.literal('missing').optional(),
   })
   .strict();
 
+type TasksSearch = z.infer<typeof tasksSearchSchema>;
+
+export function validateTasksSearch(raw: unknown) {
+  return parseRouteSearch(tasksSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/tasks')({
-  validateSearch: (raw) => tasksSearchSchema.parse(raw),
+  validateSearch: validateTasksSearch,
   component: TasksRouteShell,
 });
 
-export function TasksRouteView({ search }: { search: { view?: 'requests' | 'backlog' | 'board' | 'my' | 'inbox'; param?: string; managedSystem?: string } }) {
-  const managedSystemProps = search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
+export function TasksRouteView({ search }: { search: TasksSearch }) {
+  const managedSystemProps =
+    search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
   const selectedParamProps = search.param !== undefined ? { selectedParam: search.param } : {};
   if (search.view === 'requests') {
     return <TaskRequestsRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   if (search.view === 'board') {
-    return <TaskBoardRoute {...managedSystemProps} {...selectedParamProps} />;
+    return (
+      <TaskBoardRoute
+        {...managedSystemProps}
+        {...selectedParamProps}
+        {...(search.public_update === 'missing' ? { publicUpdate: search.public_update } : {})}
+      />
+    );
   }
-  return <TaskListRoute {...managedSystemProps} {...selectedParamProps} />;
+  if (search.view === 'milestones') {
+    return <MilestonesRoute {...managedSystemProps} {...selectedParamProps} />;
+  }
+  const view = search.view === 'my' ? 'my' : 'backlog';
+  return <TaskListRoute view={view} {...managedSystemProps} {...selectedParamProps} />;
 }
 
 function TasksRouteShell() {

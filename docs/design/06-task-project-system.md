@@ -195,6 +195,21 @@ Side effects are atomic:
 - audit task_created_from_request
 ```
 
+The conversion form inherits the source Finding's Analytics Area only when the
+Area is active and present in the form's options. If it is archived or
+unavailable, show an unresolved `Analytics Area 선택 필요` value and a Korean
+hint; block conversion until the operator selects an active Area or explicitly
+chooses `없음`. Never submit the hidden source ID. If a previously selected Area
+disappears from refreshed options, show the unresolved value and block
+conversion until another explicit choice is made. Preserve an explicit Area or
+`없음` choice across same-request refetches; selecting a different Task Request
+resets the conversion form.
+
+A successful review decision updates the canonical queue row and follows its
+result status tab once, keeping that Task Request selected. Use All if the
+result has no status tab. Revisiting the request must not replay an old result
+over newer row state or change the current tab.
+
 `POST /task-requests/:id/link-task` is the alternative path when suitable work
 already exists. It requires an approved request and an existing Task in the same
 workspace and Primary Managed System. It creates `(task_request, task,

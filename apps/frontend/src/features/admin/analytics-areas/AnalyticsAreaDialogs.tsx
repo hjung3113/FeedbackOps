@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   Button,
   Dialog,
@@ -6,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
   Input,
-  Label,
   ManagedSystemPicker,
   type PickerOption,
 } from '@fops/ui';
@@ -78,7 +79,7 @@ function RegisterForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>New area</DialogTitle>
+        <DialogTitle>Analytics Area 생성</DialogTitle>
         <DialogDescription>
           Managed System 하위에 새 Analytics Area 를 등록합니다.
         </DialogDescription>
@@ -91,9 +92,9 @@ function RegisterForm({
           e.preventDefault();
           setError(null);
           const nextErrors: Partial<Record<'managedSystem' | 'slug' | 'name', string>> = {};
-          if (!msId) nextErrors.managedSystem = 'Managed System is required.';
-          if (!slug.trim()) nextErrors.slug = 'Slug is required.';
-          if (!name.trim()) nextErrors.name = 'Name is required.';
+          if (!msId) nextErrors.managedSystem = 'Managed System을 선택해 주세요.';
+          if (!slug.trim()) nextErrors.slug = '슬러그를 입력해 주세요.';
+          if (!name.trim()) nextErrors.name = '이름을 입력해 주세요.';
           if (Object.keys(nextErrors).length > 0) {
             setFieldErrors(nextErrors);
             if (nextErrors.managedSystem) {
@@ -121,9 +122,9 @@ function RegisterForm({
           }
           aria-required="true"
         >
-          <Label id="aa-create-managed-system-label" className="text-text-secondary">
+          <FieldLabel id="aa-create-managed-system-label" className="text-text-secondary">
             Managed System <span className="text-accent-danger">· 필수</span>
-          </Label>
+          </FieldLabel>
           <ManagedSystemPicker
             options={msOptions}
             value={msId}
@@ -137,9 +138,9 @@ function RegisterForm({
           )}
         </fieldset>
         <div className="space-y-1">
-          <Label htmlFor="aa-create-slug" className="text-text-secondary">
-            Slug <span className="text-accent-danger">· 필수</span>
-          </Label>
+          <FieldLabel htmlFor="aa-create-slug" className="text-text-secondary">
+            슬러그 <span className="text-accent-danger">· 필수</span>
+          </FieldLabel>
           <Input
             id="aa-create-slug"
             ref={slugRef}
@@ -157,9 +158,9 @@ function RegisterForm({
           )}
         </div>
         <div className="space-y-1">
-          <Label htmlFor="aa-create-name" className="text-text-secondary">
-            Name <span className="text-accent-danger">· 필수</span>
-          </Label>
+          <FieldLabel htmlFor="aa-create-name" className="text-text-secondary">
+            이름 <span className="text-accent-danger">· 필수</span>
+          </FieldLabel>
           <Input
             id="aa-create-name"
             ref={nameRef}
@@ -183,7 +184,7 @@ function RegisterForm({
         )}
         <DialogFooter>
           <Button type="submit" disabled={mutation.isPending} data-testid="create-aa-submit">
-            Register
+            등록
           </Button>
         </DialogFooter>
       </form>
@@ -240,7 +241,7 @@ function EditForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Edit {target.name}</DialogTitle>
+        <DialogTitle>{target.name} 편집</DialogTitle>
         <DialogDescription>
           <span className="font-mono text-xs">analytics-area/{target.slug}</span>
         </DialogDescription>
@@ -257,9 +258,9 @@ function EditForm({
         }}
       >
         <div className="space-y-1">
-          <Label htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
-            Name
-          </Label>
+          <FieldLabel htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
+            이름
+          </FieldLabel>
           <Input
             id={`aa-edit-name-${target.slug}`}
             value={name}
@@ -281,7 +282,7 @@ function EditForm({
               disabled={archiveMutation.isPending}
               data-testid={`aa-archive-${target.slug}`}
             >
-              Archive
+              보관
             </Button>
           ) : (
             <span className="text-sm text-text-muted">이미 보관됨</span>
@@ -291,7 +292,7 @@ function EditForm({
             disabled={updateMutation.isPending}
             data-testid={`aa-save-${target.slug}`}
           >
-            Save
+            {GLOSSARY.save}
           </Button>
         </DialogFooter>
       </form>

@@ -360,7 +360,7 @@ export function EditDescriptionModal({
 
           {/* Footer ───────────────────────────────────────────────────────── */}
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="ghost" onClick={handleCancel} disabled={isSubmitting}>
+            <Button type="button" variant="secondary" onClick={handleCancel} disabled={isSubmitting}>
               취소
             </Button>
             <Button

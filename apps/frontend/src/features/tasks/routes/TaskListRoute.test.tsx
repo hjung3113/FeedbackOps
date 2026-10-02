@@ -1,8 +1,16 @@
 import { getTask, listTasks } from '@/lib/api';
+import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
-import type { TaskDetailDto } from '@fops/shared';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import {
+  type MilestoneDetailDto,
+  type TaskDetailDto,
+  type TaskDto,
+  taskPrioritySchema,
+} from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -87,12 +95,144 @@ vi.mock('@/lib/api', () => {
   };
 });
 
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+vi.mock('@/lib/api/milestones', () => ({
+  getMilestone: vi.fn(),
+}));
+
+function renderWithClient(ui: React.ReactElement, queryClient?: QueryClient) {
+  const client = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return client;
+}
+
+function priorityTask(priority: TaskDto['priority']): TaskDto {
+  return {
+    id: '10000000-0000-0000-0000-000000000001',
+    workspace_id: '90000000-0000-0000-0000-000000000009',
+    display_id: 'TASK-1000',
+    primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+    title: '매출 리포트 쿼리 플랜 개선',
+    status: 'backlog',
+    priority,
+    assignee_actor_id: null,
+    due_date: null,
+    milestone_id: null,
+    analytics_area_id: null,
+    source_task_request_id: null,
+    created_by: '20000000-0000-0000-0000-000000000002',
+    created_at: '2026-07-10T00:00:00.000Z',
+    updated_at: '2026-07-10T00:00:00.000Z',
+  };
+}
+
+function priorityTaskDetail(priority: TaskDetailDto['priority']): TaskDetailDto {
+  return { ...priorityTask(priority), source: null };
 }
 
 describe('TaskListRoute display ids', () => {
+  it('renders Korean assignment fallbacks for unresolved and empty assignees', async () => {
+    const unassigned = priorityTask('low');
+    const unresolved = {
+      ...priorityTask('high'),
+      id: '10000000-0000-0000-0000-000000000002',
+      display_id: 'TASK-1001',
+      assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+    };
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [unassigned, unresolved] });
+    renderWithClient(<TaskListRoute />);
+
+    await screen.findByText('TASK-1000');
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+    expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
+    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+    expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
+  });
+
+  it('uses the shared unassigned badge in Task detail properties', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(priorityTaskDetail('high'));
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
+  });
+
+  it('uses the glossary unknown-user label for an unresolved non-null Task assignee', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce({
+      ...priorityTaskDetail('high'),
+      assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+    });
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(GLOSSARY.unknownUser)).toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
+  });
+
+  it('uses Korean Task detail navigation labels that match section headings', async () => {
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    for (const label of ['요약', '속성', '출처', '맥락', '진행 메모']) {
+      expect(await screen.findByRole('button', { name: label })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it.each(taskPrioritySchema.options)(
+    'renders priority %s as a label in the task list',
+    async (priority) => {
+      vi.mocked(listTasks).mockResolvedValueOnce({ items: [priorityTask(priority)] });
+      renderWithClient(<TaskListRoute />);
+
+      await screen.findByText('TASK-1000');
+      expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority]).length).toBeGreaterThan(0);
+      expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(taskPrioritySchema.options)(
+    'renders priority %s as a label in Task detail',
+    async (priority) => {
+      vi.mocked(getTask).mockResolvedValueOnce(priorityTaskDetail(priority));
+      renderWithClient(
+        <TaskDetailPanel
+          taskId="10000000-0000-0000-0000-000000000001"
+          actorNamesById={new Map()}
+          managedSystemNamesById={new Map()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      await screen.findByRole('heading', { name: '속성' });
+      expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority], { exact: true })).toHaveLength(2);
+      expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
+
   it('renders task display_id in the list row, detail header, and link trail', async () => {
     renderWithClient(<TaskListRoute />);
 
@@ -145,6 +285,15 @@ describe('TaskListRoute display ids', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the true-empty message without a filter-reset action', async () => {
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [] });
+    renderWithClient(<TaskListRoute />);
+
+    expect(await screen.findByText('Task가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Task가 여기에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
   it('renders permission denied instead of the list unavailable copy for a 403', async () => {
     vi.mocked(listTasks).mockRejectedValueOnce(
       new ApiError(403, {
@@ -154,9 +303,15 @@ describe('TaskListRoute display ids', () => {
     );
     renderWithClient(<TaskListRoute />);
 
-    const panel = await screen.findByText('Task list');
+    const panel = await screen.findByText('Task 목록');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Task 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission list failure unavailable', async () => {
@@ -165,8 +320,15 @@ describe('TaskListRoute display ids', () => {
     );
     renderWithClient(<TaskListRoute />);
 
-    expect(await screen.findByText('Task list unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Task 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+
+    const attemptsBeforeRetry = vi.mocked(listTasks).mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    const taskList = await screen.findByRole('main', {}, { timeout: 5000 });
+    expect(await within(taskList).findByText('TASK-1000')).toBeInTheDocument();
+    expect(vi.mocked(listTasks).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
 
   it('renders permission denied instead of task detail unavailable for a 403', async () => {
@@ -187,7 +349,9 @@ describe('TaskListRoute display ids', () => {
 
     const panel = await screen.findByText('Task detail');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.queryByText('Task detail unavailable.')).not.toBeInTheDocument();
+    expect(screen.getByText('이 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 상세를 불러오지 못했습니다.')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission task detail failure unavailable', async () => {
@@ -203,7 +367,7 @@ describe('TaskListRoute display ids', () => {
       />,
     );
 
-    expect(await screen.findByText('Task detail unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Task 상세를 불러오지 못했습니다.')).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 });
@@ -212,7 +376,10 @@ const VOC_ID = '50000000-0000-0000-0000-000000000005';
 const FINDING_ID = '40000000-0000-0000-0000-000000000004';
 const VOC_TITLE = '로그인 지연 불만';
 
-function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
+function taskDetailFixture(
+  source: TaskDetailDto['source'],
+  milestoneId: string | null = null,
+): TaskDetailDto {
   return {
     id: '10000000-0000-0000-0000-000000000001',
     workspace_id: '90000000-0000-0000-0000-000000000009',
@@ -223,7 +390,7 @@ function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
     due_date: null,
-    milestone_id: null,
+    milestone_id: milestoneId,
     analytics_area_id: null,
     source_task_request_id: null,
     created_by: '20000000-0000-0000-0000-000000000002',
@@ -233,7 +400,7 @@ function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
   };
 }
 
-function renderTaskDetailPanel(): void {
+function renderTaskDetailPanel(queryClient?: QueryClient): void {
   renderWithClient(
     <TaskDetailPanel
       taskId="10000000-0000-0000-0000-000000000001"
@@ -241,6 +408,7 @@ function renderTaskDetailPanel(): void {
       managedSystemNamesById={new Map()}
       onClose={vi.fn()}
     />,
+    queryClient,
   );
 }
 
@@ -257,6 +425,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -265,7 +434,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     const vocBadge = trail.querySelector('[data-entity-type="voc"]');
     const findingBadge = trail.querySelector('[data-entity-type="finding"]');
@@ -305,6 +474,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         voc: { visibility_state: 'summary_visible' },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -313,10 +483,10 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     // Positive control for the negatives: the blocked panel really renders.
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'summary_visible',
     );
@@ -336,6 +506,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
         voc: { visibility_state: 'denied' },
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -344,9 +515,9 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'denied',
     );
@@ -362,6 +533,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
       taskDetailFixture({
         finding: {
           id: FINDING_ID,
+          display_id: 'FIN-179',
           title: '리포트 속도 저하',
           summary: '쿼리 플랜 개선 필요',
           evidence_count: 3,
@@ -370,12 +542,174 @@ describe('Task detail Linked context source VOC (#378)', () => {
     );
     renderTaskDetailPanel();
 
-    await screen.findByText('Linked context');
+    await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     expect(trail.querySelector('[data-state]')).toBeNull();
-    expect(screen.queryByText('Source VOC')).not.toBeInTheDocument();
+    expect(screen.queryByText('출처 VOC')).not.toBeInTheDocument();
     expect(trail.querySelector('[data-entity-type="voc"]')).toBeNull();
     // Positive control: the Finding node still renders as before.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();
+  });
+});
+
+describe('Task detail Milestone row (#514 B3b)', () => {
+  const MILESTONE_ID = '60000000-0000-0000-0000-000000000006';
+
+  function milestoneFixture(): MilestoneDetailDto {
+    return {
+      id: MILESTONE_ID,
+      workspace_id: '90000000-0000-0000-0000-000000000009',
+      display_id: 'MLS-1000',
+      primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+      title: 'Q3 결제 지표 개선',
+      why: '결제 전환율 개선',
+      status: 'in_progress',
+      owner_actor_id: '20000000-0000-0000-0000-000000000002',
+      analytics_area_id: null,
+      start_date: '2026-07-01',
+      target_date: '2026-09-30',
+      created_by: '20000000-0000-0000-0000-000000000002',
+      created_at: '2026-07-01T00:00:00.000Z',
+      updated_at: '2026-07-02T00:00:00.000Z',
+      progress: { released_done: 0, in_flight: 2, queued: 1, total: 3, percent: 0 },
+      source_finding: null,
+    };
+  }
+
+  async function milestoneRow(): Promise<HTMLElement> {
+    const row = (await screen.findByText('Milestone')).parentElement;
+    if (!(row instanceof HTMLElement)) throw new Error('Milestone row not found');
+    return row;
+  }
+
+  it('shows the label Milestone and — when milestone_id is null', async () => {
+    vi.mocked(getMilestone).mockClear();
+    renderTaskDetailPanel();
+
+    const row = await milestoneRow();
+    expect(within(row).getByText('—')).toBeInTheDocument();
+    // The row is a read: nothing to fetch without a linked milestone.
+    expect(getMilestone).not.toHaveBeenCalled();
+  });
+
+  it('fetches the linked milestone via getMilestone and shows its display_id and title', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    renderTaskDetailPanel();
+
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+  });
+
+  it('shows — when the milestone fetch returns 404', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    renderTaskDetailPanel();
+
+    const row = await milestoneRow();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows — after a 404 refetch when the cached milestone was previously visible', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['milestone', MILESTONE_ID], milestoneFixture(), { updatedAt: 0 });
+    renderTaskDetailPanel(queryClient);
+
+    const row = await milestoneRow();
+    expect(within(row).getByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000 Q3 결제 지표 개선')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides cached milestone identity after a denied refetch', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockClear();
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderTaskDetailPanel(queryClient);
+
+    const row = await milestoneRow();
+    const cachedIdentity = 'MLS-1000 Q3 결제 지표 개선';
+    expect(await within(row).findByText(cachedIdentity)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledTimes(1);
+    });
+
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const denied = new ApiError(403, {
+      code: 'permission.denied',
+      message: 'milestone read denied',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    let refetch!: Promise<void>;
+    act(() => {
+      refetch = queryClient.invalidateQueries({ queryKey: ['milestone', MILESTONE_ID] });
+    });
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      rejectRequest(denied);
+      await expect(request).rejects.toBe(denied);
+      await refetch;
+    });
+    expect(queryClient.getQueryData(['milestone', MILESTONE_ID])).toEqual(milestoneFixture());
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText(cachedIdentity)).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders no control that assigns a milestone (no POST /tasks/:id/milestone)', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    renderTaskDetailPanel();
+
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    // The row is a read: no picker and no action button live in it.
+    const row = await milestoneRow();
+    expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument();
   });
 });

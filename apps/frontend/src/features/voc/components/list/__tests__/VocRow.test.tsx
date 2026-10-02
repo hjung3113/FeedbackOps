@@ -64,12 +64,15 @@ describe('<VocRow>', () => {
     expect(screen.getByText('Tableau')).toBeInTheDocument();
   });
 
-  it('renders "Owner 필요" when both owner_user_id and owner_team_id are null', () => {
+  it('renders the shared unassigned badge when both owner ids are null', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.getByText('Owner 필요')).toBeInTheDocument();
+    expect(screen.getByText('담당자 없음')).toHaveClass(
+      'bg-accent-danger/10',
+      'text-accent-danger',
+    );
   });
 
-  it('does NOT render "Owner 필요" when an owner is resolved', () => {
+  it('does NOT render the unassigned badge when an owner is resolved', () => {
     const vocWithOwner: VocListItem = { ...BASE_VOC, owner_user_id: 'user-2' };
     render(
       <VocRow
@@ -80,7 +83,7 @@ describe('<VocRow>', () => {
         owner={{ display_name: '박서연' }}
       />,
     );
-    expect(screen.queryByText('Owner 필요')).not.toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
   it('renders the SeverityBadge label on the meta line', () => {
@@ -97,13 +100,8 @@ describe('<VocRow>', () => {
     expect(screen.queryByText('높음')).not.toBeInTheDocument();
   });
 
-  it('renders the "N similar" badge only when similar_count > 0', () => {
-    const { rerender } = render(
-      <VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />,
-    );
-    expect(screen.queryByText(/similar/)).not.toBeInTheDocument();
-
-    rerender(
+  it('does not render a same-Managed-System peer count in list rows', () => {
+    render(
       <VocRow
         voc={{ ...BASE_VOC, similar_count: 4 }}
         selected={false}
@@ -111,7 +109,8 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByText('4 similar')).toBeInTheDocument();
+
+    expect(screen.queryByText(/similar|같은 Managed System의 VOC/i)).not.toBeInTheDocument();
   });
 
   it('renders the attachment count chip when attachment_count > 0', () => {
@@ -123,15 +122,15 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByLabelText('3 attachments')).toHaveTextContent('3');
+    expect(screen.getByLabelText('첨부 3개')).toHaveTextContent('3');
   });
 
   it('does NOT render the attachment count chip when attachment_count is 0', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.queryByLabelText('0 attachments')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('첨부 0개')).not.toBeInTheDocument();
   });
 
-  it('renders distinct attachment and similar count chips', () => {
+  it('keeps the attachment count chip without a same-Managed-System peer chip', () => {
     render(
       <VocRow
         voc={{ ...BASE_VOC, attachment_count: 2, similar_count: 5 }}
@@ -140,16 +139,16 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByLabelText('2 attachments')).toHaveTextContent('2');
-    expect(screen.getByLabelText('5 similar')).toHaveTextContent('5 similar');
+    expect(screen.getByLabelText('첨부 2개')).toHaveTextContent('2');
+    expect(screen.queryByText(/similar|같은 Managed System의 VOC/i)).not.toBeInTheDocument();
   });
 
-  it('renders amber "No area" when analytics_area_id is null', () => {
+  it('renders amber "Analytics Area 없음" when analytics_area_id is null', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.getByText('No area')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area 없음')).toBeInTheDocument();
   });
 
-  it('renders the resolved area name instead of "No area" when present', () => {
+  it('renders the resolved area name instead of "Analytics Area 없음" when present', () => {
     const vocWithArea: VocListItem = { ...BASE_VOC, analytics_area_id: 'area-1' };
     render(
       <VocRow
@@ -161,7 +160,7 @@ describe('<VocRow>', () => {
       />,
     );
     expect(screen.getByText('Finance')).toBeInTheDocument();
-    expect(screen.queryByText('No area')).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Area 없음')).not.toBeInTheDocument();
   });
 
   it('shows a checkbox and toggling it calls onToggleCheck without onSelect', () => {

@@ -6,12 +6,13 @@ import {
   Outlet,
   RouterProvider,
   createMemoryHistory,
-  createRootRoute,
+  createRootRouteWithContext,
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { AppRouterContext } from './__root';
 import { rootBeforeLoad } from './index';
 import { LoginPage } from './login';
 
@@ -20,7 +21,8 @@ import { LoginPage } from './login';
 // brands that can't be re-attached to a createRoute call. The behaviour is
 // identical: hit /me, redirect to /login on 401.
 function buildHarness({ initialPath }: { initialPath: string }) {
-  const rootRoute = createRootRoute({ component: () => <Outlet /> });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const rootRoute = createRootRouteWithContext<AppRouterContext>()({ component: () => <Outlet /> });
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
@@ -39,9 +41,9 @@ function buildHarness({ initialPath }: { initialPath: string }) {
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute, loginRoute, homeRoute]),
+    context: { queryClient: qc },
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return { router, qc };
 }
 

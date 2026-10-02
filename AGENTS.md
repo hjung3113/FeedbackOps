@@ -2,15 +2,16 @@
 
 ## Operating Rules
 
-- Think before editing. State assumptions when the request can be read in more than one way.
+- State assumptions when the request can be read in more than one way.
 - Prefer the smallest change that satisfies the request. Do not add speculative flexibility.
-- Touch only files required by the task. Mention unrelated issues instead of fixing them.
 - Match existing docs and implementation patterns before inventing new structure.
 - Every changed line must trace to a user request, a documented invariant, or a failing verification.
-- For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
-- Finish one issue fully (tests + typecheck + boundaries + commit + PR + merge + close) before starting the next.
-- Stop on locked-decision ambiguity — see [Source Of Truth](#source-of-truth) → "Stop and report" for the exact condition. Never resolve unilaterally.
+
+## Finish Line And Stops
+
+- **Finish line for an issue:** the touched behavior has passing tests, the [gate](#verification) is green, docs affected by the change are updated in the same PR, and a PR to `develop` is open. Merge and close the issue only when auto-merge was granted in this session; otherwise the user merges. Finish one issue before starting the next. For other multi-step work, state the success criteria up front and verify them before claiming completion.
+- **Keep going** through steps that don't need the user. **Stop and report** on a documentation conflict that no tiebreak covers ([Source Of Truth](#source-of-truth)), and before any merge, push, or release the user has not authorized in this session.
 
 ## Prototype Is The Spec
 
@@ -18,20 +19,20 @@
 
 - **Read first.** Before any frontend chunk (route, screen, panel, component used in a screen), open the matching `screen-*.jsx` + `data.js` and the relevant `screenshots/final-baselines/<page>.png`. If a chunk creates UI without reading prototype, that chunk is rejected on review.
 - **Layout, hierarchy, density, spacing, copy come from prototype.** Do not invent placement, group order, or visual rhythm. Mirror what the prototype shows. Deviations require an explicit ADR or a user OK, recorded in the PR body.
-- **Copy verbatim, mixed-language allowed.** Copy may mix Korean and English freely. Prototype text remains the source of truth — copy what the prototype shows verbatim, whether Korean, English, or a mix. Do not blanket-translate one to the other, but variance per surface (e.g. 'BODY' label in detail panel, '설명' in create form) is allowed when reference designs/screenshots so direct.
+- **Copy verbatim, mixed-language allowed.** Copy what the prototype shows verbatim, whether Korean, English, or a mix; do not translate either direction. Per-surface variance (e.g. a `BODY` label in the detail panel next to a Korean label in the create form) is allowed when the reference designs/screenshots show it.
 - **Three-shell taxonomy (ADR-0020 / Pack 17).** Every screen is `PageShell`, `ListShell`, or `WorkbenchShell`. Special pages extend the three — never a new shell.
 - **Prototype contradicts spec text:** prototype wins for copy/layout; spec wins for behavior/AC. Document the path taken in a one-line code comment.
 - **Do NOT port from prototype:** hash routing, `window` globals, `document.execCommand`, synthetic local data, draft-only API intent panels. Production routing is TanStack Router; rich text is TipTap (ADR-0002 / ADR-0011) — not the prototype's `RichEditor`.
+- **Design review** compares the implementation against the RENDERED prototype, not prose specs; hand the implementing agent the prototype screen up front.
 
-For pixel-diff enforcement on page-level FE issues, see `apps/frontend/AGENTS.md` → Page-Level Pixel-Diff. For the full operating playbook, see the `/agent-workflow` skill (external toolkit).
+Frontend enforcement (brief contents, pixel-diff gate): `apps/frontend/AGENTS.md`.
 
 ## Git Workflow
 
 - **Per-issue feature branch.** `feature/<issue-number>-<slug>` branched from `develop`. Never commit directly to `develop` or `main`. `fix/<n>-<slug>` for hot-fixes; `chore/<slug>` for housekeeping (may target `develop` via small PR).
-- **Issue complete → PR to `develop`.** After review the user merges; delete the feature branch on merge.
+- **Issue complete → PR to `develop`.** Delete the feature branch on merge.
 - **Slice complete → PR `develop` → `main`.** User owns the final `develop` → `main` merge and any tag/release. No agent push to `main`.
-- **Exception.** Slices 1–3 shipped directly to `main` before this rule landed. From #14 onward, follow the flow above.
-- **Pre-push hook.** `.githooks/pre-push` blocks direct pushes to `main` that touch files other than `README*`. Enable once per clone: `git config core.hooksPath .githooks`. Client-side only; the real gate is GitHub branch protection.
+- **Hooks.** Enable once per clone: `git config core.hooksPath .githooks`. `.githooks/pre-commit` refuses commits on `develop` and on `main` (README-only commits on `main` are allowed); `.githooks/pre-push` blocks direct pushes to `main` that touch files other than `README*`. Client-side only; the real gate is GitHub branch protection.
 
 ## Monorepo Boundaries
 
@@ -65,9 +66,11 @@ Authority follows subject; there is no universal conflict ladder.
 
 **USER-FACING COPY (labels, headers, buttons, microcopy) — fallback chain when a source is silent:**
 
-1. `docs/design-prototype/` (HANDOFF.md + `screen-*.jsx` + `data.js`) — verbatim authority. Korean and English may coexist freely; mirror the prototype string regardless of language. Surface-level convention (what the reference shows) matters more than blanket language consistency; do not reflexively translate either direction.
+1. `docs/design-prototype/` (HANDOFF.md + `screen-*.jsx` + `data.js`) — verbatim authority, in whatever language the prototype uses (see [Prototype Is The Spec](#prototype-is-the-spec)).
 2. `docs/frontend/specs/*.md` when prototype is silent
 3. `CONTEXT.md` when neither has a verbatim string
+
+Shipped user-facing strings are implemented in `apps/frontend/src/lib/copy/*`; update the matching module when canonical wording changes.
 
 **Per-domain pointers:** endpoint behavior → `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`; DB + migrations → `04-database-and-migrations.md`; module ownership → `02-domain-module-boundaries.md`; permissions → `05-permission-policy.md`; entity links → `06-entity-linking-contract.md`; background jobs → `docs/adr/0009-background-jobs-with-pg-boss.md`; frontend routes → `docs/frontend/routes-and-layout.md`; component contracts → `docs/frontend/ui-design-system.md` + `component-inventory.md`. Visual token seed: `docs/frontend/tokens.md` (Pack 17 light tokens / ADR-0021 supersede Pack 20 prototype dark tokens for impl).
 
@@ -89,14 +92,15 @@ Authority follows subject; there is no universal conflict ladder.
 - Repositories write only tables owned by their module.
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
-- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `findings`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
-- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration keeps Evidence, Coverage, and Links feature code. Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
+- Frontend feature folders follow these ownership boundaries: `home`, `my-work`, `voc`, `findings`, `voc-cluster`, `surveys`, `tasks`, `cross-system`, `integration`, `admin`.
+- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration owns the Evidence, Coverage, and Links UI boundaries. Coverage and Links routes stay under `/integration/*`; the Evidence route is planned, not built. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 
 ## Verification
 
-- **The gate is `pnpm --filter backend test:integration` + `pnpm typecheck` + `pnpm check:boundaries` + `pnpm gate:db-migration-drift` + `pnpm gate:fe-typecheck` + `pnpm gate:fe-lint`** (plus the frontend pixel-diff harness for page-level FE work). `pnpm test` / `pnpm --filter backend test` alone is **not** the gate: the 90 backend integration suites are env-gated and all skip without a database, so a green there covers only the unit path (#204). The integration command loads `.env` and **truncates + re-seeds the target database** before the run — point it at a throwaway database if the dev one matters. See `apps/backend/AGENTS.md` → Verification for the env, the reset contract, and the `ALLOW_SKIPPED_INTEGRATION=1` opt-out.
+- **The gate is `pnpm --filter backend test:integration` + `pnpm typecheck` + `pnpm check:boundaries` + `pnpm gate:db-migration-drift` + `pnpm gate:fe-typecheck` + `pnpm gate:fe-lint`** (plus the frontend pixel-diff harness for page-level FE work). `pnpm test` / `pnpm --filter backend test` alone is **not** the gate: the backend integration suites are env-gated and all skip without a database, so a green there covers only the unit path (#204). The integration command loads `.env` and **truncates + re-seeds the target database** before the run — point it at a throwaway database if the dev one matters. See `apps/backend/AGENTS.md` → Verification for the env, the reset contract, and the `ALLOW_SKIPPED_INTEGRATION=1` opt-out.
+- The FE gates have setup traps (a fresh worktree needs the generated route tree first; the lint gate diffs committed history against a base ref — pass `--base origin/develop`). Read `scripts/gates/AGENTS.md` before running them or touching their baselines/allowlists.
 - For behavior changes and bug fixes, write or update the failing test first, then make the smallest change that passes it. If TDD is not practical, state why and still add verification for the touched behavior.
 - Add or update tests for product invariants touched by the change.
 - For frontend work, verify desktop states when layout or interaction changes (see `apps/frontend/AGENTS.md` for pixel-diff rule).
@@ -115,21 +119,13 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Execution playbook (roles, model tiers, task sizing, review/verify cycles, conductor conduct): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh <target>`, which **copies** four managed leaves as a self-contained snapshot: `.agent-workflow/{scripts,schemas,docs/agents}` + `.claude/skills/agent-workflow`. Existing installs upgrade with `--upgrade`; `--mode`/`--force` no longer exist and are rejected.
+Execution playbook (roles, model tiers, task sizing, review/verify cycles, conductor conduct): the `/agent-workflow` skill (external toolkit). Its files under `.agent-workflow/` and `.claude/skills/agent-workflow` are gitignored, so a fresh worktree lacks them; call its scripts by absolute path from the main checkout.
 
-The four leaves are gitignored here, and **git worktrees do not inherit ignored files** — a fresh worktree has no `.agent-workflow/`, so a relative `.agent-workflow/scripts/...` call from inside one fails with `No such file or directory`. Until toolkit issue #62 lands, call the scripts by absolute path from the main checkout, or install into the worktree.
-
-### Target Profile (toolkit adapter answers for THIS repo)
-
-Answers to the toolkit's compatibility interview (`references/adoption.md`) — target-specific facts that must not migrate into the shared skill:
+Target-specific facts for that toolkit (must not migrate into the shared skill):
 
 - **Verify signal traps.** A narrow test filter yields false PASS; a superuser app handle yields false FAIL. Gate runs use a whole-touched-module filter + the low-priv `fops_app` role (`VERIFY_DATABASE_URL`), with migrations applied via the separate `fops_migrate` URL. Cross-module verify noise is known debt (other modules' suites attempt `audit_log` DELETE with the app handle — fails by design).
 - **Verify DBs.** Per-issue throwaway DBs via `prepare-verify-db.sh` (admin URL must be `postgres`, port 5434 — `fops_migrate` lacks CREATEDB). Rebuild after crashed runs or migration chunks; crash-polluted DBs produce phantom failures.
-- **FE visual harness.** Committed Playwright harness at `apps/frontend/tests/visual` (vite-preview IPv4, fail-closed Zod-validated mock, CP-pixel sign-off). Sandboxed codex has no browser — the conductor generates baselines outside the sandbox. Every new screen needs fixture + spec.
-- **FE gates.** `scripts/gates/frontend-verify-profile.json` runs `fe-typecheck-gate.mjs` (fails only newly introduced typecheck errors against its baseline) and `fe-biome-gate.mjs` (checks only branch-changed files). Biome errors fail the gate; warnings do not. In a fresh worktree, run `pnpm --filter frontend build` from `apps/frontend` (or start dev) before `pnpm gate:fe-typecheck` to generate gitignored `apps/frontend/src/routeTree.gen.ts`; without it, 24 reported new errors are setup noise, not baseline drift, and must never be added to `scripts/gates/frontend-typecheck-baseline.txt`. The Biome gate does not need this generated file. Update `scripts/gates/frontend-typecheck-baseline.txt`, or add a line to `scripts/gates/frontend-biome-allowlist.txt`, only when the existing diagnostic is intentionally accepted and documented in review. An allowlist line is `<repo-relative-path> <biome-category> -- <reason>`. Each path carries its own lines; a split file needs a new line for each category.
-- **FE chunks are exempt from AC-ID discovery.** `completion-check.sh` maps AC-IDs by scanning test names, and only backend integration tests carry them here, so **no FE chunk can pass that part of the gate**. Trust its path and test-count checks; treat the AC-ID mapping as unavailable rather than as a failure to fix. Do not add AC-IDs to frontend test titles to satisfy the parser — that inverts ownership, and the tool has no tracked consumer in this repo (#250, wontfix). Upstream: hjung3113/feedbackops-workflow#80.
-- **FE design review.** Reviews compare the implementation against the RENDERED prototype (`docs/design-prototype/`), not prose specs; hand the implementing agent the prototype screen up front.
-- **Migrations.** Every new drizzle migration must be registered in the drizzle journal in the same chunk (omission has cost a review round).
+- **FE chunks are exempt from AC-ID discovery.** `completion-check.sh` maps AC-IDs by scanning test names, and only backend integration tests carry them here, so no FE chunk can pass that part of the gate. Trust its path and test-count checks; treat the AC-ID mapping as unavailable rather than as a failure to fix. Do not add AC-IDs to frontend test titles to satisfy the parser (#250, wontfix; upstream hjung3113/feedbackops-workflow#80).
 
 ## PR Review Priorities
 
@@ -140,8 +136,7 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI; external PRs are not a request surface. Includes wayfinding operations for `/wayfinder`. See `docs/agents/issue-tracker.md`.
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 - **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
-- **Workflow.** Model tiers, REV cycles, dispatch patterns: the `/agent-workflow` skill (external toolkit).
-- **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in.
+- **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in. `shadcn` is vendored from `shadcn-ui/ui` (`skills/shadcn`, MIT). `impeccable` is installed in `.claude/skills/impeccable` (plus `.claude/agents/impeccable-*`) via `npx impeccable install --providers=claude --scope=project`; its engine binary (`scripts/bin/`) is gitignored and downloads on first run. Its edit/stop hooks are intentionally disabled, so remove them from `.claude/settings.local.json` again after `npx impeccable update`.
 
 <!-- agent-workflow:begin (managed by install-into.sh — do not edit) -->
 ### Model routing (installed by the agent-workflow toolkit)
@@ -153,3 +148,5 @@ Read before any dispatch:
 
 The allocation file is authoritative. CONDUCTOR dispatches artifact-producing work; workers produce code, docs, plans, and recon.
 <!-- agent-workflow:end -->
+
+**Routing precedence (user-set 2026-09-27):** the model routing the user sets for the current session supersedes the tier list in `.agent-workflow/model-alloc.json` above. If they disagree, follow the user's routing and flag the mismatch.

@@ -34,6 +34,7 @@ describe.skipIf(!runIntegration)('task display_id assignment (#142)', () => {
       auditService: createAuditService(),
       checkService: createCheckService({ db: dbHandle.db }),
       idempotencyService: createIdempotencyService(),
+      notify: async () => {},
       vocReadService: {
         // #378 read seam; this suite only exercises conversion writes, never
         // Task detail reads, so the stub is never consulted.

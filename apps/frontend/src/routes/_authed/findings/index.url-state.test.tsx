@@ -20,7 +20,8 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -56,8 +57,19 @@ vi.mock('@fops/ui', async (importOriginal) => {
 });
 
 vi.mock('@/features/findings/components/FindingDetail', () => ({
-  FindingDetailPanel: ({ findingId }: { findingId: string }) => (
-    <section data-testid="finding-detail-panel">finding:{findingId}</section>
+  FindingDetailPanel: ({
+    findingId,
+    headerExtras,
+  }: {
+    findingId: string;
+    headerExtras?: React.ReactNode;
+  }) => (
+    <section data-testid="finding-detail-panel">
+      <header data-kind="finding">
+        <div data-testid="detail-panel-header-content">{headerExtras}</div>
+      </header>
+      <div>finding:{findingId}</div>
+    </section>
   ),
 }));
 
@@ -69,6 +81,7 @@ const MS_2 = '99999999-9999-9999-9999-999999999902';
 const F1_ID = '11111111-1111-4111-8111-111111111111';
 const F2_ID = '44444444-4444-4444-4444-444444444444';
 const STALE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const UNKNOWN_ID = '99999999-9999-4999-8999-999999999999';
 
 const F1 = {
   id: F1_ID,
@@ -121,7 +134,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 interface FetchCase {
   /** Every requested URL, in order — used for the managed_system_id assertions. */
   requested: string[];
+  findingsResponse?: () => Promise<Response>;
   failList?: boolean;
+  failuresRemaining?: number;
+  emptyList?: boolean;
+  emptyExecutionNone?: boolean;
 }
 
 function installFetch(c: FetchCase): void {
@@ -130,7 +147,16 @@ function installFetch(c: FetchCase): void {
     c.requested.push(url);
     const path = new URL(url, 'http://localhost');
     if (path.pathname === '/findings') {
+      if (c.findingsResponse) return c.findingsResponse();
       if (c.failList) return jsonResponse({ code: 'internal.unexpected' }, 500);
+      if (c.failuresRemaining !== undefined && c.failuresRemaining > 0) {
+        c.failuresRemaining -= 1;
+        return jsonResponse({ code: 'internal.unexpected' }, 500);
+      }
+      if (c.emptyList) return jsonResponse({ items: [] });
+      if (c.emptyExecutionNone && path.searchParams.get('execution') === 'none') {
+        return jsonResponse({ items: [] });
+      }
       const msFilter = path.searchParams.get('managed_system_id');
       const items = msFilter
         ? FINDINGS.filter((finding) => finding.primary_managed_system_id === msFilter)
@@ -142,7 +168,11 @@ function installFetch(c: FetchCase): void {
   }) as typeof globalThis.fetch;
 }
 
-function renderUrlState(c: FetchCase, initialPath: string) {
+function renderUrlState(
+  c: FetchCase,
+  initialPath: string,
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   installFetch(c);
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
   const route = createRoute({
@@ -151,14 +181,17 @@ function renderUrlState(c: FetchCase, initialPath: string) {
     validateSearch: (raw) => findingsSearchSchema.parse(raw),
     component: FindingsListPage,
   });
+  const vocRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/vocs',
+    component: () => <div data-testid="voc-origin-context" />,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([route]),
+    routeTree: rootRoute.addChildren([route, vocRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
@@ -177,6 +210,136 @@ describe('/findings URL state', () => {
     // List rendered alongside the detail — restore is not detail-only.
     expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
     expect(router.state.location.search).toEqual({ selected: F1_ID });
+  });
+
+  test('selected Finding exposes a return link to the exact VOC context', async () => {
+    const origin =
+      `/vocs?view=triage&managedSystem=${MS_1}` +
+      `&selected=${F2_ID}&tab=high&filter.severity=critical`;
+    const router = renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.getByRole('link', { name: '원래 VOC로 돌아가기' })).toHaveAttribute(
+      'href',
+      origin,
+    );
+    expect(
+      screen.getByRole('link', { name: '원래 VOC로 돌아가기' }).closest('[data-kind="finding"]'),
+    ).toBeInTheDocument();
+    expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
+  });
+
+  test.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Meta', { metaKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+  ])('%s-clicking the header return link preserves browser handling', async (_, modifiers) => {
+    const origin = `/vocs?view=triage&managedSystem=${MS_1}&selected=${F2_ID}`;
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+    const link = await screen.findByRole('link', { name: '원래 VOC로 돌아가기' });
+
+    const event = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+    link.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  test('returning to the VOC context uses client-side router navigation', async () => {
+    const origin = `/vocs?view=triage&managedSystem=${MS_1}&selected=${F2_ID}&tab=high`;
+    const router = renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+
+    await userEvent.click(await screen.findByRole('link', { name: '원래 VOC로 돌아가기' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/vocs'));
+    expect(router.state.location.search).toEqual({
+      view: 'triage',
+      managedSystem: MS_1,
+      selected: F2_ID,
+      tab: 'high',
+    });
+    expect(screen.getByTestId('voc-origin-context')).toBeInTheDocument();
+  });
+
+  test('does not render a return link when a VOC search value is invalid', async () => {
+    const returnTo = '/vocs?selected=not-a-uuid';
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.queryByRole('link', { name: '원래 VOC로 돌아가기' })).not.toBeInTheDocument();
+  });
+
+  test('keeps the new selection while a stale Findings cache is refetched', async () => {
+    const origin = `/vocs?view=triage&selected=${F1_ID}`;
+    let resolveFindingsResponse!: (response: Response) => void;
+    const pendingFindingsResponse = new Promise<Response>((resolve) => {
+      resolveFindingsResponse = resolve;
+    });
+    const c: FetchCase = {
+      requested: [],
+      findingsResponse: () => pendingFindingsResponse,
+    };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['findings', { managedSystemId: undefined, execution: undefined }], {
+      items: [F1],
+    });
+    await queryClient.invalidateQueries({ queryKey: ['findings'] });
+
+    const router = renderUrlState(
+      c,
+      `/findings?selected=${F2_ID}&returnTo=${encodeURIComponent(origin)}`,
+      queryClient,
+    );
+
+    await waitFor(() => expect(c.requested.some((url) => url.startsWith('/findings'))).toBe(true));
+    expect(router.state.location.search).toEqual({ selected: F2_ID, returnTo: origin });
+    expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(`finding:${F2_ID}`);
+    expect(screen.getByRole('link', { name: '원래 VOC로 돌아가기' })).toHaveAttribute(
+      'href',
+      origin,
+    );
+
+    await act(async () => {
+      resolveFindingsResponse(jsonResponse({ items: FINDINGS }));
+    });
+
+    expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+    expect(router.state.location.search).toEqual({ selected: F2_ID, returnTo: origin });
+    expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(`finding:${F2_ID}`);
+    expect(screen.getByRole('link', { name: '원래 VOC로 돌아가기' })).toHaveAttribute(
+      'href',
+      origin,
+    );
+  });
+
+  test('ignores an external return URL', async () => {
+    const returnTo = 'https://example.com/vocs?view=inbox';
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.queryByRole('link', { name: '원래 VOC로 돌아가기' })).not.toBeInTheDocument();
   });
 
   test('row click pushes selected and Back returns to no selection', async () => {
@@ -285,6 +448,109 @@ describe('/findings URL state', () => {
     expect(screen.queryByRole('button', { name: /FND-102/ })).not.toBeInTheDocument();
   });
 
+  test('execution=none is sent on the findings fetch and omitted when absent', async () => {
+    const filtered: FetchCase = { requested: [] };
+    const router = renderUrlState(
+      filtered,
+      `/findings?managedSystem=${MS_1}&selected=${F1_ID}&execution=none`,
+    );
+    await waitFor(() =>
+      expect(
+        filtered.requested.some((url) => {
+          const path = new URL(url, 'http://localhost');
+          return (
+            path.pathname === '/findings' &&
+            path.searchParams.get('execution') === 'none' &&
+            path.searchParams.get('managed_system_id') === MS_1
+          );
+        }),
+      ).toBe(true),
+    );
+    expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(router.state.location.search).toEqual({
+      managedSystem: MS_1,
+      selected: F1_ID,
+      execution: 'none',
+    });
+
+    cleanup();
+    const open: FetchCase = { requested: [] };
+    renderUrlState(open, '/findings');
+    await waitFor(() =>
+      expect(
+        open.requested.some((url) => new URL(url, 'http://localhost').pathname === '/findings'),
+      ).toBe(true),
+    );
+    expect(
+      open.requested.some((url) => {
+        const path = new URL(url, 'http://localhost');
+        return path.pathname === '/findings' && path.searchParams.has('execution');
+      }),
+    ).toBe(false);
+  });
+
+  test('shows the true-empty Finding message and keeps the zero count', async () => {
+    renderUrlState({ requested: [], emptyList: true }, '/findings');
+
+    expect(await screen.findByText('생성된 Finding이 없습니다.')).toBeInTheDocument();
+    expect(
+      screen.getByText('VOC 근거에서 실행 후보로 승격된 Finding이 여기에 표시됩니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('0건')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
+  test('clears the execution URL filter and restores Findings after a filtered miss', async () => {
+    const filtered: FetchCase = { requested: [], emptyExecutionNone: true };
+    const router = renderUrlState(filtered, `/findings?managedSystem=${MS_1}&execution=none`);
+
+    expect(await screen.findByText('현재 조건에 맞는 Finding이 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('실행과 연결되지 않은 Finding만 표시 중입니다.')).toBeInTheDocument();
+    expect(screen.getByText('0건')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+  });
+
+  test('drops a stale selection when execution=none and both list queries are empty', async () => {
+    const empty: FetchCase = { requested: [], emptyList: true };
+    const router = renderUrlState(empty, `/findings?execution=none&selected=${UNKNOWN_ID}`);
+
+    expect(await screen.findByText('생성된 Finding이 없습니다.')).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.search).toEqual({ execution: 'none' }));
+    const paths = empty.requested.map((url) => new URL(url, 'http://localhost'));
+    expect(
+      paths.some(
+        (path) => path.pathname === '/findings' && path.searchParams.get('execution') === 'none',
+      ),
+    ).toBe(true);
+    expect(
+      paths.some((path) => path.pathname === '/findings' && !path.searchParams.has('execution')),
+    ).toBe(true);
+  });
+
+  test('retries an ordinary Finding list error through the query refetch', async () => {
+    const retrying: FetchCase = { requested: [], failuresRemaining: 2 };
+    renderUrlState(retrying, '/findings');
+
+    await waitFor(
+      () => expect(screen.getByText('Finding 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
+    const attemptsBeforeRetry = retrying.requested.filter(
+      (url) => new URL(url, 'http://localhost').pathname === '/findings',
+    ).length;
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    const attemptsAfterRetry = retrying.requested.filter(
+      (url) => new URL(url, 'http://localhost').pathname === '/findings',
+    ).length;
+    expect(attemptsAfterRetry).toBeGreaterThan(attemptsBeforeRetry);
+  });
+
   test('strict search schema rejects invalid values and unknown keys', () => {
     expect(() => findingsSearchSchema.parse({ selected: 'not-a-uuid' })).toThrow();
     expect(() => findingsSearchSchema.parse({ managedSystem: 'all ' })).toThrow();
@@ -292,6 +558,10 @@ describe('/findings URL state', () => {
     expect(findingsSearchSchema.parse({})).toEqual({});
     expect(findingsSearchSchema.parse({ managedSystem: 'all' })).toEqual({
       managedSystem: 'all',
+    });
+    expect(findingsSearchSchema.parse({ selected: F1_ID, returnTo: '/vocs?view=inbox' })).toEqual({
+      selected: F1_ID,
+      returnTo: '/vocs?view=inbox',
     });
   });
 

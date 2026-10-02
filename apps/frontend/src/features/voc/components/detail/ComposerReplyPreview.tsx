@@ -48,6 +48,7 @@
 //   - bg-accent-primary/10 replaces rgba(94,106,210,0.12) (deep-violet @ 12% was the dark-pack
 //     aether-blue; in Pack 17 use bg-accent-primary/10 per PROTOTYPE-TO-PACK17 §1 notes)
 
+import { formatDate } from '@/lib/format/datetime';
 import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import { RichContentRenderer } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
@@ -87,7 +88,7 @@ export function ComposerReplyPreview({
     <div className="flex flex-col gap-3">
       {/* Disclaimer */}
       <span className="text-xs text-text-muted">
-        Reporter 1:1 답장 화면 미리보기입니다. 공개 타임라인에도 기록됩니다.
+        제출자 1:1 답장 화면 미리보기입니다. 공개 타임라인에도 기록됩니다.
       </span>
 
       {/* Preview card — prototype: padding 14, bg pitch-black, inset border */}
@@ -99,7 +100,7 @@ export function ComposerReplyPreview({
           </div>
           <div className="flex-1 min-w-0 bg-surface-card rounded-md p-2.5 text-sm">
             <div className="text-xs text-text-muted mb-1">
-              {reporter.display_name} · {voc.created_at.slice(0, 10)}
+              {reporter.display_name} · {formatDate(voc.created_at)}
             </div>
             <span className="text-text-secondary">
               {descExcerpt.length > 140 ? `${descExcerpt.slice(0, 140)}…` : descExcerpt}

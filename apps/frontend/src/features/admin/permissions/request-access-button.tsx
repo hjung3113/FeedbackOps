@@ -14,31 +14,40 @@
 
 import {
   Button,
+  DatePicker,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Label,
   Textarea,
 } from '@fops/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import {
+  permissionCheckQueryKey,
+  permissionRequestsMineKey,
+} from '@/lib/cross-system/usePermissionCheck';
 import {
   ApiError,
   type CreatePermissionRequestSuccess,
   createPermissionRequest,
 } from '../../../lib/api';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from './use-permission-check.js';
+import { permissionRequestStatusLabel } from './permission-requests-search.js';
 
 export interface RequestAccessButtonProps {
   capability: string;
   managedSystemId?: string;
   returnRouteIntent: string;
   onRequestSubmitted?: () => void;
+  /** Uses a caller-owned trigger while this component retains the request dialog and flow. */
+  renderTrigger?: (open: () => void) => ReactNode;
 }
 
 const RECOVERABLE_CONFLICT_CODES = new Set([
@@ -54,7 +63,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<{
     id: string;
-    status: string;
+    status: CreatePermissionRequestSuccess['status'];
     createdAt: string;
     reason: string;
     expiration?: string;
@@ -139,48 +148,56 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
         return;
       }
       if (err instanceof ApiError) {
-        setErrorMessage(err.envelope.message || err.envelope.code);
+        setErrorMessage(mapUnknownError(err).message);
         return;
       }
-      setErrorMessage('Request failed');
+      setErrorMessage(mapUnknownError(err).message);
     },
   });
 
   return (
     <div>
-      <Button variant="primary" size="md" onClick={() => setOpen(true)}>
-        Request access
-      </Button>
+      {props.renderTrigger !== undefined ? (
+        props.renderTrigger(() => setOpen(true))
+      ) : (
+        <Button variant="primary" size="md" onClick={() => setOpen(true)}>
+          권한 요청
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent data-testid="permission-request-dialog">
           {submitted ? (
             <>
               <DialogHeader>
-                <DialogTitle>Request submitted</DialogTitle>
-                <DialogDescription>
-                  Your request is ready for administrator review.
-                </DialogDescription>
+                <DialogTitle>권한 요청 완료</DialogTitle>
+                <DialogDescription>요청이 접수되어 관리자 검토를 기다립니다.</DialogDescription>
               </DialogHeader>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-                <dt className="text-text-muted">Request ID</dt>
+                <dt className="text-text-muted">요청 ID</dt>
                 <dd className="font-mono text-text-primary" data-testid="permission-request-id">
                   {submitted.id}
                 </dd>
-                <dt className="text-text-muted">Capability</dt>
-                <dd className="font-mono text-text-primary">{props.capability}</dd>
+                <dt className="text-text-muted">권한</dt>
+                <dd className="text-text-primary">{getCapabilityDisplayLabel(props.capability)}</dd>
                 <dt className="text-text-muted">Managed System</dt>
-                <dd className="font-mono text-text-primary">
-                  {props.managedSystemId ?? 'Workspace-wide'}
+                <dd
+                  className={
+                    props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                  }
+                >
+                  {props.managedSystemId ?? '워크스페이스 전체'}
                 </dd>
-                <dt className="text-text-muted">Reason</dt>
+                <dt className="text-text-muted">사유</dt>
                 <dd className="text-text-primary">{submitted.reason}</dd>
-                <dt className="text-text-muted">Status</dt>
-                <dd className="capitalize text-text-primary">{submitted.status}</dd>
-                <dt className="text-text-muted">Created</dt>
+                <dt className="text-text-muted">상태</dt>
+                <dd className="text-text-primary">
+                  {permissionRequestStatusLabel[submitted.status]}
+                </dd>
+                <dt className="text-text-muted">요청일</dt>
                 <dd className="text-text-primary">{submitted.createdAt}</dd>
                 {submitted.expiration ? (
                   <>
-                    <dt className="text-text-muted">Expires</dt>
+                    <dt className="text-text-muted">만료일</dt>
                     <dd className="text-text-primary">{submitted.expiration}</dd>
                   </>
                 ) : null}
@@ -196,19 +213,19 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                     setExpiration('');
                   }}
                 >
-                  Request another access
+                  다른 권한 요청
                 </Button>
                 <Button type="button" onClick={() => setOpen(false)}>
-                  Done
+                  확인
                 </Button>
               </DialogFooter>
             </>
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>Request access</DialogTitle>
-                <DialogDescription>
-                  Confirm the permission and explain why you need the least access required.
+                <DialogTitle>권한 요청</DialogTitle>
+                <DialogDescription className="text-pretty">
+                  권한을 확인하고, 필요한 최소 범위의 사유를 입력하세요.
                 </DialogDescription>
               </DialogHeader>
               <form
@@ -217,7 +234,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!reason.trim()) {
-                    setErrorMessage('Reason is required.');
+                    setErrorMessage('사유는 필수입니다.');
                     return;
                   }
                   setErrorMessage(null);
@@ -225,15 +242,21 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 }}
               >
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 rounded-md border border-border-subtle bg-surface-card p-3 text-sm">
-                  <dt className="text-text-muted">Capability</dt>
-                  <dd className="font-mono text-text-primary">{props.capability}</dd>
+                  <dt className="text-text-muted">권한</dt>
+                  <dd className="text-text-primary">
+                    {getCapabilityDisplayLabel(props.capability)}
+                  </dd>
                   <dt className="text-text-muted">Managed System</dt>
-                  <dd className="font-mono text-text-primary">
-                    {props.managedSystemId ?? 'Workspace-wide'}
+                  <dd
+                    className={
+                      props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                    }
+                  >
+                    {props.managedSystemId ?? '워크스페이스 전체'}
                   </dd>
                 </dl>
                 <div className="space-y-1">
-                  <Label htmlFor="permission-request-reason">Reason · required</Label>
+                  <Label htmlFor="permission-request-reason">사유 · 필수</Label>
                   <Textarea
                     id="permission-request-reason"
                     maxLength={2000}
@@ -243,12 +266,12 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="permission-request-expiration">Expiration · optional</Label>
-                  <Input
+                  <Label htmlFor="permission-request-expiration">만료일 · 선택</Label>
+                  <DatePicker
                     id="permission-request-expiration"
-                    type="date"
+                    aria-label="만료일 · 선택"
                     value={expiration}
-                    onChange={(event) => setExpiration(event.target.value)}
+                    onChange={(value) => setExpiration(value ?? '')}
                     data-testid="permission-request-expiration"
                   />
                 </div>
@@ -259,10 +282,10 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 ) : null}
                 <DialogFooter>
                   <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                    Cancel
+                    {GLOSSARY.cancel}
                   </Button>
                   <Button type="submit" disabled={mutation.isPending}>
-                    Submit request
+                    요청 제출
                   </Button>
                 </DialogFooter>
               </form>

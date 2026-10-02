@@ -2,41 +2,31 @@
 // contract.  Existing focused suites cover each command; this suite pins their
 // union so a future route or registry addition cannot reintroduce VOC creation.
 
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
 import {
   entityLinkRelationTypeSchema,
   registeredEntityLinkPairs,
   surveyResultDtoSchema,
-} from "@fops/shared";
-import type { FastifyInstance } from "fastify";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+} from '@fops/shared';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { loadConfig } from "../../../config.js";
-import { type DbHandle, createDb } from "../../../db/client.js";
-import { buildServer } from "../../../server.js";
-import {
-  SESSION_COOKIE_NAME,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from "../../voc/__tests__/_seed-helpers.js";
+import { loadConfig } from '../../../config.js';
+import { type DbHandle, createDb } from '../../../db/client.js';
+import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
-const APP_URL = process.env.DATABASE_URL ?? "";
-const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? "";
-const WORKSPACE_ID = process.env.WORKSPACE_ID ?? "";
+const APP_URL = process.env.DATABASE_URL ?? '';
+const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
+const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
-const SLUG = "it-slice8-exit-criteria-response-voc";
+const SLUG = 'it-slice8-exit-criteria-response-voc';
 
 type Source = {
   msId: string;
@@ -46,7 +36,7 @@ type Source = {
 };
 
 describe.skipIf(!runIntegration)(
-  "Slice 8 exit criteria: Survey Response never creates VOC (#190)",
+  'Slice 8 exit criteria: Survey Response never creates VOC (#190)',
   () => {
     let appHandle: DbHandle;
     let migrateHandle: DbHandle;
@@ -55,18 +45,18 @@ describe.skipIf(!runIntegration)(
     let adminCookie: string;
 
     beforeAll(async () => {
-      process.env.NODE_ENV = "test";
+      process.env.NODE_ENV = 'test';
       appHandle = createDb(APP_URL);
       migrateHandle = createDb(MIGRATE_URL);
       app = await buildServer({ config: loadConfig(), dbHandle: appHandle });
       await app.ready();
-      adminCookie = await loginAs(app, "mock-admin-1");
+      adminCookie = await loginAs(app, 'mock-admin-1');
       const admin = await migrateHandle.pool.query<{ id: string }>(
         "select id from core.actors where workspace_id=$1 and external_id='mock-admin-1'",
         [WORKSPACE_ID],
       );
-      adminId = admin.rows[0]?.id ?? "";
-      if (!adminId) throw new Error("mock admin fixture is missing");
+      adminId = admin.rows[0]?.id ?? '';
+      if (!adminId) throw new Error('mock admin fixture is missing');
     });
 
     beforeEach(async () => cleanup());
@@ -79,8 +69,7 @@ describe.skipIf(!runIntegration)(
 
     async function cleanup(): Promise<void> {
       if (!migrateHandle) return;
-      const systems =
-        "select id from core.managed_systems where workspace_id=$1 and slug like $2";
+      const systems = 'select id from core.managed_systems where workspace_id=$1 and slug like $2';
       const surveys = `select id from survey.surveys where workspace_id=$1 and primary_managed_system_id in (${systems})`;
       const responses = `select id from survey.survey_responses where survey_id in (${surveys})`;
       const findings = `select id from finding.findings where workspace_id=$1 and primary_managed_system_id in (${systems})`;
@@ -100,15 +89,13 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(
-        "delete from finding.evidence_highlights where finding_id in (" +
-          findings +
-          ")",
+        'delete from finding.evidence_highlights where finding_id in (' + findings + ')',
         [WORKSPACE_ID, `${SLUG}%`],
       );
-      await migrateHandle.pool.query(
-        `delete from finding.findings where id in (${findings})`,
-        [WORKSPACE_ID, `${SLUG}%`],
-      );
+      await migrateHandle.pool.query(`delete from finding.findings where id in (${findings})`, [
+        WORKSPACE_ID,
+        `${SLUG}%`,
+      ]);
       await migrateHandle.pool.query(
         `delete from survey.survey_response_answers where response_id in (${responses})`,
         [WORKSPACE_ID, `${SLUG}%`],
@@ -121,10 +108,10 @@ describe.skipIf(!runIntegration)(
         `delete from survey.survey_questions where survey_id in (${surveys})`,
         [WORKSPACE_ID, `${SLUG}%`],
       );
-      await migrateHandle.pool.query(
-        `delete from survey.surveys where id in (${surveys})`,
-        [WORKSPACE_ID, `${SLUG}%`],
-      );
+      await migrateHandle.pool.query(`delete from survey.surveys where id in (${surveys})`, [
+        WORKSPACE_ID,
+        `${SLUG}%`,
+      ]);
       await migrateHandle.pool.query(
         `delete from permission.permission_grants where managed_system_id in (${systems})`,
         [WORKSPACE_ID, `${SLUG}%`],
@@ -134,25 +121,24 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(
-        "delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)",
+        'delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
         [WORKSPACE_ID, `${SLUG}-%`],
       );
       await migrateHandle.pool.query(
-        "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)",
+        'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
         [WORKSPACE_ID, `${SLUG}-%`],
       );
       await migrateHandle.pool.query(
-        "delete from core.actors where workspace_id=$1 and external_id like $2",
+        'delete from core.actors where workspace_id=$1 and external_id like $2',
         [WORKSPACE_ID, `${SLUG}-%`],
       );
-      await migrateHandle.pool.query(
-        `delete from core.managed_systems where id in (${systems})`,
-        [WORKSPACE_ID, `${SLUG}%`],
-      );
-      await migrateHandle.pool.query(
-        "delete from core.rate_limits where key like $1 || '%'",
-        [WORKSPACE_ID],
-      );
+      await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
+        WORKSPACE_ID,
+        `${SLUG}%`,
+      ]);
+      await migrateHandle.pool.query("delete from core.rate_limits where key like $1 || '%'", [
+        WORKSPACE_ID,
+      ]);
     }
 
     async function actor(label: string) {
@@ -164,44 +150,31 @@ describe.skipIf(!runIntegration)(
       return { ...seeded, cookie: await loginAs(app, seeded.externalId) };
     }
     async function grant(actorId: string, capability: string, msId: string) {
-      await grantCapability(
-        migrateHandle,
-        WORKSPACE_ID,
-        actorId,
-        capability,
-        msId,
-        adminId,
-      );
+      await grantCapability(migrateHandle, WORKSPACE_ID, actorId, capability, msId, adminId);
     }
     async function seed(): Promise<Source> {
       const msId = await insertMsDirectly(
         migrateHandle,
         WORKSPACE_ID,
         uid(SLUG),
-        "Slice 8 Survey MS",
+        'Slice 8 Survey MS',
       );
       const survey = await migrateHandle.pool.query<{ id: string }>(
         `insert into survey.surveys (workspace_id,display_id,type,status,title,primary_managed_system_id,operator_actor_id,responses_identity_protected,created_by,opened_at)
        values ($1,$2,'outcome','open',$3,$4,$5,true,$5,now()) returning id`,
-        [
-          WORKSPACE_ID,
-          `S-${randomUUID()}`,
-          `${SLUG}-${randomUUID()}`,
-          msId,
-          adminId,
-        ],
+        [WORKSPACE_ID, `S-${randomUUID()}`, `${SLUG}-${randomUUID()}`, msId, adminId],
       );
-      const surveyId = survey.rows[0]?.id ?? "";
+      const surveyId = survey.rows[0]?.id ?? '';
       const question = await migrateHandle.pool.query<{ id: string }>(
         "insert into survey.survey_questions (workspace_id,survey_id,kind,prompt,is_required,sort_order,branch_depth) values ($1,$2,'text','What should improve?',true,0,0) returning id",
         [WORKSPACE_ID, surveyId],
       );
-      const questionId = question.rows[0]?.id ?? "";
+      const questionId = question.rows[0]?.id ?? '';
       const response = await migrateHandle.pool.query<{ id: string }>(
-        "insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at) values ($1,$2,$3,true,now()) returning id",
+        'insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at) values ($1,$2,$3,true,now()) returning id',
         [WORKSPACE_ID, surveyId, adminId],
       );
-      const responseId = response.rows[0]?.id ?? "";
+      const responseId = response.rows[0]?.id ?? '';
       await migrateHandle.pool.query(
         "insert into survey.survey_response_answers (workspace_id,survey_id,response_id,question_id,answer_kind,answer_value) values ($1,$2,$3,$4,'text',$5::jsonb)",
         [
@@ -209,7 +182,7 @@ describe.skipIf(!runIntegration)(
           surveyId,
           responseId,
           questionId,
-          JSON.stringify("raw private Slice 8 answer"),
+          JSON.stringify('raw private Slice 8 answer'),
         ],
       );
       return { msId, surveyId, questionId, responseId };
@@ -219,15 +192,15 @@ describe.skipIf(!runIntegration)(
         cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
         ...(mutation
           ? {
-              "content-type": "application/json",
-              "idempotency-key": randomUUID(),
+              'content-type': 'application/json',
+              'idempotency-key': randomUUID(),
             }
           : {}),
       };
     }
     async function vocCount(): Promise<number> {
       const count = await migrateHandle.pool.query<{ count: string }>(
-        "select count(*)::text as count from voc.vocs where workspace_id=$1",
+        'select count(*)::text as count from voc.vocs where workspace_id=$1',
         [WORKSPACE_ID],
       );
       return Number(count.rows[0]?.count ?? 0);
@@ -235,37 +208,33 @@ describe.skipIf(!runIntegration)(
     function assertNoCreateVoc(results: unknown): void {
       const body = surveyResultDtoSchema.parse(results);
       expect(body.next_actions).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
+        expect.arrayContaining([expect.objectContaining({ id: 'create_finding' })]),
       );
-      expect(body.next_actions.map((action) => action.id)).not.toContain(
-        "create_voc",
-      );
-      expect(body.next_actions.map((action) => action.id)).not.toContain(
-        "request_task",
-      );
+      expect(body.next_actions.map((action) => action.id)).not.toContain('create_voc');
+      expect(body.next_actions.map((action) => action.id)).not.toContain('request_task');
     }
 
-    it("returns the route-miss 404 for admin, operator, personal-cap, basic, and no-permission actors", async () => {
+    it('returns the route-miss 404 for admin, operator, personal-cap, basic, and no-permission actors', async () => {
       const source = await seed();
-      const operator = await actor("operator");
-      const personal = await actor("personal");
-      const basic = await actor("basic");
-      const none = await actor("none");
-      await grant(operator.id, "survey.manage", source.msId);
-      await grant(personal.id, "survey.read", source.msId);
-      await grant(personal.id, "survey.read_personal_responses", source.msId);
-      await grant(basic.id, "survey.read", source.msId);
+      const operator = await actor('operator');
+      const personal = await actor('personal');
+      const basic = await actor('basic');
+      const none = await actor('none');
+      await grant(operator.id, 'survey.manage', source.msId);
+      await grant(personal.id, 'survey.read', source.msId);
+      await grant(personal.id, 'survey.read_personal_responses', source.msId);
+      await grant(basic.id, 'survey.read', source.msId);
       const before = await vocCount();
       const unmatchedPath = `/definitely-not-a-route-${randomUUID()}`;
-      const unmatched = await app.inject({ method: "POST", url: unmatchedPath });
+      const unmatched = await app.inject({ method: 'POST', url: unmatchedPath });
       const unmatchedBody = unmatched.json<Record<string, unknown>>();
       expect(unmatched.statusCode).toBe(404);
       expect(unmatchedBody).toEqual({
         statusCode: 404,
-        error: "Not Found",
+        error: 'Not Found',
         message: expect.stringMatching(/^Route POST:.* not found$/),
       });
-      expect(unmatchedBody).not.toHaveProperty("code");
+      expect(unmatchedBody).not.toHaveProperty('code');
       for (const cookie of [
         adminCookie,
         operator.cookie,
@@ -274,7 +243,7 @@ describe.skipIf(!runIntegration)(
         none.cookie,
       ]) {
         const response = await app.inject({
-          method: "POST",
+          method: 'POST',
           url: `/survey-responses/${source.responseId}/create-voc`,
           headers: headers(cookie),
         });
@@ -288,73 +257,70 @@ describe.skipIf(!runIntegration)(
             `/survey-responses/${source.responseId}/create-voc`,
           ),
         });
-        expect(body).not.toHaveProperty("code");
+        expect(body).not.toHaveProperty('code');
       }
       expect(await vocCount()).toBe(before);
     });
 
-    it("rejects every conversion-semantic Survey Response -> VOC registry tuple at the generic route without a row", async () => {
+    it('rejects every conversion-semantic Survey Response -> VOC registry tuple at the generic route without a row', async () => {
       const source = await seed();
       const target = await insertVocDirectly(
         migrateHandle,
         WORKSPACE_ID,
         source.msId,
         adminId,
-        "Slice 8 forbidden VOC target",
+        'Slice 8 forbidden VOC target',
       );
-      const relationTypes = entityLinkRelationTypeSchema.options.filter(
-        (relationType) =>
-          registeredEntityLinkPairs.some(
-            (pair) => pair.relation_type === relationType,
-          ),
+      const relationTypes = entityLinkRelationTypeSchema.options.filter((relationType) =>
+        registeredEntityLinkPairs.some((pair) => pair.relation_type === relationType),
       );
       expect(relationTypes).toEqual(entityLinkRelationTypeSchema.options);
       for (const relation_type of relationTypes) {
         const before = await migrateHandle.pool.query<{ count: string }>(
-          "select count(*)::text as count from core.entity_links where workspace_id=$1",
+          'select count(*)::text as count from core.entity_links where workspace_id=$1',
           [WORKSPACE_ID],
         );
         const response = await app.inject({
-          method: "POST",
-          url: "/entity-links",
+          method: 'POST',
+          url: '/entity-links',
           headers: headers(adminCookie, true),
           payload: {
-            source: { type: "survey_response", id: source.responseId },
-            target: { type: "voc", id: target.id },
+            source: { type: 'survey_response', id: source.responseId },
+            target: { type: 'voc', id: target.id },
             relation_type,
           },
         });
         expect(response.statusCode).toBe(422);
         expect(response.json()).toEqual({
-          code: "validation.failed",
-          message: "unsupported entity link tuple",
-          detail: { fields: [{ path: [], code: "unsupported_tuple" }] },
+          code: 'validation.failed',
+          message: 'unsupported entity link tuple',
+          detail: { fields: [{ path: [], code: 'unsupported_tuple' }] },
         });
         const after = await migrateHandle.pool.query<{ count: string }>(
-          "select count(*)::text as count from core.entity_links where workspace_id=$1",
+          'select count(*)::text as count from core.entity_links where workspace_id=$1',
           [WORKSPACE_ID],
         );
         expect(after.rows).toEqual(before.rows);
       }
     });
 
-    it("keeps VOC count fixed through the permitted Finding -> Task Request path and excludes create_voc from every results payload", async () => {
+    it('keeps VOC count fixed through the permitted Finding -> Task Request path and excludes create_voc from every results payload', async () => {
       const source = await seed();
-      const creator = await actor("creator");
-      const reader = await actor("reader");
+      const creator = await actor('creator');
+      const reader = await actor('reader');
       for (const capability of [
-        "survey.read",
-        "survey.read_personal_responses",
-        "survey.manage",
-        "finding.manage",
-        "finding.read",
+        'survey.read',
+        'survey.read_personal_responses',
+        'survey.manage',
+        'finding.manage',
+        'finding.read',
       ])
         await grant(creator.id, capability, source.msId);
-      await grant(reader.id, "survey.read", source.msId);
+      await grant(reader.id, 'survey.read', source.msId);
       const beforeFinding = await vocCount();
       for (const cookie of [creator.cookie, reader.cookie, adminCookie]) {
         const results = await app.inject({
-          method: "GET",
+          method: 'GET',
           url: `/surveys/${source.surveyId}/results`,
           headers: headers(cookie),
         });
@@ -362,17 +328,17 @@ describe.skipIf(!runIntegration)(
         assertNoCreateVoc(results.json());
       }
       const created = await app.inject({
-        method: "POST",
+        method: 'POST',
         url: `/survey-responses/${source.responseId}/create-finding`,
         headers: headers(creator.cookie, true),
-        payload: { severity: "medium", approved_excerpt_ids: [] },
+        payload: { severity: 'medium', approved_excerpt_ids: [] },
       });
       expect(created.statusCode).toBe(201);
       const findingId = created.json<{ id: string }>().id;
       expect(await vocCount()).toBe(beforeFinding);
       for (const cookie of [creator.cookie, reader.cookie, adminCookie]) {
         const results = await app.inject({
-          method: "GET",
+          method: 'GET',
           url: `/surveys/${source.surveyId}/results`,
           headers: headers(cookie),
         });
@@ -381,12 +347,12 @@ describe.skipIf(!runIntegration)(
       }
       const beforeTaskRequest = await vocCount();
       const requested = await app.inject({
-        method: "POST",
+        method: 'POST',
         url: `/findings/${findingId}/request-task`,
         headers: headers(creator.cookie, true),
         payload: {
-          evidence_summary: "Survey evidence remains a Finding source",
-          requested_outcome: "Review in the task queue",
+          evidence_summary: 'Survey evidence remains a Finding source',
+          requested_outcome: 'Review in the task queue',
         },
       });
       expect(requested.statusCode).toBe(201);
@@ -397,13 +363,13 @@ describe.skipIf(!runIntegration)(
       );
       expect(audits.rows.map((row) => row.event_type)).toEqual(
         expect.arrayContaining([
-          "finding_created_from_survey_response",
-          "task_request_created_from_finding",
+          'finding_created_from_survey_response',
+          'task_request_created_from_finding',
         ]),
       );
       for (const cookie of [creator.cookie, reader.cookie, adminCookie]) {
         const results = await app.inject({
-          method: "GET",
+          method: 'GET',
           url: `/surveys/${source.surveyId}/results`,
           headers: headers(cookie),
         });

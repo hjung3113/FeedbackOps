@@ -14,6 +14,7 @@ import type { RoleLevel } from '../../auth/session-service.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
 import type { CheckService } from '../../permissions/check-service.js';
 import type { ConversationService } from '../conversation-service.js';
+import type { VocReadService } from '../read-service.js';
 import { selectVocForUpdate } from '../repo.js';
 
 export interface ReviewCandidateActor {
@@ -38,6 +39,7 @@ export function createPublicUpdateReviewCandidateService(deps: {
   checkService: CheckService;
   auditService: AuditService;
   conversationService: ConversationService;
+  vocReadService: Pick<VocReadService, 'resolveVocReference'>;
 }) {
   async function requireTriage(tx: Tx, actor: ReviewCandidateActor, vocId: string) {
     const voc = await selectVocForUpdate(tx, actor.workspace_id, vocId);
@@ -82,6 +84,19 @@ export function createPublicUpdateReviewCandidateService(deps: {
         })),
       };
     });
+  }
+
+  async function resolveNotificationReference(actor: ReviewCandidateActor, candidateId: string) {
+    const result = await deps.db.execute<{ voc_id: string }>(sql`
+      SELECT voc_id
+        FROM voc.public_update_review_candidates
+       WHERE id = ${candidateId}
+         AND workspace_id = ${actor.workspace_id}
+       LIMIT 1
+    `);
+    const candidate = result.rows[0];
+    if (!candidate) return null;
+    return deps.vocReadService.resolveVocReference({ actor, vocId: candidate.voc_id });
   }
 
   async function resolve(args: {
@@ -163,7 +178,7 @@ export function createPublicUpdateReviewCandidateService(deps: {
     return deps.db.transaction((tx) => resolve({ tx, ...args }));
   }
 
-  return { list, resolve, resolveCommand };
+  return { list, resolve, resolveCommand, resolveNotificationReference };
 }
 
 export type PublicUpdateReviewCandidateService = ReturnType<

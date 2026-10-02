@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Eye, Lock, Slash, XCircle } from 'lucide-react';
+import { Ban, Eye, Lock, XCircle } from 'lucide-react';
 import { cn } from '../utils/cn.js';
 import { Button } from '../components/Button.js';
 import { NestedTextBlock } from '../panel/NestedTextBlock.js';
@@ -14,14 +14,15 @@ export interface PermissionBlockedPanelProps {
   state: PermissionState;
   /** Category label, e.g. 'VOC 상세' or 'Linked Finding' */
   category: string;
-  /** Reason string returned by BE in the decision envelope */
+  /** Domain-safe reason for the blocked state. */
   reason?: string;
-  /** Required scope description (e.g. capability + managed_system_id) */
-  requiredScope?: {
-    capability: string;
-    managed_system_id?: string;
-  };
-  /** Optional ReactNode for summary state to inject summary content. */
+  /** Optional state-specific copy when a permission boundary owns the wording. */
+  description?: string;
+  /** Optional request CTA label for callers that preserve an established flow. */
+  requestAccessLabel?: string;
+  /** Canonical `required_scope` strings from permissionDecisionSchema. */
+  requiredScope?: readonly string[];
+  /** Summary content; omit for the default placeholder or pass null to omit its container. */
   summary?: React.ReactNode;
   /** Decision identifier returned by BE for audit trail. */
   decisionId?: string;
@@ -38,13 +39,15 @@ const STATE_ICON: Record<PermissionState, React.ElementType> = {
   request_access:         Lock,
   summary_visible:        Eye,
   denied:                 XCircle,
-  blocked_not_requestable: Slash,
+  blocked_not_requestable: Ban,
 };
 
 export function PermissionBlockedPanel({
   state,
   category,
   reason,
+  description,
+  requestAccessLabel,
   requiredScope,
   summary,
   decisionId,
@@ -71,56 +74,58 @@ export function PermissionBlockedPanel({
       {/* State-specific body */}
       {state === 'request_access' && (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-text-secondary">이 항목에 접근하려면 권한 요청이 필요합니다.</p>
-          {requiredScope !== undefined && (
-            <p className="text-xs text-text-muted">
-              {requiredScope.capability}
-              {requiredScope.managed_system_id !== undefined
-                ? ` · ${requiredScope.managed_system_id}`
-                : ''}
-            </p>
+          <p className="text-sm text-text-secondary">
+            {description ?? '이 항목에 접근하려면 권한 요청이 필요합니다.'}
+          </p>
+          {reason !== undefined ? <p className="text-sm text-text-secondary">{reason}</p> : null}
+          {requiredScope !== undefined && requiredScope.length > 0 && (
+            <p className="text-xs text-text-muted">{requiredScope.join(' · ')}</p>
           )}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onRequestAccess}
-            disabled={onRequestAccess === undefined}
-          >
-            권한 요청하기
-          </Button>
+          {onRequestAccess !== undefined && (
+            <Button variant="default" size="sm" onClick={onRequestAccess}>
+              {requestAccessLabel ?? '권한 요청하기'}
+            </Button>
+          )}
         </div>
       )}
 
       {state === 'summary_visible' && (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-text-secondary">요약 정보만 표시됩니다.</p>
-          <NestedTextBlock>
-            {summary !== undefined ? (
-              summary
-            ) : (
-              <p className="text-text-muted text-sm">요약 정보가 없습니다.</p>
-            )}
-          </NestedTextBlock>
+          <p className="text-sm text-text-secondary">{description ?? '요약 정보만 표시됩니다.'}</p>
+          {summary !== null ? (
+            <NestedTextBlock>
+              {summary !== undefined ? (
+                summary
+              ) : (
+                <p className="text-text-muted text-sm">요약 정보가 없습니다.</p>
+              )}
+            </NestedTextBlock>
+          ) : null}
         </div>
       )}
 
       {state === 'denied' && (
         <p className="text-sm text-text-secondary">
-          {reason ?? '이 항목에 접근할 수 없습니다.'}
+          {description ?? reason ?? '이 항목에 접근할 수 없습니다.'}
         </p>
       )}
 
       {state === 'blocked_not_requestable' && (
-        <p className="text-sm text-text-secondary">
-          {reason ?? '권한 요청이 허용되지 않습니다.'}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-text-secondary">
+            {description ?? reason ?? '권한 요청이 허용되지 않습니다.'}
+          </p>
+          {description !== undefined && reason !== undefined ? (
+            <p className="text-sm text-text-secondary">{reason}</p>
+          ) : null}
+        </div>
       )}
 
       {/* Audit footer — only when decisionId is provided */}
       {decisionId !== undefined && (
         <p className="text-xs text-text-muted">
-          Decision <code>{decisionId}</code>
-          {evaluatedRelative !== undefined ? ` · evaluated ${evaluatedRelative}` : ''}
+          결정 <code>{decisionId}</code>
+          {evaluatedRelative !== undefined ? ` · ${evaluatedRelative}에 평가됨` : ''}
         </p>
       )}
     </div>

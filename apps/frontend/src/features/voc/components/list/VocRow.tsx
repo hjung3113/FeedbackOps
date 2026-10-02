@@ -2,10 +2,10 @@
  * VocRow — single-select row for the VOC inbox list.
  *
  * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a checkbox + severity
- * indicator lead, a title line (id · title · "N similar"), a meta line
+ * indicator lead, a title line (id · title), a meta line
  * (reporter-status badge · severity badge · managed system · area/"No area" ·
  * time · linked finding), and a trailing identity column (owner avatar /
- * "Owner 필요" badge + reporter avatar).
+ * shared unassigned badge + reporter avatar).
  *
  * SELECTED STATE: prototype uses a 2px left accent bar (`.object-row.selected::before`,
  * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
@@ -30,13 +30,14 @@ import {
   ReporterStatusBadge,
   SeverityBadge,
   SeverityIndicator,
+  UnassignedBadge,
   UserAvatar,
 } from '@fops/ui';
 import { cn } from '@fops/ui';
-import { Layers, Paperclip } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import type * as React from 'react';
 
-import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
+import { formatRelativeTime } from '@/lib/format/datetime';
 
 // ---------------------------------------------------------------------------
 // Severity → left-bar color token
@@ -65,6 +66,8 @@ export interface VocRowProps {
    * `summary_visible` decision on this VOC.
    */
   permissionLimited?: boolean;
+  /** Hides the internal unassigned-ownership cue in a reporter-only My VOCs row. */
+  showOwnerMissing?: boolean;
   /**
    * Optional resolver for the MS pill — caller (VocList) calls useManagedSystem
    * per row and passes the result in. Decouples primitive from the hook.
@@ -91,6 +94,7 @@ export function VocRow({
   selected,
   onSelect,
   permissionLimited,
+  showOwnerMissing = true,
   managedSystem,
   owner,
   reporter,
@@ -100,7 +104,7 @@ export function VocRow({
   className,
 }: VocRowProps) {
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
-  const relTime = formatVocCreatedAt(voc.created_at);
+  const relTime = formatRelativeTime(voc.created_at);
   const showCheckbox = onToggleCheck !== undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -184,19 +188,10 @@ export function VocRow({
                 {voc.display_id}
               </span>
               <span className="font-medium text-text-primary truncate">{voc.title}</span>
-              {voc.similar_count > 0 && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-status-reporter-reviewing/10 px-1.5 py-0.5 text-xs font-medium text-status-reporter-reviewing shrink-0"
-                  aria-label={`${voc.similar_count} similar`}
-                >
-                  <Layers className="h-2.5 w-2.5" aria-hidden="true" />
-                  {voc.similar_count} similar
-                </span>
-              )}
               {voc.attachment_count > 0 && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-text-muted/10 px-1.5 py-0.5 text-xs font-medium text-text-muted shrink-0"
-                  aria-label={`${voc.attachment_count} attachments`}
+                  aria-label={`첨부 ${voc.attachment_count}개`}
                 >
                   <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
                   {voc.attachment_count}
@@ -221,7 +216,7 @@ export function VocRow({
               ) : voc.analytics_area_id === null ? (
                 <>
                   <RowDot />
-                  <span className="text-text-warning">No area</span>
+                  <span className="text-text-warning">Analytics Area 없음</span>
                 </>
               ) : null}
               <RowDot />
@@ -231,13 +226,11 @@ export function VocRow({
         )}
       </div>
 
-      {/* TRAILING: owner avatar / "Owner 필요" + reporter avatar */}
+      {/* TRAILING: owner avatar / unassigned badge + reporter avatar */}
       {permissionLimited !== true && (
         <div className="flex items-center gap-2 shrink-0">
-          {ownerMissing ? (
-            <span className="inline-flex items-center rounded-full bg-accent-danger/10 px-2 py-0.5 text-xs font-medium text-accent-danger">
-              Owner 필요
-            </span>
+          {showOwnerMissing && ownerMissing ? (
+            <UnassignedBadge />
           ) : owner !== null && owner !== undefined ? (
             <UserAvatar user={owner} size="sm" />
           ) : null}

@@ -127,6 +127,30 @@ describe('<ComposerSection>', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('falls back to reply when triage access is removed from the active internal tab', () => {
+    vi.mocked(useComposerVisibility).mockImplementation((_voc, _me, canTriage) => ({
+      showPublic: false,
+      showReply: true,
+      showInternal: canTriage,
+    }));
+    const { rerender } = render(
+      <ComposerSection voc={VOC} me={ME} canTriage={true} />,
+      { wrapper: makeWrapper() },
+    );
+
+    const internalTab = screen.getByRole('tab', { name: '내부 코멘트' });
+    fireEvent.click(internalTab);
+    internalTab.focus();
+    expect(internalTab).toHaveAttribute('aria-selected', 'true');
+
+    rerender(<ComposerSection voc={VOC} me={ME} canTriage={false} />);
+
+    const replyTab = screen.getByRole('tab', { name: '제출자 답변' });
+    expect(replyTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('reporter-reply-composer')).toBeVisible();
+    expect(document.activeElement).toBe(replyTab);
+  });
+
   // REV-1 #7: all three composer bodies must stay mounted across tab switches so
   // drafts survive. Switching from 'reply' to 'internal' must not unmount 'reply'.
   it('[#7] draft survives tab switch: all composers stay mounted when tab changes', () => {
@@ -138,7 +162,7 @@ describe('<ComposerSection>', () => {
     render(<ComposerSection voc={VOC} me={ME} />, { wrapper: makeWrapper() });
 
     // Switch to internal tab (ComposerTabs renders buttons with role="tab")
-    const internalTab = screen.getByRole('tab', { name: /Internal note/i });
+    const internalTab = screen.getByRole('tab', { name: /내부 코멘트/i });
     fireEvent.click(internalTab);
 
     // All three composer RichEditor stubs must remain in the DOM (kept mounted, CSS-hidden).

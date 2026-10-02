@@ -1,7 +1,8 @@
 // useFindingDetailController — state machine behind FullFindingDetail.
 // Owns modal open/close state, the detail queries (managed systems, analytics
 // areas, linked task, linked VOC, actors, permission check), derived lookups,
-// and the status mutation handler. Pure state: rendering lives in FullFindingDetail.
+// and the status mutation handler. Request Task execution state lives in
+// useFindingExecutionSection; rendering lives in FullFindingDetail.
 
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -23,8 +24,6 @@ export interface FindingDetailController {
   setAddEvidenceOpen: (open: boolean) => void;
   linkEvidenceOpen: boolean;
   setLinkEvidenceOpen: (open: boolean) => void;
-  requestTaskOpen: boolean;
-  setRequestTaskOpen: (open: boolean) => void;
   linkTaskOpen: boolean;
   setLinkTaskOpen: (open: boolean) => void;
   actorsById: Map<string, string>;
@@ -38,7 +37,8 @@ export interface FindingDetailController {
   markNotActionableDisabled: boolean;
 }
 
-const DETAIL_SECTIONS = [
+// ADR-0057 A2 amendment keeps navigation Korean and entity nouns English.
+export const DETAIL_SECTIONS = [
   { id: 'summary', label: '요약' },
   { id: 'metadata', label: '소스/심각도/신뢰도' },
   { id: 'evidence', label: 'Evidence' },
@@ -51,7 +51,6 @@ const DETAIL_SECTIONS = [
 export function useFindingDetailController(finding: FindingDto): FindingDetailController {
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
-  const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const [linkTaskOpen, setLinkTaskOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const { actors } = useWorkspaceActors();
@@ -139,8 +138,6 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     setAddEvidenceOpen,
     linkEvidenceOpen,
     setLinkEvidenceOpen,
-    requestTaskOpen,
-    setRequestTaskOpen,
     linkTaskOpen,
     setLinkTaskOpen,
     actorsById,

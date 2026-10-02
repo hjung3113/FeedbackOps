@@ -19,6 +19,10 @@ export interface TaskRequestRow {
   decided_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  source_display_id?: string;
+  source_title?: string;
+  source_evidence_count?: number;
+  source_voc_reporter_id?: string;
 }
 
 function toDate(value: Date | string): Date {
@@ -45,6 +49,16 @@ function mapTaskRequestRow(row: Record<string, unknown>): TaskRequestRow {
         : toDate(row.decided_at as Date | string),
     created_at: toDate(row.created_at as Date | string),
     updated_at: toDate(row.updated_at as Date | string),
+    ...(row.source_display_id == null
+      ? {}
+      : { source_display_id: row.source_display_id as string }),
+    ...(row.source_title == null ? {} : { source_title: row.source_title as string }),
+    ...(row.source_evidence_count == null
+      ? {}
+      : { source_evidence_count: Number(row.source_evidence_count) }),
+    ...(row.source_voc_reporter_id == null
+      ? {}
+      : { source_voc_reporter_id: row.source_voc_reporter_id as string }),
   };
 }
 
@@ -136,20 +150,40 @@ export async function listTaskRequestsByWorkspace(
     managedSystemId?: string;
   },
 ): Promise<TaskRequestRow[]> {
-  const predicates = [sql`workspace_id = ${input.workspaceId}`];
-  if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
+  const predicates = [sql`tr.workspace_id = ${input.workspaceId}`];
+  if (input.status !== undefined) predicates.push(sql`tr.status = ${input.status}`);
   if (input.managedSystemId !== undefined) {
-    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
+    predicates.push(sql`tr.primary_managed_system_id = ${input.managedSystemId}`);
   }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
-      evidence_summary, requested_outcome, requester_actor_id, status,
-      reviewer_actor_id, decision_reason, decided_at,
-      created_at, updated_at
-    FROM task_request.task_requests
+      tr.id, tr.workspace_id, tr.display_id, tr.source_type, tr.source_id,
+      tr.primary_managed_system_id, tr.evidence_summary, tr.requested_outcome,
+      tr.requester_actor_id, tr.status, tr.reviewer_actor_id, tr.decision_reason,
+      tr.decided_at, tr.created_at, tr.updated_at,
+      COALESCE(f.display_id, v.display_id, c.display_id) AS source_display_id,
+      COALESCE(f.title, v.title, c.title) AS source_title,
+      f.evidence_count AS source_evidence_count,
+      v.reporter_id AS source_voc_reporter_id
+    FROM task_request.task_requests tr
+    LEFT JOIN finding.findings f
+      ON tr.source_type = 'finding'
+     AND f.id = tr.source_id
+     AND f.workspace_id = tr.workspace_id
+     AND f.primary_managed_system_id = tr.primary_managed_system_id
+    LEFT JOIN voc.vocs v
+      ON tr.source_type = 'voc'
+     AND v.id = tr.source_id
+     AND v.workspace_id = tr.workspace_id
+     AND v.primary_managed_system_id = tr.primary_managed_system_id
+     AND v.archived_at IS NULL
+    LEFT JOIN voc_cluster.voc_clusters c
+      ON tr.source_type = 'voc_cluster'
+     AND c.id = tr.source_id
+     AND c.workspace_id = tr.workspace_id
+     AND c.primary_managed_system_id = tr.primary_managed_system_id
     WHERE ${sql.join(predicates, sql` AND `)}
-    ORDER BY created_at DESC, id DESC
+    ORDER BY tr.created_at DESC, tr.id DESC
   `);
   return result.rows.map(mapTaskRequestRow);
 }

@@ -1,10 +1,11 @@
 // Create a Finding from a VOC Cluster. Local form (not the cross-system
 // CreateFindingModal): this flow is VOC-cluster origin and has its own
-// analytics-free severity picker. No list invalidation on success — the
-// success path navigates away to the new Finding.
+// analytics-free severity picker. Its mutation invalidates the Findings list
+// before the success path navigates to the new Finding.
 
-import type { CreateFindingRequest, FindingSeverity } from '@fops/shared';
-import { createFindingRequestSchema } from '@fops/shared';
+import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import type { CreateFindingRequest } from '@fops/shared';
+import { createFindingRequestSchema, findingSeveritySchema } from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -31,13 +32,9 @@ import { useCreateFindingFromCluster } from '@/features/voc-cluster/hooks/useCre
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 
 // ── Severity options (mirrors CreateFindingModal) ─────────────────────────────
-
-const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'critical', label: 'Critical' },
-];
+// Built inside the component: FINDING_SEVERITY_LABELS re-exports @fops/ui, and
+// evaluating it at module init breaks when this file loads early in the route
+// tree import chain (RouteFallback.test hit it via voc-clusters).
 
 export function CreateFindingFromClusterModal({
   open,
@@ -52,6 +49,10 @@ export function CreateFindingFromClusterModal({
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
   const mutation = useCreateFindingFromCluster({ idempotencyKey });
 
+  const severityOptions = findingSeveritySchema.options.map((value) => ({
+    value,
+    label: FINDING_SEVERITY_LABELS[value],
+  }));
   const form = useForm<CreateFindingRequest>({
     resolver: zodResolver(createFindingRequestSchema),
     defaultValues: {
@@ -157,7 +158,7 @@ export function CreateFindingFromClusterModal({
             <Select
               defaultValue="medium"
               onValueChange={(val) =>
-                form.setValue('severity', val as FindingSeverity, {
+                form.setValue('severity', val as CreateFindingRequest['severity'], {
                   shouldValidate: true,
                 })
               }
@@ -169,7 +170,7 @@ export function CreateFindingFromClusterModal({
                 <SelectValue placeholder="심각도 선택" />
               </SelectTrigger>
               <SelectContent>
-                {SEVERITY_OPTIONS.map((opt) => (
+                {severityOptions.map((opt) => (
                   <SelectItem
                     key={opt.value}
                     value={opt.value}
@@ -191,7 +192,7 @@ export function CreateFindingFromClusterModal({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={closeAndReset}
             disabled={isSubmitting}
             data-testid="create-finding-from-cluster-cancel"

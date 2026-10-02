@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { useVocDetail } from '../useVocDetail';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

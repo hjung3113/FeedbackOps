@@ -61,6 +61,11 @@ import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
+async function chooseReporterStatus(label: string): Promise<void> {
+  fireEvent.click(screen.getByRole('combobox', { name: '다음 공개 상태 선택' }));
+  fireEvent.click(await screen.findByRole('option', { name: label }));
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const REPORTER_ID = '00000000-0000-0000-0000-000000000001';
@@ -176,7 +181,7 @@ describe('<PublicUpdateComposer>', () => {
     render(<PublicUpdateComposer voc={vocGated} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     // The Publish button must be disabled when gate blocks the staged next status.
-    const publishBtn = screen.getByRole('button', { name: /publish update/i });
+    const publishBtn = screen.getByRole('button', { name: /공개 업데이트 게시/ });
     expect(publishBtn).toBeDisabled();
   });
 
@@ -194,7 +199,7 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).toBeDisabled();
     publish.click();
     expect(mutationMock.mutate).not.toHaveBeenCalled();
@@ -214,7 +219,7 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^publish update$/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /^공개 업데이트 게시$/ })).not.toBeDisabled();
   });
 
   it('keeps the response status through the delayed detail refetch after publishing', async () => {
@@ -246,10 +251,8 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'reviewing' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /^publish update$/i }));
+    await chooseReporterStatus('검토 중');
+    fireEvent.click(screen.getByRole('button', { name: /^공개 업데이트 게시$/ }));
 
     expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
     await React.act(async () => {
@@ -258,17 +261,19 @@ describe('<PublicUpdateComposer>', () => {
 
     await waitFor(() => {
       expect(delayedDetailRefetch).toHaveBeenCalledTimes(1);
-      expect(
-        screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
-      ).toHaveValue('reviewing');
+      expect(screen.getByRole('combobox', { name: '다음 공개 상태 선택' })).toHaveValue(
+        'reviewing',
+      );
+      expect(screen.getByText('공개 상태는 그대로 유지됩니다.')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: '다음 공개 상태 선택' }));
+    await waitFor(() => {
       // The "(현재)" marker tracks the response VOC, and that option is the one
       // selected — i.e. nextStatus was resynced from data.voc, not the stale prop.
       const currentOption = screen.getByRole('option', {
         name: '검토 중 (현재)',
-      }) as HTMLOptionElement;
-      expect(currentOption.value).toBe('reviewing');
-      expect(currentOption.selected).toBe(true);
-      expect(screen.getByText('Reporter-facing status는 그대로 유지됩니다.')).toBeInTheDocument();
+      });
+      expect(currentOption).toHaveAttribute('aria-selected', 'true');
     });
     expect(queryClient.getQueryData(['voc', BASE_VOC.id])).toEqual(UPDATED_VOC);
 
@@ -303,47 +308,41 @@ describe('<PublicUpdateComposer>', () => {
     },
   } as unknown as VocDetailEnvelope;
 
-  function renderThenMoveVoc() {
+  async function renderThenMoveVoc() {
     const { rerender } = render(
       <PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />,
       { wrapper: makeWrapper() },
     );
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'reviewing' },
-    });
+    await chooseReporterStatus('검토 중');
     rerender(<PublicUpdateComposer voc={MOVED_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />);
   }
 
-  it('keeps the staged status instead of silently resyncing it to the moved VOC', () => {
-    renderThenMoveVoc();
+  it('keeps the staged status instead of silently resyncing it to the moved VOC', async () => {
+    await renderThenMoveVoc();
 
-    expect(
-      screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
-    ).toHaveValue('reviewing');
+    expect(screen.getByRole('combobox', { name: '다음 공개 상태 선택' })).toHaveValue('reviewing');
     // The choice is still presented as pending, not quietly dropped: the footer
     // hint would read "그대로 유지됩니다" if nextStatus had been resynced.
     expect(screen.getByText('로 함께 게시')).toBeInTheDocument();
-    expect(
-      screen.queryByText('Reporter-facing status는 그대로 유지됩니다.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('공개 상태는 그대로 유지됩니다.')).not.toBeInTheDocument();
   });
 
-  it('blocks Publish when the staged status is no longer an allowed transition', () => {
-    renderThenMoveVoc();
+  it('blocks Publish when the staged status is no longer an allowed transition', async () => {
+    await renderThenMoveVoc();
 
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).toBeDisabled();
 
     fireEvent.click(publish);
     expect(mutationMock.mutate).not.toHaveBeenCalled();
   });
 
-  it('blocks the PreviewModal Publish for a stale staged status too', () => {
-    renderThenMoveVoc();
+  it('blocks the PreviewModal Publish for a stale staged status too', async () => {
+    await renderThenMoveVoc();
 
-    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^미리보기/ }));
     const modalPublish = screen
-      .getAllByRole('button', { name: /^publish update$/i })
+      .getAllByRole('button', { name: /^공개 업데이트 게시$/ })
       .find((btn) => btn.closest('[role="dialog"]') != null);
     expect(modalPublish).toBeDefined();
     expect(modalPublish).toBeDisabled();
@@ -353,8 +352,8 @@ describe('<PublicUpdateComposer>', () => {
     expect(mutationMock.mutate).not.toHaveBeenCalled();
   });
 
-  it('tells the user the current status changed rather than blaming their choice', () => {
-    renderThenMoveVoc();
+  it('tells the user the current status changed rather than blaming their choice', async () => {
+    await renderThenMoveVoc();
 
     expect(screen.getByText('선택한 상태로는 더 이상 전환할 수 없습니다')).toBeInTheDocument();
     // The copy must name both statuses — which one it moved to, and which one is
@@ -365,17 +364,15 @@ describe('<PublicUpdateComposer>', () => {
     expect(reason).toContain('다시 선택');
   });
 
-  it('re-enables Publish once the user picks an allowed transition', () => {
-    renderThenMoveVoc();
+  it('re-enables Publish once the user picks an allowed transition', async () => {
+    await renderThenMoveVoc();
 
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'resolved' },
-    });
+    await chooseReporterStatus('해결됨');
 
     expect(
       screen.queryByText('선택한 상태로는 더 이상 전환할 수 없습니다'),
     ).not.toBeInTheDocument();
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).not.toBeDisabled();
 
     fireEvent.click(publish);

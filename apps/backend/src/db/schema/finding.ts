@@ -13,6 +13,7 @@ import {
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
 import { surveyResponseExcerptApprovals } from './survey.js';
+import { milestones } from './task.js';
 
 export const findingSchema = pgSchema('finding');
 
@@ -37,7 +38,9 @@ export const findings = findingSchema.table(
     status: text('status').notNull().default('draft'),
     analyticsAreaId: uuid('analytics_area_id').references(() => analyticsAreas.id),
     linkedTaskId: uuid('linked_task_id'),
-    linkedMilestoneId: uuid('linked_milestone_id'),
+    linkedMilestoneId: uuid('linked_milestone_id').references(() => milestones.id, {
+      onDelete: 'restrict',
+    }),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => actors.id),

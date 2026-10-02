@@ -7,12 +7,9 @@ import { surveyResponseSubmittedDetailSchema } from '@fops/shared';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  insertMsDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

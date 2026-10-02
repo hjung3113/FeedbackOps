@@ -3,8 +3,11 @@ import type { Tx } from '../../db/tx.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { createMyAnswerableSurveys } from './answerable-surveys.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
+import { createSurveyFollowUp } from './follow-up.js';
+import { createMySurveyResponseHistory } from './response-history.js';
 import { createSurveyResults } from './results.js';
 
 export interface SurveysActor {
@@ -31,6 +34,9 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     ...createSurveyAuthoring(deps),
     ...createSurveyResults(deps),
     ...createSurveyEvidenceAccess(deps),
+    ...createSurveyFollowUp(deps),
+    ...createMySurveyResponseHistory(deps),
+    ...createMyAnswerableSurveys(deps),
   };
 }
 export type SurveysService = ReturnType<typeof createSurveysService>;

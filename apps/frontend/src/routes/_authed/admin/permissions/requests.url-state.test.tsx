@@ -173,7 +173,7 @@ describe('/admin/permissions/requests URL state', () => {
       `/admin/permissions/requests?tab=approved&selected=${APPROVED_ID}`,
     );
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /승인됨 \(1\)/ })).toHaveAttribute(
+      expect(screen.getByRole('tab', { name: /승인됨 1/ })).toHaveAttribute(
         'aria-selected',
         'true',
       ),
@@ -204,7 +204,7 @@ describe('/admin/permissions/requests URL state', () => {
     const lengthBefore = router.history.length;
 
     // Pending selection (auto-selected) is not visible in 승인됨 → reselect.
-    fireEvent.click(screen.getByRole('tab', { name: /승인됨 \(1\)/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /승인됨 1/ }));
 
     await waitFor(() => {
       expect(router.state.location.search).toEqual({
@@ -227,7 +227,7 @@ describe('/admin/permissions/requests URL state', () => {
     );
     const lengthBefore = router.history.length;
 
-    fireEvent.click(screen.getByRole('tab', { name: /전체 \(4\)/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /전체 4/ }));
 
     await waitFor(() => {
       expect(router.state.location.search).toEqual({
@@ -267,7 +267,7 @@ describe('/admin/permissions/requests URL state', () => {
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('tab', { name: /승인됨 \(1\)/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /승인됨 1/ }));
     await waitFor(() => {
       expect(router.state.location.search).toEqual({
         tab: 'approved',
@@ -280,10 +280,7 @@ describe('/admin/permissions/requests URL state', () => {
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ selected: PENDING_ID });
     });
-    expect(screen.getByRole('tab', { name: /대기 중 \(1\)/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    expect(screen.getByRole('tab', { name: /대기 중 1/ })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
         'workspace.read',
@@ -346,7 +343,7 @@ describe('/admin/permissions/requests URL state', () => {
     await waitFor(() =>
       expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('tab', { name: /승인됨 \(1\)/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /승인됨 1/ }));
     await waitFor(() =>
       expect(router.state.location.search).toEqual({ tab: 'approved', selected: APPROVED_ID }),
     );

@@ -40,12 +40,11 @@ events, and dashboard repair signals.
 | `POST /survey-responses/:id/create-finding` | FOP-SURVEY-005 | Survey Response | Finding | `generated_finding` | finding_created_from_survey_response | resolves configured synthesis action for survey response | `POST /survey-responses/:id/create-voc` |
 | `POST /vocs/:id/request-task` | FOP-TASK-001 | VOC | Task Request | `requested_task` | task_request_created_from_voc | moves VOC follow-up to pending execution review | creating Task directly from VOC follow-up |
 | `POST /voc-clusters/:id/request-task` | FOP-TASK-001 | VOC Cluster | Task Request | `requested_task` | task_request_created_from_voc_cluster | moves cluster follow-up to pending execution review | creating Task directly from VOC Cluster follow-up |
-| `POST /findings/:id/request-task` | FOP-TASK-001 | Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
-| `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | |
+| `POST /findings/:id/request-task` | FOP-TASK-001 | Finding, including Survey-derived Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
 | `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
-| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved (미구현 as of Slice 6) | may restore blocked object visibility | bypassing explicit deny checks |
-| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected (미구현 as of Slice 6) | keeps or creates permission-blocked state | exposing full restricted object |
+| `POST /permissions/requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_approved | may restore blocked object visibility | bypassing explicit deny checks |
+| `POST /permissions/requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Request (rejected) | none | permission_rejected | keeps permission-blocked state | exposing full restricted object |
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve

@@ -3,13 +3,23 @@
 // detail route (path `clusterId`) both host this shell; selection storage is the
 // route's concern. Screens live in features/voc-cluster per AGENTS ownership.
 
-import { Button, ListShell, ObjectRow, Skeleton } from '@fops/ui';
+import { ListStateMessage } from '@/components/ListStateMessage';
+import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
+import { isPermissionDenied } from '@/lib/api';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatShortDate } from '@/lib/format/datetime';
+import {
+  ListShell,
+  ListToolbar,
+  type ListToolbarTab,
+  ObjectRow,
+  PermissionBlockedPanel,
+  Skeleton,
+} from '@fops/ui';
 import * as React from 'react';
 import { useState } from 'react';
 
-import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
-
-import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
+import { ClusterStatusBadge } from '../../lib/presentation';
 import type { VocClusterListPresentation } from '../types';
 import { VocClusterDetailPanel } from './VocClusterDetailPanel';
 
@@ -57,7 +67,7 @@ export function VocClusterListShell({
   return (
     <ListShell
       toolbar={{
-        title: 'VOC 클러스터',
+        title: 'VOC Cluster',
         subtitle: 'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
         actions: toolbarActions,
       }}
@@ -67,6 +77,8 @@ export function VocClusterListShell({
           allClusters={clusters}
           isPending={listQuery.isPending}
           isError={listQuery.isError}
+          error={listQuery.error}
+          onRetry={() => void listQuery.refetch()}
           selectedId={selectedId}
           onSelect={onSelect}
           activeTab={activeTab}
@@ -75,7 +87,11 @@ export function VocClusterListShell({
       }
       detailPanel={
         selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId) ? (
-          <VocClusterDetailPanel clusterId={selectedId} onClose={() => onCloseDetail()} />
+          <VocClusterDetailPanel
+            key={selectedId}
+            clusterId={selectedId}
+            onClose={() => onCloseDetail()}
+          />
         ) : undefined
       }
     />
@@ -91,6 +107,8 @@ function ClusterListBody({
   allClusters,
   isPending,
   isError,
+  error,
+  onRetry,
   selectedId,
   onSelect,
   activeTab,
@@ -100,74 +118,112 @@ function ClusterListBody({
   allClusters: VocClusterListPresentation[];
   isPending: boolean;
   isError: boolean;
+  error: unknown;
+  onRetry: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   activeTab: 'all' | 'confirmed' | 'no-finding';
   onTabChange: (tab: 'all' | 'confirmed' | 'no-finding') => void;
 }): React.ReactElement {
-  const tabs = [
-    { key: 'all' as const, label: '전체', count: allClusters.length },
+  // #706 — counts are unknown until the list read succeeds (covers pending,
+  // error, and refetch-after-error without data); unknown must never render
+  // as 0 (ListTabs renders badgeCount only when set).
+  const countsKnown = !isPending && !isError;
+  const tabs: ListToolbarTab[] = [
     {
-      key: 'confirmed' as const,
-      label: '확정',
-      count: allClusters.filter((cluster) => cluster.status === 'confirmed').length,
+      value: 'all',
+      label: '전체',
+      ...(countsKnown ? { badgeCount: allClusters.length } : {}),
+      id: 'cluster-tab-all',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-all',
     },
     {
-      key: 'no-finding' as const,
+      value: 'confirmed',
+      label: '확정',
+      ...(countsKnown
+        ? { badgeCount: allClusters.filter((cluster) => cluster.status === 'confirmed').length }
+        : {}),
+      id: 'cluster-tab-confirmed',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-confirmed',
+    },
+    {
+      value: 'no-finding',
       label: 'Finding 없음',
-      count: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0).length,
+      ...(countsKnown
+        ? {
+            badgeCount: allClusters.filter(
+              (cluster) => (cluster.linked_findings ?? []).length === 0,
+            ).length,
+          }
+        : {}),
+      id: 'cluster-tab-no-finding',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-no-finding',
     },
   ];
+  const isReadDenied = isError && isPermissionDenied(error);
 
   return (
     <section className="flex min-h-full flex-col">
-      <div
-        className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
-        data-toolbar-height="50"
-      >
-        <div
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
-          role="tablist"
-          aria-label="클러스터 필터"
-        >
-          {tabs.map((tab) => (
-            <Button
-              key={tab.key}
-              type="button"
-              variant={activeTab === tab.key ? 'secondary' : 'ghost'}
-              size="sm"
-              role="tab"
-              id={`cluster-tab-${tab.key}`}
-              aria-controls="cluster-list-panel"
-              aria-selected={activeTab === tab.key}
-              onClick={() => onTabChange(tab.key)}
-              data-testid={`cluster-tab-${tab.key}`}
-            >
-              {tab.label} {tab.count}
-            </Button>
-          ))}
-        </div>
-        <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
-      </div>
+      {!isReadDenied ? (
+        <ListToolbar
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={(next) => onTabChange(next as typeof activeTab)}
+          tabsAriaLabel="Cluster 필터"
+          action={<span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>}
+        />
+      ) : null}
 
-      <div id="cluster-list-panel" role="tabpanel" aria-labelledby={`cluster-tab-${activeTab}`}>
+      <div
+        id="cluster-list-panel"
+        {...(!isReadDenied
+          ? { role: 'tabpanel', 'aria-labelledby': `cluster-tab-${activeTab}` }
+          : {})}
+      >
         {isPending ? (
           <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : isError && isPermissionDenied(error) ? (
+          <PermissionBlockedPanel
+            state="denied"
+            category="VOC Cluster list"
+            reason={PERMISSION_BLOCKED_REASONS.vocClusterList}
+            className="m-4"
+          />
         ) : isError ? (
-          <p className="p-4 text-sm text-accent-danger" data-testid="cluster-list-error">
-            데이터를 불러오지 못했습니다.
-          </p>
-        ) : clusters.length === 0 ? (
-          <div
-            className="p-8 text-center text-sm text-text-muted"
-            data-testid="cluster-empty-state"
-          >
-            생성된 클러스터가 없습니다.
+          <div data-testid="cluster-list-error">
+            <ListStateMessage
+              variant="error"
+              title="VOC Cluster 목록을 불러오지 못했습니다"
+              body="잠시 후 다시 시도하세요."
+              action={{ label: '다시 시도', onClick: onRetry }}
+            />
           </div>
+        ) : allClusters.length === 0 ? (
+          <div data-testid="cluster-empty-state">
+            <ListStateMessage
+              variant="empty"
+              title="생성된 VOC Cluster가 없습니다."
+              body="VOC를 묶어 만든 Cluster가 여기에 표시됩니다."
+            />
+          </div>
+        ) : clusters.length === 0 ? (
+          // Prototype title casing is surface-specific; the reset action follows ADR-0052.
+          <ListStateMessage
+            variant="filtered"
+            title="이 필터에 해당하는 Cluster가 없습니다"
+            body={`선택한 조건: ${activeTab === 'confirmed' ? '확정' : 'Finding 없음'}`}
+            action={{
+              label: '필터 초기화',
+              onClick: () => onTabChange('all'),
+            }}
+          />
         ) : (
           <div data-testid="cluster-list">
             {clusters.map((cluster) => (
@@ -208,7 +264,7 @@ function ClusterRow({
         <>
           <span>VOC {memberCount}개</span>
           {dot()}
-          <span>{formatClusterDate(cluster.created_at)}</span>
+          <span>{formatShortDate(cluster.created_at)}</span>
         </>
       }
     />

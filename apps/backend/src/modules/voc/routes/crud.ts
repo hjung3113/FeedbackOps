@@ -82,12 +82,14 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
   });
 
   // PATCH /vocs/:id — Slice 3 #14 triage-commit route.
-  // TODO(#14 follow-up): triage rate-limit bucket per spec (60/min vs shared mutation 10/min)
+  // 60/min per actor in its own bucket so the triage console can sustain operator commits.
   app.route({
     method: 'PATCH',
     url: '/vocs/:id',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    ...(rateLimitConfig
+      ? { config: { rateLimit: (rateLimitConfig.triage ?? rateLimitConfig.mutation) as never } }
+      : {}),
     handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');

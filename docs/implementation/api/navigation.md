@@ -11,7 +11,7 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
   predicate and resolved read scope as its backing list route. Invalid values return
   `validation.failed` (422).
 - Currently emitted keys are `voc.inbox`, `voc.triage`, `voc.my`, `voc.tab.high`,
-  `voc.tab.unassigned`, `voc.tab.no-link`, `voc.clusters`, `findings.all`, and
+  `voc.tab.unassigned`, `voc.inbox.no-link`, `voc.clusters`, `findings.all`, and
   `surveys.all`. The VOC keys use the shared VOC list predicate; the other keys
   call their owning list read services. A key is absent only when it has no backing
   list filter or when scope resolution returns the expected `permission.denied` or

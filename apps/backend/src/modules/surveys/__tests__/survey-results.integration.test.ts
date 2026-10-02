@@ -7,12 +7,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  insertMsDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -121,6 +118,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
+      'delete from core.managed_systems where workspace_id=$1 and slug like $2',
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
       'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
       [WORKSPACE_ID, `${SLUG}-%`],
     );
@@ -131,10 +132,6 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     await migrateHandle.pool.query(
       "delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'",
       [WORKSPACE_ID],
-    );
-    await migrateHandle.pool.query(
-      'delete from core.managed_systems where workspace_id=$1 and slug like $2',
-      [WORKSPACE_ID, `${SLUG}%`],
     );
   }
 
@@ -491,6 +488,87 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         app_response_select: false,
       },
     ]);
+  });
+
+  it('classifies survey response state per actor and never exposes below-threshold counts', async () => {
+    const previousSettings = await migrateHandle.pool.query<{
+      survey_anonymity_threshold: number;
+    }>('select survey_anonymity_threshold from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
+    try {
+      const configured = await patchWorkspaceSettings({ survey_anonymity_threshold: 6 });
+      expect(configured.statusCode).toBe(200);
+
+      const reader = await dev();
+      const holder = await dev();
+      const zero = await seed([]);
+      for (const actor of [reader, holder]) await grant(actor.id, 'survey.read', zero.msId);
+      await grant(holder.id, 'survey.read_personal_responses', zero.msId);
+
+      const readerZero = parse2xx(await get(zero.id, reader.cookie));
+      const holderZero = parse2xx(await get(zero.id, holder.cookie));
+      for (const body of [readerZero, holderZero]) {
+        expect(body.response_state).toBe('none');
+        expect(body.anonymity_threshold).toBe(6);
+      }
+      const expectedZeroQuestionIds = Object.values(zero.questions).sort();
+      expect(readerZero.questions.map((question) => question.question_id).sort()).toEqual(
+        expectedZeroQuestionIds,
+      );
+      expect(holderZero.questions.map((question) => question.question_id).sort()).toEqual(
+        expectedZeroQuestionIds,
+      );
+      expect(readerZero.questions.every((question) => question.visibility === 'suppressed')).toBe(
+        true,
+      );
+      expect(
+        holderZero.questions.every(
+          (question) => question.visibility === 'visible' && question.answer_count === 0,
+        ),
+      ).toBe(true);
+
+      const below = await seed(full(1));
+      for (const actor of [reader, holder]) await grant(actor.id, 'survey.read', below.msId);
+      await grant(holder.id, 'survey.read_personal_responses', below.msId);
+      const nonHolderWire = await get(below.id, reader.cookie);
+      const nonHolderBelow = parse2xx(nonHolderWire);
+      expect(nonHolderBelow.response_state).toBe('below_threshold');
+      expect(nonHolderBelow.anonymity_threshold).toBe(6);
+      expect(
+        nonHolderBelow.questions.every((question) => question.visibility === 'suppressed'),
+      ).toBe(true);
+      const serializedNonHolder = JSON.stringify(nonHolderWire.json());
+      expect(serializedNonHolder).not.toContain('"answer_count"');
+      expect(serializedNonHolder).not.toMatch(/"(?:count|response_count|total_count)"\s*:\s*\d+/);
+      const holderBelow = parse2xx(await get(below.id, holder.cookie));
+      expect(holderBelow.response_state).toBe('visible');
+      expect(holderBelow.anonymity_threshold).toBe(6);
+      expect(holderBelow.questions.every((question) => question.visibility === 'visible')).toBe(
+        true,
+      );
+
+      const atThreshold = await seed(full(6));
+      for (const actor of [reader, holder]) await grant(actor.id, 'survey.read', atThreshold.msId);
+      await grant(holder.id, 'survey.read_personal_responses', atThreshold.msId);
+      for (const actor of [reader, holder]) {
+        const body = parse2xx(await get(atThreshold.id, actor.cookie));
+        expect(body.response_state).toBe('visible');
+        expect(body.anonymity_threshold).toBe(6);
+      }
+    } finally {
+      if (previousSettings.rows[0]) {
+        await migrateHandle.pool.query(
+          'update core.workspace_settings set survey_anonymity_threshold = $2 where workspace_id = $1',
+          [WORKSPACE_ID, previousSettings.rows[0].survey_anonymity_threshold],
+        );
+      } else {
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id = $1',
+          [WORKSPACE_ID],
+        );
+      }
+    }
   });
 
   it('emits request_task only for elevated actors who can read the derived Finding', async () => {

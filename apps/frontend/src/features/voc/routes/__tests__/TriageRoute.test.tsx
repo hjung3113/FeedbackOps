@@ -3,10 +3,10 @@
 // REV-1 #9: user role without voc.triage capability gets PermissionBlockedPanel.
 // TDD RED: written before TriageRoute.tsx implementation exists.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // REV-3 Cluster Y: TriagePanel now uses useQueryClient (for the empty-body
 // compensate refetch path). Tests must wrap renders in QueryClientProvider.
@@ -21,6 +21,10 @@ function renderWithQc(node: React.ReactElement) {
 
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
+
+vi.mock('@/lib/api/nav', () => ({
+  fetchNavCounts: vi.fn(),
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => searchState,
@@ -89,7 +93,7 @@ vi.mock('../../hooks/useVocList', () => ({
 }));
 
 // Stub useWorkspaceActors — added in Chunk 2; TriagePanel now calls it.
-vi.mock('../../hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     actors: [],
     isSuccess: true,
@@ -104,7 +108,7 @@ vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 
 // ── Stub usePermissionCheck (REV-2 #9 capability gate) ────────────────────────
 
-vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck: vi.fn(),
   permissionCheckQueryKey: () => ['permission-check', 'voc.triage', null],
   permissionRequestsMineKey: ['permission-requests-mine'],
@@ -150,9 +154,10 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // ── Import subject ─────────────────────────────────────────────────────────────
 
-import { TriageRoute } from '../TriageRoute';
+import { fetchNavCounts } from '@/lib/api/nav';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { TriageRoute } from '../TriageRoute';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -193,6 +198,15 @@ describe('TriageRoute', () => {
   beforeEach(() => {
     searchState = { view: 'triage' };
     navigateMock.mockClear();
+    vi.mocked(fetchNavCounts)
+      .mockReset()
+      .mockResolvedValue({
+        counts: {
+          'voc.triage': 7,
+          'voc.tab.unassigned': 2,
+          'voc.tab.high': 1,
+        },
+      });
     // Default: admin actor with voc.triage capability
     vi.mocked(useMe).mockReturnValue(ADMIN_ME as unknown as ReturnType<typeof useMe>);
     // Default: capability check approves (Admin/Developer with scope).
@@ -215,15 +229,92 @@ describe('TriageRoute', () => {
     });
   });
 
+  it('shows the whole queue total and both loaded tab counts', async () => {
+    renderWithQc(<TriageRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
+    });
+    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /미분류/ })).not.toHaveTextContent(/\d/);
+    expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
+  });
+
+  it('keeps the queue total unavailable while nav counts are delayed', async () => {
+    let resolveCounts!: (result: Awaited<ReturnType<typeof fetchNavCounts>>) => void;
+    const delayedCounts = new Promise<Awaited<ReturnType<typeof fetchNavCounts>>>((resolve) => {
+      resolveCounts = resolve;
+    });
+    vi.mocked(fetchNavCounts).mockReturnValueOnce(delayedCounts);
+
+    renderWithQc(<TriageRoute />);
+
+    const total = await screen.findByTestId('triage-queue-total');
+    expect(total).toHaveTextContent('— VOC');
+    expect(total).toHaveAttribute('aria-label', '전체 대기열 불러오는 중');
+    expect(total).not.toHaveTextContent(/\d/);
+    expect(screen.getByRole('tab', { name: '미배정' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '높음' })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveCounts({
+        counts: {
+          'voc.triage': 7,
+          'voc.tab.unassigned': 2,
+          'voc.tab.high': 1,
+        },
+      });
+      await delayedCounts;
+    });
+
+    await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
+    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
+  });
+
+  it('shows an unavailable queue total after nav counts fail', async () => {
+    vi.mocked(fetchNavCounts).mockRejectedValueOnce(new Error('nav counts unavailable'));
+
+    renderWithQc(<TriageRoute />);
+
+    const total = await screen.findByTestId('triage-queue-total');
+    await waitFor(() => {
+      expect(total).toHaveTextContent('— VOC');
+      expect(total).toHaveAttribute('aria-label', '전체 대기열 알 수 없음');
+    });
+    expect(total).not.toHaveTextContent(/\d/);
+  });
+
+  it('uses the High nav count for the High tab', async () => {
+    searchState = { view: 'triage', tab: 'high' };
+
+    renderWithQc(<TriageRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /높음 1/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+    });
+  });
+
+  it('omits a secondary count when the active tab has no nav count key', async () => {
+    searchState = { view: 'triage', tab: 'waiting' };
+
+    renderWithQc(<TriageRoute />);
+
+    await screen.findAllByText('Triage VOC 1');
+    expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
+  });
+
   it('selecting a tab calls navigate with tab param', async () => {
     renderWithQc(<TriageRoute />);
     await waitFor(() => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Find a tab trigger (e.g. "미배정" = unassigned)
-    const unassignedTab = screen.getByRole('button', { name: /미배정/i });
-    fireEvent.click(unassignedTab);
+    // Select a different tab so Radix emits a value change.
+    const highTab = screen.getByRole('tab', { name: /높음/i });
+    fireEvent.mouseDown(highTab);
 
     expect(navigateMock).toHaveBeenCalled();
     const callArg = navigateMock.mock.calls[0]?.[0] as {
@@ -232,7 +323,7 @@ describe('TriageRoute', () => {
     };
     expect(callArg.to).toBe('/vocs');
     const result = callArg.search({});
-    expect(result).toHaveProperty('tab', 'unassigned');
+    expect(result).toHaveProperty('tab', 'high');
   });
 
   it('clicking a row calls navigate with selected param', async () => {
@@ -273,9 +364,7 @@ describe('TriageRoute', () => {
     await waitFor(() => {
       // PermissionBlockedPanel renders some form of "권한" or blocked state copy.
       // The component is from @fops/ui; check for its container testid or blocked text.
-      expect(
-        screen.queryByText('Triage VOC 1'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Triage VOC 1')).not.toBeInTheDocument();
     });
 
     // The queue items must NOT be rendered for user-role actor

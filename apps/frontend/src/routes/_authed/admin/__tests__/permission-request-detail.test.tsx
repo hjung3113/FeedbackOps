@@ -104,7 +104,7 @@ describe('Permission Requests public page', () => {
     installFetch();
     renderPage();
     const panel = await screen.findByTestId('permission-request-detail-panel');
-    expect(panel).toHaveTextContent('Permission Request');
+    expect(panel).toHaveTextContent('권한 요청');
     expect(screen.queryByText('Task', { exact: true })).not.toBeInTheDocument();
   });
 
@@ -117,11 +117,12 @@ describe('Permission Requests public page', () => {
     expect(screen.queryByText(requester.email, { exact: true })).not.toBeInTheDocument();
   });
 
-  test('AC-D8c renders Unknown requester when no matching actor is returned', async () => {
+  test('AC-D8c renders the unknown-requester fallback when no matching actor is returned', async () => {
     installFetch([]);
     renderPage();
     await waitFor(() =>
-      expect(screen.getByText('Unknown requester', { exact: true })).toBeInTheDocument(),
+      // #589: Korean-first fallback copy (#580); not prototype copy.
+      expect(screen.getByText('알 수 없는 사용자', { exact: true })).toBeInTheDocument(),
     );
   });
 });

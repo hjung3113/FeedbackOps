@@ -11,7 +11,7 @@ export function TriageEmpty(): React.ReactElement {
       <CheckCircle size={24} className="text-accent-success" aria-hidden="true" />
       <strong className="text-sm font-semibold text-text-primary">큐가 비었습니다</strong>
       <span className="text-xs text-text-muted">
-        모든 VOC를 triage 처리했습니다. 새 VOC가 들어오면 자동으로 추가됩니다.
+        모든 VOC를 Triage 처리했습니다. 새 VOC가 들어오면 자동으로 추가됩니다.
       </span>
     </div>
   );

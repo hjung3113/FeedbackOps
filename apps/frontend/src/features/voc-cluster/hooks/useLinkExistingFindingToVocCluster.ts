@@ -9,6 +9,7 @@ import {
 import type { LinkedFindingDto } from "@fops/shared";
 
 import { apiClient, type ApiError } from "@/lib/api";
+import { invalidateNavCounts } from "@/lib/query/navCounts";
 
 export interface LinkExistingFindingToVocClusterVariables {
   clusterId: string;
@@ -38,6 +39,7 @@ export function useLinkExistingFindingToVocCluster(args?: {
       return response.data;
     },
     onSuccess: async (_finding, { clusterId }) => {
+      invalidateNavCounts(queryClient);
       await queryClient.invalidateQueries({
         queryKey: ["voc-cluster", clusterId],
       });

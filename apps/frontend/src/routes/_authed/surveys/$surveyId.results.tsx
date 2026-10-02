@@ -1,8 +1,13 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
+import { SurveyResultHeader } from '@/features/surveys/components/results/SurveyResultHeader';
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
-import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
-import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
-import { EmptyState, PermissionBlockedPanel } from '@fops/ui';
+import { useSurveyResultsController } from '@/features/surveys/hooks/useSurveyResultsController';
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { ApiError, isPermissionDenied } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { EmptyState, PermissionBlockedPanel, WorkbenchShell } from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 
 export const Route = createFileRoute('/_authed/surveys/$surveyId/results')({
   component: SurveyResultsRoute,
@@ -10,33 +15,140 @@ export const Route = createFileRoute('/_authed/surveys/$surveyId/results')({
 
 export function SurveyResultsRoute() {
   const { surveyId } = Route.useParams();
-  const survey = useSurvey(surveyId);
-  const gate = useSurveyReadGate(survey.data?.primary_managed_system_id);
-  const results = useSurveyResults(surveyId, gate.canRead);
+  const { survey, gate, content, followUp, resultsAreSuccessful, refetchResults } =
+    useSurveyResultsController(surveyId);
 
-  if (survey.isLoading || gate.gateState === 'loading') {
-    return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;
-  }
-  if (survey.isError || !survey.data) {
+  if (isPermissionDenied(survey.error)) {
     return (
-      <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
+      <ResultsWorkbench>
+        <SurveyPermissionDeniedState />
+      </ResultsWorkbench>
+    );
+  }
+  if (survey.isError) {
+    if (survey.error instanceof ApiError && survey.error.status === 404) {
+      return (
+        <ResultsWorkbench>
+          <EmptyState
+            body="삭제되었거나 접근 권한이 없습니다."
+            title="Survey를 찾을 수 없습니다."
+          />
+        </ResultsWorkbench>
+      );
+    }
+    return (
+      <ResultsWorkbench>
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <ListStateMessage
+            variant="error"
+            title="Survey를 불러오지 못했습니다."
+            body={mapUnknownError(survey.error).message}
+            action={{
+              label: '다시 시도',
+              onClick: () => {
+                void survey.refetch();
+              },
+            }}
+          />
+        </div>
+      </ResultsWorkbench>
+    );
+  }
+  if (survey.isLoading || gate.gateState === 'loading') {
+    return (
+      <ResultsWorkbench>
+        <div className="p-6 text-sm text-text-muted">불러오는 중…</div>
+      </ResultsWorkbench>
+    );
+  }
+  if (!survey.data) {
+    return (
+      <ResultsWorkbench>
+        <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="Survey를 찾을 수 없습니다." />
+      </ResultsWorkbench>
     );
   }
   if (!gate.canRead) {
     return (
-      <div className="p-6">
-        <PermissionBlockedPanel
-          category="Survey Result"
-          reason="설문 결과를 볼 권한이 없습니다."
-          state="denied"
-        />
-      </div>
+      <ResultsWorkbench>
+        <SurveyPermissionDeniedState />
+      </ResultsWorkbench>
     );
   }
-  if (results.isLoading)
-    return <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
-  if (results.isError || !results.data) {
-    return <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />;
+
+  let resultsContent: ReactNode;
+  switch (content.kind) {
+    case 'permission-denied':
+      resultsContent = <SurveyPermissionDeniedState />;
+      break;
+    case 'not-found':
+      resultsContent = (
+        <EmptyState body="결과를 불러올 수 없습니다." title="Survey 결과를 찾을 수 없습니다." />
+      );
+      break;
+    case 'loading':
+      resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
+      break;
+    case 'error':
+      resultsContent = (
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+          <ListStateMessage
+            variant="error"
+            title="결과를 불러오지 못했습니다."
+            body={mapUnknownError(content.error).message}
+            action={{
+              label: '다시 시도',
+              onClick: () => {
+                void refetchResults();
+              },
+            }}
+          />
+        </div>
+      );
+      break;
+    case 'ready':
+      resultsContent = (
+        <SurveyResultsSummary
+          followUpRead={followUp}
+          results={content.results}
+          survey={survey.data}
+        />
+      );
+      break;
   }
-  return <SurveyResultsSummary results={results.data} survey={survey.data} />;
+
+  return (
+    <ResultsWorkbench ariaLive={resultsAreSuccessful ? 'off' : 'polite'}>
+      <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
+      {resultsContent}
+    </ResultsWorkbench>
+  );
+}
+
+function SurveyPermissionDeniedState() {
+  return (
+    <div className="p-6">
+      <PermissionBlockedPanel
+        category="Survey 결과"
+        reason={PERMISSION_BLOCKED_REASONS.surveyResult}
+        state="denied"
+      />
+    </div>
+  );
+}
+
+function ResultsWorkbench({
+  children,
+  ariaLive = 'polite',
+}: {
+  children: ReactNode;
+  ariaLive?: 'off' | 'polite';
+}) {
+  return (
+    <WorkbenchShell>
+      <div aria-live={ariaLive} className="flex h-full min-h-0 flex-col">
+        {children}
+      </div>
+    </WorkbenchShell>
+  );
 }

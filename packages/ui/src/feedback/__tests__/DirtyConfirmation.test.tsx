@@ -26,7 +26,10 @@ describe('DirtyConfirmation', () => {
     expect(screen.getByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
     expect(screen.getByText('이동하면 작성 중인 내용이 사라집니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '이동' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '계속 작성' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계속 작성' })).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
   });
 
   it('calls onConfirm (and not onCancel) when the confirm button is clicked', () => {
@@ -66,6 +69,9 @@ describe('DirtyConfirmation', () => {
     expect(screen.getByText('저장하지 않고 나가시겠습니까?')).toBeInTheDocument();
     expect(screen.getByText('변경사항이 취소됩니다.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '나가기' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '취소' })).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
   });
 });

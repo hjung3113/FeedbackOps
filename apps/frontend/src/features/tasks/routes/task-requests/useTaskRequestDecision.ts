@@ -4,7 +4,9 @@ import {
   rejectTaskRequest,
   requestMoreEvidenceForTaskRequest,
 } from '@/lib/api';
+import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -98,15 +100,19 @@ export function useTaskRequestDecision({
       decisionSubmittingRef.current = false;
       setIsDecisionSubmitting(false);
       setDecisionDialog(null);
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
-      toast('Task Request updated.');
+      toast.success('Task Request가 처리되었습니다.');
     },
     onError: (err) => {
       decisionSubmittingRef.current = false;
       setIsDecisionSubmitting(false);
+      // #561: computed outside the updater; React runs updaters during render, so a throw
+      // there (a non-ApiError has no envelope) would take down the whole screen.
+      const message = mapUnknownError(err).message;
       setDecisionDialog((current) => {
-        if (current) return { ...current, error: err.envelope.message };
-        toast.error(err.envelope.message);
+        if (current) return { ...current, error: message };
+        toast.error(message);
         return current;
       });
     },
@@ -114,7 +120,7 @@ export function useTaskRequestDecision({
 
   function approve(): void {
     if (isSelfApproval && !canSelfApprove) {
-      toast.error('Self-approval requires scoped capability.');
+      toast.error('본인 승인에는 범위가 지정된 권한이 필요합니다.');
       return;
     }
     setDecisionDialog({ action: 'approve', value: '', error: null });
@@ -134,11 +140,11 @@ export function useTaskRequestDecision({
     const value = decisionDialog.value.trim();
     const error =
       decisionDialog.action === 'approve' && isSelfApproval && value.length === 0
-        ? 'Self-approval requires a reason.'
+        ? '본인 승인 사유를 입력해 주세요.'
         : decisionDialog.action === 'request-more-evidence' && value.length === 0
-          ? 'Note is required.'
+          ? '근거 메모를 입력해 주세요.'
           : decisionDialog.action === 'reject' && value.length === 0
-            ? 'Reason is required.'
+            ? '반려 사유를 입력해 주세요.'
             : null;
     if (error) {
       setDecisionDialog((current) => (current ? { ...current, error } : current));

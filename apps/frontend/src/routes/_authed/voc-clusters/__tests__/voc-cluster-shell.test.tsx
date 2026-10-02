@@ -1,26 +1,28 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type * as React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { ApiError } from "@/lib/api";
+import { ApiError } from '@/lib/api';
+import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { findingStatusSchema } from '@fops/shared';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
 const linkFindingMutate = vi.hoisted(() => vi.fn());
-const currentRole = vi.hoisted(() => ({ role_level: "admin" as string }));
+const requestTaskMutate = vi.hoisted(() => vi.fn());
+const currentRole = vi.hoisted(() => ({ role_level: 'admin' as string }));
 const listQueryState = vi.hoisted(() => ({
-  status: "success" as "pending" | "success",
+  status: 'success' as 'pending' | 'success',
 }));
 const detailQueryState = vi.hoisted(() => ({
-  status: "success" as "loading" | "success",
+  status: 'success' as 'loading' | 'success',
 }));
 let routeParams: Record<string, string> = {
-  clusterId: "11111111-1111-1111-1111-111111111111",
+  clusterId: '11111111-1111-1111-1111-111111111111',
 };
 // ?selected= / ?managedSystem= search state read by the route components.
-const urlSearch = vi.hoisted(() => ({} as Record<string, unknown>));
+const urlSearch = vi.hoisted(() => ({}) as Record<string, unknown>);
 
-vi.mock("@tanstack/react-router", () => ({
+vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: unknown) => ({
     ...(config as object),
     useParams: () => routeParams,
@@ -54,13 +56,13 @@ vi.mock("@tanstack/react-router", () => ({
   useSearch: () => urlSearch,
 }));
 
-vi.mock("@tanstack/react-query", () => ({
+vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
     data: {
       items: [
         {
-          id: "99999999-9999-9999-9999-999999999999",
-          name: "Billing Ops",
+          id: '99999999-9999-9999-9999-999999999999',
+          name: 'Billing Ops',
           archived_at: null,
         },
       ],
@@ -70,13 +72,12 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
-vi.mock("@fops/ui", () => ({
-  cn: (...classes: Array<string | false | null | undefined>) =>
-    classes.filter(Boolean).join(" "),
-  Button: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+vi.mock('@fops/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@fops/ui')>();
+  return {
+  ...actual,
+  cn: (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
   ),
   DetailPanelHeader: ({
@@ -116,28 +117,13 @@ vi.mock("@fops/ui", () => ({
   DialogContent: ({ children, ...props }: { children: React.ReactNode }) => (
     <div {...props}>{children}</div>
   ),
-  DialogFooter: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DialogTitle: ({ children }: { children: React.ReactNode }) => (
-    <h2>{children}</h2>
-  ),
-  FieldLabel: ({ children }: { children: React.ReactNode }) => (
-    <label>{children}</label>
-  ),
-  FieldRow: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} />
-  ),
-  Label: ({
-    children,
-    ...props
-  }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  FieldLabel: ({ children }: { children: React.ReactNode }) => <label>{children}</label>,
+  FieldRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Label: ({ children, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) => (
     <label {...props}>{children}</label>
   ),
   ListShell: ({
@@ -182,7 +168,7 @@ vi.mock("@fops/ui", () => ({
     <button
       type="button"
       data-testid={`cluster-row-${id}`}
-      data-selected={selected ? "true" : "false"}
+      data-selected={selected ? 'true' : 'false'}
       onClick={onClick}
     >
       <span>{id}</span>
@@ -194,9 +180,7 @@ vi.mock("@fops/ui", () => ({
   OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
     <span {...props}>{children}</span>
   ),
-  PanelSectionTitle: ({ children }: { children: React.ReactNode }) => (
-    <h3>{children}</h3>
-  ),
+  PanelSectionTitle: ({ children }: { children: React.ReactNode }) => <h3>{children}</h3>,
   ReporterStatusBadge: ({ status }: { status: string }) => (
     <span data-testid={`reporter-status-${status}`}>{status}</span>
   ),
@@ -204,24 +188,10 @@ vi.mock("@fops/ui", () => ({
   PageShell: ({ children }: { children: React.ReactNode }) => (
     <div data-shell="page">{children}</div>
   ),
-  Select: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  SelectContent: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  SelectItem: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => (
-    <button>{children}</button>
-  ),
-  SelectValue: () => <span />,
   Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
-  Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea {...props} />
-  ),
-}));
+  Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} />,
+  };
+});
 
 type ClusterFixture = {
   id: string;
@@ -259,23 +229,23 @@ type ClusterFixture = {
 
 const clusters: ClusterFixture[] = [
   {
-    id: "11111111-1111-1111-1111-111111111111",
-    workspace_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-    display_id: "CLU-31",
-    title: "반복 결제 문의",
-    summary: "결제 관련 VOC가 반복됩니다.",
-    status: "draft" as string,
-    primary_managed_system_id: "99999999-9999-9999-9999-999999999999",
-    created_by: "22222222-2222-2222-2222-222222222222",
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-02T00:00:00.000Z",
+    id: '11111111-1111-1111-1111-111111111111',
+    workspace_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    display_id: 'CLU-31',
+    title: '반복 결제 문의',
+    summary: '결제 관련 VOC가 반복됩니다.',
+    status: 'draft' as string,
+    primary_managed_system_id: '99999999-9999-9999-9999-999999999999',
+    created_by: '22222222-2222-2222-2222-222222222222',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-02T00:00:00.000Z',
     members: [
       {
-        voc_id: "33333333-3333-3333-3333-333333333333",
-        display_id: "VOC-333",
-        title: "결제 실패 문의",
-        added_by: "22222222-2222-2222-2222-222222222222",
-        added_at: "2026-01-03T00:00:00.000Z",
+        voc_id: '33333333-3333-3333-3333-333333333333',
+        display_id: 'VOC-333',
+        title: '결제 실패 문의',
+        added_by: '22222222-2222-2222-2222-222222222222',
+        added_at: '2026-01-03T00:00:00.000Z',
       },
     ],
     linked_findings: [] as Array<{
@@ -286,25 +256,25 @@ const clusters: ClusterFixture[] = [
   },
 ];
 
-vi.mock("@/features/voc-cluster/hooks/useVocClusterList", () => ({
+vi.mock('@/features/voc-cluster/hooks/useVocClusterList', () => ({
   useVocClusterList: () => ({
-    data: listQueryState.status === "success" ? { items: clusters } : undefined,
-    isPending: listQueryState.status === "pending",
+    data: listQueryState.status === 'success' ? { items: clusters } : undefined,
+    isPending: listQueryState.status === 'pending',
     isError: false,
-    isSuccess: listQueryState.status === "success",
+    isSuccess: listQueryState.status === 'success',
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useVocClusterDetail", () => ({
+vi.mock('@/features/voc-cluster/hooks/useVocClusterDetail', () => ({
   useVocClusterDetail: () => ({
-    data: detailQueryState.status === "success" ? clusters[0] : undefined,
-    isLoading: detailQueryState.status === "loading",
+    data: detailQueryState.status === 'success' ? clusters[0] : undefined,
+    isLoading: detailQueryState.status === 'loading',
     isError: false,
     error: null,
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useCreateVocCluster", () => ({
+vi.mock('@/features/voc-cluster/hooks/useCreateVocCluster', () => ({
   useCreateVocCluster: () => ({
     mutate: vi.fn(),
     reset: vi.fn(),
@@ -312,7 +282,7 @@ vi.mock("@/features/voc-cluster/hooks/useCreateVocCluster", () => ({
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useAddClusterMember", () => ({
+vi.mock('@/features/voc-cluster/hooks/useAddClusterMember', () => ({
   useAddClusterMember: () => ({
     mutate: addClusterMemberMutate,
     reset: vi.fn(),
@@ -320,17 +290,17 @@ vi.mock("@/features/voc-cluster/hooks/useAddClusterMember", () => ({
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useCandidatePeers", () => ({
+vi.mock('@/features/voc-cluster/hooks/useCandidatePeers', () => ({
   useCandidatePeers: () => ({
     data: {
-      candidate_basis: "same_managed_system_active_voc",
+      candidate_basis: 'same_managed_system_active_voc',
       candidates: [
         {
-          voc_id: "44444444-4444-4444-4444-444444444444",
-          display_id: "VOC-444",
-          title: "결제 재시도 안내 요청",
-          severity: "high",
-          reporter_facing_status: "received",
+          voc_id: '44444444-4444-4444-4444-444444444444',
+          display_id: 'VOC-444',
+          title: '결제 재시도 안내 요청',
+          severity: 'high',
+          reporter_facing_status: 'received',
         },
       ],
     },
@@ -339,11 +309,11 @@ vi.mock("@/features/voc-cluster/hooks/useCandidatePeers", () => ({
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useConfirmCluster", () => ({
+vi.mock('@/features/voc-cluster/hooks/useConfirmCluster', () => ({
   useConfirmCluster: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useCreateFindingFromCluster", () => ({
+vi.mock('@/features/voc-cluster/hooks/useCreateFindingFromCluster', () => ({
   useCreateFindingFromCluster: () => ({
     mutate: vi.fn(),
     reset: vi.fn(),
@@ -351,25 +321,22 @@ vi.mock("@/features/voc-cluster/hooks/useCreateFindingFromCluster", () => ({
   }),
 }));
 
-vi.mock(
-  "@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster",
-  () => ({
-    useLinkExistingFindingToVocCluster: () => ({
-      mutate: linkFindingMutate,
-      reset: vi.fn(),
-      isPending: false,
-    }),
+vi.mock('@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster', () => ({
+  useLinkExistingFindingToVocCluster: () => ({
+    mutate: linkFindingMutate,
+    reset: vi.fn(),
+    isPending: false,
   }),
-);
+}));
 
-vi.mock("@/features/findings/hooks/useFindingsList", () => ({
+vi.mock('@/features/findings/hooks/useFindingsList', () => ({
   useFindingsList: () => ({
     data: {
       items: [
         {
-          id: "55555555-5555-5555-5555-555555555555",
-          display_id: "FIN-555",
-          title: "기존 결제 Finding",
+          id: '55555555-5555-5555-5555-555555555555',
+          display_id: 'FIN-555',
+          title: '기존 결제 Finding',
         },
       ],
     },
@@ -378,7 +345,7 @@ vi.mock("@/features/findings/hooks/useFindingsList", () => ({
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useRemoveClusterMember", () => ({
+vi.mock('@/features/voc-cluster/hooks/useRemoveClusterMember', () => ({
   useRemoveClusterMember: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -386,34 +353,71 @@ vi.mock("@/features/voc-cluster/hooks/useRemoveClusterMember", () => ({
   }),
 }));
 
-vi.mock("@/features/voc-cluster/hooks/useRequestTaskFromCluster", () => ({
+vi.mock('@/features/voc-cluster/hooks/useRequestTaskFromCluster', () => ({
   useRequestTaskFromCluster: () => ({
-    mutate: vi.fn(),
+    mutate: requestTaskMutate,
     reset: vi.fn(),
     isPending: false,
   }),
 }));
 
-vi.mock("@/features/tasks/components/RequestTaskModal", () => ({
-  RequestTaskModal: () => null,
+vi.mock('@/features/cross-system/request-task/TaskRequestDraftCard', () => ({
+  TaskRequestDraftCard: ({
+    sourceKind,
+    sourceDisplayId,
+    evidenceSummaryDefault,
+    onSubmit,
+  }: {
+    sourceKind: string;
+    sourceDisplayId: string;
+    evidenceSummaryDefault: string;
+    onSubmit: (values: { evidence_summary: string; requested_outcome: string }) => void;
+  }) => {
+    let requestedOutcome = '';
+    return (
+      <section aria-label="Task Request 초안" data-testid="request-task-draft">
+        <p>
+          출처 {sourceDisplayId} · {sourceKind}
+        </p>
+        <textarea
+          data-testid="request-task-requested-outcome-input"
+          onChange={(event) => {
+            requestedOutcome = event.currentTarget.value;
+          }}
+        />
+        <button
+          type="button"
+          data-testid="request-task-submit"
+          onClick={() =>
+            onSubmit({
+              evidence_summary: evidenceSummaryDefault,
+              requested_outcome: requestedOutcome,
+            })
+          }
+        >
+          요청 등록
+        </button>
+      </section>
+    );
+  },
 }));
 
-vi.mock("@/lib/auth/useMe", () => ({
+vi.mock('@/lib/auth/useMe', () => ({
   useMe: () => ({ data: { actor: currentRole } }),
 }));
 
-vi.mock("@/lib/api", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
   return {
     ...actual,
     fetchManagedSystems: vi.fn(),
-    useIdempotencyKey: () => ({ key: "idem-key", markConsumed: vi.fn() }),
+    useIdempotencyKey: () => ({ key: 'idem-key', markConsumed: vi.fn() }),
   };
 });
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock("react-hook-form", () => ({
+vi.mock('react-hook-form', () => ({
   useForm: () => ({
     register: vi.fn(),
     handleSubmit: (fn: unknown) => fn,
@@ -423,22 +427,22 @@ vi.mock("react-hook-form", () => ({
   }),
 }));
 
-vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: vi.fn() }));
+vi.mock('@hookform/resolvers/zod', () => ({ zodResolver: vi.fn() }));
 
-describe("VOC cluster route shells", () => {
+describe('VOC cluster route shells', () => {
   beforeEach(() => {
     navigateMock.mockClear();
     addClusterMemberMutate.mockClear();
     linkFindingMutate.mockClear();
-    listQueryState.status = "success";
-    detailQueryState.status = "success";
-    currentRole.role_level = "admin";
-    routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
+    listQueryState.status = 'success';
+    detailQueryState.status = 'success';
+    currentRole.role_level = 'admin';
+    routeParams = { clusterId: '11111111-1111-1111-1111-111111111111' };
     for (const key of Object.keys(urlSearch)) delete urlSearch[key];
     clusters.splice(1);
-    clusters[0]!.status = "draft";
+    clusters[0]!.status = 'draft';
     clusters[0]!.linked_findings = [];
-    clusters[0]!.summary = "결제 관련 VOC가 반복됩니다.";
+    clusters[0]!.summary = '결제 관련 VOC가 반복됩니다.';
     delete clusters[0]!.severity;
     delete clusters[0]!.confidence;
     delete clusters[0]!.rationale;
@@ -447,204 +451,177 @@ describe("VOC cluster route shells", () => {
     delete clusters[0]!.confirmed_at;
     clusters[0]!.members = [
       {
-        voc_id: "33333333-3333-3333-3333-333333333333",
-        display_id: "VOC-333",
-        title: "결제 실패 문의",
-        added_by: "22222222-2222-2222-2222-222222222222",
-        added_at: "2026-01-03T00:00:00.000Z",
+        voc_id: '33333333-3333-3333-3333-333333333333',
+        display_id: 'VOC-333',
+        title: '결제 실패 문의',
+        added_by: '22222222-2222-2222-2222-222222222222',
+        added_at: '2026-01-03T00:00:00.000Z',
       },
     ];
   });
 
-  it("renders the cluster index as a ListShell with the selected cluster detail panel", async () => {
+  it('renders the cluster index as a ListShell with the selected cluster detail panel', async () => {
     // Selection is URL state (?selected=:clusterId) — a deep-linked id renders
     // the detail panel directly from the loaded list.
-    const { VocClusterListPage } = await import("../index");
-    urlSearch.selected = "11111111-1111-1111-1111-111111111111";
+    const { VocClusterListPage } = await import('../index');
+    urlSearch.selected = '11111111-1111-1111-1111-111111111111';
 
     render(<VocClusterListPage />);
 
-    expect(screen.getAllByText("반복 결제 문의").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("list-shell-toolbar")).toHaveTextContent(
-      "VOC 클러스터",
+    expect(screen.getAllByText('반복 결제 문의').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC Cluster');
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent(
+      'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
     );
-    expect(screen.getByTestId("list-shell-toolbar")).toHaveTextContent(
-      "VOC를 유사 주제로 묶어 Finding으로 승격합니다.",
+    expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('list-shell-detail-slot')).toContainElement(
+      screen.getByTestId('cluster-detail-panel'),
     );
-    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("list-shell-detail-slot")).toContainElement(
-      screen.getByTestId("cluster-detail-panel"),
-    );
-    expect(
-      document.querySelector('[data-shell="page"]'),
-    ).not.toBeInTheDocument();
+    expect(document.querySelector('[data-shell="page"]')).not.toBeInTheDocument();
   });
 
-  it("pushes a cluster row selection into the URL search from the list route", async () => {
-    const { VocClusterListPage } = await import("../index");
+  it('pushes a cluster row selection into the URL search from the list route', async () => {
+    const { VocClusterListPage } = await import('../index');
 
     render(<VocClusterListPage />);
 
-    expect(screen.getByTestId("cluster-row-CLU-31")).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-row-CLU-31')).toBeInTheDocument();
     // The first-load default selection (replace navigate) already fired on
     // mount; only the row click's push is asserted below.
     navigateMock.mockClear();
 
-    fireEvent.click(screen.getByTestId("cluster-row-CLU-31"));
+    fireEvent.click(screen.getByTestId('cluster-row-CLU-31'));
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
     const navOptions = navigateMock.mock.calls[0]?.[0] as {
       to: string;
       search: (prev: Record<string, unknown>) => Record<string, unknown>;
     };
-    expect(navOptions.to).toBe("/voc-clusters");
+    expect(navOptions.to).toBe('/voc-clusters');
     expect(navOptions.search({})).toEqual({
-      selected: "11111111-1111-1111-1111-111111111111",
+      selected: '11111111-1111-1111-1111-111111111111',
     });
   });
 
-  it("renders the detail route inside the same ListShell toolbar and detail framing", async () => {
-    const { VocClusterDetailPage } = await import("../$clusterId");
+  it('renders the detail route inside the same ListShell toolbar and detail framing', async () => {
+    const { VocClusterDetailPage } = await import('../$clusterId');
 
     render(<VocClusterDetailPage />);
 
     expect(document.querySelector('[data-shell="list"]')).toBeInTheDocument();
-    expect(screen.getByTestId("list-shell-toolbar")).toHaveTextContent(
-      "VOC 클러스터",
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC Cluster');
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent(
+      'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
     );
-    expect(screen.getByTestId("list-shell-toolbar")).toHaveTextContent(
-      "VOC를 유사 주제로 묶어 Finding으로 승격합니다.",
-    );
-    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
-    expect(
-      document.querySelector('[data-shell="page"]'),
-    ).not.toBeInTheDocument();
-    expect(
-      document.querySelector('a[href="/voc-clusters"]'),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
+    expect(document.querySelector('[data-shell="page"]')).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/voc-clusters"]')).not.toBeInTheDocument();
   });
 
-  it("uses managed-system and VOC display labels instead of raw UUIDs in cluster detail", async () => {
+  it('uses managed-system and VOC display labels instead of raw UUIDs in cluster detail', async () => {
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    expect(await screen.findByTestId("managed-system-pill")).toHaveTextContent(
-      "Billing Ops",
-    );
-    expect(
-      screen.queryByText("99999999-9999-9999-9999-999999999999"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByTestId('managed-system-pill')).toHaveTextContent('Billing Ops');
+    expect(screen.queryByText('99999999-9999-9999-9999-999999999999')).not.toBeInTheDocument();
     expect(screen.getByText(/VOC-333/)).toBeInTheDocument();
-    expect(screen.getByText("결제 실패 문의")).toBeInTheDocument();
+    expect(screen.getByText('결제 실패 문의')).toBeInTheDocument();
     expect(screen.queryByText(/VOC 33333333/)).not.toBeInTheDocument();
-    expect(screen.getAllByText("CLU-31").length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CLU-31').length).toBeGreaterThan(0);
   });
 
-  it("keeps hook order stable when detail data changes from loading to loaded", async () => {
-    detailQueryState.status = "loading";
+  it('keeps hook order stable when detail data changes from loading to loaded', async () => {
+    detailQueryState.status = 'loading';
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
     const { rerender } = render(
       <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
     );
 
-    expect(screen.getByTestId("cluster-detail-skeleton")).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-detail-skeleton')).toBeInTheDocument();
 
-    detailQueryState.status = "success";
+    detailQueryState.status = 'success';
     expect(() =>
-      rerender(
-        <VocClusterDetailPanel
-          clusterId={clusters[0]!.id}
-          onClose={vi.fn()}
-        />,
-      ),
+      rerender(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />),
     ).not.toThrow();
 
-    expect(screen.getByTestId("cluster-detail-title")).toHaveTextContent(
-      "반복 결제 문의",
-    );
+    expect(screen.getByTestId('cluster-detail-title')).toHaveTextContent('반복 결제 문의');
   });
 
-  it("filters list rows by All, Confirmed, and No finding without a backend filter", async () => {
+  it('filters list rows by All, Confirmed, and No finding without a backend filter', async () => {
     const baseCluster = clusters[0]!;
     clusters.push(
       {
         ...baseCluster,
-        id: "55555555-5555-5555-5555-555555555555",
-        display_id: "CLU-32",
-        title: "확정된 연결 없음",
-        status: "confirmed",
+        id: '55555555-5555-5555-5555-555555555555',
+        display_id: 'CLU-32',
+        title: '확정된 연결 없음',
+        status: 'confirmed',
         linked_findings: [],
       },
       {
         ...baseCluster,
-        id: "66666666-6666-6666-6666-666666666666",
-        display_id: "CLU-33",
-        title: "연결된 Finding 있음",
-        status: "draft",
+        id: '66666666-6666-6666-6666-666666666666',
+        display_id: 'CLU-33',
+        title: '연결된 Finding 있음',
+        status: 'draft',
         linked_findings: [
           {
-            id: "77777777-7777-7777-7777-777777777777",
-            display_id: "FIN-777",
-            status: "active",
+            id: '77777777-7777-7777-7777-777777777777',
+            display_id: 'FIN-777',
+            status: 'active',
           },
         ],
       },
     );
     const { VocClusterListShell } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterListShell"
+      '@/features/voc-cluster/components/detail/VocClusterListShell'
     );
 
-    render(
-      <VocClusterListShell
-        selectedId={null}
-        onSelect={vi.fn()}
-        onCloseDetail={vi.fn()}
-      />,
-    );
+    render(<VocClusterListShell selectedId={null} onSelect={vi.fn()} onCloseDetail={vi.fn()} />);
 
-    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
-    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
-    expect(screen.getByText("연결된 Finding 있음")).toBeInTheDocument();
+    expect(screen.getByText('반복 결제 문의')).toBeInTheDocument();
+    expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
+    expect(screen.getByText('연결된 Finding 있음')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("cluster-tab-confirmed"));
-    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
-    expect(screen.queryByText("반복 결제 문의")).not.toBeInTheDocument();
-    expect(screen.queryByText("연결된 Finding 있음")).not.toBeInTheDocument();
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-confirmed'));
+    expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
+    expect(screen.queryByText('반복 결제 문의')).not.toBeInTheDocument();
+    expect(screen.queryByText('연결된 Finding 있음')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("cluster-tab-no-finding"));
-    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
-    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
-    expect(screen.queryByText("연결된 Finding 있음")).not.toBeInTheDocument();
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-no-finding'));
+    expect(screen.getByText('반복 결제 문의')).toBeInTheDocument();
+    expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
+    expect(screen.queryByText('연결된 Finding 있음')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("cluster-tab-all"));
-    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
-    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
-    expect(screen.getByText("연결된 Finding 있음")).toBeInTheDocument();
+    // Radix tab triggers select on mousedown (#673 shared ListTabs).
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-all'));
+    expect(screen.getByText('반복 결제 문의')).toBeInTheDocument();
+    expect(screen.getByText('확정된 연결 없음')).toBeInTheDocument();
+    expect(screen.getByText('연결된 Finding 있음')).toBeInTheDocument();
   });
 
-  it("clears an inline detail selection when its tab excludes the selected cluster without navigation", async () => {
+  it('clears an inline detail selection when its tab excludes the selected cluster without navigation', async () => {
     const baseCluster = clusters[0]!;
     clusters.push({
       ...baseCluster,
-      id: "55555555-5555-5555-5555-555555555555",
-      display_id: "CLU-32",
-      title: "확정된 연결 없음",
-      status: "confirmed",
+      id: '55555555-5555-5555-5555-555555555555',
+      display_id: 'CLU-32',
+      title: '확정된 연결 없음',
+      status: 'confirmed',
     });
     const onSelect = vi.fn();
     const onCloseDetail = vi.fn();
     const { VocClusterListShell } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterListShell"
+      '@/features/voc-cluster/components/detail/VocClusterListShell'
     );
 
     render(
@@ -655,25 +632,23 @@ describe("VOC cluster route shells", () => {
       />,
     );
 
-    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("cluster-tab-confirmed"));
+    fireEvent.mouseDown(screen.getByTestId('cluster-tab-confirmed'));
 
-    expect(
-      screen.queryByTestId("cluster-detail-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
     expect(onCloseDetail).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("keeps a deeplinked detail selection open while the list query is pending", async () => {
+  it('keeps a deeplinked detail selection open while the list query is pending', async () => {
     const selectedId = clusters[0]!.id;
     const onCloseDetail = vi.fn();
     const { VocClusterListShell } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterListShell"
+      '@/features/voc-cluster/components/detail/VocClusterListShell'
     );
-    listQueryState.status = "pending";
+    listQueryState.status = 'pending';
 
     const { rerender } = render(
       <VocClusterListShell
@@ -683,12 +658,10 @@ describe("VOC cluster route shells", () => {
       />,
     );
 
-    expect(
-      screen.queryByTestId("cluster-detail-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
     expect(onCloseDetail).not.toHaveBeenCalled();
 
-    listQueryState.status = "success";
+    listQueryState.status = 'success';
     rerender(
       <VocClusterListShell
         selectedId={selectedId}
@@ -697,138 +670,160 @@ describe("VOC cluster route shells", () => {
       />,
     );
 
-    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument();
     expect(onCloseDetail).not.toHaveBeenCalled();
   });
 
-  it("renders every linked Finding in Execution and exposes its finding route", async () => {
+  it('renders every linked Finding in Execution and exposes its finding route', async () => {
     clusters[0]!.linked_findings = [
       {
-        id: "77777777-7777-7777-7777-777777777777",
-        display_id: "FIN-777",
-        status: "active",
-        title: "결제 오류 개선",
+        id: '77777777-7777-7777-7777-777777777777',
+        display_id: 'FIN-777',
+        status: 'active',
+        title: '결제 오류 개선',
       },
       {
-        id: "88888888-8888-8888-8888-888888888888",
-        display_id: "FIN-888",
-        status: "validated",
-        title: "결제 안내 개선",
+        id: '88888888-8888-8888-8888-888888888888',
+        display_id: 'FIN-888',
+        status: 'draft',
+        title: '결제 안내 개선',
       },
     ];
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    expect(
-      screen.getByTestId("cluster-linked-findings-list"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("FIN-777")).toBeInTheDocument();
-    expect(screen.getByText("결제 오류 개선")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
-    expect(screen.getByText("FIN-888")).toBeInTheDocument();
-    expect(screen.getByText("validated")).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("link", { name: "Finding 열기" })[0],
-    ).toHaveAttribute("href", "/findings/77777777-7777-7777-7777-777777777777");
-    expect(
-      screen.queryByTestId("cluster-execution-empty"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('cluster-linked-findings-list')).toBeInTheDocument();
+    expect(screen.getByText('FIN-777')).toBeInTheDocument();
+    expect(screen.getByText('결제 오류 개선')).toBeInTheDocument();
+    expect(screen.getByText('진행 중')).toBeInTheDocument();
+    expect(screen.getByText('FIN-888')).toBeInTheDocument();
+    expect(screen.getByTestId('finding-status-badge-draft')).toHaveTextContent('초안');
+    expect(screen.getAllByRole('link', { name: 'Finding 열기' })[0]).toHaveAttribute(
+      'href',
+      '/findings/77777777-7777-7777-7777-777777777777',
+    );
+    expect(screen.queryByTestId('cluster-execution-empty')).not.toBeInTheDocument();
   });
 
-  it("shows Execution create and link CTAs when no Finding is linked", async () => {
+  it.each(findingStatusSchema.options)(
+    'renders a display label for linked Finding status %s',
+    async (status) => {
+      clusters[0]!.linked_findings = [
+        {
+          id: '77777777-7777-7777-7777-777777777777',
+          display_id: 'FIN-777',
+          status,
+          title: '결제 오류 개선',
+        },
+      ];
+      const { VocClusterDetailPanel } = await import(
+        '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+      );
+
+      render(
+        <VocClusterDetailPanel
+          clusterId="11111111-1111-1111-1111-111111111111"
+          onClose={vi.fn()}
+        />,
+      );
+
+      const badge = screen.getByTestId(`finding-status-badge-${status}`);
+      expect(badge).toHaveTextContent(FINDING_STATUS_LABELS[status]);
+      expect(badge).not.toHaveTextContent(status);
+    },
+  );
+
+  it('shows Execution create and link CTAs when no Finding is linked', async () => {
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    expect(screen.getByTestId("cluster-execution-empty")).toBeInTheDocument();
-    expect(
-      screen.getByTestId("cluster-execution-create-finding"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId("cluster-link-existing-finding-button"),
-    ).toBeEnabled();
-    expect(
-      screen.queryByTestId("cluster-linked-findings-list"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('cluster-execution-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-execution-create-finding')).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-link-existing-finding-button')).toBeEnabled();
+    expect(screen.queryByTestId('cluster-linked-findings-list')).not.toBeInTheDocument();
   });
 
-  it("disables the link-existing-Finding CTA for non-mutating roles", async () => {
-    currentRole.role_level = "user";
+  it('opens an inline Task Request draft and submits the two request fields', async () => {
+    requestTaskMutate.mockClear();
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    expect(
-      screen.getByTestId("cluster-link-existing-finding-button"),
-    ).toBeDisabled();
+    fireEvent.click(screen.getByTestId('cluster-request-task-button'));
+    const draft = screen.getByTestId('request-task-draft');
+    expect(draft).toHaveTextContent('출처 CLU-31 · VOC Cluster');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
+      target: { value: 'Reduce repeated payment failures' },
+    });
+    fireEvent.click(screen.getByTestId('request-task-submit'));
+
+    expect(requestTaskMutate).toHaveBeenCalledWith(
+      {
+        evidence_summary: '결제 관련 VOC가 반복됩니다.',
+        requested_outcome: 'Reduce repeated payment failures',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 
-  it("renders rich nullable fields, five section anchors, member reporter status, and truncates members", async () => {
-    clusters[0]!.severity = "high";
-    clusters[0]!.confidence = "medium";
-    clusters[0]!.rationale = "같은 결제 실패 패턴입니다.";
-    clusters[0]!.owner_user_id = "owner-1";
-    clusters[0]!.confirmed_by = "confirmer-1";
-    clusters[0]!.confirmed_at = "2026-01-03T00:00:00.000Z";
+  it('disables the link-existing-Finding CTA for non-mutating roles', async () => {
+    currentRole.role_level = 'user';
+    const { VocClusterDetailPanel } = await import(
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+    );
+
+    render(
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
+    );
+
+    expect(screen.getByTestId('cluster-link-existing-finding-button')).toBeDisabled();
+  });
+
+  it('renders rich nullable fields, five section anchors, member reporter status, and truncates members', async () => {
+    clusters[0]!.severity = 'high';
+    clusters[0]!.confidence = 'medium';
+    clusters[0]!.rationale = '같은 결제 실패 패턴입니다.';
+    clusters[0]!.owner_user_id = 'owner-1';
+    clusters[0]!.confirmed_by = 'confirmer-1';
+    clusters[0]!.confirmed_at = '2026-01-03T00:00:00.000Z';
     clusters[0]!.members = Array.from({ length: 5 }, (_, index) => ({
       ...clusters[0]!.members[0]!,
       voc_id: `33333333-3333-3333-3333-33333333333${index}`,
-      reporter_facing_status: "reviewing",
+      reporter_facing_status: 'reviewing',
     }));
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
     const { container } = render(
       <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
     );
-    for (const anchor of [
-      "overview",
-      "why",
-      "execution",
-      "members",
-      "properties",
-    ])
-      expect(
-        container.querySelector(`[data-anchor="${anchor}"]`),
-      ).toBeInTheDocument();
-    expect(screen.getByTestId("cluster-detail-rationale")).toHaveTextContent(
-      "같은 결제 실패 패턴입니다.",
+    for (const anchor of ['overview', 'why', 'execution', 'members', 'properties'])
+      expect(container.querySelector(`[data-anchor="${anchor}"]`)).toBeInTheDocument();
+    expect(screen.getByTestId('cluster-detail-rationale')).toHaveTextContent(
+      '같은 결제 실패 패턴입니다.',
     );
-    expect(screen.getByTestId("cluster-detail-severity")).toHaveTextContent(
-      "high",
-    );
-    expect(screen.getByTestId("cluster-detail-owner")).toHaveTextContent(
-      "owner-1",
-    );
-    expect(screen.getAllByTestId("reporter-status-reviewing")).toHaveLength(4);
-    expect(screen.getByTestId("cluster-members-more")).toHaveTextContent(
-      "+1 더보기",
-    );
+    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('높음');
+    expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('owner-1');
+    expect(screen.getAllByTestId('reporter-status-reviewing')).toHaveLength(4);
+    expect(screen.getByTestId('cluster-members-more')).toHaveTextContent('+1 더보기');
   });
 
-  it("renders graceful empty values for nullable cluster fields", async () => {
+  it('renders graceful empty values for nullable cluster fields', async () => {
     clusters[0]!.summary = null;
     clusters[0]!.severity = null;
     clusters[0]!.confidence = null;
@@ -837,154 +832,138 @@ describe("VOC cluster route shells", () => {
     clusters[0]!.confirmed_by = null;
     clusters[0]!.confirmed_at = null;
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
-    render(
-      <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
+    render(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />);
+    expect(screen.getByTestId('cluster-detail-summary-empty')).toHaveTextContent(
+      '요약이 없습니다.',
     );
-    expect(
-      screen.getByTestId("cluster-detail-summary-empty"),
-    ).toHaveTextContent("요약이 없습니다.");
-    expect(
-      screen.getByTestId("cluster-detail-rationale-empty"),
-    ).toHaveTextContent("그룹화 이유가 없습니다.");
-    expect(screen.getByTestId("cluster-detail-severity")).toHaveTextContent(
-      "미지정",
+    expect(screen.getByTestId('cluster-detail-rationale-empty')).toHaveTextContent(
+      '그룹화 이유가 없습니다.',
     );
-    expect(screen.getByTestId("cluster-detail-owner")).toHaveTextContent(
-      "담당자 없음",
-    );
-    expect(screen.getByTestId("cluster-detail-confirmed-by")).toHaveTextContent(
-      "대기 중",
-    );
+    expect(screen.getByTestId('cluster-detail-severity')).toHaveTextContent('미지정');
+    expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('담당자 없음');
+    expect(screen.getByTestId('cluster-detail-confirmed-by')).toHaveTextContent('대기 중');
   });
 
-  it("submits a selected existing Finding and closes the picker on success", async () => {
+  it('submits a selected existing Finding and closes the picker on success', async () => {
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
     linkFindingMutate.mockImplementation(
-      (_variables: unknown, callbacks: { onSuccess: () => void }) =>
-        callbacks.onSuccess(),
+      (_variables: unknown, callbacks: { onSuccess: () => void }) => callbacks.onSuccess(),
     );
-    render(
-      <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
-    );
-    fireEvent.click(screen.getByTestId("cluster-link-existing-finding-button"));
-    fireEvent.change(screen.getByTestId("link-existing-finding-picker"), {
-      target: { value: "55555555-5555-5555-5555-555555555555" },
-    });
-    fireEvent.submit(document.getElementById("link-existing-finding-form")!);
+    render(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
+    fireEvent.click(screen.getByTestId('link-existing-finding-picker'));
+    fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
+    fireEvent.submit(document.getElementById('link-existing-finding-form')!);
     expect(linkFindingMutate).toHaveBeenCalledWith(
       {
         clusterId: clusters[0]!.id,
-        findingId: "55555555-5555-5555-5555-555555555555",
+        findingId: '55555555-5555-5555-5555-555555555555',
       },
       expect.any(Object),
     );
-    expect(
-      screen.queryByTestId("link-existing-finding-modal"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('link-existing-finding-modal')).not.toBeInTheDocument();
+  });
+
+  it('allows the Finding picker to return to its original empty option', async () => {
+    const { VocClusterDetailPanel } = await import(
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+    );
+    const cluster = clusters[0];
+    if (!cluster) throw new Error('Expected the cluster fixture to exist.');
+    render(<VocClusterDetailPanel clusterId={cluster.id} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
+    const picker = screen.getByTestId('link-existing-finding-picker');
+
+    expect(picker).toHaveTextContent('연결할 Finding을 선택하세요.');
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('option', { name: '연결할 Finding을 선택하세요.' }));
+
+    expect(picker).toHaveTextContent('연결할 Finding을 선택하세요.');
+    expect(screen.getByTestId('link-existing-finding-submit')).toBeDisabled();
+    expect(linkFindingMutate).not.toHaveBeenCalled();
   });
 
   it.each([
-    [403, "permission.scope_required", "해당 Managed System에 대한 권한이 없습니다."],
-    [404, "not_found.record", "존재하지 않거나 접근할 수 없는 항목입니다."],
+    [403, 'permission.scope_required', '해당 Managed System에 대한 권한이 없습니다.'],
+    [404, 'not_found.record', '존재하지 않거나 접근할 수 없는 항목입니다.'],
   ] as const)(
-    "surfaces the $1 / $2 non-disclosing link error",
+    'surfaces the $1 / $2 non-disclosing link error',
     async (status, code, expectedMessage) => {
       const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
-    );
-      const error = new ApiError(status, { code, message: "backend detail" });
+        '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
+      );
+      const error = new ApiError(status, { code, message: 'backend detail' });
       expect(error.status).toBe(status);
       expect(error.envelope.code).toBe(code);
       linkFindingMutate.mockImplementation(
-        (
-          _variables: unknown,
-          callbacks: { onError: (error: unknown) => void },
-        ) => callbacks.onError(error),
+        (_variables: unknown, callbacks: { onError: (error: unknown) => void }) =>
+          callbacks.onError(error),
       );
-      render(
-        <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
-      );
-      fireEvent.click(
-        screen.getByTestId("cluster-link-existing-finding-button"),
-      );
-      fireEvent.change(screen.getByTestId("link-existing-finding-picker"), {
-        target: { value: "55555555-5555-5555-5555-555555555555" },
-      });
-      fireEvent.submit(document.getElementById("link-existing-finding-form")!);
+      render(<VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByTestId('cluster-link-existing-finding-button'));
+      fireEvent.click(screen.getByTestId('link-existing-finding-picker'));
+      fireEvent.click(await screen.findByRole('option', { name: 'FIN-555 · 기존 결제 Finding' }));
+      fireEvent.submit(document.getElementById('link-existing-finding-form')!);
       expect(linkFindingMutate).toHaveBeenCalledWith(
         {
           clusterId: clusters[0]!.id,
-          findingId: "55555555-5555-5555-5555-555555555555",
+          findingId: '55555555-5555-5555-5555-555555555555',
         },
         expect.any(Object),
       );
-      expect(
-        screen.getByTestId("link-existing-finding-error"),
-      ).toHaveTextContent(expectedMessage);
+      expect(screen.getByTestId('link-existing-finding-error')).toHaveTextContent(expectedMessage);
     },
   );
 
-  it("AC-E10a keeps current members visible, disabled, and badged", async () => {
+  it('AC-E10a keeps current members visible, disabled, and badged', async () => {
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByTestId("cluster-add-voc-button"));
+    fireEvent.click(screen.getByTestId('cluster-add-voc-button'));
     expect(
-      screen.getByTestId(
-        "add-voc-candidate-33333333-3333-3333-3333-333333333333",
-      ),
+      screen.getByTestId('add-voc-candidate-33333333-3333-3333-3333-333333333333'),
     ).toBeDisabled();
     expect(
-      screen.getByTestId(
-        "add-voc-included-33333333-3333-3333-3333-333333333333",
-      ),
-    ).toHaveTextContent("이미 포함됨");
+      screen.getByTestId('add-voc-included-33333333-3333-3333-3333-333333333333'),
+    ).toHaveTextContent('이미 포함됨');
   });
 
-  it("AC-E10b keeps nonmembers selectable without an included badge", async () => {
+  it('AC-E10b keeps nonmembers selectable without an included badge', async () => {
     const { VocClusterDetailPanel } = await import(
-      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+      '@/features/voc-cluster/components/detail/VocClusterDetailPanel'
     );
 
     render(
-      <VocClusterDetailPanel
-        clusterId="11111111-1111-1111-1111-111111111111"
-        onClose={vi.fn()}
-      />,
+      <VocClusterDetailPanel clusterId="11111111-1111-1111-1111-111111111111" onClose={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByTestId("cluster-add-voc-button"));
+    fireEvent.click(screen.getByTestId('cluster-add-voc-button'));
 
-    const nonmember = screen.getByTestId(
-      "add-voc-candidate-44444444-4444-4444-4444-444444444444",
-    );
+    const nonmember = screen.getByTestId('add-voc-candidate-44444444-4444-4444-4444-444444444444');
     expect(nonmember).toBeEnabled();
     expect(
-      screen.queryByTestId(
-        "add-voc-included-44444444-4444-4444-4444-444444444444",
-      ),
+      screen.queryByTestId('add-voc-included-44444444-4444-4444-4444-444444444444'),
     ).not.toBeInTheDocument();
 
     fireEvent.click(nonmember);
-    fireEvent.submit(screen.getByTestId("add-voc-form"));
+    fireEvent.submit(screen.getByTestId('add-voc-form'));
 
     expect(addClusterMemberMutate).toHaveBeenCalledTimes(1);
     expect(addClusterMemberMutate).toHaveBeenCalledWith(
       {
-        clusterId: "11111111-1111-1111-1111-111111111111",
-        vocId: "44444444-4444-4444-4444-444444444444",
+        clusterId: '11111111-1111-1111-1111-111111111111',
+        vocId: '44444444-4444-4444-4444-444444444444',
       },
       expect.any(Object),
     );

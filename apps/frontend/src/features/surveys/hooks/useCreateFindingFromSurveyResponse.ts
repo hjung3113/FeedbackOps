@@ -1,4 +1,5 @@
 import { type ApiError, apiClient } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { CreateFindingFromSurveyResponseRequest, FindingDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 import { surveyKeys } from './useSurveys';
@@ -8,8 +9,14 @@ export interface CreateFindingFromSurveyResponseVariables {
   body: CreateFindingFromSurveyResponseRequest;
 }
 
+type CreateFindingSuccess = (
+  finding: FindingDto,
+  variables: CreateFindingFromSurveyResponseVariables,
+) => void;
+
 export function useCreateFindingFromSurveyResponse(
   surveyId: string,
+  onSuccess?: CreateFindingSuccess,
 ): UseMutationResult<FindingDto, ApiError, CreateFindingFromSurveyResponseVariables> {
   const queryClient = useQueryClient();
 
@@ -20,6 +27,14 @@ export function useCreateFindingFromSurveyResponse(
           body,
         })
       ).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+    onSuccess: (finding, variables) => {
+      invalidateNavCounts(queryClient);
+      onSuccess?.(finding, variables);
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['findings'] }),
+        queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+        queryClient.invalidateQueries({ queryKey: surveyKeys.outcomeFollowUp(surveyId) }),
+      ]);
+    },
   });
 }

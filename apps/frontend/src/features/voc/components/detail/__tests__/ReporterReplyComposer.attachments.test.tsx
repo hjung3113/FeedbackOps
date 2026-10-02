@@ -166,7 +166,7 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Send reply' }));
+    await user.click(screen.getByRole('button', { name: '답변 보내기' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalledTimes(1);
@@ -209,7 +209,7 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
-    await user.click(screen.getByRole('button', { name: 'Send reply' }));
+    await user.click(screen.getByRole('button', { name: '답변 보내기' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {
@@ -228,7 +228,7 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     expect(screen.queryByTestId('attachment-row')).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId('rich-editor-reporter-reply'));
-    await user.click(screen.getByRole('button', { name: 'Send reply' }));
+    await user.click(screen.getByRole('button', { name: '답변 보내기' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
 
     const secondCall = mutateMock.mock.calls[1];
@@ -260,7 +260,7 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('error');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Send reply' }));
+    await user.click(screen.getByRole('button', { name: '답변 보내기' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
@@ -291,14 +291,14 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '답변 보내기' })).toBeDisabled();
     });
 
     await act(async () => {
       resolveUpload(ATTACHMENT);
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Send reply' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: '답변 보내기' })).not.toBeDisabled();
     });
   });
 });

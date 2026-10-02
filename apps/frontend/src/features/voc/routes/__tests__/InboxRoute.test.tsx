@@ -17,8 +17,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
+const apiClientMock = vi.hoisted(() => vi.fn());
+const openRequestAccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
+  createFileRoute: () => (options: unknown) => ({ options }),
   useSearch: () => searchState,
   useNavigate: () => navigateMock,
   Link: ({
@@ -42,15 +45,35 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: ({
     capability,
     managedSystemId,
+    returnRouteIntent,
+    renderTrigger,
   }: {
     capability: string;
     managedSystemId?: string;
+    returnRouteIntent: string;
+    renderTrigger?: (open: () => void) => React.ReactNode;
   }) => (
-    <button type="button" data-managed-system-id={managedSystemId} data-testid="request-access">
-      {capability}
-    </button>
+    <div
+      data-testid="request-access-flow"
+      data-capability={capability}
+      data-managed-system-id={managedSystemId}
+      data-return-route-intent={returnRouteIntent}
+    >
+      {renderTrigger !== undefined ? (
+        renderTrigger(openRequestAccessMock)
+      ) : (
+        <button type="button" data-testid="request-access">
+          {capability}
+        </button>
+      )}
+    </div>
   ),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiClient: apiClientMock };
+});
 
 // ── Stub useVocList ────────────────────────────────────────────────────────────
 
@@ -151,11 +174,20 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: { items: [] } }),
+  useQuery: (options: {
+    queryKey?: readonly unknown[];
+    queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
+  }) => {
+    if (options.queryKey?.[0] === 'vocs' && options.queryFn) {
+      void options.queryFn({ signal: new AbortController().signal });
+    }
+    return { data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() };
+  },
 }));
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 
+import { Route as vocsRoute } from '@/routes/_authed/vocs';
 import { useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
@@ -174,11 +206,37 @@ describe('useInboxRoute', () => {
   beforeEach(() => {
     searchState = {};
     navigateMock.mockClear();
+    apiClientMock.mockReset();
+    openRequestAccessMock.mockReset();
+    apiClientMock.mockResolvedValue({ data: { items: [] } });
     useVocListMock.mockReturnValue({
       data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+    });
+  });
+
+  it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
+    const { useVocList } =
+      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    const route = vocsRoute as unknown as {
+      options: { validateSearch: (raw: unknown) => Record<string, unknown> };
+    };
+    searchState = route.options.validateSearch({ view: 'inbox', 'filter.analytics_area': 'unset' });
+
+    render(<InboxTestHarness view="inbox" />);
+
+    await waitFor(() => {
+      const requestUrl = apiClientMock.mock.calls.find(([method]) => method === 'GET')?.[1];
+      expect(requestUrl).toEqual(expect.any(String));
+      if (typeof requestUrl !== 'string') return;
+
+      const query = new URL(requestUrl, 'http://localhost').searchParams;
+      expect(query.get('filter.analytics_area')).toBe('unset');
+      expect(query.has('tab')).toBe(false);
+      expect(screen.getByRole('tab', { name: '미분류' })).toHaveAttribute('aria-selected', 'false');
     });
   });
 
@@ -193,6 +251,44 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it('renders prototype inbox tab icons and native tips without synthetic counts', () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const expectedTips: Array<[string, string]> = [
+      ['미분류', '아직 분류되지 않은 VOC'],
+      ['높음', '높음 · 심각 심각도'],
+      ['미배정', '담당자 미지정'],
+      ['연결 없음', 'Finding / Task 연결 없음'],
+      ['높음 · 연결 없음', '높음 이상인데 Finding / Task 연결 없음'],
+    ];
+    for (const [label, tip] of expectedTips) {
+      const tab = screen.getByRole('tab', { name: label });
+      expect(tab).toHaveAttribute('title', tip);
+      expect(tab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+      expect(tab).not.toHaveTextContent(/\d/);
+    }
+
+    const noTaskTab = screen.getByRole('tab', { name: 'Task 없음' });
+    expect(noTaskTab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(noTaskTab).not.toHaveAttribute('title');
+    expect(noTaskTab).not.toHaveTextContent(/\d/);
+  });
+
+  it('keeps the selected inbox tab in URL state', () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '높음' }));
+
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
+  });
+
   it('renders 3 VocList rows for my view', async () => {
     searchState = { view: 'my' };
     render(<InboxTestHarness view="my" />);
@@ -202,6 +298,26 @@ describe('useInboxRoute', () => {
       expect(screen.getByText('피드백 2')).toBeInTheDocument();
       expect(screen.getByText('피드백 3')).toBeInTheDocument();
     });
+  });
+
+  it('opens VOC creation when the 내 VOC empty-state button is clicked', () => {
+    searchState = { view: 'my' };
+    useVocListMock.mockReturnValue({
+      data: { items: [], next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(<InboxTestHarness view="my" />);
+
+    fireEvent.click(screen.getByRole('button', { name: '+ 새 VOC 작성' }));
+
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search(searchState)).toEqual({ view: 'my', action: 'create' });
   });
 
   it('clicking a row calls navigate with selected param', async () => {
@@ -296,8 +412,8 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     await waitFor(() => {
-      // Tab labels mirror the prototype (English): Untriaged / High / Unassigned / Similar / No link.
-      expect(screen.getByText('Untriaged')).toBeInTheDocument();
+      // The same-Managed-System peer tab keeps its URL value `similar`.
+      expect(screen.getByText('미분류')).toBeInTheDocument();
     });
   });
 
@@ -305,23 +421,23 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox', tab: 'high-no-link' };
     render(<InboxTestHarness view="inbox" />);
 
-    const tab = await screen.findByRole('tab', { name: 'High · no link' });
+    const tab = await screen.findByRole('tab', { name: '높음 · 연결 없음' });
     expect(tab).toHaveAttribute('data-state', 'active');
   });
 
-  it('AC-E6b renders the six inbox tabs in canonical value order', async () => {
+  it('AC-E6b renders the seven inbox tabs in canonical value order', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    await screen.findByRole('tab', { name: 'Untriaged' });
+    await screen.findByRole('tab', { name: '미분류' });
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      'Untriaged',
-      'High',
-      'Unassigned',
-      'Similar',
-      'No link',
-      'High · no link',
+      '미분류',
+      '높음',
+      '미배정',
+      '연결 없음',
+      '높음 · 연결 없음',
+      'Task 없음',
     ]);
 
     // Untriaged is already the active tab and Radix emits no onValueChange for
@@ -341,15 +457,15 @@ describe('useInboxRoute', () => {
         ).search;
         return reducer({}).tab;
       }),
-    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link']);
+    ).toEqual(['high', 'unassigned', 'no-link', 'high-no-link', 'no-task']);
   });
 
-  it('my view renders My VOCs title instead of tabs', async () => {
+  it('my view renders 내 VOC title instead of tabs', async () => {
     searchState = { view: 'my' };
     render(<InboxTestHarness view="my" />);
 
     await waitFor(() => {
-      expect(screen.getByText('My VOCs')).toBeInTheDocument();
+      expect(screen.getByText('내 VOC')).toBeInTheDocument();
     });
   });
 
@@ -366,10 +482,36 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    const panel = await screen.findByText('VOC Inbox');
-    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    const panel = await screen.findByText('VOC 수신함');
+    // #562: specs/voc.md R-VOC-INBOX — nothing requestable -> blocked_not_requestable.
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
     expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+  });
+
+  it('shows the Korean denied reason and links to 내 VOC for a 403', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'no voc.read scope for actor',
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(
+      await screen.findByText(
+        'VOC 수신함을 볼 권한이 없습니다. 내가 접수한 VOC는 내 VOC에서 확인할 수 있습니다.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('no voc.read scope for actor')).not.toBeInTheDocument();
+
+    const myVocsLink = screen.getByRole('link', { name: '내 VOC' });
+    expect(myVocsLink).toHaveAttribute('href', '/vocs');
+    expect(myVocsLink).toHaveAttribute('data-search', JSON.stringify({ view: 'my' }));
   });
 
   it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
@@ -386,8 +528,21 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
-    expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
+    const panel = await screen.findByText('VOC 수신함');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'request_access');
+    const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
+    expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);
+    const requestFlow = screen.getByTestId('request-access-flow');
+    expect(requestFlow).toHaveAttribute('data-capability', 'voc.read');
+    expect(requestFlow).toHaveAttribute('data-managed-system-id', 'ms-1');
+    expect(requestFlow).toHaveAttribute('data-return-route-intent', '/vocs?view=inbox');
+    fireEvent.click(requestButton);
+    expect(openRequestAccessMock).toHaveBeenCalledTimes(1);
+    // #562: an out-of-scope Managed System is not "no Inbox access" — no 내 VOC detour.
+    expect(
+      screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('voc-inbox-denied-my-vocs')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission error on VocList failed-load copy', async () => {
@@ -447,5 +602,21 @@ describe('useInboxRoute', () => {
       // The legacy/long-form key must NOT leak into the URL.
       expect(result).not.toHaveProperty('filter.reporter_facing_status');
     });
+  });
+
+  it('shows the shared medium severity label in Inbox filters', async () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /필터/ }));
+
+    const mediumOption = await screen.findByRole('checkbox', { name: '중간' });
+    expect(mediumOption).toBeInTheDocument();
+    fireEvent.click(mediumOption);
+
+    const call = navigateMock.mock.calls.at(-1)?.[0] as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(call.search({})['filter.severity']).toBe('medium');
   });
 });

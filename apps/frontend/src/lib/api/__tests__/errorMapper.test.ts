@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { ERROR_CODES, type ErrorCode } from '@fops/shared';
+import { UnauthenticatedError } from '../auth';
 import {
   CATALOG,
   errorMapper,
   GENERIC_ERROR_MESSAGE,
+  mapUnknownError,
   RETIRED_OR_SERVER_ONLY_CODES,
 } from '../errorMapper';
+import { ApiError } from '../types';
 
 const VALID_TONES = new Set(['error', 'warning', 'info']);
 
@@ -158,5 +161,38 @@ describe('errorMapper — ERROR_CODES coverage', () => {
     const mapped = errorMapper({ code: 'made.up.code' as ErrorCode, message: '' });
     expect(mapped.message).toBe(GENERIC_ERROR_MESSAGE);
     expect(mapped.tone).toBe('error');
+  });
+});
+
+describe('errorMapper — unknown and missing errors', () => {
+  it.each([
+    ['undefined envelope', undefined],
+    ['null envelope', null],
+    ['envelope without code', {} as never],
+  ] as const)('%s maps to the generic error', (_label, envelope) => {
+    const mapped = errorMapper(envelope);
+
+    expect(mapped).toEqual({ tone: 'error', message: GENERIC_ERROR_MESSAGE });
+  });
+
+  it.each([
+    {
+      label: 'ApiError',
+      error: new ApiError(403, { code: 'permission.denied', message: 'Forbidden' }),
+      expected: CATALOG['permission.denied']?.message,
+    },
+    {
+      label: 'UnauthenticatedError',
+      error: new UnauthenticatedError(),
+      expected: CATALOG['auth.session_required']?.message,
+    },
+    { label: 'plain Error', error: new Error('failure'), expected: GENERIC_ERROR_MESSAGE },
+    { label: 'string', error: 'failure', expected: GENERIC_ERROR_MESSAGE },
+  ])('mapUnknownError maps $label', ({ error, expected }) => {
+    const mapped = mapUnknownError(error);
+
+    expect(mapped.tone).toBe('error');
+    expect(mapped.message).toBe(expected);
+    if (expected === GENERIC_ERROR_MESSAGE) expect(mapped).not.toHaveProperty('action');
   });
 });

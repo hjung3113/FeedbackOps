@@ -55,8 +55,8 @@ describe('<ManagedSystemPicker>', () => {
     render(
       <ManagedSystemPicker
         options={[
-          { id: 'tableau', label: 'Tableau' },
-          { id: 'power-bi', label: 'Power BI' },
+          { id: 'tableau', slug: 'tableau', label: 'Tableau' },
+          { id: 'power-bi', slug: 'power-bi', label: 'Power BI' },
         ]}
         value="tableau"
         onChange={() => {}}
@@ -65,5 +65,7 @@ describe('<ManagedSystemPicker>', () => {
 
     expect(screen.getByText('TB')).toBeInTheDocument();
     expect(screen.getByText('PB')).toBeInTheDocument();
+    expect(screen.getByText('TB')).toHaveAttribute('data-token', '--managed-system-tableau');
+    expect(screen.getByText('PB')).toHaveAttribute('data-token', '--managed-system-power-bi');
   });
 });

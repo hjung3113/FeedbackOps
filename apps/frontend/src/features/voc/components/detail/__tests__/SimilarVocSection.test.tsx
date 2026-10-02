@@ -38,11 +38,12 @@ const similar = {
 } satisfies VocDetailEnvelope['similar'];
 
 describe('<SimilarVocSection>', () => {
-  it('renders the Similarity count badge and up to three peer rows', () => {
+  it('renders the same-Managed-System peer count and up to three peer rows', () => {
     render(<SimilarVocSection similar={similar} similarCount={4} onSelect={vi.fn()} />);
 
-    expect(screen.getByText('유사 VOC')).toBeInTheDocument();
-    expect(screen.getByText('Similarity 4')).toBeInTheDocument();
+    expect(screen.getByText('같은 Managed System의 VOC')).toBeInTheDocument();
+    expect(screen.getByText('4건')).toBeInTheDocument();
+    expect(screen.getByLabelText('같은 Managed System의 VOC 4건')).toBeInTheDocument();
     expect(screen.getByText('VOC-0002')).toBeInTheDocument();
     expect(screen.getByText('첫 번째 유사 VOC')).toBeInTheDocument();
     expect(screen.getByText('높음')).toBeInTheDocument();

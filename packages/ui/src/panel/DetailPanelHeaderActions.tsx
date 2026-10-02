@@ -19,10 +19,10 @@ export interface DetailPanelHeaderActionsProps {
 }
 
 const DEFERRED_ITEMS: Array<{ label: string; disabledReason: string }> = [
-  { label: '읽음 표시', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '스누즈', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '구독', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '보관', disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '읽음 표시', disabledReason: '이후 제공 예정입니다' },
+  { label: '스누즈', disabledReason: '이후 제공 예정입니다' },
+  { label: '구독', disabledReason: '이후 제공 예정입니다' },
+  { label: '보관', disabledReason: '이후 제공 예정입니다' },
 ];
 
 /**
@@ -68,7 +68,7 @@ async function writeToClipboard(text: string): Promise<boolean> {
 const iconButtonCls = cn(
   'flex items-center justify-center rounded p-1',
   'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
 );
 
 export function DetailPanelHeaderActions({
@@ -85,7 +85,7 @@ export function DetailPanelHeaderActions({
       typeof window !== 'undefined' ? new URL(copyUrl, window.location.href).href : copyUrl;
 
     if (await writeToClipboard(absolute)) {
-      toast('링크가 복사되었습니다.');
+      toast.success('링크가 복사되었습니다.');
     } else {
       // Saying "복사되었습니다" after copying nothing is worse than failing:
       // the actor pastes stale content and never learns why.

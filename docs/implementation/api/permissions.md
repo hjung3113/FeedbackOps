@@ -13,11 +13,91 @@ GET /me/permissions/scope?capability={capability}
 
 POST /permission-requests
 GET /permission-requests          # admin-only workspace list (#87)
+GET /permissions/requests         # canonical review-console list
 GET /permission-requests/mine     # caller's open requests
-POST /permission-requests/:id/approve   # 미구현 as of Slice 6 — permission request approval workflow not started
-POST /permission-requests/:id/reject    # 미구현 as of Slice 6 — permission request rejection workflow not started
-POST /permission-requests/:id/revoke    # 미구현 as of Slice 6 — permission grant/request revoke workflow not started
+POST /permissions/requests/:id/approve
+POST /permissions/requests/:id/reject
+POST /permissions/requests/:id/need-more-info
+POST /permissions/requests/:id/deny
+POST /permission-requests/:id/submit-more-info
 ```
+
+### `POST /permission-requests`
+
+The create body accepts `requested_expiration?: iso8601`. When present, the
+service stores that requested end time on the Permission Request.
+
+```ts
+{
+  requested_capability: string;
+  requested_managed_system_id?: uuid;
+  requested_object_type?: string;
+  requested_object_id?: uuid;
+  reason: string;
+  requested_expiration?: iso8601;
+  source_object_type?: string;
+  source_object_id?: uuid;
+  source_action_id?: string;
+  return_route_intent?: string;
+}
+```
+
+The response remains `{ id: uuid, status: "pending", created_at: iso8601 }`.
+
+### `POST /permission-requests/:id/submit-more-info`
+
+Any authenticated member may resubmit a request only when the request belongs
+to that actor in the current workspace and has status `needs_more_info`. Admins
+use the same requester check; there is no admin bypass. An unknown request id,
+a request in another workspace, or another member's request returns
+`404 not_found.record`.
+
+The strict request body accepts:
+
+```ts
+{
+  reason?: string; // 1–2000 characters
+  requested_managed_system_id?: uuid | null;
+  requested_object_type?: string | null; // at least 1 character when present
+  requested_object_id?: uuid | null;
+  requested_expiration?: iso8601 | null;
+}
+```
+
+Omitted values keep the stored value. JSON `null` clears the four nullable
+scope and expiration columns; `reason` cannot be null.
+Submitted reasons are trimmed and must remain non-empty. A sensitive
+capability returns `validation.sensitive_reason_required` for an empty resolved
+reason; other capabilities return `validation.failed` with a `reason` field
+error. Unknown keys and malformed values return `422 validation.failed`.
+An invalid UUIDv4 `Idempotency-Key` returns
+`422 validation.malformed_idempotency_key`; a stored capability outside the
+current vocabulary returns `422 validation.unknown_capability`. An unknown
+managed-system id or one from another workspace returns `422 validation.failed`
+with `fields: [{ path: ['requested_managed_system_id'], code: 'custom' }]`. A
+non-UUID `:id` returns `422 validation.failed`.
+
+```json
+{
+  "id": "uuid",
+  "status": "pending",
+  "updated_at": "iso8601"
+}
+```
+
+The command locks the request row inside the transaction and accepts only
+`needs_more_info`; all other statuses return `409 conflict.stale_write`. A
+resolved managed-system id must belong to the current workspace. When the
+scope tuple changes, the service rechecks the capability in the same
+transaction and returns `409 conflict.capability_already_granted` if the actor
+already has it. An active-request unique-index collision returns
+`409 conflict.permission_request_duplicate`.
+
+An optional UUIDv4 `Idempotency-Key` stores and replays the `200` response for
+the same actor, key, and body. Reusing that key with a different body returns
+`409 conflict.idempotency_key_reuse`. The transaction updates the request and
+writes the strict `permission_more_info_submitted` audit detail, including the
+stored pre-image, atomically.
 
 `GET /me/permissions/scope` (Slice 11 #215) is the per-Managed-System bulk
 equivalent of `GET /me/permissions/check` and resolves in the same order, so
@@ -38,6 +118,7 @@ non-admin caller receives `permission.denied` → `403`. Response:
       "requester_actor_id": "uuid",
       "requested_capability": "string",
       "requested_managed_system_id": "uuid | null",
+      "requested_expiration": "iso8601 | null",
       "reason": "string",
       "status": "pending | needs_more_info",
       "created_at": "iso8601"
@@ -46,3 +127,31 @@ non-admin caller receives `permission.denied` → `403`. Response:
   "count": 0
 }
 ```
+
+`GET /permissions/requests` is the canonical Admin review-console list and
+accepts `status=pending|needs_more_info|approved|rejected|all`; without a
+status it returns open requests. It uses the same review item shape, including
+`requested_expiration`. The detail panel is populated from that item and shows
+the same requested value; no separate detail endpoint is used.
+
+### `POST /permissions/requests/:id/approve`
+
+The strict approve body accepts:
+
+```ts
+{
+  reason?: string;
+  expiration?: iso8601 | null;
+  self_approval?: {
+    policy_citation: string;
+    peer_reviewer_absence: string;
+  };
+}
+```
+
+Omitting `expiration` keeps the request's `requested_expiration`; `null` grants
+permanent access; an ISO datetime overrides the requested value. A datetime at
+or before the current time returns `422 validation.failed` with
+`fields: [{ path: ['expiration'], code: 'custom' }]`. The grant's `expires_at`
+is the resolved value. The `permission_approved` audit detail records both
+`requested_expiration` and `granted_expiration`, each as `iso8601 | null`.

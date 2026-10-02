@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  type AssignTaskMilestoneRequest,
   type ConvertTaskRequestRequest,
   type CreateTaskCommentRequest,
   type LinkExistingTaskRequest,
@@ -12,17 +13,22 @@ import {
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
-import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
-import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
-import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import {
+  commentMentionErrors,
+  findRichContentNodes,
+  validateRichContentMentions,
+} from '../../lib/rich-content/mentions.js';
+import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
+import { findWorkspaceActor, findWorkspaceActorIds } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -35,6 +41,8 @@ import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import { lockMilestone } from '../milestones/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
@@ -42,10 +50,10 @@ import {
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
 import {
-  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
-} from '../voc/jobs/released-review-candidates.js';
-import type { VocReadService } from '../voc/read-service.js';
+  type VocReferenceReader,
+  enqueueReleasedTaskReviewCandidates,
+} from '../voc/index.js';
 import {
   type TaskCommentRow,
   type TaskRow,
@@ -56,6 +64,7 @@ import {
   listTasksByWorkspace,
   lockTaskById,
   resolveTaskSource,
+  updateTaskMilestone,
   updateTaskStatus,
 } from './repo.js';
 
@@ -70,10 +79,11 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   /** Narrow read seam (#378): Task detail resolves its source VOC's visibility
    *  verdict through the canonical VOC read-authority path — never a copied
    *  predicate (see #423) and never a VOC repo import (module-seams guard). */
-  vocReadService: Pick<VocReadService, 'resolveVocReference'>;
+  vocReadService: VocReferenceReader;
   boss?: PgBoss;
 }
 
@@ -134,51 +144,12 @@ function taskCommentToDto(row: TaskCommentRow): TaskCommentDto {
   };
 }
 
-function richContentFieldCode(error: RichContentError): string {
-  if (error.code === 'rich_content.external_image_forbidden') return 'external_image_forbidden';
-  return error.fields_code ?? 'disallowed_node';
-}
-
 function sanitizeCommentBody(doc: unknown): unknown {
-  const result = sanitizeTipTap({
+  return sanitizeRichContentOrThrow({
     surface: 'internal-comment',
-    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
+    doc,
+    fieldPath: ['body_rich_content'],
   });
-  if (!result.ok) {
-    throw new HttpError(result.error.code, result.error.reason, {
-      fields: [{ path: ['body_rich_content'], code: richContentFieldCode(result.error) }],
-      hint: result.error.path,
-    });
-  }
-  return result.doc;
-}
-
-interface MentionNode {
-  attrs?: Record<string, unknown>;
-}
-
-function findNodesOfType(doc: unknown, type: string): MentionNode[] {
-  const results: MentionNode[] = [];
-  const stack: MentionNode[] = [doc as MentionNode];
-  while (stack.length > 0) {
-    const node = stack.pop() as MentionNode & { type?: string; content?: unknown[] };
-    if (!node || typeof node !== 'object') continue;
-    if (node.type === type) results.push(node);
-    if (Array.isArray(node.content)) {
-      for (const child of node.content) stack.push(child as MentionNode);
-    }
-  }
-  return results;
-}
-
-function dedupe(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function setsEqual(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) return false;
-  for (const value of left) if (!right.has(value)) return false;
-  return true;
 }
 
 async function validateCommentMentions(
@@ -187,33 +158,11 @@ async function validateCommentMentions(
   sanitizedBody: unknown,
   mentions: string[] | undefined,
 ): Promise<string[]> {
-  const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
-  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  for (const node of mentionNodes) {
-    const actorId = node.attrs?.actor_id;
-    if (typeof actorId !== 'string' || !uuidRegex.test(actorId)) {
-      throw new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
-        fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
-      });
-    }
-  }
+  const mentionIds = validateRichContentMentions(sanitizedBody, mentions, commentMentionErrors);
 
-  const bodyMentionIds = dedupe(mentionNodes.map((node) => node.attrs?.actor_id as string));
-  const requestMentionIds = dedupe(mentions ?? []);
-  if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
-    throw new HttpError(
-      'validation.failed',
-      'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-      { fields: [{ path: ['mentions'], code: 'invalid' }] },
-    );
-  }
-
-  if (requestMentionIds.length > 0) {
-    const foundRows = await tx
-      .select({ id: actors.id })
-      .from(actors)
-      .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, requestMentionIds)));
-    if (foundRows.length !== requestMentionIds.length) {
+  if (mentionIds.length > 0) {
+    const foundActorIds = await findWorkspaceActorIds(tx, workspaceId, mentionIds);
+    if (foundActorIds.size !== mentionIds.length) {
       throw new HttpError(
         'validation.failed',
         'one or more mention actor_ids do not belong to this workspace',
@@ -221,7 +170,7 @@ async function validateCommentMentions(
       );
     }
   }
-  return requestMentionIds;
+  return mentionIds;
 }
 
 function statusChangeBody(reason: string | undefined): unknown {
@@ -248,25 +197,22 @@ async function assertConversionAnalyticsArea(args: {
   tx: Tx;
   workspaceId: string;
   analyticsAreaId: string | null | undefined;
+  milestoneId: string | null | undefined;
   managedSystemId: string;
 }): Promise<void> {
-  if (!args.analyticsAreaId) return;
-  // Lock order MS -> AA, same as AA archive (ADR-0019 E) and VOC create; the
-  // Task insert's FK also takes a KEY SHARE on the MS, so locking the AA first
-  // would invert the order and can deadlock against a concurrent AA archive.
+  if (!args.analyticsAreaId && args.milestoneId == null) return;
+  // Lock the Managed System before either child row. When an Analytics Area is
+  // present, this matches AA archive (ADR-0019 E) and VOC create. When only a
+  // Milestone is present, it also keeps the Task insert's Managed System FK
+  // KEY SHARE request from inverting the Managed System -> Milestone order.
   await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
-  const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
-  if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
-  if (aa.managed_system_id !== args.managedSystemId) {
-    throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-      fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-    });
-  }
-  if (aa.archived_at !== null) {
-    throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-      fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
-    });
-  }
+  if (!args.analyticsAreaId) return;
+  await assertActiveAnalyticsAreaForManagedSystem(
+    args.tx,
+    args.workspaceId,
+    args.managedSystemId,
+    args.analyticsAreaId,
+  );
 }
 
 async function preserveSourceLinks(args: {
@@ -535,7 +481,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             sanitizedBody,
             args.input.mentions,
           );
-          if (findNodesOfType(sanitizedBody, 'attachmentRef').length > 0) {
+          if (findRichContentNodes(sanitizedBody, 'attachmentRef').length > 0) {
             throw new HttpError('validation.failed', 'attachments are not supported for comments', {
               fields: [{ path: ['body_rich_content'], code: 'attachment_not_supported' }],
             });
@@ -629,8 +575,40 @@ export function createTasksService(deps: TasksServiceDeps) {
             tx,
             workspaceId: args.actor.workspace_id,
             analyticsAreaId: args.input.analytics_area_id,
+            milestoneId: args.input.milestone_id,
             managedSystemId: taskRequest.primary_managed_system_id,
           });
+
+          // #514 A10 — validate milestone_id before insertTask. Unknown or
+          // foreign-workspace: not_found; cross-MS: out_of_scope. Status does
+          // not gate Task assignment or conversion (ADR-0050 Decision 5).
+          if (args.input.milestone_id != null) {
+            const milestone = await lockMilestone(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.input.milestone_id,
+            });
+            if (!milestone) {
+              throw new HttpError('not_found.record', 'milestone not found');
+            }
+            if (milestone.primary_managed_system_id !== taskRequest.primary_managed_system_id) {
+              throw new HttpError(
+                'validation.failed',
+                'milestone does not belong to the task request managed system',
+                { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+              );
+            }
+          }
+
+          // #554 — reject unknown or foreign-workspace assignees before insertTask.
+          if (args.input.assignee_actor_id != null) {
+            const assignee = await findWorkspaceActor(tx, {
+              workspaceId: args.actor.workspace_id,
+              actorId: args.input.assignee_actor_id,
+            });
+            if (!assignee) {
+              throw new HttpError('not_found.record', 'assignee actor not found');
+            }
+          }
 
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,
@@ -679,6 +657,21 @@ export function createTasksService(deps: TasksServiceDeps) {
               preserved_links: preservedLinks.map((link) => link.id),
             },
           });
+
+          if (task.assignee_actor_id) {
+            await deps.notify(tx, 'task.assigned_to_me', {
+              workspace_id: args.actor.workspace_id,
+              actor_ids: [task.assignee_actor_id],
+              subject_id: task.id,
+              correlation_id: randomUUID(),
+              detail: {
+                task_id: task.id,
+                primary_managed_system_id: task.primary_managed_system_id,
+                source_task_request_id: taskRequest.id,
+              },
+              params: {},
+            });
+          }
 
           return { status: 201, body: taskToDto(task) };
         },
@@ -855,7 +848,7 @@ export function createTasksService(deps: TasksServiceDeps) {
                   entity_link_id: link.entity_link_id,
                 })),
               };
-              await deps.boss.send(TASK_RELEASED_REVIEW_CANDIDATES_QUEUE, payload, {
+              await enqueueReleasedTaskReviewCandidates(deps.boss, payload, {
                 db: fromDrizzle(tx, sql),
               });
             }
@@ -890,6 +883,92 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
   }
 
+  async function assignTaskMilestone(args: {
+    actor: TasksActor;
+    taskId: string;
+    ifMatch: string;
+    input: AssignTaskMilestoneRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              task.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (task.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
+              current_updated_at: task.updated_at.toISOString(),
+            });
+          }
+
+          // ADR-0050 Decision 5: assigning or unassigning a Task does not
+          // consult Milestone status. Existence, workspace, and Managed System
+          // checks stay, so a released Milestone in the caller's workspace on
+          // the Task's Managed System is a successful assign.
+          if (args.input.milestone_id != null) {
+            const milestone = await lockMilestone(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.input.milestone_id,
+            });
+            if (!milestone) {
+              throw new HttpError('not_found.record', 'milestone not found');
+            }
+            if (milestone.primary_managed_system_id !== task.primary_managed_system_id) {
+              throw new HttpError(
+                'validation.failed',
+                'milestone does not belong to the task managed system',
+                { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+              );
+            }
+          }
+
+          const updatedTask = await updateTaskMilestone(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            milestoneId: args.input.milestone_id,
+          });
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_milestone_assigned',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task milestone assigned',
+            detail: {
+              from_milestone_id: task.milestone_id,
+              to_milestone_id: updatedTask.milestone_id,
+            },
+          });
+
+          return { status: 200, body: taskToDto(updatedTask) };
+        },
+      );
+    });
+  }
+
   async function listTasks(args: {
     actor: TasksActor;
     query: ListTasksQuery;
@@ -908,6 +987,8 @@ export function createTasksService(deps: TasksServiceDeps) {
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+      ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
+      ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
     });
     const items: TaskDto[] = [];
     for (const row of rows) {
@@ -929,6 +1010,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     convertTaskRequest,
     linkExistingTask,
     patchTaskStatus,
+    assignTaskMilestone,
     listTasks,
   };
 }

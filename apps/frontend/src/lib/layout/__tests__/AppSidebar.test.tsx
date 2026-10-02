@@ -1,8 +1,8 @@
+import { NAV_TREE } from '@/routes/_authed';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
-import { NAV_TREE } from '@/routes/_authed';
 
 const entries = [
   {
@@ -15,15 +15,74 @@ const entries = [
   { id: 'my', label: 'My', href: '/my', active: true, section: 'VIEWS' },
 ];
 
+function createMemoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
+  const values = new Map<string, string>();
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+}
+
 beforeEach(() => {
+  vi.stubGlobal('localStorage', createMemoryStorage());
   localStorage.removeItem('appSidebarCollapsed');
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('AppSidebar', () => {
+  it('groups triage tabs under the Korean triage section and keeps No link in Inbox', () => {
+    const triageViews = NAV_TREE.voc.filter((entry) => entry.section === 'Triage 보기');
+    expect(
+      triageViews.map(({ id, label, href, countKey }) => ({ id, label, href, countKey })),
+    ).toEqual([
+      {
+        id: 'high-severity',
+        label: '높음',
+        href: '/vocs?view=triage&tab=high',
+        countKey: 'voc.tab.high',
+      },
+      {
+        id: 'unassigned',
+        label: '미배정',
+        href: '/vocs?view=triage&tab=unassigned',
+        countKey: 'voc.tab.unassigned',
+      },
+    ]);
+
+    const noLink = NAV_TREE.voc.find((entry) => entry.id === 'no-link');
+    expect(noLink).toMatchObject({
+      label: '연결 없음',
+      href: '/vocs?view=inbox&tab=no-link',
+      section: '보기',
+      countKey: 'voc.inbox.no-link',
+    });
+    expect(noLink?.parentId).toBe('inbox');
+  });
+
+  it('uses the neutral tone for an urgent zero count', () => {
+    render(<AppSidebar entries={NAV_TREE.voc} counts={{ 'voc.tab.unassigned': 0 }} />);
+
+    const badge = screen.getByTestId('sidebar-count-unassigned');
+    expect(badge).toHaveTextContent('0');
+    expect(badge.className).toContain('bg-surface-row-selected');
+    expect(badge.className).not.toContain('text-accent-danger');
+  });
+
   it('renders nav entries with correct aria-current on active', () => {
     render(<AppSidebar entries={entries} />);
     expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-nav-my').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('does not render a footer wrapper for a non-admin actor', () => {
+    render(<AppSidebar entries={entries} canAccessWorkspaceAdmin={false} />);
+
+    expect(screen.queryByTestId('sidebar-footer')).not.toBeInTheDocument();
   });
 
   it('collapse toggle persists to localStorage', () => {
@@ -150,6 +209,33 @@ describe('AppSidebar', () => {
     ]);
   });
 
+  // #679 FIX2: renamed section headers must keep their develop-era Latin test ids.
+  it('keeps Latin sidebar-section test ids for every renamed section header', () => {
+    render(
+      <AppSidebar
+        entries={[
+          { id: 'queue-unassigned-voc', label: '미배정 VOC', href: '/vocs', section: '액션 큐' },
+          ...NAV_TREE.findings,
+          ...NAV_TREE.tasks,
+          ...NAV_TREE.surveys,
+          ...NAV_TREE.integration,
+          ...NAV_TREE.admin,
+        ]}
+      />,
+    );
+
+    for (const testId of [
+      'sidebar-section-action-queues',
+      'sidebar-section-findings',
+      'sidebar-section-tasks',
+      'sidebar-section-surveys',
+      'sidebar-section-integration',
+      'sidebar-section-admin',
+    ]) {
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+    }
+  });
+
   it('hides section labels when collapsed', () => {
     render(<AppSidebar entries={entries} defaultCollapsed={true} />);
 
@@ -161,12 +247,21 @@ describe('AppSidebar', () => {
     const apply = vi.fn();
     const save = vi.fn();
     const remove = vi.fn();
-    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name: 'High priority' }]} canSaveView onApplySavedView={apply} onSaveView={save} onDeleteSavedView={remove} />);
+    render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[{ id: 'view-1', name: 'High priority' }]}
+        canSaveView
+        onApplySavedView={apply}
+        onSaveView={save}
+        onDeleteSavedView={remove}
+      />,
+    );
     expect(screen.getByTestId('saved-views-section')).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-count-view-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
     expect(apply).toHaveBeenCalledWith('view-1');
-    fireEvent.change(screen.getByLabelText('Saved view name'), { target: { value: 'Mine' } });
+    fireEvent.change(screen.getByLabelText('저장된 보기 이름'), { target: { value: 'Mine' } });
     fireEvent.click(screen.getByTestId('saved-view-save'));
     expect(save).toHaveBeenCalledWith('Mine');
     fireEvent.click(screen.getByTestId('saved-view-delete-view-1'));
@@ -178,6 +273,7 @@ describe('AppSidebar', () => {
       <AppSidebar
         entries={entries}
         defaultCollapsed={true}
+        canAccessWorkspaceAdmin={true}
         footerItems={[
           {
             id: 'workspace-settings',
@@ -212,6 +308,39 @@ describe('AppSidebar', () => {
     expect(invite.textContent).toBe('');
   });
 
+  it.each([true, false])('hides Invite member for isAdmin=%s', (isAdmin) => {
+    render(<AppSidebar entries={entries} isAdmin={isAdmin} />);
+
+    expect(screen.queryByTestId('sidebar-footer-invite-member')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invite member')).not.toBeInTheDocument();
+  });
+
+  it('renders Milestones without a badge when nav counts have no milestone key', () => {
+    const counts = {
+      'voc.inbox': 5,
+      'voc.triage': 3,
+      'voc.my': 2,
+      'voc.tab.high': 1,
+      'voc.tab.unassigned': 1,
+      'voc.inbox.no-link': 2,
+      'voc.clusters': 4,
+      'findings.all': 7,
+      'surveys.all': 0,
+    };
+    const milestoneEntry = NAV_TREE.tasks.find((entry) => entry.label === 'Milestones');
+
+    expect(milestoneEntry).toBeDefined();
+    expect(milestoneEntry?.countKey).toBeUndefined();
+
+    render(<AppSidebar entries={NAV_TREE.tasks} counts={counts} />);
+
+    const milestonesLink = screen.getByTestId('sidebar-nav-milestones');
+    expect(milestonesLink).toHaveAttribute('href', '/tasks?view=milestones');
+    expect(milestonesLink).toHaveTextContent('Milestones');
+    expect(screen.queryByTestId('sidebar-count-milestones')).not.toBeInTheDocument();
+    expect(milestonesLink).not.toHaveTextContent('0');
+  });
+
   it('distinguishes an absent count from an explicit zero count', () => {
     const countEntries = [
       { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', countKey: 'voc.inbox' as const },
@@ -240,7 +369,7 @@ describe('AppSidebar', () => {
 
     fireEvent.click(screen.getByTestId('scope-selector'));
     expect(screen.getByTestId('scope-option-outside')).toBeVisible();
-    expect(screen.getByLabelText('Outside your grants')).toBeVisible();
+    expect(screen.getByLabelText('범위 밖')).toBeVisible();
   });
 
   it('AC-E5a shows granted and total counts without claiming zero systems', () => {
@@ -258,7 +387,7 @@ describe('AppSidebar', () => {
 
     fireEvent.click(screen.getByTestId('scope-selector'));
     const allScope = screen.getByTestId('scope-option-all');
-    expect(allScope).toHaveTextContent('granted 0 / 3');
+    expect(allScope).toHaveTextContent('내 담당 0 / 3');
     expect(allScope).not.toHaveTextContent('0 systems');
     // The note lives outside the option buttons so it never becomes part of an
     // option's accessible name.
@@ -271,22 +400,64 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('scope-option-sales')).toHaveTextContent('Sales Workspace');
   });
 
-  it('labels non-admin all scope as the union of granted Managed Systems only', () => {
-    const { rerender } = render(
+  it('labels non-admin all scope with the assigned systems on an unobstructed second line', () => {
+    render(
       <AppSidebar
         entries={entries}
         isAdmin={false}
         managedSystems={[
-          { id: 'one', name: 'Identity', granted: true },
-          { id: 'two', name: 'Finance', granted: true },
+          { id: 'tableau', name: 'Tableau', granted: true },
+          { id: 'powerbi', name: 'Power BI', granted: true },
         ]}
       />,
     );
-    expect(screen.getByTestId('scope-union-badge')).toBeVisible();
-    expect(screen.getByTestId('scope-selector')).toHaveTextContent('Identity · Finance');
-
-    rerender(<AppSidebar entries={entries} isAdmin={true} managedSystems={[{ id: 'one', name: 'Identity', granted: true }]} />);
+    const selector = screen.getByTestId('scope-selector');
+    const scopeName = screen.getByTestId('scope-name');
+    expect(scopeName).toHaveTextContent('전체 Managed System');
+    expect(selector).toHaveTextContent('내 담당: Tableau · Power BI');
+    expect(selector).toHaveAccessibleName('전체 Managed System, 내 담당 범위');
     expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+    expect(Array.from(scopeName.parentElement?.children ?? [])).toHaveLength(1);
+
+    fireEvent.click(selector);
+    expect(screen.getByTestId('scope-option-all')).toHaveTextContent('전체 Managed System');
+  });
+
+  it('labels Admin all scope without a second line or qualifier', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={true}
+        managedSystems={[{ id: 'one', name: 'Identity', granted: true }]}
+      />,
+    );
+    expect(screen.getByTestId('scope-name')).toHaveTextContent('전체 Managed System');
+    expect(screen.getByTestId('scope-selector')).not.toHaveTextContent('내 담당:');
+    expect(screen.getByTestId('scope-selector')).toHaveAccessibleName('전체 Managed System');
+    expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    expect(screen.getByTestId('scope-option-all')).toHaveTextContent('워크스페이스 전체');
+  });
+
+  it('keeps scope qualifiers visible and exposes a long system name accessibly', () => {
+    const name = 'Finance Analytics and Global Revenue Operations';
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[{ id: 'outside', name, granted: false }]}
+        selectedManagedSystemId="outside"
+      />,
+    );
+
+    const selector = screen.getByTestId('scope-selector');
+    expect(selector).toHaveAccessibleName(`${name}, 범위 밖`);
+    expect(selector).toHaveAttribute('title', name);
+    expect(screen.getByTestId('scope-name')).toHaveTextContent(name);
+    expect(screen.getByTestId('scope-name')).toHaveClass('truncate');
+    expect(screen.getByTestId('scope-out-of-scope-badge')).toHaveTextContent('범위 밖');
+    expect(screen.getByTestId('scope-out-of-scope-badge')).toBeVisible();
   });
 
   it('replaces prior-rail items when the sidebar tree changes', () => {

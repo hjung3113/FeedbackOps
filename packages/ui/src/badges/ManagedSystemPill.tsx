@@ -1,20 +1,19 @@
 /**
- * ManagedSystemPill — outline pill: border + rounded-full + name + 12 px color square.
+ * ManagedSystemPill — outline pill: border + rounded-full + name + 6 px round color dot.
  *
  * C1 design contract: this component takes the RESOLVED data directly.
- * The `useManagedSystem(id)` hook (C6, features/voc/hooks/) computes
- * `mark` from an id-hash → fixed palette and passes it in. This keeps
- * `@fops/ui` free of domain data-fetching per AGENTS.md.
+ * Callers resolve `mark` from the Managed System slug with
+ * `managedSystemMarkColor`, keeping this package primitive free of data fetching.
+ * This keeps `@fops/ui` free of domain data-fetching per AGENTS.md.
  *
- * Unknown id pattern: caller passes `name: 'Unknown MS'` with no `mark`
- * → renders muted version.
+ * A known record with an unsupported slug gets the neutral default token.
+ * A missing record can omit `mark` and renders in the muted version.
  */
-import * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export interface ManagedSystemPillProps {
   name: string;
-  /** CSS color string for the 12 px square "mark". Computed by caller via id-hash palette. */
+  /** CSS color string for the 6 px round "mark" dot, resolved by slug in the caller. */
   mark?: string;
   /** When true, renders in a muted style (e.g. archived or unknown system). */
   archived?: boolean;
@@ -23,7 +22,7 @@ export interface ManagedSystemPillProps {
 
 /**
  * Outline pill for a Managed System reference.
- * Renders a small 12 px colored square prefix ("mark") when `mark` is provided.
+ * Renders a small 6 px round colored dot prefix ("mark") when `mark` is provided.
  * Passes `archived` as a data attribute for testability.
  */
 export function ManagedSystemPill({ name, mark, archived, className }: ManagedSystemPillProps) {
@@ -45,9 +44,9 @@ export function ManagedSystemPill({ name, mark, archived, className }: ManagedSy
         <span
           style={{
             display: 'inline-block',
-            width: 12,
-            height: 12,
-            borderRadius: 2,
+            width: 6,
+            height: 6,
+            borderRadius: 9999,
             backgroundColor: mark,
             flexShrink: 0,
           }}

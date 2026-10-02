@@ -7,6 +7,11 @@
 //   4. apps/frontend MUST NOT import from apps/backend.
 //   5. apps/backend MUST NOT import from apps/frontend or packages/ui.
 //   6. apps/backend/src/modules/* MUST NOT import another top-level module's repo*.js.
+//   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
+//   8. Non-VOC frontend features and src/lib MUST NOT import VOC hooks/lib internals.
+//   9. Backend modules MUST NOT import another module's __tests__/_seed-helpers.
+//  10. Modules outside Core owners/tests MUST NOT use owner tables in raw SQL or import owner symbols;
+//      src/test-support also MUST NOT import owner symbols from db/schema/core.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -46,6 +51,26 @@ const RULES = [
     targetBasename: /^repo[^/]*\.js$/,
     msg: 'backend modules must import another module through its approved public seam, not repo*.js',
   },
+  {
+    scope: 'apps/backend',
+    kind: 'outside-voc-imports-voc-jobs',
+    msg: 'files outside the VOC module must import job behavior through the VOC public seam',
+  },
+  {
+    scope: 'apps/frontend/src',
+    kind: 'feature-imports-voc-internals',
+    msg: 'non-VOC frontend features and src/lib must not import VOC hooks or lib internals',
+  },
+  {
+    scope: 'apps/backend/src/modules',
+    kind: 'foreign-test-seed-helpers',
+    msg: "backend modules must not import another module's __tests__/_seed-helpers; shared helpers live in src/test-support",
+  },
+  {
+    scope: 'apps/backend/src',
+    kind: 'foreign-core-owner-table-access',
+    msg: 'backend code must access Managed Systems and Analytics Areas through their owner surfaces',
+  },
 ];
 
 const EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx']);
@@ -67,6 +92,11 @@ function moduleSegment(file) {
   const rel = relative(join(ROOT, 'apps/backend/src/modules'), file);
   if (rel.startsWith('..')) return null;
   return rel.split(sep)[0];
+}
+
+function isWithinPath(directory, file) {
+  const rel = relative(directory, file);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`));
 }
 
 function collectImportSpecifiers(file, content) {
@@ -110,6 +140,53 @@ function collectImportSpecifiers(file, content) {
   return out;
 }
 
+function collectCoreOwnerTableImports(file, content) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const out = [];
+  const coreSchemaPath = /(?:^|\/)db\/schema\/core(?:\.js)?$/;
+  const ownerTables = new Set(['managedSystems', 'analyticsAreas']);
+  const visit = (node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      coreSchemaPath.test(node.moduleSpecifier.text.replaceAll('\\', '/'))
+    ) {
+      const namedBindings = node.importClause?.namedBindings;
+      if (namedBindings && ts.isNamedImports(namedBindings)) {
+        for (const element of namedBindings.elements) {
+          const importedName = (element.propertyName ?? element.name).text;
+          if (ownerTables.has(importedName)) {
+            out.push({
+              name: importedName,
+              line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+            });
+          }
+        }
+      }
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      coreSchemaPath.test(node.moduleSpecifier.text.replaceAll('\\', '/')) &&
+      node.exportClause &&
+      ts.isNamedExports(node.exportClause)
+    ) {
+      for (const element of node.exportClause.elements) {
+        const importedName = (element.propertyName ?? element.name).text;
+        if (ownerTables.has(importedName)) {
+          out.push({
+            name: importedName,
+            line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return out;
+}
+
 let violations = 0;
 for (const rule of RULES) {
   const base = join(ROOT, rule.scope);
@@ -135,6 +212,129 @@ for (const rule of RULES) {
           violations++;
           console.error(
             `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${relative(ROOT, target)})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'outside-voc-imports-voc-jobs') {
+      const vocModuleDir = join(ROOT, 'apps/backend/src/modules/voc');
+      const vocJobsDir = join(vocModuleDir, 'jobs');
+      if (isWithinPath(vocModuleDir, file)) continue;
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        const pathNamesVocJobs = /(^|\/)voc\/jobs(?:\/|$)/.test(normalizedSpecifier);
+        const resolvedTarget = specifier.startsWith('.') ? resolve(dirname(file), specifier) : null;
+        const targetsVocJobs =
+          (resolvedTarget !== null && isWithinPath(vocJobsDir, resolvedTarget)) || pathNamesVocJobs;
+        if (targetsVocJobs) {
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${specifier})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'feature-imports-voc-internals') {
+      const frontendSrc = join(ROOT, 'apps/frontend/src');
+      const featureRoot = join(frontendSrc, 'features');
+      const libRoot = join(frontendSrc, 'lib');
+      const vocHooksDir = join(featureRoot, 'voc/hooks');
+      const vocLibDir = join(featureRoot, 'voc/lib');
+      const frontendParts = relative(frontendSrc, file).split(sep);
+      const featureParts = relative(featureRoot, file).split(sep);
+      const isNonVocFeature =
+        isWithinPath(featureRoot, file) && featureParts.length > 1 && featureParts[0] !== 'voc';
+      const isLibFile = isWithinPath(libRoot, file);
+      const isTestFile = frontendParts.includes('__tests__') || /\.test\./.test(basename(file));
+      if ((!isNonVocFeature && !isLibFile) || isTestFile) continue;
+
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        const isVocAlias = /^@\/features\/voc\/(?:hooks|lib)(?:\/|$)/.test(normalizedSpecifier);
+        const resolvedTarget = normalizedSpecifier.startsWith('.')
+          ? resolve(dirname(file), normalizedSpecifier)
+          : null;
+        const targetsVocInternals =
+          isVocAlias ||
+          (resolvedTarget !== null &&
+            (isWithinPath(vocHooksDir, resolvedTarget) || isWithinPath(vocLibDir, resolvedTarget)));
+        if (targetsVocInternals) {
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${specifier})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'foreign-test-seed-helpers') {
+      const moduleRoot = join(ROOT, 'apps/backend/src/modules');
+      const srcSegment = moduleSegment(file);
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        let targetModule = null;
+        let resolvedTarget = null;
+        if (normalizedSpecifier.startsWith('.')) {
+          resolvedTarget = resolve(dirname(file), normalizedSpecifier);
+          const targetRel = relative(moduleRoot, resolvedTarget);
+          if (targetRel !== '..' && !targetRel.startsWith(`..${sep}`)) {
+            const targetParts = targetRel.split(sep);
+            if (
+              targetParts[1] === '__tests__' &&
+              /^_seed-helpers(?:$|[./])/.test(targetParts[2] ?? '')
+            ) {
+              targetModule = targetParts[0];
+            }
+          }
+        } else {
+          const match = normalizedSpecifier.match(
+            /(?:^|\/)modules\/([^/]+)\/__tests__\/_seed-helpers(?:\/|\.|$)/,
+          );
+          targetModule = match?.[1] ?? null;
+        }
+        if (srcSegment && targetModule && srcSegment !== targetModule) {
+          violations++;
+          const displayTarget = resolvedTarget ? relative(ROOT, resolvedTarget) : specifier;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${displayTarget})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'foreign-core-owner-table-access') {
+      const srcSegment = moduleSegment(file);
+      const modulesRoot = join(ROOT, 'apps/backend/src/modules');
+      const testSupportRoot = join(ROOT, 'apps/backend/src/test-support');
+      const isModuleFile = isWithinPath(modulesRoot, file);
+      const isTestSupportFile = isWithinPath(testSupportRoot, file);
+      const relativeParts = relative(isModuleFile ? modulesRoot : testSupportRoot, file).split(sep);
+      if (
+        (!isModuleFile && !isTestSupportFile) ||
+        (isModuleFile && (srcSegment === 'managed-systems' || srcSegment === 'analytics-areas')) ||
+        relativeParts.includes('__tests__') ||
+        /\.test\./.test(basename(file))
+      ) {
+        continue;
+      }
+      for (const { name, line } of collectCoreOwnerTableImports(file, content)) {
+        violations++;
+        console.error(`[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${name})`);
+      }
+      if (isModuleFile) {
+        const tableReference = new RegExp(
+          String.raw`\b(?:(?:from|join|update|into|using|delete\s+from|` +
+            String.raw`truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+|,\s*)` +
+            String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)\b["']?`,
+          'gi',
+        );
+        for (const match of content.matchAll(tableReference)) {
+          const line = content.slice(0, match.index).split('\n').length;
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (references core.${match[1]})`,
           );
         }
       }

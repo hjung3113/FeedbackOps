@@ -1,13 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../voc/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
+import {
+  NOTIFICATION_DISPATCH_QUEUE,
+  createRecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -39,17 +45,33 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   let db: DbHandle;
   let migrateDb: DbHandle;
   let app: FastifyInstance;
+  let rollbackApp: FastifyInstance;
+  let boss: Awaited<ReturnType<typeof initBoss>>;
   let adminCookie: string;
   let adminId: string;
   let requesterId: string;
   let requesterExternalId: string;
+  const notifications = createRecordingNotificationDispatcher();
+  let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     db = createDb(APP_URL);
     migrateDb = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle: db });
+    boss = await initBoss({ connectionString: APP_URL, log: { info() {}, warn() {}, error() {} } });
+    failAfterEnqueue = createFailAfterEnqueueNotificationDispatcher(boss);
+    app = await buildServer({
+      config: loadConfig(),
+      dbHandle: db,
+      notificationDispatcher: notifications,
+    });
+    rollbackApp = await buildServer({
+      config: loadConfig(),
+      dbHandle: db,
+      notificationDispatcher: failAfterEnqueue.dispatcher,
+    });
     await app.ready();
+    await rollbackApp.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     const admin = await db.pool.query<{ id: string }>(
       `select id from core.actors where workspace_id = $1 and external_id = 'mock-admin-1'`,
@@ -60,6 +82,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   beforeEach(async () => {
+    await cleanupFailedNotificationJobs();
+    notifications.jobs.splice(0);
+    failAfterEnqueue.attemptedPayloads.length = 0;
     await db.pool.query('delete from core.idempotency_keys');
     await db.pool.query('delete from core.rate_limits');
     const actor = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
@@ -67,8 +92,13 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     requesterExternalId = actor.externalId;
   });
 
+  afterEach(cleanupFailedNotificationJobs);
+
   afterAll(async () => {
+    await cleanupFailedNotificationJobs();
     await cleanupFixtures();
+    await shutdownBoss(boss).catch(() => {});
+    await rollbackApp?.close();
     await app?.close();
     await db?.close();
     await migrateDb?.close();
@@ -105,28 +135,37 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         where workspace_id = $1 and actor_id in (${actorIds})`,
       [WORKSPACE_ID],
     );
-    await db.pool.query(
-      `delete from core.idempotency_keys where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await db.pool.query(
-      `delete from core.sessions where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await migrateDb.pool.query(
-      `delete from core.audit_log where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await db.pool.query(
-      `delete from core.actors where workspace_id = $1 and ${actorPattern}`,
-      [WORKSPACE_ID],
-    );
+    await db.pool.query(`delete from core.idempotency_keys where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await db.pool.query(`delete from core.sessions where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await migrateDb.pool.query(`delete from core.audit_log where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await db.pool.query(`delete from core.actors where workspace_id = $1 and ${actorPattern}`, [
+      WORKSPACE_ID,
+    ]);
     await db.pool.query(
       `delete from core.managed_systems
         where workspace_id = $1
           and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
       [WORKSPACE_ID],
     );
+  }
+
+  async function cleanupFailedNotificationJobs(): Promise<void> {
+    const correlationIds =
+      failAfterEnqueue?.attemptedPayloads.map((payload) => payload.correlation_id) ?? [];
+    if (migrateDb && correlationIds.length > 0) {
+      await migrateDb.pool.query(
+        `delete from pgboss.job
+          where name = $1 and data ->> 'correlation_id' = any($2::text[])`,
+        [NOTIFICATION_DISPATCH_QUEUE, correlationIds],
+      );
+    }
+    if (failAfterEnqueue) failAfterEnqueue.attemptedPayloads.length = 0;
   }
 
   async function seedRequest(
@@ -149,6 +188,18 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         `${TEST_REASON}${randomUUID()}`,
         input.status ?? 'pending',
       ],
+    );
+    return inserted.rows[0]?.id ?? '';
+  }
+
+  async function seedRequestWithExpiration(requestedExpiration: string): Promise<string> {
+    const inserted = await db.pool.query<{ id: string }>(
+      `insert into permission.permission_requests
+        (workspace_id, requester_actor_id, requested_capability, requested_managed_system_id,
+         reason, status, requested_expiration)
+       values ($1, $2, 'voc.read', null, $3, 'pending', $4)
+       returning id`,
+      [WORKSPACE_ID, requesterId, `${TEST_REASON}${randomUUID()}`, requestedExpiration],
     );
     return inserted.rows[0]?.id ?? '';
   }
@@ -262,6 +313,68 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     ).toMatchObject({ allow: true, via: 'managed_system_scope' });
   });
 
+  // Relative to the run so the cases never age into the past-expiration (422) branch.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const REQUESTED_EXPIRATION = new Date(Date.now() + 90 * DAY_MS).toISOString();
+  const CHANGED_EXPIRATION = new Date(Date.now() + 120 * DAY_MS).toISOString();
+
+  it.each([
+    {
+      label: 'keeps the requested expiration when the body omits expiration',
+      body: {},
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: REQUESTED_EXPIRATION,
+    },
+    {
+      label: 'uses the changed expiration on the grant',
+      body: { expiration: CHANGED_EXPIRATION },
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: CHANGED_EXPIRATION,
+    },
+    {
+      label: 'clears the grant expiration when the body sends null',
+      body: { expiration: null },
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: null,
+    },
+  ])(
+    'approval $label and audits both expiration values',
+    async ({ body, requestedExpiration, grantedExpiration }) => {
+      const request = await seedRequestWithExpiration(requestedExpiration);
+      const response = await decide(request, 'approve', body);
+      expect(response.statusCode).toBe(200);
+
+      const { grant_id: grantId } = response.json<{ grant_id: string }>();
+      const grant = await db.pool.query<{ expires_at: Date | null }>(
+        'select expires_at from permission.permission_grants where id = $1',
+        [grantId],
+      );
+      expect(grant.rows[0]?.expires_at?.toISOString() ?? null).toBe(grantedExpiration);
+      const audit = await db.pool.query<{
+        detail: { requested_expiration: string | null; granted_expiration: string | null };
+      }>(
+        `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
+        [request],
+      );
+      expect(audit.rows[0]?.detail).toMatchObject({
+        requested_expiration: requestedExpiration,
+        granted_expiration: grantedExpiration,
+      });
+    },
+  );
+
+  it('returns a field validation error for an explicitly past approval expiration', async () => {
+    const request = await seedRequest();
+    const response = await decide(request, 'approve', { expiration: '2000-01-01T00:00:00.000Z' });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['expiration'] }] },
+    });
+    expect(await requestStatus(request)).toBe('pending');
+  });
+
   it('deny overrides an existing grant, transitions rejected, and is audited once', async () => {
     const id = await seedRequest();
     await db.pool.query(
@@ -325,6 +438,88 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         { event_type: 'permission_needs_more_info', count: '1' },
       ]),
     );
+    expect(notifications.jobs).toMatchObject([
+      expect.objectContaining({
+        workspace_id: WORKSPACE_ID,
+        actor_id: requesterId,
+        event_type: 'permission_request.decided',
+        subject_id: rejected,
+        summary: '권한 요청이 반려되었습니다.',
+        detail: { permission_request_id: rejected },
+        correlation_id: expect.any(String),
+      }),
+    ]);
+  });
+
+  it.each([
+    ['approve', 'approved', '권한 요청이 승인되었습니다.'],
+    ['reject', 'rejected', '권한 요청이 반려되었습니다.'],
+    ['deny', 'rejected', '권한 요청이 반려되었습니다.'],
+  ] as const)(
+    'notifies the requester for permission %s with outcome %s',
+    async (action, outcome, summary) => {
+      const requestId = await seedRequest();
+      const response = await decide(
+        requestId,
+        action,
+        action === 'approve' ? {} : { reason: 'Not justified.' },
+        adminCookie,
+        action === 'deny' ? randomUUID() : undefined,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(notifications.jobs).toEqual([
+        expect.objectContaining({
+          workspace_id: WORKSPACE_ID,
+          actor_id: requesterId,
+          event_type: 'permission_request.decided',
+          subject_type: 'permission_request',
+          subject_id: requestId,
+          summary,
+          detail: { permission_request_id: requestId },
+          correlation_id: expect.any(String),
+        }),
+      ]);
+      expect(response.json<{ status: string }>().status).toBe(outcome);
+    },
+  );
+
+  it('rolls back permission approval and audit after successful notification enqueue', async () => {
+    const requestId = await seedRequest();
+    const response = await rollbackApp.inject({
+      method: 'POST',
+      url: `/permissions/requests/${requestId}/approve`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const [payload] = failAfterEnqueue.attemptedPayloads;
+    if (!payload) throw new Error('notification enqueue payload missing');
+    expect(payload).toMatchObject({
+      actor_id: requesterId,
+      event_type: 'permission_request.decided',
+      subject_id: requestId,
+    });
+
+    expect(await requestStatus(requestId)).toBe('pending');
+    const audits = await migrateDb.pool.query(
+      `select 1 from core.audit_log
+        where workspace_id = $1 and event_type = 'permission_approved' and subject_id = $2`,
+      [WORKSPACE_ID, requestId],
+    );
+    expect(audits.rowCount).toBe(0);
+    const jobs = await migrateDb.pool.query(
+      `select 1 from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = $2`,
+      [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
+    );
+    expect(jobs.rowCount).toBe(0);
   });
 
   it('denies only the managed-system scope requested', async () => {
@@ -401,6 +596,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const stale = await decide(approved, 'reject', { reason: 'late' });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().code).toBe('conflict.stale_write');
+    expect(notifications.jobs).toHaveLength(1);
   });
 
   it('returns the specific duplicate-grant conflict', async () => {
@@ -411,6 +607,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect((await decide(duplicate, 'approve', {})).json().code).toBe(
       'conflict.capability_already_granted',
     );
+    expect(notifications.jobs).toHaveLength(1);
   });
 
   it('returns the specific duplicate-deny conflict', async () => {
@@ -430,6 +627,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const first = await decide(keyed, 'approve', {}, adminCookie, key);
     const replay = await decide(keyed, 'approve', {}, adminCookie, key);
     expect(replay.json()).toEqual(first.json());
+    expect(notifications.jobs).toHaveLength(1);
     const grantCount = await db.pool.query<{ count: string }>(
       `select count(*) from permission.permission_grants where actor_id = $1 and capability = 'finding.manage'`,
       [requesterId],
@@ -457,7 +655,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   it('allows a self-approval with its envelope, audits it, and mints an effective grant by default', async () => {
-    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [WORKSPACE_ID]);
+    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
     const settingsRow = await db.pool.query(
       'select 1 from core.workspace_settings where workspace_id = $1',
       [WORKSPACE_ID],
@@ -557,8 +757,14 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   // ── Issue #404: validation 422 normalization + sensitive rate tier ──────
 
   it.each([
-    ['AC-1 returns 422 with field detail for a bogus status filter (legacy list)', '/permission-requests'],
-    ['AC-1 returns 422 with field detail for a bogus status filter (console list)', '/permissions/requests'],
+    [
+      'AC-1 returns 422 with field detail for a bogus status filter (legacy list)',
+      '/permission-requests',
+    ],
+    [
+      'AC-1 returns 422 with field detail for a bogus status filter (console list)',
+      '/permissions/requests',
+    ],
   ] as const)('%s', async (_title, url) => {
     const response = await app.inject({
       method: 'GET',

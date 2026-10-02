@@ -1,72 +1,61 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { ApiError } from '@/lib/api/types';
+import { isPermissionDenied } from '@/lib/api/types';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { TaskDto } from '@fops/shared';
+import { formatCount } from '@/lib/format/count';
+import { formatShortDateTime } from '@/lib/format/datetime';
 import {
   InternalTaskBadge,
   ListShell,
   ObjectRow,
-  type ObjectRowSeverity,
+  OutlineBadge,
   PermissionBlockedPanel,
+  UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
+import {
+  resolveTaskAssignee,
+  taskPriorityToSeverity,
+  useTaskManagedSystemNames,
+} from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
-
-const PRIORITY_SEVERITY: Record<TaskDto['priority'], ObjectRowSeverity> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  urgent: 'critical',
-};
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
 }
 
-function formatDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(raw));
-}
-
 export function TaskListRoute({
+  view = 'backlog',
   selectedParam,
   managedSystem,
 }: {
+  view?: 'my' | 'backlog';
   selectedParam?: string | undefined;
   managedSystem?: string;
 }) {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const tasksQuery = useQuery({
-    queryKey: ['tasks', managedSystem] as const,
+    queryKey: ['tasks', view, managedSystem] as const,
     queryFn: ({ signal }) =>
       listTasks({
         signal,
+        ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
     staleTime: 30 * 1000,
   });
   const { actors } = useWorkspaceActors();
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemNamesById = useTaskManagedSystemNames();
   const items = tasksQuery.data?.items ?? [];
   const actorNamesById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
     [actors],
-  );
-  const managedSystemNamesById = React.useMemo(
-    () => new Map((managedSystemsQuery.data?.items ?? []).map((ms) => [ms.id, ms.name])),
-    [managedSystemsQuery.data?.items],
   );
 
   React.useEffect(() => {
@@ -81,60 +70,95 @@ export function TaskListRoute({
 
   function selectTask(id: string): void {
     setSelectedId(id);
-    void navigate({ to: '/tasks', search: { view: 'backlog', param: id } });
+    void navigate({ to: '/tasks', search: { view, param: id } });
   }
 
   if (tasksQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
+    return <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>;
   }
   if (isPermissionDenied(tasksQuery.error)) {
     return (
       <PermissionBlockedPanel
         state="denied"
-        category="Task list"
-        reason={tasksQuery.error.message}
+        category="Task 목록"
+        reason={PERMISSION_BLOCKED_REASONS.taskList}
         className="m-4"
       />
     );
   }
   if (tasksQuery.error) {
-    return <div className="p-4 text-sm text-accent-danger">Task list unavailable.</div>;
+    return (
+      <ListStateMessage
+        variant="error"
+        title="Task 목록을 불러오지 못했습니다"
+        body="잠시 후 다시 시도하세요."
+        action={{ label: '다시 시도', onClick: () => void tasksQuery.refetch() }}
+      />
+    );
   }
 
+  // #682 owner decision sets title/count and empty copy within the prototype Tasks list.
   return (
     <ListShell
+      toolbar={{
+        title: (
+          <span className="flex items-center gap-2">
+            {view === 'my' ? '내 Task' : 'Tasks'}
+            <OutlineBadge>{formatCount(items.length)}</OutlineBadge>
+          </span>
+        ),
+      }}
       list={
         <>
-          {items.map((task) => (
-            <ObjectRow
-              key={task.id}
-              id={task.display_id}
-              title={task.title}
-              selected={selected?.id === task.id}
-              density="default"
-              severity={PRIORITY_SEVERITY[task.priority]}
-              onClick={() => selectTask(task.id)}
-              badges={<InternalTaskBadge status={task.status} />}
-              meta={
-                <>
-                  <span>{task.priority}</span>
-                  {dot()}
-                  <span>
-                    {task.assignee_actor_id
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? 'Assigned')
-                      : 'Unassigned'}
-                  </span>
-                  {dot()}
-                  <span>
-                    {managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
-                  </span>
-                  {dot()}
-                  <span>{formatDate(task.updated_at)}</span>
-                </>
-              }
-            />
-          ))}
-          {items.length === 0 && <div className="px-5 py-8 text-sm text-text-muted">No Tasks.</div>}
+          {items.map((task) => {
+            const assignee = resolveTaskAssignee(task.assignee_actor_id, actorNamesById);
+            return (
+              <ObjectRow
+                key={task.id}
+                id={task.display_id}
+                title={task.title}
+                selected={selected?.id === task.id}
+                density="default"
+                severity={taskPriorityToSeverity(task.priority)}
+                onClick={() => selectTask(task.id)}
+                badges={<InternalTaskBadge status={task.status} />}
+                meta={
+                  <>
+                    <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
+                    {dot()}
+                    <span>
+                      {task.assignee_actor_id ? (
+                        assignee.kind === 'resolved' ? (
+                          assignee.displayName
+                        ) : (
+                          GLOSSARY.unknownUser
+                        )
+                      ) : (
+                        <UnassignedBadge />
+                      )}
+                    </span>
+                    {dot()}
+                    <span>
+                      {managedSystemNamesById.get(task.primary_managed_system_id) ??
+                        'Managed System'}
+                    </span>
+                    {dot()}
+                    <span>{formatShortDateTime(task.updated_at)}</span>
+                  </>
+                }
+              />
+            );
+          })}
+          {items.length === 0 &&
+            (view === 'my' ? (
+              <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
+            ) : (
+              <ListStateMessage
+                variant="empty"
+                title="Task가 없습니다."
+                body="생성된 Task가 여기에 표시됩니다."
+              />
+            ))}
         </>
       }
       detailPanel={
@@ -143,22 +167,14 @@ export function TaskListRoute({
             taskId={selected.id}
             actorNamesById={actorNamesById}
             managedSystemNamesById={managedSystemNamesById}
-            view="backlog"
+            view={view}
             onClose={() => {
               setSelectedId(null);
-              void navigate({ to: '/tasks', search: { view: 'backlog' } });
+              void navigate({ to: '/tasks', search: { view } });
             }}
           />
         ) : null
       }
     />
-  );
-}
-
-function isPermissionDenied(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 403 &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

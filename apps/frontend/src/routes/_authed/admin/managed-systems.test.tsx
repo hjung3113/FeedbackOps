@@ -25,7 +25,7 @@ function buildHarness({ initialPath }: { initialPath: string }) {
     path: '/admin/managed-systems',
     component: ManagedSystemsAdminPage,
   });
-  // Stub target for the "Open review console" / "Review" links.
+  // Stub target for the "검토 콘솔 열기" / "Review" links.
   const reqRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/admin/permissions/requests',
@@ -160,13 +160,18 @@ describe('/admin/managed-systems route', () => {
     await waitFor(() => {
       expect(screen.getByTestId('managed-systems-registry')).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(
+        'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.',
+      ),
+    ).toBeVisible();
     expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument();
     expect(screen.getByText('managed-system/tableau')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('김지원')).toBeInTheDocument());
     expect(screen.getByText('Revenue')).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId('ms-requests-count')).toHaveTextContent(
-        '3 requests awaiting decision',
+        '결정 대기 중인 요청 3건',
       ),
     );
     expect(screen.getByTestId('ms-register-button')).toBeInTheDocument();
@@ -203,7 +208,7 @@ describe('/admin/managed-systems route', () => {
     installFetch({ permissionState: 'request_access', managedSystems: [] });
     renderRoute();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '권한 요청' })).toBeInTheDocument();
     });
     expect(screen.queryByTestId('managed-systems-registry')).not.toBeInTheDocument();
   });
@@ -228,7 +233,7 @@ describe('/admin/managed-systems route', () => {
     fireEvent.change(screen.getByTestId('create-name'), { target: { value: 'dup' } });
     fireEvent.click(screen.getByTestId('create-submit'));
     await waitFor(() => {
-      expect(screen.getByTestId('create-error')).toHaveTextContent(/conflict\.duplicate_slug/);
+      expect(screen.getByTestId('create-error')).toHaveTextContent('이미 사용 중인 식별자입니다.');
     });
   });
 });

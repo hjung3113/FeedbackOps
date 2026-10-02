@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   type ApproveTaskRequestRequest,
   type CreateTaskRequestFromFindingRequest,
@@ -23,6 +25,7 @@ import {
 } from '../entity-links/index.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockVocClusterById } from '../voc-clusters/index.js';
 import { selectVocForUpdate } from '../voc/index.js';
@@ -46,9 +49,18 @@ export interface TaskRequestsServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
 }
 
 type TaskRequestDecisionAction = 'approve' | 'reject' | 'request_more_evidence';
+type TaskRequestSourceLink = {
+  link_id: string;
+  source_id: string;
+  source_type: TaskRequestSourceType;
+  display_id?: string;
+  title?: string;
+  evidence_count?: number;
+};
 
 const ALLOWED_TASK_REQUEST_TRANSITIONS: Record<
   TaskRequestDecisionAction,
@@ -74,10 +86,16 @@ const EVENT_TYPE_BY_ACTION: Record<
   request_more_evidence: 'task_request_needs_more_evidence',
 };
 
-function taskRequestToDto(
-  row: TaskRequestRow,
-  source?: { link_id: string; source_id: string; source_type: TaskRequestSourceType },
-): TaskRequestDto {
+const NOTIFICATION_EVENT_BY_ACTION: Record<
+  TaskRequestDecisionAction,
+  'task_request.approved' | 'task_request.rejected' | 'task_request.needs_more_evidence'
+> = {
+  approve: 'task_request.approved',
+  reject: 'task_request.rejected',
+  request_more_evidence: 'task_request.needs_more_evidence',
+};
+
+function taskRequestToDto(row: TaskRequestRow, source?: TaskRequestSourceLink): TaskRequestDto {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -101,6 +119,11 @@ function taskRequestToDto(
             id: source.source_id,
             relation_type: 'requested_task',
             link_id: source.link_id,
+            ...(source.display_id !== undefined ? { display_id: source.display_id } : {}),
+            ...(source.title !== undefined ? { title: source.title } : {}),
+            ...(source.evidence_count !== undefined
+              ? { evidence_count: source.evidence_count }
+              : {}),
           },
         }
       : {}),
@@ -122,6 +145,20 @@ async function canReadSourceVoc(
     { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
     options,
   );
+  return decision.allow;
+}
+
+async function canExposeSourceVocText(
+  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
+  actor: TaskRequestsActor,
+  managedSystemId: string,
+  reporterId: string,
+): Promise<boolean> {
+  if (actor.actor_id === reporterId) return true;
+  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: managedSystemId,
+  });
   return decision.allow;
 }
 
@@ -159,14 +196,10 @@ function decisionReasonForAction(
 }
 
 export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
-  async function sourceLinkForTaskRequest(row: TaskRequestRow): Promise<
-    | {
-        link_id: string;
-        source_id: string;
-        source_type: TaskRequestSourceType;
-      }
-    | undefined
-  > {
+  async function sourceLinkForTaskRequest(
+    row: TaskRequestRow,
+    actor: TaskRequestsActor,
+  ): Promise<TaskRequestSourceLink | undefined> {
     const links = await selectActiveLinksForEndpoint(deps.db, {
       workspaceId: row.workspace_id,
       endpointType: 'task_request',
@@ -178,15 +211,36 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         candidate.relation_type === 'requested_task' &&
         candidate.target_type === 'task_request' &&
         candidate.target_id === row.id &&
+        candidate.source_id === row.source_id &&
         candidate.source_type === row.source_type,
     );
-    return link
-      ? {
-          link_id: link.id,
-          source_id: link.source_id,
-          source_type: row.source_type,
-        }
-      : undefined;
+    if (!link) return undefined;
+
+    const source: TaskRequestSourceLink = {
+      link_id: link.id,
+      source_id: link.source_id,
+      source_type: row.source_type,
+    };
+    if (row.source_type === 'voc') {
+      const canRead =
+        row.source_voc_reporter_id !== undefined &&
+        (await canExposeSourceVocText(
+          deps,
+          actor,
+          row.primary_managed_system_id,
+          row.source_voc_reporter_id,
+        ));
+      if (!canRead) return source;
+    }
+
+    return {
+      ...source,
+      ...(row.source_display_id !== undefined ? { display_id: row.source_display_id } : {}),
+      ...(row.source_title !== undefined ? { title: row.source_title } : {}),
+      ...(row.source_type === 'finding' && row.source_evidence_count !== undefined
+        ? { evidence_count: row.source_evidence_count }
+        : {}),
+    };
   }
 
   async function createFromSource(args: {
@@ -479,7 +533,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         })
       ).allow;
       if (!canManage) continue;
-      items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row)));
+      items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row, args.actor)));
     }
     return { items };
   }
@@ -617,6 +671,20 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             summary: 'Task Request review decision recorded',
             detail,
           });
+
+          if (taskRequest.requester_actor_id) {
+            await deps.notify(tx, NOTIFICATION_EVENT_BY_ACTION[args.action], {
+              workspace_id: args.actor.workspace_id,
+              actor_ids: [taskRequest.requester_actor_id],
+              subject_id: taskRequest.id,
+              correlation_id: randomUUID(),
+              detail: {
+                task_request_id: taskRequest.id,
+                primary_managed_system_id: taskRequest.primary_managed_system_id,
+              },
+              params: {},
+            });
+          }
 
           return { status: 200, body: taskRequestToDto(updated) };
         },

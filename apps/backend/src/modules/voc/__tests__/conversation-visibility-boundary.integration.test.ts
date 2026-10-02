@@ -10,16 +10,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  insertInternalComment,
-  insertMsDirectly,
-  insertPublicUpdate,
-  insertReporterReply,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from './_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { insertPublicUpdate, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import { insertInternalComment, insertReporterReply } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -76,10 +71,9 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
   afterAll(async () => {
     await cleanupFixtures();
     // Sessions must go before the actors they reference.
-    await migrateHandle?.pool.query(
-      `delete from core.sessions where actor_id = any($1::uuid[])`,
-      [[operatorId, outOfScopeActorId]],
-    );
+    await migrateHandle?.pool.query(`delete from core.sessions where actor_id = any($1::uuid[])`, [
+      [operatorId, outOfScopeActorId],
+    ]);
     await migrateHandle?.pool.query(
       `delete from permission.permission_grants where actor_id = any($1::uuid[])`,
       [[operatorId, outOfScopeActorId]],
@@ -141,7 +135,10 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
     );
   }
 
-  async function seedConversation(): Promise<{ vocId: string; ids: Record<TimelineItem['kind'], string[]> }> {
+  async function seedConversation(): Promise<{
+    vocId: string;
+    ids: Record<TimelineItem['kind'], string[]>;
+  }> {
     const msId = await insertMsDirectly(
       migrateHandle,
       WORKSPACE_ID,
@@ -206,13 +203,21 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
     expect(conversation.statusCode).toBe(200);
     const page = conversation.json<{ items: TimelineItem[] }>();
     expect(page.items.filter((item) => item.kind === 'internal_comment')).toHaveLength(0);
-    expect(page.items.map((item) => item.id)).toEqual(expect.arrayContaining([...ids.public_update, ...ids.reporter_reply]));
+    expect(page.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([...ids.public_update, ...ids.reporter_reply]),
+    );
 
-    const detail = await app.inject({ method: 'GET', url: `/vocs/${vocId}`, headers: cookie(reporterCookie) });
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/vocs/${vocId}`,
+      headers: cookie(reporterCookie),
+    });
     expect(detail.statusCode).toBe(200);
     const inline = detail.json<{ conversation_timeline: TimelineItem[] }>().conversation_timeline;
     expect(inline.filter((item) => item.kind === 'internal_comment')).toHaveLength(0);
-    expect(inline.map((item) => item.id)).toEqual(expect.arrayContaining([...ids.public_update, ...ids.reporter_reply]));
+    expect(inline.map((item) => item.id)).toEqual(
+      expect.arrayContaining([...ids.public_update, ...ids.reporter_reply]),
+    );
 
     const internalOnly = await app.inject({
       method: 'GET',
@@ -255,7 +260,9 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
     }
 
     const idsByKind = kinds.map((kind) => new Set(returned.get(kind)?.map((item) => item.id)));
-    expect([...idsByKind[0]!].some((id) => idsByKind[1]?.has(id) || idsByKind[2]?.has(id))).toBe(false);
+    expect([...idsByKind[0]!].some((id) => idsByKind[1]?.has(id) || idsByKind[2]?.has(id))).toBe(
+      false,
+    );
     expect([...idsByKind[1]!].some((id) => idsByKind[2]?.has(id))).toBe(false);
   });
 
@@ -269,7 +276,9 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
     await expect(
       appHandle.pool.query(`update voc.${table} set created_at = created_at where id = $1`, [id]),
     ).rejects.toMatchObject({ code: '42501' });
-    await expect(appHandle.pool.query(`delete from voc.${table} where id = $1`, [id])).rejects.toMatchObject({
+    await expect(
+      appHandle.pool.query(`delete from voc.${table} where id = $1`, [id]),
+    ).rejects.toMatchObject({
       code: '42501',
     });
 

@@ -10,6 +10,79 @@ import {
   surveyDtoSchema,
   surveyQuestionDtoSchema,
 } from '../dto.js';
+import {
+  surveyRespondentFormDtoSchema,
+  surveyResponseSubmissionSchema,
+  surveyResponseSubmittedDtoSchema,
+} from '../respondent.js';
+
+const RESPONDENT_FORM = {
+  survey: {
+    id: 'a1b2c3d4-0000-4111-8222-333344445555',
+    title: '온보딩 탐구 설문',
+    type: 'discovery',
+    identity_protected: true,
+  },
+  questions: [
+    {
+      id: '6f1c2b3a-1111-4222-8333-444455556666',
+      kind: 'single_choice',
+      prompt: '가장 불편한 점은?',
+      is_required: true,
+      sort_order: 0,
+      options: [{ key: 'slow', label: '느림' }],
+      rating_min: null,
+      rating_max: null,
+      rating_low_label: null,
+      rating_high_label: null,
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+    },
+  ],
+} as const;
+
+const VALID_SUBMISSION = {
+  answers: [
+    {
+      question_id: '6f1c2b3a-1111-4222-8333-444455556666',
+      value: 'slow',
+    },
+  ],
+} as const;
+
+describe('survey respondent schemas', () => {
+  it('parses the respondent-safe form DTO', () => {
+    expect(surveyRespondentFormDtoSchema.parse(RESPONDENT_FORM)).toEqual(RESPONDENT_FORM);
+  });
+
+  it('parses strict response submission and acknowledgement bodies', () => {
+    expect(surveyResponseSubmissionSchema.parse(VALID_SUBMISSION)).toEqual(VALID_SUBMISSION);
+    expect(
+      surveyResponseSubmittedDtoSchema.parse({
+        id: '7f1c2b3a-1111-4222-8333-444455556666',
+        survey_id: 'a1b2c3d4-0000-4111-8222-333344445555',
+        submitted_at: '2026-07-01T00:00:00.000Z',
+        identity_protected: true,
+      }).identity_protected,
+    ).toBe(true);
+  });
+
+  it.each([
+    ['root field', { ...VALID_SUBMISSION, extra_root: true }],
+    [
+      'answer field',
+      {
+        answers: [{ ...VALID_SUBMISSION.answers[0], extra_answer: true }],
+      },
+    ],
+  ])('rejects a valid non-empty submission with an extra %s', (_field, submission) => {
+    expect(surveyResponseSubmissionSchema.safeParse(submission).success).toBe(false);
+  });
+
+  it('rejects an empty answers array', () => {
+    expect(surveyResponseSubmissionSchema.safeParse({ answers: [] }).success).toBe(false);
+  });
+});
 
 const QUESTION = {
   id: '6f1c2b3a-1111-4222-8333-444455556666',

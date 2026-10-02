@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type EntityLinkEntityType,
@@ -16,20 +16,17 @@ import {
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
-import { insertVocClusterRow } from '../../voc-clusters/__tests__/_seed-helpers.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
+import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import { vocEntityLinkProvider } from '../../voc/entity-link-provider.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -45,6 +42,8 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   let adminCookie: string;
   let adminActorId: string;
   let reporterId: string;
+  const convertedRequestIds = new Set<string>();
+  const conversionIdempotencyKeys = new Set<string>();
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -84,6 +83,28 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
   async function cleanupEntityLinkFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    if (convertedRequestIds.size > 0) {
+      await migrateHandle.pool.query(
+        `delete from core.audit_log
+          where workspace_id = $1
+            and event_type = 'task_created_from_request'
+            and detail ->> 'source_task_request_id' = any($2::text[])`,
+        [WORKSPACE_ID, [...convertedRequestIds]],
+      );
+      convertedRequestIds.clear();
+    }
+    if (conversionIdempotencyKeys.size > 0) {
+      await migrateHandle.pool.query(
+        'delete from core.idempotency_keys where key = any($1::uuid[])',
+        [[...conversionIdempotencyKeys]],
+      );
+      conversionIdempotencyKeys.clear();
+    }
+    const managedSystems = `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
+    const surveys = `select id from survey.surveys
+      where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
+    const responses = `select id from survey.survey_responses
+      where workspace_id = $1 and survey_id in (${surveys})`;
     await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
@@ -97,6 +118,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         where workspace_id = $1
           and event_type in ('entity_link.created', 'entity_link.detached', 'finding_created_from_voc')`,
       [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `delete from finding.evidence_highlights
+        where workspace_id = $1
+          and primary_managed_system_id in (${managedSystems})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from task.tasks
@@ -120,6 +147,30 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
           )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_excerpt_approvals
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_answers
+        where workspace_id = $1 and response_id in (${responses})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_responses
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_questions
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.surveys where workspace_id = $1 and id in (${surveys})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
@@ -338,6 +389,20 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       method: 'GET',
       url: `/entity-links${query}`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+
+  function convertTaskRequest(taskRequestId: string, key: string) {
+    conversionIdempotencyKeys.add(key);
+    return app.inject({
+      method: 'POST',
+      url: `/task-requests/${taskRequestId}/convert`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: { title: 'Converted Task link summary' },
     });
   }
 
@@ -967,11 +1032,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       'POST Triage Target VOC',
     );
 
-    const { id: devId, externalId } = await insertDevActor(
-      dbHandle,
-      WORKSPACE_ID,
-      uid('post-tri'),
-    );
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('post-tri'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -1121,6 +1182,175 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(fixtureItems.every((item) => item.visibility_state === 'allowed')).toBe(true);
   });
 
+  it('GET workspace inventory paginates in a stable order and enforces the page-size bounds', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const targetTwo = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged target two',
+    );
+    const targetThree = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged target three',
+    );
+    const fixtureIds = await Promise.all(
+      [targetVoc, targetTwo, targetThree].map((target) =>
+        seedEntityLinkDirectly({
+          sourceId: sourceVoc.id,
+          targetId: target.id,
+          managedSystemId: msA,
+          visibility: 'internal_only',
+        }),
+      ),
+    );
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = '2026-09-01T00:00:00.000000+00:00'::timestamptz
+        where id = any($1::uuid[])`,
+      [fixtureIds],
+    );
+    const expectedRows = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.entity_links
+        where workspace_id = $1 and id = any($2::uuid[])
+        order by created_at desc, id desc`,
+      [WORKSPACE_ID, fixtureIds],
+    );
+    const expectedIds = expectedRows.rows.map((row) => row.id);
+
+    const first = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=2`,
+    );
+    expect(first.statusCode).toBe(200);
+    const firstBody = first.json<{
+      items: Array<{ id: string }>;
+      page: {
+        has_more: boolean;
+        cursor?: string;
+        status_counts?: { active: number; stale: number; detached: number; revoked: number };
+      };
+    }>();
+    expect(firstBody.items.map((item) => item.id)).toEqual(expectedIds.slice(0, 2));
+    expect(firstBody.page.has_more).toBe(true);
+    expect(firstBody.page.cursor).toBeDefined();
+    expect(firstBody.page.status_counts).toEqual({
+      active: expect.any(Number),
+      stale: expect.any(Number),
+      detached: expect.any(Number),
+      revoked: expect.any(Number),
+    });
+    const pageCursor = firstBody.page.cursor;
+    if (pageCursor === undefined)
+      throw new Error('expected a cursor for the second inventory page');
+
+    const second = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=2&cursor=${encodeURIComponent(pageCursor)}`,
+    );
+    expect(second.statusCode).toBe(200);
+    const secondBody = second.json<{
+      items: Array<{ id: string }>;
+      page: { has_more: boolean; cursor?: string };
+    }>();
+    expect(secondBody.items.map((item) => item.id)).toEqual(expectedIds.slice(2));
+    expect(secondBody.page.has_more).toBe(false);
+    expect(secondBody.page.cursor).toBeUndefined();
+    expect([...firstBody.items, ...secondBody.items].map((item) => item.id)).toEqual(expectedIds);
+
+    const one = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=1`,
+    );
+    expect(one.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id)).toEqual([
+      expectedIds[0],
+    ]);
+    const invalidLimit = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=101`,
+    );
+    expect(invalidLimit.statusCode).toBe(422);
+  });
+
+  it('GET workspace inventory filters command-only tuples before applying the page limit', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const visible = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(visible.statusCode).toBe(201);
+    const visibleId = visible.json<{ id: string }>().id;
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+    const commandResponses = await Promise.all([seedSurveyResponse(msA), seedSurveyResponse(msA)]);
+    const commandOnlyIds = await Promise.all(
+      commandResponses.map(({ responseId }) =>
+        seedEntityLinkDirectly({
+          sourceType: 'survey_response',
+          sourceId: responseId,
+          targetType: 'finding',
+          targetId: finding.id,
+          relationType: 'generated_finding',
+          managedSystemId: msA,
+          visibility: 'internal_only',
+        }),
+      ),
+    );
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = case id
+            when $1::uuid then '2026-09-03T00:00:00.000000+00:00'::timestamptz
+            when $2::uuid then '2026-09-02T00:00:00.000000+00:00'::timestamptz
+            when $3::uuid then '2026-09-01T00:00:00.000000+00:00'::timestamptz
+          end
+        where id = any($4::uuid[])`,
+      [commandOnlyIds[0], commandOnlyIds[1], visibleId, [...commandOnlyIds, visibleId]],
+    );
+
+    const first = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=1`,
+    );
+    expect(first.statusCode).toBe(200);
+    const body = first.json<{
+      items: Array<{ id: string }>;
+      page: { has_more: boolean; cursor?: string };
+    }>();
+    expect(body.items.map((item) => item.id)).toEqual([visibleId]);
+    expect(body.page.has_more).toBe(false);
+    expect(body.page.cursor).toBeUndefined();
+  });
+
+  it('GET workspace inventory resolves repeated endpoint subjects and summaries once per page', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const targetTwo = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Repeated endpoint target two',
+    );
+    await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    await postEntityLink(adminCookie, sourceVoc.id, targetTwo.id);
+
+    const permissionSubjectSpy = vi.spyOn(vocEntityLinkProvider, 'getPermissionSubject');
+    const internalSummarySpy = vi.spyOn(vocEntityLinkProvider, 'getInternalSummary');
+    try {
+      const res = await getEntityLinks(adminCookie, `?scope=workspace&managed_system_id=${msA}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ items: unknown[] }>().items).toHaveLength(2);
+      expect(permissionSubjectSpy.mock.calls.map((call) => call[2]).sort()).toEqual(
+        [sourceVoc.id, targetVoc.id, targetTwo.id].sort(),
+      );
+      expect(internalSummarySpy.mock.calls.map((call) => call[2]).sort()).toEqual(
+        [sourceVoc.id, targetVoc.id, targetTwo.id].sort(),
+      );
+    } finally {
+      permissionSubjectSpy.mockRestore();
+      internalSummarySpy.mockRestore();
+    }
+  });
+
   it('GET workspace inventory status filter narrows to detached rows', async () => {
     const firstPair = await seedVocPair();
     const secondPair = await seedVocPair();
@@ -1218,6 +1448,153 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(hiddenRow?.target_id).toBeUndefined();
   });
 
+  it('GET workspace inventory preserves endpoint visibility payloads across one-row pages', async () => {
+    const msA = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-paged-visibility-a`,
+      'Paged Visibility MS-A',
+    );
+    const msB = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-paged-visibility-b`,
+      'Paged Visibility MS-B',
+    );
+    const sourceVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged Visibility Source',
+    );
+    const hiddenTarget = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msB,
+      adminActorId,
+      'Paged Visibility Hidden Target',
+    );
+    const deniedTarget = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      adminActorId,
+      'Paged Visibility Denied Target',
+    );
+    const reporterTask = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Reporter safe paged Task',
+      status: 'doing',
+      createdBy: adminActorId,
+    });
+    const linkIds = {
+      hidden: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: hiddenTarget.id,
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      }),
+      denied: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: deniedTarget.id,
+        managedSystemId: msA,
+        visibility: 'admin_only',
+      }),
+      reporterSummary: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetType: 'task',
+        targetId: reporterTask.id,
+        relationType: 'evidence_of',
+        managedSystemId: msA,
+        visibility: 'summary_visible',
+      }),
+    };
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = case id
+            when $1::uuid then '2026-09-03T00:00:00.000000+00:00'::timestamptz
+            when $2::uuid then '2026-09-02T00:00:00.000000+00:00'::timestamptz
+            when $3::uuid then '2026-09-01T00:00:00.000000+00:00'::timestamptz
+          end
+        where id = any($4::uuid[])`,
+      [linkIds.hidden, linkIds.denied, linkIds.reporterSummary, Object.values(linkIds)],
+    );
+
+    const { id: developerId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('paged-visibility'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'voc.read', msA, adminActorId);
+    const developerCookie = await loginAs(app, externalId);
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+
+    async function expectPagedPayloadsMatchEndpointRead(cookie: string) {
+      const unpaged = await getEntityLinks(cookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+      expect(unpaged.statusCode).toBe(200);
+      const unpagedItems = unpaged.json<{ items: Array<Record<string, unknown>> }>().items;
+      const serializedById = new Map(
+        unpagedItems.map((item) => [item.id as string, JSON.stringify(item)]),
+      );
+
+      const pageItems: Array<Record<string, unknown>> = [];
+      let cursor: string | undefined;
+      for (let index = 0; index < 3; index += 1) {
+        const page = await getEntityLinks(
+          cookie,
+          `?scope=workspace&managed_system_id=${msA}&limit=1${
+            cursor !== undefined ? `&cursor=${encodeURIComponent(cursor)}` : ''
+          }`,
+        );
+        expect(page.statusCode).toBe(200);
+        const body = page.json<{
+          items: Array<Record<string, unknown>>;
+          page: { has_more: boolean; cursor?: string };
+        }>();
+        expect(body.items).toHaveLength(1);
+        const item = body.items[0];
+        if (!item) throw new Error('expected one Entity Link on each visibility page');
+        pageItems.push(item);
+        cursor = body.page.cursor;
+        expect(body.page.has_more).toBe(index < 2);
+      }
+
+      expect(pageItems.map((item) => item.id)).toEqual([
+        linkIds.hidden,
+        linkIds.denied,
+        linkIds.reporterSummary,
+      ]);
+      for (const item of pageItems) {
+        expect(JSON.stringify(item)).toBe(serializedById.get(item.id as string));
+      }
+      return pageItems;
+    }
+
+    const developerPages = await expectPagedPayloadsMatchEndpointRead(developerCookie);
+    expect(developerPages.map((item) => item.visibility_state)).toEqual([
+      'hidden',
+      'denied',
+      'hidden',
+    ]);
+
+    const reporterPages = await expectPagedPayloadsMatchEndpointRead(reporterCookie);
+    expect(reporterPages.map((item) => item.visibility_state)).toEqual([
+      'hidden',
+      'hidden',
+      'summary_visible',
+    ]);
+    expect(reporterPages[2]).toMatchObject({
+      visibility_state: 'summary_visible',
+      summary: {
+        target_type: 'task',
+        public_title: 'Reporter safe paged Task',
+        reporter_facing_status: '진행 중',
+      },
+    });
+  });
+
   it('GET workspace inventory hides voc↔voc rows from a triage-only actor (ADR-0047)', async () => {
     const msA = await insertMsDirectly(
       dbHandle,
@@ -1247,11 +1624,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     // (routes.ts gates on requireSession/requireWorkspace only), so a plain
     // voc.triage actor can call it; per ADR-0047 the voc↔voc row must come
     // back hidden with no endpoint ids.
-    const { id: devId, externalId } = await insertDevActor(
-      dbHandle,
-      WORKSPACE_ID,
-      uid('inv-tri'),
-    );
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('inv-tri'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -1497,6 +1870,93 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         .items.filter((item) => [allowedId, mixedId].includes(item.id))
         .every((item) => item.visibility_state === 'hidden'),
     ).toBe(true);
+  });
+
+  it('GET inventory includes a source summary only when both endpoints are readable', async () => {
+    const msA = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-source-summary-a`,
+      'Source Summary MS-A',
+    );
+    const msB = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-source-summary-b`,
+      'Source Summary MS-B',
+    );
+    const sourceVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Source summary seed VOC',
+    );
+    const sourceTitle = 'Internal source cluster name';
+    const sourceCluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: sourceTitle,
+      status: 'confirmed',
+      createdBy: adminActorId,
+    });
+    const readableFinding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Readable target Finding',
+    });
+    const unreadableFinding = await seedFindingDirectly({
+      managedSystemId: msB,
+      sourceVocId: sourceVoc.id,
+      title: 'Unreadable target Finding',
+    });
+    const allowedId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: sourceCluster.id,
+      targetType: 'finding',
+      targetId: readableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const hiddenId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: sourceCluster.id,
+      targetType: 'finding',
+      targetId: unreadableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    const { id: developerId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('srcsum'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'voc.read', msA, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'finding.read', msA, adminActorId);
+    const developerCookie = await loginAs(app, externalId);
+    const developer = await getEntityLinks(developerCookie, '?scope=workspace');
+    expect(developer.statusCode).toBe(200);
+    const rows = developer.json<{ items: Array<Record<string, unknown>> }>().items;
+    const allowedRow = rows.find((item) => item.id === allowedId);
+    expect(allowedRow).toMatchObject({
+      visibility_state: 'allowed',
+      source_summary: {
+        type: 'voc_cluster',
+        id: sourceCluster.id,
+        display_id: sourceCluster.display_id,
+        title: sourceTitle,
+      },
+    });
+
+    const hiddenRow = rows.find((item) => item.id === hiddenId);
+    expect(hiddenRow).toMatchObject({ visibility_state: 'hidden' });
+    expect(hiddenRow?.source_id).toBeUndefined();
+    expect(hiddenRow?.target_id).toBeUndefined();
+    expect(hiddenRow?.source_summary).toBeUndefined();
+    expect(JSON.stringify(hiddenRow)).not.toContain(sourceTitle);
   });
 
   it('GET a VOC Task link projects only the reporter-safe Task summary', async () => {
@@ -1862,6 +2322,94 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const second = await patchEntityLink(adminCookie, linkId, { reason: 'Again' });
     expect(second.statusCode).toBe(409);
     expect(second.json<{ code: string }>().code).toBe('conflict.stale_write');
+  });
+
+  it('GET returns the allowed Task summary for a freshly converted Task Request', async () => {
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Converted Task request source',
+    });
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'finding',
+      sourceId: finding.id,
+      primaryManagedSystemId: msA,
+      requesterActorId: adminActorId,
+      status: 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Approved in seed',
+      decided: true,
+    });
+    convertedRequestIds.add(request.id);
+    await seedEntityLinkDirectly({
+      sourceType: 'finding',
+      sourceId: finding.id,
+      targetType: 'task_request',
+      targetId: request.id,
+      relationType: 'requested_task',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    const key = randomUUID();
+    const conversion = await convertTaskRequest(request.id, key);
+    expect(conversion.statusCode).toBe(201);
+    const task = conversion.json<{ id: string; display_id: string; title: string }>();
+
+    const response = await getEntityLinks(
+      adminCookie,
+      `?source_type=task_request&source_id=${request.id}`,
+    );
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      items: Array<{
+        source_id?: string;
+        target_id?: string;
+        target_summary?: { type: string; id: string; display_id: string; title: string };
+        relation_type: string;
+        status: string;
+        visibility_state: string;
+      }>;
+    }>();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      source_id: request.id,
+      target_id: task.id,
+      relation_type: 'converted_to',
+      status: 'active',
+      visibility_state: 'allowed',
+      target_summary: {
+        type: 'task',
+        id: task.id,
+        display_id: task.display_id,
+        title: task.title,
+      },
+    });
+
+    const persisted = await dbHandle.pool.query<{
+      status: string;
+      task_status: string;
+      link_count: number;
+    }>(
+      `select tr.status,
+              t.status as task_status,
+              (select count(*)::int from core.entity_links el
+                where el.source_type = 'task_request'
+                  and el.source_id = tr.id
+                  and el.target_type = 'task'
+                  and el.target_id = t.id
+                  and el.relation_type = 'converted_to'
+                  and el.status = 'active') as link_count
+         from task_request.task_requests tr
+         join task.tasks t on t.source_task_request_id = tr.id
+        where tr.id = $1`,
+      [request.id],
+    );
+    expect(persisted.rows).toEqual([
+      { status: 'converted', task_status: 'backlog', link_count: 1 },
+    ]);
   });
 
   it('PATCH returns 404 when actor lacks scope on the target endpoint', async () => {

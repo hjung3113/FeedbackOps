@@ -2,13 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: [] }),
 }));
-vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({
-  usePermissionDecision: () => null,
-}));
+vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/cross-system/getPermissionDecision')>();
+  return { ...actual, getPermissionDecision: () => null };
+});
 vi.mock('@/features/voc/hooks/usePublicUpdateReviewCandidates', () => ({
   usePublicUpdateReviewCandidates: () => ({ data: { items: [] } }),
 }));
@@ -56,9 +57,6 @@ vi.mock('@/features/voc/components/detail/LinkedEntityTrailSection', () => ({
 vi.mock('@/features/voc/components/detail/LinkedExecutionSection', () => ({
   LinkedExecutionSection: () => null,
 }));
-vi.mock('@/features/voc/components/detail/NextActionFooter', () => ({
-  NextActionFooter: () => null,
-}));
 vi.mock('@/features/voc/components/detail/PublicUpdateReviewModal', () => ({
   PublicUpdateReviewModal: () => null,
 }));
@@ -75,8 +73,8 @@ import {
   makeDetailQuery,
   makeMeQuery,
 } from '@/features/voc/components/detail/__tests__/_fixtures';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useMe } from '@/lib/auth/useMe';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 
 const AREA_ID = '20000000-0000-4000-8000-000000000001';
 
@@ -100,6 +98,10 @@ describe('VocDetailPanel Finding creation area handoff', () => {
       </QueryClientProvider>,
     );
 
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — driving it by keyboard matches this repo's
+    // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
+    // #669: Finding 생성 is a footer button now, not an overflow menu item.
     fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
 
     const modal = screen.getByTestId('create-finding-modal-props');

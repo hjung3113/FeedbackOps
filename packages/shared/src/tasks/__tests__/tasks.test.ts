@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { taskDetailDtoSchema, taskDtoSchema } from '../index.js';
+import { assignTaskMilestoneRequestSchema, taskDetailDtoSchema, taskDtoSchema } from '../index.js';
 
 const U1 = '01919b8c-0000-7000-8000-000000000001';
 const U2 = '01919b8c-0000-7000-8000-000000000002';
@@ -38,10 +38,12 @@ describe('taskDetailDtoSchema', () => {
       source: {
         task_request: {
           id: U4,
+          display_id: 'REQ-100',
           status: 'converted',
         },
         finding: {
           id: U1,
+          display_id: 'FIN-123',
           title: 'Export failures',
           summary: 'VOC evidence needs execution.',
           evidence_count: 2,
@@ -50,6 +52,7 @@ describe('taskDetailDtoSchema', () => {
     });
 
     expect(parsed.source?.finding?.evidence_count).toBe(2);
+    expect(parsed.source?.finding?.display_id).toBe('FIN-123');
   });
 
   it('accepts a standalone task with null source', () => {
@@ -69,6 +72,7 @@ describe('taskDetailDtoSchema', () => {
         source: {
           finding: {
             id: U1,
+            display_id: 'FIN-123',
             title: 'Export failures',
             summary: 'VOC evidence needs execution.',
             evidence_count: 2,
@@ -92,7 +96,7 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
     const parsed = taskDetailDtoSchema.parse({
       ...baseTask,
       source: {
-        task_request: { id: U4, status: 'approved' },
+        task_request: { id: U4, display_id: 'REQ-100', status: 'approved' },
         voc: vocAllowed,
       },
     });
@@ -121,7 +125,7 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
   it('accepts a source without voc (hidden is omitted, never serialized)', () => {
     const parsed = taskDetailDtoSchema.parse({
       ...baseTask,
-      source: { task_request: { id: U4, status: 'approved' } },
+      source: { task_request: { id: U4, display_id: 'REQ-100', status: 'approved' } },
     });
 
     expect(parsed.source?.voc).toBeUndefined();
@@ -171,6 +175,36 @@ describe('taskDetailDtoSchema source.voc (#378)', () => {
         ...baseTask,
         source: { voc: { visibility_state: 'public' } },
       }),
+    ).toThrow();
+  });
+});
+
+describe('assignTaskMilestoneRequestSchema (#514 B1b)', () => {
+  const U5 = '01919b8c-0000-7000-8000-000000000005';
+
+  it('accepts a milestone uuid', () => {
+    expect(assignTaskMilestoneRequestSchema.parse({ milestone_id: U5 })).toEqual({
+      milestone_id: U5,
+    });
+  });
+
+  it('accepts null to unassign', () => {
+    expect(assignTaskMilestoneRequestSchema.parse({ milestone_id: null })).toEqual({
+      milestone_id: null,
+    });
+  });
+
+  it('rejects a non-uuid milestone_id', () => {
+    expect(() => assignTaskMilestoneRequestSchema.parse({ milestone_id: 'MLS-1' })).toThrow();
+  });
+
+  it('rejects a missing milestone_id', () => {
+    expect(() => assignTaskMilestoneRequestSchema.parse({})).toThrow();
+  });
+
+  it('rejects unknown keys (strict)', () => {
+    expect(() =>
+      assignTaskMilestoneRequestSchema.parse({ milestone_id: U5, status: 'planning' }),
     ).toThrow();
   });
 });

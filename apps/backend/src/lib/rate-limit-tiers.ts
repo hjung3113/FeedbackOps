@@ -14,6 +14,8 @@ export function buildRateLimitTiers(
   mutation: Record<string, unknown>;
   sensitive: Record<string, unknown>;
   read: Record<string, unknown>;
+  notificationState: Record<string, unknown>;
+  triage: Record<string, unknown>;
   reporterEdit: Record<string, unknown>;
   attachmentMutation: Record<string, unknown>;
 } {
@@ -29,6 +31,20 @@ export function buildRateLimitTiers(
       timeWindow: '1 minute',
       keyGenerator,
       routeGroup: 'sensitive',
+    },
+    // Notification read/archive state is frequent, so it uses a separate 60/min Actor bucket.
+    notificationState: {
+      max: 60,
+      timeWindow: '1 minute',
+      keyGenerator,
+      routeGroup: 'notification_state',
+    },
+    // VOC triage commits are a frequent operator loop, separate from the shared mutation bucket.
+    triage: {
+      max: 60,
+      timeWindow: '1 minute',
+      keyGenerator,
+      routeGroup: 'triage',
     },
     // TODO(F18 follow-up): add admin bypass for the read tier once the
     // admin-role detection helper lands (see plan §C3 follow-up F18).

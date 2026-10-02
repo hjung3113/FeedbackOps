@@ -1,15 +1,14 @@
 // useWorkspaceActors.test.ts — TDD RED test.
 // GET /actors?workspace=current; cached by workspace; returns actor list.
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
-import { useWorkspaceActors } from '../useWorkspaceActors';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// BE wire shape per @fops/shared `listActorsResponseSchema`. The hook maps
-// each row to the UI shape `{id, display_name, kind: 'user'}` (teams not
-// seeded yet — ADR-0018).
+// BE wire shape per @fops/shared `listActorsResponseSchema`. The hook keeps
+// id, display_name, email, and role_level. `kind` is not part of the cache.
 const MOCK_BE_ACTORS = [
   {
     id: '00000000-0000-0000-0000-000000000001',
@@ -34,14 +33,17 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 describe('useWorkspaceActors', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        headers: new Headers(),
-        text: () => Promise.resolve(JSON.stringify({ actors: MOCK_BE_ACTORS })),
-      }),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ actors: MOCK_BE_ACTORS })),
+        }),
+      ),
+    );
   });
 
   afterEach(() => {
@@ -55,11 +57,6 @@ describe('useWorkspaceActors', () => {
       const r = result.current;
       expect(r.status === 'success').toBe(true);
     });
-    expect(result.current.actors).toHaveLength(2);
-    expect(result.current.actors?.[0]?.display_name).toBe('Alice');
-    // BE response is mapped to UI shape with `kind: 'user'` for every row
-    // until teams ship (ADR-0018). `email` / `role_level` stay on the BE
-    // type and are not exposed by the hook.
-    expect(result.current.actors?.[0]?.kind).toBe('user');
+    expect(result.current.actors).toEqual(MOCK_BE_ACTORS);
   });
 });

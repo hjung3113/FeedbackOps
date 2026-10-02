@@ -1,9 +1,11 @@
-import { ToggleGroup, ToggleGroupItem } from './shadcn/toggle-group.js';
+import { managedSystemMarkColor, managedSystemMarkToken } from '../badges/managed-system-mark.js';
 import { cn } from '../utils/cn.js';
+import { ToggleGroup, ToggleGroupItem } from './shadcn/toggle-group.js';
 
 export interface PickerOption {
   id: string;
   label: string;
+  slug?: string;
   archived?: boolean;
 }
 
@@ -60,7 +62,7 @@ export function ChipPicker({
               ? 'gap-2 rounded-md border border-border-subtle bg-surface-canvas px-2.5 text-text-secondary shadow-subtle hover:bg-surface-row-hover data-[state=on]:border-border-selected data-[state=on]:bg-surface-row-selected data-[state=on]:text-text-primary'
               : 'rounded-pill border border-border-subtle px-3 data-[state=on]:bg-accent-primary data-[state=on]:text-text-inverse data-[state=on]:border-accent-primary'}
           >
-            {isManagedSystem && <ManagedSystemMark label={option.label} />}
+            {isManagedSystem && <ManagedSystemMark label={option.label} slug={option.slug ?? ''} />}
             {label}
           </ToggleGroupItem>
         );
@@ -69,9 +71,9 @@ export function ChipPicker({
   );
 }
 
-function ManagedSystemMark({ label }: { label: string }) {
+function ManagedSystemMark({ label, slug }: { label: string; slug: string }) {
   const mark = managedSystemMark(label);
-  const colorToken = managedSystemColorToken(label);
+  const colorToken = managedSystemMarkToken(slug);
 
   return (
     <span
@@ -79,7 +81,7 @@ function ManagedSystemMark({ label }: { label: string }) {
       className="grid h-4 w-4 shrink-0 place-items-center rounded-sm font-bold leading-none text-text-on-accent"
       data-token={colorToken}
       style={{
-        backgroundColor: `rgb(var(${colorToken}))`,
+        backgroundColor: managedSystemMarkColor(slug),
         fontSize: 'var(--text-system-mark)',
       }}
     >
@@ -100,13 +102,4 @@ function managedSystemMark(label: string): string {
     ? parts.slice(0, 2).map((part) => part[0]).join('')
     : (parts[0] ?? label).slice(0, 2);
   return initials.toUpperCase();
-}
-
-function managedSystemColorToken(label: string): string {
-  const normalized = label.toLowerCase();
-  if (normalized.includes('tableau')) return '--managed-system-tableau';
-  if (normalized.includes('power bi') || normalized.includes('power-bi')) return '--managed-system-power-bi';
-  if (normalized.includes('looker')) return '--managed-system-looker';
-  if (normalized.includes('metabase')) return '--managed-system-metabase';
-  return '--managed-system-default';
 }

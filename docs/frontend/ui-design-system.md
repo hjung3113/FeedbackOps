@@ -57,6 +57,10 @@ This document fills the frontend gaps:
 
 ## Global Layout Contracts
 
+### Three Route Shells (ADR-0020)
+
+Every AppShell route classifies as one of three shells (ADR-0020): `PageShell` for page-body routes, `ListShell` for filter/list/detail routes, and `WorkbenchShell` for work surfaces that are not simple object lists. Do not introduce a fourth shell; extend one of these three when a route needs a new layout pattern.
+
 ### AppShell
 
 Purpose:
@@ -68,7 +72,7 @@ The persistent application frame for all internal FeedbackOps screens.
 Anatomy:
 
 ```text
-- RoleLevelAwareSidebar
+- AppRail + AppSidebar
 - ManagedSystemScopeSwitcher when applicable
 - MainRegion
 - RightDetailPanel optional
@@ -94,7 +98,8 @@ Rules:
 - Opening a detail panel should not navigate away from the list context.
 - Object creation from a selected object should prefer inline panel or drawer over full-page redirect.
 - Avoid full-screen modals for routine workflow actions.
-- RoleLevelAwareSidebar renders backend-provided navigation items only.
+- AppSidebar renders route-owned navigation entries. Admin discovery entries use the approved
+  `workspace.admin` capability as a display hint; Admin route `PermissionGate`s remain authoritative.
 - ManagedSystemScopeSwitcher appears on scoped operational views when the actor has access to more than one Managed System.
 - Switching Managed System scope updates URL state and list queries; it must not navigate to a duplicated per-Managed-System app tree.
 - `All` in ManagedSystemScopeSwitcher means the actor's effective Managed System scope union; only Admin sees true workspace-wide all.
@@ -149,10 +154,12 @@ Shared list pattern for VOC Triage/Inbox, Integration Findings, Tasks, Task inta
 Anatomy:
 
 ```text
-- ListToolbar
+- ListToolbar (composes the reusable ListTabs strip)
+- ListTabs: compact 28px strip with optional bare counts, decorative icons, native title tips, and overflow controls
 - FilterViewTabs
 - ObjectRow[]
-- EmptyState
+- `ListStateMessage` for application list states, wrapping `@fops/ui` `EmptyState` with `empty`,
+  `filtered`, and `error` variants
 - LoadingState
 - ErrorState
 - BulkActionBar when rows selected
@@ -222,7 +229,7 @@ Required row fields:
 - owner
 - analytics area
 - created time
-- similar VOC indicator
+- no per-row same-Managed-System peer indicator; show that count in detail and triage copy instead
 - linked Finding / Task indicator
 - next action
 ```
@@ -315,11 +322,12 @@ Anatomy:
 PanelHeader:
 
 ```text
-- object type
+- one shared kind chip with the kind accent, tint, and dot
 - object id optional
 - close button
 - overflow menu
 - open full page optional
+- secondary navigation such as the Finding VOC return link may use the header extras slot
 ```
 
 Rules:
@@ -330,6 +338,9 @@ Rules:
 - Internal status and reporter-facing status must be visually separate.
 - Permission-hidden content should show a PermissionBlockedPanel, not disappear silently.
 - Unsaved edits show dirty state and confirm before close.
+- Keep the 4px kind accent stripe on every header except Milestone.
+- Omit the id until the record is available; render it in mono when present.
+- Panel section navigation follows the Korean labels recorded in ADR-0057 A2; keep the approved domain nouns and anchor ids.
 ```
 
 ### LinkedEntityTrail
@@ -365,6 +376,13 @@ Example:
 ```text
 VOC → optional Evidence → optional Finding → optional Task Request → optional Task → optional Outcome Survey
 ```
+
+### Managed System Identity Mark
+
+Managed System marks use `managedSystemMarkColor(slug)` from `@fops/ui`, which
+maps `tableau`, `power-bi`, `looker`, and `metabase` to their identity tokens.
+Unknown slugs use the neutral `--managed-system-default` token. Keep the
+Managed System name visible next to its mark.
 
 ### EvidenceHighlight
 
@@ -423,6 +441,14 @@ Families:
 - permission-request-status
 ```
 
+Survey status labels:
+
+```text
+- draft → Draft (neutral)
+- open → Open (accent)
+- closed → Closed (muted-strong)
+```
+
 Rules:
 
 ```text
@@ -466,6 +492,7 @@ Rules:
 ```text
 - Signal badges are secondary unless they represent urgent action.
 - Critical and blocked states must remain distinguishable for color-blind users through icon or label.
+- Use the shared UnassignedBadge for missing owners and reviewers: danger text on a faint danger background, default label `담당자 없음`, reviewer label `검토자 없음`.
 ```
 
 ### RichContentEditor
@@ -708,12 +735,12 @@ Required field components:
 - Textarea
 - RichContentEditor
 - Select
+- DatePicker
 - Combobox
 - MultiSelect
 - Checkbox
 - RadioGroup
 - SegmentedControl
-- DateInput
 - UserPicker
 - AnalyticsAreaPicker
 ```
@@ -724,8 +751,10 @@ Form rules:
 - Labels appear above fields in forms and as compact inline labels in detail panels.
 - Required fields use text marker and validation, not color alone.
 - Validation appears after blur or submit.
+- DatePicker validity remains live for submit gating; non-native submit handlers use `onValidityChange` to block invalid drafts.
 - Save failure preserves user input.
 - Dirty forms warn before close.
+- Feature code uses the shared `Select` and `DatePicker`; do not use native `<select>` or `type="date"` controls.
 ```
 
 ### Modal / Drawer / InlineCreatePanel
@@ -764,7 +793,7 @@ Rules:
 Rules:
 
 ```text
-- Lists use skeleton rows.
+- Lists use skeleton rows. Skeleton placeholder fill: bg-surface-blocked (visible on canvas, card, and detail surfaces).
 - DetailPanel uses skeleton sections.
 - Home and Integration queues show independent loading per queue when possible.
 - Avoid full-page spinners after the app shell is loaded.

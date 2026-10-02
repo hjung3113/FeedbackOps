@@ -7,6 +7,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import {
   type Scope,
@@ -66,23 +67,11 @@ export async function actorTriageScope(db: Db | Tx, actor: ActorContextLite): Pr
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
 }
 
-// ── SQL array helper ──────────────────────────────────────────────────────────
-// Drizzle's sql`` tag serializes JS arrays as postgres row/record literals, not
-// postgres array literals. To safely use ANY($arr::uuid[]), we build
-// ARRAY[v1, v2, ...]::uuid[] with individual parameterised slots.
-// This avoids string interpolation of user-supplied values.
-
-// Identical to the private helper in repo-read.ts; not exported.
-function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  const items = ids.map((id) => sql`${id}::uuid`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
-}
-
 // ── Similar VOC visibility predicate (ADR-0031) ──────────────────────────────
 
 /**
- * The ADR-0031 VOC visibility rule, and the only copy of it.
+ * SQL face of the single ADR-0031 VOC visibility rule. The object form is
+ * `isVocVisibleToActor`; the two forms must change together.
  *
  * A VOC other than the actor's own source is visible when its Managed System
  * is in the actor's `voc.read` scope, or the actor reported it. Both the
@@ -112,4 +101,20 @@ export function similarVocVisibilityPredicate(
     ${vocAlias}.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
     OR ${vocAlias}.reporter_id = ${actorId}
   )`;
+}
+
+/**
+ * Object face of the single ADR-0031 VOC visibility rule. The SQL form is
+ * `similarVocVisibilityPredicate`; the two forms must change together.
+ */
+export function isVocVisibleToActor(
+  readScope: Scope,
+  actorId: string,
+  voc: { primary_managed_system_id: string; reporter_id: string },
+): boolean {
+  if (readScope.kind === 'all') return true;
+  return (
+    readScope.managedSystemIds.includes(voc.primary_managed_system_id) ||
+    voc.reporter_id === actorId
+  );
 }

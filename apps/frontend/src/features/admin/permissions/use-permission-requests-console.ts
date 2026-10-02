@@ -2,10 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 
-import { type AdminPermissionRequestRow, fetchPermissionRequestsAll } from '@/lib/api';
+import {
+  type AdminPermissionRequestRow,
+  fetchManagedSystems,
+  fetchPermissionRequestsAll,
+} from '@/lib/api';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 
 import type { PermissionRequestsSearch, ReviewTab } from './permission-requests-search.js';
-import { useWorkspaceActors } from './permission-state-view.js';
 import { permissionRequestsReviewKey } from './useDecidePermissionRequest.js';
 
 export function usePermissionRequestsConsole(): {
@@ -15,6 +19,7 @@ export function usePermissionRequestsConsole(): {
   selected: AdminPermissionRequestRow | null;
   selectedId: string | null;
   actorNames: Record<string, string>;
+  managedSystemNames: Record<string, string>;
   isPending: boolean;
   isError: boolean;
   handleTabChange: (next: ReviewTab) => void;
@@ -28,9 +33,20 @@ export function usePermissionRequestsConsole(): {
     queryFn: ({ signal }) => fetchPermissionRequestsAll({ status: 'all', signal }),
     retry: false,
   });
-  const actors = useWorkspaceActors();
+  const actors = useWorkspaceActors({ retry: false, staleTime: 0 });
   const actorNames = Object.fromEntries(
-    (actors.data ?? []).map((actor) => [actor.id, actor.display_name]),
+    (actors.actors ?? []).map((actor) => [actor.id, actor.display_name]),
+  );
+  const managedSystemsQuery = useQuery({
+    queryKey: ['managed-systems', 'all'],
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
+    retry: false,
+  });
+  const managedSystemNames = Object.fromEntries(
+    (managedSystemsQuery.data?.items ?? []).map((managedSystem) => [
+      managedSystem.id,
+      managedSystem.name,
+    ]),
   );
   // Tab + selection are URL state; `pending` is the default tab (omitted).
   const activeTab: ReviewTab = search.tab ?? 'pending';
@@ -123,6 +139,7 @@ export function usePermissionRequestsConsole(): {
     selected,
     selectedId,
     actorNames,
+    managedSystemNames,
     isPending: query.isPending,
     isError: query.isError,
     handleTabChange,

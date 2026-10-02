@@ -7,6 +7,7 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 ```text
 GET /findings
 GET /findings/:id
+GET /findings/:id/evidence-highlights
 GET /findings/:id/comments
 POST /findings/:id/comments
 PATCH /findings/:id

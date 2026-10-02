@@ -1,24 +1,25 @@
 // TimelineEntry — single conversation entry with kind chip + rich body.
 
-import * as React from 'react';
+import { useMe } from '@/lib/auth/useMe';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import type { ConversationEntry } from '@fops/shared';
 import {
-  UserChip,
   OutlineBadge,
-  RichContentRenderer,
-  ReporterStatusBadge,
   type ReporterFacingStatusEnum,
+  ReporterStatusBadge,
+  RichContentRenderer,
   type TipTapDoc,
+  UserChip,
 } from '@fops/ui';
-import { useMe } from '@/lib/auth/useMe';
-import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
+import type * as React from 'react';
 import { AttachmentChipList } from './AttachmentChip';
 
 // ── Korean labels ────────────────────────────────────────────────────────────
 
 const KIND_LABELS: Record<ConversationEntry['kind'], string> = {
   public_update:     '공개 업데이트',
-  reporter_reply:    'Reporter 답변',
+  reporter_reply:    '제출자 답변',
   internal_comment:  '내부 코멘트',
 };
 
@@ -39,7 +40,7 @@ export function TimelineEntry({ entry, actorDisplayName }: TimelineEntryProps): 
       ? { display_name: actorDisplayName }
       : me?.actor.id === entry.actor_id
       ? { display_name: me.actor.display_name }
-      : { display_name: 'Conversation actor' };
+      : { display_name: GLOSSARY.unknownUser };
 
   const rendererMode =
     entry.kind === 'internal_comment' ? 'internal' : 'reporter_visible';
@@ -53,11 +54,7 @@ export function TimelineEntry({ entry, actorDisplayName }: TimelineEntryProps): 
     <div className="flex flex-col gap-1 py-2 border-b border-border-subtle last:border-b-0">
       {/* Top row: actor chip + kind badge */}
       <div className="flex items-center justify-between gap-2">
-        <UserChip
-          user={actorUser}
-          size="sm"
-          sub={formatVocCreatedAt(entry.created_at)}
-        />
+        <UserChip user={actorUser} size="sm" sub={formatRelativeTime(entry.created_at)} />
         <OutlineBadge>{KIND_LABELS[entry.kind]}</OutlineBadge>
       </div>
 

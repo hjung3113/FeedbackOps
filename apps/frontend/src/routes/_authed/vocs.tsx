@@ -11,9 +11,11 @@ import { ChevronLeft } from 'lucide-react';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
+import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
+import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
-const vocSearchSchema = z
+export const vocSearchSchema = z
   .object({
     view: z.enum(['inbox', 'my', 'triage']).optional(),
     action: z.enum(['create']).optional(),
@@ -33,13 +35,20 @@ const vocSearchSchema = z
     'filter.severity': z.string().optional(),
     'filter.reporterStatus': z.string().optional(),
     'filter.owner': z.string().optional(),
+    'filter.analytics_area': z.literal('unset').optional(),
   })
   .strict(); // reject unknown query keys — prevents link-poisoning as #20 grows
 
 type VocSearch = z.infer<typeof vocSearchSchema>;
 
+export const VOC_DEFAULT_VIEW = 'inbox' as const;
+
+export function validateVocSearch(raw: unknown) {
+  return parseRouteSearch(vocSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/vocs')({
-  validateSearch: (raw) => vocSearchSchema.parse(raw),
+  validateSearch: validateVocSearch,
   component: VocRouteShell,
 });
 
@@ -64,11 +73,11 @@ export function VocRouteShell() {
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                <span>Inbox</span>
+                <span>{GLOSSARY.inbox}</span>
               </Link>
               <span className="inline-flex items-center gap-1 rounded-md bg-accent-primary/10 px-2 py-1 text-xs font-medium text-accent-primary">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden />
-                New VOC
+                {createLabel('VOC')}
               </span>
             </div>
           ),
@@ -89,7 +98,7 @@ export function VocRouteShell() {
     );
   }
   // inbox / my / default
-  const view = search.view ?? 'inbox';
+  const view = search.view ?? VOC_DEFAULT_VIEW;
   return <InboxShell view={view} />;
 }
 

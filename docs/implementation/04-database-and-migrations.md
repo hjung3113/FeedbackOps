@@ -19,13 +19,25 @@ Applied migrations are the final database authority.
 - Migrations must be reversible when practical.
 - Sensitive decisions append audit log entries.
 - Inline images are stored as governed attachment records and referenced from rich content; never store base64 body images.
-- Survey response and answer tables remain outside `fops_app` read access. Any
-  dashboard or result projection over them must use a narrow `SECURITY DEFINER`
-  aggregate owned by `fops_survey_aggregate_owner`, returning only the contract's
-  aggregate value and never response identifiers or answer bodies. The authorized
-  exception is `survey.read_approved_result_excerpts_personal`, a separate
-  `SECURITY DEFINER` owned by `fops_survey_evidence_reader_owner` that returns
-  `response_id` only behind `survey.read_personal_responses`.
+- Survey response and answer tables remain outside direct `fops_app` read
+  access. Aggregate projections use narrow `SECURITY DEFINER` functions owned
+  by `fops_survey_aggregate_owner`. The `survey.read_approved_result_excerpts_personal`,
+  `survey.read_my_survey_response_history`, and `survey.read_my_answerable_surveys`
+  functions are narrow
+  `SECURITY DEFINER` projections owned by `fops_survey_evidence_reader_owner`:
+  the first returns `response_id` and is called by the app only behind
+  `survey.read_personal_responses` (an app-layer gate),
+  the second returns only `survey_id`, Survey title, `submitted_at`, and
+  `identity_protected` for the session Actor's responses after the Surveys
+  service supplies the session `workspace_id` and `actor_id`, and does
+  not return a response ID. The third returns only Survey IDs for open Surveys
+  in the session Workspace that have no response from the session Actor. The
+  app reads respondent-safe Survey metadata and question counts through its
+  existing `survey.surveys` and `survey.survey_questions` access, then applies
+  `opened_at DESC, survey_id DESC` ordering and cursor pagination. This split
+  keeps the response table hidden from `fops_app` without adding column grants
+  to the definer owner. None of these functions return answer bodies or
+  respondent Actor IDs.
 ```
 
 ### Database prerequisite: pgvector (ADR-0034 D1)
@@ -59,6 +71,7 @@ core
 - analytics_areas
 - entity_links
 - audit_log
+- notifications
 - rate_limits
 - idempotency_keys
 - display_counters
@@ -66,6 +79,7 @@ core
 voc
 - vocs
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
+- voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
 - voc_public_updates
 - voc_reporter_replies
 - voc_internal_comments
@@ -84,8 +98,8 @@ finding
 task
 - tasks
 - task_comments (Task progress notes; `docs/adr/0049-finding-task-progress-notes.md`)
+- milestones
 - work_initiatives / projects when future execution grouping is introduced
-- milestones when future execution grouping is introduced
 
 task_request
 - task_requests
@@ -93,7 +107,8 @@ task_request
 survey
 - surveys
 - survey_responses
-- survey_results
+- survey_results (computed read projection; not a table)
+- outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
 
 permission
 - permission_requests
@@ -150,6 +165,10 @@ VOC status.
 - Work Initiative / Project tables must not be required for VOC, Finding, Task Request, Task, Survey, Dashboard, or permission MVP scope.
 ```
 
+## Adding a Field to an Owned Entity
+
+Update the owning Drizzle table in `apps/backend/src/db/schema/<schema>.ts`, and update the wire contract separately: use `packages/shared/src/<entity>/` where that shared schema exists; otherwise update the module's `routes.ts` request schemas and the frontend `apps/frontend/src/lib/api/<entity>.ts` request types/response DTO. Generate the SQL migration and Drizzle metadata with `pnpm --filter backend db:generate`; if SQL is hand-written, follow [Migration Naming](#migration-naming) for the journal registration and snapshot refresh—never hand-edit `apps/backend/migrations/meta/*.json`—and run `pnpm gate:db-migration-drift`. If the table uses column-level privileges, add the new column to the corresponding column-level grant for `fops_app` in the same migration; do not widen it to a table-level grant. Then update the owning service and required audit detail, the consuming UI, and the affected design/API docs in the same change. For example, `apps/backend/src/db/schema/core.ts` defines the Drizzle table, `apps/backend/migrations/0005_slice2_registry.sql` creates `core.managed_systems`, `apps/backend/src/modules/managed-systems/routes.ts` defines its request schemas, `apps/frontend/src/lib/api/managed-systems.ts` defines its wire DTO, `apps/backend/src/modules/managed-systems/managed-system-service.ts` persists and audits it, `packages/shared/src/audit/managed-system.ts` defines the audit detail schema (a column missing there is silently dropped from the audit snapshot), and `apps/frontend/src/features/admin/managed-systems/ManagedSystemsScreen.tsx` exposes it. Amend an ADR when recording a compatible addition that leaves its decision in force; reopen the decision with a new ADR when changing or reversing it. For `managed_systems`, adding a column requires a dated amendment to ADR-0017 that updates the column list and audit detail; changing the semantics of `id`, `slug`, or `external_key` requires a new ADR reopening ADR-0017.
+
 ## Rich Content And Attachments
 
 ```text
@@ -180,7 +199,8 @@ The archive-over-delete invariant is enforced in `apps/backend/src/modules/attac
   - workspace_id, target_type, target_id
   - workspace_id, relation_type
   - workspace_id, source_type, source_id, relation_type
-- audit_logs index workspace_id, actor_id, event_type, created_at.
+- core.audit_log indexes: (workspace_id, created_at DESC), (workspace_id, subject_type, subject_id, created_at DESC), (workspace_id, actor_id, created_at DESC), and (workspace_id, event_type, created_at DESC).
+- notifications index workspace_id, actor_id, read_at, created_at DESC.
 ```
 
 ## Migration Naming
@@ -256,6 +276,75 @@ CHECK validates pending/dismissed/actioned fields, and its terminal-immutability
 trigger rejects every rewrite of an actioned or dismissed candidate. A later
 Task release must create a new candidate row; it must never reopen or mutate a
 terminal decision.
+
+## Issue #512: VOC cluster shadow measurements
+
+Migration `0051_voc_cluster_autogen_shadow.sql` pre-creates the hourly
+`voc.cluster_autogen_shadow` queue with ADR-0009 retry defaults and creates
+`voc.voc_cluster_autogen_shadow_candidates` as a separate non-domain measurement
+table. Rows are unique by workspace, sorted VOC pair, and embedding version;
+`fops_app` has `SELECT`, `INSERT`, and `UPDATE`, with no `DELETE`. The shadow
+handler never writes cluster, membership, recommendation-decision, VOC, or audit
+rows; see ADR-0054 for its eligibility and reporting rules.
+
+## Issue #510: outcome follow-up decisions
+
+Migration `0052_outcome_follow_up_decisions.sql` creates
+`survey.outcome_follow_up_decisions` (ADR-0055 storage option (b): state row
+plus `core.audit_log` history) and the `SECURITY DEFINER` classifier
+`survey.read_outcome_follow_up_state`, and replaces
+`survey.count_negative_outcome_without_followup` in place with the ADR-0055
+predicate: low rating band via the IMMUTABLE `survey.rating_band_for_value`
+helper (parity-tested against `getRatingBandForValue`), closed outcome
+surveys only, workspace `survey_anonymity_threshold` respected, resolution
+only by an active `generated_finding` link to a `draft`/`active`/`converted`
+Finding or a current `no_follow_up` decision. `fops_app` holds `SELECT`,
+`INSERT`, and `UPDATE` scoped to `state`, `reason`, `decided_by_actor_id`,
+`updated_at`, with no `DELETE`; `fops_survey_aggregate_owner` gained only the
+column grants the new predicate reads (`surveys.status`,
+`survey_questions.rating_max`, `entity_links.relation_type`/`target_id`,
+`finding.findings(id, workspace_id, status)` plus schema `USAGE`,
+`core.workspace_settings(workspace_id, survey_anonymity_threshold)`, and
+column-scoped `SELECT` on the decision table).
+
+Migration `0053_outcome_follow_up_read.sql` adds the part C read surface as
+two more `SECURITY DEFINER` functions owned by `fops_survey_aggregate_owner`
+(chosen over the evidence-reader owner because its grants already cover the
+whole ADR-0055 classifier predicate; the items reader crosses no raw-text or
+excerpt boundary): `survey.read_outcome_follow_up_survey_state` returns only
+the two survey-grain booleans (`classifiable`, `follow_up_needed`) for any
+`survey.read` caller, and `survey.read_outcome_follow_up_items_personal`
+returns the per-poor-response review rows — response id, 1-based submission
+ordinal, low-band answers with question label and bounds, resolution, the
+qualifying Finding (earliest-created live `generated_finding`, returned with
+its primary Managed System so the service can apply the caller's Finding read
+scope), and the
+current decision — only for callers that already crossed the
+personal-response seam. Both reuse `survey.rating_band_for_value` and the
+same predicate as `read_outcome_follow_up_state`. The owner gained only the
+display columns the review list needs: `survey_responses.submitted_at`,
+`survey_questions.prompt`/`sort_order`,
+`outcome_follow_up_decisions.reason`/`updated_at`, and
+`finding.findings.created_at`/`display_id`/`primary_managed_system_id`.
+
+## Issue #509: notification inbox and dispatch
+
+Migration `0054_notifications.sql` creates `core.notifications` with a
+workspace and recipient Actor foreign key, a UUID `correlation_id`, and the
+unique idempotency key `(workspace_id, actor_id, event_type, subject_id,
+correlation_id)`. The table intentionally has no database CHECK on
+`event_type`; the application catalogue owns that allowlist. Its inbox index
+is `(workspace_id, actor_id, read_at, created_at DESC)`. `fops_app` has
+`SELECT`, `INSERT`, and column-scoped `UPDATE` on `read_at`, `archived_at`, and
+`email_sent_at`, with no `DELETE` or table-wide `UPDATE`; `fops_migrate` retains
+`ALL` on the table.
+
+The same migration pre-creates the `notifications.dispatch` pg-boss queue
+with ADR-0009 retry defaults (5 retries, 30 second delay, backoff enabled).
+Notification jobs are enqueued in the caller's transaction; the handler
+persists one actor-scoped inbox row and makes the email claim while holding
+that row transaction open. Email delivery is at-least-once because a process
+can send successfully and fail before the transaction commits.
 
 ## Issue #182: conversion-link visibility backfill
 

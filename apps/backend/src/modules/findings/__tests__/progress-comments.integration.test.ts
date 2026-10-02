@@ -7,14 +7,12 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import {
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  loginAs,
-  paragraphDoc,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import { insertFindingRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -310,6 +308,31 @@ describe.skipIf(!runIntegration)('Finding progress comments API (#377)', () => {
     );
     expect(invalidCursor.statusCode).toBe(422);
   });
+
+  it.each([{ actorId: randomUUID() }])(
+    'rejects a mention actor outside the workspace',
+    async ({ actorId }) => {
+      const finding = await seedFinding();
+      const response = await commentsRequest(manageCookie, 'POST', finding.id, {
+        body_rich_content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'mention', attrs: { actor_id: actorId } }],
+            },
+          ],
+        },
+        mentions: [actorId],
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['mentions'], code: 'cross_workspace' }] },
+      });
+    },
+  );
 
   it('review follow-up: cursor pagination does not skip a row sharing the same millisecond as the cursor boundary', async () => {
     // Regression for astra medium's review of PR #449: encoding the cursor

@@ -7,6 +7,7 @@
 // C5.4 of slice3 #21.
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (internal variant)
 
+import { ApiError } from '@/lib/api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
@@ -15,14 +16,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
 const mockMutate = vi.fn();
+const mockMutationOnError = vi.fn();
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocInternalCommentMutation', () => ({
-  useVocInternalCommentMutation: vi.fn(() => ({
-    mutate: mockMutate,
-    isPending: false,
-    isError: false,
-    error: null,
-  })),
+  useVocInternalCommentMutation: vi.fn(
+    (options: {
+      onError: (error: {
+        code: string;
+        message: string;
+        envelope: { code: string; message: string };
+      }) => void;
+    }) => {
+      mockMutationOnError.mockImplementation(options.onError);
+      return { mutate: mockMutate, isPending: false, isError: false, error: null };
+    },
+  ),
 }));
+vi.mock('sonner', () => ({ toast }));
 
 // Mock RichEditor — exposes a callback to simulate doc changes with mention nodes.
 let capturedOnChange: ((doc: import('@fops/ui').TipTapDoc) => void) | undefined;
@@ -126,7 +136,7 @@ describe('<InternalCommentComposer>', () => {
       capturedOnChange?.(docWithMention);
     });
 
-    const addBtn = screen.getByRole('button', { name: /add note/i });
+    const addBtn = screen.getByRole('button', { name: /내부 코멘트 추가/ });
     fireEvent.click(addBtn);
 
     await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
@@ -164,7 +174,7 @@ describe('<InternalCommentComposer>', () => {
       capturedOnChange?.(docWithDuplicateMentions);
     });
 
-    const addBtn = screen.getByRole('button', { name: /add note/i });
+    const addBtn = screen.getByRole('button', { name: /내부 코멘트 추가/ });
     fireEvent.click(addBtn);
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
@@ -181,7 +191,7 @@ describe('<InternalCommentComposer>', () => {
   it('Preview button is DOM-disabled (not hidden) per D-5.4', () => {
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
-    const previewBtn = screen.getByRole('button', { name: /preview/i });
+    const previewBtn = screen.getByRole('button', { name: /미리보기/ });
     expect(previewBtn).toBeInTheDocument();
     expect(previewBtn).toBeDisabled();
   });
@@ -200,7 +210,7 @@ describe('<InternalCommentComposer>', () => {
     );
 
     expect(screen.getByTestId('internal-comment-composer')).toBeInTheDocument();
-    const add = screen.getByRole('button', { name: /add note/i });
+    const add = screen.getByRole('button', { name: /내부 코멘트 추가/ });
     expect(add).toBeDisabled();
     fireEvent.click(add);
     expect(mockMutate).not.toHaveBeenCalled();
@@ -220,6 +230,19 @@ describe('<InternalCommentComposer>', () => {
     );
 
     expect(screen.getByTestId('internal-comment-composer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add note/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /내부 코멘트 추가/ })).not.toBeDisabled();
+  });
+
+  it('toasts the mapped Korean message when an internal comment fails', () => {
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
+
+    act(() => {
+      mockMutationOnError(
+        new ApiError(422, { code: 'validation.failed', message: 'raw server message' }),
+      );
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('입력값이 올바르지 않습니다.');
+    expect(toast.error).not.toHaveBeenCalledWith('validation.failed: raw server message');
   });
 });

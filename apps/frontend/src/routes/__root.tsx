@@ -1,15 +1,23 @@
-import { Outlet, createRootRoute } from '@tanstack/react-router';
-import { OctagonAlert, TriangleAlert, Info, Loader2, CircleCheck } from 'lucide-react';
+import { DocumentTitleProvider } from '@/lib/router/document-title';
+import type { QueryClient } from '@tanstack/react-query';
+import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
+import { CircleCheck, Info, Loader2, OctagonAlert, TriangleAlert } from 'lucide-react';
 import { Toaster } from 'sonner';
 
-export const Route = createRootRoute({
+export interface AppRouterContext {
+  queryClient: QueryClient;
+}
+
+export const Route = createRootRouteWithContext<AppRouterContext>()({
   component: RootLayout,
 });
 
 function RootLayout() {
   return (
     <div className="min-h-full bg-surface-canvas text-text-primary">
-      <Outlet />
+      <DocumentTitleProvider>
+        <Outlet />
+      </DocumentTitleProvider>
       <Toaster
         position="bottom-center"
         richColors

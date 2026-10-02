@@ -1,7 +1,13 @@
 // /voc-clusters — ADR-0020 ListShell cluster list + right detail panel.
-// CreateClusterModal opens on "클러스터 생성" and navigates to detail on create.
+// CreateClusterModal opens on "Cluster 생성" and navigates to detail on create.
 
-import * as React from "react";
+import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
+import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
+import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
+import { type ApiError, errorMapper, fetchManagedSystems } from "@/lib/api";
+import { useMe } from "@/lib/auth/useMe";
+import { parseRouteSearch } from '@/lib/router/search';
+import type { CreateVocClusterRequest } from "@fops/shared";
 import {
   Button,
   Dialog,
@@ -9,21 +15,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
   Input,
-  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from "@fops/ui";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import * as React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { CreateVocClusterRequest } from "@fops/shared";
-import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
-import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
-import { useMe } from "@/lib/auth/useMe";
-import { fetchManagedSystems, errorMapper, type ApiError } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
-import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
 import { z } from "zod";
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
@@ -40,9 +46,14 @@ export const vocClustersSearchSchema = z
   .strict();
 
 type VocClustersSearch = z.infer<typeof vocClustersSearchSchema>;
+const NO_MANAGED_SYSTEM = '__none__';
+
+export function validateVocClustersSearch(raw: unknown) {
+  return parseRouteSearch(vocClustersSearchSchema, raw);
+}
 
 export const Route = createFileRoute("/_authed/voc-clusters/")({
-  validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
+  validateSearch: validateVocClustersSearch,
   component: VocClusterListPage,
 });
 
@@ -117,14 +128,14 @@ export function VocClusterListPage(): React.ReactElement {
               data-testid="cluster-create-button"
             >
               <Plus className="h-4 w-4" />
-              클러스터 생성
+              Cluster 생성
             </Button>
           ) : (
             <span
               className="text-xs text-text-muted"
               data-testid="cluster-create-hint"
             >
-              Admin 또는 Developer 권한이 필요합니다.
+              관리자 또는 개발자 권한이 필요합니다.
             </span>
           )
         }
@@ -161,7 +172,9 @@ function CreateClusterModal({
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [managedSystemId, setManagedSystemId] = useState("");
+  const [managedSystemError, setManagedSystemError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const managedSystemTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   const systemsQuery = useQuery({
     queryKey: ["managed-systems", { includeArchived: false }] as const,
@@ -176,6 +189,7 @@ function CreateClusterModal({
     setTitle("");
     setSummary("");
     setManagedSystemId("");
+    setManagedSystemError(null);
     setError(null);
     mutation.reset();
     onClose();
@@ -184,6 +198,12 @@ function CreateClusterModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (managedSystemId === '') {
+      setManagedSystemError('Managed System을 선택하세요.');
+      managedSystemTriggerRef.current?.focus();
+      return;
+    }
+    setManagedSystemError(null);
     const body: CreateVocClusterRequest = {
       title,
       primary_managed_system_id: managedSystemId,
@@ -210,7 +230,7 @@ function CreateClusterModal({
     >
       <DialogContent data-testid="create-cluster-modal">
         <DialogHeader>
-          <DialogTitle>클러스터 생성</DialogTitle>
+          <DialogTitle>Cluster 생성</DialogTitle>
         </DialogHeader>
         <form
           id="create-cluster-form"
@@ -220,14 +240,14 @@ function CreateClusterModal({
         >
           {/* Title */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cluster-title" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-title" className="text-text-secondary">
               제목 <span aria-hidden>*</span>
-            </Label>
+            </FieldLabel>
             <Input
               id="cluster-title"
               required
               value={title}
-              placeholder="클러스터 제목을 입력하세요."
+              placeholder="Cluster 제목을 입력하세요."
               onChange={(e) => setTitle(e.target.value)}
               data-testid="cluster-title-input"
             />
@@ -235,14 +255,14 @@ function CreateClusterModal({
 
           {/* Summary */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cluster-summary" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-summary" className="text-text-secondary">
               요약 (선택)
-            </Label>
+            </FieldLabel>
             <Textarea
               id="cluster-summary"
               rows={3}
               value={summary}
-              placeholder="클러스터에 대한 간단한 설명을 입력하세요."
+              placeholder="Cluster에 대한 간단한 설명을 입력하세요."
               onChange={(e) => setSummary(e.target.value)}
               data-testid="cluster-summary-input"
             />
@@ -250,27 +270,51 @@ function CreateClusterModal({
 
           {/* Managed System */}
           <div className="flex flex-col gap-1.5">
-            <Label
+            <FieldLabel
               htmlFor="cluster-managed-system"
               className="text-text-secondary"
             >
               Managed System <span aria-hidden>*</span>
-            </Label>
-            <select
-              id="cluster-managed-system"
-              required
-              value={managedSystemId}
-              onChange={(e) => setManagedSystemId(e.target.value)}
-              data-testid="cluster-managed-system-select"
-              className="h-9 w-full rounded-md border border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            </FieldLabel>
+            <Select
+              value={managedSystemId || NO_MANAGED_SYSTEM}
+              onValueChange={(value) => {
+                setManagedSystemId(value === NO_MANAGED_SYSTEM ? '' : value);
+                setManagedSystemError(null);
+              }}
             >
-              <option value="">시스템 선택…</option>
-              {(systemsQuery.data?.items ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                ref={managedSystemTriggerRef}
+                id="cluster-managed-system"
+                aria-label="Managed System"
+                aria-required="true"
+                aria-invalid={managedSystemError !== null}
+                {...(managedSystemError
+                  ? { 'aria-describedby': 'cluster-managed-system-error' }
+                  : {})}
+                data-testid="cluster-managed-system-select"
+                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_MANAGED_SYSTEM}>시스템 선택…</SelectItem>
+                {(systemsQuery.data?.items ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {managedSystemError ? (
+              <p
+                id="cluster-managed-system-error"
+                role="alert"
+                className="text-sm text-accent-danger"
+              >
+                {managedSystemError}
+              </p>
+            ) : null}
           </div>
 
           {error && (
@@ -286,7 +330,7 @@ function CreateClusterModal({
         <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             onClick={closeAndReset}
             disabled={mutation.isPending}
             data-testid="create-cluster-cancel"

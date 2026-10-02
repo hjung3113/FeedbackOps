@@ -2,6 +2,8 @@
 // grant/deny rows consumed by check-service; they never execute the originally
 // blocked domain action.
 
+import { randomUUID } from 'node:crypto';
+
 import { and, eq, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
@@ -24,6 +26,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
 
@@ -32,6 +35,7 @@ export interface DecisionServiceDeps {
   checkService: CheckService;
   auditService: AuditService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   resolveWorkspaceSettings: (
     dbOrTx: Db | Tx,
     workspaceId: string,
@@ -52,6 +56,7 @@ type SelfApprovalEnvelope = {
 type DecisionBody = {
   reason?: string;
   note?: string;
+  expiration?: string | null;
   self_approval?: SelfApprovalEnvelope;
 };
 type DecidableStatus = 'pending' | 'needs_more_info';
@@ -160,6 +165,24 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           });
         }
 
+        let grantedExpiration = request.requestedExpiration;
+        if (action === 'approve' && body.expiration !== undefined) {
+          if (body.expiration === null) {
+            grantedExpiration = null;
+          } else {
+            grantedExpiration = new Date(body.expiration);
+            if (grantedExpiration.getTime() <= Date.now()) {
+              throw new HttpError(
+                'validation.failed',
+                'approval expiration must be in the future',
+                {
+                  fields: [{ path: ['expiration'], code: 'custom' }],
+                },
+              );
+            }
+          }
+        }
+
         let grantId: string | undefined;
         let denyId: string | undefined;
         const status =
@@ -179,7 +202,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
                 capability,
                 managedSystemId: request.requestedManagedSystemId,
                 grantedByActorId: actor.actor_id,
-                expiresAt: request.requestedExpiration,
+                expiresAt: grantedExpiration,
                 sensitiveReason: reason || null,
               })
               .returning({ id: permissionGrants.id });
@@ -237,6 +260,12 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           requester_actor_id: request.requesterActorId,
           ...(action === 'need_more_info' ? { note: note as string } : { reason: reason || null }),
           ...(grantId ? { grant_id: grantId } : {}),
+          ...(action === 'approve'
+            ? {
+                requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                granted_expiration: grantedExpiration?.toISOString() ?? null,
+              }
+            : {}),
           ...(denyId ? { deny_id: denyId } : {}),
           ...(isSelfApproval ? { self_approval: body.self_approval as SelfApprovalEnvelope } : {}),
         };
@@ -249,6 +278,17 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           summary: `Permission request ${action.replaceAll('_', ' ')}`,
           detail,
         });
+
+        if (action === 'approve' || action === 'reject' || action === 'deny') {
+          await deps.notify(tx, 'permission_request.decided', {
+            workspace_id: actor.workspace_id,
+            actor_ids: [request.requesterActorId],
+            subject_id: request.id,
+            correlation_id: randomUUID(),
+            detail: { permission_request_id: request.id },
+            params: { outcome: action === 'approve' ? 'approved' : 'rejected' },
+          });
+        }
 
         return {
           status: 200,

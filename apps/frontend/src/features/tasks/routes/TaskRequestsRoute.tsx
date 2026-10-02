@@ -1,3 +1,6 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { ListShell, ListToolbar, PermissionBlockedPanel } from '@fops/ui';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
@@ -20,9 +23,20 @@ export function TaskRequestsRoute({
   managedSystem?: string;
 }) {
   const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const selectedDocumentTitle =
+    !queue.isLoading &&
+    !queue.hasError &&
+    queue.selected !== null &&
+    queue.selectedId === queue.selected.id
+      ? formatRecordDocumentTitle({
+          displayId: queue.selected.display_id,
+          title: queue.selected.requested_outcome,
+        })
+      : null;
+  useDocumentTitle(selectedDocumentTitle);
 
   if (queue.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Task Requests…</div>;
+    return <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>;
   }
 
   if (queue.permissionDeniedError) {
@@ -30,14 +44,31 @@ export function TaskRequestsRoute({
       <PermissionBlockedPanel
         state="denied"
         category="Task Request queue"
-        reason={queue.permissionDeniedError.message}
+        reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
         className="m-4"
       />
     );
   }
   if (queue.hasError) {
-    return <div className="p-4 text-sm text-accent-danger">Task Request queue unavailable.</div>;
+    return (
+      <ListStateMessage
+        variant="error"
+        title="Task Request 목록을 불러오지 못했습니다"
+        body="잠시 후 다시 시도하세요."
+        action={{ label: '다시 시도', onClick: queue.refetch }}
+      />
+    );
   }
+
+  const activeTabLabel =
+    queue.tabs.find((tab) => tab.value === queue.activeTab)?.label ?? queue.activeTab;
+  const isPendingEmpty =
+    queue.shown.length === 0 && queue.hasItems && queue.activeTab === 'pending_review';
+  const isFilteredEmpty =
+    queue.shown.length === 0 &&
+    queue.hasItems &&
+    queue.activeTab !== 'pending_review' &&
+    queue.activeTab !== 'all';
 
   return (
     <ListShell
@@ -58,9 +89,30 @@ export function TaskRequestsRoute({
                 onSelect={queue.setSelectedId}
               />
             ))}
-            {queue.shown.length === 0 && (
-              <div className="px-5 py-8 text-sm text-text-muted">No Task Requests.</div>
-            )}
+            {queue.shown.length === 0 &&
+              (isPendingEmpty ? (
+                <ListStateMessage
+                  variant="filtered"
+                  title="검토 대기 중인 Task Request가 없습니다"
+                  body="다른 상태의 Task Request가 있습니다."
+                />
+              ) : isFilteredEmpty ? (
+                <ListStateMessage
+                  variant="filtered"
+                  title="현재 조건에 맞는 Task Request가 없습니다"
+                  body={`선택한 상태: ${activeTabLabel}`}
+                  action={{
+                    label: '필터 초기화',
+                    onClick: () => queue.setActiveTab('pending_review'),
+                  }}
+                />
+              ) : (
+                <ListStateMessage
+                  variant="empty"
+                  title="Task Request가 없습니다."
+                  body="검토 요청이 접수되면 이 목록에 표시됩니다."
+                />
+              ))}
           </div>
         </>
       }
@@ -72,6 +124,7 @@ export function TaskRequestsRoute({
             currentActorId={queue.currentActorId}
             currentRole={queue.currentRole}
             onClose={() => queue.setSelectedId(null)}
+            onDecisionComplete={queue.onDecisionComplete}
           />
         ) : null
       }

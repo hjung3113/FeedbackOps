@@ -39,6 +39,16 @@ export const creatableEntityLinkVisibilitySchema = z.literal('internal_only');
 export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
 export type EntityLinkStatus = z.infer<typeof entityLinkStatusSchema>;
 
+export const entityLinkStatusCountsSchema = z
+  .object({
+    active: z.number().int().nonnegative(),
+    stale: z.number().int().nonnegative(),
+    detached: z.number().int().nonnegative(),
+    revoked: z.number().int().nonnegative(),
+  })
+  .strict();
+export type EntityLinkStatusCounts = z.infer<typeof entityLinkStatusCountsSchema>;
+
 export const entityLinkVisibilityStateSchema = z.enum([
   'allowed',
   'hidden',
@@ -204,6 +214,8 @@ export const listEntityLinksQuerySchema = z
     status: csvEntityLinkStatusSchema,
     relation_type: entityLinkRelationTypeSchema.optional(),
     managed_system_id: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    cursor: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -243,6 +255,13 @@ export const listEntityLinksQuerySchema = z
         message: 'target_type and target_id must be provided together',
       });
     }
+    if (hasEndpoint && (value.limit !== undefined || value.cursor !== undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: value.cursor !== undefined ? ['cursor'] : ['limit'],
+        message: 'pagination is only available for workspace inventory',
+      });
+    }
     if (value.scope !== 'workspace' && hasEndpoint && hasSource === hasTarget) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -250,13 +269,15 @@ export const listEntityLinksQuerySchema = z
         message: 'provide exactly one source or target endpoint',
       });
     }
-  });
+  })
+  .transform((value) => ({ ...value, limit: value.limit ?? 50 }));
 export type ListEntityLinksQuery = z.infer<typeof listEntityLinksQuerySchema>;
 
 export const allowedEntityLinkSchema = z.object({
   id: z.string().uuid(),
   source_type: entityLinkEntityTypeSchema,
   source_id: z.string().uuid(),
+  source_summary: entityLinkTargetSummarySchema.optional(),
   target_type: entityLinkEntityTypeSchema,
   target_id: z.string().uuid(),
   target_summary: entityLinkTargetSummarySchema.optional(),
@@ -313,8 +334,18 @@ export const entityLinkDtoSchema = z.discriminatedUnion('visibility_state', [
 ]);
 export type EntityLinkDto = z.infer<typeof entityLinkDtoSchema>;
 
+export const listEntityLinksPageSchema = z
+  .object({
+    has_more: z.boolean(),
+    cursor: z.string().optional(),
+    status_counts: entityLinkStatusCountsSchema.optional(),
+  })
+  .strict();
+export type ListEntityLinksPage = z.infer<typeof listEntityLinksPageSchema>;
+
 export const listEntityLinksResponseSchema = z.object({
   items: z.array(entityLinkDtoSchema),
+  page: listEntityLinksPageSchema.optional(),
 });
 export type ListEntityLinksResponse = z.infer<typeof listEntityLinksResponseSchema>;
 

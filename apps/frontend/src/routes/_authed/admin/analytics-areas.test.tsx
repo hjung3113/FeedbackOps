@@ -171,8 +171,16 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(screen.getByTestId('aa-grouped-list')).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(
+        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.',
+      ),
+    ).toBeVisible();
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
-      'Analytics Area 는 MVP 권한 경계가 아닙니다',
+      'Analytics Area는 권한 경계가 아닙니다',
+    );
+    expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
+      'Analytics Area는 Managed System 안에서 분류와 집계에만 쓰입니다. 권한 범위는 Managed System으로만 정해집니다.',
     );
     // Both MS groups render; Tableau has one area, Power BI is empty.
     expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
@@ -180,6 +188,23 @@ describe('/admin/analytics-areas route', () => {
     expect(
       within(screen.getByTestId('aa-group-ms-pbi')).getByText(/등록된 Analytics Area/),
     ).toBeInTheDocument();
+  });
+
+  test('uses user-facing language in the Analytics Area detail guardrail', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-row-permission-management'));
+    const detail = await screen.findByTestId('aa-slide-over');
+    expect(detail).toHaveTextContent(
+      'Analytics Area는 권한 경계가 아니라 분류와 집계 단위입니다. Triage 필터, 대시보드 탭, Survey 대상 지정에만 사용되며 권한 확인에는 영향을 주지 않습니다.',
+    );
   });
 
   test('filters by Managed System and archived inclusion through requests, then clears both', async () => {
@@ -191,7 +216,7 @@ describe('/admin/analytics-areas route', () => {
       requests,
     });
     await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
-    expect(screen.getByText('2 areas · 2 systems')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area 2개 · Managed System 2개')).toBeInTheDocument();
     expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('aa-filter-button'));
@@ -204,7 +229,7 @@ describe('/admin/analytics-areas route', () => {
       expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
       expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
       expect(screen.queryByTestId('aa-group-ms-tab')).not.toBeInTheDocument();
-      expect(screen.getByText('1 area · 1 system')).toBeInTheDocument();
+      expect(screen.getByText('Analytics Area 1개 · Managed System 1개')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
@@ -219,7 +244,7 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(requests).toContain('/analytics-areas?include_archived=true');
       expect(screen.getByTestId('aa-row-legacy-revenue')).toBeInTheDocument();
-      expect(screen.getByText('3 areas · 2 systems')).toBeInTheDocument();
+      expect(screen.getByText('Analytics Area 3개 · Managed System 2개')).toBeInTheDocument();
       expect(screen.getAllByTestId(/^aa-row-/)).toHaveLength(3);
     });
 
@@ -286,12 +311,12 @@ describe('/admin/analytics-areas route', () => {
     expect(within(drawer).getAllByText('PM Tableau').length).toBeGreaterThanOrEqual(1);
     // Section nav exposes all six sections including deferred Workload/Findings.
     for (const label of [
-      'Overview',
-      'Guardrail',
-      'Definition',
-      'Workload',
+      '개요',
+      '권한 경계',
+      '정의',
+      '작업량',
       'Findings',
-      'Used by',
+      '사용 위치',
     ]) {
       expect(within(drawer).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
     }
@@ -349,7 +374,9 @@ describe('/admin/analytics-areas route', () => {
     fireEvent.change(screen.getByTestId('create-aa-name'), { target: { value: 'X' } });
     fireEvent.click(screen.getByTestId('create-aa-submit'));
     await waitFor(() => {
-      expect(screen.getByTestId('create-aa-error')).toHaveTextContent(/conflict\.parent_archived/);
+      expect(screen.getByTestId('create-aa-error')).toHaveTextContent(
+        '상위 항목이 보관되어 더 이상 변경할 수 없습니다.',
+      );
     });
   });
 
@@ -360,7 +387,7 @@ describe('/admin/analytics-areas route', () => {
       analyticsAreas: [],
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '권한 요청' })).toBeInTheDocument();
     });
     expect(screen.queryByTestId('analytics-areas-catalog')).not.toBeInTheDocument();
   });

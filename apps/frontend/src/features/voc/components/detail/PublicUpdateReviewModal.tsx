@@ -2,7 +2,10 @@ import {
   usePublicUpdateReviewCandidates,
   useResolvePublicUpdateReviewCandidate,
 } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
+import { formatDate } from '@/lib/format/datetime';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import {
   Button,
@@ -12,6 +15,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
 } from '@fops/ui';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -26,6 +37,8 @@ const STATUSES: ReporterFacingStatusEnum[] = [
   'reopened',
   'closed',
 ];
+
+const NO_STATUS = '__none__';
 
 export function PublicUpdateReviewModal({
   voc,
@@ -42,6 +55,7 @@ export function PublicUpdateReviewModal({
   const [status, setStatus] = useState<ReporterFacingStatusEnum | ''>('');
   const [message, setMessage] = useState('');
   const [dismissalReason, setDismissalReason] = useState('');
+  const reviewCandidates = candidates.data?.items ?? [];
 
   const resetForm = () => {
     setCandidateId('');
@@ -87,7 +101,7 @@ export function PublicUpdateReviewModal({
           resetForm();
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error.envelope.message),
+        onError: (error) => toast.error(mapUnknownError(error).message),
       },
     );
   };
@@ -101,7 +115,7 @@ export function PublicUpdateReviewModal({
           resetForm();
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error.envelope.message),
+        onError: (error) => toast.error(mapUnknownError(error).message),
       },
     );
   };
@@ -118,58 +132,93 @@ export function PublicUpdateReviewModal({
         <DialogHeader>
           <DialogTitle>공개 업데이트 리뷰</DialogTitle>
           <DialogDescription>
-            Task 상태를 자동 반영하지 않습니다. Reporter-facing status를 직접 선택하세요.
+            Task 상태를 자동 반영하지 않습니다. 공개 상태를 직접 선택하세요.
           </DialogDescription>
         </DialogHeader>
         {candidates.isLoading ? (
           <p className="text-sm text-text-muted">후보를 불러오는 중…</p>
+        ) : candidates.isError ? (
+          <div className="grid gap-2" role="alert">
+            <p className="text-sm text-text-danger">후보 목록을 불러오지 못했습니다.</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void candidates.refetch();
+              }}
+            >
+              다시 시도
+            </Button>
+          </div>
+        ) : reviewCandidates.length === 0 ? (
+          <p className="text-sm text-text-muted">검토할 후보가 없습니다.</p>
         ) : (
           <div className="grid gap-3">
-            <label className="text-sm">
-              후보
-              <select
-                className="mt-1 w-full"
-                value={candidateId}
-                onChange={(e) => setCandidateId(e.target.value)}
-              >
-                {(candidates.data?.items ?? []).map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    Released Task 후보 · {new Date(candidate.created_at).toLocaleDateString()}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              공개 업데이트
-              <textarea
-                className="mt-1 w-full"
+            <div className="text-sm">
+              <label htmlFor="public-update-candidate">후보</label>
+              <Select value={candidateId} onValueChange={setCandidateId}>
+                <SelectTrigger
+                  id="public-update-candidate"
+                  aria-label="후보"
+                  className="mt-1 w-full"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {reviewCandidates.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      Released Task 후보 · {formatDate(candidate.created_at)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5 text-sm">
+              <FieldLabel htmlFor="public-update-review-message">공개 업데이트</FieldLabel>
+              <Textarea
+                id="public-update-review-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                className="mt-1"
               />
-            </label>
-            <label className="text-sm">
-              Reporter-facing status
-              <select
-                className="mt-1 w-full"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ReporterFacingStatusEnum)}
+            </div>
+            <div className="text-sm">
+              <label htmlFor="public-update-reporter-status">{GLOSSARY.reporterFacingStatus}</label>
+              <Select
+                value={status || NO_STATUS}
+                onValueChange={(value) =>
+                  setStatus(value === NO_STATUS ? '' : (value as ReporterFacingStatusEnum))
+                }
               >
-                <option value="">상태 선택</option>
-                {STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {REPORTER_STATUS_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Dismiss reason
-              <input
-                className="mt-1 w-full"
+                <SelectTrigger
+                  id="public-update-reporter-status"
+                  aria-label={GLOSSARY.reporterFacingStatus}
+                  className="mt-1 w-full"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_STATUS}>상태 선택</SelectItem>
+                  {STATUSES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {REPORTER_STATUS_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5 text-sm">
+              <FieldLabel htmlFor="public-update-review-dismissal-reason">
+                {GLOSSARY.dismissReason}
+              </FieldLabel>
+              <Input
+                id="public-update-review-dismissal-reason"
                 value={dismissalReason}
                 onChange={(e) => setDismissalReason(e.target.value)}
+                className="mt-1"
               />
-            </label>
+            </div>
           </div>
         )}
         <DialogFooter>
@@ -178,16 +227,16 @@ export function PublicUpdateReviewModal({
             onClick={dismiss}
             disabled={!dismissalReason.trim() || resolve.isPending}
           >
-            Dismiss
+            {GLOSSARY.dismiss}
           </Button>
           <Button
             onClick={apply}
             disabled={!candidateId || !status || !message.trim() || resolve.isPending}
           >
-            Apply public update
+            {GLOSSARY.applyPublicUpdate}
           </Button>
-          <Button variant="ghost" onClick={close} disabled={resolve.isPending}>
-            취소
+          <Button variant="secondary" onClick={close} disabled={resolve.isPending}>
+            {GLOSSARY.cancel}
           </Button>
         </DialogFooter>
       </DialogContent>

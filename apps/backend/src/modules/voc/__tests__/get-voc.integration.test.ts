@@ -12,21 +12,20 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { randomUUID, uid } from '../../../test-support/ids.js';
+import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import {
-  SESSION_COOKIE_NAME,
   cleanupReadTestTables,
-  denyCapability,
-  grantCapability,
-  insertDevActor,
-  insertInternalComment,
-  insertMsDirectly,
-  insertPermissionDecisionsSeed,
   insertPublicUpdate,
-  insertReporterReply,
   insertVocDirectly,
-  loginAs,
-  randomUUID,
-  uid,
+} from '../../../test-support/voc-fixtures.js';
+import {
+  insertInternalComment,
+  insertPermissionDecisionsSeed,
+  insertReporterReply,
 } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -78,14 +77,22 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   // Helper: insert a VOC directly (bypasses rate limit on POST /vocs)
-  async function insertVoc(msId: string, title: string): Promise<{ id: string; updated_at: string }> {
+  async function insertVoc(
+    msId: string,
+    title: string,
+  ): Promise<{ id: string; updated_at: string }> {
     return insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, title);
   }
 
   // ── AC1: Full envelope shape ──────────────────────────────────────────────
 
   it('AC1: GET /vocs/:id returns full envelope with all top-level fields', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-full`, 'Full Envelope MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-full`,
+      'Full Envelope MS',
+    );
     const voc = await insertVoc(msId, 'Full Envelope VOC');
 
     const res = await app.inject({
@@ -121,8 +128,18 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('returns authorized same-MS peers only, capped and ordered in similar.items', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-similar`, 'Similar MS');
-    const otherMsId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-other`, 'Other MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-similar`,
+      'Similar MS',
+    );
+    const otherMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-other`,
+      'Other MS',
+    );
     const source = await insertVoc(msId, 'Similarity source');
     const peer1 = await insertVoc(msId, 'Peer one');
     const peer2 = await insertVoc(msId, 'Peer two');
@@ -130,42 +147,69 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     const peer4 = await insertVoc(msId, 'Peer four');
     await insertVoc(otherMsId, 'Other MS peer');
     const archived = await insertVoc(msId, 'Archived peer');
-    await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [archived.id]);
-    await dbHandle.pool.query(
-      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
-      [peer1.id, '2026-01-01T00:00:01Z'],
-    );
-    await dbHandle.pool.query(
-      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
-      [peer2.id, '2026-01-01T00:00:02Z'],
-    );
-    await dbHandle.pool.query(
-      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
-      [peer3.id, '2026-01-01T00:00:03Z'],
-    );
+    await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [
+      archived.id,
+    ]);
+    await dbHandle.pool.query(`update voc.vocs set created_at = $2::timestamptz where id = $1`, [
+      peer1.id,
+      '2026-01-01T00:00:01Z',
+    ]);
+    await dbHandle.pool.query(`update voc.vocs set created_at = $2::timestamptz where id = $1`, [
+      peer2.id,
+      '2026-01-01T00:00:02Z',
+    ]);
+    await dbHandle.pool.query(`update voc.vocs set created_at = $2::timestamptz where id = $1`, [
+      peer3.id,
+      '2026-01-01T00:00:03Z',
+    ]);
 
     const res = await app.inject({
-      method: 'GET', url: `/vocs/${source.id}`,
+      method: 'GET',
+      url: `/vocs/${source.id}`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ similar_count: number; similar: { items: Array<{ id: string; title: string }> } }>();
+    const body = res.json<{
+      similar_count: number;
+      similar: { items: Array<{ id: string; title: string }> };
+    }>();
     expect(body.similar_count).toBe(4);
     expect(body.similar.items).toHaveLength(3);
     expect(body.similar.items.map((item) => item.id)).toEqual([peer4.id, peer3.id, peer2.id]);
   });
 
   it('omits peer fields from an unscoped reporter-owned source VOC', async () => {
-    const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-a`, 'Scope A');
-    const msBId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-b`, 'Scope B');
-    const { id: actorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('similar-scope'));
+    const msAId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-scope-a`,
+      'Scope A',
+    );
+    const msBId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-scope-b`,
+      'Scope B',
+    );
+    const { id: actorId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('similar-scope'),
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, actorId, 'voc.read', msAId, adminActorId);
     const cookie = await loginAs(app, externalId);
-    const source = await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, actorId, 'Owned source outside read scope');
+    const source = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msBId,
+      actorId,
+      'Owned source outside read scope',
+    );
     await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, 'Hidden peer');
 
     const res = await app.inject({
-      method: 'GET', url: `/vocs/${source.id}`,
+      method: 'GET',
+      url: `/vocs/${source.id}`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(res.statusCode).toBe(200);
@@ -177,7 +221,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC2: next_reporter_states derived from transitions ───────────────────
 
   it('AC2: next_reporter_states derived from reporter_facing_status_transitions; received → allowed present', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-nrs`, 'NRS MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-nrs`,
+      'NRS MS',
+    );
     const voc = await insertVoc(msId, 'NRS VOC');
 
     const res = await app.inject({
@@ -198,7 +247,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC3: reporter_status_gate omitted in Slice 3 ─────────────────────────
 
   it('AC3: reporter_status_gate field not present in envelope (Slice 3)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rsg`, 'RSG MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-rsg`,
+      'RSG MS',
+    );
     const voc = await insertVoc(msId, 'RSG VOC');
 
     const res = await app.inject({
@@ -214,7 +268,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC4: conversation_timeline hybrid 30 ─────────────────────────────────
 
   it('AC4: 30 internal_comments → 30 inline + has_more=false (canTriage actor)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-conv30`, 'Conv30 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-conv30`,
+      'Conv30 MS',
+    );
     const voc = await insertVoc(msId, 'Conv30 VOC');
 
     for (let i = 0; i < 30; i++) {
@@ -239,7 +298,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC5: conversation_timeline hybrid 65 ─────────────────────────────────
 
   it('AC5: 65 internal_comments → 50 inline + has_more=true', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-conv65`, 'Conv65 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-conv65`,
+      'Conv65 MS',
+    );
     const voc = await insertVoc(msId, 'Conv65 VOC');
 
     for (let i = 0; i < 65; i++) {
@@ -264,7 +328,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC6: Visibility — reporter on own VOC ────────────────────────────────
 
   it('AC6: reporter on own VOC → FULL envelope; sees public_updates + own reporter_replies; NO internal_comments', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rep-vis`, 'Reporter Vis MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-rep-vis`,
+      'Reporter Vis MS',
+    );
     const voc = await insertVoc(msId, 'Reporter Vis VOC');
 
     await insertPublicUpdate(dbHandle, voc.id, adminActorId);
@@ -301,7 +370,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC7: Developer with voc.read AND voc.triage sees all 3 kinds ─────────
 
   it('AC7: developer with voc.read AND voc.triage sees all 3 conversation kinds', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-dev-tri`, 'Dev Triage MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-dev-tri`,
+      'Dev Triage MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac7'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
@@ -333,7 +407,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // no internal_comments. Previous code incorrectly showed all reporter_replies.
 
   it('AC8: developer with voc.read only (not reporter) → public_updates ONLY; NO reporter_replies, NO internal_comments (B2 fix)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-dev-read`, 'Dev Read MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-dev-read`,
+      'Dev Read MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac8'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
     const devCookie = await loginAs(app, externalId);
@@ -363,7 +442,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC8b: Reporter visibility — sees own reporter_replies only ───────────
 
   it('AC8b: reporter (isReporter=true, !canTriage) sees public_updates + own reporter_replies; NO internal', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rep-only`, 'Rep Only MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-rep-only`,
+      'Rep Only MS',
+    );
     const voc = await insertVoc(msId, 'Rep Only VOC');
 
     await insertPublicUpdate(dbHandle, voc.id, adminActorId);
@@ -392,10 +476,25 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('#337: reporter without voc.read or voc.triage receives no internal triage or peer fields', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-reporter`, 'Reporter Arm MS');
-    const { id: reporterActorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reporter'));
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-337-reporter`,
+      'Reporter Arm MS',
+    );
+    const { id: reporterActorId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('337-reporter'),
+    );
     const cookie = await loginAs(app, externalId);
-    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter arm VOC');
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterActorId,
+      'Reporter arm VOC',
+    );
     await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter arm peer');
 
     const res = await app.inject({
@@ -427,8 +526,17 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('#337: voc.read actor retains every internal triage and peer field', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-read`, 'Read Scope MS');
-    const { id: readerId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reader'));
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-337-read`,
+      'Read Scope MS',
+    );
+    const { id: readerId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('337-reader'),
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, readerId, 'voc.read', msId, adminActorId);
     const cookie = await loginAs(app, externalId);
     const voc = await insertVoc(msId, 'Read scope VOC');
@@ -453,11 +561,26 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('#337: reporter with voc.read retains the full envelope', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-reporter-read`, 'Reporter Read MS');
-    const { id: reporterActorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reporter-read'));
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-337-reporter-read`,
+      'Reporter Read MS',
+    );
+    const { id: reporterActorId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('337-reporter-read'),
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, reporterActorId, 'voc.read', msId, adminActorId);
     const cookie = await loginAs(app, externalId);
-    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter read VOC');
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterActorId,
+      'Reporter read VOC',
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -481,7 +604,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC9: Cross-MS Developer (no access) → 404 ────────────────────────────
 
   it('AC9: cross-MS developer (no read, no effective scope on this MS, not reporter) → 404 not_found.record', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cross-404`, 'Cross 404 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cross-404`,
+      'Cross 404 MS',
+    );
     const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac9'));
     const devCookie = await loginAs(app, externalId);
 
@@ -499,7 +627,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC10: Cross-MS with voc.triage grant → SUMMARY envelope ─────────────
 
   it('AC10: developer with voc.triage on MS (no voc.read) → 200 SUMMARY envelope with request_access', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-summary`, 'Summary MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-summary`,
+      'Summary MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac10'));
     // voc.triage but NOT voc.read → effectiveScope=MS, readScope=empty → SUMMARY
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
@@ -550,7 +683,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC12: ETag header format ──────────────────────────────────────────────
 
   it('AC12: GET /vocs/:id returns ETag header in W/"<iso>" format', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-etag`, 'ETag MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-etag`,
+      'ETag MS',
+    );
     const voc = await insertVoc(msId, 'ETag VOC');
 
     const res = await app.inject({
@@ -567,7 +705,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC13: similarity detail always bypasses conditional 304 ───────────────
 
   it('AC13: If-None-Match: <etag> → 200 because similarity is peer-derived', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304`, '304 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-304`,
+      '304 MS',
+    );
     const voc = await insertVoc(msId, '304 VOC');
 
     // First request — get ETag
@@ -594,7 +737,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC14: Stale If-None-Match → 200 + new etag ───────────────────────────
 
   it('AC14: stale If-None-Match → 200 + new envelope + new etag', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-stale-etag`, 'Stale ETag MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-stale-etag`,
+      'Stale ETag MS',
+    );
     const voc = await insertVoc(msId, 'Stale ETag VOC');
 
     const staleEtag = 'W/"1970-01-01T00:00:00.000Z"';
@@ -616,7 +764,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC15: permission_decisions.linkedFinding from seed fixture ────────────
 
   it('AC15: permission_decisions contains seed fixture envelope verbatim', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-pd-seed`, 'PD Seed MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-pd-seed`,
+      'PD Seed MS',
+    );
     const voc = await insertVoc(msId, 'PD Seed VOC');
 
     const seedEnvelope = {
@@ -640,7 +793,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC13b: multi-value If-None-Match is also ignored ─────────────────────
 
   it('AC13b: multi-value If-None-Match returns the current detail envelope', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-mv`, '304 MV MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-304-mv`,
+      '304 MV MS',
+    );
     const voc = await insertVoc(msId, '304 MV VOC');
 
     // First request — get ETag
@@ -667,7 +825,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('AC13c: wildcard If-None-Match returns the current detail envelope', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-wc`, '304 WC MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-304-wc`,
+      '304 WC MS',
+    );
     const voc = await insertVoc(msId, '304 WC VOC');
 
     const res = await app.inject({
@@ -685,7 +848,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   // ── AC16: SUMMARY envelope shape ─────────────────────────────────────────
 
   it('AC16: SUMMARY envelope only has id, display_id, primary_managed_system_id, reporter_facing_status, created_at, permission_decisions._self', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sum-shape`, 'Sum Shape MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-sum-shape`,
+      'Sum Shape MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac16'));
     // Only voc.triage → effectiveScope has MS; readScope does not
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
@@ -721,7 +889,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
   });
 
   it('AC17: SUMMARY explicit_deny returns blocked_not_requestable permission_decisions._self', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sum-deny`, 'Sum Deny MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-sum-deny`,
+      'Sum Deny MS',
+    );
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac17'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
     await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);

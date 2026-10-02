@@ -1,29 +1,22 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
-import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
-import {
-  Button,
-  Checkbox,
-  FieldLabel,
-  RadioGroup,
-  RadioGroupItem,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@fops/ui';
+import { FindingRequestTaskDraftHost, useFindingDetail } from '@/features/findings/public';
+import { RATING_BAND_LABELS, SURVEY_RESULT_KIND_LABELS } from '@/lib/copy/enum-labels';
+import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
+import { Button, EmptyState } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import { FilePlus } from 'lucide-react';
-import { useState } from 'react';
-import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
+import { useCallback, useEffect, useState } from 'react';
 import type { Survey } from '../../types';
+import { CreateFindingDraftPanel, excerptsByResponse } from './CreateFindingDraftPanel';
 
 export interface SurveyResultsSummaryProps {
   survey: Survey;
   results: SurveyResultDto;
+  followUpRead?: OutcomeFollowUpReadDto | null | undefined;
 }
 
 function questionPrompt(survey: Survey, questionId: string): string {
-  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? 'Question';
+  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? '질문';
 }
 
 function QuestionResult({
@@ -42,7 +35,9 @@ function QuestionResult({
         data-testid={`survey-result-suppressed-${result.question_id}`}
       >
         <p className="text-sm font-medium text-text-primary">Q{index + 1}</p>
-        <p className="mt-2 text-sm text-text-muted">Results are suppressed to protect anonymity.</p>
+        <p className="mt-2 text-sm text-text-muted">
+          익명 보호를 위해 이 질문의 결과는 숨겨집니다.
+        </p>
       </section>
     );
   }
@@ -52,15 +47,15 @@ function QuestionResult({
       <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
         <span>Q{index + 1}</span>
         <span className="rounded border border-border-subtle px-1.5 py-0.5 text-xs capitalize">
-          {result.kind}
+          {SURVEY_RESULT_KIND_LABELS[result.kind]}
         </span>
-        <span>{result.answer_count} responses</span>
+        <span>응답 {result.answer_count}건</span>
       </div>
       <h2 className="mt-2 text-base font-semibold text-text-primary">
         {questionPrompt(survey, result.question_id)}
       </h2>
       {result.kind === 'choice' && (
-        <ul className="mt-4 space-y-2" aria-label="Response distribution">
+        <ul className="mt-4 space-y-2" aria-label="응답 분포">
           {result.option_buckets.map((bucket) => (
             <li className="flex items-center justify-between gap-4 text-sm" key={bucket.key}>
               <span className="text-text-secondary">{bucket.label}</span>
@@ -70,10 +65,10 @@ function QuestionResult({
         </ul>
       )}
       {result.kind === 'rating' && (
-        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="Rating distribution">
+        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="평점 분포">
           {(['low', 'mid', 'high'] as const).map((band) => (
             <div className="rounded bg-surface-card p-3" key={band}>
-              <dt className="text-xs capitalize text-text-muted">{band}</dt>
+              <dt className="text-xs text-text-muted">{RATING_BAND_LABELS[band]}</dt>
               <dd className="mt-1 font-medium tabular-nums text-text-primary">
                 {result.distribution[band]}
               </dd>
@@ -84,7 +79,7 @@ function QuestionResult({
       {result.kind === 'text' && (
         <div className="mt-4 space-y-2">
           {result.excerpts.length === 0 ? (
-            <p className="text-sm text-text-muted">No approved excerpts are available.</p>
+            <p className="text-sm text-text-muted">승인된 발췌가 없습니다.</p>
           ) : (
             result.excerpts.map((excerpt) => (
               <blockquote
@@ -101,156 +96,32 @@ function QuestionResult({
   );
 }
 
-type ResponseExcerpt = { id: string; text: string; response_id: string };
-
-function excerptsByResponse(results: SurveyResultDto): ResponseExcerpt[][] {
-  const grouped = new Map<string, ResponseExcerpt[]>();
-  for (const question of results.questions) {
-    if (question.visibility !== 'visible') continue;
-    if (question.kind !== 'text') continue;
-    for (const excerpt of question.excerpts) {
-      if (!excerpt.response_id) continue;
-      const group = grouped.get(excerpt.response_id) ?? [];
-      group.push({ ...excerpt, response_id: excerpt.response_id });
-      grouped.set(excerpt.response_id, group);
-    }
-  }
-  return [...grouped.values()];
-}
-
-function CreateFindingDraftPanel({
-  surveyId,
-  groups,
+// Mounted only while a Finding is selected, so the results page needs no
+// QueryClient unless a Request Task action is actually used.
+function SelectedFindingRequest({
+  findingId,
+  onClose,
+  onLoadError,
+  onReady,
 }: {
-  surveyId: string;
-  groups: ResponseExcerpt[][];
+  findingId: string;
+  onClose: () => void;
+  onLoadError: (findingId: string) => void;
+  onReady: (findingId: string) => void;
 }) {
-  const [selection, setSelection] = useState<{ responseId?: string; excerptIds: string[] }>({
-    excerptIds: [],
-  });
-  const [severity, setSeverity] = useState<FindingSeverity>('medium');
-  const mutation = useCreateFindingFromSurveyResponse(surveyId);
-  const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
-  const selectedExcerptIds = selection.excerptIds.filter((id) =>
-    selectedGroup?.some((excerpt) => excerpt.id === id),
-  );
+  const finding = useFindingDetail(findingId);
+  const loaded = finding.data?.id === findingId ? finding.data : undefined;
 
-  function selectResponse(nextResponseId: string) {
-    setSelection({ responseId: nextResponseId, excerptIds: [] });
-  }
+  useEffect(() => {
+    if (loaded) onReady(findingId);
+  }, [findingId, loaded, onReady]);
 
-  function setExcerptSelected(id: string, checked: boolean) {
-    setSelection((current) => ({
-      ...current,
-      excerptIds: checked
-        ? [...current.excerptIds, id]
-        : current.excerptIds.filter((excerptId) => excerptId !== id),
-    }));
-  }
-
-  function submit() {
-    if (!selectedGroup || selectedExcerptIds.length === 0) return;
-    const first = selectedGroup[0];
-    if (!first) return;
-    mutation.mutate({
-      responseId: first.response_id,
-      body: { severity, approved_excerpt_ids: selectedExcerptIds },
-    });
-  }
+  useEffect(() => {
+    if (finding.isError && !finding.isFetching && !loaded) onLoadError(findingId);
+  }, [finding.isError, finding.isFetching, findingId, loaded, onLoadError]);
 
   return (
-    <section
-      className="mt-3 space-y-3 border-t border-border-subtle pt-3"
-      data-testid="survey-create-finding-draft"
-    >
-      <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
-      <fieldset className="space-y-2">
-        <legend className="text-sm text-text-secondary" id="survey-finding-response-label">
-          Choose a response
-        </legend>
-        <RadioGroup
-          aria-labelledby="survey-finding-response-label"
-          onValueChange={selectResponse}
-          value={selection.responseId ?? ''}
-        >
-          {groups.map((group, index) => {
-            const first = group[0];
-            if (!first) return null;
-            return (
-              <label
-                className="flex items-center gap-2 text-sm text-text-secondary"
-                htmlFor={`survey-finding-response-${first.response_id}`}
-                key={first.response_id}
-              >
-                <RadioGroupItem
-                  data-testid={`survey-finding-response-${index}`}
-                  id={`survey-finding-response-${first.response_id}`}
-                  value={first.response_id}
-                />
-                Response {index + 1}
-              </label>
-            );
-          })}
-        </RadioGroup>
-      </fieldset>
-      {selectedGroup && (
-        <fieldset className="space-y-2">
-          <legend className="text-sm text-text-secondary">Approved excerpts</legend>
-          {selectedGroup.map((excerpt) => (
-            <label
-              className="flex gap-2 text-sm text-text-secondary"
-              htmlFor={`survey-finding-excerpt-${excerpt.id}`}
-              key={excerpt.id}
-            >
-              <Checkbox
-                checked={selectedExcerptIds.includes(excerpt.id)}
-                data-testid={`survey-finding-excerpt-${excerpt.id}`}
-                id={`survey-finding-excerpt-${excerpt.id}`}
-                onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
-              />
-              <span>{excerpt.text}</span>
-            </label>
-          ))}
-        </fieldset>
-      )}
-      <FieldLabel
-        className="block text-sm text-text-secondary"
-        htmlFor="survey-finding-severity"
-        id="survey-finding-severity-label"
-      >
-        Severity
-      </FieldLabel>
-      <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
-        <SelectTrigger
-          aria-labelledby="survey-finding-severity-label"
-          className="mt-1"
-          data-testid="survey-finding-severity"
-          id="survey-finding-severity"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="critical">Critical</SelectItem>
-        </SelectContent>
-      </Select>
-      {mutation.error && (
-        <p className="text-sm text-text-danger" role="alert">
-          {mutation.error.message}
-        </p>
-      )}
-      <Button
-        data-testid="survey-create-finding-submit"
-        disabled={!selectedGroup || selectedExcerptIds.length === 0}
-        loading={mutation.isPending}
-        onClick={submit}
-        type="button"
-      >
-        Create selected Finding
-      </Button>
-    </section>
+    <FindingRequestTaskDraftHost findingId={findingId} finding={loaded} open onClose={onClose} />
   );
 }
 
@@ -264,7 +135,22 @@ function NextActions({
   surveyId: string;
 }) {
   const [draftOpen, setDraftOpen] = useState(false);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
+  const [readyFindingId, setReadyFindingId] = useState<string | null>(null);
+  const [loadErrorFindingId, setLoadErrorFindingId] = useState<string | null>(null);
   const groups = excerptsByResponse(results);
+
+  const handleReady = useCallback((findingId: string) => setReadyFindingId(findingId), []);
+  const handleLoadError = useCallback((findingId: string) => {
+    setLoadErrorFindingId(findingId);
+    setSelectedFindingId(null);
+  }, []);
+  const handleClose = useCallback(() => {
+    setSelectedFindingId(null);
+    setReadyFindingId(null);
+    setLoadErrorFindingId(null);
+  }, []);
+
   if (actions.length === 0) return null;
 
   return (
@@ -272,27 +158,29 @@ function NextActions({
       className="sticky top-4 self-start rounded-md border border-border-subtle bg-surface-raised p-4"
       data-testid="survey-result-next-actions"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-        Follow-up actions
-      </h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">후속 조치</h2>
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
-          const label = action.id === 'create_finding' ? 'Create Finding' : 'Request Task';
+          const label = action.id === 'create_finding' ? 'Finding 생성' : 'Task 요청';
+          const actionKey =
+            action.id === 'request_task'
+              ? `${action.id}:${action.source_finding_id ?? ''}`
+              : action.id;
           if (action.availability === 'blocked_requestable') {
             if (!action.requestable_permission) {
               return (
-                <div className="space-y-1" data-action-id={action.id} key={action.id}>
+                <div className="space-y-1" data-action-id={action.id} key={actionKey}>
                   <Button disabled type="button" variant="secondary">
-                    Request access
+                    권한 요청
                   </Button>
                   <p className="text-sm text-text-muted">
-                    Access details are unavailable, so this request cannot be submitted.
+                    접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.
                   </p>
                 </div>
               );
             }
             return (
-              <div data-action-id={action.id} key={action.id}>
+              <div data-action-id={action.id} key={actionKey}>
                 <RequestAccessButton
                   capability={action.requestable_permission.permission}
                   managedSystemId={action.requestable_permission.managed_system_id}
@@ -307,7 +195,7 @@ function NextActions({
               <div
                 className="space-y-1"
                 data-testid="survey-result-action-create-finding"
-                key={action.id}
+                key={actionKey}
               >
                 <Button
                   className="w-full justify-start text-left"
@@ -322,17 +210,47 @@ function NextActions({
                 </Button>
                 {unavailable && (
                   <p className="text-sm text-text-muted">
-                    No approved excerpts are available for a response you can access.
+                    접근 가능한 응답에 승인된 발췌가 없습니다.
                   </p>
                 )}
                 {draftOpen && <CreateFindingDraftPanel groups={groups} surveyId={surveyId} />}
               </div>
             );
           }
+          const actionLoading =
+            selectedFindingId === action.source_finding_id &&
+            readyFindingId !== action.source_finding_id;
           return (
-            <Button data-action-id={action.id} key={action.id} type="button" variant="secondary">
-              {label}
-            </Button>
+            <div className="space-y-1" key={actionKey}>
+              <Button
+                data-action-id={action.id}
+                disabled={actionLoading || readyFindingId === action.source_finding_id}
+                loading={actionLoading}
+                onClick={() => {
+                  setLoadErrorFindingId(null);
+                  setReadyFindingId(null);
+                  setSelectedFindingId(action.source_finding_id);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                {label}
+              </Button>
+              {loadErrorFindingId === action.source_finding_id && (
+                <p className="text-sm text-text-danger" role="alert">
+                  Finding을 불러오지 못했습니다.
+                </p>
+              )}
+              {selectedFindingId === action.source_finding_id && (
+                <SelectedFindingRequest
+                  findingId={action.source_finding_id}
+                  key={action.source_finding_id}
+                  onClose={handleClose}
+                  onLoadError={handleLoadError}
+                  onReady={handleReady}
+                />
+              )}
+            </div>
           );
         })}
       </div>
@@ -340,41 +258,92 @@ function NextActions({
   );
 }
 
-export function SurveyResultsSummary({ survey, results }: SurveyResultsSummaryProps) {
+export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyResultsSummaryProps) {
   // The aggregate DTO has no outcome score or poor-result flag. Keep this
   // annotation tied to backend-provided follow-up availability rather than
   // deriving a poor outcome from response distributions.
-  const hasOutcomeFollowUp = survey.type === 'outcome' && results.next_actions.length > 0;
-
+  const hasOutcomeFollowUp =
+    survey.type === 'outcome' &&
+    (followUpRead === undefined
+      ? results.next_actions.length > 0
+      : followUpRead?.follow_up_needed === true);
+  // The route renders SurveyResultHeader above this component for every survey type and always
+  // passes followUpRead (null when not applicable). `undefined` only happens in direct-render
+  // tests, which keep the in-body title below.
+  const directRender = followUpRead === undefined;
   return (
-    <main className="mx-auto max-w-6xl p-6" data-testid="survey-results-summary">
-      <header className="border-b border-border-subtle pb-5">
-        <p className="text-sm text-text-muted">{survey.display_id}</p>
-        <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          Question summaries and response distributions
-        </p>
-        {results.identity_protected && (
-          <p className="mt-3 text-sm text-text-muted">Identity protected responses</p>
-        )}
-        {hasOutcomeFollowUp && (
-          <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
-            Outcome follow-up is available
-          </p>
-        )}
-      </header>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="space-y-4">
-          {results.questions.map((result, index) => (
-            <QuestionResult
-              index={index}
-              key={result.question_id}
-              result={result}
-              survey={survey}
-            />
-          ))}
+    <main
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      data-testid="survey-results-summary"
+    >
+      <div className="mx-auto w-full max-w-6xl p-6">
+        <header className="border-b border-border-subtle pb-5">
+          {directRender && (
+            <>
+              <p className="text-sm text-text-muted">{survey.display_id}</p>
+              <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
+            </>
+          )}
+          <p className="mt-2 text-sm text-text-muted">질문 요약과 응답 분포입니다.</p>
+          {results.identity_protected && (
+            <p className="mt-3 text-sm text-text-muted">신원 보호 응답</p>
+          )}
+          {hasOutcomeFollowUp &&
+            (followUpRead === undefined ? (
+              // Legacy direct-render branch keeps the develop-era Summary test green.
+              <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
+                후속 조치 검토 사용 가능
+              </p>
+            ) : (
+              <div
+                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary"
+                data-testid="outcome-follow-up-callout"
+              >
+                <div>
+                  <p className="font-medium">후속 조치가 필요한 저조한 응답이 있습니다</p>
+                  {followUpRead?.personal_access !== true && (
+                    <p className="mt-1 text-text-muted">
+                      개인 응답 열람 권한이 있어야 응답별로 검토할 수 있습니다.
+                    </p>
+                  )}
+                </div>
+                {followUpRead?.personal_access === true && (
+                  <Link
+                    className="shrink-0 font-medium text-accent-primary underline-offset-2 hover:underline"
+                    params={{ surveyId: survey.id }}
+                    to="/surveys/$surveyId/follow-up"
+                  >
+                    후속 조치 검토
+                  </Link>
+                )}
+              </div>
+            ))}
+        </header>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="space-y-4">
+            {results.response_state === 'none' ? (
+              <EmptyState
+                body={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다.`}
+                title="아직 응답이 없습니다"
+              />
+            ) : results.response_state === 'below_threshold' ? (
+              <EmptyState
+                body={`익명 보호를 위해 ${results.anonymity_threshold}건 미만일 때는 집계와 정확한 응답 수를 숨깁니다.`}
+                title={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다`}
+              />
+            ) : (
+              results.questions.map((result, index) => (
+                <QuestionResult
+                  index={index}
+                  key={result.question_id}
+                  result={result}
+                  survey={survey}
+                />
+              ))
+            )}
+          </div>
+          <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
         </div>
-        <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
       </div>
     </main>
   );

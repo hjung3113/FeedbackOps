@@ -102,7 +102,7 @@ export function ComposerPublicPreview({
     <div className="flex flex-col gap-3">
       {/* Disclaimer */}
       <span className="text-xs text-text-muted">
-        Reporter 가 이 화면을 받습니다. 내부 식별자·@멘션은 자동으로 가려집니다.
+        제출자가 이 화면을 받습니다. 내부 식별자·@멘션은 자동으로 가려집니다.
       </span>
 
       {/* Preview card — prototype: padding 14, bg pitch-black, inset border */}
@@ -146,7 +146,7 @@ export function ComposerPublicPreview({
         <Shield size={10} aria-hidden="true" />
         {isStatusChanging ? (
           <span>
-            Reporter-facing 상태가 &ldquo;{REPORTER_STATUS_LABELS[voc.reporter_facing_status]}
+            공개 상태가 &ldquo;{REPORTER_STATUS_LABELS[voc.reporter_facing_status]}
             &rdquo; → &ldquo;{REPORTER_STATUS_LABELS[nextStatus]}&rdquo; 로 변경됩니다.
           </span>
         ) : (

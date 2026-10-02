@@ -21,7 +21,13 @@ from score thresholds alone. Recommendation reasons must use domain-safe summary
 text and must not expose hidden response detail.
 
 Survey Results returns permission-filtered `next_actions`: `create_finding` is
-always present. `request_task` for Findings derived from Survey Responses is deferred to issue #239.
+always present. It looks up Survey-derived Findings connected through an active
+`generated_finding` link to responses represented by approved excerpts, then
+returns one `request_task` action per Finding the actor can read. That action
+may have `availability: 'blocked_requestable'` with `requestable_permission`
+when access can be requested. The client loads the Finding by
+`source_finding_id` and submits the request through
+`POST /findings/:id/request-task`.
 
 `attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
 exist in the actor's effective Managed System scope, the actor may see
@@ -58,6 +64,18 @@ workflow capability, a non-empty reason, managed_system_id, source object,
 previous recovery state, and affected recovery item ids. Reversal uses a
 separate audited reopen-follow-up action that supersedes the decision and
 triggers recovery item re-evaluation.
+
+For `POST /survey-responses/:id/mark-no-follow-up` and
+`POST /survey-responses/:id/reopen-follow-up` (ADR-0055), these failure codes
+are carried as `detail.failure_code` on `409 conflict.stale_write`. The two
+commands have separate preconditions. Mark requires a subject still
+classifiable as a poor outcome with an `open` resolution:
+`action_no_longer_available` when it is not poor (or reopen finds no current
+`no_follow_up` row) and `recovery_item_resolved` when a qualifying Finding or
+a current decision is already in force. Reopen checks only the current
+decision row — it does not re-run the classifier — and after it the response
+re-enters the queue only if it is still poor and above the threshold with no
+qualifying Finding.
 Undoing Survey evidence attachment detaches or revokes the entity_link through a
 separate audited action. It must not hard-delete the Evidence Highlight or erase
 canonical link history.

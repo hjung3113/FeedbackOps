@@ -157,6 +157,24 @@ export async function updateTaskStatus(
   return mapTaskRow(row);
 }
 
+// #514 B1b — the assign command writes milestone_id and updated_at only.
+export async function updateTaskMilestone(
+  tx: Tx,
+  input: { workspaceId: string; taskId: string; milestoneId: string | null },
+): Promise<TaskRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE task.tasks
+       SET milestone_id = ${input.milestoneId},
+           updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')
+     WHERE id = ${input.taskId}
+       AND workspace_id = ${input.workspaceId}
+     RETURNING ${TASK_SELECT}
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateTaskMilestone returned no row');
+  return mapTaskRow(row);
+}
+
 export async function insertTaskComment(
   tx: Tx,
   input: {
@@ -242,6 +260,8 @@ export async function listTasksByWorkspace(
     status?: TaskStatus;
     assigneeActorId?: string;
     managedSystemId?: string;
+    publicUpdate?: 'missing';
+    milestoneId?: string;
   },
 ): Promise<TaskRow[]> {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
@@ -252,6 +272,47 @@ export async function listTasksByWorkspace(
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
   }
+  // Gap side of countReleasedTasksWithPublicUpdate (dashboard/repo.ts):
+  // released, in that denominator, and not in that numerator. Do not import it.
+  if (input.publicUpdate === 'missing') {
+    predicates.push(sql`
+      status = 'released'
+      AND EXISTS (
+        SELECT 1
+        FROM core.entity_links link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM core.entity_links link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        JOIN voc.voc_public_updates public_update
+          ON public_update.voc_id = voc.id
+         AND public_update.skip_public_update = false
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )
+    `);
+  }
+  if (input.milestoneId !== undefined) {
+    predicates.push(sql`milestone_id = ${input.milestoneId}`);
+  }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT ${TASK_SELECT}
       FROM task.tasks
@@ -259,6 +320,54 @@ export async function listTasksByWorkspace(
      ORDER BY updated_at DESC, id DESC
   `);
   return result.rows.map(mapTaskRow);
+}
+export interface MilestoneTaskCounts {
+  released_done: number;
+  in_flight: number;
+  queued: number;
+  total: number;
+}
+
+// #514 B1c — one grouped child-count query for a page of Milestone ids.
+// Buckets: released_done = done + released; in_flight = doing + review +
+// reopened (counting reopened as in flight is the design §7 item 4
+// proposal); queued = backlog + todo; total = child count. An empty
+// Milestone is omitted by GROUP BY; the caller fills zeros.
+export async function countTasksByMilestone(
+  db: Db | Tx,
+  input: { workspaceId: string; milestoneIds: string[] },
+): Promise<Map<string, MilestoneTaskCounts>> {
+  const counts = new Map<string, MilestoneTaskCounts>();
+  if (input.milestoneIds.length === 0) return counts;
+  const result = await (db as Db).execute<{
+    milestone_id: string;
+    released_done: number;
+    in_flight: number;
+    queued: number;
+    total: number;
+  }>(sql`
+    SELECT milestone_id,
+           COUNT(*) FILTER (WHERE status IN ('done', 'released'))::int AS released_done,
+           COUNT(*) FILTER (WHERE status IN ('doing', 'review', 'reopened'))::int AS in_flight,
+           COUNT(*) FILTER (WHERE status IN ('backlog', 'todo'))::int AS queued,
+           COUNT(*)::int AS total
+      FROM task.tasks
+     WHERE workspace_id = ${input.workspaceId}
+       AND milestone_id IN (${sql.join(
+         input.milestoneIds.map((id) => sql`${id}`),
+         sql`, `,
+       )})
+     GROUP BY milestone_id
+  `);
+  for (const row of result.rows) {
+    counts.set(row.milestone_id, {
+      released_done: Number(row.released_done),
+      in_flight: Number(row.in_flight),
+      queued: Number(row.queued),
+      total: Number(row.total),
+    });
+  }
+  return counts;
 }
 
 export interface ResolvedTaskSource {
@@ -279,10 +388,12 @@ export async function resolveTaskSource(
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       tr.id AS task_request_id,
+      tr.display_id AS task_request_display_id,
       tr.status AS task_request_status,
       tr.source_type AS task_request_source_type,
       tr.source_id AS task_request_source_id,
       f.id AS finding_id,
+      f.display_id AS finding_display_id,
       f.title AS finding_title,
       f.summary AS finding_summary,
       f.evidence_count AS finding_evidence_count,
@@ -310,12 +421,14 @@ export async function resolveTaskSource(
   const source: TaskDetailSource = {
     task_request: {
       id: row.task_request_id as string,
+      display_id: row.task_request_display_id as string,
       status: row.task_request_status as NonNullable<TaskDetailSource['task_request']>['status'],
     },
   };
   if (row.finding_id) {
     source.finding = {
       id: row.finding_id as string,
+      display_id: row.finding_display_id as string,
       title: row.finding_title as string,
       summary: row.finding_summary as string,
       evidence_count: Number(row.finding_evidence_count),

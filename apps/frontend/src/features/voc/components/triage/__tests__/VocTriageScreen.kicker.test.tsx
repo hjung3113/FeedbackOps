@@ -8,6 +8,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,8 +27,10 @@ vi.mock('sonner', () => ({
   },
 }));
 
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
-import { VocTriageScreen } from '../VocTriageScreen';
+import { type TriageTab, VocTriageScreen } from '../VocTriageScreen';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-kicker-001',
@@ -48,6 +51,15 @@ const MOCK_VOC: VocListItem = {
   attachment_count: 0,
 };
 
+const PINNED_OUT_OF_TAB_VOC: VocListItem = {
+  ...MOCK_VOC,
+  id: 'voc-kicker-pinned',
+  display_id: 'VOC-K-PINNED',
+  title: '이미 분류된 고정 VOC',
+  triage_state: 'triaged',
+  owner_user_id: '00000000-0000-0000-0000-000000000011',
+};
+
 function Wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -55,7 +67,98 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+function ControlledTriageScreen() {
+  const [activeTab, setActiveTab] = useState<TriageTab>('unassigned');
+  return (
+    <VocTriageScreen
+      items={[MOCK_VOC]}
+      selectedId={MOCK_VOC.id}
+      activeTab={activeTab}
+      onSelectVoc={vi.fn()}
+      onTabChange={setActiveTab}
+    />
+  );
+}
+
 describe('VocTriageScreen — V1 inline kicker', () => {
+  it('associates each selected tab with the queue panel and end-aligns the strip', () => {
+    render(
+      <Wrapper>
+        <ControlledTriageScreen />
+      </Wrapper>,
+    );
+
+    const unassignedTab = screen.getByRole('tab', { name: /미배정/ });
+    let panel = screen.getByRole('tabpanel');
+    const viewport = screen.getByRole('tablist').closest('[data-list-toolbar-tabs]');
+    expect(viewport?.firstElementChild).toHaveClass('ml-auto');
+    expect(unassignedTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(unassignedTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', unassignedTab.id);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /높음/ }));
+
+    const highTab = screen.getByRole('tab', { name: /높음/ });
+    panel = screen.getByRole('tabpanel');
+    expect(highTab).toHaveAttribute('aria-selected', 'true');
+    expect(highTab).toHaveAttribute('aria-controls', panel.id);
+    expect(document.getElementById(highTab.getAttribute('aria-controls') ?? '')).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', highTab.id);
+  });
+
+  it('renders independently supplied navigation counts on both supported tabs', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC, PINNED_OUT_OF_TAB_VOC]}
+          selectedId={PINNED_OUT_OF_TAB_VOC.id}
+          activeTab="unassigned"
+          queueTotal={7}
+          unassignedTabCount={1}
+          highTabCount={3}
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /높음 3/ })).toBeInTheDocument();
+  });
+
+  it('uses the shared untriaged label for the triage tab', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByRole('tab', { name: TRIAGE_STATE_LABELS.untriaged })).toBeInTheDocument();
+  });
+
+  it('uses the sidebar labels for the Unassigned and High severity tabs', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="unassigned"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.unassigned })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: VOC_TRIAGE_TAB_LABELS.high })).toBeInTheDocument();
+  });
+
   it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {
     render(
       <Wrapper>
@@ -91,7 +194,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     // It renders as text with data-testid="triage-kicker-console".
     const consoleLabel = screen.getByTestId('triage-kicker-console');
     expect(consoleLabel).toBeInTheDocument();
-    expect(consoleLabel.textContent).toBe('Console');
+    expect(consoleLabel.textContent).toBe('콘솔');
   });
 
   it('renders "Triage" kicker name in the toolbar', () => {
@@ -169,7 +272,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
 
     // Stage a severity so the confirm button enables, then confirm to trigger
     // the optimistic remove that drives the processed count.
-    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /높음/ }));
     fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
 
     const count = screen.getByTestId('triage-processed-count');

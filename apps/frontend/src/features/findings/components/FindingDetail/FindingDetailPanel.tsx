@@ -2,7 +2,9 @@
 // States: loading skeleton → not-found → permission-blocked → full detail.
 // Mirrors VocDetailPanel structure per domain-module-boundaries §Frontend Boundary Rules.
 
-import { Button, EmptyState, PermissionBlockedPanel, Skeleton } from '@fops/ui';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { Button, DetailPanelHeader, EmptyState, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import type * as React from 'react';
 import { useFindingDetail } from '../../hooks/useFindingDetail';
@@ -12,6 +14,28 @@ import { FullFindingDetail } from './FullFindingDetail';
 
 export interface FindingDetailPanelProps {
   findingId: string;
+  headerExtras?: React.ReactNode;
+}
+
+function FindingPanelLayout({
+  id,
+  headerExtras,
+  children,
+}: {
+  id?: string;
+  headerExtras: React.ReactNode | undefined;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-surface-detail">
+      <DetailPanelHeader
+        kind="finding"
+        {...(id !== undefined ? { id } : {})}
+        {...(headerExtras !== undefined ? { extras: headerExtras } : {})}
+      />
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
 }
 
 // ── Loading skeleton ─────────────────────────────────────────────────────────
@@ -41,65 +65,96 @@ function FindingNotFound(): React.ReactElement {
       title="Finding을 찾을 수 없습니다."
       body="해당 Finding은 삭제되었거나 접근 권한이 없습니다."
       action={
-        <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/vocs' })}>
-          VOC 목록으로
+        <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/findings' })}>
+          Findings 목록으로
         </Button>
       }
       className="px-6"
     />
   );
 }
+
+type FindingDetailErrorState = 'not-found' | 'blocked' | 'error';
+
+function classifyFindingDetailError(error: unknown): FindingDetailErrorState {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'not_found.record') return 'not-found';
+  if (code === 'permission.denied') return 'blocked';
+  return 'error';
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
-export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): React.ReactElement {
-  const { data, isLoading, isError, error } = useFindingDetail(findingId);
+export function FindingDetailPanel({
+  findingId,
+  headerExtras,
+}: FindingDetailPanelProps): React.ReactElement {
+  const { data, isLoading, isError, isSuccess, isFetching, error } = useFindingDetail(findingId);
+  useDocumentTitle(
+    isSuccess && !isFetching && data?.id === findingId
+      ? formatRecordDocumentTitle({ displayId: data.display_id, title: data.title })
+      : null,
+  );
 
   // 1. Loading
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full overflow-y-auto">
-        <div className="h-12 border-b border-border-subtle flex items-center px-6">
-          <Skeleton className="h-4 w-32" />
+      <FindingPanelLayout headerExtras={headerExtras}>
+        <div className="h-full overflow-y-auto">
+          <FindingDetailSkeleton />
         </div>
-        <FindingDetailSkeleton />
-      </div>
+      </FindingPanelLayout>
     );
   }
 
   // 2. Error
   if (isError) {
-    const code = (error as { code?: string } | null)?.code;
-    if (code === 'not_found.record') {
-      return <FindingNotFound />;
+    const errorState = classifyFindingDetailError(error);
+    if (errorState === 'not-found') {
+      return (
+        <FindingPanelLayout headerExtras={headerExtras}>
+          <FindingNotFound />
+        </FindingPanelLayout>
+      );
     }
     // permission.denied → finding.read blocked
-    if (code === 'permission.denied') {
+    if (errorState === 'blocked') {
       return (
-        <div className="flex flex-col h-full">
-          <div className="h-12 border-b border-border-subtle flex items-center px-6">
-            <span className="text-sm font-medium text-text-primary">Finding 상세</span>
-          </div>
-          <div className="flex-1 flex items-center justify-center p-6">
+        <FindingPanelLayout headerExtras={headerExtras}>
+          <div className="flex h-full items-center justify-center p-6">
             <PermissionBlockedPanel
               state="denied"
               category="Finding 상세"
-              reason="finding.read 권한이 없습니다. 해당 Managed System의 Developer 이상 권한이 필요합니다."
+              reason={PERMISSION_BLOCKED_REASONS.findingDetail}
             />
           </div>
-        </div>
+        </FindingPanelLayout>
       );
     }
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <p className="text-sm text-feedback-error">데이터를 불러오지 못했습니다.</p>
-      </div>
+      <FindingPanelLayout headerExtras={headerExtras}>
+        <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
+          <p className="text-sm text-text-danger">데이터를 불러오지 못했습니다.</p>
+        </div>
+      </FindingPanelLayout>
     );
   }
 
   if (!data) {
-    return <FindingNotFound />;
+    return (
+      <FindingPanelLayout headerExtras={headerExtras}>
+        <FindingNotFound />
+      </FindingPanelLayout>
+    );
   }
 
   // 3. Full detail
-  return <FullFindingDetail finding={data} />;
+  return (
+    <FindingPanelLayout
+      {...(data.id === findingId ? { id: data.display_id } : {})}
+      headerExtras={headerExtras}
+    >
+      <FullFindingDetail key={data.id} finding={data} />
+    </FindingPanelLayout>
+  );
 }

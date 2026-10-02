@@ -48,6 +48,12 @@ auth and permission: Admin or Developer. Admin sees all Task Requests in the
   workspace. Developer rows are filtered per Task Request by `finding.manage`
   on `primary_managed_system_id`.
 sort: created_at DESC
+source projection: when an active `requested_task` link exists, `source`
+  includes its type, id, relation, and link id plus the source `display_id`
+  and `title`; Finding sources also include `evidence_count`. VOC `display_id`
+  and `title` are included for the Reporter or when the deny-first `voc.read`
+  check allows the actor to read that VOC, including for Admins; otherwise those
+  summary keys are omitted. A missing active source link omits `source`.
 ```
 
 Decision endpoints:
@@ -112,6 +118,9 @@ validation errors:
   - unknown or cross-workspace Analytics Area: 404 not_found.record
   - Analytics Area on another Managed System: 422 validation.failed with out_of_scope on analytics_area_id
   - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
+  - unknown or cross-workspace Milestone: 404 not_found.record
+  - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
+  - unknown or cross-workspace assignee_actor_id: 404 not_found.record
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
@@ -149,6 +158,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 query:
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
+  milestone_id optional uuid
 response body: { items: TaskDto[] }
 auth and permission: Admin or Developer. Admin sees all workspace Tasks.
   Developer rows are filtered by finding.manage on primary_managed_system_id.
@@ -164,8 +174,8 @@ auth and permission: Admin or Developer with finding.manage on the Task
   primary_managed_system_id. Admin bypass follows GET /tasks.
 source resolution:
   - source = null when source_task_request_id is null
-  - source.task_request = { id, status } when source_task_request_id resolves
-  - source.finding = { id, title, summary, evidence_count } via active
+  - source.task_request = { id, display_id, status } when source_task_request_id resolves
+  - source.finding = { id, display_id, title, summary, evidence_count } via active
     (finding, task_request, requested_task) when present
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
     by the FE: allowed = { visibility_state, id, display_id, title };
@@ -178,8 +188,8 @@ errors:
   - User or Developer outside Managed System scope: 403 permission.denied
 ```
 
-Standalone `POST /tasks` is not yet implemented even though standalone Tasks
-are a valid nullable-source data shape.
+Standalone `POST /tasks` is not yet implemented even though standalone Tasks are
+a valid nullable-source data shape.
 
 ## Task Request Create From VOC / VOC Cluster Contract
 
@@ -220,7 +230,6 @@ idempotency behavior: Idempotency-Key required; hash includes body, source id,
 
 ```text
 GET /task-requests
-GET /task-requests/:id
 POST /task-requests/:id/approve
 POST /task-requests/:id/reject
 POST /task-requests/:id/request-more-evidence
@@ -229,9 +238,10 @@ POST /task-requests/:id/link-task
 
 GET /tasks
 GET /tasks/:id
+PATCH /tasks/:id
 GET /tasks/:id/comments
 POST /tasks/:id/comments
-POST /tasks    # not implemented
+POST /tasks/:id/milestone
 ```
 
 ## Progress notes
@@ -380,3 +390,21 @@ Task Request is not independently created through `POST /task-requests` as of
 Slice 6. It is created only through source transition routes:
 `POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
 `POST /voc-clusters/:id/request-task`.
+
+## POST /tasks/:id/milestone — Task milestone assign (issue #514 B1b)
+
+| Aspect | Contract |
+|---|---|
+| Purpose | Assign a Milestone to a Task, or unassign it. |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Body | `{ milestone_id: uuid \| null }`; `.strict()` (zod). `null` unassigns. |
+| Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching the status PATCH authority. |
+| Milestone scope | Unknown or other-workspace Milestone → 404 `not_found.record`. Milestone on another Managed System → 422 `validation.failed`, `out_of_scope` on `milestone_id`. The check goes through the milestones module's `lockMilestone`; the command writes no entity link. |
+| Milestone status | ADR-0050 Decision 5: Milestone status is not consulted. Existence, workspace, and Managed System checks stay; a `released` Milestone in the caller's workspace on the Task's Managed System is a successful assign. |
+| Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
+| Service ordering | `SELECT FOR UPDATE task → permission check → If-Match compare → lockMilestone scope check → UPDATE milestone_id + updated_at → audit emit`. |
+| Writes | `task.tasks.milestone_id` and `updated_at` only. No Task status change, no status_change comment, no entity link. |
+| Response | 200 `TaskDto`. An idempotent replay returns the stored first response. Missing task → 404 `not_found.record`. |
+| Audit event | `task_milestone_assigned` with strict detail `{ from_milestone_id: uuid \| null, to_milestone_id: uuid \| null }`, written in the same transaction as the UPDATE. |
+| Idempotency hash | Includes `taskId`, `ifMatch`, route identity `task.milestone_assign`, and request body. |
+| Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |

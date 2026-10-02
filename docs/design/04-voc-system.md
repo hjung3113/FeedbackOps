@@ -315,6 +315,8 @@ Reporter-facing status is public progress; triage state is internal workflow.
 
 ### VOC Triage
 
+The current triage-panel grouping is defined by [ADR-0051](../adr/0051-triage-panel-grouped-sections-and-diff-summary.md).
+
 Purpose:
 
 ```text
@@ -345,6 +347,11 @@ Quick Actions:
 - Request Task
 - Write Public Update
 ```
+
+Create Finding from VOC detail or Triage starts with the VOC title and severity
+as editable defaults. Triage uses its staged severity, then the saved VOC
+severity, then `medium`; VOC detail uses the saved severity or `medium` when it
+has none. The operator can edit both values before creating the Finding.
 
 Rich content surfaces:
 

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 vi.mock('@fops/ui', async (importOriginal) => {
@@ -9,14 +9,15 @@ vi.mock('@fops/ui', async (importOriginal) => {
     RichContentRenderer: () => <div data-testid="rce" />,
   };
 });
-vi.mock('@/features/voc/lib/format-date', () => ({
-  formatVocCreatedAt: () => '방금 전',
+vi.mock('@/lib/format/datetime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format/datetime')>()),
+  formatRelativeTime: () => '방금 전',
 }));
 
 import { useMe } from '@/lib/auth/useMe';
+import type { ConversationEntry } from '@fops/shared';
 import { TimelineEntry } from '../TimelineEntry';
 import { ME_RESPONSE } from './_fixtures';
-import type { ConversationEntry } from '@fops/shared';
 
 beforeEach(() => {
   vi.mocked(useMe).mockReturnValue({ data: ME_RESPONSE } as ReturnType<typeof useMe>);
@@ -38,10 +39,10 @@ describe('<TimelineEntry>', () => {
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
   });
 
-  it('renders "Reporter 답변" kind chip', () => {
+  it('renders "제출자 답변" kind chip', () => {
     const entry: ConversationEntry = { ...BASE, kind: 'reporter_reply', visibility: 'reporter' };
     render(<TimelineEntry entry={entry} />);
-    expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
+    expect(screen.getByText('제출자 답변')).toBeInTheDocument();
   });
 
   it('renders "내부 코멘트" kind chip', () => {
@@ -55,6 +56,14 @@ describe('<TimelineEntry>', () => {
     render(<TimelineEntry entry={entry} actorDisplayName="박운영" />);
     expect(screen.getByText('박운영')).toBeInTheDocument();
     expect(screen.queryByText(`Actor ${BASE.actor_id.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
+  // #679 FIX2: unresolved conversation actors fall back to the glossary's
+  // unknown-user name instead of an English chrome label.
+  it('falls back to 알 수 없는 사용자 when the actor name cannot be resolved', () => {
+    const entry: ConversationEntry = { ...BASE, kind: 'public_update', visibility: 'public' };
+    render(<TimelineEntry entry={entry} />);
+    expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
   });
 
   it('renders status transition pair when both status fields present', () => {

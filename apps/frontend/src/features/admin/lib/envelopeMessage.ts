@@ -1,7 +1,5 @@
-import { ApiError } from '../../../lib/api';
+import { mapUnknownError } from '../../../lib/api/errorMapper';
 
 export function envelopeMessage(err: unknown): string {
-  if (err instanceof ApiError) return `${err.envelope.code}: ${err.envelope.message}`;
-  if (err instanceof Error) return err.message;
-  return 'unknown error';
+  return mapUnknownError(err).message;
 }

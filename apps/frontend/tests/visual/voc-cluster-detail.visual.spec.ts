@@ -30,7 +30,7 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
         .filter({ hasText: '높음' }),
     ).toBeVisible();
     await expect(detail.getByTestId('cluster-detail-confidence-badge')).toContainText(
-      'Confidence · high',
+      '신뢰도 · 높음',
     );
     await expect(detail.locator('[data-token="--status-reporter-reviewing"]')).toBeVisible();
     await expect(detail.getByTestId('cluster-members-list')).toBeVisible();
@@ -78,7 +78,8 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
     await page.getByTestId('cluster-link-existing-finding-button').click();
     const dialog = page.getByTestId('link-existing-finding-modal');
     await expect(dialog.getByTestId('link-existing-finding-picker')).toBeVisible();
-    await dialog.getByTestId('link-existing-finding-picker').selectOption(IDS.finding);
+    await dialog.getByTestId('link-existing-finding-picker').click();
+    await page.getByRole('option', { name: /FND-201/ }).click();
     const post = page.waitForRequest(
       (request) =>
         request.method() === 'POST' &&
@@ -98,7 +99,7 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
     await page.goto(`/voc-clusters/${IDS.draft}`);
 
     await expect(page.getByTestId('cluster-detail-error')).toContainText(
-      '클러스터를 찾을 수 없습니다.',
+      'Cluster를 찾을 수 없습니다.',
     );
   });
 

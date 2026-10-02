@@ -1,5 +1,12 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import {
+  EVIDENCE_IMPORTANCE_LABELS,
+  EVIDENCE_SENTIMENT_LABELS,
+  EVIDENCE_SOURCE_TYPE_LABELS,
+} from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { koreanZodErrorMap, zodIssueMessage } from '@/lib/forms/zodIssueMessage';
+import {
   type AddEvidenceHighlightRequest,
   type EvidenceHighlightImportance,
   type EvidenceHighlightSentiment,
@@ -39,28 +46,27 @@ interface AddEvidenceModalProps {
 const SOURCE_TYPE_OPTIONS: {
   value: EvidenceHighlightSourceType;
   label: string;
-}[] = [
-  { value: 'voc', label: 'VOC' },
-  { value: 'survey_response', label: 'Survey Response' },
-  { value: 'note', label: 'Note (manual)' },
-];
+}[] = (['voc', 'survey_response', 'note'] as const).map((value) => ({
+  value,
+  label: EVIDENCE_SOURCE_TYPE_LABELS[value],
+}));
 
 const SENTIMENT_OPTIONS: {
   value: EvidenceHighlightSentiment;
   label: string;
 }[] = [
-  { value: 'negative', label: '부정 (Negative)' },
-  { value: 'neutral', label: '중립 (Neutral)' },
-  { value: 'positive', label: '긍정 (Positive)' },
+  { value: 'negative', label: EVIDENCE_SENTIMENT_LABELS.negative },
+  { value: 'neutral', label: EVIDENCE_SENTIMENT_LABELS.neutral },
+  { value: 'positive', label: EVIDENCE_SENTIMENT_LABELS.positive },
 ];
 
 const IMPORTANCE_OPTIONS: {
   value: EvidenceHighlightImportance;
   label: string;
 }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
+  { value: 'low', label: EVIDENCE_IMPORTANCE_LABELS.low },
+  { value: 'medium', label: EVIDENCE_IMPORTANCE_LABELS.medium },
+  { value: 'high', label: EVIDENCE_IMPORTANCE_LABELS.high },
 ];
 
 export function AddEvidenceModal({
@@ -71,7 +77,7 @@ export function AddEvidenceModal({
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<AddEvidenceHighlightRequest>({
-    resolver: zodResolver(addEvidenceHighlightRequestSchema),
+    resolver: zodResolver(addEvidenceHighlightRequestSchema, { errorMap: koreanZodErrorMap }),
     defaultValues: {
       source_type: 'note',
       source_id: null,
@@ -83,6 +89,11 @@ export function AddEvidenceModal({
   });
 
   const watchedSourceType = form.watch('source_type');
+  const sourceIdError = form.formState.errors.source_id;
+  const sourceIdErrorMessage =
+    sourceIdError?.type === 'custom'
+      ? zodIssueMessage({ code: 'custom', path: ['source_id'] })
+      : sourceIdError?.message;
 
   const mutation = useAddEvidenceHighlightMutation({
     findingId,
@@ -119,7 +130,7 @@ export function AddEvidenceModal({
     >
       <DialogContent className="max-w-lg" data-testid="add-evidence-modal">
         <DialogHeader>
-          <DialogTitle>Evidence 추가</DialogTitle>
+          <DialogTitle>{GLOSSARY.addEvidence}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -167,9 +178,9 @@ export function AddEvidenceModal({
                 aria-invalid={Boolean(form.formState.errors.source_id)}
                 data-testid="evidence-source-id-input"
               />
-              {form.formState.errors.source_id?.message && (
+              {sourceIdErrorMessage && (
                 <p className="text-xs text-text-danger" role="alert">
-                  {form.formState.errors.source_id.message}
+                  {sourceIdErrorMessage}
                 </p>
               )}
             </div>
@@ -243,7 +254,7 @@ export function AddEvidenceModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+          <Button type="button" variant="secondary" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button

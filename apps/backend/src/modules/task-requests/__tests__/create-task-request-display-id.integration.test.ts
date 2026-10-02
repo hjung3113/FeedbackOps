@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createCheckService } from '../../permissions/check-service.js';
-import { createTaskRequestsService, type TaskRequestsService } from '../service.js';
+import { type TaskRequestsService, createTaskRequestsService } from '../service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -36,6 +36,7 @@ describe.skipIf(!runIntegration)('task request display_id assignment (#142)', ()
       auditService: createAuditService(),
       checkService: createCheckService({ db: dbHandle.db }),
       idempotencyService: createIdempotencyService(),
+      notify: async () => {},
     });
 
     await migrateHandle.pool.query(`insert into core.workspaces (id, name) values ($1, $2)`, [

@@ -12,7 +12,7 @@ export function OptionsEditor({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm">Options</p>
+      <p className="text-sm">선택지</p>
       {(question.options ?? []).map((option, index) => (
         <Input
           key={option.key}

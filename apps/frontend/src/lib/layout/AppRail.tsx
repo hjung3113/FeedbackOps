@@ -1,4 +1,26 @@
-import * as React from 'react';
+import { logout } from '@/lib/api/auth';
+import { useMe } from '@/lib/auth/useMe';
+import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
+import { HOME_INBOX_COPY } from '@/lib/copy/home';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
+import type { RoleLevel } from '@fops/shared';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Bell,
   Boxes,
@@ -9,21 +31,17 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react';
-import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
-import {
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@fops/ui';
-import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { logout } from '@/lib/api/auth';
-import { useMe } from '@/lib/auth/useMe';
+import * as React from 'react';
+import type { NavCounts } from './AppSidebar';
 
-export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
+export type RailDomain =
+  | 'home'
+  | 'voc'
+  | 'findings'
+  | 'tasks'
+  | 'integration'
+  | 'surveys'
+  | 'admin';
 
 export const RAIL_ITEMS: Array<{
   key: RailDomain;
@@ -31,13 +49,13 @@ export const RAIL_ITEMS: Array<{
   href: string;
   icon: React.ElementType<{ className?: string }>;
 }> = [
-  { key: 'home', label: 'Home', href: '/home', icon: House },
+  { key: 'home', label: '홈', href: '/home', icon: House },
   { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
   { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
   { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
-  { key: 'integration', label: 'Integration', href: '/integration', icon: Boxes },
-  { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
-  { key: 'admin', label: 'Admin', href: '/admin/managed-systems', icon: Shield },
+  { key: 'integration', label: '연동', href: '/integration', icon: Boxes },
+  { key: 'surveys', label: 'Surveys', href: '/surveys/participate', icon: FileBarChart },
+  { key: 'admin', label: '관리자', href: '/admin/managed-systems', icon: Shield },
 ];
 
 export function railForPathname(pathname: string): RailDomain {
@@ -52,14 +70,29 @@ export function railForPathname(pathname: string): RailDomain {
 
 export interface AppRailProps {
   activeDomain?: RailDomain;
+  canAccessWorkspaceAdmin?: boolean;
+  counts?: NavCounts;
   className?: string;
 }
 
 /** 52px global domain selector. The sidebar owns the selected domain's tree. */
-export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
+export function AppRail({
+  activeDomain = 'voc',
+  canAccessWorkspaceAdmin = false,
+  counts,
+  className,
+}: AppRailProps) {
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
+  const vocHref =
+    counts === undefined || counts['voc.inbox'] !== undefined
+      ? '/vocs?view=inbox'
+      : '/vocs?view=my';
+  const unreadNotificationCount = useUnreadNotificationCount();
+  const unreadCount = unreadNotificationCount.data;
+  const unreadBadge =
+    unreadCount !== undefined && unreadCount > 0 ? formatUnreadBadge(unreadCount) : undefined;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -93,7 +126,7 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
         className,
       )}
       style={{ width: 'var(--rail-width)' }}
-      aria-label="System selector"
+      aria-label="시스템 선택"
       data-testid="app-rail"
     >
       <div
@@ -103,26 +136,45 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       >
         F
       </div>
-      {head.map((item) => (
-        <RailButton key={item.key} item={item} active={activeDomain === item.key} />
-      ))}
-      {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
-      {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
+      <TooltipProvider delayDuration={400}>
+        {head.map((item) => (
+          <RailButton
+            key={item.key}
+            item={item}
+            active={activeDomain === item.key}
+            href={item.key === 'voc' ? vocHref : item.href}
+          />
+        ))}
+        {canAccessWorkspaceAdmin && admin && (
+          <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />
+        )}
+        {canAccessWorkspaceAdmin && admin && (
+          <RailButton item={admin} active={activeDomain === admin.key} />
+        )}
+      </TooltipProvider>
       <div className="flex-1" />
-      <button
-        type="button"
+      {/* Plain anchor like the RailButton entries above (the rail renders outside routes in tests too). */}
+      <a
+        href="/home?tab=inbox"
         className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
-        aria-label="Notifications"
+        aria-label={HOME_INBOX_COPY.railNotificationsLabel(unreadCount)}
       >
-        <Bell className="h-4 w-4" />
-      </button>
+        <span className="relative inline-flex">
+          <Bell className="h-4 w-4" />
+          {unreadBadge !== undefined && (
+            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-[9px] font-semibold leading-none text-white">
+              {unreadBadge}
+            </span>
+          )}
+        </span>
+      </a>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
-            title="Profile"
-            aria-label="Profile"
+            title="프로필"
+            aria-label="프로필"
           >
             <UserRound className="h-4 w-4" />
           </button>
@@ -134,7 +186,8 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
               /me shape; logout below stays reachable either way. */}
           {me?.actor && (
             <DropdownMenuLabel>
-              {me.actor.display_name} · {ROLE_LEVEL_LABELS[me.actor.role_level as RoleLevel]}
+              {me.actor.display_name} ·{' '}
+              {ROLE_LEVEL_DISPLAY_LABELS[me.actor.role_level as RoleLevel]}
             </DropdownMenuLabel>
           )}
           <DropdownMenuItem disabled={isLoggingOut} onSelect={handleLogout}>
@@ -149,24 +202,33 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
 function RailButton({
   item,
   active,
+  href = item.href,
 }: {
   item: (typeof RAIL_ITEMS)[number];
   active: boolean;
+  href?: string;
 }) {
   const Icon = item.icon;
   return (
-    <a
-      href={item.href}
-      className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
-        active && 'bg-surface-row-selected text-accent-primary',
-      )}
-      aria-label={item.label}
-      aria-current={active ? 'page' : undefined}
-      data-testid={`rail-${item.key}`}
-      title={item.label}
-    >
-      <Icon className="h-4 w-4" />
-    </a>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={href}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            active && 'bg-surface-row-selected text-accent-primary',
+          )}
+          aria-label={item.label}
+          aria-current={active ? 'page' : undefined}
+          data-testid={`rail-${item.key}`}
+        >
+          <Icon className="h-4 w-4" />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">
+        {item.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

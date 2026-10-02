@@ -1,7 +1,14 @@
-import { createFindingFromSurveyResponseRequestSchema } from '@fops/shared';
+import {
+  createFindingFromSurveyResponseRequestSchema,
+  outcomeFollowUpDecisionRequestSchema,
+  surveyQuestionKindSchema,
+  surveyResponseSubmissionSchema,
+  surveyTypeSchema,
+} from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { requireIdempotencyKey } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -16,7 +23,7 @@ const options = z
   .max(50);
 const create = z
   .object({
-    type: z.enum(['discovery', 'validation', 'outcome']),
+    type: surveyTypeSchema,
     title: z.string().min(1),
     description: z.string().optional(),
     primary_managed_system_id: uuid,
@@ -27,7 +34,7 @@ const create = z
   .strict();
 const update = z
   .object({
-    type: z.enum(['discovery', 'validation', 'outcome']).optional(),
+    type: surveyTypeSchema.optional(),
     title: z.string().min(1).optional(),
     description: z.string().optional(),
     primary_managed_system_id: uuid.optional(),
@@ -40,7 +47,7 @@ const update = z
 const reorder = z.object({ question_ids: z.array(uuid) }).strict();
 const question = z
   .object({
-    kind: z.enum(['single_choice', 'multiple_choice', 'rating', 'text']),
+    kind: surveyQuestionKindSchema,
     prompt: z.string().min(1),
     is_required: z.boolean().optional(),
     options: options.optional(),
@@ -53,21 +60,19 @@ const question = z
     branch_trigger_option_key: z.string().min(1).nullable().optional(),
   })
   .strict();
-const responseSubmission = z
+const emptyQuery = z.object({}).strict();
+const mySurveyResponsesQuery = z
   .object({
-    answers: z
-      .array(
-        z
-          .object({
-            question_id: uuid,
-            value: z.union([z.string(), z.array(z.string()), z.number()]),
-          })
-          .strict(),
-      )
-      .min(1),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
   })
   .strict();
-const emptyQuery = z.object({}).strict();
+const myAnswerableSurveysQuery = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  })
+  .strict();
 const evidenceCandidate = z.object({ question_id: uuid }).strict();
 const approvedExcerpt = z
   .object({ question_id: uuid, redacted_excerpt: z.string().min(1) })
@@ -113,6 +118,32 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     }
     return x.data;
   };
+  app.get('/me/survey-responses', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = mySurveyResponsesQuery.safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply.header('cache-control', 'private, no-cache').send(
+      await opts.surveysService.getMySurveyResponses(actor(req), {
+        limit: query.data.limit,
+        ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
+      }),
+    );
+  });
+  app.get('/me/answerable-surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = myAnswerableSurveysQuery.safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply.header('cache-control', 'private, no-cache').send(
+      await opts.surveysService.getMyAnswerableSurveys(actor(req), {
+        limit: query.data.limit,
+        ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
+      }),
+    );
+  });
   app.get('/surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const q = z
       .object({ managed_system_id: z.union([uuid, z.literal('all')]).optional() })
@@ -148,6 +179,20 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/outcome-follow-up',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const q = emptyQuery.safeParse(req.query);
+      if (!q.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(q.error.issues),
+        });
+      return reply.send(await opts.surveysService.getOutcomeFollowUp(actor(req), id));
+    },
+  );
   app.post(
     '/survey-responses/:id/create-finding',
     { preHandler: pre, ...rate('mutation') },
@@ -170,6 +215,35 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       return reply.code(r.status).send(r.body);
     },
   );
+  const followUpCommand = (
+    suffix: 'mark-no-follow-up' | 'reopen-follow-up',
+    op: 'markNoFollowUp' | 'reopenFollowUp',
+  ) =>
+    app.post(
+      `/survey-responses/:id/${suffix}`,
+      { preHandler: pre, ...rate('mutation') },
+      async (req, reply) => {
+        const id = (req.params as { id: string }).id;
+        if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+        const body = parse(outcomeFollowUpDecisionRequestSchema, req.body, reply);
+        if (!body) return;
+        const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+        const r = await opts.surveysService[op]({
+          actor: actor(req),
+          responseId: id,
+          input: body,
+          idempotencyKey,
+          requestHash: hashRequestBody({
+            body,
+            route: `survey_response.${suffix === 'mark-no-follow-up' ? 'mark_no_follow_up' : 'reopen_follow_up'}`,
+            responseId: id,
+          }),
+        });
+        return reply.code(r.status).send(r.body);
+      },
+    );
+  followUpCommand('mark-no-follow-up', 'markNoFollowUp');
+  followUpCommand('reopen-follow-up', 'reopenFollowUp');
   app.delete(
     '/survey-responses/:id/approved-excerpts/:approved_excerpt_id',
     { preHandler: pre, ...rate('mutation') },
@@ -217,7 +291,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     async (req, reply) => {
       const id = (req.params as { id: string }).id;
       if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
-      const b = parse(responseSubmission, req.body, reply);
+      const b = parse(surveyResponseSubmissionSchema, req.body, reply);
       if (!b) return;
       const r = await opts.surveysService.submitResponse({
         actor: actor(req),

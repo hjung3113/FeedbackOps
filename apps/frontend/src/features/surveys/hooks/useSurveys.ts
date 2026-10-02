@@ -1,11 +1,20 @@
 import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
+  type AnswerableSurveysResponse,
+  type MySurveyResponsesResponse,
+  type SurveyResponseSubmission,
   type SurveyResultDto,
+  answerableSurveysResponseSchema,
   listSurveysResponseSchema,
+  mySurveyResponsesResponseSchema,
   surveyDetailDtoSchema,
+  surveyRespondentFormDtoSchema,
+  surveyResponseSubmittedDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { surveyResultsReadDenialKeys } from '../policy/resultsReadDenial';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
 export const surveyKeys = {
@@ -13,7 +22,91 @@ export const surveyKeys = {
   listScoped: (managedSystemId: string) => ['surveys', { managedSystemId }] as const,
   detail: (id: string) => ['surveys', id] as const,
   results: (id: string) => ['surveys', id, 'results'] as const,
+  answerable: ['surveys', 'participation', 'answerable'] as const,
+  myResponses: ['surveys', 'participation', 'history'] as const,
+  respondentForm: (id: string) => ['surveys', 'participation', id, 'form'] as const,
+  resultsReadDenialPrefix: surveyResultsReadDenialKeys.prefix,
+  resultsReadDenial: surveyResultsReadDenialKeys.bySurvey,
+  outcomeFollowUp: (id: string) => ['surveys', id, 'outcome-follow-up'] as const,
 };
+
+export function useAnswerableSurveys() {
+  return useInfiniteQuery({
+    queryKey: surveyKeys.answerable,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<AnswerableSurveysResponse> =>
+      (
+        await apiRequest(
+          'GET',
+          `/me/answerable-surveys${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+          answerableSurveysResponseSchema,
+          { signal },
+        )
+      ).data,
+    getNextPageParam: (lastPage) => (lastPage.page.has_more ? lastPage.page.cursor : undefined),
+    retry: false,
+  });
+}
+
+export function useMySurveyResponses() {
+  return useInfiniteQuery({
+    queryKey: surveyKeys.myResponses,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<MySurveyResponsesResponse> =>
+      (
+        await apiRequest(
+          'GET',
+          `/me/survey-responses${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+          mySurveyResponsesResponseSchema,
+          { signal },
+        )
+      ).data,
+    getNextPageParam: (lastPage) => (lastPage.page.has_more ? lastPage.page.cursor : undefined),
+    retry: false,
+  });
+}
+
+export function useSurveyRespondentForm(surveyId: string) {
+  return useQuery({
+    queryKey: surveyKeys.respondentForm(surveyId),
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest('GET', `/surveys/${surveyId}/form`, surveyRespondentFormDtoSchema, {
+          signal,
+        })
+      ).data,
+    enabled: Boolean(surveyId),
+    retry: false,
+  });
+}
+
+export function useSubmitSurveyResponse(surveyId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      body,
+      idempotencyKey,
+    }: {
+      body: SurveyResponseSubmission;
+      idempotencyKey: string;
+    }) =>
+      (
+        await apiRequest(
+          'POST',
+          `/surveys/${surveyId}/responses`,
+          surveyResponseSubmittedDtoSchema,
+          {
+            body,
+            idempotencyKey,
+          },
+        )
+      ).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.answerable });
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.myResponses });
+    },
+  });
+}
 
 // Optional managed_system_id filter mirrors the backend GET /surveys query
 // param (uuid | 'all' on the wire; 'all' resolves to no filter = the caller's
@@ -64,7 +157,10 @@ export function useCreateSurvey() {
   const queryClient = useQueryClient();
   return useMutation<Survey, ApiError, CreateSurveyInput>({
     mutationFn: async (body) => (await apiClient<Survey>('POST', '/surveys', { body })).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.list }),
+    onSuccess: () => {
+      invalidateNavCounts(queryClient);
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.list });
+    },
   });
 }
 

@@ -47,7 +47,6 @@ apps/frontend/src/features/tasks/routes/TaskListRoute.tsx format -- pre-existing
 apps/frontend/src/features/tasks/routes/TaskListRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
-apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (2x, unchanged)
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
@@ -178,3 +177,223 @@ packages/shared/src/audit/voc.ts format -- pre-existing on develop (1x, unchange
 apps/backend/src/modules/voc/routes/crud.ts organizeImports -- pre-existing on develop as voc/routes.ts (1x, unchanged); #478 renames the file, does not touch the import block
 apps/backend/src/modules/voc/__tests__/routes-no-frame.test.ts lint/suspicious/noExportsInTest -- pre-existing on develop (2x, unchanged); the design (#478) explicitly keeps `stripComments`/`findFrameOwnership` exported for the file's own self-test, do not un-export
 packages/shared/src/audit/__tests__/survey-audit-schemas.test.ts organizeImports -- pre-existing on develop (1x, unchanged); import order predates biome
+# #513 touched these files. The identities below are whole-file format/import-order
+# or assertions whose blame is f1c06725 (2026-05-19), before this branch.
+# develop's dashboard/repo.ts is already unfixed under `biome check --stdin-file-path`.
+apps/backend/src/modules/dashboard/repo.ts format -- pre-existing on develop; the file predates biome formatting. This branch adds analyticsAreaId and listVocAnalyticsAreaIds, not the public-update gap SQL (that lives in tasks/repo.ts)
+packages/shared/src/vocs/__tests__/list-query.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds tab and unset-area cases
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts format -- pre-existing on develop; long expectations predate biome formatting
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (blame f1c06725); cursor and out-of-scope assertions this branch did not add
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (blame f1c06725); cleanup queries this branch did not add
+apps/frontend/src/routes/_authed.tsx format -- pre-existing on develop; this branch adds only the Coverage nav entry
+apps/frontend/src/routes/_authed.tsx organizeImports -- pre-existing on develop; import order predates biome and this branch does not reorder imports
+
+# #517 Phase 1 (test-support extraction / hook + import-path relocation) touched only
+# import lines or moved content verbatim in the files below; the diagnostics are on
+# untouched pre-existing content that the import-line change exposed to the changed-files
+# biome scope for the first time. Verified against origin/develop per-file diffs before
+# allowlisting; backend integration suite (183 files, real DB) and frontend suite (176
+# files) both green after this branch's safe `biome check --write` formatting pass.
+apps/backend/src/modules/entity-links/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/findings/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (3x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/slice8-exit-criteria-response-voc.integration.test.ts lint/style/useTemplate -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/slice8-exit-criteria-evidence-visibility.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/task-requests/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/hooks/__tests__/useVocDetail.test.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/survey-patch.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/survey-results.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/task-requests/__tests__/task-request-review.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/triage/TriageRow.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/triage/TriageRow.tsx lint/a11y/noRedundantRoles -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/tasks/__tests__/task-detail-and-finding-link.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/tasks/__tests__/patch-task-status.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/embedding-enqueue-on-write.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/get-conversation.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/list/VocList.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/list/VocList.tsx lint/suspicious/noArrayIndexKey -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (7x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/embedding-backfill.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (5x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/conversation-service.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (11x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/embed-voc.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/released-review-candidates.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (8x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/released-review-candidates.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/recommendations/__tests__/recommendations-routes.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/permissions-fixtures.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/voc-fixtures.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/voc-fixtures.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/routes/_authed/admin/permissions/requests.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #524; decisionPosts()[0]! at two test call sites this branch did not touch)
+apps/frontend/src/routes/_authed/admin/permissions/requests.test.tsx organizeImports -- pre-existing on develop; whole-file double-quote style predates biome, this branch only adds/edits individual test bodies
+apps/frontend/src/routes/_authed/admin/permissions/requests.test.tsx format -- pre-existing on develop; whole-file double-quote style predates biome, this branch only adds/edits individual test bodies
+apps/frontend/src/lib/layout/AppFrame.tsx organizeImports -- pre-existing on develop; import order predates biome, this branch adds a scopeControlEnabled prop only
+apps/frontend/src/lib/layout/AppFrame.tsx format -- pre-existing on develop; import block/JSDoc predates biome formatting, this branch adds a scopeControlEnabled prop only
+packages/ui/src/badges/__tests__/SeverityBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
+packages/ui/src/badges/__tests__/ReporterStatusBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
+packages/ui/src/indicators/__tests__/SeverityIndicator.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer severities.forEach() and inner bars.forEach() calls this branch did not write, only added a new it() block using the same pre-existing pattern
+# #519 (VOC detail nav overflow + unified footer). The 4 identities below were measured
+# with the gate's own --reporter=json --max-diagnostics=500 invocation against origin/develop's
+# real tracked file content (checked out in place, not a scratch copy elsewhere in the tree —
+# an untracked copy under a different filename silently under-reports lint diagnostics here).
+# All four sit in code this branch's diff never touches (isNextAction's bracket-key type guard;
+# the two scrollRef IntersectionObserver useEffects predating this file's biome adoption, already
+# marked with a now-inert `// eslint-disable-line` comment biome does not honor; the pre-existing
+# SECTIONS.forEach test setup helper).
+apps/frontend/src/features/voc/components/detail/NextActionFooter.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (3x, unchanged by #519; isNextAction's r['id']/r['label']/r['available'] guard this branch did not touch)
+packages/ui/src/panel/__tests__/DetailPanelSectionNav.test.tsx lint/complexity/noForEach -- pre-existing on develop (1x, unchanged by #519; SECTIONS.forEach() setup in an existing test this branch did not touch)
+packages/ui/src/panel/DetailPanelSectionNav.tsx lint/complexity/noForEach -- pre-existing on develop (1x, unchanged by #519; anchors.forEach() inside the pre-existing IntersectionObserver effect)
+packages/ui/src/panel/DetailPanelSectionNav.tsx lint/correctness/useExhaustiveDependencies -- pre-existing on develop (4x, unchanged by #519; the two scrollRef/sectionKey effects already carry a `// eslint-disable-line react-hooks/exhaustive-deps` comment biome does not recognize)
+apps/frontend/src/features/voc/hooks/useTriagePanelState.ts lint/correctness/useExhaustiveDependencies -- pre-existing on develop (2x, measured on the develop copy; #520 only adds `baseline` to the return value; the voc.id reset effect carries an eslint-disable comment biome does not recognize)
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, measured on the develop copy 2026-09-28; #521 only changes the empty/error branch)
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (1x, measured on the develop copy 2026-09-28; row click handler unchanged by #521)
+apps/frontend/src/lib/api/errorMapper.ts format -- pre-existing on develop (column-aligned CATALOG rows; #561 adds a null-envelope guard and mapUnknownError only)
+apps/frontend/src/lib/api/errorMapper.ts lint/complexity/useLiteralKeys -- pre-existing on develop (measured on the develop copy 2026-09-30; unchanged by #561)
+apps/frontend/src/lib/api/__tests__/errorMapper.test.ts format -- pre-existing on develop (measured on the develop copy 2026-09-30; #561 appends one describe block)
+apps/frontend/src/lib/api/__tests__/errorMapper.test.ts organizeImports -- pre-existing on develop (measured on the develop copy 2026-09-30; #561 adds two imports in the existing order)
+apps/backend/src/index.ts organizeImports -- pre-existing on develop (measured on the develop copy 2026-09-30; #517 P2 only repoints the registerVocJobs import to the VOC barrel)
+apps/backend/src/modules/attachments/service.ts format -- pre-existing on develop (measured 2026-09-30; #517 P2 only narrows the VOC reader type)
+apps/backend/src/modules/attachments/service.ts organizeImports -- pre-existing on develop (measured 2026-09-30; #517 P2 only narrows the VOC reader type)
+apps/backend/src/modules/attachments/service.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (2x, measured 2026-09-30; untouched lines)
+apps/backend/src/modules/voc/jobs/released-review-candidates.ts format -- pre-existing on develop (measured 2026-09-30; #517 P2 moves the queue constant and payload type to the contract file)
+apps/backend/src/modules/voc/jobs/released-review-candidates.ts organizeImports -- pre-existing on develop (measured 2026-09-30; #517 P2 moves the queue constant and payload type to the contract file)
+apps/frontend/src/features/voc/components/create/useVocCreateController.ts lint/complexity/useLiteralKeys -- moved verbatim from VocCreateScreen.tsx, which carries the same 2x on develop (#517 Phase 3; bracket access kept for noPropertyAccessFromIndexSignature)
+apps/backend/src/modules/voc/read/repository-list.ts lint/correctness/noUnusedVariables -- moved verbatim from voc/repo-read.ts, which carries the same 8x on develop (#517 Phase 3)
+apps/backend/src/modules/voc/read/repository-list.ts lint/style/noNonNullAssertion -- moved verbatim from voc/repo-read.ts (pre-existing on develop; #517 Phase 3)
+apps/backend/src/modules/voc/read/repository-conversation.ts lint/style/noNonNullAssertion -- moved verbatim from voc/repo-read.ts (pre-existing 2x on develop; #517 Phase 3)
+apps/backend/src/modules/voc/read/list.ts lint/correctness/noUnusedVariables -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
+apps/backend/src/modules/voc/read/scope.ts lint/style/noNonNullAssertion -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
+apps/backend/src/modules/voc/conversation/frame.ts lint/style/noNonNullAssertion -- moved verbatim from voc/conversation-service.ts (pre-existing on develop; #517 Phase 3)
+apps/frontend/src/features/home/InboxPanel.tsx lint/complexity/useLiteralKeys -- detail is Record<string, unknown>; noPropertyAccessFromIndexSignature requires detail['voc_id'] (#509 part 4)
+apps/backend/src/lib/rate-limit-tiers.ts format -- pre-existing on develop (measured 2026-09-30; #509 part 4 only adds the notificationState tier)
+apps/backend/src/modules/task-requests/__tests__/create-task-request-display-id.integration.test.ts format -- pre-existing on develop (measured 2026-09-30; #574 changes one import line)
+apps/backend/src/modules/task-requests/__tests__/create-task-request-display-id.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (10x, measured 2026-09-30; #574 changes one import line)
+apps/backend/src/modules/voc-clusters/__tests__/linked-findings.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (8x, measured 2026-09-30; #574 changes one import line)
+packages/ui/src/permissions/PermissionBlockedPanel.tsx format -- pre-existing on develop (measured 2026-09-30; #564 adds one reason line in request_access)
+packages/ui/src/permissions/PermissionBlockedPanel.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-09-30)
+packages/ui/src/permissions/PermissionBlockedPanel.tsx organizeImports -- pre-existing on develop (measured 2026-09-30)
+packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx format -- pre-existing on develop (measured 2026-09-30; #564 adds one test)
+packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx lint/complexity/noForEach -- pre-existing on develop (measured 2026-09-30)
+packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-09-30)
+packages/ui/src/permissions/__tests__/PermissionBlockedPanel.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30)
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/detail/ConversationTimeline.tsx format -- pre-existing on develop (measured 2026-09-30); #591 only gates the internal tab
+apps/frontend/src/features/voc/components/list/__tests__/VocList.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-09-30); #591 adds reporter/operator cases below it
+apps/frontend/src/features/voc/hooks/useComposerVisibility.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #591 only switches the internal composer to the triage capability
+apps/frontend/src/features/voc/hooks/__tests__/useComposerVisibility.test.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #591 adds capability cases
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerSection.test.tsx format -- pre-existing on develop (measured 2026-09-30); #591 adds a tab-fallback transition test
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerSection.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-09-30); #591 adds a tab-fallback transition test
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerSection.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #591 adds a tab-fallback transition test
+apps/frontend/src/features/findings/hooks/useFindingStatusMutation.ts lint/style/useImportType -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/findings/hooks/useFindingStatusMutation.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/findings/hooks/useRequestTaskFromFinding.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useAddClusterMember.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useConfirmCluster.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useCreateFindingFromCluster.ts format -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useCreateFindingFromCluster.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useCreateVocCluster.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster.ts format -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc-cluster/hooks/useRemoveClusterMember.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc/hooks/useConfirmVocRecommendation.ts lint/complexity/useLiteralKeys -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc/hooks/useConfirmVocRecommendation.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts format -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts lint/style/useImportType -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/lib/auth/useMe.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #583 adds the cached identity helpers
+apps/frontend/src/routes/__root.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #583 switches to createRootRouteWithContext
+apps/frontend/src/routes/_authed/findings/$findingId.tsx format -- pre-existing on develop (measured 2026-09-30); #587 only changes the back link target
+apps/frontend/src/routes/_authed/findings/$findingId.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #587 only changes the back link target
+apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/create/__tests__/SimilarVocPanel.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/detail/__tests__/SimilarVocSection.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/voc/components/triage/__tests__/ClusterSectionReadOnly.test.tsx format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/tests/visual/voc-create.visual.spec.ts format -- pre-existing on develop (measured 2026-09-30); #592 only relabels the same-Managed-System peer copy
+apps/frontend/src/features/integration/components/EntityRelationRow.test.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #589 adds identity cases
+apps/backend/src/modules/permissions/decision-service.ts lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
+apps/backend/src/modules/permissions/decision-service.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
+apps/frontend/src/features/admin/permissions/useDecidePermissionRequest.ts format -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
+apps/frontend/src/features/admin/permissions/useDecidePermissionRequest.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
+apps/frontend/src/lib/api/permissions.ts format -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
+apps/frontend/src/routes/_authed/admin/managed-systems.test.tsx format -- pre-existing on develop (measured 2026-10-01); #613 only changes the request-button selector
+apps/frontend/src/routes/_authed/admin/analytics-areas.test.tsx format -- pre-existing on develop (measured 2026-10-01); #613 only changes the request-button selector
+packages/ui/src/index.ts format -- pre-existing on develop (measured 2026-10-01); #616 only adds the DatePicker export
+packages/ui/src/badges/__tests__/ManagedSystemPill.test.tsx format -- pre-existing on develop (measured 2026-10-01); #615 adds the identity-token mark cases
+packages/ui/src/components/ChipPicker.tsx format -- pre-existing on develop (measured 2026-10-01); #615 passes the system slug to the shared mark helper
+apps/backend/migrations/meta/0051_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0052_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0053_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0054_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/src/modules/dashboard/service.ts lint/style/noNonNullAssertion -- pre-existing; values are defined inside the openVoc/vocScope guard, and a lint chore must not change the coverage math (release gate vs main, 2026-10-01)
+packages/ui/src/components/shadcn/avatar.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #671 only changes the AvatarFallback class
+packages/ui/src/identity/__tests__/UserAvatar.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
+packages/ui/src/identity/__tests__/UserAvatar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
+packages/ui/src/identity/__tests__/UserAvatar.test.tsx format -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
+packages/ui/src/feedback/EmptyState.tsx format -- pre-existing on develop (measured 2026-10-01); #674 only changes the sm title classes
+packages/ui/src/feedback/EmptyState.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-01); #674 only changes the sm title classes
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx format -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/a11y/useButtonType -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx lint/correctness/noUnusedVariables -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+packages/ui/src/feedback/__tests__/EmptyState.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #674 appends one it() block
+apps/frontend/src/features/voc/components/detail/EditDescriptionModal.tsx format -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel button variant
+packages/ui/src/feedback/DirtyConfirmation.tsx format -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/DirtyConfirmation.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/DirtyConfirmation.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 only changes the cancel action class
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+packages/ui/src/feedback/__tests__/DirtyConfirmation.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx format -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #676 adds one cancel-variant assertion
+apps/frontend/src/features/voc/components/detail/TimelineEntry.tsx format -- pre-existing on develop (measured 2026-10-01); #684 only swaps the date formatter import
+packages/ui/src/components/shadcn/skeleton.tsx format -- pre-existing on develop (measured 2026-10-01); #702 only swaps the background token
+packages/ui/src/components/shadcn/skeleton.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-01); #702 only swaps the background token
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerTabs.test.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerTabs.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/ComposerTabs.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/ComposerTabs.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/__tests__/InternalCommentToolbar.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/__tests__/InternalCommentToolbar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/__tests__/PublicUpdateToolbar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/__tests__/ReporterReplyToolbar.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/InternalCommentToolbar.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/PublicUpdateToolbar.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/rich-toolbars/ReporterReplyToolbar.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/routes/__tests__/vocs.test.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/AnalyticsAreaPicker.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/ManagedSystemPicker.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/shadcn/dialog.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/shadcn/dialog.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/shadcn/sheet.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/components/shadcn/sheet.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/data/ObjectRow.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/layout/ShellHeader.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/src/layout/ShellHeader.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/detail/__tests__/ComposerFooter.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/OutOfScopeSummaryBanner.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/TriageEmpty.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/TriageEmpty.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/__tests__/OutOfScopeSummaryBanner.test.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/__tests__/OutOfScopeSummaryBanner.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+apps/frontend/src/features/voc/components/triage/__tests__/OutOfScopeSummaryBanner.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes UI copy strings
+packages/ui/__tests__/combobox.test.tsx format -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
+packages/ui/__tests__/combobox.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
+packages/ui/__tests__/combobox.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
+packages/ui/__tests__/combobox.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string

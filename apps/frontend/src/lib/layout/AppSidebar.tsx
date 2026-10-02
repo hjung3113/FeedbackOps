@@ -1,5 +1,6 @@
+import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { cn } from '@fops/ui';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
 import * as React from 'react';
 
 export type NavCounts = Partial<Record<NavCountKey, number>>;
@@ -9,7 +10,7 @@ export type NavCountKey =
   | 'voc.my'
   | 'voc.tab.high'
   | 'voc.tab.unassigned'
-  | 'voc.tab.no-link'
+  | 'voc.inbox.no-link'
   | 'voc.clusters'
   | 'findings.all'
   | 'surveys.all'
@@ -26,7 +27,9 @@ export interface SidebarNavEntry {
   href: string;
   section?: string;
   icon?: React.ReactNode;
+  parentId?: string;
   active?: boolean;
+  contextActive?: boolean;
   countKey?: NavCountKey;
   /** Explicit, route-owned count. Undefined is deliberately not rendered. */
   count?: number;
@@ -59,7 +62,10 @@ export interface AppSidebarProps {
   counts?: NavCounts;
   managedSystems?: ManagedSystemScopeOption[];
   selectedManagedSystemId?: string;
+  /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
+  scopeControlEnabled?: boolean;
   isAdmin?: boolean;
+  canAccessWorkspaceAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
   canSaveView?: boolean;
@@ -70,8 +76,7 @@ export interface AppSidebarProps {
 
 const STORAGE_KEY = 'appSidebarCollapsed';
 const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
-  { id: 'invite-member', label: 'Invite member', icon: <UserPlus className="h-4 w-4" />, disabled: true },
-  { id: 'workspace-settings', label: 'Workspace settings', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
+  { id: 'workspace-settings', label: '워크스페이스 설정', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
 function readInitialCollapsed(defaultValue: boolean): boolean {
@@ -88,13 +93,15 @@ export function AppSidebar({
   entries,
   footerItems = DEFAULT_FOOTER_ITEMS,
   systemLabel = 'VOC',
-  systemSubtitle = 'Voice of Customer',
+  systemSubtitle = '고객 피드백',
   className,
   defaultCollapsed = false,
   counts = {},
   managedSystems = [],
   selectedManagedSystemId,
+  scopeControlEnabled = true,
   isAdmin = true,
+  canAccessWorkspaceAdmin = false,
   onManagedSystemChange,
   savedViews = [],
   canSaveView = false,
@@ -107,6 +114,20 @@ export function AppSidebar({
   const selectedSystem = managedSystems.find((system) => system.id === selectedManagedSystemId);
   const grantedSystems = managedSystems.filter((system) => system.granted);
   const isUnion = !isAdmin && selectedManagedSystemId === undefined;
+  const scopeName = scopeControlEnabled
+    ? (selectedSystem?.name ?? SCOPE_SELECTOR_COPY.allLabel)
+    : SCOPE_SELECTOR_COPY.workspaceAll;
+  const scopeQualifier = scopeControlEnabled
+    ? selectedSystem && !selectedSystem.granted
+      ? SCOPE_SELECTOR_COPY.outOfScope
+      : isUnion
+        ? SCOPE_SELECTOR_COPY.unionAccessibleQualifier
+        : null
+    : null;
+  const scopeAccessibleName = scopeQualifier ? `${scopeName}, ${scopeQualifier}` : scopeName;
+  const visibleFooterItems = footerItems.filter(
+    (item) => item.id !== 'workspace-settings' || canAccessWorkspaceAdmin,
+  );
 
   const toggle = React.useCallback(() => {
     setCollapsed((prev) => {
@@ -125,7 +146,7 @@ export function AppSidebar({
     <aside
       className={cn('flex flex-col border-r border-border-subtle bg-surface-sidebar transition-[width] duration-150', className)}
       style={{ width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }}
-      aria-label="Primary navigation"
+      aria-label="주요 탐색"
       data-testid="app-sidebar"
       data-collapsed={collapsed ? 'true' : 'false'}
     >
@@ -136,35 +157,65 @@ export function AppSidebar({
             <div className="truncate text-[10px] text-text-muted" data-testid="sidebar-system-subtitle">{systemSubtitle}</div>
           </div>
         )}
-        <button type="button" onClick={toggle} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle">
+        <button type="button" onClick={toggle} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary" aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} data-testid="sidebar-collapse-toggle">
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
       {!collapsed && (
         <div className="relative border-b border-border-subtle p-2">
-          <button type="button" className="flex w-full items-center gap-2 rounded-md border border-border-subtle px-2 py-2 text-left text-sm hover:bg-surface-row-hover" onClick={() => setScopeOpen((open) => !open)} aria-expanded={scopeOpen} aria-haspopup="listbox" data-testid="scope-selector">
+          <button
+            type="button"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md border border-border-subtle px-2 py-2 text-left text-sm hover:bg-surface-row-hover',
+              !scopeControlEnabled && 'cursor-not-allowed opacity-60 hover:bg-transparent',
+            )}
+            onClick={() => scopeControlEnabled && setScopeOpen((open) => !open)}
+            disabled={!scopeControlEnabled}
+            aria-expanded={scopeOpen}
+            aria-haspopup="listbox"
+            aria-label={scopeAccessibleName}
+            title={scopeControlEnabled ? scopeName : '이 화면은 Managed System 범위를 지원하지 않습니다'}
+            data-testid="scope-selector"
+          >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-primary/15 text-xs font-semibold text-accent-primary">{selectedSystem ? selectedSystem.name.slice(0, 1) : '∗'}</span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1 truncate font-medium">
-                {selectedSystem?.name ?? 'All Managed Systems'}
-                {isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
-                {selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-0 items-center gap-1 font-medium">
+                <span className="min-w-0 flex-1 truncate" data-testid="scope-name" title={scopeName}>{scopeName}</span>
+                {scopeControlEnabled && selectedSystem && !selectedSystem.granted && (
+                  <ScopeBadge
+                    testId="scope-out-of-scope-badge"
+                    label={SCOPE_SELECTOR_COPY.outOfScope}
+                    urgent
+                  />
+                )}
               </span>
-              {isUnion && grantedSystems.length > 0 && <span className="block truncate text-[10px] text-text-muted">{grantedSystems.map((system) => system.name).join(' · ')}</span>}
+              {scopeControlEnabled && isUnion && grantedSystems.length > 0 && (
+                <span className="block truncate text-[10px] text-text-muted">
+                  {SCOPE_SELECTOR_COPY.assignedPrefix}{' '}
+                  {grantedSystems.map((system) => system.name).join(' · ')}
+                </span>
+              )}
             </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />
+            {scopeControlEnabled && <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />}
           </button>
-          {scopeOpen && (
-            <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System scope">
+          {scopeControlEnabled && scopeOpen && (
+            <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System 범위">
               <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover" onClick={() => selectScope(undefined)} data-testid="scope-option-all">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
-                <span className="min-w-0 flex-1"><span className="block font-medium">All Managed Systems</span><span className="block text-[10px] text-text-muted">{isAdmin ? 'workspace-wide' : `granted ${grantedSystems.length} / ${managedSystems.length}`}</span></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{SCOPE_SELECTOR_COPY.allLabel}</span>
+                  <span className="block text-[10px] text-text-muted">
+                    {isAdmin
+                      ? SCOPE_SELECTOR_COPY.workspaceAll
+                      : `${SCOPE_SELECTOR_COPY.assignedCountPrefix} ${grantedSystems.length} / ${managedSystems.length}`}
+                  </span>
+                </span>
               </button>
               {managedSystems.map((system) => (
                 <button key={system.id} type="button" className={cn('flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover', !system.granted && 'opacity-55')} onClick={() => selectScope(system.id)} data-testid={`scope-option-${system.id}`}>
                   <span className="flex h-5 w-5 items-center justify-center rounded bg-surface-row-selected text-xs font-semibold">{system.name.slice(0, 1)}</span>
                   <span className="min-w-0 flex-1 truncate">{system.name}</span>
-                  {!system.granted && <Shield className="h-3 w-3 text-text-muted" aria-label="Outside your grants" />}
+                  {!system.granted && <Shield className="h-3 w-3 text-text-muted" aria-label="범위 밖" />}
                 </button>
               ))}
               {/* #282: sits outside the option buttons on purpose — inside one,
@@ -182,13 +233,13 @@ export function AppSidebar({
             return <React.Fragment key={entry.id}>
               {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
               {entry.disabled ? (
-                <button type="button" disabled className={cn(navItemClass(collapsed, entry.active), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                <button type="button" disabled className={cn(navItemClass(collapsed, entry.active, entry.contextActive), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
                   {!collapsed && entry.trailing}
                 </button>
               ) : (
-                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active, entry.contextActive)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
                   {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
@@ -208,7 +259,15 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      <div className="border-t border-border-subtle p-2"><div className="flex flex-col gap-0.5">{footerItems.map((item) => <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />)}</div></div>
+      {visibleFooterItems.length > 0 && (
+        <div className="border-t border-border-subtle p-2" data-testid="sidebar-footer">
+          <div className="flex flex-col gap-0.5">
+            {visibleFooterItems.map((item) => (
+              <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
+            ))}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -228,20 +287,20 @@ function SavedViewsSection({
 }) {
   const [name, setName] = React.useState('');
   return (
-    <section className="mt-3.5" aria-label="Saved views" data-testid="saved-views-section">
-      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">Saved views</div>
+    <section className="mt-3.5" aria-label="저장된 보기" data-testid="saved-views-section">
+      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
       {views.map((view) => (
         <div key={view.id} className="group flex items-center gap-1">
           <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
             <span className="truncate">{view.name}</span>
           </button>
-          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`Delete saved view ${view.name}`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
+          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
         </div>
       ))}
       {canSave && (
         <form className="mt-1 flex gap-1 px-2" onSubmit={(event) => { event.preventDefault(); const trimmed = name.trim(); if (trimmed) { onSave?.(trimmed); setName(''); } }}>
-          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required aria-label="Saved view name" placeholder="Save current filter" className="min-w-0 flex-1 rounded border border-border-subtle bg-surface-canvas px-2 py-1 text-xs" />
-          <button type="submit" className="rounded px-2 py-1 text-xs text-accent-primary hover:bg-surface-row-hover" data-testid="saved-view-save">Save</button>
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required aria-label="저장된 보기 이름" placeholder="현재 필터 저장" className="min-w-0 flex-1 rounded border border-border-subtle bg-surface-canvas px-2 py-1 text-xs" />
+          <button type="submit" className="rounded px-2 py-1 text-xs text-accent-primary hover:bg-surface-row-hover" data-testid="saved-view-save">저장</button>
         </form>
       )}
     </section>
@@ -249,11 +308,11 @@ function SavedViewsSection({
 }
 
 function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: number; urgent?: boolean }) {
-  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
+  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
-  return <span className={cn('inline-flex items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-[9px] font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
+  return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-[9px] font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
 }
 
 function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {
@@ -262,8 +321,19 @@ function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; colla
   return <button type="button" disabled={item.disabled} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</button>;
 }
 
-function navItemClass(collapsed: boolean, active = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary'); }
-function sectionTestId(section: string) { return section.toLowerCase().replace(/\s+/g, '-'); }
+function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }
+const KOREAN_SECTION_TEST_IDS: Record<string, string> = {
+  Finding: 'findings',
+  Task: 'tasks',
+  Survey: 'surveys',
+  '액션 큐': 'action-queues',
+  연동: 'integration',
+  관리자: 'admin',
+};
+function sectionTestId(section: string) {
+  // Test ids stay Latin even when the visible section header is Korean.
+  return KOREAN_SECTION_TEST_IDS[section] ?? section.toLowerCase().replace(/\s+/g, '-');
+}
 function scopedHref(href: string, managedSystemId: string | undefined) {
   if (managedSystemId === undefined || !href.startsWith('/vocs')) return href;
   const url = new URL(href, 'http://feedbackops.local');

@@ -1,5 +1,12 @@
 # Research 3 — Permission request cancel / edit
 
+## Status
+
+The `needs_more_info` supplement shipped in Issue #511 at
+`POST /permission-requests/:id/submit-more-info`. The 2026-09-26 research below
+predates that route. ADR-0044 still governs request-creation UX; requester
+cancellation and edits to a `pending` request remain undecided.
+
 Read-only survey of ADR-0044, the permissions module, and the permission-request lifecycle. No code was changed. There is no `service.ts` or `repo.ts` in this module. Requester commands live in `request-service.ts`, admin decisions in `decision-service.ts`, and both talk to Drizzle directly.
 
 ## Verdict
@@ -150,7 +157,7 @@ So:
 
 - **Same row.** Inserting a new request while the old one is still `needs_more_info` either hits `permission_requests_active_uq` (409 `conflict.permission_request_duplicate`) or, if the scope tuple changed, leaves the admin staring at an abandoned open request. Both are the outcome the policy forbids.
 - **Only from `needs_more_info`.** That is the state in which an admin has asked for a revision and has not minted a grant. A still-`pending` request has not been partially reviewed. Rewriting it under an admin who has the queue open is a different product. The create audit would also stop matching the row, and no contract authorizes the rewrite. `POST` below must `409 conflict.stale_write` when status is `pending` (or any terminal status).
-- **After this partial review, edit is safe only because the trail is append-only and the row is locked.** `permission_requested` keeps the original submission. `permission_needs_more_info` keeps the admin note. The new event keeps the pre-image of the fields the older events do not store (expiration and object scope) plus the post-image. `SELECT … FOR UPDATE` serializes with `decide`: the loser sees a status that is no longer `needs_more_info` and gets `conflict.stale_write`. No merge.
+- **After this partial review, edit is safe only because the trail is append-only and the row is locked.** `permission_requested` keeps the original submission. `permission_needs_more_info` keeps the admin note. The new event keeps the pre-image of the fields the older events do not store (expiration and object scope) plus the post-image. `SELECT … FOR UPDATE` serializes with `decide`. If approve, reject, or deny commits first, a later supplement sees a status that is no longer `needs_more_info` and gets `conflict.stale_write`. A second `need-more-info` leaves the status `needs_more_info`, so a later supplement can still succeed. If supplement commits first, a later approve can accept the now-`pending` row and grant from its supplemented values. No merge; approve reads the locked row rather than an earlier body.
 - **Capability and source identity stay put.** The unique index and the "same source object, source action" sentence treat those as the request's identity. Changing `requested_capability`, `source_object_*`, `source_action_id`, `return_route_intent`, or the requester is a different request. They are not fields of this command. `.strict()` rejects a body that tries to send them.
 - **Scope and expiration may change.** FR-PERM-002 says so. "Requested scope" in this schema is `requested_managed_system_id` + `requested_object_type` + `requested_object_id` (see the active unique index and the create body). Changing them moves the index entry. A collision with another open row is `conflict.permission_request_duplicate`, and the transaction rolls back. That is the same mapping `createRequest` uses for `23505`. When that scope tuple differs from the locked row, re-run create's in-transaction `checkCapability` against the resolved managed-system id and return `409 conflict.capability_already_granted` if the actor already holds the capability. A non-null `requested_managed_system_id` must be a `managed_systems` row in this workspace before the UPDATE; an unknown or cross-workspace id is `validation.failed` on that field, not an unmapped FK 500. `05` (the paragraph after the lifecycle field list) and ADR-0044 say the client may submit only server-provided scope candidates. Create does not enforce that server-side. This endpoint does not add that check either — same gap, restated so a scope rewrite is not a silent second door. A past `requested_expiration` is also not rejected, same as create. `decide` copies it verbatim onto the grant, so approve can mint an already-expired grant. Note it; do not add a new check in this issue.
 - **Resubmit without a field change is valid.** `{}` moves `needs_more_info` → `pending` and still audits. The admin asked a question; confirming the existing reason is an answer. Do not require a diff.
@@ -302,10 +309,12 @@ Normative home, when implemented: `docs/implementation/api/permissions.md`. This
         Status is anything other than needs_more_info, including pending,
         approved, rejected, expired, revoked. Message should say the
         request is not awaiting requester supplementation. Same code
-        decide uses for a non-decidable row. Concurrent approve/reject/
-        deny/need-more-info wins or loses the row lock; the loser 409s.
-        No auto-merge. This check runs inside run, so a same-key replay
-        never reaches it.
+        decide uses for a non-decidable row. If approve locks the row first,
+        it can approve that row and a later supplement returns stale_write.
+        If supplement locks first, it commits the updated row as pending and
+        a later approve may succeed using that supplemented row. The row lock
+        serializes these outcomes; see the concurrency note below. This check
+        runs inside run, so a same-key replay never reaches it.
     409 conflict.capability_already_granted
         Resolved scope tuple differs from the locked row, and
         checkCapability in this transaction returns allow === true.
@@ -467,11 +476,11 @@ The issue's route tests must cover at least:
 - Non-owner. The row is in the caller's workspace and `requester_actor_id` is someone else. Response is `404 not_found.record`, not `403 permission.denied`.
 - Whitespace reason on a non-sensitive capability. Body `reason` is `" "` (or the stored reason is only whitespace and the field is omitted). Response is `422 validation.failed` with `fields: [{ path: ['reason'], code: 'too_small' }]`. Not `validation.sensitive_reason_required`. Nothing is written.
 - Scope collision. The resolved scope tuple matches another active request for this requester. Response is `409 conflict.permission_request_duplicate`. The `needs_more_info` row is unchanged.
-- Concurrent approve vs submit-more-info on the same id. Both take `FOR UPDATE` inside their own handlers. The loser gets `409 conflict.stale_write`. No merge, and the loser does not mint a grant from a body it did not read.
+- Deterministic serialization in both orders: supplement then approve returns `200` for both commands and the grant contains the supplemented scope and expiration; approve then supplement returns `200` then `409 conflict.stale_write`, with the approved row and grant unchanged. `approve` accepts both `pending` and `needs_more_info`, so the supplement-first order is expected to succeed.
 
 ### Concurrency note (why this is enough after partial review)
 
-`need-more-info` has already committed. The requester's command and a later `approve` / `reject` / `deny` / second `need-more-info` both take `FOR UPDATE` on the same row. Exactly one sees `needs_more_info`. The other gets `conflict.stale_write` and does not mint a grant from a body it did not read. The audit log then contains, in order, `permission_requested`, `permission_needs_more_info`, `permission_more_info_submitted`, and only then a decision event whose detail was copied from the row **after** the supplement. `decide` reads the locked row and copies capability, managed system, and `requestedExpiration` into the grant. It does not trust the client's original create body.
+`need-more-info` has already committed. The requester's command and a later `approve` both take `FOR UPDATE` on the same row, so their writes serialize. If supplement commits first, the row becomes `pending`; `approve` accepts that status, reads the supplemented row under lock, and may succeed. Its grant copies the supplemented managed system and `requestedExpiration`. If approve commits first, the row becomes `approved`; the later supplement sees a status other than `needs_more_info` and returns `conflict.stale_write` without changing the row or grant. The supplement-first audit order is `permission_requested`, `permission_needs_more_info`, `permission_more_info_submitted`, then `permission_approved`. No grant is minted from a body approve did not read.
 
 ## 6. Draft endpoint contract — cancel (do not implement yet)
 
@@ -575,7 +584,7 @@ No other product fork is required for `POST /permission-requests/:id/submit-more
 
 These are pre-existing. Do not "resolve" them by picking a winner inside the supplement PR beyond the files that chunk already has to touch.
 
-- `docs/implementation/api/permissions.md` still says `POST /permission-requests/:id/approve|reject|revoke` are unimplemented as of Slice 6, and it does not mention `/permissions/requests/:id/approve|reject|need-more-info|deny`. The normative catalog is stale relative to `routes.ts`. The supplement issue should add its own route here. The file is partly Korean (`미구현`); keep that language when adding the line rather than mixing English into the existing list. Fixing the stale decision lines is in-scope only because this file is the route's normative home and is already wrong; do not expand into a general docs sweep.
+- `docs/implementation/api/permissions.md` was stale relative to `routes.ts`: this implementation removes the obsolete unimplemented approve/reject entries, lists the shipped `/permissions/requests/:id/approve|reject|need-more-info|deny` tree, and adds this endpoint's contract. The file retains its existing `미구현` note for the out-of-scope revoke route; no general docs sweep is included.
 - `docs/design/15-data-contracts.md` Permission Request status enum is `pending, approved, rejected, expired, revoked`. It omits `needs_more_info`. `05`, the CHECK constraint, `09`, interaction-patterns, `CONTEXT.md`, and the services include it. That is a design-vs-implementation disagreement on the enum. Shipped behavior and `05` are what this endpoint follows. The document that must be reopened is `15-data-contracts.md`, to add `needs_more_info`. Do not implement against 15's shorter list. Adding `cancelled` later reopens `15` again; that is part of decision (1), not part of supplement.
 - `09` lists `more_info_request`, `approver_id`, and `decided_at` on the request. The table has none of them. The note is audit-only. Supplement must not add those columns just to match `09`. The read gap in §4 is the honest statement of that drift.
 
@@ -608,7 +617,7 @@ Independent review: `.review/RESEARCH-3-permission-cancel-edit-OPUS-REVIEW.md`. 
 7. **Detail strictness.** `permissionRequestedDetailSchema` is not `.strict()`. Only the four decision detail schemas are. The supplement detail schema is `.strict()`.
 8. **§6** states the `run`-closure order explicitly, so a later cancel issue cannot copy the lock-before-replay bug.
 9. **Skipping cancel** leaves the requester with no way to clear an open row. It stays on the active unique index and in the admin queue until an admin rejects or denies it. Stated in §3 and in question 1. The ship-supplement recommendation stands.
-10. **Route test matrix** under §5: replay after success returns 200; a non-owner gets 404; a whitespace reason on a non-sensitive capability is rejected; a scope collision returns `conflict.permission_request_duplicate`; on a concurrent approve vs supplement, the loser gets `conflict.stale_write`.
+10. **Route test matrix** under §5: replay after success returns 200; a non-owner gets 404; a whitespace reason on a non-sensitive capability is rejected; a scope collision returns `conflict.permission_request_duplicate`; deterministic ordering covers supplement then approve (both succeed and the grant has the supplemented values) and approve then supplement (the supplement returns `conflict.stale_write`).
 
 Also recorded, without changing the recommendation: server-provided scope candidates stay a frontend constraint (no new `requestable` check, same gap as create); a past `requested_expiration` is not rejected (same gap as create); `:id` is a UUID at the route so a non-UUID is not an unmapped `22P02`; the audit summary is the literal `Permission request more info submitted`; an edit to `docs/implementation/api/permissions.md` keeps that file's language.
 

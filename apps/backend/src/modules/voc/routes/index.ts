@@ -29,6 +29,7 @@ export interface VocRoutesOptions {
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
     read?: Record<string, unknown>;
+    triage?: Record<string, unknown>;
     reporterEdit?: Record<string, unknown>;
   };
 }

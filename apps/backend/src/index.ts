@@ -20,9 +20,15 @@ import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
+import {
+  createNotificationEmailChannel,
+  createNotificationNotifier,
+  createPgBossNotificationDispatcher,
+  registerNotificationJobs,
+} from './modules/notifications/index.js';
 import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
-import { registerVocJobs } from './modules/voc/jobs/index.js';
+import { registerVocJobs } from './modules/voc/index.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
@@ -58,6 +64,8 @@ const logger = createRootLogger(config);
 const jobLog = toJobLog(logger);
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL, log: jobLog });
+const notificationDispatcher = createPgBossNotificationDispatcher(boss);
+const notify = createNotificationNotifier(notificationDispatcher);
 await registerCoreJobs(boss, {
   db: dbHandle.db,
   pool: dbHandle.pool,
@@ -78,11 +86,17 @@ await registerVocJobs(boss, {
   publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
     db: dbHandle.db,
     auditService: createAuditService(),
+    notify,
   }),
   log: jobLog,
 });
+await registerNotificationJobs(boss, {
+  db: dbHandle.db,
+  channel: await createNotificationEmailChannel(jobLog, config),
+  log: jobLog,
+});
 
-const app = await buildServer({ config, dbHandle, boss, logger });
+const app = await buildServer({ config, dbHandle, boss, logger, notificationDispatcher });
 
 // Single-shot shutdown handler. Multiple signals (e.g. SIGTERM then SIGINT)
 // short-circuit through the `shuttingDown` flag so we don't try to close pools

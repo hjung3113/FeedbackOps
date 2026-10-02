@@ -27,14 +27,3 @@ export function ClusterStatusBadge({
     </OutlineBadge>
   );
 }
-
-export function shortId(id: string): string {
-  return `${id.slice(0, 8)}...`;
-}
-
-export function formatClusterDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-  }).format(new Date(raw));
-}

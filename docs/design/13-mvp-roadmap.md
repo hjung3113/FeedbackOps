@@ -5,7 +5,7 @@
 This document defines release scope. System documents describe behavior; this document decides when behavior ships.
 
 Implementation slice status is `docs/implementation/08-mvp-slice-plan.md`.
-This document only groups release scope. It is not an execution queue and it does not record what is already built.
+This document groups release scope and includes short shipped/open notes for partially delivered items. It is not an execution queue.
 
 ## Alpha
 
@@ -34,11 +34,9 @@ This document only groups release scope. It is not an execution queue and it doe
 ## Phase 1
 
 ```text
-- VOC Cluster Candidate 자동 생성
-- 권한 요청 고도화
-- Notification Rule
-- Outcome Survey workflow
-- Dashboard coverage / unlinked data 고도화
+- VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
+- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided)
+- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; editable thresholds deferred)
 - Analytics Area별 리포트
 ```
 

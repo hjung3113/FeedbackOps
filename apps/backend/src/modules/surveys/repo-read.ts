@@ -1,14 +1,74 @@
+import type { SurveyQuestionKind, SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
+
+const postgresTimestampCursorSchema = z
+  .string()
+  .datetime({ offset: true })
+  .refine((timestamp) => {
+    if (timestamp.endsWith('Z')) return true;
+    const offset = /[+-](\d{2})(?::?(\d{2}))?$/.exec(timestamp);
+    return offset !== null && Number(offset[1]) <= 15 && Number(offset[2] ?? '0') <= 59;
+  });
+
+const surveyResponseHistoryCursorSchema = z
+  .object({
+    submittedAt: postgresTimestampCursorSchema,
+    surveyId: z.string().uuid(),
+  })
+  .strict();
+
+export type SurveyResponseHistoryCursor = z.infer<typeof surveyResponseHistoryCursorSchema>;
+
+export function decodeSurveyResponseHistoryCursor(raw: string): SurveyResponseHistoryCursor {
+  return decodeTimestampIdCursor(raw, surveyResponseHistoryCursorSchema);
+}
+
+const answerableSurveysCursorSchema = z
+  .object({
+    openedAt: postgresTimestampCursorSchema,
+    surveyId: z.string().uuid(),
+  })
+  .strict();
+
+export type AnswerableSurveysCursor = z.infer<typeof answerableSurveysCursorSchema>;
+
+export function decodeAnswerableSurveysCursor(raw: string): AnswerableSurveysCursor {
+  return decodeTimestampIdCursor(raw, answerableSurveysCursorSchema);
+}
+
+function decodeTimestampIdCursor<Cursor extends { surveyId: string }>(
+  raw: string,
+  schema: z.ZodType<Cursor>,
+): Cursor {
+  const fail = () =>
+    new HttpError('validation.failed', 'invalid cursor', {
+      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+    });
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw fail();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    throw fail();
+  }
+  const result = schema.safeParse(parsed);
+  if (!result.success) throw fail();
+  return result.data;
+}
 
 export type SurveyStatus = 'draft' | 'open' | 'closed';
-export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
+export type QuestionKind = SurveyQuestionKind;
 export interface SurveyRow {
   id: string;
   workspace_id: string;
   display_id: string;
-  type: 'discovery' | 'validation' | 'outcome';
+  type: SurveyType;
   status: SurveyStatus;
   title: string;
   description: string | null;
@@ -86,6 +146,141 @@ export function mapQuestion(r: Record<string, unknown>): QuestionRow {
     updated_at: date(r.updated_at),
   };
 }
+
+export async function listMySurveyResponseHistory(
+  db: Db | Tx,
+  args: {
+    workspace_id: string;
+    actor_id: string;
+    limit: number;
+    cursor?: SurveyResponseHistoryCursor;
+  },
+) {
+  const result = await db.execute<Record<string, unknown>>(sql`
+    select survey_id, survey_title, submitted_at::text as submitted_at_raw,
+           identity_protected
+      from survey.read_my_survey_response_history(
+        ${args.workspace_id}::uuid,
+        ${args.actor_id}::uuid,
+        ${args.limit + 1},
+        ${args.cursor?.submittedAt ?? null}::timestamptz,
+        ${args.cursor?.surveyId ?? null}::uuid
+      )
+  `);
+  const rows = result.rows.map((row) => ({
+    survey_id: row.survey_id as string,
+    survey_title: row.survey_title as string,
+    submitted_at_raw: row.submitted_at_raw as string,
+    identity_protected: row.identity_protected as boolean,
+  }));
+  const has_more = rows.length > args.limit;
+  const pageRows = rows.slice(0, args.limit);
+  const items = pageRows.map((row) => ({
+    survey_id: row.survey_id,
+    survey_title: row.survey_title,
+    submitted_at: normalizePgTimestampToIso(row.submitted_at_raw),
+    identity_protected: row.identity_protected,
+  }));
+  const last = pageRows.at(-1);
+  const cursor =
+    has_more && last
+      ? Buffer.from(
+          JSON.stringify({
+            submittedAt: normalizePgTimestampToIso(last.submitted_at_raw),
+            surveyId: last.survey_id,
+          }),
+          'utf8',
+        ).toString('base64')
+      : undefined;
+
+  return {
+    items,
+    page: {
+      has_more,
+      ...(cursor === undefined ? {} : { cursor }),
+    },
+  };
+}
+
+export async function listMyAnswerableSurveys(
+  db: Db | Tx,
+  args: {
+    workspace_id: string;
+    actor_id: string;
+    limit: number;
+    cursor?: AnswerableSurveysCursor;
+  },
+) {
+  // Split read (#718): the SECURITY DEFINER function only filters answered Surveys and
+  // returns their ids — its owner holds no surveys.opened_at grant. Metadata, ordering,
+  // and cursor pagination run here over survey.surveys / survey_questions, which the
+  // app role already selects.
+  const cursorFilter = args.cursor
+    ? sql`and (s.opened_at, s.id) < (${args.cursor.openedAt}::timestamptz, ${args.cursor.surveyId}::uuid)`
+    : sql``;
+  const result = await db.execute<Record<string, unknown>>(sql`
+    select s.id as survey_id,
+           s.display_id,
+           s.title,
+           s.type,
+           (
+             select count(q.id)
+               from survey.survey_questions as q
+              where q.workspace_id = s.workspace_id
+                and q.survey_id = s.id
+           ) as question_count,
+           s.opened_at::text as opened_at_raw
+      from survey.surveys as s
+     where s.id in (
+       select survey_id
+         from survey.read_my_answerable_surveys(
+           ${args.workspace_id}::uuid,
+           ${args.actor_id}::uuid
+         )
+     )
+     ${cursorFilter}
+     order by s.opened_at desc, s.id desc
+     limit ${args.limit + 1}
+  `);
+  const rows = result.rows.map((row) => ({
+    survey_id: row.survey_id as string,
+    display_id: row.display_id as string,
+    title: row.title as string,
+    type: row.type as SurveyType,
+    question_count: Number(row.question_count),
+    opened_at_raw: row.opened_at_raw as string,
+  }));
+  const has_more = rows.length > args.limit;
+  const pageRows = rows.slice(0, args.limit);
+  const items = pageRows.map((row) => ({
+    survey_id: row.survey_id,
+    display_id: row.display_id,
+    title: row.title,
+    type: row.type,
+    question_count: row.question_count,
+    opened_at: normalizePgTimestampToIso(row.opened_at_raw),
+  }));
+  const last = pageRows.at(-1);
+  const cursor =
+    has_more && last
+      ? Buffer.from(
+          JSON.stringify({
+            openedAt: normalizePgTimestampToIso(last.opened_at_raw),
+            surveyId: last.survey_id,
+          }),
+          'utf8',
+        ).toString('base64')
+      : undefined;
+
+  return {
+    items,
+    page: {
+      has_more,
+      ...(cursor === undefined ? {} : { cursor }),
+    },
+  };
+}
+
 const surveyCols = sql`id, workspace_id, display_id, type, status, title, description, primary_managed_system_id, analytics_area_id, operator_actor_id, responses_identity_protected, created_by, opened_at, closed_at, created_at, updated_at`;
 export async function findSurvey(db: Db | Tx, workspaceId: string, id: string) {
   const x = await db.execute<Record<string, unknown>>(

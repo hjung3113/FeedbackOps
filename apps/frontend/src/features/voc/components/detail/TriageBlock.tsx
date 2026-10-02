@@ -1,7 +1,16 @@
 // TriageBlock — read-only triage fields; edits happen in the triage console (#363).
 
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { Button, FieldRow, PanelSectionTitle, SeverityBadge, UserChip } from '@fops/ui';
+import {
+  Button,
+  FieldRow,
+  PanelSectionTitle,
+  SeverityBadge,
+  UnassignedBadge,
+  UserChip,
+} from '@fops/ui';
 import type * as React from 'react';
 
 export interface TriageBlockProps {
@@ -20,9 +29,9 @@ export function TriageBlock({
   onOpenTriage,
 }: TriageBlockProps): React.ReactElement {
   return (
-    <div>
+    <div className="mt-8">
       <div className="flex items-center justify-between">
-        <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
+        <PanelSectionTitle>Triage (읽기 전용)</PanelSectionTitle>
         {canTriage && (
           <Button
             variant="ghost"
@@ -30,13 +39,13 @@ export function TriageBlock({
             data-testid="triage-open-console"
             onClick={onOpenTriage}
           >
-            트리아지에서 변경
+            Triage에서 변경
           </Button>
         )}
       </div>
 
       {/* 심각도 */}
-      <FieldRow label="심각도">
+      <FieldRow label="심각도" className="px-0">
         {voc.severity !== null ? (
           <SeverityBadge severity={voc.severity} />
         ) : (
@@ -45,26 +54,26 @@ export function TriageBlock({
       </FieldRow>
 
       {/* 담당자 */}
-      <FieldRow label="담당자">
+      <FieldRow label="담당자" className="px-0">
         {voc.owner_user_id !== null ? (
-          <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
+          <UserChip user={{ display_name: ownerDisplayName ?? GLOSSARY.owner }} size="sm" />
         ) : (
-          <span className="text-sm text-feedback-error">Owner 없음</span>
+          <UnassignedBadge />
         )}
       </FieldRow>
 
-      {/* 분석 영역 */}
-      <FieldRow label="분석 영역">
+      {/* Analytics Area */}
+      <FieldRow label="Analytics Area" className="px-0">
         {voc.analytics_area_id !== null ? (
-          <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics area'}</span>
+          <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics Area'}</span>
         ) : (
-          <span className="text-sm text-feedback-warning">미지정</span>
+          <span className="text-sm text-text-warning">미지정</span>
         )}
       </FieldRow>
 
-      {/* 트리아지 상태 */}
-      <FieldRow label="트리아지 상태">
-        <span className="text-sm text-text-primary">{voc.triage_state}</span>
+      {/* Triage 상태 */}
+      <FieldRow label="Triage 상태" className="px-0">
+        <span className="text-sm text-text-primary">{TRIAGE_STATE_LABELS[voc.triage_state]}</span>
       </FieldRow>
     </div>
   );

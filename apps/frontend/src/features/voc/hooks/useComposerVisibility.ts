@@ -1,18 +1,16 @@
-// useComposerVisibility — derives which composer tabs to show based on actor role + VOC context.
+// useComposerVisibility — derives composer tabs from actor identity and triage capability.
 //
 // C5.1 (slice3 #21)
 // Spec: PLAN-21-SUBCHUNKS.md C5.1
 // Prototype ref: docs/design-prototype/screen-voc.jsx:404-413 (tab visibility gating)
 //
 // Visibility rules:
-//   - Reporter on own VOC → { showPublic: false, showReply: true, showInternal: false }
-//   - Admin or Developer in scope → { showPublic: true, showReply: true, showInternal: true }
-//   - Reporter on someone else's VOC → null (no composer section rendered)
+//   - Reporter on own VOC → reply; internal only with voc.triage
+//   - Admin or Developer → public and reply; Internal only with voc.triage
+//   - Reporter on someone else's VOC → Internal only with triage; otherwise no composer
 //
-// The "outside MS" case (developer not in read_scope for the VOC's MS) is handled
-// upstream: VocDetailPanel only shows the full envelope to actors with read_scope,
-// so the outer panel already guards access. A developer who receives the full envelope
-// is considered in-scope.
+// The outer panel guards full-envelope access. Internal remains gated separately by
+// the backend triage capability supplied by the detail controller.
 
 import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
@@ -30,6 +28,7 @@ export interface ComposerVisibility {
 export function useComposerVisibility(
   voc: VocDetailEnvelope,
   me: MeResponse | null | undefined,
+  canTriage: boolean,
 ): ComposerVisibility | null {
   if (!me) return null;
 
@@ -37,17 +36,16 @@ export function useComposerVisibility(
   const isReporter = role_level === 'user';
   const isOwnVoc = actorId === voc.reporter_id;
 
-  // Reporter on their own VOC → reply tab only.
+  // Reporter on their own VOC → reply tab, plus Internal when triage is approved.
   if (isReporter && isOwnVoc) {
-    return { showPublic: false, showReply: true, showInternal: false };
+    return { showPublic: false, showReply: true, showInternal: canTriage };
   }
 
-  // Reporter on someone else's VOC → no composer.
+  // A User with triage may add Internal, but cannot use Public/Reply on someone else's VOC.
   if (isReporter && !isOwnVoc) {
-    return null;
+    return canTriage ? { showPublic: false, showReply: false, showInternal: true } : null;
   }
 
-  // Admin or Developer in scope → all three tabs.
-  // (VocDetailPanel guards the full envelope so reaching here implies in-scope.)
-  return { showPublic: true, showReply: true, showInternal: true };
+  // Public and reply stay role-based; Internal follows the backend capability.
+  return { showPublic: true, showReply: true, showInternal: canTriage };
 }

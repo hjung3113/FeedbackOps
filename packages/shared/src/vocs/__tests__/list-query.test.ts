@@ -146,7 +146,7 @@ describe('listVocsQuerySchema — limit', () => {
 });
 
 describe('listVocsQuerySchema — tab', () => {
-  it.each(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'waiting'] as const)(
+  it.each(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'no-task', 'waiting'] as const)(
     'accepts tab=%s',
     (tab) => {
       expect(listVocsQuerySchema.parse({ view: 'inbox', tab }).tab).toBe(tab);
@@ -167,5 +167,16 @@ describe('listVocsQuerySchema — filter.owner', () => {
     expect(() =>
       listVocsQuerySchema.parse({ view: 'inbox', 'filter.owner': 'all' }),
     ).toThrow();
+  });
+});
+
+describe('listVocsQuerySchema — filter.analytics_area', () => {
+  it("accepts filter.analytics_area='unset' as a flat query key", () => {
+    const result = listVocsQuerySchema.parse({
+      view: 'inbox',
+      'filter.analytics_area': 'unset',
+    });
+
+    expect(result['filter.analytics_area']).toBe('unset');
   });
 });

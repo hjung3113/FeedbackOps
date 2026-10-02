@@ -94,6 +94,36 @@ describe.skipIf(!runIntegration)('GET /permission-requests (admin list)', () => 
     expect(statuses).toEqual(['needs_more_info', 'pending']);
   });
 
+  it('includes requested expiration on the admin review row used by the detail panel', async () => {
+    const actorRows = await dbHandle.pool.query<{ external_id: string; id: string }>(
+      'select external_id, id from core.actors where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    const requester = actorRows.rows.find((row) => row.external_id === 'mock-user-1');
+    if (!requester) throw new Error('seeded requester missing');
+    const requestedExpiration = '2026-12-31T23:59:59.000Z';
+    const inserted = await dbHandle.pool.query<{ id: string }>(
+      `insert into permission.permission_requests
+        (workspace_id, requester_actor_id, requested_capability, reason, status, requested_expiration)
+       values ($1, $2, 'workspace.read', 'expiration review', 'pending', $3)
+       returning id`,
+      [WORKSPACE_ID, requester.id, requestedExpiration],
+    );
+    const requestId = inserted.rows[0]?.id;
+    if (!requestId) throw new Error('permission request insert returned no row');
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/permissions/requests?status=pending',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().requests).toContainEqual(
+      expect.objectContaining({ id: requestId, requested_expiration: requestedExpiration }),
+    );
+  });
+
   it('non-admin is forbidden (403)', async () => {
     await seedRequests();
     const cookie = await loginAs(app, 'mock-user-1');

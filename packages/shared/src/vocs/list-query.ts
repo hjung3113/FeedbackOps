@@ -32,6 +32,7 @@ export const vocTabEnumSchema = z.enum([
   'unassigned',
   'similar',
   'no-link',
+  'no-task',
   'high-no-link',
   'waiting',
 ]);
@@ -55,6 +56,7 @@ export const listVocsQuerySchema = z.object({
   'filter.severity': commaListOf(severityEnumSchema).optional(),
   'filter.reporter_facing_status': commaListOf(reporterFacingStatusEnumSchema).optional(),
   'filter.owner': z.enum(['assigned', 'unassigned']).optional(),
+  'filter.analytics_area': z.literal('unset').optional(),
   // Sort whitelist is enforced here; mapped to drizzle column + direction in
   // repo layer via a fixed SORT_COLUMN_MAP dict (never string-interpolated).
   sort: z

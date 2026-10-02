@@ -8,7 +8,7 @@ export type { TaskStatus } from './status.js';
 export const taskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const taskDtoSchema = z
   .object({
@@ -36,6 +36,7 @@ export const taskDetailSourceSchema = z
     task_request: z
       .object({
         id: z.string().uuid(),
+        display_id: z.string(),
         status: z.enum([
           'pending_review',
           'approved',
@@ -49,6 +50,7 @@ export const taskDetailSourceSchema = z
     finding: z
       .object({
         id: z.string().uuid(),
+        display_id: z.string(),
         title: z.string(),
         summary: z.string(),
         evidence_count: z.number().int().nonnegative(),
@@ -93,6 +95,14 @@ export const patchTaskStatusRequestSchema = z
   .strict();
 export type PatchTaskStatusRequest = z.infer<typeof patchTaskStatusRequestSchema>;
 
+// #514 B1b — POST /tasks/:id/milestone. `null` unassigns.
+export const assignTaskMilestoneRequestSchema = z
+  .object({
+    milestone_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type AssignTaskMilestoneRequest = z.infer<typeof assignTaskMilestoneRequestSchema>;
+
 export const convertTaskRequestRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -117,6 +127,8 @@ export const listTasksQuerySchema = z
     status: taskStatusSchema.optional(),
     assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    public_update: z.literal('missing').optional(),
+    milestone_id: z.string().uuid().optional(),
   })
   .strict();
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;

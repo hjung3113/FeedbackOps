@@ -1,4 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
 import { type LinkEvidenceRequest, linkEvidenceRequestSchema } from '@fops/shared';
 import {
   Button,
@@ -32,7 +33,7 @@ export function LinkEvidenceModal({
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<LinkEvidenceRequest>({
-    resolver: zodResolver(linkEvidenceRequestSchema),
+    resolver: zodResolver(linkEvidenceRequestSchema, { errorMap: koreanZodErrorMap }),
     defaultValues: {
       source_type: 'voc',
       source_id: '',
@@ -103,13 +104,11 @@ export function LinkEvidenceModal({
             )}
           </div>
 
-          <p className="text-xs text-text-muted">
-            현재 VOC 소스만 연결할 수 있습니다. (source_type: voc)
-          </p>
+          <p className="text-xs text-text-muted">현재 VOC 소스만 연결할 수 있습니다.</p>
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+          <Button type="button" variant="secondary" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button

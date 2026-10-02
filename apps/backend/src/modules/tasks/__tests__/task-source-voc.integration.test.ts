@@ -24,18 +24,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -123,7 +119,9 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     msId: string;
     voc?: { id: string; displayId: string; title: string } | undefined;
     findingId?: string | undefined;
+    findingDisplayId?: string | undefined;
     taskRequestId: string;
+    taskRequestDisplayId: string;
     taskId: string;
   }
 
@@ -136,36 +134,37 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
 
     let voc: SeededChain['voc'];
     let findingId: string | undefined;
+    let findingDisplayId: string | undefined;
     if (input.findingSource === 'voc') {
       const seeded = await seedVoc(msId, input.vocTitle);
       voc = { ...seeded, title: input.vocTitle };
-      findingId = (
-        await insertFindingRow(migrateHandle, {
-          workspaceId: WORKSPACE_ID,
-          primaryManagedSystemId: msId,
-          title: FINDING_TITLE,
-          summary: FINDING_SUMMARY,
-          sourceType: 'voc',
-          sourceId: seeded.id,
-          status: 'active',
-          createdBy: adminActorId,
-        })
-      ).id;
+      const finding = await insertFindingRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        title: FINDING_TITLE,
+        summary: FINDING_SUMMARY,
+        sourceType: 'voc',
+        sourceId: seeded.id,
+        status: 'active',
+        createdBy: adminActorId,
+      });
+      findingId = finding.id;
+      findingDisplayId = finding.display_id;
     } else if (input.findingSource === 'voc_cluster') {
       // Cluster/manual/survey provenance: source_id is not a VOC and must not
       // resolve one (no FK on findings.source_id — a bare uuid is valid).
-      findingId = (
-        await insertFindingRow(migrateHandle, {
-          workspaceId: WORKSPACE_ID,
-          primaryManagedSystemId: msId,
-          title: FINDING_TITLE,
-          summary: FINDING_SUMMARY,
-          sourceType: 'voc_cluster',
-          sourceId: randomUUID(),
-          status: 'active',
-          createdBy: adminActorId,
-        })
-      ).id;
+      const finding = await insertFindingRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        title: FINDING_TITLE,
+        summary: FINDING_SUMMARY,
+        sourceType: 'voc_cluster',
+        sourceId: randomUUID(),
+        status: 'active',
+        createdBy: adminActorId,
+      });
+      findingId = finding.id;
+      findingDisplayId = finding.display_id;
     }
 
     const taskRequest = await insertTaskRequestRow(migrateHandle, {
@@ -201,7 +200,15 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       sourceTaskRequestId: taskRequest.id,
       createdBy: adminActorId,
     });
-    return { msId, voc, findingId, taskRequestId: taskRequest.id, taskId: task.id };
+    return {
+      msId,
+      voc,
+      findingId,
+      findingDisplayId,
+      taskRequestId: taskRequest.id,
+      taskRequestDisplayId: taskRequest.display_id,
+      taskId: task.id,
+    };
   }
 
   /** Developer actor (role_level 'developer') with the given MS grants. */
@@ -230,9 +237,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ source: Record<string, unknown> | null }>();
     expect(body.source).toEqual({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
       finding: {
         id: chain.findingId,
+        display_id: chain.findingDisplayId,
         title: FINDING_TITLE,
         summary: FINDING_SUMMARY,
         evidence_count: 0,
@@ -321,7 +333,10 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       taskRequestSource: 'finding',
     });
     const got = await getTask(adminCookie, chain.taskId);
-    const detail = got.json<{ updated_at: string; source: { voc?: { visibility_state: string } } }>();
+    const detail = got.json<{
+      updated_at: string;
+      source: { voc?: { visibility_state: string } };
+    }>();
     // Positive twin: GET carries the verdict, so equality below is not vacuous.
     expect(detail.source.voc?.visibility_state).toBe('allowed');
 
@@ -359,9 +374,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     const body = res.json<{ source: Record<string, unknown> | null }>();
     expect(body.source).toEqual({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
       finding: {
         id: chain.findingId,
+        display_id: chain.findingDisplayId,
         title: FINDING_TITLE,
         summary: FINDING_SUMMARY,
         evidence_count: 0,
@@ -388,9 +408,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     const body = res.json<{ source: Record<string, unknown> | null }>();
     // task_request/finding nodes are unchanged for the out-of-scope actor.
     expect(body.source).toMatchObject({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
       finding: {
         id: chain.findingId,
+        display_id: chain.findingDisplayId,
         title: FINDING_TITLE,
         summary: FINDING_SUMMARY,
         evidence_count: 0,
@@ -422,8 +447,16 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(raw).not.toContain(vocTitle);
     // Non-VOC nodes are unchanged for the summary-visibility actor.
     expect(body.source).toMatchObject({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
-      finding: { id: chain.findingId, title: FINDING_TITLE },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
+      finding: {
+        id: chain.findingId,
+        display_id: chain.findingDisplayId,
+        title: FINDING_TITLE,
+      },
     });
   });
 
@@ -432,18 +465,17 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     const requestVocTitle = `SrcVoc VOC request-${randomUUID().slice(0, 8)}`;
     const requestVoc = await seedVoc(msId, requestVocTitle);
     const findingVoc = await seedVoc(msId, `SrcVoc VOC finding-${randomUUID().slice(0, 8)}`);
-    const findingId = (
-      await insertFindingRow(migrateHandle, {
-        workspaceId: WORKSPACE_ID,
-        primaryManagedSystemId: msId,
-        title: FINDING_TITLE,
-        summary: FINDING_SUMMARY,
-        sourceType: 'voc',
-        sourceId: findingVoc.id,
-        status: 'active',
-        createdBy: adminActorId,
-      })
-    ).id;
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: FINDING_TITLE,
+      summary: FINDING_SUMMARY,
+      sourceType: 'voc',
+      sourceId: findingVoc.id,
+      status: 'active',
+      createdBy: adminActorId,
+    });
+    const findingId = finding.id;
     const taskRequest = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       sourceType: 'voc',
@@ -477,9 +509,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     const body = res.json<{ source: Record<string, unknown> | null }>();
     expect(body.source).toEqual({
-      task_request: { id: taskRequest.id, status: 'approved' },
+      task_request: {
+        id: taskRequest.id,
+        display_id: taskRequest.display_id,
+        status: 'approved',
+      },
       finding: {
         id: findingId,
+        display_id: finding.display_id,
         title: FINDING_TITLE,
         summary: FINDING_SUMMARY,
         evidence_count: 0,
@@ -506,9 +543,14 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     const body = res.json<{ source: Record<string, unknown> | null }>();
     expect(body.source).toEqual({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
       finding: {
         id: chain.findingId,
+        display_id: chain.findingDisplayId,
         title: FINDING_TITLE,
         summary: FINDING_SUMMARY,
         evidence_count: 0,
@@ -527,7 +569,11 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
     const body = res.json<{ source: Record<string, unknown> | null }>();
     expect(body.source).toEqual({
-      task_request: { id: chain.taskRequestId, status: 'approved' },
+      task_request: {
+        id: chain.taskRequestId,
+        display_id: chain.taskRequestDisplayId,
+        status: 'approved',
+      },
     });
   });
 

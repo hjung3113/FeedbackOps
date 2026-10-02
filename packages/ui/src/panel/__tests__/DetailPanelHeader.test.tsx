@@ -4,12 +4,31 @@ import userEvent from '@testing-library/user-event';
 import { DetailPanelHeader } from '../DetailPanelHeader.js';
 import type { DetailPanelKind } from '../DetailPanelHeader.js';
 
+// #525: the tokens are raw RGB triplets — a bare `var(--color-X)` is not a
+// valid CSS color, so the component wraps it in `rgb(...)`. This map's exact
+// string values ARE the regression guard: if the component reverts to the
+// bare form, this test fails even though jsdom's CSSOM echoes either form
+// back from `.style.backgroundColor` without validating it (var() references
+// are unresolved at parse time, so jsdom can't tell the bare form is
+// invalid on its own — matching the literal fixed string is what catches it).
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc: 'var(--color-aether-blue)',
-  finding: 'var(--color-emerald)',
-  task: 'var(--color-amethyst)',
-  survey: 'var(--color-cyan-spark)',
-  cluster: 'var(--color-amber)',
+  voc: 'rgb(var(--color-aether-blue))',
+  finding: 'rgb(var(--color-emerald))',
+  task: 'rgb(var(--color-amethyst))',
+  task_request: 'rgb(var(--color-amber))',
+  survey: 'rgb(var(--color-cyan-spark))',
+  cluster: 'rgb(var(--color-amber))',
+  milestone: 'rgb(var(--color-amber))',
+};
+
+const KIND_LABELS: Record<DetailPanelKind, string> = {
+  voc: 'VOC',
+  finding: 'Finding',
+  task: 'Task',
+  task_request: 'Task Request',
+  survey: 'Survey',
+  cluster: 'Cluster',
+  milestone: 'Milestone',
 };
 
 const kinds = Object.keys(KIND_ACCENT) as DetailPanelKind[];
@@ -23,7 +42,9 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       const header = container.querySelector(`[data-kind="${kind}"]`);
       expect(header).not.toBeNull();
     });
+  }
 
+  for (const kind of kinds.filter((kind) => kind !== 'milestone')) {
     it(`kind="${kind}" accent stripe has correct CSS variable background`, () => {
       const { container } = render(
         <DetailPanelHeader kind={kind} id="V-1024" onClose={() => {}} />,
@@ -38,6 +59,46 @@ describe('DetailPanelHeader — kind accent stripe', () => {
   }
 });
 
+describe('DetailPanelHeader — milestone kind badge', () => {
+  it.each(kinds)('renders kind="%s" as a title-case chip with a dot', (kind) => {
+    const { container } = render(<DetailPanelHeader kind={kind} id="ID-1" onClose={() => {}} />);
+    const chip = screen.getByText(KIND_LABELS[kind]);
+
+    expect(chip).toHaveClass('rounded');
+    expect(chip).toHaveClass('text-[11px]');
+    expect(chip).not.toHaveClass('uppercase');
+    expect(chip.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect((chip as HTMLElement).style.color).toBe(KIND_ACCENT[kind]);
+    expect((chip as HTMLElement).style.backgroundColor).toBe(
+      KIND_ACCENT[kind].replace(/\)$/, ' / 12%)'),
+    );
+    expect(container.querySelector(`[data-kind="${kind}"]`)).toBeInTheDocument();
+  });
+
+  it('renders the rounded title-case badge without a leading stripe', () => {
+    const { container } = render(
+      <DetailPanelHeader
+        kind="milestone"
+        id="M-21"
+        onClose={() => {}}
+        extras={<span data-testid="extra-slot">extra</span>}
+      />,
+    );
+
+    const header = container.querySelector('[data-kind="milestone"]');
+    const badge = screen.getByText('Milestone');
+
+    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('text-[11px]');
+    expect(badge).not.toHaveClass('uppercase');
+    expect((badge as HTMLElement).querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(header?.querySelector(':scope > div[aria-hidden="true"]')).toBeNull();
+    expect(screen.getByText('M-21')).toBeInTheDocument();
+    expect(screen.getByTestId('extra-slot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+  });
+});
+
 describe('DetailPanelHeader — display', () => {
   it('renders the display id', () => {
     render(<DetailPanelHeader kind="voc" id="V-2048" onClose={() => {}} />);
@@ -47,6 +108,16 @@ describe('DetailPanelHeader — display', () => {
   it('renders kind label', () => {
     render(<DetailPanelHeader kind="voc" id="V-1" onClose={() => {}} />);
     expect(screen.getByText('VOC')).toBeInTheDocument();
+  });
+
+  // B2d fixup (#514): panels mount the header before their detail query
+  // resolves; without an id the chrome and close action still render and no
+  // unavailable record data appears.
+  it('renders kind label and close action without an id span when id is omitted', () => {
+    const { container } = render(<DetailPanelHeader kind="milestone" onClose={() => {}} />);
+    expect(screen.getByText('Milestone')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+    expect(container.querySelector('.font-mono')).toBeNull();
   });
 
   it('matches prototype panel-header and panel-id typography', () => {
@@ -88,5 +159,10 @@ describe('DetailPanelHeader — onClose', () => {
     render(<DetailPanelHeader kind="voc" id="V-1" onClose={onClose} />);
     await user.click(screen.getByRole('button', { name: '패널 닫기' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('omits the close button when no callback is provided', () => {
+    render(<DetailPanelHeader kind="survey" id="SRV-1" />);
+    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
   });
 });

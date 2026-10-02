@@ -1,3 +1,4 @@
+import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
 // List filters + selection are URL state (docs/frontend/routes-and-layout.md
@@ -13,3 +14,7 @@ export const analyticsAreasSearchSchema = z
   .strict();
 
 export type AnalyticsAreasSearch = z.infer<typeof analyticsAreasSearchSchema>;
+
+export function validateAnalyticsAreasSearch(raw: unknown) {
+  return parseRouteSearch(analyticsAreasSearchSchema, raw);
+}

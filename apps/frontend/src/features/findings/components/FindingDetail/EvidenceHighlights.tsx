@@ -1,32 +1,13 @@
-import type {
-  EvidenceHighlightDto,
-  EvidenceHighlightImportance,
-  EvidenceHighlightSentiment,
-  EvidenceHighlightSourceType,
-} from '@fops/shared';
+import {
+  EVIDENCE_IMPORTANCE_LABELS,
+  EVIDENCE_SENTIMENT_LABELS,
+  EVIDENCE_SOURCE_TYPE_LABELS,
+} from '@/lib/copy/enum-labels';
+import type { EvidenceHighlightDto } from '@fops/shared';
 import { EmptyState, Skeleton } from '@fops/ui';
 import type * as React from 'react';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import { FitBadge } from './detail-primitives';
-
-export const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> = {
-  voc: 'VOC',
-  survey_response: 'Survey',
-  note: 'Note',
-};
-// ── Sentiment / importance badge helpers ─────────────────────────────────────
-
-const SENTIMENT_LABEL: Record<EvidenceHighlightSentiment, string> = {
-  negative: '부정',
-  neutral: '중립',
-  positive: '긍정',
-};
-
-const IMPORTANCE_LABEL: Record<EvidenceHighlightImportance, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-};
 
 // ── Single Evidence Highlight row ────────────────────────────────────────────
 
@@ -47,7 +28,7 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
       {/* Source reference */}
       <div className="flex items-center gap-2 flex-wrap">
         <FitBadge data-testid="evidence-source-type">
-          {EVIDENCE_SOURCE_TYPE_LABEL[highlight.source_type]}
+          {EVIDENCE_SOURCE_TYPE_LABELS[highlight.source_type]}
         </FitBadge>
         {highlight.source_type !== 'survey_response' && highlight.source_id !== null && (
           <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
@@ -56,12 +37,12 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
         )}
         {highlight.sentiment !== null && (
           <FitBadge data-testid="evidence-sentiment">
-            {SENTIMENT_LABEL[highlight.sentiment]}
+            {EVIDENCE_SENTIMENT_LABELS[highlight.sentiment]}
           </FitBadge>
         )}
         {highlight.importance !== null && (
           <FitBadge data-testid="evidence-importance">
-            {IMPORTANCE_LABEL[highlight.importance]}
+            {EVIDENCE_IMPORTANCE_LABELS[highlight.importance]}
           </FitBadge>
         )}
       </div>
@@ -102,7 +83,7 @@ export function EvidenceHighlightsSection({
   }
 
   if (isError) {
-    return <p className="text-sm text-feedback-error">Evidence 목록을 불러오지 못했습니다.</p>;
+    return <p className="text-sm text-text-danger">Evidence 목록을 불러오지 못했습니다.</p>;
   }
 
   const items = highlights ?? [];
@@ -112,8 +93,8 @@ export function EvidenceHighlightsSection({
       <div data-testid="evidence-empty-state">
         <EmptyState
           size="sm"
-          title="증거 하이라이트가 없습니다."
-          body="Evidence 추가 버튼으로 증거를 추가하세요."
+          title="Evidence 하이라이트가 없습니다."
+          body="Evidence 추가 버튼으로 Evidence를 추가하세요."
           className="rounded-md border border-dashed border-border-subtle bg-surface-card px-6"
         />
       </div>

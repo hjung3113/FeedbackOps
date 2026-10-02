@@ -57,7 +57,7 @@ pnpm --filter @fops/backend db:migrate
 SEED_MODE=personas pnpm --filter @fops/backend db:seed
 ```
 
-`SEED_MODE=personas` gives you eight actors across all three role levels with realistic permission grants — the fastest way to see how the product behaves for someone who is *not* an admin. See the User Manual's persona table for who can do what.
+`SEED_MODE=personas` gives you six login personas across all three role levels with realistic permission grants — the fastest way to see how the product behaves for someone who is *not* an admin. See the User Manual's persona table for who can do what.
 
 Run both apps:
 

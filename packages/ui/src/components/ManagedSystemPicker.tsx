@@ -22,5 +22,5 @@ export interface ManagedSystemPickerProps {
 }
 
 export function ManagedSystemPicker(props: ManagedSystemPickerProps) {
-  return <ChipPicker {...props} placeholder={props.placeholder ?? 'Select Managed System'} testId={props.testId ?? 'managed-system-picker'} variant="managed-system" />;
+  return <ChipPicker {...props} placeholder={props.placeholder ?? 'Managed System 선택'} testId={props.testId ?? 'managed-system-picker'} variant="managed-system" />;
 }

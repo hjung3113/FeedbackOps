@@ -27,6 +27,7 @@ export type SurveyResponseEvidencePurpose =
   | 'personal_read'
   | 'approve_excerpt'
   | 'create_finding'
+  | 'follow_up_decision'
   | 'read_highlight';
 export type SurveyResponseEvidenceAccess = {
   subject: SurveyResponseEvidenceSubject;

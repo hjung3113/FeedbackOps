@@ -7,10 +7,10 @@
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468
 //   Reply variant is the same shell minus ReporterStatusChangeBlock.
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -51,9 +51,9 @@ vi.mock('@fops/ui', async (importActual) => {
   };
 });
 
-import { ReporterReplyComposer } from '../ReporterReplyComposer';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope } from '@fops/shared';
+import { ReporterReplyComposer } from '../ReporterReplyComposer';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -122,6 +122,14 @@ describe('<ReporterReplyComposer>', () => {
     vi.clearAllMocks();
   });
 
+  it('uses 제출자 as the fallback identity in the reply preview', async () => {
+    render(<ReporterReplyComposer voc={BASE_VOC} me={ME_REPORTER} />, { wrapper: makeWrapper() });
+
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+
+    expect(await screen.findByText(/제출자 ·/)).toBeInTheDocument();
+  });
+
   it('renders the composer and wires submit mutation: invalidates [voc, id] on success', async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -154,7 +162,7 @@ describe('<ReporterReplyComposer>', () => {
     expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
 
     // Send button is present
-    expect(screen.getByRole('button', { name: /send reply/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /답변 보내기/ })).toBeInTheDocument();
 
     // Trigger onSuccess (simulates mutation callback)
     capturedOnSuccess?.();
@@ -201,7 +209,7 @@ describe('<ReporterReplyComposer>', () => {
     );
 
     expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
-    const send = screen.getByRole('button', { name: /send reply/i });
+    const send = screen.getByRole('button', { name: /답변 보내기/ });
     expect(send).toBeDisabled();
     fireEvent.click(send);
     expect(mockMutate).not.toHaveBeenCalled();
@@ -221,6 +229,6 @@ describe('<ReporterReplyComposer>', () => {
     );
 
     expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /send reply/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /답변 보내기/ })).not.toBeDisabled();
   });
 });

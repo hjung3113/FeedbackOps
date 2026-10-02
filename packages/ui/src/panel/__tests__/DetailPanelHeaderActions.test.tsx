@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DetailPanelHeaderActions } from '../DetailPanelHeaderActions.js';
 
-// Mock sonner. `toast` is callable and carries `.error`, matching the real API.
+// Mock sonner's success and error methods.
 vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { error: vi.fn() }),
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 afterEach(() => {
@@ -63,7 +63,7 @@ describe('DetailPanelHeaderActions — copy link', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       'https://app.example.com/vocs/V-1024',
     );
-    expect(toast).toHaveBeenCalledWith('링크가 복사되었습니다.');
+    expect(toast.success).toHaveBeenCalledWith('링크가 복사되었습니다.');
   });
 
   it('resolves a route path into a pasteable absolute URL', async () => {
@@ -91,7 +91,7 @@ describe('DetailPanelHeaderActions — copy link', () => {
     await user.click(screen.getByRole('button', { name: '링크 복사' }));
 
     expect(document.execCommand).toHaveBeenCalledWith('copy');
-    expect(toast).toHaveBeenCalledWith('링크가 복사되었습니다.');
+    expect(toast.success).toHaveBeenCalledWith('링크가 복사되었습니다.');
   });
 
   it('reports failure instead of claiming a copy that never happened', async () => {
@@ -102,7 +102,7 @@ describe('DetailPanelHeaderActions — copy link', () => {
 
     await user.click(screen.getByRole('button', { name: '링크 복사' }));
 
-    expect(toast).not.toHaveBeenCalledWith('링크가 복사되었습니다.');
+    expect(toast.success).not.toHaveBeenCalledWith('링크가 복사되었습니다.');
     expect(toast.error).toHaveBeenCalledWith(
       '링크를 복사하지 못했습니다. 주소창의 URL을 직접 복사해 주세요.',
     );
@@ -116,7 +116,7 @@ describe('DetailPanelHeaderActions — copy link', () => {
 
     await user.click(screen.getByRole('button', { name: '링크 복사' }));
 
-    expect(toast).not.toHaveBeenCalledWith('링크가 복사되었습니다.');
+    expect(toast.success).not.toHaveBeenCalledWith('링크가 복사되었습니다.');
     expect(toast.error).toHaveBeenCalled();
   });
 
@@ -134,7 +134,7 @@ describe('DetailPanelHeaderActions — copy link', () => {
     await user.click(screen.getByRole('button', { name: '링크 복사' }));
 
     expect(document.execCommand).toHaveBeenCalledWith('copy');
-    expect(toast).toHaveBeenCalledWith('링크가 복사되었습니다.');
+    expect(toast.success).toHaveBeenCalledWith('링크가 복사되었습니다.');
   });
 });
 

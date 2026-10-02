@@ -16,7 +16,7 @@ const preset: Config = {
       colors: {
         // --- Surface tokens ---
         'surface-canvas': 'rgb(var(--surface-canvas) / <alpha-value>)',
-        'surface-raised': 'rgb(var(--surface-raised) / <alpha-value>)',        // compat alias
+        'surface-raised': 'rgb(var(--surface-raised) / <alpha-value>)', // compat alias
         'surface-sidebar': 'rgb(var(--surface-sidebar) / <alpha-value>)',
         'surface-list': 'rgb(var(--surface-list) / <alpha-value>)',
         'surface-row-hover': 'rgb(var(--surface-row-hover) / <alpha-value>)',
@@ -42,7 +42,7 @@ const preset: Config = {
         'text-inverse': 'rgb(var(--color-pitch-black) / <alpha-value>)',
 
         // --- Border tokens ---
-        'border-default': 'rgb(var(--border-default) / <alpha-value>)',        // compat alias
+        'border-default': 'rgb(var(--border-default) / <alpha-value>)', // compat alias
         'border-subtle': 'rgb(var(--border-subtle) / <alpha-value>)',
         'border-strong': 'rgb(var(--border-strong) / <alpha-value>)',
         'border-selected': 'rgb(var(--border-selected) / <alpha-value>)',
@@ -59,64 +59,105 @@ const preset: Config = {
         'accent-success': 'rgb(var(--color-emerald) / <alpha-value>)',
 
         // --- Status tokens: Reporter-facing ---
-        'status-reporter-received':  'rgb(var(--color-cyan-spark) / <alpha-value>)',
+        'status-reporter-received': 'rgb(var(--color-cyan-spark) / <alpha-value>)',
         'status-reporter-reviewing': 'rgb(var(--color-aether-blue) / <alpha-value>)',
-        'status-reporter-assigned':  'rgb(var(--color-deep-violet) / <alpha-value>)',
-        'status-reporter-progress':  'rgb(var(--color-amethyst) / <alpha-value>)',
-        'status-reporter-prep':      'rgb(var(--color-amber) / <alpha-value>)',
-        'status-reporter-resolved':  'rgb(var(--color-emerald) / <alpha-value>)',
-        'status-reporter-reopened':  'rgb(var(--color-warning-red) / <alpha-value>)',
-        'status-reporter-closed':    'rgb(var(--color-fog-grey) / <alpha-value>)',
+        'status-reporter-assigned': 'rgb(var(--color-deep-violet) / <alpha-value>)',
+        'status-reporter-progress': 'rgb(var(--color-amethyst) / <alpha-value>)',
+        'status-reporter-prep': 'rgb(var(--color-amber) / <alpha-value>)',
+        'status-reporter-resolved': 'rgb(var(--color-emerald) / <alpha-value>)',
+        'status-reporter-reopened': 'rgb(var(--color-warning-red) / <alpha-value>)',
+        'status-reporter-closed': 'rgb(var(--color-fog-grey) / <alpha-value>)',
+        // #525: contrast-safe pairs for label TEXT (dot/tint keep the base
+        // token above). See tokens.css for the per-token contrast math.
+        'status-reporter-received-label':
+          'rgb(var(--status-reporter-received-label) / <alpha-value>)',
+        'status-reporter-reviewing-label':
+          'rgb(var(--status-reporter-reviewing-label) / <alpha-value>)',
+        'status-reporter-assigned-label':
+          'rgb(var(--status-reporter-assigned-label) / <alpha-value>)',
+        'status-reporter-progress-label':
+          'rgb(var(--status-reporter-progress-label) / <alpha-value>)',
+        'status-reporter-prep-label': 'rgb(var(--status-reporter-prep-label) / <alpha-value>)',
+        'status-reporter-resolved-label':
+          'rgb(var(--status-reporter-resolved-label) / <alpha-value>)',
+        'status-reporter-reopened-label':
+          'rgb(var(--status-reporter-reopened-label) / <alpha-value>)',
+        'status-reporter-closed-label': 'rgb(var(--status-reporter-closed-label) / <alpha-value>)',
 
         // --- Status tokens: Internal Task ---
-        'status-internal-backlog':  'rgb(var(--color-fog-grey) / <alpha-value>)',
-        'status-internal-todo':     'rgb(var(--color-storm-cloud) / <alpha-value>)',
-        'status-internal-doing':    'rgb(var(--color-aether-blue) / <alpha-value>)',
-        'status-internal-review':   'rgb(var(--color-amethyst) / <alpha-value>)',
-        'status-internal-done':     'rgb(var(--color-emerald) / <alpha-value>)',
+        'status-internal-backlog': 'rgb(var(--color-fog-grey) / <alpha-value>)',
+        'status-internal-todo': 'rgb(var(--color-storm-cloud) / <alpha-value>)',
+        'status-internal-doing': 'rgb(var(--color-aether-blue) / <alpha-value>)',
+        'status-internal-review': 'rgb(var(--color-amethyst) / <alpha-value>)',
+        'status-internal-done': 'rgb(var(--color-emerald) / <alpha-value>)',
         'status-internal-released': 'rgb(var(--color-cyan-spark) / <alpha-value>)',
         'status-internal-reopened': 'rgb(var(--color-warning-red) / <alpha-value>)',
 
         // --- Severity tokens ---
-        'severity-low':      'rgb(var(--color-storm-cloud) / <alpha-value>)',
-        'severity-medium':   'rgb(var(--color-amber) / <alpha-value>)',
-        'severity-high':     'rgb(var(--severity-high) / <alpha-value>)',
+        'severity-low': 'rgb(var(--color-storm-cloud) / <alpha-value>)',
+        'severity-medium': 'rgb(var(--color-amber) / <alpha-value>)',
+        'severity-high': 'rgb(var(--severity-high) / <alpha-value>)',
         'severity-critical': 'rgb(var(--color-warning-red) / <alpha-value>)',
+        // #525: contrast-safe pairs for label TEXT (dot/tint/ring keep the
+        // base token above). See tokens.css for the per-token contrast math.
+        'severity-low-label': 'rgb(var(--severity-low-label) / <alpha-value>)',
+        'severity-medium-label': 'rgb(var(--severity-medium-label) / <alpha-value>)',
+        'severity-high-label': 'rgb(var(--severity-high-label) / <alpha-value>)',
+        'severity-critical-label': 'rgb(var(--severity-critical-label) / <alpha-value>)',
 
         // --- Confidence tokens ---
-        'confidence-low':    'rgb(var(--color-storm-cloud) / <alpha-value>)',
+        'confidence-low': 'rgb(var(--color-storm-cloud) / <alpha-value>)',
         'confidence-medium': 'rgb(var(--color-cyan-spark) / <alpha-value>)',
-        'confidence-high':   'rgb(var(--color-emerald) / <alpha-value>)',
+        'confidence-high': 'rgb(var(--color-emerald) / <alpha-value>)',
+      },
+
+      // Pack 17 typography tokens (issue #672). Sizes the documented Type Scale
+      // pairs with a leading (body 1.4, heading 1.2) carry it; the rest stay
+      // size-only like the prototype's .text-* helpers, inheriting the body
+      // leading. Token names not used by any screen (text-caption/tiny/md/
+      // heading-lg/display) are intentionally unmapped.
+      fontFamily: {
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+      },
+
+      fontSize: {
+        xs: 'var(--text-xs)',
+        sm: 'var(--text-sm)',
+        base: ['var(--text-body)', { lineHeight: 'var(--leading-normal)' }],
+        lg: 'var(--text-lg)',
+        xl: 'var(--text-xl)',
+        '2xl': ['var(--text-heading)', { lineHeight: 'var(--leading-tight)' }],
       },
 
       spacing: {
         // Layout tokens exposed as spacing utilities
-        'sidebar':           'var(--sidebar-width)',
+        sidebar: 'var(--sidebar-width)',
         'sidebar-collapsed': 'var(--sidebar-width-collapsed)',
-        'rail':              'var(--rail-width)',
-        'detail-panel':      'var(--detail-panel-width)',
-        'toolbar':           'var(--toolbar-height)',
-        'topbar':            'var(--topbar-height)',
-        'row-compact':       'var(--row-height-compact)',
-        'row-default':       'var(--row-height-default)',
-        'row-expanded':      'var(--row-height-expanded)',
+        rail: 'var(--rail-width)',
+        'detail-panel': 'var(--detail-panel-width)',
+        toolbar: 'var(--toolbar-height)',
+        topbar: 'var(--topbar-height)',
+        'row-compact': 'var(--row-height-compact)',
+        'row-default': 'var(--row-height-default)',
+        'row-expanded': 'var(--row-height-expanded)',
       },
 
       borderRadius: {
-        'sm':   'var(--radius-sm)',
-        'md':   'var(--radius-md)',
-        'lg':   'var(--radius-lg)',
-        'xl':   'var(--radius-xl)',
-        'pill': 'var(--radius-pill)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        pill: 'var(--radius-pill)',
       },
 
       boxShadow: {
-        'sm':       'var(--shadow-sm)',
-        'md':       'var(--shadow-md)',
-        'subtle':   'var(--shadow-subtle)',
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        subtle: 'var(--shadow-subtle)',
         'subtle-2': 'var(--shadow-subtle-2)',
-        'xl':       'var(--shadow-xl)',
-        'focus':    'var(--shadow-focus)',
+        xl: 'var(--shadow-xl)',
+        focus: 'var(--shadow-focus)',
       },
     },
   },

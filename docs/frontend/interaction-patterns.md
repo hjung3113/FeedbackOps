@@ -174,6 +174,7 @@ UX rules:
 - Review may be performed by Admin or by Developer within the same Managed System scope.
 - Same-Developer self-approval requires explicit scoped capability, reason, and visibly audited self-approval metadata.
 - Conversion must show created Task and preserved source links.
+- The converted panel resolves the Task from the active, allowed `converted_to` row returned by `GET /entity-links`.
 ```
 
 ## Survey Result Action Boundary

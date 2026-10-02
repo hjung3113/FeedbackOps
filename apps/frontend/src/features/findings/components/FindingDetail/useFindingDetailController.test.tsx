@@ -198,7 +198,6 @@ describe('useFindingDetailController', () => {
   it.each([
     ['addEvidenceOpen', 'setAddEvidenceOpen'],
     ['linkEvidenceOpen', 'setLinkEvidenceOpen'],
-    ['requestTaskOpen', 'setRequestTaskOpen'],
     ['linkTaskOpen', 'setLinkTaskOpen'],
   ] as const)('%s toggles open and closed', (openKey, setKey) => {
     const { result } = renderController(FINDING_LINKED);
@@ -221,8 +220,11 @@ describe('useFindingDetailController', () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith('Finding이 조치 불필요로 표시되었습니다.'),
     );
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['finding', IDS.finding] });
+    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenNthCalledWith(1, { queryKey: ['nav-counts'] });
+    expect(invalidateSpy).toHaveBeenNthCalledWith(2, {
+      queryKey: ['finding', IDS.finding],
+    });
     expect(setDataSpy).toHaveBeenCalledWith(
       ['finding', IDS.finding],
       expect.objectContaining({ id: IDS.finding }),

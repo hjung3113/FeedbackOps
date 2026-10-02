@@ -1,6 +1,13 @@
 @import "@fops/ui/styles/tokens.css";
 @import "@fops/ui/styles/semantic.css";
 
+/* Pack 17 webfonts (#715): variable faces registered by these packages.
+   Inter has no Hangul, so --font-sans falls Korean glyphs through to
+   Pretendard Variable (dynamic unicode-range subsets). */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,4 +16,14 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+@layer base {
+  /* Prototype body spec (docs/design-prototype/styles.css .body rule):
+     Pack 17 body size + leading on top of the Inter stack. */
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
+  }
 }

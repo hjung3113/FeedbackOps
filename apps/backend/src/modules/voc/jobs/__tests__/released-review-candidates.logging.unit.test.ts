@@ -12,9 +12,9 @@ import type { JobLog } from '../../../../lib/job-log.js';
 import type { PublicUpdateReviewCandidatesService } from '../../../voc/public-update-review-candidates/service.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
-  registerReleasedReviewCandidates,
   type TaskReleasedReviewCandidatesPayload,
-} from '../released-review-candidates.js';
+} from '../released-review-candidates-contract.js';
+import { registerReleasedReviewCandidates } from '../released-review-candidates.js';
 
 function payload(
   overrides?: Partial<TaskReleasedReviewCandidatesPayload>,

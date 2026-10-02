@@ -1,0 +1,38 @@
+import { formatDate, formatDateOnly } from '@/lib/format/datetime';
+import type { TaskDto } from '@fops/shared';
+import { InternalTaskBadge, SeverityIndicator, UnassignedBadge, UserAvatar } from '@fops/ui';
+import { taskPriorityToSeverity } from '../../adapters/taskDisplayAdapters';
+
+// Read-only child Task row mirroring screen-milestones.jsx:214-238.
+export function MilestoneTaskRow({
+  task,
+  assigneeName,
+}: {
+  task: TaskDto;
+  assigneeName?: string | undefined;
+}) {
+  return (
+    // G-columns (ADR-0050 choice a, design §7 item 12): the prototype's estimate slot
+    // renders the Task due_date; no estimate field exists.
+    // Nested card geometry per prototype .card-nested: radius 6, borderless, 10/12 padding.
+    <div className="flex items-center gap-2.5 rounded-md bg-surface-canvas px-3 py-2.5">
+      <SeverityIndicator severity={taskPriorityToSeverity(task.priority)} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs text-text-muted">{task.display_id}</span>
+          <span className="truncate text-sm font-medium text-text-primary">{task.title}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+          <InternalTaskBadge status={task.status} />
+          {task.due_date !== null && <span>· {formatDateOnly(task.due_date)}</span>}
+          <span>· 업데이트 {formatDate(task.updated_at)}</span>
+        </div>
+      </div>
+      {assigneeName !== undefined ? (
+        <UserAvatar user={{ display_name: assigneeName }} size="sm" />
+      ) : task.assignee_actor_id === null ? (
+        <UnassignedBadge />
+      ) : null}
+    </div>
+  );
+}

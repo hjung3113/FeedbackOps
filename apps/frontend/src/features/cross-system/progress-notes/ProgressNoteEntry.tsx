@@ -10,6 +10,7 @@
 // passes InternalTaskBadge (which owns its own labels). Status vocabulary stays
 // on the owning surface instead of being duplicated here.
 
+import { formatShortDateTime } from '@/lib/format/datetime';
 import { isTipTapDocBlank } from '@fops/shared';
 import type { FindingStatus, TaskStatus } from '@fops/shared';
 import { OutlineBadge, RichContentRenderer, type TipTapDoc, UserChip } from '@fops/ui';
@@ -56,7 +57,7 @@ export function ProgressNoteEntry({
     >
       {/* Top row: actor chip + kind badge */}
       <div className="flex items-center justify-between gap-2">
-        <UserChip user={actor} size="sm" sub={formatCreatedAt(entry.created_at)} />
+        <UserChip user={actor} size="sm" sub={formatShortDateTime(entry.created_at)} />
         <OutlineBadge>{kindBadgeLabel}</OutlineBadge>
       </div>
 
@@ -80,16 +81,4 @@ export function ProgressNoteEntry({
       )}
     </div>
   );
-}
-
-// Compact absolute timestamp — same shape as the Task panel's row meta clock.
-// (Relative time would need the visual harness's fixed-clock pin; absolute
-// dates keep the timeline unambiguous across pages.)
-function formatCreatedAt(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(raw));
 }

@@ -16,8 +16,8 @@ describe('OutOfScopeSummaryBanner', () => {
       />,
     );
     expect(screen.getByText(/3건/)).toBeInTheDocument();
-    expect(screen.getByText(/high/)).toBeInTheDocument();
-    expect(screen.getByText(/critical/)).toBeInTheDocument();
+    expect(screen.getByText(/높음/)).toBeInTheDocument();
+    expect(screen.getByText(/심각/)).toBeInTheDocument();
   });
 
   it('renders the "Managed System 권한 밖" context text', () => {

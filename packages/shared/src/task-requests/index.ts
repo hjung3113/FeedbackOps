@@ -82,6 +82,9 @@ export const taskRequestDtoSchema = z
         id: z.string().uuid(),
         relation_type: z.literal('requested_task'),
         link_id: z.string().uuid(),
+        display_id: z.string().optional(),
+        title: z.string().optional(),
+        evidence_count: z.number().int().nonnegative().optional(),
       })
       .strict()
       .optional(),

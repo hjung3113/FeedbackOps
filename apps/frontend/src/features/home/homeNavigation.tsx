@@ -1,5 +1,5 @@
 import type { DashboardSummary } from '@fops/shared';
-import { Command, FileBarChart, Home, Inbox, ListTodo } from 'lucide-react';
+import { Home } from 'lucide-react';
 
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import type { SidebarNavEntry } from '@/lib/layout/AppSidebar';
@@ -21,17 +21,14 @@ export function homeSidebarEntries(
     id: `queue-${queue.id}`,
     label: HOME_QUEUE_COPY[queue.id].sidebarLabel,
     href: queue.next_action.route,
-    section: 'ACTION QUEUES',
+    section: '액션 큐',
     countKey: QUEUE_COUNT_KEY[queue.id],
     count: queue.count,
     urgent: queue.severity === 'urgent',
   })) ?? [];
+  // #585: Show actor-safe backend queues only; prototype Command/RECENT items are placeholders.
   return [
-    { id: 'home', label: 'Home', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
-    { id: 'command', label: 'Command', href: '/home', icon: <Command className="h-4 w-4" />, disabled: true, trailing: <kbd className="rounded border border-border-subtle px-1 text-[10px] text-text-muted">⌘K</kbd> },
+    { id: 'home', label: '홈', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
     ...queues,
-    { id: 'recent-finding', label: 'FIN-181 SSO 재인증', href: '/findings', section: 'RECENT', icon: <FileBarChart className="h-4 w-4" /> },
-    { id: 'recent-voc', label: 'VOC-2814 사이드 메뉴', href: '/vocs?view=inbox', icon: <Inbox className="h-4 w-4" /> },
-    { id: 'recent-task', label: 'TASK-901 쿼리 플랜', href: '/tasks?view=board', icon: <ListTodo className="h-4 w-4" /> },
   ];
 }

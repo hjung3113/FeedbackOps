@@ -23,10 +23,22 @@ describe('PermissionBlockedPanel — state rendering', () => {
     ).toBeInTheDocument();
   });
 
-  it('state=request_access: button disabled when onRequestAccess undefined', () => {
+  it('state=request_access: renders a domain reason when provided', () => {
+    render(
+      <PermissionBlockedPanel
+        state="request_access"
+        category="VOC Inbox"
+        reason="선택한 Managed System의 VOC를 볼 권한이 없습니다."
+      />,
+    );
+    expect(
+      screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),
+    ).toBeInTheDocument();
+  });
+
+  it('state=request_access: omits the request button when onRequestAccess is undefined', () => {
     render(<PermissionBlockedPanel state="request_access" category="VOC 상세" />);
-    const btn = screen.getByRole('button', { name: '권한 요청하기' });
-    expect(btn).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '권한 요청하기' })).not.toBeInTheDocument();
   });
 
   it('state=request_access: button enabled + onClick fires when handler provided', () => {
@@ -49,7 +61,7 @@ describe('PermissionBlockedPanel — state rendering', () => {
       <PermissionBlockedPanel
         state="request_access"
         category="VOC 상세"
-        requiredScope={{ capability: 'voc.read', managed_system_id: 'ms-001' }}
+        requiredScope={['voc.read', 'ms-001']}
       />,
     );
     expect(screen.getByText('voc.read · ms-001')).toBeInTheDocument();
@@ -60,7 +72,7 @@ describe('PermissionBlockedPanel — state rendering', () => {
       <PermissionBlockedPanel
         state="request_access"
         category="VOC 상세"
-        requiredScope={{ capability: 'voc.read' }}
+        requiredScope={['voc.read']}
       />,
     );
     expect(screen.getByText('voc.read')).toBeInTheDocument();

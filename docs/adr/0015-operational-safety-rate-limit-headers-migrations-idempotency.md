@@ -10,6 +10,7 @@ Four small but load-bearing decisions that the engineering skills and reviewers 
 - Per-Actor (when authenticated):     100 requests / minute
 - Per-IP   (when unauthenticated):     50 requests / minute
 - Per-Actor mutation tier:             10 requests / minute on POST/PUT/PATCH/DELETE
+- Per-Actor VOC triage commit:          60 requests / minute (PATCH /vocs/:id)
 - Per-Actor Sensitive Permission use:   5 requests / minute (Task Request Self-Approval, Permission Request decisions)
 ```
 

@@ -1,15 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock factories are hoisted above module-level const declarations, so the
 // doubles have to be created inside vi.hoisted or the factories close over
 // uninitialised bindings.
-const { navigate, logout, useMe } = vi.hoisted(() => ({
+const { navigate, logout, useMe, fetchUnreadNotificationCount } = vi.hoisted(() => ({
   navigate: vi.fn(),
   logout: vi.fn(),
   useMe: vi.fn(),
+  fetchUnreadNotificationCount: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -18,8 +19,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 vi.mock('@/lib/api/auth', () => ({ logout }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe }));
+vi.mock('@/lib/api/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/notifications')>()),
+  fetchUnreadNotificationCount,
+}));
 
-import { AppRail, railForPathname } from '../AppRail';
+import { AppRail, RAIL_ITEMS, railForPathname } from '../AppRail';
 
 const ACTOR = {
   actor: {
@@ -49,16 +54,32 @@ function renderRail(props: ComponentProps<typeof AppRail> = {}) {
 // environment and the one worth asserting: a logout that only pointers can
 // reach is the same accessibility failure as #335's native prompt.
 function openAccountMenu() {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Profile' }), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('button', { name: '프로필' }), { key: 'Enter' });
 }
 
 beforeEach(() => {
   navigate.mockReset();
   logout.mockReset();
   useMe.mockReturnValue({ data: ACTOR });
+  fetchUnreadNotificationCount.mockReset();
+  fetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 describe('AppRail', () => {
+  it('sends the Surveys rail destination to participation', () => {
+    expect(RAIL_ITEMS.find((item) => item.key === 'surveys')?.href).toBe('/surveys/participate');
+  });
+
+  it.each([
+    ['loading counts', undefined, '/vocs?view=inbox'],
+    ['loaded counts with Inbox access', { 'voc.inbox': 0 }, '/vocs?view=inbox'],
+    ['loaded counts without Inbox access', {}, '/vocs?view=my'],
+  ] as const)('AC-681-6 uses %s to select the VOC rail destination', (_state, counts, href) => {
+    renderRail(counts === undefined ? {} : { counts });
+
+    expect(screen.getByTestId('rail-voc')).toHaveAttribute('href', href);
+  });
+
   it.each([
     ['/home', 'home'],
     ['/vocs?view=inbox', 'voc'],
@@ -69,8 +90,21 @@ describe('AppRail', () => {
     ['/surveys', 'surveys'],
     ['/admin/settings', 'admin'],
   ] as const)('marks %s as the active %s rail', (pathname, domain) => {
-    renderRail({ activeDomain: railForPathname(pathname) });
+    renderRail({
+      activeDomain: railForPathname(pathname),
+      ...(domain === 'admin' ? { canAccessWorkspaceAdmin: true } : {}),
+    });
     expect(screen.getByTestId(`rail-${domain}`)).toHaveAttribute('aria-current', 'page');
+  });
+
+  it.each(RAIL_ITEMS)('names the $label rail link and shows its label on focus', async (item) => {
+    renderRail({ activeDomain: item.key, canAccessWorkspaceAdmin: true });
+
+    const link = screen.getByRole('link', { name: item.label });
+    expect(link).toHaveAttribute('href', item.href);
+    fireEvent.focus(link);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(item.label);
   });
 
   it('keeps Home as the first rail entry', () => {
@@ -78,6 +112,44 @@ describe('AppRail', () => {
     renderRail({ activeDomain: 'home' });
     const railButtons = screen.getAllByRole('link');
     expect(railButtons[0]).toHaveAttribute('data-testid', 'rail-home');
+  });
+
+  it('links the bell to Inbox without an unread badge', async () => {
+    renderRail();
+
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const notifications = screen.getByRole('link', { name: '알림' });
+    expect(notifications).toHaveAttribute('href', '/home?tab=inbox');
+    expect(notifications).not.toHaveTextContent('0');
+  });
+
+  it('caps the unread badge and keeps the full count in its accessible name', async () => {
+    fetchUnreadNotificationCount.mockResolvedValue(120);
+    renderRail();
+
+    expect(await screen.findByText('99+')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '알림, 읽지 않음 120건' })).toHaveAttribute(
+      'href',
+      '/home?tab=inbox',
+    );
+  });
+
+  it('keeps the rail rendered when the notification count request fails', async () => {
+    fetchUnreadNotificationCount.mockRejectedValue(new Error('network failed'));
+    renderRail();
+
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('app-rail')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '알림' })).toHaveAttribute('href', '/home?tab=inbox');
+    expect(screen.queryByText('99+')).not.toBeInTheDocument();
   });
 });
 
@@ -108,6 +180,18 @@ describe('AppRail account menu', () => {
     expect(logout).toHaveBeenCalledOnce();
     expect(queryClient.clear).toHaveBeenCalledOnce();
     expect(calls).toEqual(['logout', 'clear', 'navigate']);
+  });
+
+  it('removes the me identity from the query cache on logout', async () => {
+    logout.mockResolvedValue(undefined);
+    const queryClient = renderRail();
+    queryClient.setQueryData(['me'], ACTOR);
+
+    openAccountMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
+    expect(queryClient.getQueryData(['me'])).toBeUndefined();
   });
 
   it('clears cached data and routes to login when revocation fails', async () => {
@@ -142,11 +226,22 @@ describe('AppRail account menu', () => {
     );
   });
 
-  it('shows the Actor display name and Role Level in the account menu', () => {
-    renderRail();
-    openAccountMenu();
-    expect(screen.getByText('김지원 · Admin')).toBeInTheDocument();
-  });
+  it.each([
+    ['admin', '관리자'],
+    ['developer', '개발자'],
+    ['user', '사용자'],
+  ] as const)(
+    'shows the Korean Role Level label for %s in the account menu',
+    (role_level, label) => {
+      useMe.mockReturnValue({
+        data: { ...ACTOR, actor: { ...ACTOR.actor, role_level } },
+      });
+      renderRail();
+      openAccountMenu();
+      expect(screen.getByText(`김지원 · ${label}`)).toBeInTheDocument();
+      expect(screen.queryByText(/· (Admin|Developer|User)$/)).not.toBeInTheDocument();
+    },
+  );
 
   // Both /me shapes that omit an actor, not just the unresolved one. The
   // second case is the one that actually crashed the frame: `data` present,
@@ -159,6 +254,6 @@ describe('AppRail account menu', () => {
     renderRail();
     openAccountMenu();
     expect(screen.getByRole('menuitem', { name: '로그아웃' })).toBeInTheDocument();
-    expect(screen.queryByText('김지원 · Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('김지원 · 관리자')).not.toBeInTheDocument();
   });
 });

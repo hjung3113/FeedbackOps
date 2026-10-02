@@ -11,3 +11,7 @@ export {
 } from './analytics-area-service.js';
 export { analyticsAreasRoutes, type AnalyticsAreasRoutesOptions } from './routes.js';
 export { lockAnalyticsArea, type LockedAnalyticsArea } from './repo.js';
+export {
+  assertActiveAnalyticsAreaForManagedSystem,
+  type AssertActiveAnalyticsAreaOptions,
+} from './assertions.js';

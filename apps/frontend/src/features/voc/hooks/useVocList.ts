@@ -13,7 +13,7 @@ export interface UseVocListParams {
   /**
    * #383: carries the re-triage deep link's target into the triage queue.
    * The queue predicate excludes already-triaged VOCs, so without this the
-   * "트리아지에서 변경" link lands on a queue that cannot show what it points at.
+   * "Triage에서 변경" link lands on a queue that cannot show what it points at.
    * view='triage' only — the backend rejects it on other views.
    */
   pinVocId?: string;

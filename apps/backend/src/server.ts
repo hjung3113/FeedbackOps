@@ -1,3 +1,5 @@
+import type { NotificationSubjectReference } from '@fops/shared';
+
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -10,7 +12,6 @@ import {
 } from 'fastify-type-provider-zod';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
-
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { buildEntityLinkProviders } from './entity-link-providers.js';
@@ -28,9 +29,8 @@ import {
 } from './modules/analytics-areas/index.js';
 import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
 import { createAttachmentsService } from './modules/attachments/service.js';
-import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
-import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import type { AuthProvider } from './modules/auth/auth-provider.js';
+import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { createOidcAuthProvider } from './modules/auth/oidc-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -38,44 +38,54 @@ import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { healthRoutes } from './modules/core/health/routes.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
+import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
 import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
-import { createNavCountsService, navRoutes, type NavCountsService } from './modules/nav/index.js';
-import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
+import { createMilestonesService, milestonesRoutes } from './modules/milestones/index.js';
+import { type NavCountsService, createNavCountsService, navRoutes } from './modules/nav/index.js';
+import {
+  createNoopNotificationDispatcher,
+  createNotificationNotifier,
+  createNotificationService,
+  createPgBossNotificationDispatcher,
+  notificationRoutes,
+  type NotificationDispatcher,
+} from './modules/notifications/index.js';
 import {
   createCheckService,
   createDecisionService,
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
 import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
+import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import {
+  createConversationService,
+  createPublicUpdateReviewCandidateService,
+  createVocEmbeddingEnqueuer,
+  createVocReadService,
+  createVocRecommendationsService,
+  createVocService,
+  vocRecommendationsRoutes,
+  vocRoutes,
+} from './modules/voc/index.js';
+import {
+  createPreSubmitVocPeersService,
+  preSubmitVocPeersRoutes,
+} from './modules/voc/pre-submit-peers/index.js';
 import {
   createWorkspaceSettingsService,
   getResolvedWorkspaceSettings,
   workspaceSettingsRoutes,
 } from './modules/workspace-settings/index.js';
-import {
-  createConversationService,
-  createPublicUpdateReviewCandidateService,
-  createVocEmbeddingEnqueuer,
-  createVocRecommendationsService,
-  createVocReadService,
-  createVocService,
-  vocRecommendationsRoutes,
-  vocRoutes,
-} from './modules/voc/index.js';
-import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
-import {
-  createPreSubmitVocPeersService,
-  preSubmitVocPeersRoutes,
-} from './modules/voc/pre-submit-peers/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -88,6 +98,8 @@ export interface BuildServerOptions {
    * background jobs may omit it.
    */
   boss?: PgBoss;
+  /** Optional notification queue override for route and application tests. */
+  notificationDispatcher?: NotificationDispatcher;
   /**
    * Optional process root logger (ADR-0013, amended 2026-09-22). When given,
    * Fastify attaches it via `loggerInstance` so request logs share the ONE
@@ -354,17 +366,23 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const checkService = createCheckService({ db: dbHandle.db });
   const auditService = createAuditService();
   const idempotencyService = createIdempotencyService();
+  const notificationDispatcher =
+    opts.notificationDispatcher ??
+    (boss ? createPgBossNotificationDispatcher(boss) : createNoopNotificationDispatcher());
+  const notify = createNotificationNotifier(notificationDispatcher);
   const requestService = createRequestService({
     db: dbHandle.db,
     checkService,
     auditService,
     idempotencyService,
+    notify,
   });
   const decisionService = createDecisionService({
     db: dbHandle.db,
     checkService,
     auditService,
     idempotencyService,
+    notify,
     resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(permissionsRoutes, {
@@ -482,6 +500,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    notify,
   });
   await app.register(taskRequestsRoutes, {
     sessionService,
@@ -508,11 +527,29 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     idempotencyService,
     vocReadService,
+    notify,
     ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
     sessionService,
     tasksService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── Milestones module — #514 ─────────────────────────────────────────────
+  const milestonesService = createMilestonesService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(milestonesRoutes, {
+    sessionService,
+    milestonesService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -527,6 +564,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    notify,
     // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
     // key-less environment creates no embedding jobs at all.
     embeddingEnqueuer: createVocEmbeddingEnqueuer({
@@ -540,6 +578,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    notify,
     vocReadService,
   });
   const publicUpdateReviewCandidateService = createPublicUpdateReviewCandidateService({
@@ -547,6 +586,73 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     conversationService,
+    vocReadService,
+  });
+
+  const subjectReferenceForAllowedRecord = (
+    displayId: string,
+    title: string,
+  ): NotificationSubjectReference => {
+    const safeDisplayId = displayId.trim();
+    const safeTitle = title.trim();
+    return safeDisplayId && safeTitle
+      ? { visibility_state: 'allowed', display_id: safeDisplayId, title: safeTitle }
+      : { visibility_state: 'unavailable' };
+  };
+
+  const notificationService = createNotificationService({
+    db: dbHandle.db,
+    notificationDispatcher,
+    resolveSubjectReference: async ({
+      actor,
+      subject_type: subjectType,
+      subject_id: subjectId,
+    }): Promise<NotificationSubjectReference> => {
+      switch (subjectType) {
+        case 'voc': {
+          const reference = await vocReadService.resolveVocReference({ actor, vocId: subjectId });
+          return reference.visibility_state === 'allowed'
+            ? subjectReferenceForAllowedRecord(reference.display_id, reference.title)
+            : { visibility_state: 'unavailable' };
+        }
+        case 'task':
+        case 'task_request': {
+          const summary = await entityLinksService.resolveReadableEndpointSummary({
+            actor,
+            endpoint: { type: subjectType, id: subjectId },
+          });
+          if (!summary) return { visibility_state: 'unavailable' };
+          if (subjectType === 'task') {
+            if (summary.type !== 'task') return { visibility_state: 'unavailable' };
+            return subjectReferenceForAllowedRecord(summary.display_id, summary.title);
+          }
+          if (summary.type !== 'task_request') return { visibility_state: 'unavailable' };
+          const title =
+            summary.requested_outcome.trim() || summary.evidence_summary.trim();
+          return subjectReferenceForAllowedRecord(summary.display_id, title);
+        }
+        case 'permission_request': {
+          const request = await requestService.resolveNotificationReference(actor, subjectId);
+          return request
+            ? subjectReferenceForAllowedRecord(
+                request.id.slice(0, 8),
+                request.requested_capability,
+              )
+            : { visibility_state: 'unavailable' };
+        }
+        case 'public_update_review_candidate': {
+          const reference = await publicUpdateReviewCandidateService.resolveNotificationReference(
+            actor,
+            subjectId,
+          );
+          return reference?.visibility_state === 'allowed'
+            ? subjectReferenceForAllowedRecord(reference.display_id, reference.title)
+            : { visibility_state: 'unavailable' };
+        }
+        default:
+          return { visibility_state: 'unavailable' };
+      }
+    },
   });
 
   // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
@@ -567,12 +673,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       read: app.rateLimitConfig.read,
     },
   });
-  const navCountsService = opts.navCountsService ?? createNavCountsService({
-    vocReadService,
-    findingsService,
-    surveysService,
-    vocClustersService,
-  });
+  const navCountsService =
+    opts.navCountsService ??
+    createNavCountsService({
+      vocReadService,
+      findingsService,
+      surveysService,
+      vocClustersService,
+    });
   await app.register(navRoutes, {
     sessionService,
     navCountsService,
@@ -591,6 +699,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     workspaceId,
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });
+  await app.register(notificationRoutes, {
+    sessionService,
+    notificationService,
+    workspaceId,
+    rateLimitConfig: {
+      read: app.rateLimitConfig.read,
+      notificationState: app.rateLimitConfig.notificationState,
+    },
+  });
 
   // #143 actor-private persisted list filters. This is intentionally a root
   // prefix (rather than /nav) because it is a CRUD resource, not navigation's
@@ -608,13 +725,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     embeddingVersion: config.EMBEDDING_VERSION,
     embeddingEnabled: isEmbeddingEnabled(config),
-    createClustersService: (db) => createVocClustersService({
-      db,
-      auditService,
-      checkService,
-      idempotencyService,
-      postPublicUpdate: conversationService.postPublicUpdate,
-    }),
+    createClustersService: (db) =>
+      createVocClustersService({
+        db,
+        auditService,
+        checkService,
+        idempotencyService,
+        postPublicUpdate: conversationService.postPublicUpdate,
+      }),
   });
   await app.register(vocRecommendationsRoutes, {
     sessionService,
@@ -643,6 +761,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
+      triage: app.rateLimitConfig.triage,
       reporterEdit: app.rateLimitConfig.reporterEdit,
     },
   });

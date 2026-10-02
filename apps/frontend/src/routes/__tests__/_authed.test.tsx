@@ -1,21 +1,16 @@
-// _authed beforeLoad branch tests (Slice 3 #18 cycle-2 P3-B).
-//
-// The beforeLoad of _authed:
-//   1. On UnauthenticatedError → throws redirect to /login.
-//   2. On non-auth error (network failure, etc.) → re-throws so caller
-//      sees it (router error boundary / fail-closed).
-//   3. On fetchMe success → resolves (AuthedLayout mounts).
-//
-// We exercise the beforeLoad as a pure async function rather than
-// mounting the full router, to avoid routeTree.gen.ts timing issues.
+// Focused auth-branch examples from Slice 3 #18 cycle-2 P3-B.
+// The route's query-cache and navigation behavior is covered by
+// _authed-me-cache.test.tsx; this file keeps the original branch cases without
+// mounting routeTree.gen.ts.
 
 import { redirect } from '@tanstack/react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
-import { SIDEBAR_ENTRIES } from '../_authed';
+import { AppSidebar } from '../../lib/layout/AppSidebar';
+import { NAV_TREE, SIDEBAR_ENTRIES, getSidebarEntryStates, isSidebarEntryActive } from '../_authed';
 
-// Re-implement beforeLoad logic verbatim from _authed.tsx so we can
-// exercise it in isolation without the TanStack file-route type brands.
+// Re-implement only the redirect/error branch expectations in isolation.
 async function beforeLoad({ location }: { location: { href: string } }) {
   try {
     await fetchMe();
@@ -90,6 +85,30 @@ describe('_authed beforeLoad', () => {
 });
 
 describe('_authed sidebar navigation tree', () => {
+  it('puts Survey participation before Survey management', () => {
+    expect(
+      NAV_TREE.surveys.map(({ id, label, href, countKey }) => ({ id, label, href, countKey })),
+    ).toEqual([
+      {
+        id: 'surveys-participate',
+        label: 'Survey 참여',
+        href: '/surveys/participate',
+        countKey: undefined,
+      },
+      { id: 'surveys', label: 'Survey 관리', href: '/surveys', countKey: 'surveys.all' },
+    ]);
+  });
+
+  it.each([
+    ['/surveys', 'surveys'],
+    ['/surveys/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'surveys'],
+    ['/surveys/participate', 'surveys-participate'],
+    ['/surveys/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/respond', 'surveys-participate'],
+  ] as const)('activates one Survey destination for %s', (pathname, expectedId) => {
+    const states = getSidebarEntryStates(NAV_TREE.surveys, pathname, '');
+    expect(states.filter((entry) => entry.active).map((entry) => entry.id)).toEqual([expectedId]);
+  });
+
   it('keeps every shipped destination reachable from exactly one rail tree', () => {
     const entries = SIDEBAR_ENTRIES.map(({ id, label, href, section }) => ({
       id,
@@ -105,17 +124,162 @@ describe('_authed sidebar navigation tree', () => {
           id: 'task-requests',
           label: 'Task Requests',
           href: '/tasks?view=requests',
-          section: 'TASKS',
+          section: 'Task',
         },
-        { id: 'tasks-board', label: 'Tasks', href: '/tasks?view=board', section: 'TASKS' },
-        { id: 'my-tasks', label: 'My Tasks', href: '/tasks?view=my', section: 'TASKS' },
+        { id: 'tasks-board', label: 'Tasks', href: '/tasks?view=board', section: 'Task' },
+        { id: 'my-tasks', label: '내 Task', href: '/tasks?view=my', section: 'Task' },
       ]),
     );
     expect(entries).toEqual(
       expect.arrayContaining([
-        { id: 'findings', label: 'All findings', href: '/findings', section: 'FINDINGS' },
+        { id: 'findings', label: '전체 Finding', href: '/findings', section: 'Finding' },
       ]),
     );
   });
 
+  it('#532 puts the Action dashboard first in Integration navigation', () => {
+    expect(NAV_TREE.integration[0]).toMatchObject({
+      id: 'integration-dashboard',
+      label: '액션 대시보드',
+      href: '/integration',
+      section: '연동',
+    });
+  });
+
+  it('#532 activates Action dashboard only on the exact /integration route', () => {
+    const dashboardEntry = NAV_TREE.integration.find(
+      (entry) => entry.id === 'integration-dashboard',
+    );
+    if (dashboardEntry === undefined) throw new Error('missing integration-dashboard nav entry');
+    expect(isSidebarEntryActive(dashboardEntry, '/integration', '')).toBe(true);
+    expect(isSidebarEntryActive(dashboardEntry, '/integration/links', '')).toBe(false);
+  });
+
+  it('keeps other parent navigation entries active on their detail routes', () => {
+    const findingsEntry = NAV_TREE.findings[0];
+    if (findingsEntry === undefined) throw new Error('missing findings nav entry');
+    expect(isSidebarEntryActive(findingsEntry, '/findings/finding-a', '')).toBe(true);
+  });
+});
+
+describe('_authed sidebar current destination', () => {
+  function createMemoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
+    const values = new Map<string, string>();
+
+    return {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, String(value)),
+      removeItem: (key) => values.delete(key),
+    };
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', createMemoryStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { route: 'Default Inbox', pathname: '/vocs', searchStr: '', expectedId: 'inbox' },
+    {
+      route: 'Default Inbox with selected VOC',
+      pathname: '/vocs',
+      searchStr: '?selected=11111111-1111-4111-8111-111111111111',
+      expectedId: 'inbox',
+    },
+    { route: 'Inbox', pathname: '/vocs', searchStr: '?view=inbox', expectedId: 'inbox' },
+    { route: 'Triage', pathname: '/vocs', searchStr: '?view=triage', expectedId: 'triage' },
+    {
+      route: 'High severity triage',
+      pathname: '/vocs',
+      searchStr: '?view=triage&tab=high',
+      expectedId: 'high-severity',
+    },
+    {
+      route: 'Unassigned triage',
+      pathname: '/vocs',
+      searchStr: '?view=triage&tab=unassigned',
+      expectedId: 'unassigned',
+    },
+    {
+      route: 'No-link inbox tab',
+      pathname: '/vocs',
+      searchStr: '?view=inbox&tab=no-link',
+      expectedId: 'no-link',
+    },
+    { route: '내 VOC', pathname: '/vocs', searchStr: '?view=my', expectedId: 'my-vocs' },
+    {
+      route: 'Clusters',
+      pathname: '/voc-clusters',
+      searchStr: '',
+      expectedId: 'voc-clusters',
+    },
+    {
+      route: 'New VOC action',
+      pathname: '/vocs',
+      searchStr: '?action=create',
+      expectedId: 'inbox',
+    },
+    { route: 'Default Task list', pathname: '/tasks', searchStr: '', expectedId: null },
+    {
+      route: 'Task list with selected task',
+      pathname: '/tasks',
+      searchStr: '?param=11111111-1111-4111-8111-111111111111',
+      expectedId: null,
+    },
+    {
+      route: 'Explicit My Tasks link',
+      pathname: '/tasks',
+      searchStr: '?view=my',
+      expectedId: 'my-tasks',
+    },
+  ])(
+    'renders the expected current destination for $route',
+    ({ pathname, searchStr, expectedId }) => {
+      localStorage.removeItem('appSidebarCollapsed');
+      const entries = pathname === '/tasks' ? NAV_TREE.tasks : NAV_TREE.voc;
+      render(<AppSidebar entries={getSidebarEntryStates(entries, pathname, searchStr)} />);
+
+      const navLinks = entries.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
+      const currentLinks = navLinks.filter(
+        (entry) => entry.getAttribute('aria-current') === 'page',
+      );
+      if (expectedId === null) {
+        expect(currentLinks).toHaveLength(0);
+      } else {
+        expect(currentLinks).toHaveLength(1);
+        expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
+        expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
+      }
+
+      for (const entry of navLinks) {
+        expect(entry.classList.contains('bg-surface-row-selected')).toBe(
+          entry.getAttribute('aria-current') === 'page',
+        );
+      }
+
+      const createEntry = screen.queryByTestId('sidebar-nav-create');
+      if (createEntry !== null) {
+        expect(createEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(createEntry).not.toHaveClass('bg-surface-row-selected');
+      }
+
+      if (expectedId !== null && ['high-severity', 'unassigned'].includes(expectedId)) {
+        const triageEntry = screen.getByTestId('sidebar-nav-triage');
+        expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
+        expect(triageEntry).toHaveClass('text-text-primary');
+      } else if (expectedId === 'no-link') {
+        const inboxEntry = screen.getByTestId('sidebar-nav-inbox');
+        expect(inboxEntry).not.toHaveAttribute('aria-current', 'page');
+        expect(inboxEntry).not.toHaveClass('bg-surface-row-selected');
+        expect(inboxEntry).toHaveClass('text-text-primary');
+        expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('text-text-primary');
+      } else if (expectedId !== 'triage' && entries.some((entry) => entry.id === 'triage')) {
+        expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('font-medium');
+      }
+    },
+  );
 });

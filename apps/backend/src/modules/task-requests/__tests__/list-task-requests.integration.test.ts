@@ -6,17 +6,22 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { taskRequestDtoSchema } from '@fops/shared';
+
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { randomUUID, uid } from '../../../test-support/ids.js';
 import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+  denyCapability,
+  grantCapability,
+  revokeDeny,
+} from '../../../test-support/permissions-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -83,7 +88,23 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
     await migrateHandle.pool.query(
+      `delete from core.entity_links
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from task_request.task_requests
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from finding.findings
         where workspace_id = $1
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
@@ -142,13 +163,30 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
     requestBId = requestB.id;
   }
 
-  function listTaskRequests(managedSystemId?: string) {
+  function listTaskRequests(managedSystemId?: string, cookie = adminCookie) {
     const query = managedSystemId === undefined ? '' : `?managed_system_id=${managedSystemId}`;
     return app.inject({
       method: 'GET',
       url: `/task-requests${query}`,
-      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
+  }
+
+  async function insertRequestedTaskLink(
+    sourceType: 'finding' | 'voc',
+    sourceId: string,
+    requestId: string,
+    managedSystemId: string,
+  ): Promise<void> {
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        )
+       values ($1, $2, $3, 'task_request', $4, 'requested_task',
+               'internal_only', 'active', $5, $6)`,
+      [WORKSPACE_ID, sourceType, sourceId, requestId, managedSystemId, adminActorId],
+    );
   }
 
   function ids(body: { items: Array<{ id: string }> }): string[] {
@@ -182,4 +220,126 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
+
+  it('returns Finding metadata and omits unreadable VOC metadata from source links', async () => {
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msAId,
+      title: 'Task Request source finding',
+      summary: 'Source finding summary',
+      sourceId: randomUUID(),
+      evidenceCount: 7,
+      createdBy: adminActorId,
+    });
+    const findingRequest = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'finding',
+      sourceId: finding.id,
+      primaryManagedSystemId: msAId,
+      requesterActorId: userActorId,
+    });
+    await insertRequestedTaskLink('finding', finding.id, findingRequest.id, msAId);
+    await insertRequestedTaskLink('voc', vocId, requestAId, msAId);
+
+    const adminResponse = await listTaskRequests(msAId);
+    expect(adminResponse.statusCode).toBe(200);
+    const adminItems = adminResponse.json<{ items: unknown[] }>().items;
+    const findingDto = taskRequestDtoSchema.parse(
+      adminItems.find((item) => (item as { id?: string }).id === findingRequest.id),
+    );
+    expect(findingDto.source).toMatchObject({
+      display_id: finding.display_id,
+      title: 'Task Request source finding',
+      evidence_count: 7,
+    });
+
+    const vocDto = taskRequestDtoSchema.parse(
+      adminItems.find((item) => (item as { id?: string }).id === requestAId),
+    );
+    expect(vocDto.source).toMatchObject({
+      display_id: expect.any(String),
+      title: 'Task request filter seed VOC',
+    });
+
+    const { id: devActorId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-req-source'),
+    );
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      devActorId,
+      'finding.manage',
+      msAId,
+      adminActorId,
+    );
+    const devCookie = await loginAs(app, externalId);
+    const devResponse = await listTaskRequests(msAId, devCookie);
+    expect(devResponse.statusCode).toBe(200);
+    const devItems = devResponse.json<{ items: unknown[] }>().items;
+    const readableFinding = taskRequestDtoSchema.parse(
+      devItems.find((item) => (item as { id?: string }).id === findingRequest.id),
+    );
+    expect(readableFinding.source?.display_id).toBe(finding.display_id);
+
+    const unreadableVoc = taskRequestDtoSchema.parse(
+      devItems.find((item) => (item as { id?: string }).id === requestAId),
+    );
+    expect(unreadableVoc.source).toMatchObject({ type: 'voc' });
+    expect(unreadableVoc.source).not.toHaveProperty('display_id');
+    expect(unreadableVoc.source).not.toHaveProperty('title');
+  });
+
+  it.each([
+    { scope: 'Managed-System-scoped', managedSystemId: () => msAId },
+    { scope: 'workspace-wide', managedSystemId: () => null },
+  ])(
+    'omits source VOC text for a non-reporter Admin with a $scope voc.read deny',
+    async ({ managedSystemId }) => {
+      await insertRequestedTaskLink('voc', vocId, requestAId, msAId);
+
+      const reader = await insertDevActor(dbHandle, WORKSPACE_ID, uid('task-req-admin-voc'));
+      await migrateHandle.pool.query("update core.actors set role_level = 'admin' where id = $1", [
+        reader.id,
+      ]);
+      const readerCookie = await loginAs(app, reader.externalId);
+
+      const readableResponse = await listTaskRequests(msAId, readerCookie);
+      expect(readableResponse.statusCode).toBe(200);
+      const readableItem = taskRequestDtoSchema.parse(
+        readableResponse
+          .json<{ items: unknown[] }>()
+          .items.find((item) => (item as { id?: string }).id === requestAId),
+      );
+      expect(readableItem.source).toMatchObject({
+        display_id: expect.any(String),
+        title: 'Task request filter seed VOC',
+      });
+
+      const denyId = await denyCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        reader.id,
+        'voc.read',
+        managedSystemId(),
+        adminActorId,
+      );
+      try {
+        const deniedResponse = await listTaskRequests(msAId, readerCookie);
+        expect(deniedResponse.statusCode).toBe(200);
+        const deniedItem = taskRequestDtoSchema.parse(
+          deniedResponse
+            .json<{ items: unknown[] }>()
+            .items.find((item) => (item as { id?: string }).id === requestAId),
+        );
+        expect(deniedItem.source).toMatchObject({ type: 'voc' });
+        expect(deniedItem.source).not.toHaveProperty('display_id');
+        expect(deniedItem.source).not.toHaveProperty('title');
+        expect(deniedResponse.body).not.toContain('Task request filter seed VOC');
+      } finally {
+        await revokeDeny(dbHandle, denyId, adminActorId);
+      }
+    },
+  );
 });

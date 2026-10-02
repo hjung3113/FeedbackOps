@@ -78,3 +78,49 @@ export type SurveyDetailDto = z.infer<typeof surveyDetailDtoSchema>;
 /** GET /surveys responds with a bare array (no envelope), questions omitted. */
 export const listSurveysResponseSchema = z.array(surveyDtoSchema);
 export type ListSurveysResponse = z.infer<typeof listSurveysResponseSchema>;
+
+const mySurveyResponseItemSchema = z
+  .object({
+    survey_id: z.string().uuid(),
+    survey_title: z.string(),
+    submitted_at: z.string().datetime({ offset: true }),
+    identity_protected: z.boolean(),
+  })
+  .strict();
+
+export const mySurveyResponsesResponseSchema = z
+  .object({
+    items: z.array(mySurveyResponseItemSchema),
+    page: z
+      .object({
+        has_more: z.boolean(),
+        cursor: z.string().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+export type MySurveyResponsesResponse = z.infer<typeof mySurveyResponsesResponseSchema>;
+
+const answerableSurveyItemSchema = z
+  .object({
+    survey_id: z.string().uuid(),
+    display_id: z.string(),
+    title: z.string(),
+    type: surveyTypeSchema,
+    question_count: z.number().int().nonnegative(),
+    opened_at: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export const answerableSurveysResponseSchema = z
+  .object({
+    items: z.array(answerableSurveyItemSchema),
+    page: z
+      .object({
+        has_more: z.boolean(),
+        cursor: z.string().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+export type AnswerableSurveysResponse = z.infer<typeof answerableSurveysResponseSchema>;

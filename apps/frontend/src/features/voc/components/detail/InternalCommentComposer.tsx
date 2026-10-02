@@ -28,8 +28,10 @@
 
 import { MentionPickerButton } from '@/features/cross-system/mentions/MentionPickerButton';
 import { extractMentions } from '@/features/cross-system/mentions/extractMentions';
+import { insertMention } from '@/features/cross-system/mentions/insertMention';
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import type { TipTapDoc, TipTapEditor } from '@fops/ui';
@@ -109,7 +111,7 @@ export function InternalCommentComposer({
       toast.success('내부 코멘트가 추가되었습니다.');
     },
     onError: (error) => {
-      toast.error(`${error.code}: ${error.message}`);
+      toast.error(mapUnknownError(error).message);
     },
   });
 
@@ -130,14 +132,7 @@ export function InternalCommentComposer({
 
   // Handler for MentionPickerButton: inserts a mention node into the editor.
   function handleInsertMention(actor: { id: string; display_name: string }) {
-    editorRef.current
-      ?.chain()
-      .focus()
-      .insertContent({
-        type: 'mention',
-        attrs: { actor_id: actor.id },
-      })
-      .run();
+    insertMention(editorRef.current, actor);
   }
 
   // Status hint: prototype "팀원 6명에게 보임" (visible to N team members).
@@ -153,15 +148,7 @@ export function InternalCommentComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="내부 코멘트를 입력하세요..."
         minHeight={84}
-        onAttach={async (file) => {
-          const r = await uploadAttachment(file);
-          return {
-            attachment_id: r.id,
-            name: r.name,
-            size_bytes: r.size_bytes,
-            mime_type: r.mime_type,
-          };
-        }}
+        onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => {
           // Keep editor ref in sync for mention insertion.
           editorRef.current = editor;
@@ -175,9 +162,7 @@ export function InternalCommentComposer({
                 // below.
               }}
               onAttach={(file) => api.attach(file)}
-              onAttachError={(e) =>
-                toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
-              }
+              onAttachError={(e) => toast.error(mapUnknownError(e).message)}
             />
           );
         }}
@@ -198,7 +183,7 @@ export function InternalCommentComposer({
 
       {/* ComposerFooter — Preview disabled per D-5.4 */}
       <ComposerFooter
-        submitLabel="Add note"
+        submitLabel="내부 코멘트 추가"
         onPreview={() => {
           // Preview is DOM-disabled on internal composer per D-5.4; this is never called.
         }}

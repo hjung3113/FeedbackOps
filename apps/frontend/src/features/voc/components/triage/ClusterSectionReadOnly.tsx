@@ -1,19 +1,16 @@
 /**
- * ClusterSectionReadOnly — Cluster 추천 section (#168 step 6, chunk 6b).
+ * ClusterSectionReadOnly — semantic VOC recommendation section (#168 step 6, chunk 6b).
  *
  * Prototype ref: screen-voc-create.jsx:512-541
  *
  * The prototype predates ADR-0034 and models ONE aggregate cluster decision.
  * The real resource is per candidate: dismiss and confirm each take a specific
  * candidate_voc_id. So the prototype's single 확정 / 무시 pair becomes a list,
- * one row per recommended VOC, each row carrying its own actions. The section
- * title, the Similarity badge, the nested card and the explanatory sentence are
- * kept verbatim from the prototype.
+ * one row per recommended VOC, each row carrying its own actions. The semantic
+ * recommendation surface is labeled separately from the heuristic peer count.
  *
- * ADR-0031 coexistence: `similarCount` is the same-Managed-System heuristic and
- * is NOT replaced or reinterpreted here. It still drives the Similarity badge,
- * because when the recommendation response is `available: false` the heuristic
- * is the only related-VOC signal left.
+ * ADR-0031 coexistence: `similarCount` remains the same-Managed-System peer
+ * count. It is not recommendation-derived and keeps its own truthful label.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.9):
  *   .card-nested → bg-surface-canvas rounded-md p-3
@@ -21,10 +18,14 @@
 
 import type { VocRecommendationItem } from '@fops/shared';
 import { Button, PanelSectionTitle, ReporterStatusBadge } from '@fops/ui';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Layers } from 'lucide-react';
 import * as React from 'react';
 
 import type { ApiError } from '@/lib/api';
+import {
+  SEMANTIC_VOC_RECOMMENDATIONS_LABEL,
+  formatSameManagedSystemVocCount,
+} from '@/lib/copy/voc';
 
 import {
   isCrossManagedSystemError,
@@ -120,29 +121,30 @@ export function ClusterSectionReadOnly({
   } else if (!data.available) {
     stateLine =
       data.reason === 'provider_disabled'
-        ? '이 환경에는 임베딩 제공자가 설정되어 있지 않아 Cluster 추천이 꺼져 있습니다.'
+        ? '이 환경에는 임베딩 제공자가 설정되어 있지 않아 유사 VOC 추천이 꺼져 있습니다.'
         : '이 VOC는 아직 임베딩되지 않았습니다. 임베딩이 생성되면 추천이 표시됩니다.';
   } else if (data.items.length === 0) {
     stateLine = '추천 임계값을 넘은 유사 VOC가 없습니다.';
   } else {
     stateLine = (
       <>
-        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이 발견됐어요.
+        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이
+        발견됐어요.
       </>
     );
   }
 
   return (
-    <div className="mb-8" data-anchor="cluster" data-testid="cluster-recommendation-section">
+    <div className="mb-8" data-anchor="similar" data-testid="cluster-recommendation-section">
       <div className="flex items-center justify-between">
-        <PanelSectionTitle className="mb-0">Cluster 추천</PanelSectionTitle>
+        <PanelSectionTitle className="mb-0">{SEMANTIC_VOC_RECOMMENDATIONS_LABEL}</PanelSectionTitle>
         {similarCount > 0 && (
           <span
             data-testid="cluster-similarity-badge"
             className="inline-flex items-center gap-1 rounded-md bg-accent-primary/[0.12] px-2 py-0.5 text-[11px] font-medium text-accent-primary"
           >
-            <Sparkles size={9} aria-hidden="true" />
-            Similarity {similarCount}
+            <Layers size={9} aria-hidden="true" />
+            {formatSameManagedSystemVocCount(similarCount)}
           </span>
         )}
       </div>

@@ -67,7 +67,8 @@ import {
 } from '@/features/voc/hooks/useReporterStatusTransitions';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { mapUnknownError } from '@/lib/api/errorMapper';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import {
@@ -201,7 +202,7 @@ export function PublicUpdateComposer({
     onError: (error) => {
       submitInFlightRef.current = false;
       if (getComposerErrorTone(error.code) == null) {
-        toast.error(`${error.code}: ${error.message}`);
+        toast.error(mapUnknownError(error).message);
       }
     },
   });
@@ -258,7 +259,7 @@ export function PublicUpdateComposer({
       <span className="text-text-muted">로 함께 게시</span>
     </span>
   ) : (
-    <span className="text-xs text-text-muted">Reporter-facing status는 그대로 유지됩니다.</span>
+    <span className="text-xs text-text-muted">공개 상태는 그대로 유지됩니다.</span>
   );
 
   // ── Error matrix ─────────────────────────────────────────────────────────────
@@ -268,7 +269,8 @@ export function PublicUpdateComposer({
   const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
   const inlineCalloutReason =
     inlineCalloutTone != null
-      ? ((mutationError?.detail?.reason as string | undefined) ?? mutationError?.message)
+      ? ((mutationError?.detail?.reason as string | undefined) ??
+        mapUnknownError(mutationError).message)
       : null;
 
   return (
@@ -283,22 +285,12 @@ export function PublicUpdateComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="공개 업데이트 내용을 입력하세요..."
         minHeight={84}
-        onAttach={async (file) => {
-          const r = await uploadAttachment(file);
-          return {
-            attachment_id: r.id,
-            name: r.name,
-            size_bytes: r.size_bytes,
-            mime_type: r.mime_type,
-          };
-        }}
+        onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
           <PublicUpdateToolbar
             editor={editor}
             onAttach={(file) => api.attach(file)}
-            onAttachError={(e) =>
-              toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
-            }
+            onAttachError={(e) => toast.error(mapUnknownError(e).message)}
           />
         )}
       />
@@ -337,7 +329,7 @@ export function PublicUpdateComposer({
 
       {/* ComposerFooter — shared across all three composer surfaces */}
       <ComposerFooter
-        submitLabel="Publish update"
+        submitLabel="공개 업데이트 게시"
         onPreview={() => setPreviewOpen(true)}
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
@@ -351,7 +343,7 @@ export function PublicUpdateComposer({
       <PreviewModal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="Public update — Reporter preview"
+        title="공개 업데이트 — 제출자 미리보기"
       >
         <ComposerPublicPreview
           voc={voc}
@@ -361,7 +353,7 @@ export function PublicUpdateComposer({
         />
         <div className="flex justify-end gap-2 border-t border-border-subtle pt-3">
           <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
-            Continue editing
+            이어서 편집
           </Button>
           <Button
             type="button"
@@ -370,7 +362,7 @@ export function PublicUpdateComposer({
             disabled={isSubmitBlocked}
             onClick={handlePreviewPublish}
           >
-            Publish update
+            공개 업데이트 게시
           </Button>
         </div>
       </PreviewModal>

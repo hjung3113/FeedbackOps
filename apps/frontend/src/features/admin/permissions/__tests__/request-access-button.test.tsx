@@ -1,11 +1,18 @@
+import type { ReactNode } from 'react';
+
+import { PermissionBlockedPanel } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import {
+  permissionCheckQueryKey,
+  permissionRequestsMineKey,
+} from '@/lib/cross-system/usePermissionCheck';
 import { RequestAccessButton } from '../request-access-button.js';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from '../use-permission-check.js';
 
 const CAPABILITY = 'finding.manage';
+const CAPABILITY_LABEL = 'Finding 관리';
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
 const RETURN_ROUTE = '/findings?selected=FND-274';
 const REASON = 'Need scoped access to verify the distinct finding fixture.';
@@ -18,15 +25,19 @@ function success(id = 'PR-D8-001') {
   });
 }
 
-function wrap() {
+function wrap(
+  renderTrigger?: (open: () => void) => ReactNode,
+  managedSystemId: string | null = MANAGED_SYSTEM_ID,
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
   render(
     <QueryClientProvider client={qc}>
       <RequestAccessButton
         capability={CAPABILITY}
-        managedSystemId={MANAGED_SYSTEM_ID}
         returnRouteIntent={RETURN_ROUTE}
+        {...(managedSystemId !== null ? { managedSystemId } : {})}
+        {...(renderTrigger !== undefined ? { renderTrigger } : {})}
       />
     </QueryClientProvider>,
   );
@@ -34,9 +45,11 @@ function wrap() {
 }
 
 function openForm() {
-  fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
+  fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
   expect(screen.getByTestId('permission-request-form')).toBeInTheDocument();
-  expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
+  expect(screen.getByText(CAPABILITY_LABEL)).toBeInTheDocument();
+  expect(screen.queryByText(CAPABILITY)).not.toBeInTheDocument();
+  expect(screen.getByLabelText('사유 · 필수')).toBeInTheDocument();
   expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
 }
 
@@ -80,6 +93,30 @@ describe('<RequestAccessButton>', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test('renders a workspace-wide request scope in Korean', () => {
+    wrap(undefined, null);
+
+    fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
+
+    expect(screen.getByText('워크스페이스 전체')).toBeInTheDocument();
+    expect(screen.getByText(CAPABILITY_LABEL)).toBeInTheDocument();
+  });
+
+  test('a request-access panel trigger opens the existing permission request form', () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap((open) => (
+      <PermissionBlockedPanel state="request_access" category="VOC Inbox" onRequestAccess={open} />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: '권한 요청하기' }));
+
+    expect(screen.getByTestId('permission-request-form')).toBeInTheDocument();
+    expect(screen.getByText(CAPABILITY_LABEL)).toBeInTheDocument();
+    expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('AC-D8b submitting sends exactly one matching non-hardcoded reason', async () => {
@@ -130,15 +167,25 @@ describe('<RequestAccessButton>', () => {
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
     wrap();
     openForm();
+    fireEvent.change(screen.getByTestId('permission-request-expiration'), {
+      target: { value: '2026-09-30' },
+    });
 
     fillReasonAndSubmit();
 
-    expect(await screen.findByText('Request submitted')).toBeInTheDocument();
+    expect(await screen.findByText('권한 요청 완료')).toBeInTheDocument();
     expect(screen.getByTestId('permission-request-id')).toHaveTextContent('PR-D8-IDENTIFIABLE');
-    expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
+    expect(screen.getByText(CAPABILITY_LABEL)).toBeInTheDocument();
+    expect(screen.queryByText(CAPABILITY)).not.toBeInTheDocument();
+    expect(screen.getByText('권한')).toBeInTheDocument();
     expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
+    expect(screen.getByText('사유')).toBeInTheDocument();
     expect(screen.getByText(REASON)).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
+    expect(screen.getByText('상태')).toBeInTheDocument();
+    expect(screen.getByText('요청일')).toBeInTheDocument();
+    expect(screen.getByText('만료일')).toBeInTheDocument();
+    expect(screen.getByText('대기 중')).toBeInTheDocument();
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
     expect(screen.getByText(CREATED_AT)).toBeInTheDocument();
   });
 
@@ -181,12 +228,16 @@ describe('<RequestAccessButton>', () => {
     openForm();
 
     fillReasonAndSubmit();
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('request failed'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      ),
+    );
     fireEvent.submit(screen.getByTestId('permission-request-form'));
     await waitFor(() =>
       expect(screen.getByTestId('permission-request-id')).toHaveTextContent('PR-D8-RETRY'),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Request another access' }));
+    fireEvent.click(screen.getByRole('button', { name: '다른 권한 요청' }));
     fillReasonAndSubmit('A distinct second intent after the successful request.');
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));

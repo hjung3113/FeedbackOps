@@ -12,7 +12,7 @@
 //
 // Spec: .review/SLICE-3-16-PLAN.md §C3
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 
 import type {
   InternalCommentRequest,
@@ -21,28 +21,36 @@ import type {
   VocDetailEnvelope,
 } from '@fops/shared';
 import type { Db } from '../../db/client.js';
-import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
-
+import {
+  commentMentionErrors,
+  validateRichContentMentions,
+} from '../../lib/rich-content/mentions.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
   linkRejectedFields,
 } from '../attachments/index.js';
+import { findWorkspaceActorIds, listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
-import { lockManagedSystem } from '../managed-systems/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
+import {
+  checkTriageCapability,
+  isTriggerActorMismatchError,
+  lockVocForConversationCommand,
+  mapTriageDenyToHttpError,
+  runConversationCommand,
+  sanitizeOrThrow,
+} from './conversation/frame.js';
 import type { VocReadService } from './read-service.js';
 import {
   insertInternalComment,
   insertPublicUpdate,
   insertReporterReply,
-  selectVocForUpdate,
   updateVocReporterStatus,
 } from './repo.js';
 import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
@@ -91,113 +99,6 @@ export interface InternalCommentEnvelope {
   voc: VocDetailEnvelope;
 }
 
-// ── Internal TipTap doc-walking helper ────────────────────────────────────────
-
-interface TipTapNode {
-  type: string;
-  content?: TipTapNode[];
-  attrs?: Record<string, unknown>;
-}
-
-/**
- * Walks a TipTap doc and returns all nodes of the given type.
- * No existing helper in lib/rich-content/ — defined locally per AGENTS.md
- * "smallest change" rule.
- */
-function findNodesOfType(doc: unknown, type: string): TipTapNode[] {
-  // Iterative walk with explicit stack (cycle-2 M3 fix — recursion blew V8
-  // default frame budget on deeply nested adversarial docs even at 50 KB
-  // payload).
-  const results: TipTapNode[] = [];
-  const stack: TipTapNode[] = [doc as TipTapNode];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (!node || typeof node !== 'object') continue;
-    if (node.type === type) results.push(node);
-    if (Array.isArray(node.content)) {
-      for (const child of node.content) stack.push(child);
-    }
-  }
-  return results;
-}
-
-// ── Permission helper (reused from service.ts pattern) ────────────────────────
-
-/**
- * Re-evaluates voc.triage capability for the actor on the given MS inside `tx`.
- * Returns the decision object; callers map deny reasons to HttpError codes.
- */
-async function checkTriageCapability(
-  checkService: CheckService,
-  tx: Tx,
-  actor: ConversationActor,
-  managedSystemId: string,
-) {
-  return checkService.checkCapability(
-    { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
-    'voc.triage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    { tx },
-  );
-}
-
-/**
- * Maps a checkCapability deny decision to the correct HttpError.
- * Mirrors the pattern in service.ts updateVoc.
- */
-function mapTriageDenyToHttpError(
-  reason: string,
-  roleLevel: RoleLevel,
-  managedSystemId: string,
-): HttpError {
-  if (reason === 'no_grant' && roleLevel === 'developer') {
-    return new HttpError(
-      'permission.scope_required',
-      'voc.triage capability required; developer needs MS-scoped grant',
-      {
-        requiredScope: [managedSystemId],
-        requestable_permission: {
-          permission: 'voc.triage',
-          managed_system_id: managedSystemId,
-          reason_required: false,
-        },
-      },
-    );
-  }
-  return new HttpError('permission.denied', `voc.triage denied: ${reason}`, { reason });
-}
-
-// ── Sanitize helper ───────────────────────────────────────────────────────────
-
-function richContentFieldCode(error: RichContentError): string {
-  if (error.code === 'rich_content.external_image_forbidden') {
-    return 'external_image_forbidden';
-  }
-  return error.fields_code ?? 'disallowed_node';
-}
-
-function sanitizeOrThrow(
-  surface: 'public-update' | 'reporter-reply' | 'internal-comment',
-  doc: unknown,
-): unknown {
-  const result = sanitizeTipTap({
-    surface,
-    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
-  });
-  if (!result.ok) {
-    throw new HttpError(result.error.code, result.error.reason, {
-      fields: [
-        {
-          path: ['body_rich_content'],
-          code: richContentFieldCode(result.error),
-        },
-      ],
-      hint: result.error.path,
-    });
-  }
-  return result.doc;
-}
-
 // ── Service factory ───────────────────────────────────────────────────────────
 
 export function createConversationService(deps: {
@@ -207,6 +108,7 @@ export function createConversationService(deps: {
   checkService: CheckService;
   /** #392 — required: commands own the idempotency frame per Layer Rules. */
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   vocReadService: VocReadService;
 }) {
   // ── postPublicUpdate ──────────────────────────────────────────────────────
@@ -219,19 +121,7 @@ export function createConversationService(deps: {
   }): Promise<PublicUpdateEnvelope> {
     const { tx, actor, vocId, input } = args;
 
-    // 1. FOR UPDATE lock + archive checks.
-    const row = await selectVocForUpdate(tx, actor.workspace_id, vocId);
-    if (!row) throw new HttpError('not_found.record', 'voc not found');
-    if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
-
-    // 1b. Parent MS archive guard (issue #16 AC — archived parent MS → 409).
-    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
-    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
-    if (ms.archived_at !== null) {
-      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
-        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
-      });
-    }
+    const row = await lockVocForConversationCommand(tx, actor.workspace_id, vocId);
 
     // 2. Permission re-check inside tx (admin bypass via role; developer needs MS grant).
     const decision = await checkTriageCapability(
@@ -412,19 +302,7 @@ export function createConversationService(deps: {
   }): Promise<ReporterReplyEnvelope> {
     const { tx, actor, vocId, input } = args;
 
-    // 1. FOR UPDATE lock + archive checks.
-    const row = await selectVocForUpdate(tx, actor.workspace_id, vocId);
-    if (!row) throw new HttpError('not_found.record', 'voc not found');
-    if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
-
-    // 1b. Parent MS archive guard.
-    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
-    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
-    if (ms.archived_at !== null) {
-      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
-        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
-      });
-    }
+    const row = await lockVocForConversationCommand(tx, actor.workspace_id, vocId);
 
     // 2. Actor must be the reporter.
     if (actor.actor_id !== row.reporterId) {
@@ -501,6 +379,22 @@ export function createConversationService(deps: {
       },
     });
 
+    const adminActorIds = await listWorkspaceAdminActorIds(tx, actor.workspace_id);
+    const actorIds = row.ownerUserId
+      ? [...new Set([row.ownerUserId, ...adminActorIds])]
+      : adminActorIds;
+    await deps.notify(tx, 'voc.reporter_replied', {
+      workspace_id: actor.workspace_id,
+      actor_ids: actorIds,
+      subject_id: vocId,
+      correlation_id: randomUUID(),
+      detail: {
+        voc_id: vocId,
+        primary_managed_system_id: row.primaryManagedSystemId,
+      },
+      params: {},
+    });
+
     // 7. Refresh envelope.
     const vocEnvelope = await deps.vocReadService.composeDetailEnvelope({
       tx,
@@ -534,19 +428,7 @@ export function createConversationService(deps: {
   }): Promise<InternalCommentEnvelope> {
     const { tx, actor, vocId, input } = args;
 
-    // 1. FOR UPDATE lock + archive checks.
-    const row = await selectVocForUpdate(tx, actor.workspace_id, vocId);
-    if (!row) throw new HttpError('not_found.record', 'voc not found');
-    if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
-
-    // 1b. Parent MS archive guard.
-    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
-    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
-    if (ms.archived_at !== null) {
-      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
-        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
-      });
-    }
+    const row = await lockVocForConversationCommand(tx, actor.workspace_id, vocId);
 
     // 2. Permission: Admin OR scoped voc.triage. Reporter identity is NOT a
     //    deny condition (codex cycle-1 BLOCKER fix — a reporter who also holds
@@ -564,44 +446,17 @@ export function createConversationService(deps: {
     // 3. Sanitize body.
     const sanitizedBody = sanitizeOrThrow('internal-comment', input.body_rich_content);
 
-    // 4. Validate mentions[] — set-equality with body mention nodes (codex cycle-1 fix).
-    //    Extract deduped actor_ids from `mention` nodes in sanitized doc.
-    //    Reject malformed mention nodes (missing / non-string / non-UUID attrs.actor_id)
-    //    rather than silently dropping them — codex cycle-2 fix.
-    const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
-    const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    for (const n of mentionNodes) {
-      const id = n.attrs?.actor_id;
-      if (typeof id !== 'string' || !UUID_RE.test(id)) {
-        throw new HttpError(
-          'validation.failed',
-          'mention node attrs.actor_id must be a valid UUID',
-          { fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }] },
-        );
-      }
-    }
-    const bodyMentionIds = dedupe(mentionNodes.map((n) => n.attrs!.actor_id as string));
-
-    const requestMentionIds = dedupe(input.mentions ?? []);
-
-    // Set-equality: both sides must contain the same IDs.
-    if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
-      throw new HttpError(
-        'validation.failed',
-        'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-        { fields: [{ path: ['mentions'], code: 'invalid' }] },
-      );
-    }
+    // 4. Validate mentions[] against the sanitized body, then verify workspace membership.
+    const mentionIds = validateRichContentMentions(
+      sanitizedBody,
+      input.mentions,
+      commentMentionErrors,
+    );
 
     // 5. Verify every mentioned actor_id resolves to an actor in the same workspace.
-    if (requestMentionIds.length > 0) {
-      const foundRows = await tx
-        .select({ id: actors.id })
-        .from(actors)
-        .where(
-          and(eq(actors.workspaceId, actor.workspace_id), inArray(actors.id, requestMentionIds)),
-        );
-      if (foundRows.length !== requestMentionIds.length) {
+    if (mentionIds.length > 0) {
+      const foundActorIds = await findWorkspaceActorIds(tx, actor.workspace_id, mentionIds);
+      if (foundActorIds.size !== mentionIds.length) {
         throw new HttpError(
           'validation.failed',
           'one or more mention actor_ids do not belong to this workspace',
@@ -649,7 +504,7 @@ export function createConversationService(deps: {
         voc_id: vocId,
         internal_comment_id: inserted.id,
         actor_id: actor.actor_id,
-        mentions: requestMentionIds,
+        mentions: mentionIds,
         attachment_ids: input.attachment_ids ?? [],
       },
     });
@@ -706,13 +561,12 @@ export function createConversationService(deps: {
     requestHash: string;
   }): Promise<{ status: number; body: PublicUpdateEnvelope }> {
     const { actor, vocId, input, idempotencyKey, requestHash } = args;
-    return runIdempotentCommand({
+    return runConversationCommand({
       db: deps.db,
       idempotencyService: deps.idempotencyService,
       actorId: actor.actor_id,
       idempotencyKey,
       requestHash,
-      status: 201,
       work: (tx) => postPublicUpdate({ tx, actor, vocId, input }),
     });
   }
@@ -725,13 +579,12 @@ export function createConversationService(deps: {
     requestHash: string;
   }): Promise<{ status: number; body: ReporterReplyEnvelope }> {
     const { actor, vocId, input, idempotencyKey, requestHash } = args;
-    return runIdempotentCommand({
+    return runConversationCommand({
       db: deps.db,
       idempotencyService: deps.idempotencyService,
       actorId: actor.actor_id,
       idempotencyKey,
       requestHash,
-      status: 201,
       work: (tx) => postReporterReply({ tx, actor, vocId, input }),
     });
   }
@@ -744,13 +597,12 @@ export function createConversationService(deps: {
     requestHash: string;
   }): Promise<{ status: number; body: InternalCommentEnvelope }> {
     const { actor, vocId, input, idempotencyKey, requestHash } = args;
-    return runIdempotentCommand({
+    return runConversationCommand({
       db: deps.db,
       idempotencyService: deps.idempotencyService,
       actorId: actor.actor_id,
       idempotencyKey,
       requestHash,
-      status: 201,
       work: (tx) => postInternalComment({ tx, actor, vocId, input }),
     });
   }
@@ -767,50 +619,3 @@ export function createConversationService(deps: {
 }
 
 export type ConversationService = ReturnType<typeof createConversationService>;
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-function dedupe<T>(arr: T[]): T[] {
-  return [...new Set(arr)];
-}
-
-function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-  if (a.size !== b.size) return false;
-  for (const item of a) {
-    if (!b.has(item)) return false;
-  }
-  return true;
-}
-
-/**
- * Detects whether an error originated from the `enforce_reporter_reply_actor`
- * DB trigger. The trigger raises an exception with message
- * 'voc_reporter_reply.actor_must_match_reporter' (migration 0010).
- * We match on the message text; sqlstate P0001 (raise_exception) is the
- * expected Postgres error code for application-level RAISE EXCEPTION.
- */
-function isTriggerActorMismatchError(err: unknown): boolean {
-  if (err === null || typeof err !== 'object') return false;
-  const e = err as Record<string, unknown>;
-  // pg-node surfaces the message on `message` and the sqlstate on `code`.
-  // The trigger RAISE EXCEPTION message is 'voc_reporter_reply_actor_must_be_reporter'
-  // (migration 0010 function voc_reporter_reply_actor_check).
-  if (
-    typeof e.message === 'string' &&
-    e.message.includes('voc_reporter_reply_actor_must_be_reporter')
-  ) {
-    return true;
-  }
-  // Belt-and-suspenders: also match on legacy message variant.
-  if (
-    typeof e.message === 'string' &&
-    e.message.includes('voc_reporter_reply.actor_must_match_reporter')
-  ) {
-    return true;
-  }
-  // Belt-and-suspenders: also match on routine / constraint name if present.
-  if (typeof e.routine === 'string' && e.routine.includes('enforce_reporter_reply_actor')) {
-    return true;
-  }
-  return false;
-}

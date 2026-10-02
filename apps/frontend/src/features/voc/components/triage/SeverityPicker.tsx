@@ -15,7 +15,7 @@
  * — a richer layout than ToggleGroupItem supports.
  */
 
-import { cn } from '@fops/ui';
+import { SEVERITY_LABELS, cn } from '@fops/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@fops/ui';
 import { HelpCircle } from 'lucide-react';
 import type * as React from 'react';
@@ -55,11 +55,14 @@ const ACTIVE_CLASS: Record<SeverityLevel, string> = {
   critical: 'bg-severity-critical/10 ring-1 ring-inset ring-severity-critical/40',
 };
 
+// #525: the raw severity hue fails WCAG AA 4.5:1 as label text at this
+// chip's tint background — use the contrast-safe `-label` pair instead
+// (the bar/tint/ring above keep the vivid base token).
 const ACTIVE_LABEL_CLASS: Record<SeverityLevel, string> = {
-  low: 'text-severity-low',
-  medium: 'text-severity-medium',
-  high: 'text-severity-high',
-  critical: 'text-severity-critical',
+  low: 'text-severity-low-label',
+  medium: 'text-severity-medium-label',
+  high: 'text-severity-high-label',
+  critical: 'text-severity-critical-label',
 };
 
 export function SeverityPicker({
@@ -82,7 +85,7 @@ export function SeverityPicker({
             <button
               key={level}
               type="button"
-              aria-label={level}
+              aria-label={SEVERITY_LABELS[level]}
               aria-pressed={isActive}
               data-active={isActive ? 'true' : 'false'}
               data-sev={level}
@@ -106,11 +109,11 @@ export function SeverityPicker({
                 {/* .severity-pick-label */}
                 <span
                   className={cn(
-                    'text-[13px] font-semibold capitalize leading-none mb-[3px]',
+                    'text-[13px] font-semibold leading-none mb-[3px]',
                     isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
                   )}
                 >
-                  {level}
+                  {SEVERITY_LABELS[level]}
                 </span>
                 {/* .severity-pick-meta */}
                 <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>

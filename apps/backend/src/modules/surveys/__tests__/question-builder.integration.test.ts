@@ -6,12 +6,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  insertMsDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -150,6 +147,37 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       { key: 'no', label: 'No' },
     ],
     ...overrides,
+  });
+
+  it.each(['type', 'kind'] as const)('rejects an unknown survey %s at the route', async (field) => {
+    const response = await (field === 'type'
+      ? (async () => {
+          const managedSystemId = await insertMsDirectly(
+            appHandle,
+            WORKSPACE_ID,
+            uid(SLUG_PREFIX),
+            'Unknown survey type MS',
+          );
+          return app.inject({
+            method: 'POST',
+            url: '/surveys',
+            headers: mutationHeaders(),
+            payload: {
+              type: 'unknown',
+              title: 'Unknown survey type',
+              primary_managed_system_id: managedSystemId,
+              responses_identity_protected: true,
+            },
+          });
+        })()
+      : postQuestion(await createDraftSurvey(), choiceQuestion({ kind: 'unknown' })));
+
+    expect(response.statusCode).toBe(422);
+    const body = response.json<{ code: string; detail: { fields: Array<{ path: string[] }> } }>();
+    expect(body.code).toBe('validation.failed');
+    expect(body.detail.fields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: [field] })]),
+    );
   });
 
   it('creates a draft question and writes a survey_question_created audit event', async () => {

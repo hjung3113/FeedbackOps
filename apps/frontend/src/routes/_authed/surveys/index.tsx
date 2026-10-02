@@ -4,6 +4,12 @@ import { useCreateSurvey, useSurvey, useSurveys } from '@/features/surveys/hooks
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import type { SurveyType } from '@/features/surveys/types';
 import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { parseRouteSearch } from '@/lib/router/search';
+import { surveyTypeSchema } from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -41,8 +47,12 @@ export const surveysSearchSchema = z
 
 type SurveysSearch = z.infer<typeof surveysSearchSchema>;
 
+export function validateSurveysSearch(raw: unknown) {
+  return parseRouteSearch(surveysSearchSchema, raw);
+}
+
 export const Route = createFileRoute('/_authed/surveys/')({
-  validateSearch: (raw) => surveysSearchSchema.parse(raw),
+  validateSearch: validateSurveysSearch,
   component: SurveysIndexRoute,
 });
 
@@ -52,11 +62,31 @@ export function SurveysIndexRoute() {
   const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
   const query = useSurveys(managedSystemId);
   const gate = useSurveyManageGate();
+  const managedSystemNames = useManagedSystemNamesResult();
+  const managedSystemNamesById = managedSystemNames.isSuccess
+    ? managedSystemNames.namesById
+    : undefined;
+  const { actors, isSuccess: actorsResolved } = useWorkspaceActors();
+  const actorNamesById = React.useMemo(
+    () =>
+      actorsResolved
+        ? new Map((actors ?? []).map((actor) => [actor.id, actor.display_name]))
+        : undefined,
+    [actors, actorsResolved],
+  );
   const [createOpen, setCreateOpen] = React.useState(false);
   const selectedId = search.selected ?? null;
   const selected = useSurvey(selectedId ?? '');
   const selectedGate = useSurveyManageGate(selected.data?.primary_managed_system_id);
   const surveys = query.data ?? [];
+  useDocumentTitle(
+    selected.isSuccess && !selected.isFetching && selected.data?.id === selectedId
+      ? formatRecordDocumentTitle({
+          displayId: selected.data.display_id,
+          title: selected.data.title,
+        })
+      : null,
+  );
 
   const handleSelect = React.useCallback(
     (id: string): void => {
@@ -93,7 +123,10 @@ export function SurveysIndexRoute() {
         list={
           <SurveyList
             surveys={query.data ?? []}
-            isLoading={query.isLoading}
+            // #706 — isPending keeps the skeleton up through the whole
+            // no-data window (incl. the retry delay), so tabs never render
+            // unknown counts as 0.
+            isLoading={query.isPending}
             error={query.error}
             selectedId={selectedId}
             onSelect={handleSelect}
@@ -101,7 +134,10 @@ export function SurveysIndexRoute() {
             {...(gate.permissionState !== undefined
               ? { permissionState: gate.permissionState }
               : {})}
+            managedSystemNamesById={managedSystemNamesById}
+            actorNamesById={actorNamesById}
             onCreate={() => setCreateOpen(true)}
+            onRetry={() => void query.refetch()}
           />
         }
         detailPanel={
@@ -110,6 +146,8 @@ export function SurveysIndexRoute() {
               survey={selected.data}
               canManage={selectedGate.canManage}
               onClose={handleClose}
+              managedSystemNamesById={managedSystemNamesById}
+              actorNamesById={actorNamesById}
             />
           ) : undefined
         }
@@ -190,7 +228,7 @@ export function CreateSurveyDialog({
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>설문 생성</DialogTitle>
+          <DialogTitle>Survey 생성</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -226,15 +264,17 @@ export function CreateSurveyDialog({
             />
           </label>
           <div className="block text-sm">
-            Survey type
+            Survey 유형
             <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
-              <SelectTrigger aria-label="Survey type">
+              <SelectTrigger aria-label="Survey 유형">
                 <SelectValue placeholder="유형 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="discovery">discovery</SelectItem>
-                <SelectItem value="validation">validation</SelectItem>
-                <SelectItem value="outcome">outcome</SelectItem>
+                {surveyTypeSchema.options.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {SURVEY_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -297,7 +337,9 @@ export function CreateSurveyDialog({
               </SelectContent>
             </Select>
           </div>
-          {create.isError && <p className="text-sm text-text-danger">설문을 만들지 못했습니다.</p>}
+          {create.isError && (
+            <p className="text-sm text-text-danger">Survey를 만들지 못했습니다.</p>
+          )}
           <DialogFooter>
             <Button
               type="button"

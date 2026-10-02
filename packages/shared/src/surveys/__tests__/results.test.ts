@@ -16,6 +16,8 @@ function maximalValidResult() {
     survey_id: U,
     status: 'closed',
     identity_protected: true,
+    response_state: 'visible',
+    anonymity_threshold: 5,
     questions: [
       {
         question_id: V,
@@ -123,6 +125,30 @@ describe('rating result bands', () => {
 });
 
 describe('SurveyResultDto privacy boundary', () => {
+  it.each(['none', 'below_threshold', 'visible'] as const)(
+    'accepts the %s response state',
+    (response_state) => {
+      expect(
+        surveyResultDtoSchema.parse({ ...maximalValidResult(), response_state }).response_state,
+      ).toBe(response_state);
+    },
+  );
+
+  it.each(['response_state', 'anonymity_threshold'] as const)('requires the %s field', (field) => {
+    const missingField: Record<string, unknown> = { ...maximalValidResult() };
+    delete missingField[field];
+    expect(() => surveyResultDtoSchema.parse(missingField)).toThrow();
+  });
+
+  it('requires a positive integer anonymity threshold', () => {
+    expect(() =>
+      surveyResultDtoSchema.parse({ ...maximalValidResult(), anonymity_threshold: 0 }),
+    ).toThrow();
+    expect(() =>
+      surveyResultDtoSchema.parse({ ...maximalValidResult(), anonymity_threshold: 5.5 }),
+    ).toThrow();
+  });
+
   it('accepts empty and approved excerpt projections, but rejects extra excerpt fields', () => {
     const payload = maximalValidResult();
     const textQuestion = payload.questions[2];

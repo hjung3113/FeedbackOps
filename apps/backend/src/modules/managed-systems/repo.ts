@@ -7,6 +7,7 @@ export interface LockedManagedSystem {
   id: string;
   workspace_id: string;
   archived_at: Date | null;
+  default_survey_operator_actor_id: string | null;
 }
 
 export async function lockManagedSystem(
@@ -18,13 +19,21 @@ export async function lockManagedSystem(
     id: string;
     workspace_id: string;
     archived_at: Date | null;
+    default_survey_operator_actor_id: string | null;
   }>(sql`
-    select id, workspace_id, archived_at
+    select id, workspace_id, archived_at, default_survey_operator_actor_id
     from ${managedSystems}
     where id = ${managedSystemId}
       and workspace_id = ${workspaceId}
     for update
   `);
   const row = rows.rows[0];
-  return row ? { id: row.id, workspace_id: row.workspace_id, archived_at: row.archived_at } : null;
+  return row
+    ? {
+        id: row.id,
+        workspace_id: row.workspace_id,
+        archived_at: row.archived_at,
+        default_survey_operator_actor_id: row.default_survey_operator_actor_id,
+      }
+    : null;
 }

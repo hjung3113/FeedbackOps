@@ -1,3 +1,5 @@
+import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
+import { surveyQuestionKindSchema } from '@fops/shared';
 import {
   Input,
   Select,
@@ -11,13 +13,6 @@ import type { QuestionKind, SurveyQuestion } from '../../types';
 import { BranchEditor } from './BranchEditor';
 import { OptionsEditor } from './OptionsEditor';
 import { questionForKind } from './lib/questionDraft';
-
-const kinds: Array<{ value: QuestionKind; label: string }> = [
-  { value: 'single_choice', label: 'Single choice' },
-  { value: 'multiple_choice', label: 'Multiple choice' },
-  { value: 'rating', label: 'Rating' },
-  { value: 'text', label: 'Text' },
-];
 
 export function QuestionEditor({
   question,
@@ -41,26 +36,26 @@ export function QuestionEditor({
   return (
     <div className="space-y-4">
       <label className="block text-sm" htmlFor="question-kind">
-        Question kind
+        질문 유형
         <Select
           value={question.kind}
           disabled={!editable}
           onValueChange={(kind) => set(questionForKind(question, kind as QuestionKind))}
         >
-          <SelectTrigger id="question-kind" aria-label="Question kind">
+          <SelectTrigger id="question-kind" aria-label="질문 유형">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {kinds.map((kind) => (
-              <SelectItem key={kind.value} value={kind.value}>
-                {kind.value}
+            {surveyQuestionKindSchema.options.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {SURVEY_QUESTION_KIND_LABELS[kind]}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </label>
       <label className="block text-sm" htmlFor="question-title">
-        Question title
+        질문 제목
         <Textarea
           id="question-title"
           value={question.prompt}

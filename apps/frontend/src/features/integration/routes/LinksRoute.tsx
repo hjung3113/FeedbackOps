@@ -1,13 +1,18 @@
 import { resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { EntityLinksInventoryTable } from '../components/EntityLinksInventoryTable';
-import { useEntityLinkInventory } from '../hooks/useEntityLinkInventory';
+import {
+  entityLinkInventoryQueryKey,
+  useEntityLinkInventory,
+} from '../hooks/useEntityLinkInventory';
 
 type StatusFilter = EntityLinkStatus;
 
@@ -35,11 +40,11 @@ function toSearchableRelationType(value: string | undefined): SearchableRelation
 }
 
 const STATUS_TABS: ListToolbarTab[] = [
-  { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'stale', label: 'Stale', urgent: true },
-  { value: 'detached', label: 'Detached' },
-  { value: 'revoked', label: 'Revoked' },
+  { value: 'all', label: GLOSSARY.all },
+  { value: 'active', label: '활성' },
+  { value: 'stale', label: '오래됨', urgent: true },
+  { value: 'detached', label: '분리됨' },
+  { value: 'revoked', label: '취소됨' },
 ];
 
 const STATUS_TAB_VALUES: StatusFilter[] = ['active', 'stale', 'detached', 'revoked'];
@@ -47,13 +52,14 @@ const STATUS_TAB_VALUES: StatusFilter[] = ['active', 'stale', 'detached', 'revok
 const FILTER_CATEGORIES = [
   {
     key: 'type',
-    label: 'Rel type',
-    options: [{ value: 'related_to', label: 'related_to' }],
+    label: '관계 유형',
+    options: [{ value: 'related_to', label: ENTITY_LINK_RELATION_LABELS.related_to }],
   },
 ];
 
 export function LinksRoute() {
   const search = useSearch({ strict: false }) as LinksSearch;
+  const queryClient = useQueryClient();
   // `from` is what types the search reducer. Without it useNavigate() hands the
   // reducer the router-wide search union (12 keys), which is not assignable to
   // this route's 3-key reducer signature — that mismatch was the long-standing
@@ -67,11 +73,80 @@ export function LinksRoute() {
     [search.type],
   );
 
-  const inventory = useEntityLinkInventory({
-    ...(search.status !== undefined ? { status: search.status } : {}),
-    ...(search.type !== undefined ? { relationType: search.type } : {}),
-    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-  });
+  const inventoryParams = React.useMemo(
+    () => ({
+      ...(search.status !== undefined ? { status: search.status } : {}),
+      ...(search.type !== undefined ? { relationType: search.type } : {}),
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    }),
+    [search.managedSystem, search.status, search.type],
+  );
+  const previousInventoryParams = React.useRef(inventoryParams);
+  React.useEffect(() => {
+    const previous = previousInventoryParams.current;
+    previousInventoryParams.current = inventoryParams;
+    if (
+      previous.status === inventoryParams.status &&
+      previous.relationType === inventoryParams.relationType &&
+      previous.managedSystemId === inventoryParams.managedSystemId
+    ) {
+      return;
+    }
+
+    const queryKey = entityLinkInventoryQueryKey(inventoryParams);
+    const cachedPages = queryClient.getQueryData<{ pages: unknown[] }>(queryKey)?.pages;
+    if (cachedPages && cachedPages.length > 1) {
+      void queryClient.resetQueries({ queryKey, exact: true });
+    }
+  }, [inventoryParams, queryClient]);
+
+  const inventory = useEntityLinkInventory(inventoryParams);
+  const inventoryItems = React.useMemo(
+    () => inventory.data?.pages.flatMap((page) => page.items) ?? [],
+    [inventory.data],
+  );
+
+  const activeFilterDescription = React.useMemo(() => {
+    const conditions: string[] = [];
+    if (search.status !== undefined) {
+      const statusLabel = STATUS_TABS.find((tab) => tab.value === search.status)?.label;
+      conditions.push(`상태: ${statusLabel ?? search.status}`);
+    }
+    if (search.type !== undefined) {
+      conditions.push(`관계 유형: ${ENTITY_LINK_RELATION_LABELS[search.type]}`);
+    }
+    return conditions.length > 0 ? conditions.join(' · ') : undefined;
+  }, [search.status, search.type]);
+  const needsUnfilteredCheck =
+    activeFilterDescription !== undefined &&
+    inventory.isSuccess &&
+    inventoryItems.length === 0 &&
+    inventory.hasNextPage !== true;
+  const unfilteredInventory = useEntityLinkInventory(
+    {
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    },
+    needsUnfilteredCheck,
+  );
+  const tableError =
+    inventoryItems.length === 0
+      ? (inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null))
+      : null;
+  const retryTable = React.useCallback((): void => {
+    if (inventory.isFetchNextPageError) {
+      void inventory.fetchNextPage();
+    } else if (inventory.error) {
+      void inventory.refetch();
+    } else {
+      void unfilteredInventory.refetch();
+    }
+  }, [
+    inventory.error,
+    inventory.fetchNextPage,
+    inventory.isFetchNextPageError,
+    inventory.refetch,
+    unfilteredInventory.refetch,
+  ]);
 
   const countInventory = useEntityLinkInventory({
     ...(search.type !== undefined ? { relationType: search.type } : {}),
@@ -87,12 +162,12 @@ export function LinksRoute() {
   const actorIds = React.useMemo(
     () => [
       ...new Set(
-        (inventory.data?.items ?? [])
+        inventoryItems
           .map((item) => item.created_by)
           .filter((id): id is string => typeof id === 'string'),
       ),
     ],
-    [inventory.data?.items],
+    [inventoryItems],
   );
   const actorsQuery = useQuery({
     queryKey: ['actors-resolve', actorIds, []] as const,
@@ -121,19 +196,33 @@ export function LinksRoute() {
   }, [actorsQuery.data]);
 
   const statusTabs = React.useMemo<ListToolbarTab[]>(() => {
-    const items = countInventory.data?.items ?? [];
-    const counts = new Map<string, number>([['all', items.length]]);
+    // #706 — counts are unknown until the counts read succeeds (covers
+    // pending, error, and refetch-after-error without data); unknown must
+    // never render as 0 (ListTabs renders badgeCount only when set).
+    if (!countInventory.isSuccess) return STATUS_TABS;
+    const items = countInventory.data?.pages.flatMap((page) => page.items) ?? [];
+    const statusCounts = countInventory.data?.pages[0]?.page?.status_counts;
+    const counts = new Map<string, number>([
+      [
+        'all',
+        statusCounts !== undefined
+          ? statusCounts.active + statusCounts.stale + statusCounts.detached + statusCounts.revoked
+          : items.length,
+      ],
+    ]);
     for (const status of STATUS_TAB_VALUES) {
       counts.set(
         status,
-        items.filter((link) => link.status === status).length,
+        statusCounts !== undefined
+          ? statusCounts[status]
+          : items.filter((link) => link.status === status).length,
       );
     }
     return STATUS_TABS.map((tab) => ({
       ...tab,
       badgeCount: counts.get(tab.value) ?? 0,
     }));
-  }, [countInventory.data?.items]);
+  }, [countInventory.data, countInventory.isSuccess]);
 
   function handleStatusChange(next: string): void {
     void navigate({
@@ -176,6 +265,15 @@ export function LinksRoute() {
     });
   }
 
+  function handleResetFilters(): void {
+    void navigate({
+      to: '/integration/links',
+      search: (prev): LinksSearch => ({
+        ...(prev.managedSystem !== undefined ? { managedSystem: prev.managedSystem } : {}),
+      }),
+    });
+  }
+
   return (
     <>
       <ListToolbar
@@ -184,7 +282,7 @@ export function LinksRoute() {
         onTabChange={handleStatusChange}
         action={
           <div className="flex items-center gap-2">
-            <SearchInput placeholder="Entity link 검색…" />
+            <SearchInput placeholder={`${GLOSSARY.entityLinks} 검색…`} />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
               values={currentFilters}
@@ -204,19 +302,28 @@ export function LinksRoute() {
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Refresh
+              {GLOSSARY.refresh}
             </Button>
           </div>
         }
       />
       <EntityLinksInventoryTable
-        items={inventory.data?.items ?? []}
-        loading={inventory.isLoading}
-        error={inventory.error ?? null}
+        items={inventoryItems}
+        loading={inventory.isLoading || (needsUnfilteredCheck && unfilteredInventory.isPending)}
+        error={tableError ?? null}
         managedSystemsById={managedSystemsById}
         actorsById={actorsById}
-        onRetry={() => {
-          void inventory.refetch();
+        onRetry={retryTable}
+        unfilteredItemsCount={
+          unfilteredInventory.data?.pages.flatMap((page) => page.items).length ?? 0
+        }
+        filterDescription={activeFilterDescription}
+        onResetFilters={handleResetFilters}
+        hasMore={inventory.hasNextPage === true}
+        loadingMore={inventory.isFetchingNextPage}
+        loadMoreError={inventory.isFetchNextPageError ? inventory.error : null}
+        onLoadMore={() => {
+          void inventory.fetchNextPage();
         }}
       />
     </>

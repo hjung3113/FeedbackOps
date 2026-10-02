@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This inventory defines the reusable components that should exist before domain screens are built.
+This inventory defines the reusable components that should exist before domain screens are built. The complete shipped `@fops/ui` export inventory is `packages/ui/src/index.ts`; this document describes reusable component contracts and required states.
 
 Component ownership paths live in `docs/tech-stack/component-stack.md`.
 Screen mapping lives in `docs/frontend/ui-design-system.md`.
@@ -27,6 +27,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
 | RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi | focus, disabled, invalid, loading | keyboard navigable |
+| DatePicker | typed date, calendar | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented | focus, selected, disabled | group label required |
@@ -40,6 +41,8 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Table | data, comparison | loading, empty, selected | keyboard row navigation |
 | ListRow | object, action-queue | hover, selected, active, permission-limited | row action is keyboard reachable |
 | Panel | detail, blocked, create | loading, dirty, error | close is keyboard reachable |
+| DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe |
+| UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone includes text |
 | Toolbar | view, action, bulk | default, selection-active | one primary action maximum |
 
 ## Composed Components
@@ -72,6 +75,12 @@ ReviewerPicker
 UserPicker
 AuditTimeline
 ```
+
+## Implemented Shared Flow Components
+
+- `apps/frontend/src/features/cross-system/request-task/TaskRequestDraftCard.tsx` — neutral inline source request form and pending-source read presentation with the contract fields Evidence Summary and Requested Outcome; source mutations stay in their owning features.
+- `ListTabs` — reusable 28px list tab strip with optional bare counts, icons, native title tips, and overflow controls; composed by `ListToolbar`.
+- Internal `useHorizontalOverflow` — shared 1px scroll-edge state, resize observation, direct-child rebinding, and cleanup for `ListTabs` and `DetailPanelSectionNav`. Each consumer retains its active-item reveal, fade or scrollspy behavior, and component-specific layout rules.
 
 ## Status And Signal Catalog
 

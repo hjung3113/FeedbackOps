@@ -65,6 +65,7 @@ export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPa
 
 // Form primitives (Slice 3 #19)
 export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
+export { DatePicker, type DatePickerProps } from './forms/DatePicker.js';
 // Feedback primitives (Slice 3 #19)
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
 // Feedback primitives (Slice 3 #21 C3.1)
@@ -74,10 +75,20 @@ export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
 
 // Indicators + badges (Slice 3 #20)
 export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';
-export { SeverityBadge, type SeverityBadgeProps } from './badges/SeverityBadge';
+export {
+  SeverityBadge,
+  SEVERITY_LABELS,
+  type SeverityBadgeProps,
+} from './badges/SeverityBadge';
 export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
 export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
+export { UnassignedBadge, type UnassignedBadgeProps } from './badges/UnassignedBadge';
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
+export {
+  managedSystemMarkColor,
+  managedSystemMarkToken,
+  type ManagedSystemMarkToken,
+} from './badges/managed-system-mark.js';
 export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
 export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
 
@@ -87,6 +98,7 @@ export { UserChip, type UserChipProps } from './identity/UserChip';
 
 // Toolbar primitives (Slice 3 #20)
 export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
+export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
 export { ListFilterButton, type ListFilterButtonProps, type FilterCategory } from './toolbar/ListFilterButton';
 export { ListSortButton, type ListSortButtonProps, type SortOption } from './toolbar/ListSortButton';
 // Forms (Slice 3 #20)
