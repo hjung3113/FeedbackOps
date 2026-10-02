@@ -7,7 +7,7 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
@@ -66,7 +66,6 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
   let app: FastifyInstance;
   let adminCookie: string;
   let reporterCookie: string;
-  let plainUserCookie: string;
   let adminActorId: string;
   let reporterId: string;
   let foreignWorkspaceId: string;
@@ -90,7 +89,6 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     reporterCookie = await loginAs(app, 'mock-user-1');
-    plainUserCookie = await loginAs(app, 'mock-user-2');
     adminActorId = (
       await dbHandle.pool.query<{ id: string }>(
         `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
@@ -196,6 +194,13 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     return loginAs(app, externalId);
   }
 
+  /** Fresh plain user with no grants who is not the seeded VOC reporter (core seed has no mock-user-2). */
+  async function plainUserCookie(): Promise<string> {
+    const externalId = `mock-user-plain-${uid('plain')}`;
+    await insertActorRow(dbHandle, { workspaceId: WORKSPACE_ID, externalId, roleLevel: 'user' });
+    return loginAs(app, externalId);
+  }
+
   async function blindDeveloperCookie(): Promise<string> {
     const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('blind'));
     return loginAs(app, externalId);
@@ -295,7 +300,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
 
     const missing = await resolveVia(adminCookie, missingDisplayId);
     const crossWorkspace = await resolveVia(adminCookie, foreignOnlyDisplayId);
-    const unreadable = await resolveVia(plainUserCookie, seed.taskDisplay);
+    const unreadable = await resolveVia(await plainUserCookie(), seed.taskDisplay);
 
     expect(missing.response.statusCode).toBe(404);
     expect(crossWorkspace.response.statusCode).toBe(404);
@@ -340,7 +345,7 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     async (c) => {
       const seed = await seedScenario();
 
-      const { response } = await resolveVia(plainUserCookie, c.display(seed));
+      const { response } = await resolveVia(await plainUserCookie(), c.display(seed));
 
       expect(response.statusCode).toBe(404);
     },
