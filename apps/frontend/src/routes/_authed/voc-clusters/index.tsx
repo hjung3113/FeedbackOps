@@ -15,8 +15,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -240,9 +240,9 @@ function CreateClusterModal({
         >
           {/* Title */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cluster-title" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-title" className="text-text-secondary">
               제목 <span aria-hidden>*</span>
-            </Label>
+            </FieldLabel>
             <Input
               id="cluster-title"
               required
@@ -255,9 +255,9 @@ function CreateClusterModal({
 
           {/* Summary */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cluster-summary" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-summary" className="text-text-secondary">
               요약 (선택)
-            </Label>
+            </FieldLabel>
             <Textarea
               id="cluster-summary"
               rows={3}
@@ -270,12 +270,12 @@ function CreateClusterModal({
 
           {/* Managed System */}
           <div className="flex flex-col gap-1.5">
-            <Label
+            <FieldLabel
               htmlFor="cluster-managed-system"
               className="text-text-secondary"
             >
               Managed System <span aria-hidden>*</span>
-            </Label>
+            </FieldLabel>
             <Select
               value={managedSystemId || NO_MANAGED_SYSTEM}
               onValueChange={(value) => {

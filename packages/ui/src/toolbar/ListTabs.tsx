@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/shadcn/tooltip.js';
+import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
 
 export interface ListToolbarTab {
@@ -45,10 +46,11 @@ export function ListTabs({
   align = 'start',
   className,
 }: ListTabsProps): React.ReactElement {
-  const [overflowState, setOverflowState] = React.useState({
-    canScrollLeft: false,
-    canScrollRight: false,
-  });
+  const tabViewportRef = React.useRef<HTMLDivElement>(null);
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState(tabs[0]?.value ?? '');
+  const selectedTab = activeTab ?? uncontrolledActiveTab;
+  const tabKey = tabs.map((tab) => tab.value).join('|');
+  const overflowState = useHorizontalOverflow(tabViewportRef, { contentKey: tabKey });
   const hasOverflow = overflowState.canScrollLeft || overflowState.canScrollRight;
   // CSS mask-image fade on each scrollable side so a partially clipped tab does not
   // show as a stray fragment.
@@ -61,11 +63,6 @@ export function ListTabs({
     }, ${canScrollRight ? `black calc(100% - ${fade}), transparent 100%` : 'black 100%'})`;
     return { maskImage: image, WebkitMaskImage: image };
   }, [overflowState]);
-  const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState(tabs[0]?.value ?? '');
-  const tabViewportRef = React.useRef<HTMLDivElement>(null);
-  const selectedTab = activeTab ?? uncontrolledActiveTab;
-  const tabKey = tabs.map((tab) => tab.value).join('|');
-
   const revealActiveTab = React.useCallback(() => {
     const viewport = tabViewportRef.current;
     const active = viewport?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
@@ -88,32 +85,6 @@ export function ListTabs({
       if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: 'smooth' });
     }
   }, []);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tabKey is the rebind trigger when the tab set changes.
-  React.useLayoutEffect(() => {
-    const viewport = tabViewportRef.current;
-    if (!viewport) return;
-
-    const updateOverflow = () => {
-      const maxScroll = viewport.scrollWidth - viewport.clientWidth;
-      setOverflowState({
-        canScrollLeft: viewport.scrollLeft > 1,
-        canScrollRight: maxScroll - viewport.scrollLeft > 1,
-      });
-    };
-    updateOverflow();
-    viewport.addEventListener('scroll', updateOverflow, { passive: true });
-    window.addEventListener('resize', updateOverflow);
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateOverflow);
-    resizeObserver?.observe(viewport);
-    for (const child of viewport.children) resizeObserver?.observe(child);
-    return () => {
-      viewport.removeEventListener('scroll', updateOverflow);
-      window.removeEventListener('resize', updateOverflow);
-      resizeObserver?.disconnect();
-    };
-  }, [tabKey]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: selection, tab-set, or initial overflow changes must reveal the active tab.
   React.useLayoutEffect(() => {

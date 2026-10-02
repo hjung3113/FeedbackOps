@@ -1,6 +1,6 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneDetailDto } from '@fops/shared';
-import { DetailPanelSectionNav, NestedTextBlock } from '@fops/ui';
+import { DetailPanelSectionNav, EmptyState, NestedTextBlock } from '@fops/ui';
 import type * as React from 'react';
 
 import { MilestonePanelSectionTitle } from '../MilestoneIdentity';
@@ -159,15 +159,17 @@ export function MilestoneDetailContent({
         <div data-anchor="evidence" className="mb-8 last:mb-0">
           <MilestonePanelSectionTitle>Evidence</MilestonePanelSectionTitle>
           {/* No evidence read path in these slices (manual linking is §7 item 14); empty copy only. */}
-          <div className="py-3 text-center text-xs text-text-muted">
-            연결된 {GLOSSARY.evidenceHighlight}가 없습니다.
-          </div>
+          <EmptyState
+            size="sm"
+            className="py-3 gap-0 text-xs"
+            title={`연결된 ${GLOSSARY.evidenceHighlight}가 없습니다.`}
+          />
         </div>
 
         <div data-anchor="activity" className="last:mb-0">
           <MilestonePanelSectionTitle>이력</MilestonePanelSectionTitle>
           {/* No audit_log read path exists (§7 item 9); the empty copy ships. */}
-          <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
+          <EmptyState size="sm" className="py-3 gap-0 text-xs" title="활동 기록이 없습니다." />
         </div>
       </div>
     </>

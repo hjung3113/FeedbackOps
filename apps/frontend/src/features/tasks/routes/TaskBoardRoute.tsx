@@ -2,9 +2,10 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
-import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatCount } from '@/lib/format/count';
 import {
   DndContext,
   type DragEndEvent,
@@ -33,11 +34,14 @@ import {
 } from '../components/task-board/TaskBoardGroupByButton';
 import { useTaskStatusTransition } from '../hooks/useTaskStatusTransition';
 
-const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string }> = [
-  { key: 'backlog', label: 'Backlog' }, { key: 'todo', label: 'Todo' },
-  { key: 'doing', label: 'Doing' }, { key: 'review', label: 'Review' },
-  { key: 'done', label: 'Done' }, { key: 'released', label: 'Released' },
-  { key: 'reopened', label: 'Reopened' },
+const STATUS_COLUMNS: TaskStatus[] = [
+  'backlog',
+  'todo',
+  'doing',
+  'review',
+  'done',
+  'released',
+  'reopened',
 ];
 type Filters = Record<string, string[]>;
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
@@ -66,7 +70,9 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || (task.assignee_actor_id === null ? assignee.includes('__unassigned') : assignee.includes(task.assignee_actor_id)));
   }), [items, filters]);
   const columns = React.useMemo(() => {
-    if (groupBy === 'status') return STATUS_COLUMNS;
+    if (groupBy === 'status') {
+      return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
+    }
     if (groupBy === 'priority') {
       return [...taskPrioritySchema.options].reverse().map((key) => ({
         key,
@@ -134,7 +140,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
           <span className="flex items-center gap-2">
             보드
             {tasksQuery.isSuccess && !tasksQuery.isFetching && !tasksQuery.isError ? (
-              <OutlineBadge>{filtered.length}건</OutlineBadge>
+              <OutlineBadge>{formatCount(filtered.length)}</OutlineBadge>
             ) : null}
           </span>
         ),

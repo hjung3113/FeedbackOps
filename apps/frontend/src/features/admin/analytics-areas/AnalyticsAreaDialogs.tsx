@@ -7,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldLabel,
   Input,
-  Label,
   ManagedSystemPicker,
   type PickerOption,
 } from '@fops/ui';
@@ -122,9 +122,9 @@ function RegisterForm({
           }
           aria-required="true"
         >
-          <Label id="aa-create-managed-system-label" className="text-text-secondary">
+          <FieldLabel id="aa-create-managed-system-label" className="text-text-secondary">
             Managed System <span className="text-accent-danger">· 필수</span>
-          </Label>
+          </FieldLabel>
           <ManagedSystemPicker
             options={msOptions}
             value={msId}
@@ -138,9 +138,9 @@ function RegisterForm({
           )}
         </fieldset>
         <div className="space-y-1">
-          <Label htmlFor="aa-create-slug" className="text-text-secondary">
+          <FieldLabel htmlFor="aa-create-slug" className="text-text-secondary">
             슬러그 <span className="text-accent-danger">· 필수</span>
-          </Label>
+          </FieldLabel>
           <Input
             id="aa-create-slug"
             ref={slugRef}
@@ -158,9 +158,9 @@ function RegisterForm({
           )}
         </div>
         <div className="space-y-1">
-          <Label htmlFor="aa-create-name" className="text-text-secondary">
+          <FieldLabel htmlFor="aa-create-name" className="text-text-secondary">
             이름 <span className="text-accent-danger">· 필수</span>
-          </Label>
+          </FieldLabel>
           <Input
             id="aa-create-name"
             ref={nameRef}
@@ -258,9 +258,9 @@ function EditForm({
         }}
       >
         <div className="space-y-1">
-          <Label htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
             이름
-          </Label>
+          </FieldLabel>
           <Input
             id={`aa-edit-name-${target.slug}`}
             value={name}
