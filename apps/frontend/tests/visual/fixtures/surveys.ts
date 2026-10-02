@@ -1,5 +1,10 @@
 import type { ManagedSystemDto } from '@/lib/api/managed-systems';
-import { listActorsResponseSchema, surveyQuestionKindSchema, surveyTypeSchema } from '@fops/shared';
+import {
+  listActorsResponseSchema,
+  surveyDetailDtoSchema,
+  surveyQuestionKindSchema,
+  surveyTypeSchema,
+} from '@fops/shared';
 import { z } from 'zod';
 import { managedSystemVisualSchema } from './managed-system-owner';
 
@@ -40,6 +45,7 @@ export const surveyVisualFixtureSchema = z.object({
 export type SurveyVisualScenario =
   | 'list'
   | 'detail'
+  | 'detail-empty'
   | 'builder'
   | 'builder-empty'
   | 'builder-dirty'
@@ -54,6 +60,7 @@ export const surveyVisualScenarios = z
     z.enum([
       'list',
       'detail',
+      'detail-empty',
       'builder',
       'builder-empty',
       'builder-dirty',
@@ -68,6 +75,7 @@ export const surveyVisualScenarios = z
   .parse([
     'list',
     'detail',
+    'detail-empty',
     'builder',
     'builder-empty',
     'builder-dirty',
@@ -123,7 +131,7 @@ export const surveyDetailVisualFixture = surveyVisualFixtureSchema.parse({
   opened_at: '2026-07-21T00:00:00.000Z',
 });
 
-export const surveyEmptyBuilderVisualFixture = surveyVisualFixtureSchema.parse({
+export const surveyEmptyBuilderVisualFixture = surveyDetailDtoSchema.parse({
   ...surveyVisualFixture,
   questions: [],
 });

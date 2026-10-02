@@ -66,6 +66,10 @@ beforeEach(() => {
 });
 
 describe('AppRail', () => {
+  it('sends the Surveys rail destination to participation', () => {
+    expect(RAIL_ITEMS.find((item) => item.key === 'surveys')?.href).toBe('/surveys/participate');
+  });
+
   it.each([
     ['loading counts', undefined, '/vocs?view=inbox'],
     ['loaded counts with Inbox access', { 'voc.inbox': 0 }, '/vocs?view=inbox'],

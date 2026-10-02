@@ -6,6 +6,15 @@ import {
   surveyResultsFollowUpReadVisualFixture,
 } from '../../fixtures/survey-follow-up';
 import {
+  surveyParticipationAnswerableFixture,
+  surveyParticipationEmptyFixture,
+  surveyParticipationHistoryFixture,
+  surveyParticipationId,
+  surveyParticipationMoreAnswerableFixture,
+  surveyRespondentFormFixture,
+  surveyResponseSubmittedFixture,
+} from '../../fixtures/survey-participation';
+import {
   surveyResultVisualFixture,
   surveyResultVisualListFixture,
   surveyResultsFixtureFor,
@@ -41,6 +50,44 @@ export function createSurveyActorHandlers(context: MockApiContext): MockApiHandl
 export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
   const handlers: MockApiHandler[] = [];
+
+  if (options.surveyParticipationScenario) {
+    const empty = options.surveyParticipationScenario === 'empty';
+    const answerable =
+      options.surveyParticipationScenario === 'has-more'
+        ? surveyParticipationMoreAnswerableFixture
+        : surveyParticipationAnswerableFixture;
+    handlers.push(
+      {
+        method: 'GET',
+        path: '/me/answerable-surveys',
+        handle: (route) => json(route, 200, empty ? surveyParticipationEmptyFixture : answerable),
+      },
+      {
+        method: 'GET',
+        path: '/me/survey-responses',
+        handle: (route) =>
+          json(
+            route,
+            200,
+            empty ? { items: [], page: { has_more: false } } : surveyParticipationHistoryFixture,
+          ),
+      },
+      {
+        method: 'GET',
+        path: `/surveys/${surveyParticipationId}/form`,
+        handle: (route) => json(route, 200, surveyRespondentFormFixture),
+      },
+      {
+        method: 'POST',
+        path: `/surveys/${surveyParticipationId}/responses`,
+        handle: (route, mockContext) => {
+          mockContext.postedBodies.push(route.request().postDataJSON());
+          return json(route, 201, surveyResponseSubmittedFixture);
+        },
+      },
+    );
+  }
 
   if (options.surveyScenario) {
     handlers.push({
@@ -135,7 +182,8 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
         const fixture =
           options.surveyScenario === 'detail'
             ? surveyDetailVisualFixture
-            : options.surveyScenario === 'builder-empty'
+            : options.surveyScenario === 'detail-empty' ||
+                options.surveyScenario === 'builder-empty'
               ? surveyEmptyBuilderVisualFixture
               : options.surveyScenario === 'builder-drag-over'
                 ? surveyBuilderDragOverVisualFixture

@@ -31,6 +31,7 @@ export * from './rich-content/index.js';
 export * from './auth/list-actors.js';
 export * from './surveys/results.js';
 export * from './surveys/dto.js';
+export * from './surveys/respondent.js';
 export * from './surveys/create-finding.js';
 export * from './surveys/follow-up.js';
 export * from './dashboard.js';

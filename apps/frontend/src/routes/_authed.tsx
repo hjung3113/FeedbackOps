@@ -16,6 +16,7 @@ import {
   Link2,
   ListChecks,
   ListTodo,
+  PenLine,
   Plus,
   Settings,
   Shield,
@@ -27,14 +28,15 @@ import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
 import { GLOSSARY, createLabel } from '../lib/copy/glossary';
+import { SURVEY_PARTICIPATION_COPY } from '../lib/copy/survey-participation';
 import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
+import { AppFrame } from '../lib/layout/AppFrame';
+import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
+import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import {
   AuthenticatedRouteErrorFallback,
   AuthenticatedRoutePendingFallback,
 } from '../lib/layout/RouteFallback';
-import { AppFrame } from '../lib/layout/AppFrame';
-import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
-import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import type { AppRouterContext } from './__root';
 import { VOC_DEFAULT_VIEW } from './_authed/vocs';
 
@@ -167,8 +169,15 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
   ],
   surveys: [
     {
+      id: 'surveys-participate',
+      label: SURVEY_PARTICIPATION_COPY.participate,
+      href: '/surveys/participate',
+      section: 'Survey',
+      icon: <PenLine className="h-4 w-4" />,
+    },
+    {
       id: 'surveys',
-      label: GLOSSARY.allSurveys,
+      label: SURVEY_PARTICIPATION_COPY.manage,
       href: '/surveys',
       section: 'Survey',
       icon: <FileBarChart className="h-4 w-4" />,
@@ -216,6 +225,13 @@ export function isSidebarEntryActive(
   pathname: string,
   searchStr: string,
 ): boolean {
+  const participationPath =
+    pathname === '/surveys/participate' || /^\/surveys\/[^/]+\/respond$/.test(pathname);
+  if (entry.id === 'surveys-participate') return participationPath;
+  if (entry.id === 'surveys') {
+    return (pathname === '/surveys' || pathname.startsWith('/surveys/')) && !participationPath;
+  }
+
   const [entryPath = '', entrySearch] = entry.href.split('?');
   if (entryPath !== pathname) {
     if (entry.id === 'integration-dashboard' || !pathname.startsWith(`${entryPath}/`)) {
@@ -316,13 +332,14 @@ export function AuthedLayout() {
       replace: true,
     });
   }, [location.href, me.error, navigate, queryClient]);
-  // Every domain except Admin already reads/scopes by its own `managedSystem`
-  // URL param (docs/frontend/routes-and-layout.md §URL State Rules): VOC,
-  // VOC Clusters, Findings, Tasks (every view), Surveys, Integration
-  // (Links/Coverage). Admin's four sub-routes only partially support it
-  // (Analytics Areas does, Managed Systems/Permission Requests/Settings do
-  // not), so it stays out of the shared sidebar selector for now (#518).
-  const supportsManagedSystemScope = activeDomain !== 'admin';
+  // Scoped domains read their own `managedSystem` URL param. Survey management
+  // is scoped, but the respondent routes are actor-wide (routes-and-layout.md).
+  // Admin's four sub-routes only partially support scope, so they remain out
+  // of the shared selector (#518).
+  const isSurveyRespondentPath =
+    location.pathname === '/surveys/participate' ||
+    /^\/surveys\/[^/]+\/respond$/.test(location.pathname);
+  const supportsManagedSystemScope = activeDomain !== 'admin' && !isSurveyRespondentPath;
   const managedSystemId = supportsManagedSystemScope
     ? (new URLSearchParams(location.searchStr).get('managedSystem') ?? undefined)
     : undefined;

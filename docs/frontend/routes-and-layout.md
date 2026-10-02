@@ -21,6 +21,8 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId?builder=true
 /surveys/:surveyId/results
 /surveys/:surveyId/follow-up
+/surveys/participate
+/surveys/:surveyId/respond
 /tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
 /tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&selected=:requestId
@@ -43,6 +45,8 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/findings` | `managedSystem`, `selected`, `execution`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/surveys/participate` | — | No search state |
+| `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
 | `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
@@ -107,7 +111,10 @@ Navigation is a discovery surface; backend permission checks remain authoritativ
 Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which owns route
 labels and destinations. `AppFrame` filters its `ADMIN` entries using the same `workspace.admin` check
 as the Admin page gates. The other section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including
-Milestones), `INTEGRATION`, and `SURVEYS`. Per the AGENTS.md two-consumer rule, each feature adds its
+Milestones), `INTEGRATION`, and `Survey`. The Survey sidebar has `Survey 참여`
+at `/surveys/participate` followed by `Survey 관리` at `/surveys`; the active
+entry follows the participation and respondent routes versus the management
+routes. The Surveys rail destination opens `/surveys/participate`. Per the AGENTS.md two-consumer rule, each feature adds its
 entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries`
 (`apps/frontend/src/features/home/homeNavigation.tsx`).
 
@@ -162,6 +169,10 @@ Frontend Home renders only backend-provided queue groups. It may choose layout,
 empty states, and ordering affordances, but it must not infer hidden queues from
 role labels alone.
 
+The Home Surveys panel shows up to five backend-provided answerable surveys and
+links to the full participation list. Its list, loading, empty, and retry states
+use the same answerable-surveys query as `/surveys/participate`.
+
 Home may show the same recovery item as Dashboard or Integration only when the
 current actor can personally act on it now, such as owner, reviewer, assignee,
 or scoped actor with the required capability. It uses the same recovery identity
@@ -197,6 +208,8 @@ as the other surfaces.
 - Developer: `all` may appear on VOC, Tasks, Dashboard, and Integration views only when the actor has access to more than one Managed System; it means the union of the actor's effective Managed System scopes.
 - User: `all` is hidden on Home, My VOCs, Survey response, and other own-work views; the backend returns only actor-safe own work.
 - Survey respondent surfaces do not show Managed System `all`.
+- `/surveys/participate` lists answerable Surveys and the current Actor's
+  response history; `/surveys/:surveyId/respond` renders the respondent form.
 - A Developer with one Managed System scope should see that scope directly, not a redundant `all` option.
 ```
 

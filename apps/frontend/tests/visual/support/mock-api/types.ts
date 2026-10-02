@@ -5,6 +5,7 @@ import type {
   PermissionScenarioName,
   createPermissionRequestsScenario,
 } from '../../fixtures/permissions';
+import type { SurveyParticipationVisualScenario } from '../../fixtures/survey-participation';
 import type { SurveyResultsVisualScenario } from '../../fixtures/survey-results';
 import type { SurveyVisualScenario } from '../../fixtures/surveys';
 import type { TriageAreaVisualScenario } from '../../fixtures/triage-analytics-area';
@@ -27,6 +28,8 @@ export interface InstallOptions {
   /** Issue #179 reporter-safe linked Task summary surface. */
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
+  /** Respondent participation pages and POST /surveys/:id/responses. */
+  surveyParticipationScenario?: SurveyParticipationVisualScenario;
   surveyResultsScenario?: SurveyResultsVisualScenario;
   /** ADR-0055 outcome follow-up review screen, with a holder response fixture. */
   surveyFollowUp?: boolean;

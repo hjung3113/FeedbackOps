@@ -1,0 +1,48 @@
+export const SURVEY_PARTICIPATION_COPY = {
+  participate: 'Survey 참여',
+  subtitle: '응답할 Survey에 참여하고 내가 제출한 응답을 확인합니다.',
+  manage: 'Survey 관리',
+  editQuestions: '질문 편집',
+  addFirstQuestion: '새 질문 추가',
+  answerableSurveys: '응답할 Survey',
+  respond: '응답하기',
+  responseHistory: '내 응답 이력',
+  noAnswerableSurveys: '응답할 Survey가 없습니다.',
+  noSurveyResponses: '응답한 Survey가 없습니다.',
+  answerableLoadError: '응답할 Survey를 불러오지 못했습니다.',
+  responseHistoryLoadError: '응답 이력을 불러오지 못했습니다.',
+  loadMore: '더 보기',
+  loadingMore: '불러오는 중…',
+  loadMoreError: '추가 Survey를 불러오지 못했습니다.',
+  formLoadError: '응답 양식을 불러오지 못했습니다.',
+  loading: '불러오는 중…',
+  retry: '다시 시도',
+  anonymityNotice: '익명성 안내',
+  identityProtected: '응답은 익명으로 처리되며 개인을 식별할 수 없습니다.',
+  identityUnprotected: '응답에 개인 식별자가 포함될 수 있으니 관련 정책을 확인하세요.',
+  previewTitle: '응답자 미리보기',
+  previewDescription: '미리보기 — 실제 응답은 저장되지 않습니다.',
+  previewSubmit: '제출 (미리보기)',
+  submitted: '응답이 제출되었습니다',
+  backToParticipation: 'Survey 참여로 돌아가기',
+  submit: '제출',
+  requiredAnswer: '응답을 입력해 주세요.',
+  invalidAnswer: '응답을 확인해 주세요.',
+  textTooLong: '응답은 4000자 이내로 입력해 주세요.',
+  noAnswers: '한 개 이상 응답해 주세요.',
+  validationSummary: '응답을 확인해 주세요.',
+  notFoundTitle: 'Survey를 찾을 수 없습니다.',
+  notFoundBody: '삭제되었거나 접근 권한이 없습니다.',
+  titleMissing: '제목 없음',
+  descriptionMissing: '아직 설명이 추가되지 않았습니다.',
+  textPlaceholder: '자유롭게 적어주세요…',
+  questionCount: (count: number) => `${count}개 질문`,
+  responseCount: (count: number) => `${count}개 응답`,
+  viewAllHome: 'Survey 참여에서 모두 보기',
+} as const;
+
+export function respondentIdentityNotice(identityProtected: boolean): string {
+  return identityProtected
+    ? SURVEY_PARTICIPATION_COPY.identityProtected
+    : SURVEY_PARTICIPATION_COPY.identityUnprotected;
+}

@@ -33,6 +33,7 @@ import {
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
 import { formatRelativeTime } from '@/lib/format/datetime';
+import { AnswerableSurveysPanel } from './AnswerableSurveysPanel';
 import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';
@@ -161,6 +162,9 @@ export function HomeScreen({
             </div>
             <div className="mt-9">
               <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
+            </div>
+            <div className="mt-9">
+              <AnswerableSurveysPanel />
             </div>
           </TabsContent>
           <TabsContent value="inbox" className="mt-0">

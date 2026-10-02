@@ -2,6 +2,7 @@ import {
   createFindingFromSurveyResponseRequestSchema,
   outcomeFollowUpDecisionRequestSchema,
   surveyQuestionKindSchema,
+  surveyResponseSubmissionSchema,
   surveyTypeSchema,
 } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
@@ -57,20 +58,6 @@ const question = z
     sort_order: z.number().int().nonnegative().optional(),
     branch_parent_question_id: uuid.nullable().optional(),
     branch_trigger_option_key: z.string().min(1).nullable().optional(),
-  })
-  .strict();
-const responseSubmission = z
-  .object({
-    answers: z
-      .array(
-        z
-          .object({
-            question_id: uuid,
-            value: z.union([z.string(), z.array(z.string()), z.number()]),
-          })
-          .strict(),
-      )
-      .min(1),
   })
   .strict();
 const emptyQuery = z.object({}).strict();
@@ -304,7 +291,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     async (req, reply) => {
       const id = (req.params as { id: string }).id;
       if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
-      const b = parse(responseSubmission, req.body, reply);
+      const b = parse(surveyResponseSubmissionSchema, req.body, reply);
       if (!b) return;
       const r = await opts.surveysService.submitResponse({
         actor: actor(req),
