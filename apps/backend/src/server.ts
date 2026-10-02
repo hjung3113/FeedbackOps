@@ -46,7 +46,13 @@ import {
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
 import { createMilestonesService, milestonesRoutes } from './modules/milestones/index.js';
-import { type NavCountsService, createNavCountsService, navRoutes } from './modules/nav/index.js';
+import {
+  type NavCountsService,
+  type NavResolveService,
+  createNavCountsService,
+  createNavResolveService,
+  navRoutes,
+} from './modules/nav/index.js';
 import {
   createNoopNotificationDispatcher,
   createNotificationNotifier,
@@ -121,6 +127,8 @@ export interface BuildServerOptions {
   healthProbeTimeoutMs?: number;
   /** Route-test seam; production constructs the navigation read model below. */
   navCountsService?: NavCountsService;
+  /** Route-test seam; production constructs the navigation resolve service below. */
+  navResolveService?: NavResolveService;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
@@ -681,9 +689,18 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       surveysService,
       vocClustersService,
     });
+  const navResolveService =
+    opts.navResolveService ??
+    createNavResolveService({
+      vocReadService,
+      findingsService,
+      tasksService,
+      taskRequestsService,
+    });
   await app.register(navRoutes, {
     sessionService,
     navCountsService,
+    navResolveService,
     workspaceId,
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });

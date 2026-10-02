@@ -274,3 +274,75 @@ async function clearAuditLogForDevActors(workspaceId: string): Promise<void> {
     await migrateHandle.close();
   }
 }
+
+/**
+ * Cleans the test-created actor cohort whose external_id starts with
+ * `externalIdPrefix` in one workspace: dependent rows first, then the actors.
+ * Generic counterpart of the mock-dev-read-* cleanup inside
+ * cleanupReadTestTables, for suites that create other cohorts (the nav-resolve
+ * suite's mock-user-plain-* actors, #731 FIX1). Order mirrors that cleanup:
+ * permission grants/denies/requests (FK into core.actors), idempotency keys,
+ * rate limits (authenticated actor-id key or loopback IP fallback), sessions,
+ * audit rows through the migrate role (fops_app has no DELETE on
+ * core.audit_log), then the actors themselves.
+ */
+export async function cleanupTestActorsByExternalIdPrefix(
+  dbHandle: DbHandle,
+  workspaceId: string,
+  externalIdPrefix: string,
+): Promise<void> {
+  const cohortSub = `select id from core.actors
+      where external_id like $2 and workspace_id = $1`;
+  await dbHandle.pool.query(
+    `delete from permission.permission_grants
+      where workspace_id = $1 and actor_id in (${cohortSub})`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+  await dbHandle.pool.query(
+    `delete from permission.permission_denies
+      where workspace_id = $1 and actor_id in (${cohortSub})`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+  await dbHandle.pool.query(
+    `delete from permission.permission_requests
+      where workspace_id = $1 and requester_actor_id in (${cohortSub})`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+  await dbHandle.pool.query(
+    `delete from core.idempotency_keys
+      where actor_id in (${cohortSub})`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+  await dbHandle.pool.query(
+    `delete from core.rate_limits
+      where key in (
+        select id::text from core.actors where external_id like $2 and workspace_id = $1
+      )
+      or key like '127.0.0.%'`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+  await dbHandle.pool.query(
+    `delete from core.sessions
+       where actor_id in (${cohortSub})`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+
+  const migrateUrl = process.env.DATABASE_URL_MIGRATE ?? '';
+  if (migrateUrl) {
+    const migrateHandle = createDb(migrateUrl);
+    try {
+      await migrateHandle.pool.query(
+        `delete from core.audit_log
+          where actor_id in (${cohortSub})`,
+        [workspaceId, `${externalIdPrefix}%`],
+      );
+    } finally {
+      await migrateHandle.close();
+    }
+  }
+
+  await dbHandle.pool.query(
+    `delete from core.actors where external_id like $2 and workspace_id = $1`,
+    [workspaceId, `${externalIdPrefix}%`],
+  );
+}

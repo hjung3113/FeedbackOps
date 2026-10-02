@@ -57,6 +57,33 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
 
     return { kind, row, readScope, canTriage, isReporter, isReporterArm, primaryMs, etag };
   }
+
+  // ── resolveVocDisplayId (#731) ────────────────────────────────────────────
+  //
+  // Display id → id for /nav/resolve. Resolves the id first, then maps THE
+  // canonical access decision (resolveVocAccess, the same one getVocDetail
+  // uses — no duplicated permission predicates, #423): the detail 404 arm
+  // (missing/archived/foreign-workspace row OR out-of-effective-scope
+  // anti-probe) maps to null; a FULL or SUMMARY verdict counts as readable.
+  async function resolveVocDisplayId(args: {
+    actor: ReadActorContext;
+    displayId: string;
+  }): Promise<{ id: string } | null> {
+    const row = await repoRead.selectVocIdByDisplayId(
+      deps.db,
+      args.actor.workspace_id,
+      args.displayId,
+    );
+    if (!row) return null;
+    try {
+      const access = await resolveVocAccess({ actor: args.actor, vocId: row.id });
+      return { id: access.row.id };
+    } catch (error) {
+      if (error instanceof HttpError && error.code === 'not_found.record') return null;
+      throw error;
+    }
+  }
+
   // ── getVocDetail ──────────────────────────────────────────────────────────
 
   async function getVocDetail(args: {
@@ -381,5 +408,5 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       attachments: vocAttRows.map(mapAttachmentRow),
     };
   }
-  return { resolveVocAccess, getVocDetail, composeDetailEnvelope };
+  return { resolveVocAccess, resolveVocDisplayId, getVocDetail, composeDetailEnvelope };
 }

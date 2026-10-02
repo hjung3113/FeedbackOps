@@ -3,6 +3,8 @@ import { createRouter } from '@tanstack/react-router';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { NavRouteIntent } from '@fops/shared';
+
 import { routeTree } from '@/routeTree.gen';
 import { validateAnalyticsAreasSearch } from '../../features/admin/analytics-areas/search';
 import { validatePermissionRequestsSearch } from '../../features/admin/permissions/permission-requests-search';
@@ -150,4 +152,21 @@ describe('route search validation', () => {
 
     expect(screen.getByText('Task list view')).toBeInTheDocument();
   });
+});
+
+// #731 FIX1 (R2): these are the exact search objects the nav resolver emits for
+// REQ/TASK (docs/implementation/api/navigation.md). The shipped `/tasks`
+// schema reads `param`, so both intents must survive validateTasksSearch with
+// the resolved id intact — `selected` would be dropped and the palette would
+// lose the selection.
+describe('nav resolve task intents survive the tasks search schema', () => {
+  it.each([
+    ['task_request', { route: '/tasks', search: { view: 'requests', param: ID } }],
+    ['task', { route: '/tasks', search: { view: 'board', param: ID } }],
+  ] as ReadonlyArray<[string, NavRouteIntent]>)(
+    '%s intent keeps the resolved id through validateTasksSearch',
+    (_entityType, intent) => {
+      expect(validateTasksSearch(intent.search)).toEqual(intent.search);
+    },
+  );
 });

@@ -20,6 +20,7 @@ export type { ListVocsRepoArgs } from './read/repository-list.js';
 
 export {
   selectVocByIdForRead,
+  selectVocIdByDisplayId,
   selectPinnedVocListRow,
   selectPermissionDecisionsSeed,
 } from './read/repository-detail.js';

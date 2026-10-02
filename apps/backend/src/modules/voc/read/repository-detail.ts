@@ -33,6 +33,25 @@ export async function selectVocByIdForRead(
   return mapVocRow(row);
 }
 
+// Display id → id for /nav/resolve (#731). Same row population the VOC detail
+// read sees: workspace-scoped, archived rows excluded (archived = not found).
+export async function selectVocIdByDisplayId(
+  db: Db | Tx,
+  workspaceId: string,
+  displayId: string,
+): Promise<{ id: string } | null> {
+  const result = await (db as Db).execute<{ id: string }>(sql`
+    SELECT id
+    FROM ${vocs}
+    WHERE display_id = ${displayId}
+      AND workspace_id = ${workspaceId}
+      AND archived_at IS NULL
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  return row ? { id: row.id } : null;
+}
+
 // ── selectPinnedVocListRow ───────────────────────────────────────────────────
 
 /**

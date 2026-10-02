@@ -39,4 +39,5 @@ export type VocGroupedCountArgs = {
   managedSystemId?: string;
 };
 export type VocReferenceReader = Pick<VocReadService, 'resolveVocReference'>;
+export type VocDisplayIdReader = Pick<VocReadService, 'resolveDisplayId'>;
 export type VocDetailReader = Pick<VocReadService, 'getVocDetail'>;

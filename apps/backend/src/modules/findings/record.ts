@@ -11,6 +11,7 @@ import { lockTaskById } from '../tasks/index.js';
 import {
   findCreatedFindingSourceLink,
   findFindingById,
+  findFindingIdByDisplayId,
   listFindingsByWorkspace,
 } from './repo-read.js';
 import {
@@ -65,6 +66,23 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
       findingId: row.id,
     });
     return toDto(row, source);
+  }
+
+  // Display id → id for /nav/resolve (#731). Same read authority as getFinding
+  // above: workspace row + canReadFinding; missing and unreadable both map to
+  // null so the route answers a single identical 404.
+  async function resolveDisplayId(args: {
+    actor: FindingsActor;
+    displayId: string;
+  }): Promise<{ id: string } | null> {
+    const row = await findFindingIdByDisplayId(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      displayId: args.displayId,
+    });
+    if (!row) return null;
+    const readable = await canReadFinding(deps, args.actor, row.primary_managed_system_id);
+    if (!readable) return null;
+    return { id: row.id };
   }
 
   async function listFindings(args: {
@@ -312,5 +330,6 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     listFindings,
     patchFinding,
     linkTask,
+    resolveDisplayId,
   };
 }

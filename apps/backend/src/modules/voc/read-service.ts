@@ -58,6 +58,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     countGroupedVocs: listReaders.countGroupedVocs,
     getVocDetail: detailReaders.getVocDetail,
     resolveVocReference: referenceReader.resolveVocReference,
+    resolveDisplayId: detailReaders.resolveVocDisplayId,
     getConversation: conversationReader.getConversation,
     composeDetailEnvelope: detailReaders.composeDetailEnvelope,
   };
