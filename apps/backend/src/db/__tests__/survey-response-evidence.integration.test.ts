@@ -288,8 +288,6 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
       'surveys.analytics_area_id.SELECT',
       'surveys.display_id.SELECT',
       'surveys.id.SELECT',
-      // #718: ordering/projection column for read_my_answerable_surveys.
-      'surveys.opened_at.SELECT',
       'surveys.primary_managed_system_id.SELECT',
       'surveys.status.SELECT',
       // #548: the history row's survey_title.

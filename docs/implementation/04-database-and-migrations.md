@@ -30,11 +30,13 @@ Applied migrations are the final database authority.
   the second returns only `survey_id`, Survey title, `submitted_at`, and
   `identity_protected` for the session Actor's responses after the Surveys
   service supplies the session `workspace_id` and `actor_id`, and does
-  not return a response ID. The third returns Survey-level fields
-  (`survey_id`, `display_id`, `title`, `type`, `question_count`, `opened_at`)
-  for open Surveys in the session Workspace that have no response from the
-  session Actor, so the respondent-discovery filter never exposes the response
-  table to `fops_app`. None of these functions return answer bodies or
+  not return a response ID. The third returns only Survey IDs for open Surveys
+  in the session Workspace that have no response from the session Actor. The
+  app reads respondent-safe Survey metadata and question counts through its
+  existing `survey.surveys` and `survey.survey_questions` access, then applies
+  `opened_at DESC, survey_id DESC` ordering and cursor pagination. This split
+  keeps the response table hidden from `fops_app` without adding column grants
+  to the definer owner. None of these functions return answer bodies or
   respondent Actor IDs.
 ```
 

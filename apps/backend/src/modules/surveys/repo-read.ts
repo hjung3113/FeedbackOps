@@ -209,15 +209,36 @@ export async function listMyAnswerableSurveys(
     cursor?: AnswerableSurveysCursor;
   },
 ) {
+  // Split read (#718): the SECURITY DEFINER function only filters answered Surveys and
+  // returns their ids — its owner holds no surveys.opened_at grant. Metadata, ordering,
+  // and cursor pagination run here over survey.surveys / survey_questions, which the
+  // app role already selects.
+  const cursorFilter = args.cursor
+    ? sql`and (s.opened_at, s.id) < (${args.cursor.openedAt}::timestamptz, ${args.cursor.surveyId}::uuid)`
+    : sql``;
   const result = await db.execute<Record<string, unknown>>(sql`
-    select survey_id, display_id, title, type, question_count, opened_at::text as opened_at_raw
-      from survey.read_my_answerable_surveys(
-        ${args.workspace_id}::uuid,
-        ${args.actor_id}::uuid,
-        ${args.limit + 1},
-        ${args.cursor?.openedAt ?? null}::timestamptz,
-        ${args.cursor?.surveyId ?? null}::uuid
-      )
+    select s.id as survey_id,
+           s.display_id,
+           s.title,
+           s.type,
+           (
+             select count(q.id)
+               from survey.survey_questions as q
+              where q.workspace_id = s.workspace_id
+                and q.survey_id = s.id
+           ) as question_count,
+           s.opened_at::text as opened_at_raw
+      from survey.surveys as s
+     where s.id in (
+       select survey_id
+         from survey.read_my_answerable_surveys(
+           ${args.workspace_id}::uuid,
+           ${args.actor_id}::uuid
+         )
+     )
+     ${cursorFilter}
+     order by s.opened_at desc, s.id desc
+     limit ${args.limit + 1}
   `);
   const rows = result.rows.map((row) => ({
     survey_id: row.survey_id as string,

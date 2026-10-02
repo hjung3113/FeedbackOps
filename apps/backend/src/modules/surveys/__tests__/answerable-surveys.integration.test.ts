@@ -350,20 +350,23 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
   });
 
   it('paginates by opened_at then survey_id across pages without gaps or overlap', async () => {
-    const oldest = await seedSurvey(`${SLUG} pagination oldest`, 'open', {
-      openedAt: '2026-09-30T11:00:00.000Z',
-    });
-    const middle = await seedSurvey(`${SLUG} pagination middle`, 'open', {
+    const older = await seedSurvey(`${SLUG} pagination older`, 'open', {
       openedAt: '2026-09-30T12:00:00.000Z',
     });
-    const newest = await seedSurvey(`${SLUG} pagination newest`, 'open', {
+    const tieA = await seedSurvey(`${SLUG} pagination tie a`, 'open', {
       openedAt: '2026-09-30T13:00:00.000Z',
     });
+    const tieB = await seedSurvey(`${SLUG} pagination tie b`, 'open', {
+      openedAt: '2026-09-30T13:00:00.000Z',
+    });
+    // Shared opened_at: only the survey_id DESC tie-break orders these two.
+    const tieOrder = [tieA.id, tieB.id].sort().reverse();
+    const expectedOrder = [...tieOrder, older.id];
 
     const firstPage = answerableSurveysResponseSchema.parse(
       (await get(actorA.cookie, '?limit=1')).json(),
     );
-    expect(firstPage.items.map((item) => item.survey_id)).toEqual([newest.id]);
+    expect(firstPage.items.map((item) => item.survey_id)).toEqual([tieOrder[0]]);
     expect(firstPage.page.has_more).toBe(true);
     expect(firstPage.page.cursor).toBeTruthy();
 
@@ -372,7 +375,9 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
       `?limit=1&cursor=${encodeURIComponent(firstPage.page.cursor ?? '')}`,
     );
     const secondPage = answerableSurveysResponseSchema.parse(secondResponse.json());
-    expect(secondPage.items.map((item) => item.survey_id)).toEqual([middle.id]);
+    // A timestamp-only cursor would skip or duplicate tieOrder[1]; the cursor's
+    // survey_id must break the tie.
+    expect(secondPage.items.map((item) => item.survey_id)).toEqual([tieOrder[1]]);
     expect(secondPage.page.has_more).toBe(true);
 
     const thirdResponse = await get(
@@ -380,12 +385,13 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
       `?limit=1&cursor=${encodeURIComponent(secondPage.page.cursor ?? '')}`,
     );
     const thirdPage = answerableSurveysResponseSchema.parse(thirdResponse.json());
-    expect(thirdPage.items.map((item) => item.survey_id)).toEqual([oldest.id]);
+    expect(thirdPage.items.map((item) => item.survey_id)).toEqual([older.id]);
     expect(thirdPage.page).toEqual({ has_more: false });
 
     const seen = [firstPage, secondPage, thirdPage].flatMap((page) =>
       page.items.map((item) => item.survey_id),
     );
+    expect(seen).toEqual(expectedOrder);
     expect(new Set(seen).size).toBe(3);
   });
 
