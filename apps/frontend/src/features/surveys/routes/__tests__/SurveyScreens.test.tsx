@@ -1322,23 +1322,23 @@ describe('Survey screens', () => {
         if (state === 'paused') {
           expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
           expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-          expect(screen.queryByText('생성된 설문이 없습니다.')).not.toBeInTheDocument();
+          expect(screen.queryByText('생성된 Survey가 없습니다.')).not.toBeInTheDocument();
           return;
         }
         if (state === 'failed') {
-          expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+          expect(await screen.findByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument();
           expect(screen.queryByRole('tab')).not.toBeInTheDocument();
           return;
         }
         if (state === 'loaded-empty') {
-          expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
-          expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+          expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
           expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
           expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
           return;
         }
         expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'All 1' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '전체 1' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: '초안 1' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
       },
@@ -1354,7 +1354,7 @@ describe('Survey screens', () => {
           <SurveysIndexRoute />
         </QueryClientProvider>,
       );
-      expect(screen.getByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+      expect(screen.getByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument();
       expect(screen.queryByRole('tab')).not.toBeInTheDocument();
 
       // Post-error refetch resets to pending with no data (paused/non-fetching
@@ -1374,8 +1374,8 @@ describe('Survey screens', () => {
           <SurveysIndexRoute />
         </QueryClientProvider>,
       );
-      expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+      expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
     });

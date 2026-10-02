@@ -511,25 +511,25 @@ describe('integration links route', () => {
       );
 
       if (state === 'pending') {
-        await waitFor(() => expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument());
-        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^Active \d+$/ })).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument());
+        expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^활성 \d+$/ })).not.toBeInTheDocument();
         return;
       }
       if (state === 'failed') {
         await waitFor(
           () =>
-            expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+            expect(screen.getByText('엔티티 링크 목록을 불러오지 못했습니다')).toBeInTheDocument(),
           { timeout: 4000 },
         );
-        expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^Stale \d+$/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^오래됨 \d+$/ })).not.toBeInTheDocument();
         return;
       }
-      expect(await screen.findByRole('tab', { name: 'All 0' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Stale 0' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Revoked 0' })).toBeInTheDocument();
+      expect(await screen.findByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '오래됨 0' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '취소됨 0' })).toBeInTheDocument();
     },
   );
 
@@ -585,14 +585,14 @@ describe('integration links route', () => {
     );
 
     await waitFor(
-      () => expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      () => expect(screen.getByText('엔티티 링크 목록을 불러오지 못했습니다')).toBeInTheDocument(),
       { timeout: 4000 },
     );
-    expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
 
     const callsBeforeRefetch = urls.filter((rawUrl) => rawUrl.includes('/entity-links')).length;
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await userEvent.click(screen.getByRole('button', { name: '새로고침' }));
 
     // Post-error refetch resets to pending with no data: the error view clears
     // and counts stay absent while it is unresolved.
@@ -602,17 +602,17 @@ describe('integration links route', () => {
       ),
     );
     await waitFor(() =>
-      expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument(),
+      expect(screen.queryByText('엔티티 링크 목록을 불러오지 못했습니다')).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole('tab', { name: 'All' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /^All \d+$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
 
     await act(async () => {
       releaseRead?.();
     });
 
-    expect(await screen.findByRole('tab', { name: 'All 0' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Stale 0' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Revoked 0' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '오래됨 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '취소됨 0' })).toBeInTheDocument();
   });
 });

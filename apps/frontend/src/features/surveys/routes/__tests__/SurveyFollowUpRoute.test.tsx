@@ -372,9 +372,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
 
     expect(await screen.findByText('후속 검토를 사용할 수 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        '후속 검토는 마감된 성과 Survey 중 충분한 응답이 모인 경우에만 제공됩니다.',
-      ),
+      screen.getByText('후속 검토는 마감된 성과 Survey 중 충분한 응답이 모인 경우에만 제공됩니다.'),
     ).toBeInTheDocument();
   });
 

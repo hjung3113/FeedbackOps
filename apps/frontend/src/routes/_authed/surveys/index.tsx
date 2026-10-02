@@ -337,7 +337,9 @@ export function CreateSurveyDialog({
               </SelectContent>
             </Select>
           </div>
-          {create.isError && <p className="text-sm text-text-danger">Survey를 만들지 못했습니다.</p>}
+          {create.isError && (
+            <p className="text-sm text-text-danger">Survey를 만들지 못했습니다.</p>
+          )}
           <DialogFooter>
             <Button
               type="button"

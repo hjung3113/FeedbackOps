@@ -1,8 +1,8 @@
 // TimelineEntry — single conversation entry with kind chip + rich body.
 
 import { useMe } from '@/lib/auth/useMe';
-import { formatRelativeTime } from '@/lib/format/datetime';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { formatRelativeTime } from '@/lib/format/datetime';
 import type { ConversationEntry } from '@fops/shared';
 import {
   OutlineBadge,

@@ -142,7 +142,10 @@ export function SurveyResultsRoute() {
     if (survey.error instanceof ApiError && survey.error.status === 404) {
       return (
         <ResultsWorkbench>
-          <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="Survey를 찾을 수 없습니다." />
+          <EmptyState
+            body="삭제되었거나 접근 권한이 없습니다."
+            title="Survey를 찾을 수 없습니다."
+          />
         </ResultsWorkbench>
       );
     }

@@ -28,8 +28,8 @@ import {
 import { Maximize2, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
 
-import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
 import { formatDate } from '@/lib/format/datetime';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';

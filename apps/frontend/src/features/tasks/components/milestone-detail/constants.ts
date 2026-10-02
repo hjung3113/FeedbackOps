@@ -1,6 +1,6 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneStatusFilter, TaskDto } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
-import { GLOSSARY } from '@/lib/copy/glossary';
 
 // ADR-0057 A2 amendment localizes Korean navigation; Timeline stays Slice C.
 // MilestoneDetailContent appends the child-row count to Tasks when loaded.

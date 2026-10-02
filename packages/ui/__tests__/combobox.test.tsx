@@ -67,7 +67,7 @@ describe('Combobox', () => {
     const searchInput = document.querySelector('input')!;
     fireEvent.change(searchInput, { target: { value: 'zzz' } });
     expect(screen.queryByRole('option')).not.toBeInTheDocument();
-    expect(screen.getByText('No results.')).toBeInTheDocument();
+    expect(screen.getByText('결과 없음')).toBeInTheDocument();
   });
 
   it('trigger has aria-controls linking to listbox when open', () => {

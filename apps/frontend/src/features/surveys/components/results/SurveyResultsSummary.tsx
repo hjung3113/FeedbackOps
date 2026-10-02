@@ -39,7 +39,9 @@ function QuestionResult({
         data-testid={`survey-result-suppressed-${result.question_id}`}
       >
         <p className="text-sm font-medium text-text-primary">Q{index + 1}</p>
-        <p className="mt-2 text-sm text-text-muted">익명 보호를 위해 이 질문의 결과는 숨겨집니다.</p>
+        <p className="mt-2 text-sm text-text-muted">
+          익명 보호를 위해 이 질문의 결과는 숨겨집니다.
+        </p>
       </section>
     );
   }
@@ -186,9 +188,7 @@ function NextActions({
       className="sticky top-4 self-start rounded-md border border-border-subtle bg-surface-raised p-4"
       data-testid="survey-result-next-actions"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-        후속 조치
-      </h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">후속 조치</h2>
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
           const label = action.id === 'create_finding' ? 'Finding 생성' : 'Task 요청';
@@ -314,9 +314,7 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
               <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
             </>
           )}
-          <p className="mt-2 text-sm text-text-muted">
-            질문 요약과 응답 분포입니다.
-          </p>
+          <p className="mt-2 text-sm text-text-muted">질문 요약과 응답 분포입니다.</p>
           {results.identity_protected && (
             <p className="mt-3 text-sm text-text-muted">신원 보호 응답</p>
           )}

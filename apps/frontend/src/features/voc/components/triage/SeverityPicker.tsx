@@ -15,7 +15,7 @@
  * — a richer layout than ToggleGroupItem supports.
  */
 
-import { cn, SEVERITY_LABELS } from '@fops/ui';
+import { SEVERITY_LABELS, cn } from '@fops/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@fops/ui';
 import { HelpCircle } from 'lucide-react';
 import type * as React from 'react';
