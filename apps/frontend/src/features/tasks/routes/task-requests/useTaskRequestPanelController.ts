@@ -1,4 +1,4 @@
-import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
+import { useFindingDetail } from '@/features/findings/public';
 import type { TaskDto, TaskRequestDto } from '@fops/shared';
 
 import { useTaskRequestConversion } from './useTaskRequestConversion';

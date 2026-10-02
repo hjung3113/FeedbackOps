@@ -27,6 +27,7 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - Show evidence/source panels only when linked context exists and is visible or safely summarized.
 - Managed System filters refine lists and defaults; they do not duplicate VOC, Survey, Task, or Integration navigation.
 - Task creation from Finding must preserve pending, error, and linked context states.
+- Task Request review reads Finding source defaults through `features/findings/public.ts`; do not import Finding hook internals.
 
 ## Key files
 
@@ -45,6 +46,7 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
   composition, exactly-once decision callback, and dialog lifetime.
 - `apps/frontend/src/features/tasks/routes/task-requests/useTaskRequestPanelController.ts` — source Area
   defaults and canonical outcome reconciliation; section components render the view.
+- `apps/frontend/src/features/findings/public.ts` — supported Finding source-read edge used for Task Request defaults.
 - `apps/frontend/src/features/tasks/components/TaskDetailPanel.tsx` — Task detail and status actions.
 - `apps/frontend/src/features/tasks/components/MilestoneRow.tsx` — Milestone list row.
 - `apps/frontend/src/features/tasks/components/MilestoneDetailPanel.tsx` —

@@ -1,15 +1,11 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
-import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
-import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
-import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
-import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { FindingRequestTaskDraftHost, useFindingDetail } from '@/features/findings/public';
 import { RATING_BAND_LABELS, SURVEY_RESULT_KIND_LABELS } from '@/lib/copy/enum-labels';
 import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
 import { Button, EmptyState } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import { FilePlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import type { Survey } from '../../types';
 import { CreateFindingDraftPanel, excerptsByResponse } from './CreateFindingDraftPanel';
 
@@ -115,14 +111,6 @@ function SelectedFindingRequest({
 }) {
   const finding = useFindingDetail(findingId);
   const loaded = finding.data?.id === findingId ? finding.data : undefined;
-  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
-  const mutation = useRequestTaskFromFinding({
-    findingId,
-    idempotencyKey,
-    onError: (err: ApiError) => {
-      toast.error(errorMapper(err.envelope).message);
-    },
-  });
 
   useEffect(() => {
     if (loaded) onReady(findingId);
@@ -132,26 +120,8 @@ function SelectedFindingRequest({
     if (finding.isError && !finding.isFetching && !loaded) onLoadError(findingId);
   }, [finding.isError, finding.isFetching, findingId, loaded, onLoadError]);
 
-  if (!loaded) return null;
   return (
-    <TaskRequestDraftCard
-      sourceKind="Finding"
-      sourceDisplayId={loaded.display_id}
-      evidenceSummaryDefault={loaded.summary}
-      isSubmitting={mutation.isPending}
-      source={{ type: 'finding', id: loaded.id }}
-      onClose={onClose}
-      onSubmit={(values) => {
-        mutation.mutate(values, {
-          onSuccess: () => {
-            markConsumed();
-            mutation.reset();
-            onClose();
-            toast.success('Task Request가 생성되었습니다.');
-          },
-        });
-      }}
-    />
+    <FindingRequestTaskDraftHost findingId={findingId} finding={loaded} open onClose={onClose} />
   );
 }
 

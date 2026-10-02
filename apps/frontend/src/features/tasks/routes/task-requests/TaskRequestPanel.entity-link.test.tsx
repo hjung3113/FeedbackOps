@@ -20,7 +20,7 @@ const { useDecision, useConversion, useLink } = vi.hoisted(() => ({
   useLink: vi.fn(),
 }));
 
-vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
+vi.mock('@/features/findings/public', () => ({
   useFindingDetail: () => ({ data: null }),
 }));
 vi.mock('./useTaskRequestDecision', () => ({ useTaskRequestDecision: useDecision }));

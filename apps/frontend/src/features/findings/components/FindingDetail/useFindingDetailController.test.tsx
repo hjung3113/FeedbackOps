@@ -198,7 +198,6 @@ describe('useFindingDetailController', () => {
   it.each([
     ['addEvidenceOpen', 'setAddEvidenceOpen'],
     ['linkEvidenceOpen', 'setLinkEvidenceOpen'],
-    ['requestTaskOpen', 'setRequestTaskOpen'],
     ['linkTaskOpen', 'setLinkTaskOpen'],
   ] as const)('%s toggles open and closed', (openKey, setKey) => {
     const { result } = renderController(FINDING_LINKED);
