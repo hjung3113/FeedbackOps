@@ -253,6 +253,27 @@ export async function findTaskById(
   return row ? mapTaskRow(row) : null;
 }
 
+// Display id → id for /nav/resolve (#731). Same row population findTaskById
+// reads: no status filter, mirroring the Task detail read.
+export async function findTaskIdByDisplayId(
+  db: Db | Tx,
+  input: { workspaceId: string; displayId: string },
+): Promise<{ id: string; primary_managed_system_id: string } | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, primary_managed_system_id
+      FROM task.tasks
+     WHERE display_id = ${input.displayId}
+       AND workspace_id = ${input.workspaceId}
+     LIMIT 1
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    primary_managed_system_id: row.primary_managed_system_id as string,
+  };
+}
+
 export async function listTasksByWorkspace(
   db: Db | Tx,
   input: {
