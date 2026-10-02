@@ -13,8 +13,9 @@ test.describe('/home command palette', () => {
     await page.goto('/home');
     await expect(page.getByTestId('home-screen')).toBeVisible();
 
-    // ControlOrMeta maps to the platform-appropriate modifier (#611).
-    await page.keyboard.press('ControlOrMeta+KeyK');
+    // The harness emulates Desktop Chrome on Windows (userAgentData.platform is
+    // 'Windows'), so the app binds Ctrl+K regardless of the host OS (#611).
+    await page.keyboard.press('Control+KeyK');
     const dialog = page.getByRole('dialog', { name: '명령 메뉴' });
     await expect(dialog).toBeVisible();
 
@@ -26,7 +27,7 @@ test.describe('/home command palette', () => {
     await page.goto('/home');
     await expect(page.getByTestId('home-screen')).toBeVisible();
 
-    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.keyboard.press('Control+KeyK');
     const dialog = page.getByRole('dialog', { name: '명령 메뉴' });
     await expect(dialog).toBeVisible();
 

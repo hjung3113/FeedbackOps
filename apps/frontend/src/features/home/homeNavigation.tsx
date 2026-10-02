@@ -3,8 +3,8 @@ import { Command as CommandIcon, Home } from 'lucide-react';
 
 import { COMMAND_PALETTE_COPY } from '@/lib/copy/command-palette';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
-import { shortcutLabel } from '@/lib/layout/command-palette/platform';
 import type { SidebarNavItem } from '@/lib/layout/AppSidebar';
+import { shortcutLabel } from '@/lib/layout/command-palette/platform';
 
 const QUEUE_COUNT_KEY = {
   'unassigned-voc': 'home.unassigned-voc',
