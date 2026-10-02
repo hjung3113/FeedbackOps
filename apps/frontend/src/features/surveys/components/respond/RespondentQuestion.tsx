@@ -11,6 +11,8 @@ export interface RespondentQuestionData {
   options: Array<{ key: string; label: string }> | null;
   rating_min: number | null;
   rating_max: number | null;
+  rating_low_label: string | null;
+  rating_high_label: string | null;
 }
 
 export function RespondentQuestion({
@@ -38,22 +40,32 @@ export function RespondentQuestion({
     const minimum = question.rating_min ?? 1;
     const maximum = question.rating_max ?? 5;
     return (
-      <div className="mt-2 flex gap-2">
-        {Array.from({ length: Math.max(0, maximum - minimum + 1) }, (_, index) => {
-          const score = minimum + index;
-          const selected = value === score;
-          return (
-            <button
-              key={score}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onChange(score)}
-              className={`h-8 w-8 rounded-full border ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
-            >
-              {score}
-            </button>
-          );
-        })}
+      <div
+        className="mt-2 space-y-2"
+        role="radiogroup"
+        aria-labelledby={`respondent-question-label-${question.id}`}
+      >
+        <div className="flex gap-2">
+          {Array.from({ length: Math.max(0, maximum - minimum + 1) }, (_, index) => {
+            const score = minimum + index;
+            const selected = value === score;
+            return (
+              <button
+                key={score}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onChange(score)}
+                className={`h-8 w-8 rounded-full border ${selected ? 'border-border-selected bg-surface-row-selected' : 'border-border-subtle'}`}
+              >
+                {score}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex justify-between gap-2 text-xs text-text-muted">
+          <span>{question.rating_low_label}</span>
+          <span>{question.rating_high_label}</span>
+        </div>
       </div>
     );
   }

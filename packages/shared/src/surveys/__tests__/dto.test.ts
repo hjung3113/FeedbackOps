@@ -41,21 +41,22 @@ const RESPONDENT_FORM = {
   ],
 } as const;
 
+const VALID_SUBMISSION = {
+  answers: [
+    {
+      question_id: '6f1c2b3a-1111-4222-8333-444455556666',
+      value: 'slow',
+    },
+  ],
+} as const;
+
 describe('survey respondent schemas', () => {
   it('parses the respondent-safe form DTO', () => {
     expect(surveyRespondentFormDtoSchema.parse(RESPONDENT_FORM)).toEqual(RESPONDENT_FORM);
   });
 
   it('parses strict response submission and acknowledgement bodies', () => {
-    const submission = {
-      answers: [
-        {
-          question_id: '6f1c2b3a-1111-4222-8333-444455556666',
-          value: 'slow',
-        },
-      ],
-    };
-    expect(surveyResponseSubmissionSchema.parse(submission)).toEqual(submission);
+    expect(surveyResponseSubmissionSchema.parse(VALID_SUBMISSION)).toEqual(VALID_SUBMISSION);
     expect(
       surveyResponseSubmittedDtoSchema.parse({
         id: '7f1c2b3a-1111-4222-8333-444455556666',
@@ -64,9 +65,22 @@ describe('survey respondent schemas', () => {
         identity_protected: true,
       }).identity_protected,
     ).toBe(true);
-    expect(surveyResponseSubmissionSchema.safeParse({ answers: [], extra: true }).success).toBe(
-      false,
-    );
+  });
+
+  it.each([
+    ['root field', { ...VALID_SUBMISSION, extra_root: true }],
+    [
+      'answer field',
+      {
+        answers: [{ ...VALID_SUBMISSION.answers[0], extra_answer: true }],
+      },
+    ],
+  ])('rejects a valid non-empty submission with an extra %s', (_field, submission) => {
+    expect(surveyResponseSubmissionSchema.safeParse(submission).success).toBe(false);
+  });
+
+  it('rejects an empty answers array', () => {
+    expect(surveyResponseSubmissionSchema.safeParse({ answers: [] }).success).toBe(false);
   });
 });
 

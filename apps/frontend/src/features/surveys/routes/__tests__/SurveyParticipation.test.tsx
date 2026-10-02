@@ -140,9 +140,31 @@ function textForm(isRequired: boolean): SurveyRespondentFormDto {
   });
 }
 
+function ratingForm(): SurveyRespondentFormDto {
+  return surveyRespondentFormDtoSchema.parse({
+    survey: formDto.survey,
+    questions: [
+      {
+        ...firstQuestion,
+        kind: 'rating',
+        prompt: '사용 빈도는 어떠했나요?',
+        is_required: true,
+        options: null,
+        rating_min: 1,
+        rating_max: 5,
+        rating_low_label: '훨씬 자주',
+        rating_high_label: '거의 없음',
+        branch_parent_question_id: null,
+        branch_trigger_option_key: null,
+      },
+    ],
+  });
+}
+
 interface RequestRecord {
   method: string;
   pathname: string;
+  cursor: string | null;
   body: unknown;
   idempotencyKey: string | null;
 }
@@ -151,18 +173,27 @@ function installFetch(
   options: {
     answerable?: AnswerableSurveysResponse;
     answerableErrorOnce?: boolean;
+    answerableNextPage?: AnswerableSurveysResponse;
+    answerableNextPageErrorOnce?: boolean;
+    pendingAnswerableNextPage?: boolean;
     pendingAnswerable?: boolean;
     history?: MySurveyResponsesResponse;
     historyErrorOnce?: boolean;
+    historyNextPage?: MySurveyResponsesResponse;
+    historyNextPageErrorOnce?: boolean;
+    pendingHistoryNextPage?: boolean;
     pendingHistory?: boolean;
     form?: SurveyRespondentFormDto;
     formStatus?: number;
+    postNetworkErrorOnce?: boolean;
     postStatuses?: Array<{ status: number; code?: string }>;
   } = {},
 ) {
   const requests: RequestRecord[] = [];
   let answerableRequests = 0;
+  let answerableNextPageRequests = 0;
   let historyRequests = 0;
+  let historyNextPageRequests = 0;
   let successfulSubmission = false;
   let postIndex = 0;
   const answerable = options.answerable ?? {
@@ -175,6 +206,7 @@ function installFetch(
     const request: RequestRecord = {
       method,
       pathname: url.pathname,
+      cursor: url.searchParams.get('cursor'),
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
       idempotencyKey: new Headers(init?.headers).get('Idempotency-Key'),
     };
@@ -182,6 +214,14 @@ function installFetch(
 
     if (url.pathname === '/me/answerable-surveys') {
       answerableRequests += 1;
+      if (url.searchParams.has('cursor')) {
+        answerableNextPageRequests += 1;
+        if (options.pendingAnswerableNextPage) return new Promise<Response>(() => {});
+        if (options.answerableNextPageErrorOnce && answerableNextPageRequests === 1) {
+          return jsonResponse({ code: 'internal.unexpected', message: 'temporary failure' }, 500);
+        }
+        return jsonResponse(options.answerableNextPage ?? { items: [], page: { has_more: false } });
+      }
       if (options.pendingAnswerable) return new Promise<Response>(() => {});
       if (options.answerableErrorOnce && answerableRequests === 1) {
         return jsonResponse({ code: 'internal.unexpected', message: 'temporary failure' }, 500);
@@ -192,6 +232,14 @@ function installFetch(
     }
     if (url.pathname === '/me/survey-responses') {
       historyRequests += 1;
+      if (url.searchParams.has('cursor')) {
+        historyNextPageRequests += 1;
+        if (options.pendingHistoryNextPage) return new Promise<Response>(() => {});
+        if (options.historyNextPageErrorOnce && historyNextPageRequests === 1) {
+          return jsonResponse({ code: 'internal.unexpected', message: 'temporary failure' }, 500);
+        }
+        return jsonResponse(options.historyNextPage ?? { items: [], page: { has_more: false } });
+      }
       if (options.pendingHistory) return new Promise<Response>(() => {});
       if (options.historyErrorOnce && historyRequests === 1) {
         return jsonResponse({ code: 'internal.unexpected', message: 'temporary failure' }, 500);
@@ -212,7 +260,9 @@ function installFetch(
     }
     if (url.pathname === `/surveys/${surveyId}/responses` && method === 'POST') {
       const result = options.postStatuses?.[postIndex] ?? { status: 201 };
+      const rejectForNetwork = options.postNetworkErrorOnce && postIndex === 0;
       postIndex += 1;
+      if (rejectForNetwork) throw new TypeError('Failed to fetch');
       if (result.status === 201) successfulSubmission = true;
       if (result.status >= 400) {
         return jsonResponse(
@@ -288,6 +338,115 @@ describe('Survey participation page', () => {
     expect(screen.getByTestId('participation-history-loading')).toBeInTheDocument();
   });
 
+  it('loads another answerable Survey with the cursor returned by the first page', async () => {
+    const cursor = 'answerable-next-page';
+    const nextSurvey = {
+      ...answerableSurvey,
+      survey_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      display_id: 'SRV-22',
+      title: '분기 업무 흐름 설문',
+    };
+    const { requests } = installFetch({
+      answerable: answerableSurveysResponseSchema.parse({
+        items: [answerableSurvey],
+        page: { has_more: true, cursor },
+      }),
+      answerableNextPage: answerableSurveysResponseSchema.parse({
+        items: [nextSurvey],
+        page: { has_more: false },
+      }),
+    });
+    renderWithQuery(<SurveyParticipationPage />);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('link', { name: /분기 업무 흐름 설문/ })).toBeInTheDocument();
+    expect(
+      requests.some(
+        (request) => request.pathname === '/me/answerable-surveys' && request.cursor === cursor,
+      ),
+    ).toBe(true);
+  });
+
+  it('loads another response history row with the cursor returned by the first page', async () => {
+    const cursor = 'history-next-page';
+    const nextHistory = mySurveyResponsesResponseSchema.parse({
+      items: [
+        {
+          survey_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          survey_title: '지난 분기 업무 흐름',
+          submitted_at: '2026-07-22T00:00:00.000Z',
+          identity_protected: true,
+        },
+      ],
+      page: { has_more: false },
+    });
+    const { requests } = installFetch({
+      history: mySurveyResponsesResponseSchema.parse({
+        items: completedHistory.items,
+        page: { has_more: true, cursor },
+      }),
+      historyNextPage: nextHistory,
+    });
+    renderWithQuery(<SurveyParticipationPage />);
+
+    const section = screen.getByRole('heading', { name: '내 응답 이력' }).closest('section');
+    if (section === null) throw new Error('response history section is missing');
+    await userEvent.setup().click(await within(section).findByRole('button', { name: '더 보기' }));
+
+    expect(await within(section).findByText('지난 분기 업무 흐름')).toBeInTheDocument();
+    expect(
+      requests.some(
+        (request) => request.pathname === '/me/survey-responses' && request.cursor === cursor,
+      ),
+    ).toBe(true);
+  });
+
+  it('shows continuation loading and keeps loaded rows when a continuation can be retried', async () => {
+    const nextSurvey = {
+      ...answerableSurvey,
+      survey_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      display_id: 'SRV-22',
+      title: '분기 업무 흐름 설문',
+    };
+    installFetch({
+      answerable: answerableSurveysResponseSchema.parse({
+        items: [answerableSurvey],
+        page: { has_more: true, cursor: 'answerable-next-page' },
+      }),
+      answerableNextPage: answerableSurveysResponseSchema.parse({
+        items: [nextSurvey],
+        page: { has_more: false },
+      }),
+      answerableNextPageErrorOnce: true,
+    });
+    renderWithQuery(<SurveyParticipationPage />);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '추가 Survey를 불러오지 못했습니다.',
+    );
+    expect(screen.getByRole('link', { name: /Q3 사용성 진단/ })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByRole('link', { name: /분기 업무 흐름 설문/ })).toBeInTheDocument();
+  });
+
+  it('marks a Survey continuation as loading while the next page is pending', async () => {
+    installFetch({
+      answerable: answerableSurveysResponseSchema.parse({
+        items: [answerableSurvey],
+        page: { has_more: true, cursor: 'answerable-next-page' },
+      }),
+      pendingAnswerableNextPage: true,
+    });
+    renderWithQuery(<SurveyParticipationPage />);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('button', { name: '불러오는 중…' })).toBeDisabled();
+  });
+
   it('shows both empty regions when there is no answerable or submitted Survey', async () => {
     installFetch({ answerable: { items: [], page: { has_more: false } } });
     renderWithQuery(<SurveyParticipationPage />);
@@ -326,6 +485,24 @@ describe('Survey participation page', () => {
 });
 
 describe('respondent form', () => {
+  it('shows directional rating labels and submits the selected numeric value', async () => {
+    const { requests } = installFetch({ form: ratingForm() });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    await screen.findByText(/사용 빈도는 어떠했나요/);
+    const ratingGroup = screen.getByRole('radiogroup', { name: /사용 빈도는 어떠했나요/ });
+    expect(within(ratingGroup).getByText('훨씬 자주')).toBeInTheDocument();
+    expect(within(ratingGroup).getByText('거의 없음')).toBeInTheDocument();
+    await userEvent.setup().click(within(ratingGroup).getByRole('button', { name: '5' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '제출' }));
+
+    expect(await screen.findByText('응답이 제출되었습니다')).toBeInTheDocument();
+    const submission = requests.find((request) => request.method === 'POST');
+    expect(surveyResponseSubmissionSchema.parse(submission?.body)).toEqual({
+      answers: [{ question_id: firstQuestion.id, value: 5 }],
+    });
+  });
+
   it('keeps a branch hidden until its single-choice trigger is selected', async () => {
     installFetch();
     renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
@@ -334,6 +511,29 @@ describe('respondent form', () => {
     expect(screen.queryByRole('textbox', { name: '어떤 점이 좋았나요?' })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('radio', { name: '예' }));
     expect(await screen.findByRole('textbox', { name: '어떤 점이 좋았나요?' })).toBeInTheDocument();
+  });
+
+  it('counts visible questions and non-empty visible answers in respondent progress', async () => {
+    const optionalBranchForm = surveyRespondentFormDtoSchema.parse({
+      ...formDto,
+      questions: formDto.questions.map((question) =>
+        question.id === childId ? { ...question, is_required: false } : question,
+      ),
+    });
+    installFetch({ form: optionalBranchForm });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+
+    expect(await screen.findByText('1개 질문 · 0개 응답')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('radio', { name: '예' }));
+    expect(screen.getByText('2개 질문 · 1개 응답')).toBeInTheDocument();
+    const optionalAnswer = screen.getByRole('textbox', { name: '어떤 점이 좋았나요?' });
+    fireEvent.change(optionalAnswer, { target: { value: '좋았어요.' } });
+    expect(screen.getByText('2개 질문 · 2개 응답')).toBeInTheDocument();
+    fireEvent.change(optionalAnswer, { target: { value: '' } });
+    expect(screen.getByText('2개 질문 · 1개 응답')).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('radio', { name: '아니오' }));
+    expect(screen.getByText('1개 질문 · 1개 응답')).toBeInTheDocument();
   });
 
   it('blocks missing required answers inline without sending a request', async () => {
@@ -458,6 +658,26 @@ describe('respondent form', () => {
     expect(keys[0]).toBe(keys[1]);
   });
 
+  it('shows a rejected fetch and retries the unchanged payload with the same idempotency key', async () => {
+    const { requests } = installFetch({ postNetworkErrorOnce: true });
+    renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
+    await screen.findByText('사용하기 쉬웠나요?');
+    await userEvent.setup().click(screen.getByRole('radio', { name: '아니오' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '제출' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(screen.getByRole('button', { name: '제출' })).toBeEnabled();
+    await userEvent.setup().click(screen.getByRole('button', { name: '제출' }));
+
+    expect(await screen.findByText('응답이 제출되었습니다')).toBeInTheDocument();
+    const submissions = requests.filter((request) => request.method === 'POST');
+    expect(submissions).toHaveLength(2);
+    expect(submissions[0]?.body).toEqual(submissions[1]?.body);
+    expect(submissions[0]?.idempotencyKey).toBe(submissions[1]?.idempotencyKey);
+  });
+
   it('mints a new idempotency key when the payload changes after a failure', async () => {
     const { requests } = installFetch({ postStatuses: [{ status: 500 }, { status: 201 }] });
     renderWithQuery(<RespondSurveyPage surveyId={surveyId} />);
@@ -533,7 +753,15 @@ describe('Home answerable Survey panel', () => {
     installFetch({ answerable: { items: [], page: { has_more: false } } });
     renderWithQuery(<AnswerableSurveysPanel />);
 
-    expect(await screen.findByText('응답할 Survey가 없습니다.')).toBeInTheDocument();
+    const emptyRow = await screen.findByText('응답할 Survey가 없습니다.');
+    expect(emptyRow.tagName).toBe('P');
+    expect(emptyRow).toHaveClass('px-4', 'py-5', 'text-sm', 'text-text-muted');
+    expect(emptyRow.parentElement).toHaveClass(
+      'rounded-md',
+      'border',
+      'border-border-subtle',
+      'bg-surface-card',
+    );
   });
 
   it('shows a loading state while the answerable list is pending', async () => {

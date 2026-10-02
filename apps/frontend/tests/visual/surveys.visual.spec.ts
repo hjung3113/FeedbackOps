@@ -13,12 +13,12 @@ test.describe('/surveys visual harness', () => {
       const isBuilder = ['builder', 'builder-empty', 'builder-dirty', 'builder-drag-over'].includes(
         scenario,
       );
-      const url =
-        scenario === 'detail'
-          ? `/surveys/${surveyVisualFixture.id}`
-          : isBuilder
-            ? `/surveys/${surveyVisualFixture.id}?builder=true`
-            : '/surveys';
+      const isDetail = scenario === 'detail' || scenario === 'detail-empty';
+      const url = isDetail
+        ? `/surveys/${surveyVisualFixture.id}`
+        : isBuilder
+          ? `/surveys/${surveyVisualFixture.id}?builder=true`
+          : '/surveys';
       await page.goto(url);
 
       if (scenario === 'builder-dirty') {
@@ -43,12 +43,16 @@ test.describe('/surveys visual harness', () => {
         await page.getByTestId('survey-create-button').click();
         await expect(page.getByRole('dialog')).toBeVisible();
       }
+      if (scenario === 'detail-empty') {
+        await expect(page.getByRole('link', { name: '질문 편집' })).toBeVisible();
+        await expect(page.getByRole('link', { name: '새 질문 추가' })).toBeVisible();
+      }
 
       const target = isBuilder
         ? page.getByTestId('survey-builder')
         : scenario === 'create-dialog'
           ? page.getByRole('dialog')
-          : scenario === 'detail'
+          : isDetail
             ? page.getByTestId('survey-detail')
             : scenario === 'empty-no-permission'
               ? page.getByTestId('survey-list')

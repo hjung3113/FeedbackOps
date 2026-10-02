@@ -1,5 +1,5 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { ApiError, errorMapper } from '@/lib/api';
+import { ApiError, errorMapper, mapUnknownError } from '@/lib/api';
 import { useIdempotencyKey } from '@/lib/api/useIdempotencyKey';
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import {
@@ -22,6 +22,7 @@ import {
   RespondentQuestion,
 } from '../components/respond/RespondentQuestion';
 import { getVisibleRespondentQuestions } from '../components/respond/branching';
+import { countNonEmptyRespondentAnswers } from '../components/respond/progress';
 import {
   useAnswerableSurveys,
   useMySurveyResponses,
@@ -32,6 +33,8 @@ import {
 export function SurveyParticipationPage() {
   const answerable = useAnswerableSurveys();
   const history = useMySurveyResponses();
+  const answerableItems = answerable.data?.pages.flatMap((page) => page.items) ?? [];
+  const historyItems = history.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <PageShell contentClassName="max-w-none">
@@ -50,10 +53,14 @@ export function SurveyParticipationPage() {
             {SURVEY_PARTICIPATION_COPY.answerableSurveys}
           </h2>
           <AnswerableSurveysRegion
-            data={answerable.data?.items ?? []}
+            data={answerableItems}
             isLoading={answerable.isPending}
-            isError={answerable.isError}
+            isError={answerable.isError && answerable.data === undefined}
             onRetry={() => void answerable.refetch()}
+            hasNextPage={answerable.hasNextPage ?? false}
+            isFetchingNextPage={answerable.isFetchingNextPage}
+            isNextPageError={answerable.isFetchNextPageError}
+            onLoadMore={() => void answerable.fetchNextPage()}
           />
         </section>
         <section aria-labelledby="survey-response-history-heading">
@@ -64,10 +71,14 @@ export function SurveyParticipationPage() {
             {SURVEY_PARTICIPATION_COPY.responseHistory}
           </h2>
           <SurveyResponseHistoryRegion
-            data={history.data?.items ?? []}
+            data={historyItems}
             isLoading={history.isPending}
-            isError={history.isError}
+            isError={history.isError && history.data === undefined}
             onRetry={() => void history.refetch()}
+            hasNextPage={history.hasNextPage ?? false}
+            isFetchingNextPage={history.isFetchingNextPage}
+            isNextPageError={history.isFetchNextPageError}
+            onLoadMore={() => void history.fetchNextPage()}
           />
         </section>
       </main>
@@ -80,11 +91,19 @@ function AnswerableSurveysRegion({
   isLoading,
   isError,
   onRetry,
+  hasNextPage,
+  isFetchingNextPage,
+  isNextPageError,
+  onLoadMore,
 }: {
   data: AnswerableSurveysResponse['items'];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isNextPageError: boolean;
+  onLoadMore: () => void;
 }) {
   if (isLoading) {
     return <ParticipationListLoading testId="participation-answerable-loading" />;
@@ -98,38 +117,53 @@ function AnswerableSurveysRegion({
       />
     );
   }
-  if (data.length === 0) {
+  if (data.length === 0)
     return (
-      <ListStateMessage variant="empty" title={SURVEY_PARTICIPATION_COPY.noAnswerableSurveys} />
+      <>
+        <ListStateMessage variant="empty" title={SURVEY_PARTICIPATION_COPY.noAnswerableSurveys} />
+        <SurveyParticipationLoadMore
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          isError={isNextPageError}
+          onLoadMore={onLoadMore}
+        />
+      </>
     );
-  }
 
   return (
-    <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
-      {data.map((survey) => (
-        <li key={survey.survey_id} className="border-b border-border-subtle last:border-b-0">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Link
-              to="/surveys/$surveyId/respond"
-              params={{ surveyId: survey.survey_id }}
-              className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
-              <span className="mt-1 block text-xs text-text-muted">
-                {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
-                {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
-                {formatDate(survey.opened_at)}
-              </span>
-            </Link>
-            <Button asChild variant="primary" size="sm">
-              <Link to="/surveys/$surveyId/respond" params={{ surveyId: survey.survey_id }}>
-                {SURVEY_PARTICIPATION_COPY.respond}
+    <>
+      <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
+        {data.map((survey) => (
+          <li key={survey.survey_id} className="border-b border-border-subtle last:border-b-0">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Link
+                to="/surveys/$surveyId/respond"
+                params={{ surveyId: survey.survey_id }}
+                className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  {survey.display_id} · {SURVEY_TYPE_LABELS[survey.type]} ·{' '}
+                  {SURVEY_PARTICIPATION_COPY.questionCount(survey.question_count)} ·{' '}
+                  {formatDate(survey.opened_at)}
+                </span>
               </Link>
-            </Button>
-          </div>
-        </li>
-      ))}
-    </ul>
+              <Button asChild variant="primary" size="sm">
+                <Link to="/surveys/$surveyId/respond" params={{ surveyId: survey.survey_id }}>
+                  {SURVEY_PARTICIPATION_COPY.respond}
+                </Link>
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <SurveyParticipationLoadMore
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        isError={isNextPageError}
+        onLoadMore={onLoadMore}
+      />
+    </>
   );
 }
 
@@ -138,11 +172,19 @@ function SurveyResponseHistoryRegion({
   isLoading,
   isError,
   onRetry,
+  hasNextPage,
+  isFetchingNextPage,
+  isNextPageError,
+  onLoadMore,
 }: {
   data: MySurveyResponsesResponse['items'];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isNextPageError: boolean;
+  onLoadMore: () => void;
 }) {
   if (isLoading) {
     return <ParticipationListLoading testId="participation-history-loading" />;
@@ -156,26 +198,73 @@ function SurveyResponseHistoryRegion({
       />
     );
   }
-  if (data.length === 0) {
-    return <ListStateMessage variant="empty" title={SURVEY_PARTICIPATION_COPY.noSurveyResponses} />;
-  }
+  if (data.length === 0)
+    return (
+      <>
+        <ListStateMessage variant="empty" title={SURVEY_PARTICIPATION_COPY.noSurveyResponses} />
+        <SurveyParticipationLoadMore
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          isError={isNextPageError}
+          onLoadMore={onLoadMore}
+        />
+      </>
+    );
 
   return (
-    <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
-      {data.map((response) => (
-        <li
-          key={`${response.survey_id}-${response.submitted_at}`}
-          className="border-b border-border-subtle px-4 py-3 last:border-b-0"
-        >
-          <span className="block text-sm font-medium text-text-primary">
-            {response.survey_title}
-          </span>
-          <span className="mt-1 block text-xs text-text-muted">
-            제출 {formatDate(response.submitted_at)}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
+        {data.map((response) => (
+          <li
+            key={`${response.survey_id}-${response.submitted_at}`}
+            className="border-b border-border-subtle px-4 py-3 last:border-b-0"
+          >
+            <span className="block text-sm font-medium text-text-primary">
+              {response.survey_title}
+            </span>
+            <span className="mt-1 block text-xs text-text-muted">
+              제출 {formatDate(response.submitted_at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <SurveyParticipationLoadMore
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        isError={isNextPageError}
+        onLoadMore={onLoadMore}
+      />
+    </>
+  );
+}
+
+function SurveyParticipationLoadMore({
+  hasNextPage,
+  isFetchingNextPage,
+  isError,
+  onLoadMore,
+}: {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isError: boolean;
+  onLoadMore: () => void;
+}) {
+  if (!hasNextPage) return null;
+  return (
+    <div className="flex flex-col items-center gap-2 pt-3">
+      {isError && (
+        <p className="text-sm text-accent-danger" role="alert">
+          {SURVEY_PARTICIPATION_COPY.loadMoreError}
+        </p>
+      )}
+      <Button variant="subtle" size="sm" disabled={isFetchingNextPage} onClick={onLoadMore}>
+        {isFetchingNextPage
+          ? SURVEY_PARTICIPATION_COPY.loadingMore
+          : isError
+            ? SURVEY_PARTICIPATION_COPY.retry
+            : SURVEY_PARTICIPATION_COPY.loadMore}
+      </Button>
+    </div>
   );
 }
 
@@ -287,10 +376,11 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
     );
   }
 
-  const submitError =
-    submit.isError && submit.error instanceof ApiError
+  const submitError = submit.isError
+    ? submit.error instanceof ApiError && submit.error.status === 422
       ? errorMapper(submit.error.envelope).message
-      : null;
+      : mapUnknownError(submit.error).message
+    : null;
   const showSummary = submitError ?? validationSummary;
 
   return (
@@ -330,7 +420,10 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
           >
             {visibleQuestions.map((question) => (
               <div key={question.id}>
-                <p className="text-sm font-medium text-text-primary">
+                <p
+                  className="text-sm font-medium text-text-primary"
+                  id={`respondent-question-label-${question.id}`}
+                >
                   Q{question.sort_order + 1}. {question.prompt}
                   {question.is_required && ' *'}
                 </p>
@@ -359,11 +452,17 @@ export function RespondSurveyPage({ surveyId }: { surveyId: string }) {
                 {showSummary}
               </p>
             )}
-            <div className="border-t border-border-subtle pt-4 text-right">
+            <footer className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 text-xs text-text-muted">
+              <span>
+                {SURVEY_PARTICIPATION_COPY.questionCount(visibleQuestions.length)} ·{' '}
+                {SURVEY_PARTICIPATION_COPY.responseCount(
+                  countNonEmptyRespondentAnswers(visibleQuestions, answers),
+                )}
+              </span>
               <Button type="submit" disabled={submit.isPending}>
                 {SURVEY_PARTICIPATION_COPY.submit}
               </Button>
-            </div>
+            </footer>
           </form>
         </section>
       </main>

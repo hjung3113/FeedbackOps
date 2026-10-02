@@ -332,13 +332,14 @@ export function AuthedLayout() {
       replace: true,
     });
   }, [location.href, me.error, navigate, queryClient]);
-  // Every domain except Admin already reads/scopes by its own `managedSystem`
-  // URL param (docs/frontend/routes-and-layout.md §URL State Rules): VOC,
-  // VOC Clusters, Findings, Tasks (every view), Surveys, Integration
-  // (Links/Coverage). Admin's four sub-routes only partially support it
-  // (Analytics Areas does, Managed Systems/Permission Requests/Settings do
-  // not), so it stays out of the shared sidebar selector for now (#518).
-  const supportsManagedSystemScope = activeDomain !== 'admin';
+  // Scoped domains read their own `managedSystem` URL param. Survey management
+  // is scoped, but the respondent routes are actor-wide (routes-and-layout.md).
+  // Admin's four sub-routes only partially support scope, so they remain out
+  // of the shared selector (#518).
+  const isSurveyRespondentPath =
+    location.pathname === '/surveys/participate' ||
+    /^\/surveys\/[^/]+\/respond$/.test(location.pathname);
+  const supportsManagedSystemScope = activeDomain !== 'admin' && !isSurveyRespondentPath;
   const managedSystemId = supportsManagedSystemScope
     ? (new URLSearchParams(location.searchStr).get('managedSystem') ?? undefined)
     : undefined;

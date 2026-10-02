@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 
 export function AnswerableSurveysPanel() {
   const query = useAnswerableSurveys();
-  const surveys = query.data?.items ?? [];
+  const surveys = query.data?.pages[0]?.items ?? [];
 
   return (
     <section>
@@ -33,7 +33,7 @@ export function AnswerableSurveysPanel() {
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </section>
-      ) : query.isError ? (
+      ) : query.isError && surveys.length === 0 ? (
         <div className="rounded-md border border-border-subtle bg-surface-card px-4 py-3">
           <ListStateMessage
             variant="error"
@@ -45,8 +45,10 @@ export function AnswerableSurveysPanel() {
           />
         </div>
       ) : surveys.length === 0 ? (
-        <div className="rounded-md border border-border-subtle bg-surface-card px-4 py-3">
-          <ListStateMessage variant="empty" title={SURVEY_PARTICIPATION_COPY.noAnswerableSurveys} />
+        <div className="rounded-md border border-border-subtle bg-surface-card">
+          <p className="px-4 py-5 text-sm text-text-muted">
+            {SURVEY_PARTICIPATION_COPY.noAnswerableSurveys}
+          </p>
         </div>
       ) : (
         <ul

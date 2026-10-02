@@ -16,6 +16,7 @@ import {
 import type { Survey } from '../../types';
 import { type RespondentAnswer, RespondentQuestion } from '../respond/RespondentQuestion';
 import { getVisibleRespondentQuestions } from '../respond/branching';
+import { countNonEmptyRespondentAnswers } from '../respond/progress';
 
 export function PreviewPane({
   survey,
@@ -87,7 +88,7 @@ function PreviewSheet({ survey }: { survey: Survey }) {
           <div className="mt-6 space-y-6">
             {questions.map((question) => (
               <div key={question.id}>
-                <p className="text-sm font-medium">
+                <p className="text-sm font-medium" id={`respondent-question-label-${question.id}`}>
                   Q{allQuestions.indexOf(question) + 1}.{' '}
                   {question.prompt || SURVEY_PARTICIPATION_COPY.titleMissing}
                   {question.is_required && ' *'}
@@ -105,7 +106,9 @@ function PreviewSheet({ survey }: { survey: Survey }) {
           <footer className="mt-8 flex items-center justify-between border-t border-border-subtle pt-4 text-xs text-text-muted">
             <span>
               {SURVEY_PARTICIPATION_COPY.questionCount(questions.length)} ·{' '}
-              {SURVEY_PARTICIPATION_COPY.responseCount(Object.keys(answers).length)}
+              {SURVEY_PARTICIPATION_COPY.responseCount(
+                countNonEmptyRespondentAnswers(questions, answers),
+              )}
             </span>
             <Button size="sm" onClick={() => setSubmitted(true)}>
               {SURVEY_PARTICIPATION_COPY.previewSubmit}

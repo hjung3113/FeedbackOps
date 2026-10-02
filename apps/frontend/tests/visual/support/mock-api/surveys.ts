@@ -10,6 +10,7 @@ import {
   surveyParticipationEmptyFixture,
   surveyParticipationHistoryFixture,
   surveyParticipationId,
+  surveyParticipationMoreAnswerableFixture,
   surveyRespondentFormFixture,
   surveyResponseSubmittedFixture,
 } from '../../fixtures/survey-participation';
@@ -52,16 +53,15 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
 
   if (options.surveyParticipationScenario) {
     const empty = options.surveyParticipationScenario === 'empty';
+    const answerable =
+      options.surveyParticipationScenario === 'has-more'
+        ? surveyParticipationMoreAnswerableFixture
+        : surveyParticipationAnswerableFixture;
     handlers.push(
       {
         method: 'GET',
         path: '/me/answerable-surveys',
-        handle: (route) =>
-          json(
-            route,
-            200,
-            empty ? surveyParticipationEmptyFixture : surveyParticipationAnswerableFixture,
-          ),
+        handle: (route) => json(route, 200, empty ? surveyParticipationEmptyFixture : answerable),
       },
       {
         method: 'GET',
@@ -182,7 +182,8 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
         const fixture =
           options.surveyScenario === 'detail'
             ? surveyDetailVisualFixture
-            : options.surveyScenario === 'builder-empty'
+            : options.surveyScenario === 'detail-empty' ||
+                options.surveyScenario === 'builder-empty'
               ? surveyEmptyBuilderVisualFixture
               : options.surveyScenario === 'builder-drag-over'
                 ? surveyBuilderDragOverVisualFixture

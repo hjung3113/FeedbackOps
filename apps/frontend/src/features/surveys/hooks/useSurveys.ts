@@ -13,7 +13,13 @@ import {
   surveyResponseSubmittedDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
-import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
 export const surveyKeys = {
@@ -36,24 +42,37 @@ export const surveyKeys = {
 };
 
 export function useAnswerableSurveys() {
-  return useQuery<AnswerableSurveysResponse>({
+  return useInfiniteQuery({
     queryKey: surveyKeys.answerable,
-    queryFn: async ({ signal }) =>
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<AnswerableSurveysResponse> =>
       (
-        await apiRequest('GET', '/me/answerable-surveys', answerableSurveysResponseSchema, {
-          signal,
-        })
+        await apiRequest(
+          'GET',
+          `/me/answerable-surveys${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+          answerableSurveysResponseSchema,
+          { signal },
+        )
       ).data,
+    getNextPageParam: (lastPage) => (lastPage.page.has_more ? lastPage.page.cursor : undefined),
     retry: false,
   });
 }
 
 export function useMySurveyResponses() {
-  return useQuery<MySurveyResponsesResponse>({
+  return useInfiniteQuery({
     queryKey: surveyKeys.myResponses,
-    queryFn: async ({ signal }) =>
-      (await apiRequest('GET', '/me/survey-responses', mySurveyResponsesResponseSchema, { signal }))
-        .data,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<MySurveyResponsesResponse> =>
+      (
+        await apiRequest(
+          'GET',
+          `/me/survey-responses${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+          mySurveyResponsesResponseSchema,
+          { signal },
+        )
+      ).data,
+    getNextPageParam: (lastPage) => (lastPage.page.has_more ? lastPage.page.cursor : undefined),
     retry: false,
   });
 }

@@ -193,6 +193,73 @@ describe('shipped deep-link contract', () => {
     expect(requests).not.toContainEqual({ method: 'GET', pathname: '/surveys' });
   });
 
+  test.each([
+    {
+      pathname: '/surveys/participate',
+      screenTestId: 'survey-participation-page',
+      scopeDisabled: true,
+    },
+    {
+      pathname: `/surveys/${respondentSurveyId}/respond`,
+      screenTestId: 'survey-respondent-form',
+      scopeDisabled: true,
+    },
+    { pathname: '/surveys', screenTestId: 'survey-list', scopeDisabled: false },
+  ])(
+    'uses Managed System scope selection on $pathname according to the route contract',
+    async ({ pathname, screenTestId, scopeDisabled }) => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const rawUrl =
+          typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        const url = new URL(rawUrl, 'http://localhost');
+        if (url.pathname === '/me/answerable-surveys' || url.pathname === '/me/survey-responses') {
+          return jsonResponse(200, { items: [], page: { has_more: false } });
+        }
+        if (url.pathname === `/surveys/${respondentSurveyId}/form`)
+          return jsonResponse(200, respondentForm);
+        if (url.pathname === '/surveys') return jsonResponse(200, []);
+        if (url.pathname === '/managed-systems') return jsonResponse(200, { items: [], total: 0 });
+        if (url.pathname === '/me/permissions/scope')
+          return jsonResponse(200, { scope: { kind: 'all' } });
+        if (url.pathname === '/me/permissions/check')
+          return jsonResponse(200, { state: 'approved', decision: { allow: true } });
+        if (url.pathname === '/me/saved-views') return jsonResponse(200, { items: [] });
+        if (url.pathname === '/nav/counts') return jsonResponse(200, { counts: {} });
+        if (url.pathname === '/actors') return jsonResponse(200, { actors: [] });
+        return jsonResponse(200, {});
+      });
+      vi.stubGlobal('fetch', fetchMock as typeof globalThis.fetch);
+
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      queryClient.setQueryData(ME_QUERY_KEY, {
+        actor: {
+          id: '11111111-1111-4111-8111-111111111111',
+          external_id: 'survey-route-test',
+          email: 'survey-route@example.test',
+          display_name: 'Survey route test',
+          role_level: 'developer',
+        },
+        workspace_id: '22222222-2222-4222-8222-222222222222',
+      });
+      const routeRouter = createRouter({
+        routeTree,
+        context: { queryClient },
+        history: createMemoryHistory({ initialEntries: [pathname] }),
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={routeRouter} />
+        </QueryClientProvider>,
+      );
+
+      expect(await screen.findByTestId(screenTestId)).toBeVisible();
+      const selector = await screen.findByTestId('scope-selector');
+      if (scopeDisabled) expect(selector).toBeDisabled();
+      else expect(selector).toBeEnabled();
+    },
+  );
+
   test('rejects a link when route validation drops one of its parameters', () => {
     expect(() => assertResolvable('/vocs?view=inbox&tab=not-a-voc-tab')).toThrow();
   });
