@@ -52,7 +52,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-text-primary">{actor.display_name}</span>
           <span className="text-xs text-text-muted">
-            Role: {ROLE_LEVEL_LABELS[actor.role_level as RoleLevel]}
+            역할: {ROLE_LEVEL_LABELS[actor.role_level as RoleLevel]}
           </span>
         </div>
       </CardContent>

@@ -320,7 +320,7 @@ export function TaskDetailPanel({
           {sourceVoc && sourceVoc.visibility_state !== 'allowed' && (
             <PermissionBlockedPanel
               state={sourceVoc.visibility_state}
-              category="Source VOC"
+              category="출처 VOC"
               className="mt-2"
             />
           )}
@@ -394,7 +394,7 @@ export function TaskDetailPanel({
             onClick={() => onMoveToNextStatus(task.id)}
           >
             <ArrowRight className="h-4 w-4" />
-            Move to next status
+            다음 상태로 이동
           </Button>
         </div>
       )}

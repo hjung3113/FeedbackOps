@@ -101,7 +101,7 @@ export function IdentityMetadataStrip({
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
       )}
       {hasAnalyticsArea && analyticsAreaId !== null && (
-        <OutlineBadge>{analyticsAreaName ?? 'Analytics area'}</OutlineBadge>
+        <OutlineBadge>{analyticsAreaName ?? 'Analytics Area'}</OutlineBadge>
       )}
       <OutlineBadge>{sourceContextLabel}</OutlineBadge>
     </div>

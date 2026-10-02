@@ -64,7 +64,7 @@ export function SurveyList({
       <div data-testid="survey-list-error">
         <ListStateMessage
           variant="error"
-          title="설문 목록을 불러오지 못했습니다"
+          title="Survey 목록을 불러오지 못했습니다"
           body="잠시 후 다시 시도하세요."
           {...(onRetry !== undefined ? { action: { label: '다시 시도', onClick: onRetry } } : {})}
         />
@@ -129,7 +129,7 @@ export function SurveyList({
                 data-testid="survey-create-button"
               >
                 <Plus className="h-4 w-4" />
-                설문 생성
+                Survey 생성
               </Button>
             )}
           </div>
@@ -140,7 +140,7 @@ export function SurveyList({
           isFilteredEmpty ? (
             <ListStateMessage
               variant="filtered"
-              title="현재 조건에 맞는 설문이 없습니다"
+              title="현재 조건에 맞는 Survey가 없습니다"
               body={activeConditions.join(' · ')}
               action={{
                 label: '필터 초기화',
@@ -153,11 +153,11 @@ export function SurveyList({
           ) : (
             <ListStateMessage
               variant="empty"
-              title="생성된 설문이 없습니다."
+              title="생성된 Survey가 없습니다."
               body={
                 canCreate
-                  ? '설문을 만들어 응답을 수집하세요.'
-                  : '설문을 만들려면 survey.manage 권한이 필요합니다.'
+                  ? 'Survey를 만들어 응답을 수집하세요.'
+                  : 'Survey를 만들려면 survey.manage 권한이 필요합니다.'
               }
               actionContent={
                 canCreate ? (
@@ -169,7 +169,7 @@ export function SurveyList({
                       data-testid="survey-empty-create-button"
                     >
                       <Plus className="h-4 w-4" />
-                      설문 생성
+                      Survey 생성
                     </Button>
                   )
                 ) : permissionState === 'request_access' ? (
@@ -195,7 +195,7 @@ export function SurveyList({
               const operatorName = survey.operator_actor_id
                 ? actorNamesById === undefined
                   ? '—'
-                  : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+                  : (actorNamesById.get(survey.operator_actor_id) ?? GLOSSARY.unknownUser)
                 : null;
               return (
                 <button

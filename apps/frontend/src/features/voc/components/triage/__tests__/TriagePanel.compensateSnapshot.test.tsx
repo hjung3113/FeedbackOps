@@ -130,7 +130,7 @@ describe('TriagePanel — compensating PATCH payload (REV-1 #3)', () => {
     );
 
     // User stages a NEW severity (different from prior 'low')
-    const highChip = screen.getByRole('button', { name: /^high$/i });
+    const highChip = screen.getByRole('button', { name: /^높음$/ });
     fireEvent.click(highChip);
 
     await waitFor(() => {

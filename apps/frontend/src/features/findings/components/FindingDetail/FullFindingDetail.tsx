@@ -194,7 +194,9 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
             </FieldRow>
             <FieldRow label="생성자" className="px-0">
               <UserChip
-                user={{ display_name: actorsById.get(finding.created_by) ?? '생성자 없음' }}
+                user={{
+                  display_name: actorsById.get(finding.created_by) ?? GLOSSARY.unknownUser,
+                }}
                 size="sm"
               />
             </FieldRow>

@@ -142,7 +142,7 @@ export function SurveyResultsRoute() {
     if (survey.error instanceof ApiError && survey.error.status === 404) {
       return (
         <ResultsWorkbench>
-          <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
+          <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="Survey를 찾을 수 없습니다." />
         </ResultsWorkbench>
       );
     }
@@ -151,7 +151,7 @@ export function SurveyResultsRoute() {
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <ListStateMessage
             variant="error"
-            title="설문을 불러오지 못했습니다."
+            title="Survey를 불러오지 못했습니다."
             body={mapUnknownError(survey.error).message}
             action={{
               label: '다시 시도',
@@ -174,7 +174,7 @@ export function SurveyResultsRoute() {
   if (!survey.data) {
     return (
       <ResultsWorkbench>
-        <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
+        <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="Survey를 찾을 수 없습니다." />
       </ResultsWorkbench>
     );
   }
@@ -218,7 +218,7 @@ export function SurveyResultsRoute() {
     resultsContent = <SurveyPermissionDeniedState />;
   } else if (resultsNotFound) {
     resultsContent = (
-      <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />
+      <EmptyState body="결과를 불러올 수 없습니다." title="Survey 결과를 찾을 수 없습니다." />
     );
   } else if (results.isLoading) {
     resultsContent = <div className="p-6 text-sm text-text-muted">결과를 불러오는 중…</div>;
@@ -255,7 +255,7 @@ function SurveyPermissionDeniedState() {
   return (
     <div className="p-6">
       <PermissionBlockedPanel
-        category="Survey Result"
+        category="Survey 결과"
         reason={PERMISSION_BLOCKED_REASONS.surveyResult}
         state="denied"
       />

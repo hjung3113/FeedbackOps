@@ -120,7 +120,7 @@ export function InternalCommentToolbar({
       <ToolbarButton
         onClick={() => {
           const previousUrl = editor?.getAttributes('link').href ?? '';
-          const url = window.prompt('Link URL', previousUrl);
+          const url = window.prompt('링크 URL', previousUrl);
           if (url === null) return;
           if (url === '') {
             editor?.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -143,7 +143,7 @@ export function InternalCommentToolbar({
         onClick={onInsertMention}
         isActive={false}
         disabled={editorDisabled}
-        title="@Mention"
+        title="@멘션"
       >
         <AtSign size={14} />
       </ToolbarButton>

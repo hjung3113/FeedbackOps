@@ -234,7 +234,7 @@ function ManagedSystemsFilter({
             onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
             data-testid="ms-filter-include-archived"
           />
-          Archived 포함
+          보관됨 포함
         </label>
       </PopoverContent>
     </Popover>

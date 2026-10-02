@@ -16,7 +16,7 @@ type AllowedEntityLinkDto = Extract<EntityLinkDto, { visibility_state: 'allowed'
 
 const ENTITY_TYPE_LABEL: Record<EntityLinkDto['source_type'], string> = {
   voc: 'VOC',
-  survey_response: 'Survey Response',
+  survey_response: 'Survey 응답',
   finding: 'Finding',
   voc_cluster: 'VOC Cluster',
   task_request: 'Task Request',

@@ -28,12 +28,12 @@ const queueFixtures = [
     next_action: {
       label: 'Review VOCs',
       route: '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=assign_owner',
-      intent: 'assign-owner',
+      intent: 'triage',
     },
     secondary_action: {
       label: 'Bulk assign',
       route: '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=bulk_assign',
-      intent: 'bulk-assign',
+      intent: 'bulk_assign',
     },
   },
   {
@@ -43,7 +43,7 @@ const queueFixtures = [
     next_action: {
       label: 'Request Tasks',
       route: '/findings?selected=finding-a&action=request_task',
-      intent: 'request-task',
+      intent: 'plan_execution',
     },
     secondary_action: null,
   },
@@ -54,7 +54,7 @@ const queueFixtures = [
     next_action: {
       label: 'Review Updates',
       route: '/tasks?view=board&selected=task-a&action=review_reporter_status',
-      intent: 'review-update',
+      intent: 'request_reporter_update',
     },
     secondary_action: null,
   },
@@ -65,7 +65,7 @@ const queueFixtures = [
     next_action: {
       label: 'Create Follow-up',
       route: '/surveys?selected=survey-a&action=create_follow_up',
-      intent: 'create-follow-up',
+      intent: 'create_followup',
     },
     secondary_action: null,
   },
@@ -76,7 +76,7 @@ const queueFixtures = [
     next_action: {
       label: 'Link Finding',
       route: '/vocs?view=inbox&tab=high-no-link&selected=voc-b&action=link_finding',
-      intent: 'link-finding',
+      intent: 'triage',
     },
     secondary_action: null,
   },
@@ -87,7 +87,7 @@ const queueFixtures = [
     next_action: {
       label: 'Open Requests',
       route: '/admin/permissions/requests?selected=request-a&action=review',
-      intent: 'review',
+      intent: 'review_permissions',
     },
     secondary_action: null,
   },
@@ -221,6 +221,14 @@ describe('integration action dashboard route', () => {
       'high-severity-unlinked',
       'permission-requests-pending',
     ] as const;
+    const expectedPrimaryLabels = {
+      'unassigned-voc': 'VOC 검토',
+      'actionable-finding-no-execution': 'Finding 검토',
+      'released-task-unresolved-voc': 'Released Task 검토',
+      'bad-outcome-no-followup': '성과 Survey 검토',
+      'high-severity-unlinked': '높은 심각도 VOC 검토',
+      'permission-requests-pending': '권한 요청 열기',
+    } as const;
     for (const id of orderedIds) {
       const queue = queueFixtures.find((entry) => entry.id === id);
       expect(queue).toBeDefined();
@@ -232,7 +240,13 @@ describe('integration action dashboard route', () => {
         'href',
         queue?.next_action.route,
       );
+      expect(screen.getByTestId(`integration-queue-primary-${id}`)).toHaveTextContent(
+        expectedPrimaryLabels[id],
+      );
     }
+    expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveTextContent(
+      '일괄 담당자 지정',
+    );
 
     expect(screen.getByTestId('integration-dashboard-gap-count').textContent).toBe('34');
     const surfaces = within(screen.getByTestId('integration-surfaces'));
@@ -241,6 +255,11 @@ describe('integration action dashboard route', () => {
     expect(
       surfaces.getByText(
         'VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다.',
+      ),
+    ).toBeVisible();
+    expect(
+      surfaces.getByText(
+        'VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다.',
       ),
     ).toBeVisible();
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();

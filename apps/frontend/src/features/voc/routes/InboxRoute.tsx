@@ -74,7 +74,7 @@ interface InboxSearch {
 // invent counts.
 const INBOX_TABS: ListToolbarTab[] = [
   { value: 'untriaged', label: GLOSSARY.untriaged, icon: Flag, tip: '아직 분류되지 않은 VOC' },
-  { value: 'high', label: GLOSSARY.high, icon: TriangleAlert, tip: 'High / Critical 심각도' },
+  { value: 'high', label: GLOSSARY.high, icon: TriangleAlert, tip: '높음 · 심각 심각도' },
   {
     value: 'unassigned',
     label: GLOSSARY.unassigned,
@@ -92,7 +92,7 @@ const INBOX_TABS: ListToolbarTab[] = [
     value: 'high-no-link',
     label: GLOSSARY.highNoLink,
     icon: TriangleAlert,
-    tip: 'High 이상인데 Finding / Task 연결 없음',
+    tip: '높음 이상인데 Finding / Task 연결 없음',
   },
   // The prototype has no No task icon or tip; reuse the link icon without inventing copy.
   { value: 'no-task', label: GLOSSARY.noTask, icon: LinkIcon },

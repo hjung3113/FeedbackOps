@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   Button,
   Callout,
@@ -41,7 +42,7 @@ export function AnalyticsAreasFilter({
       <PopoverTrigger asChild>
         <Button variant="subtle" size="sm" data-testid="aa-filter-button">
           <Filter className="h-4 w-4" />
-          Filter
+          {GLOSSARY.filter}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="space-y-3">
@@ -74,7 +75,7 @@ export function AnalyticsAreasFilter({
             onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
             data-testid="aa-filter-include-archived"
           />
-          Archived 포함
+          보관됨 포함
         </label>
       </PopoverContent>
     </Popover>

@@ -28,7 +28,7 @@ export function SurveyDetail({
   const operatorName = survey.operator_actor_id
     ? actorNamesById === undefined
       ? '—'
-      : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+      : (actorNamesById.get(survey.operator_actor_id) ?? GLOSSARY.unknownUser)
     : '담당자 미지정';
   return (
     <aside
@@ -71,7 +71,7 @@ export function SurveyDetail({
           )}
         </div>
         <section className="mt-6 px-5">
-          <h2 className="mb-2 text-sm font-medium">설문 빌더</h2>
+          <h2 className="mb-2 text-sm font-medium">Survey 빌더</h2>
           {canManage && survey.status === 'draft' ? (
             <Link
               to="/surveys/$surveyId"
@@ -84,7 +84,7 @@ export function SurveyDetail({
           ) : (
             <p className="text-sm text-text-muted">
               {survey.status === 'draft'
-                ? '설문 관리 권한이 없습니다.'
+                ? 'Survey 관리 권한이 없습니다.'
                 : `${surveyStatusLabel(survey.status)} 상태 — 질문 변경은 잠겨 있습니다.`}
             </p>
           )}
@@ -122,7 +122,7 @@ export function SurveyDetail({
         <section className="mt-6 space-y-3 px-5 pb-5 text-sm">
           <div>
             <h2 className="font-medium">권한 경계</h2>
-            <p className="text-text-muted">Survey Response는 VOC를 생성하지 않습니다.</p>
+            <p className="text-text-muted">Survey 응답은 VOC를 생성하지 않습니다.</p>
           </div>
           <div>
             <h2 className="font-medium">개인정보</h2>
@@ -149,3 +149,4 @@ export function SurveyDetail({
     </aside>
   );
 }
+import { GLOSSARY } from '@/lib/copy/glossary';

@@ -110,7 +110,7 @@ describe('Milestone mutation error copy', () => {
         await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
         if (mutation === 'title') {
-          await user.click(screen.getByRole('button', { name: 'Edit title' }));
+          await user.click(screen.getByRole('button', { name: '제목 편집' }));
           fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
             target: { value: 'SSO Stabilization v2' },
           });

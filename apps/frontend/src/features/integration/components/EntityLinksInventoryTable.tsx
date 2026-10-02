@@ -1,5 +1,6 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { isPermissionDenied } from '@/lib/api/types';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
@@ -55,7 +56,7 @@ export function EntityLinksInventoryTable({
   onLoadMore,
 }: EntityLinksInventoryTableProps) {
   if (loading === true) {
-    return <div className="p-6 text-sm text-text-muted">Entity links를 불러오는 중…</div>;
+    return <div className="p-6 text-sm text-text-muted">엔티티 링크를 불러오는 중…</div>;
   }
 
   if (error != null) {
@@ -83,7 +84,7 @@ export function EntityLinksInventoryTable({
       <div className="p-4">
         <ListStateMessage
           variant="error"
-          title="Entity Link 목록을 불러오지 못했습니다"
+          title="엔티티 링크 목록을 불러오지 못했습니다"
           body="잠시 후 다시 시도하세요."
           {...(onRetry !== undefined ? { action: { label: '다시 시도', onClick: onRetry } } : {})}
         />
@@ -106,7 +107,7 @@ export function EntityLinksInventoryTable({
         <div className="p-4">
           <ListStateMessage
             variant="filtered"
-            title="현재 조건에 맞는 Entity Link가 없습니다"
+            title="현재 조건에 맞는 엔티티 링크가 없습니다"
             body={filterDescription}
             {...(onResetFilters !== undefined
               ? { action: { label: '필터 초기화', onClick: onResetFilters } }
@@ -120,7 +121,7 @@ export function EntityLinksInventoryTable({
       <div className="p-4">
         <ListStateMessage
           variant="empty"
-          title="Entity Link가 없습니다."
+          title="엔티티 링크가 없습니다."
           body="시스템 간 연결이 생성되면 이 목록에 표시됩니다."
         />
       </div>
@@ -159,7 +160,9 @@ export function EntityLinksInventoryTable({
                   <LinkStatusBadge status={link.status} />
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-                  <span className="font-mono text-xs text-text-muted">Link {shortId(link.id)}</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {GLOSSARY.entityLinks} {shortId(link.id)}
+                  </span>
                   <RowDot />
                   {managedSystem !== undefined ? (
                     <ManagedSystemPill
@@ -179,7 +182,7 @@ export function EntityLinksInventoryTable({
                   )}
                   <RowDot />
                   <span>
-                    by <span>{actor?.display_name ?? '알 수 없는 사용자'}</span>
+                    생성자 <span>{actor?.display_name ?? GLOSSARY.unknownUser}</span>
                     {!actor && (
                       <span className="ml-1 font-mono text-text-muted">
                         {shortId(link.created_by)}
@@ -187,7 +190,7 @@ export function EntityLinksInventoryTable({
                     )}
                   </span>
                   <RowDot />
-                  <span>updated {formatTimestamp(link.updated_at)}</span>
+                  <span>업데이트 {formatTimestamp(link.updated_at)}</span>
                 </div>
               </div>
             </div>

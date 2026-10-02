@@ -22,7 +22,7 @@ describe('<InternalCommentToolbar>', () => {
     expect(screen.getByTitle('코드')).toBeInTheDocument();
     expect(screen.getByTitle('글머리 기호')).toBeInTheDocument();
     expect(screen.getByTitle('링크')).toBeInTheDocument();
-    expect(screen.getByTitle('@Mention')).toBeInTheDocument();
+    expect(screen.getByTitle('@멘션')).toBeInTheDocument();
   });
 
   it('hides Attach when onAttach is not provided', () => {

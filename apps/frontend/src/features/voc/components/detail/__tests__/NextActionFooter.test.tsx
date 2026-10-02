@@ -48,7 +48,7 @@ describe('<NextActionFooter>', () => {
       { id: 'a2', label: '담당자 지정', available: true, primary: false },
     ];
     render(<NextActionFooter voc={{ ...DETAIL_ENVELOPE, next_actions: actions }} />);
-    expect(screen.getByText('+1 more')).toBeInTheDocument();
+    expect(screen.getByText('+1개 더보기')).toBeInTheDocument();
   });
 
   it('ignores entries that do not match the NextAction shape', () => {

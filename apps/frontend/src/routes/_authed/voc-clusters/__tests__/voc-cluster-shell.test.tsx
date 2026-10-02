@@ -469,7 +469,7 @@ describe('VOC cluster route shells', () => {
     render(<VocClusterListPage />);
 
     expect(screen.getAllByText('반복 결제 문의').length).toBeGreaterThan(0);
-    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC 클러스터');
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC Cluster');
     expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent(
       'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
     );
@@ -509,7 +509,7 @@ describe('VOC cluster route shells', () => {
     render(<VocClusterDetailPage />);
 
     expect(document.querySelector('[data-shell="list"]')).toBeInTheDocument();
-    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC 클러스터');
+    expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent('VOC Cluster');
     expect(screen.getByTestId('list-shell-toolbar')).toHaveTextContent(
       'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
     );

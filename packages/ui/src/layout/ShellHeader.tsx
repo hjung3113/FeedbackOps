@@ -30,8 +30,14 @@ export function ShellHeader({ title, subtitle, actions, variant = 'default', cla
       data-toolbar-height="50"
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {title && <h2 className="text-sm font-semibold text-text-primary truncate">{title}</h2>}
-        {subtitle && <div className="text-xs text-text-muted truncate">{subtitle}</div>}
+        {/* Page identity never yields to the subtitle: the title keeps its natural
+            width (capped at the container) and the subtitle absorbs the remainder. */}
+        {title && (
+          <h2 className="max-w-full shrink-0 text-sm font-semibold text-text-primary truncate">
+            {title}
+          </h2>
+        )}
+        {subtitle && <div className="min-w-0 flex-1 text-xs text-text-muted truncate">{subtitle}</div>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </header>

@@ -54,14 +54,14 @@ export function SurveyResultHeader({
       </div>
       {/* Two views only exist for personal-response holders; a lone Results tab is noise. */}
       {canReviewResponses && (
-        <nav aria-label="설문 결과 보기" className="flex items-center gap-1">
+        <nav aria-label="Survey 결과 보기" className="flex items-center gap-1">
           <Link
             aria-current={activeTab === 'results' ? 'page' : undefined}
             className={tabClass(activeTab === 'results')}
             params={{ surveyId: survey.id }}
             to="/surveys/$surveyId/results"
           >
-            Results
+            결과
           </Link>
           <Link
             aria-current={activeTab === 'follow-up' ? 'page' : undefined}
@@ -69,7 +69,7 @@ export function SurveyResultHeader({
             params={{ surveyId: survey.id }}
             to="/surveys/$surveyId/follow-up"
           >
-            Follow-up · {openCount}
+            후속 조치 · {openCount}
           </Link>
         </nav>
       )}

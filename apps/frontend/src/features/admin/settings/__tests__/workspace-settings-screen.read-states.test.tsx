@@ -34,6 +34,6 @@ describe('WorkspaceSettingsScreen read retry (#609)', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
     expect(await screen.findByTestId('workspace-settings-screen')).toBeInTheDocument();
-    expect(screen.getByText('Permission Request 직접 승인', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('권한 요청 직접 승인', { exact: true })).toBeInTheDocument();
   });
 });

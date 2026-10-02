@@ -1,5 +1,9 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
-import { EVIDENCE_IMPORTANCE_LABELS, EVIDENCE_SOURCE_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import {
+  EVIDENCE_IMPORTANCE_LABELS,
+  EVIDENCE_SENTIMENT_LABELS,
+  EVIDENCE_SOURCE_TYPE_LABELS,
+} from '@/lib/copy/enum-labels';
 import { koreanZodErrorMap, zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import {
   type AddEvidenceHighlightRequest,
@@ -50,9 +54,9 @@ const SENTIMENT_OPTIONS: {
   value: EvidenceHighlightSentiment;
   label: string;
 }[] = [
-  { value: 'negative', label: '부정 (Negative)' },
-  { value: 'neutral', label: '중립 (Neutral)' },
-  { value: 'positive', label: '긍정 (Positive)' },
+  { value: 'negative', label: EVIDENCE_SENTIMENT_LABELS.negative },
+  { value: 'neutral', label: EVIDENCE_SENTIMENT_LABELS.neutral },
+  { value: 'positive', label: EVIDENCE_SENTIMENT_LABELS.positive },
 ];
 
 const IMPORTANCE_OPTIONS: {

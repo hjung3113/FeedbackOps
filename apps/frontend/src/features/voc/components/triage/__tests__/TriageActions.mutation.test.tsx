@@ -83,7 +83,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 // Helper: make panel dirty by clicking a severity chip
 function clickSeverity() {
-  const chips = screen.getAllByRole('button', { name: /low|medium|high|critical/i });
+  const chips = screen.getAllByRole('button', { name: /낮음|중간|높음|심각/ });
   if (chips[0]) fireEvent.click(chips[0]);
 }
 

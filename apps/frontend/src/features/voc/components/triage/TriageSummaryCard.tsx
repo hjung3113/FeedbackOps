@@ -1,8 +1,8 @@
 /** Summary of staged changes in the triage panel. */
 
 import { GLOSSARY } from '@/lib/copy/glossary';
-import { FieldRow, ReporterStatusBadge, cn } from '@fops/ui';
-import type { AvatarUser, ReporterFacingStatusEnum } from '@fops/ui';
+import { FieldRow, ReporterStatusBadge, SEVERITY_LABELS, cn } from '@fops/ui';
+import type { AvatarUser, ReporterFacingStatusEnum, SeverityEnum } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
 import type { TriagePanelLocalState } from '../../hooks/useTriagePanelState';
@@ -24,8 +24,8 @@ function ownerLabel(
   actorMap: Map<string, AvatarUser> | undefined,
   ownerTeamName: string | null | undefined,
 ): string {
-  if (ownerUserId !== null) return actorMap?.get(ownerUserId)?.display_name ?? 'Owner';
-  if (ownerTeamId !== null) return ownerTeamName ?? 'Owner team';
+  if (ownerUserId !== null) return actorMap?.get(ownerUserId)?.display_name ?? GLOSSARY.unknownUser;
+  if (ownerTeamId !== null) return ownerTeamName ?? '알 수 없는 팀';
   return '미지정';
 }
 
@@ -70,8 +70,16 @@ export function TriageSummaryCard({
           {severityChanged && (
             <DiffRow
               label="심각도"
-              from={baseline.severity ?? '미지정'}
-              to={panelState.severity ?? '미지정'}
+              from={
+                baseline.severity === null
+                  ? '미지정'
+                  : (SEVERITY_LABELS[baseline.severity as SeverityEnum] ?? baseline.severity)
+              }
+              to={
+                panelState.severity === null
+                  ? '미지정'
+                  : (SEVERITY_LABELS[panelState.severity as SeverityEnum] ?? panelState.severity)
+              }
             />
           )}
           {ownerChanged && (
@@ -92,12 +100,12 @@ export function TriageSummaryCard({
               from={
                 baseline.analyticsAreaId === null
                   ? '미지정'
-                  : (baselineAnalyticsAreaName ?? 'Analytics area')
+                  : (baselineAnalyticsAreaName ?? 'Analytics Area')
               }
               to={
                 panelState.analyticsAreaId === null
                   ? '미지정'
-                  : (analyticsAreaName ?? 'Analytics area')
+                  : (analyticsAreaName ?? 'Analytics Area')
               }
             />
           )}

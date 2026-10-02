@@ -164,9 +164,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     expect(
-      screen.getByText(
-        '근거 Finding 이 연결되어 있지 않습니다. Standalone milestone 으로 운영 중입니다.',
-      ),
+      screen.getByText('근거 Finding이 연결되어 있지 않습니다. 단독 Milestone으로 운영 중입니다.'),
     ).toBeInTheDocument();
     // The Finding → Milestone writer is out of scope (#514); no control may
     // pretend one exists.
@@ -177,7 +175,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    expect(screen.getByText('연결된 evidence highlight 가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('연결된 Evidence 하이라이트가 없습니다.')).toBeInTheDocument();
     expect(screen.getByText('활동 기록이 없습니다.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '이력' })).toBeInTheDocument();
     // FOP-OUT-014: no Milestone → Outcome Survey validation in MVP.
@@ -232,7 +230,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     const user = userEvent.setup();
     renderPanel(new Promise<MilestoneDetailDto>(() => {}), { onClose });
 
-    expect(screen.getByText('Loading Milestone…')).toBeInTheDocument();
+    expect(screen.getByText('Milestone을 불러오는 중…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
     // No record data may leak before the read resolves.
     expect(screen.queryByText('SSO Stabilization')).not.toBeInTheDocument();
@@ -426,7 +424,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     );
     await screen.findByRole('heading', { name: 'Alpha milestone' });
 
-    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.click(screen.getByRole('button', { name: '제목 편집' }));
     await user.type(screen.getByRole('textbox', { name: '제목' }), ' typed on A');
 
     view.rerender(
@@ -558,7 +556,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
-    expect(row).toHaveTextContent('updated 2026. 7. 21.');
+    expect(row).toHaveTextContent('업데이트 2026. 7. 21.');
   });
 
   it('renders no Add task control in the Tasks section', async () => {
@@ -579,11 +577,11 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     );
     renderPanel(linkedDetail);
 
-    expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Task 목록' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone의 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     // The generic outage copy never explains a 403.
-    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 표시할 수 없습니다.')).not.toBeInTheDocument();
     // The milestone itself stays readable.
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
@@ -615,7 +613,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     );
     await queryClient.refetchQueries({ queryKey: ['tasks', { milestone_id: MILESTONE_ID }] });
 
-    expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Task 목록' })).toBeInTheDocument();
     expect(screen.getByText('이 Milestone의 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     // Retained success data no longer feeds the nav entry or section count.
@@ -629,7 +627,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     // Rows and empty copy stay hidden: a denied read is not an empty success.
     expect(screen.queryByText('TASK-902')).not.toBeInTheDocument();
     expect(screen.queryByText('아직 연결된 Task 가 없습니다.')).not.toBeInTheDocument();
-    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 표시할 수 없습니다.')).not.toBeInTheDocument();
   });
 });
 
@@ -657,7 +655,7 @@ describe('MilestoneDetailPanel title edit concurrency (Astra finding 2)', () => 
     );
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.click(screen.getByRole('button', { name: '제목 편집' }));
     await user.type(screen.getByRole('textbox', { name: '제목' }), ' v2');
 
     // Another actor's change lands through a background refetch while the
@@ -717,7 +715,7 @@ describe('MilestoneDetailPanel title save lock (R4)', () => {
     );
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.click(screen.getByRole('button', { name: '제목 편집' }));
     const input = screen.getByRole('textbox', { name: '제목' });
     await user.type(input, ' v2');
     // Mock call history accumulates across tests in this file; assert deltas.
@@ -753,7 +751,7 @@ describe('MilestoneDetailPanel open finding guard (R4)', () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.click(screen.getByRole('button', { name: '제목 편집' }));
     await user.type(screen.getByRole('textbox', { name: '제목' }), ' with unsaved work');
 
     await user.click(screen.getByRole('button', { name: 'Finding 열기' }));
@@ -845,7 +843,7 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
       await screen.findByRole('heading', { name: 'SSO Stabilization' });
       const callsBefore = vi.mocked(updateMilestone).mock.calls.length;
       if (viaTitleSave) {
-        await user.click(screen.getByRole('button', { name: 'Edit title' }));
+        await user.click(screen.getByRole('button', { name: '제목 편집' }));
         await user.type(screen.getByRole('textbox', { name: '제목' }), ' v2');
         await user.click(screen.getByRole('button', { name: '저장' }));
       } else {
@@ -869,7 +867,7 @@ describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
 
       // The reopen window: Edit title stays locked, and a click cannot reopen
       // the editor against the stale row.
-      const editButton = screen.getByRole('button', { name: 'Edit title' });
+      const editButton = screen.getByRole('button', { name: '제목 편집' });
       expect(editButton).toBeDisabled();
       await user.click(editButton);
       expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();

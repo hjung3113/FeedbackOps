@@ -27,7 +27,7 @@ export function LinkedExecutionSection({
         <PanelSectionTitle>연결된 실행</PanelSectionTitle>
         <PermissionBlockedPanel
           state={linkedFindingDecision.state}
-          category="Linked Finding"
+          category="연결된 Finding"
           // #564: request_access now renders reason, and this decision's reason is a
           // machine code (e.g. developer_outside_managed_system_scope), so keep it out there.
           {...(linkedFindingDecision.reason !== undefined &&

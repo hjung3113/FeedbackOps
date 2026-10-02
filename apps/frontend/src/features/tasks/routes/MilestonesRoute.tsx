@@ -483,7 +483,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       // Prototype-verbatim copy retains this surface's lowercase spelling.
                       <ListStateMessage
                         variant="empty"
-                        title="표시할 milestone 이 없습니다."
+                        title="표시할 Milestone이 없습니다."
                         body="생성된 Milestone이 여기에 표시됩니다."
                       />
                     ))}

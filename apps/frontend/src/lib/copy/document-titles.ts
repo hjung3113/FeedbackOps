@@ -10,7 +10,7 @@ export const DOCUMENT_TITLE_COPY = {
     my: GLOSSARY.myVocs,
     create: '새 VOC 작성',
   },
-  vocClusters: 'VOC 클러스터',
+  vocClusters: 'VOC Cluster',
   findings: 'Findings',
   findingDetail: 'Finding 상세',
   tasks: {

@@ -257,10 +257,10 @@ describe('useInboxRoute', () => {
 
     const expectedTips: Array<[string, string]> = [
       ['미분류', '아직 분류되지 않은 VOC'],
-      ['높음', 'High / Critical 심각도'],
+      ['높음', '높음 · 심각 심각도'],
       ['미배정', '담당자 미지정'],
       ['연결 없음', 'Finding / Task 연결 없음'],
-      ['높음 · 연결 없음', 'High 이상인데 Finding / Task 연결 없음'],
+      ['높음 · 연결 없음', '높음 이상인데 Finding / Task 연결 없음'],
     ];
     for (const [label, tip] of expectedTips) {
       const tab = screen.getByRole('tab', { name: label });

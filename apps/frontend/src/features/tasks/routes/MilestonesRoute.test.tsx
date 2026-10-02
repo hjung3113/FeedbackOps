@@ -204,7 +204,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     renderWithClient(<MilestonesRoute />);
 
-    expect(await screen.findByText('표시할 milestone 이 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
   });
 
   it('renders display id, title, In progress label, and why excerpt without raw UUIDs', async () => {
@@ -571,7 +571,7 @@ describe('MilestonesRoute list states (#609)', () => {
           'data-variant',
           'empty',
         );
-        expect(screen.getByText('표시할 milestone 이 없습니다.')).toBeInTheDocument();
+        expect(screen.getByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
         return;
       }
 

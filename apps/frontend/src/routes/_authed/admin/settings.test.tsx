@@ -125,42 +125,42 @@ describe('/admin/settings route', () => {
     renderRoute();
 
     await screen.findByTestId('workspace-settings-screen');
-    expect(screen.getByText('Permission Request 직접 승인', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('권한 요청 직접 승인', { exact: true })).toBeInTheDocument();
     expect(
       screen.queryByText('Self-approval of Task Request', { exact: true }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        '다른 Managed System 의 entity 를 참조·연결할 수 있는지 결정합니다. 차단된 경우 PermissionBlockedPanel 로 표시됩니다.',
+        '다른 Managed System의 항목을 참조하거나 연결할 수 있는지 결정합니다. 접근할 수 없는 항목에는 차단 안내가 표시됩니다.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        '명시 거부(denied) 이후 재요청을 허용하는 기간입니다. 0 이면 정책 갱신 전까지 재요청 불가.',
+        '명시 거부 이후 재요청을 허용하는 기간입니다. 0이면 정책 갱신 전까지 재요청할 수 없습니다.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Admin 만 all 을 workspace-wide 로 해석합니다. 다른 역할은 effective scope union (교집합 = workspace ∩ grants) 으로 해석합니다.',
+        '관리자만 all을 워크스페이스 전체로 해석합니다. 다른 역할은 유효 범위의 합집합 (교집합 = 워크스페이스 ∩ 부여된 범위)으로 해석합니다.',
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByText('금지', { exact: true })).toHaveLength(2);
-    expect(
-      screen.getByText('Survey Response → VOC').closest('div[class*="grid"]'),
-    ).toHaveTextContent('금지');
+    expect(screen.getByText('Survey 응답 → VOC').closest('div[class*="grid"]')).toHaveTextContent(
+      '금지',
+    );
     expect(
       screen
-        .getByText('Survey Response → VOC')
+        .getByText('Survey 응답 → VOC')
         .closest('div[class*="grid"]')
         ?.querySelector('.text-accent-danger'),
     ).toHaveTextContent('금지');
     expect(screen.getByText('응답 9건', { exact: true })).toBeInTheDocument();
     expect(screen.queryByText('정책 강제 연결 후 편집 가능')).not.toBeInTheDocument();
     for (const label of [
-      'Cross-Managed-System 연결',
+      'Managed System 간 연결',
       '권한 요청 재신청 기간',
-      'Survey Response → VOC',
-      '기본 Managed System 범위 (Developer)',
+      'Survey 응답 → VOC',
+      '개발자의 기본 Managed System 범위',
       'all = 워크스페이스 전체',
     ]) {
       const row = screen.getByText(label, { exact: true }).closest('div[class*="grid"]');
@@ -174,7 +174,7 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     expect(
-      screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+      screen.queryByText('소급 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).not.toBeInTheDocument();
 
     const selfApprovalEditButton = screen.getAllByRole('button', { name: '편집' })[0];
@@ -184,14 +184,18 @@ describe('/admin/settings route', () => {
     fireEvent.click(await screen.findByRole('option', { name: '허용' }));
 
     expect(
-      screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+      screen.getByText('소급 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).toBeInTheDocument();
-    expect(screen.getByText(/^active capability grant —/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '활성 권한 부여는 유지됩니다. 새 직접 승인은 권한 없이도 허용되며 감사 라벨은 동일합니다.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/^\d+ active capability grant$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '버리기' }));
     expect(
-      screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+      screen.queryByText('소급 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).not.toBeInTheDocument();
   });
 
@@ -254,7 +258,7 @@ describe('/admin/settings route', () => {
     fireEvent.click(screen.getByRole('combobox', { name: '직접 승인' }));
     fireEvent.click(await screen.findByRole('option', { name: '허용' }));
     expect(saveBar).toHaveTextContent('저장되지 않은 변경 2건');
-    expect(saveBar).toHaveTextContent('Permission Request 직접 승인 · 익명성 임계값');
+    expect(saveBar).toHaveTextContent('권한 요청 직접 승인 · 익명성 임계값');
 
     fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
     await waitFor(() => expect(screen.queryByText('변경됨')).not.toBeInTheDocument());

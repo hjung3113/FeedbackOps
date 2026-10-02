@@ -322,7 +322,14 @@ function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; colla
 }
 
 function navItemClass(collapsed: boolean, active = false, contextActive = false) { return cn('flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary', collapsed && 'justify-center px-0', active && 'bg-surface-row-selected text-text-primary', contextActive && !active && 'font-medium text-text-primary'); }
-const KOREAN_SECTION_TEST_IDS: Record<string, string> = { 연동: 'integration', 관리자: 'admin' };
+const KOREAN_SECTION_TEST_IDS: Record<string, string> = {
+  Finding: 'findings',
+  Task: 'tasks',
+  Survey: 'surveys',
+  '액션 큐': 'action-queues',
+  연동: 'integration',
+  관리자: 'admin',
+};
 function sectionTestId(section: string) {
   // Test ids stay Latin even when the visible section header is Korean.
   return KOREAN_SECTION_TEST_IDS[section] ?? section.toLowerCase().replace(/\s+/g, '-');

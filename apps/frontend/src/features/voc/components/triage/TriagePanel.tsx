@@ -29,6 +29,7 @@ import { Maximize2, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
 
 import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatDate } from '@/lib/format/datetime';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
@@ -73,10 +74,10 @@ export interface TriagePanelProps {
 // section is always present because ADR-0034 candidates are workspace-wide.
 function buildTriageSections() {
   return [
-    { id: 'overview', label: 'Overview' },
-    { id: 'assignment', label: 'Assignment' },
+    { id: 'overview', label: '개요' },
+    { id: 'assignment', label: '담당 배정' },
     { id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL },
-    { id: 'summary', label: 'Summary' },
+    { id: 'summary', label: '요약' },
   ];
 }
 
@@ -202,7 +203,7 @@ export function TriagePanel({
 
         <div className="mb-8" data-anchor="assignment">
           <div className="mb-6">
-            <PanelSectionTitle>Severity 결정</PanelSectionTitle>
+            <PanelSectionTitle>심각도 결정</PanelSectionTitle>
             <SeverityPicker
               value={(panelState.severity as SeverityLevel) ?? null}
               onChange={(sev) => {
@@ -213,7 +214,7 @@ export function TriagePanel({
           </div>
 
           <div className="mb-6">
-            <PanelSectionTitle>Owner 배정 (선택)</PanelSectionTitle>
+            <PanelSectionTitle>담당자 배정 (선택)</PanelSectionTitle>
             <OwnerPicker
               candidates={candidates}
               value={currentOwnerId}
@@ -222,7 +223,7 @@ export function TriagePanel({
               }}
             />
             <p className="text-xs text-text-muted mt-2 leading-relaxed">
-              미지정 상태로 확정할 수 있으며 Owner는 나중에 지정할 수 있습니다.
+              미지정 상태로 확정할 수 있으며 {GLOSSARY.owner}는 나중에 지정할 수 있습니다.
             </p>
           </div>
 
@@ -258,7 +259,7 @@ export function TriagePanel({
 
         {/* Compact changed-fields summary */}
         <div className="mb-0" data-anchor="summary">
-          <PanelSectionTitle>Summary · 변경 사항</PanelSectionTitle>
+          <PanelSectionTitle>요약 · 변경 사항</PanelSectionTitle>
           <TriageSummaryCard
             panelState={panelState}
             baseline={baseline}

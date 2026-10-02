@@ -78,7 +78,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function clickSeverity(idx = 0) {
-  const chips = screen.getAllByRole('button', { name: /low|medium|high|critical/i });
+  const chips = screen.getAllByRole('button', { name: /낮음|중간|높음|심각/ });
   if (chips[idx]) fireEvent.click(chips[idx]);
 }
 

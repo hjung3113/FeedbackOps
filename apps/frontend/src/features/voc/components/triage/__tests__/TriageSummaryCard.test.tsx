@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TriagePanelLocalState } from '../../../hooks/useTriagePanelState';
@@ -39,10 +40,10 @@ describe('TriageSummaryCard', () => {
       />,
     );
     const row = screen.getByTestId('summary-diff-row-심각도');
-    expect(row).toHaveTextContent('medium');
-    expect(row).toHaveTextContent('critical');
-    expect(row.querySelector('.line-through')).toHaveTextContent('medium');
-    expect(row.querySelector('.text-text-primary')).toHaveTextContent('critical');
+    expect(row).toHaveTextContent('중간');
+    expect(row).toHaveTextContent('심각');
+    expect(row.querySelector('.line-through')).toHaveTextContent('중간');
+    expect(row.querySelector('.text-text-primary')).toHaveTextContent('심각');
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
       '확정 시 공개 상태:',
@@ -73,12 +74,21 @@ describe('TriageSummaryCard', () => {
     expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
   });
 
+  it('uses the glossary unknown-user label when the owner actor cannot be resolved', () => {
+    const panelState = { ...BASE_STATE, ownerUserId: 'unresolved-actor' };
+    render(
+      <TriageSummaryCard panelState={panelState} baseline={BASE_STATE} actorMap={new Map()} />,
+    );
+
+    expect(screen.getByTestId('summary-diff-row-담당자')).toHaveTextContent(GLOSSARY.unknownUser);
+  });
+
   it('uses the neutral Owner team label without leaking an unresolved team id', () => {
     const baseline = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
     const panelState = { ...BASE_STATE, ownerTeamId: null };
     const { container } = render(<TriageSummaryCard panelState={panelState} baseline={baseline} />);
     const row = screen.getByTestId('summary-diff-row-담당자');
-    expect(within(row).getByText('Owner team')).toBeInTheDocument();
+    expect(within(row).getByText('알 수 없는 팀')).toBeInTheDocument();
     expect(row).toHaveTextContent('미지정');
     expect(container).not.toHaveTextContent('00000000');
   });

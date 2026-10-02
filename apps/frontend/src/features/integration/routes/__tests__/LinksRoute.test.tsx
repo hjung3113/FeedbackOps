@@ -207,13 +207,13 @@ describe('integration links route', () => {
       expect(screen.getByRole('tab', { name: '전체 2' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '활성 1' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '분리됨 1' })).toBeInTheDocument();
-      expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-      expect(screen.getByText(`Link ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
       expect(screen.getAllByText('운영자')).toHaveLength(2);
-      expect(screen.getAllByText(/updated/)).toHaveLength(2);
+      expect(screen.getAllByText(/업데이트/)).toHaveLength(2);
       expect(screen.getByText('필터')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Entity link 검색…')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('엔티티 링크 검색…')).toBeInTheDocument();
     });
     expect(screen.getByRole('list', { name: '엔티티 링크 목록' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
@@ -236,14 +236,14 @@ describe('integration links route', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('현재 조건에 맞는 Entity Link가 없습니다')).toBeInTheDocument();
+      expect(screen.getByText('현재 조건에 맞는 엔티티 링크가 없습니다')).toBeInTheDocument();
     });
     expect(screen.getByText('상태: 취소됨')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
     await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_A }));
-    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-    expect(screen.getByText(`Link ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
   });
 
   test('shows a true-empty Entity Link message without a filter-reset action', async () => {
@@ -257,7 +257,7 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('Entity Link가 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('엔티티 링크가 없습니다.')).toBeInTheDocument();
     expect(screen.getByText('시스템 간 연결이 생성되면 이 목록에 표시됩니다.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
   });
@@ -278,13 +278,13 @@ describe('integration links route', () => {
     );
 
     await waitFor(
-      () => expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      () => expect(screen.getByText('엔티티 링크 목록을 불러오지 못했습니다')).toBeInTheDocument(),
       { timeout: 4000 },
     );
     const attemptsBeforeRetry = urls.filter((url) => url.includes('/entity-links')).length;
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
-    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     const attemptsAfterRetry = urls.filter((url) => url.includes('/entity-links')).length;
     expect(attemptsAfterRetry).toBeGreaterThan(attemptsBeforeRetry);
   });
@@ -309,9 +309,9 @@ describe('integration links route', () => {
     });
     const panel = screen.getByText('엔티티 링크');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.getByText('Entity link 목록을 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('엔티티 링크 목록을 볼 권한이 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('entity_link.read capability required')).not.toBeInTheDocument();
-    expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
+    expect(screen.queryByText('엔티티 링크 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   test('changing status tab updates the request status param and rendered subset', async () => {
@@ -330,8 +330,8 @@ describe('integration links route', () => {
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
-      expect(screen.queryByText(`Link ${LINK_A.slice(0, 8)}`)).not.toBeInTheDocument();
-      expect(screen.getByText(`Link ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.queryByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).not.toBeInTheDocument();
+      expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
     });
   });
@@ -367,11 +367,11 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '활성 2' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
 
-    expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByRole('tab', { name: '활성 2' })).toBeInTheDocument();
     expect(
@@ -392,16 +392,16 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
-    expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));
 
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ status: 'active' });
-      expect(screen.queryByText(`Link ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
-      expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+      expect(screen.queryByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
+      expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     });
     expect(
       urls.some((rawUrl) => {
@@ -424,7 +424,7 @@ describe('integration links route', () => {
 
     const loadSecondPage = async () => {
       await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
-      expect(await screen.findByText(`Link ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
+      expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
     };
     const allFirstPageRequests = () =>
       urls.filter((rawUrl) => {
@@ -446,13 +446,13 @@ describe('integration links route', () => {
     const expectAllFirstPageReloaded = async (previousRequestCount: number) => {
       await waitFor(() => {
         expect(router.state.location.search).toEqual({});
-        expect(screen.getByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-        expect(screen.queryByText(`Link ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
+        expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+        expect(screen.queryByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).not.toBeInTheDocument();
         expect(allFirstPageRequests()).toHaveLength(previousRequestCount + 1);
       });
     };
 
-    expect(await screen.findByText(`Link ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
+    expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
     await loadSecondPage();
     const afterInitialLoad = allFirstPageRequests().length;
     await userEvent.click(screen.getByRole('tab', { name: /^활성/ }));

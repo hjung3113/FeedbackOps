@@ -29,6 +29,7 @@ vi.mock('./useTaskRequestConvertedTaskLink', () => ({
 }));
 
 import { TASK_REQUEST_STATUS_LABELS as STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { TaskRequestPanel } from './TaskRequestPanel';
 
@@ -151,6 +152,7 @@ describe('TaskRequestPanel next actions', () => {
     expect(header).toBeInTheDocument();
     expect(within(header as HTMLElement).getByText('Task Request')).toHaveClass('rounded');
     expect(within(header as HTMLElement).getByText('REQ-42')).toBeInTheDocument();
+    expect(screen.getAllByText(GLOSSARY.unknownUser)).toHaveLength(2);
     expect(screen.getByText('검토자 없음')).toHaveClass(
       'bg-accent-danger/10',
       'text-accent-danger',

@@ -70,7 +70,7 @@ describe('<ReporterCard>', () => {
     );
     render(<ReporterCard />);
     expect(screen.getByText('김호중')).toBeInTheDocument();
-    expect(screen.getByText(`Role: ${label}`)).toBeInTheDocument();
+    expect(screen.getByText(`역할: ${label}`)).toBeInTheDocument();
     expect(screen.queryByText(role_level, { exact: true })).not.toBeInTheDocument();
   });
 

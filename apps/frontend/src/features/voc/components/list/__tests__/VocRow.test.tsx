@@ -122,12 +122,12 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByLabelText('3 attachments')).toHaveTextContent('3');
+    expect(screen.getByLabelText('첨부 3개')).toHaveTextContent('3');
   });
 
   it('does NOT render the attachment count chip when attachment_count is 0', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
-    expect(screen.queryByLabelText('0 attachments')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('첨부 0개')).not.toBeInTheDocument();
   });
 
   it('keeps the attachment count chip without a same-Managed-System peer chip', () => {
@@ -139,7 +139,7 @@ describe('<VocRow>', () => {
         managedSystem={null}
       />,
     );
-    expect(screen.getByLabelText('2 attachments')).toHaveTextContent('2');
+    expect(screen.getByLabelText('첨부 2개')).toHaveTextContent('2');
     expect(screen.queryByText(/similar|같은 Managed System의 VOC/i)).not.toBeInTheDocument();
   });
 

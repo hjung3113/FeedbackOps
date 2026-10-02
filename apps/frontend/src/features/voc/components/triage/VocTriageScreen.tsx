@@ -145,7 +145,7 @@ export function VocTriageScreen({
             data-testid="triage-kicker-console"
             className="text-xs font-medium uppercase tracking-[0.04em] text-text-muted"
           >
-            콘솔
+            {GLOSSARY.console}
           </span>
           <span className="text-[10px] text-text-muted" aria-hidden="true">
             ·
@@ -167,8 +167,8 @@ export function VocTriageScreen({
         >
           {queueTotal === undefined ? '— VOC' : `${queueTotal} VOC`}
         </output>
-        <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → severity">
-          미배정 → severity 순
+        <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → 심각도">
+          미배정 → 심각도 순
         </span>
         {/* Processed-count progress — emerald/accent toned. Prototype ref:
             screen-voc-create.jsx:652-656 ("· N건 처리됨"). */}

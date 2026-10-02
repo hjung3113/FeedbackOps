@@ -124,8 +124,8 @@ export function PermissionBlockedPanel({
       {/* Audit footer — only when decisionId is provided */}
       {decisionId !== undefined && (
         <p className="text-xs text-text-muted">
-          Decision <code>{decisionId}</code>
-          {evaluatedRelative !== undefined ? ` · evaluated ${evaluatedRelative}` : ''}
+          결정 <code>{decisionId}</code>
+          {evaluatedRelative !== undefined ? ` · ${evaluatedRelative}에 평가됨` : ''}
         </p>
       )}
     </div>

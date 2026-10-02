@@ -1,5 +1,5 @@
 // /voc-clusters — ADR-0020 ListShell cluster list + right detail panel.
-// CreateClusterModal opens on "클러스터 생성" and navigates to detail on create.
+// CreateClusterModal opens on "Cluster 생성" and navigates to detail on create.
 
 import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
 import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
@@ -128,14 +128,14 @@ export function VocClusterListPage(): React.ReactElement {
               data-testid="cluster-create-button"
             >
               <Plus className="h-4 w-4" />
-              클러스터 생성
+              Cluster 생성
             </Button>
           ) : (
             <span
               className="text-xs text-text-muted"
               data-testid="cluster-create-hint"
             >
-              Admin 또는 Developer 권한이 필요합니다.
+              관리자 또는 개발자 권한이 필요합니다.
             </span>
           )
         }
@@ -230,7 +230,7 @@ function CreateClusterModal({
     >
       <DialogContent data-testid="create-cluster-modal">
         <DialogHeader>
-          <DialogTitle>클러스터 생성</DialogTitle>
+          <DialogTitle>Cluster 생성</DialogTitle>
         </DialogHeader>
         <form
           id="create-cluster-form"
@@ -247,7 +247,7 @@ function CreateClusterModal({
               id="cluster-title"
               required
               value={title}
-              placeholder="클러스터 제목을 입력하세요."
+              placeholder="Cluster 제목을 입력하세요."
               onChange={(e) => setTitle(e.target.value)}
               data-testid="cluster-title-input"
             />
@@ -262,7 +262,7 @@ function CreateClusterModal({
               id="cluster-summary"
               rows={3}
               value={summary}
-              placeholder="클러스터에 대한 간단한 설명을 입력하세요."
+              placeholder="Cluster에 대한 간단한 설명을 입력하세요."
               onChange={(e) => setSummary(e.target.value)}
               data-testid="cluster-summary-input"
             />

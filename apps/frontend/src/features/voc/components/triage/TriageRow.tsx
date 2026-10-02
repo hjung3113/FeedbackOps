@@ -110,7 +110,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-text-muted">Area 미지정</span>
+              <span className="text-text-muted">Analytics Area 미지정</span>
             </>
           )}
 

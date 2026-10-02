@@ -270,7 +270,7 @@ describe('<VocList>', () => {
     fireEvent.click(screen.getByLabelText('VOC-001 선택'));
 
     expect(screen.getByRole('toolbar', { name: '일괄 작업' })).toBeInTheDocument();
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByText('1개 선택됨')).toBeInTheDocument();
     // Clicking the checkbox must not open the detail panel.
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -282,9 +282,9 @@ describe('<VocList>', () => {
       { wrapper: makeWrapper() },
     );
     fireEvent.click(screen.getByLabelText('VOC-001 선택'));
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByText('1개 선택됨')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택 해제' }));
     expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
   });
 });

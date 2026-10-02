@@ -85,13 +85,13 @@ export function TaskListRoute({
   }
 
   if (tasksQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
+    return <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>;
   }
   if (isPermissionDenied(tasksQuery.error)) {
     return (
       <PermissionBlockedPanel
         state="denied"
-        category="Task list"
+        category="Task 목록"
         reason={PERMISSION_BLOCKED_REASONS.taskList}
         className="m-4"
       />

@@ -572,9 +572,9 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
-    // Description section now uses an English 'BODY' label per the
-    // reference image (see .review/title-reference.png + relaxed copy rule).
-    expect(screen.getByText('BODY')).toBeInTheDocument();
+    // #679 FIX2: the reference's relaxed 'BODY' variance is superseded by the
+    // Korean-chrome policy; the label is 본문.
+    expect(screen.getByText('본문')).toBeInTheDocument();
     expect(screen.getByText('연결된 실행')).toBeInTheDocument();
     expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
     expect(screen.getByText('대화')).toBeInTheDocument();

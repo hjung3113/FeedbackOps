@@ -29,6 +29,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   permissionCheckQueryKey,
   permissionRequestsMineKey,
@@ -281,10 +282,10 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 ) : null}
                 <DialogFooter>
                   <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                    Cancel
+                    {GLOSSARY.cancel}
                   </Button>
                   <Button type="submit" disabled={mutation.isPending}>
-                    Submit request
+                    요청 제출
                   </Button>
                 </DialogFooter>
               </form>

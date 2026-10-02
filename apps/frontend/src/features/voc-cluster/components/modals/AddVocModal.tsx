@@ -67,7 +67,7 @@ export function AddVocModal({
       { clusterId, vocId },
       {
         onSuccess: () => {
-          toast.success('VOC가 클러스터에 추가되었습니다.');
+          toast.success('VOC가 Cluster에 추가되었습니다.');
           closeAndReset();
         },
         onError: (err: ApiError) => {

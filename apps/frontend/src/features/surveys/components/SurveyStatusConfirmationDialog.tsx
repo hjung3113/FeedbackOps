@@ -20,8 +20,8 @@ function messageFor(error: ApiError | null, target: 'open' | 'close') {
     return 'Survey 시작 전에 질문을 하나 이상 추가해야 합니다.';
   if (hasField('status', 'invalid_transition'))
     return target === 'open'
-      ? '이 설문은 더 이상 시작할 수 없는 상태입니다.'
-      : '이 설문은 더 이상 종료할 수 없는 상태입니다.';
+      ? '이 Survey는 더 이상 시작할 수 없는 상태입니다.'
+      : '이 Survey는 더 이상 종료할 수 없는 상태입니다.';
   return '상태 변경에 실패했습니다. 다시 시도하세요.';
 }
 

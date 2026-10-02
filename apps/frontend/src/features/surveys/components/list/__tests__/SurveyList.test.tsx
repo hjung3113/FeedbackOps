@@ -66,8 +66,8 @@ describe('SurveyList empty state', () => {
   it('renders the existing creation recovery when survey creation is allowed', () => {
     renderEmptyList({ canCreate: true });
 
-    expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
-    expect(screen.getByText('설문을 만들어 응답을 수집하세요.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('Survey를 만들어 응답을 수집하세요.')).toBeInTheDocument();
     expect(screen.getByTestId('survey-empty-create-button')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
   });
@@ -86,7 +86,7 @@ describe('SurveyList empty state', () => {
     await userEvent.click(screen.getByRole('tab', { name: /진행 중/ }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Survey 검색' }), '찾을 수 없음');
 
-    expect(await screen.findByText('현재 조건에 맞는 설문이 없습니다')).toBeInTheDocument();
+    expect(await screen.findByText('현재 조건에 맞는 Survey가 없습니다')).toBeInTheDocument();
     expect(screen.getByText('상태: 진행 중 · 검색어: 찾을 수 없음')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
@@ -98,9 +98,9 @@ describe('SurveyList empty state', () => {
   it('renders request access for a requestable missing survey.manage permission', () => {
     renderEmptyList({ canCreate: false, permissionState: 'request_access' });
 
-    expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('설문을 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('request-access-survey.manage')).toBeInTheDocument();
     expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
@@ -109,9 +109,9 @@ describe('SurveyList empty state', () => {
   it('renders contact-admin recovery for a non-requestable missing survey.manage permission', () => {
     renderEmptyList({ canCreate: false, permissionState: 'blocked_non_requestable' });
 
-    expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('설문을 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',
@@ -123,9 +123,9 @@ describe('SurveyList empty state', () => {
     // Omit the optional prop to preserve the unavailable-state fail-closed path.
     renderEmptyList({ canCreate: false });
 
-    expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('설문을 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',

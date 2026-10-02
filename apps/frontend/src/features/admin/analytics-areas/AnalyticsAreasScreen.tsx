@@ -22,13 +22,14 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
+import { createLabel } from '@/lib/copy/glossary';
 import { PermissionGate } from '../permissions/permission-gate.js';
 import { AnalyticsAreasBody } from './AnalyticsAreasContainer.js';
 import { AnalyticsAreasFilter } from './AnalyticsAreasList.js';
 import type { AnalyticsAreasSearch } from './search.js';
 
 const SUBTITLE =
-  'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 dashboard와 Triage에서 쓰는 필터 기준입니다.';
+  'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.';
 const GUARDRAIL_TITLE = 'Analytics Area는 권한 경계가 아닙니다';
 const GUARDRAIL_BODY =
   'Analytics Area는 Managed System 안에서 분류와 집계에만 쓰입니다. 권한 범위는 Managed System으로만 정해집니다.';
@@ -108,7 +109,7 @@ export function AnalyticsAreasAdminPage() {
               data-testid="aa-new-area-button"
             >
               <Plus className="h-4 w-4" />
-              New area
+              {createLabel('Analytics Area')}
             </Button>
           </PermissionGate>
         ),

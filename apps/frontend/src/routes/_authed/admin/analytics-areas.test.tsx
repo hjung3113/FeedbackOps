@@ -173,7 +173,7 @@ describe('/admin/analytics-areas route', () => {
     });
     expect(
       screen.getByText(
-        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 dashboard와 Triage에서 쓰는 필터 기준입니다.',
+        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.',
       ),
     ).toBeVisible();
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(

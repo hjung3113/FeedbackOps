@@ -272,7 +272,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
 
     // Stage a severity so the confirm button enables, then confirm to trigger
     // the optimistic remove that drives the processed count.
-    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /높음/ }));
     fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
 
     const count = screen.getByTestId('triage-processed-count');

@@ -65,14 +65,14 @@ export const FINDING_SOURCE_TYPE_LABELS: Record<FindingDto['source_type'], strin
   voc: 'VOC',
   voc_cluster: 'VOC Cluster',
   survey: 'Survey',
-  survey_response: 'Survey Response',
-  manual: 'Manual',
+  survey_response: 'Survey 응답',
+  manual: '수동',
 };
 
 export const EVIDENCE_SOURCE_TYPE_LABELS: Record<EvidenceHighlightSourceType, string> = {
   voc: 'VOC',
   survey_response: 'Survey',
-  note: 'Manual note',
+  note: '수동 메모',
 };
 
 export const EVIDENCE_SENTIMENT_LABELS: Record<EvidenceHighlightSentiment, string> = {

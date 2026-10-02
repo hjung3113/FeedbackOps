@@ -209,6 +209,33 @@ describe('AppSidebar', () => {
     ]);
   });
 
+  // #679 FIX2: renamed section headers must keep their develop-era Latin test ids.
+  it('keeps Latin sidebar-section test ids for every renamed section header', () => {
+    render(
+      <AppSidebar
+        entries={[
+          { id: 'queue-unassigned-voc', label: '미배정 VOC', href: '/vocs', section: '액션 큐' },
+          ...NAV_TREE.findings,
+          ...NAV_TREE.tasks,
+          ...NAV_TREE.surveys,
+          ...NAV_TREE.integration,
+          ...NAV_TREE.admin,
+        ]}
+      />,
+    );
+
+    for (const testId of [
+      'sidebar-section-action-queues',
+      'sidebar-section-findings',
+      'sidebar-section-tasks',
+      'sidebar-section-surveys',
+      'sidebar-section-integration',
+      'sidebar-section-admin',
+    ]) {
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+    }
+  });
+
   it('hides section labels when collapsed', () => {
     render(<AppSidebar entries={entries} defaultCollapsed={true} />);
 

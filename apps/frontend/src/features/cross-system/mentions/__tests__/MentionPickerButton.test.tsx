@@ -46,7 +46,7 @@ describe('<MentionPickerButton>', () => {
   it('shows the Korean label beside the @ icon and keeps its accessible name', () => {
     render(<MentionPickerButton onSelect={vi.fn()} />, { wrapper: makeWrapper() });
 
-    const trigger = screen.getByRole('button', { name: '@Mention' });
+    const trigger = screen.getByRole('button', { name: '@멘션' });
     expect(screen.getByText('멘션')).toBeInTheDocument();
     expect(trigger.querySelector('svg')).toBeInTheDocument();
     expect(screen.queryByText('@', { selector: 'span' })).not.toBeInTheDocument();

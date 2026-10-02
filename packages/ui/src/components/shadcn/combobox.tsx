@@ -193,7 +193,7 @@ export function Combobox({
         >
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-text-muted" role="presentation">
-              No results.
+              결과 없음
             </li>
           ) : (
             filtered.map((option, idx) => (

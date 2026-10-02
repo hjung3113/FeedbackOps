@@ -1,3 +1,5 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
+
 import {
   Button,
   Callout,
@@ -118,7 +120,7 @@ export function AnalyticsAreaSlideOver({
                 <span>{ms?.name ?? area.managed_system_id}</span>
               </span>
             </FieldRow>
-            <FieldRow label="Slug" className="px-0">
+            <FieldRow label="슬러그" className="px-0">
               <span className="font-mono text-xs">{area.slug}</span>
             </FieldRow>
             <FieldRow label="리드" className="px-0">
@@ -134,7 +136,7 @@ export function AnalyticsAreaSlideOver({
             <FieldRow label="기본 공개 범위" className="px-0">
               <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-xs text-text-secondary">
                 <Shield className="h-2.5 w-2.5" />
-                Internal · MS 범위
+                내부 · Managed System 범위
               </span>
             </FieldRow>
           </div>
@@ -154,7 +156,7 @@ export function AnalyticsAreaSlideOver({
               </div>
             </div>
             <p className="mt-2 text-xs text-text-muted" data-testid="aa-workload-defer">
-              Findings · Evidence 집계는 Slice 4/5 surface 가 들어온 뒤 연결됩니다.
+              Findings · Evidence 집계는 이후 화면이 제공되면 연결됩니다.
             </p>
           </div>
 
@@ -164,7 +166,7 @@ export function AnalyticsAreaSlideOver({
               className="rounded-md border border-border-subtle bg-surface-card p-4 text-center text-xs text-text-muted"
               data-testid="aa-findings-defer"
             >
-              Findings 목록은 Slice 4/5 에서 연결됩니다.
+              Findings 목록은 이후 화면에서 연결됩니다.
             </div>
           </div>
 
@@ -173,7 +175,7 @@ export function AnalyticsAreaSlideOver({
             <div className="flex flex-col gap-1.5">
               {[
                 { label: 'VOC Triage', meta: '필터 차원' },
-                { label: 'Findings 목록', meta: '필터 + 그룹핑' },
+                { label: 'Findings 목록', meta: '필터 + 그룹화' },
                 { label: 'Survey 대상 지정', meta: '세그먼트 정의' },
               ].map((u) => (
                 <div
@@ -197,7 +199,7 @@ export function AnalyticsAreaSlideOver({
             data-testid="aa-edit-button"
           >
             <Settings className="h-3 w-3" />
-            편집
+            {GLOSSARY.edit}
           </Button>
         </div>
       </SheetContent>

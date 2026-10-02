@@ -492,7 +492,7 @@ describe('document titles from production detail panels', () => {
     await waitFor(() =>
       expect(document.title).toBe(`${DOCUMENT_TITLE_COPY.tasks.milestones} · FeedbackOps`),
     );
-    expect(screen.getByText('Loading Milestone…')).toBeInTheDocument();
+    expect(screen.getByText('Milestone을 불러오는 중…')).toBeInTheDocument();
 
     missingRead.reject(
       new ApiError(404, { code: 'not_found.record', message: 'Milestone missing' }),

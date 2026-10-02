@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   Button,
   Dialog,
@@ -92,7 +93,7 @@ function RegisterForm({
           setError(null);
           const nextErrors: Partial<Record<'managedSystem' | 'slug' | 'name', string>> = {};
           if (!msId) nextErrors.managedSystem = 'Managed System을 선택해 주세요.';
-          if (!slug.trim()) nextErrors.slug = 'Slug를 입력해 주세요.';
+          if (!slug.trim()) nextErrors.slug = '슬러그를 입력해 주세요.';
           if (!name.trim()) nextErrors.name = '이름을 입력해 주세요.';
           if (Object.keys(nextErrors).length > 0) {
             setFieldErrors(nextErrors);
@@ -138,7 +139,7 @@ function RegisterForm({
         </fieldset>
         <div className="space-y-1">
           <Label htmlFor="aa-create-slug" className="text-text-secondary">
-            Slug <span className="text-accent-danger">· 필수</span>
+            슬러그 <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-slug"
@@ -158,7 +159,7 @@ function RegisterForm({
         </div>
         <div className="space-y-1">
           <Label htmlFor="aa-create-name" className="text-text-secondary">
-            Name <span className="text-accent-danger">· 필수</span>
+            이름 <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-name"
@@ -183,7 +184,7 @@ function RegisterForm({
         )}
         <DialogFooter>
           <Button type="submit" disabled={mutation.isPending} data-testid="create-aa-submit">
-            Register
+            등록
           </Button>
         </DialogFooter>
       </form>
@@ -258,7 +259,7 @@ function EditForm({
       >
         <div className="space-y-1">
           <Label htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
-            Name
+            이름
           </Label>
           <Input
             id={`aa-edit-name-${target.slug}`}
@@ -281,7 +282,7 @@ function EditForm({
               disabled={archiveMutation.isPending}
               data-testid={`aa-archive-${target.slug}`}
             >
-              Archive
+              보관
             </Button>
           ) : (
             <span className="text-sm text-text-muted">이미 보관됨</span>
@@ -291,7 +292,7 @@ function EditForm({
             disabled={updateMutation.isPending}
             data-testid={`aa-save-${target.slug}`}
           >
-            Save
+            {GLOSSARY.save}
           </Button>
         </DialogFooter>
       </form>

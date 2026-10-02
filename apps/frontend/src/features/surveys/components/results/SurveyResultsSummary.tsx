@@ -39,7 +39,7 @@ function QuestionResult({
         data-testid={`survey-result-suppressed-${result.question_id}`}
       >
         <p className="text-sm font-medium text-text-primary">Q{index + 1}</p>
-        <p className="mt-2 text-sm text-text-muted">Results are suppressed to protect anonymity.</p>
+        <p className="mt-2 text-sm text-text-muted">익명 보호를 위해 이 질문의 결과는 숨겨집니다.</p>
       </section>
     );
   }
@@ -51,7 +51,7 @@ function QuestionResult({
         <span className="rounded border border-border-subtle px-1.5 py-0.5 text-xs capitalize">
           {SURVEY_RESULT_KIND_LABELS[result.kind]}
         </span>
-        <span>{result.answer_count} responses</span>
+        <span>응답 {result.answer_count}건</span>
       </div>
       <h2 className="mt-2 text-base font-semibold text-text-primary">
         {questionPrompt(survey, result.question_id)}
@@ -187,7 +187,7 @@ function NextActions({
       data-testid="survey-result-next-actions"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-        Follow-up actions
+        후속 조치
       </h2>
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
@@ -204,7 +204,7 @@ function NextActions({
                     권한 요청
                   </Button>
                   <p className="text-sm text-text-muted">
-                    Access details are unavailable, so this request cannot be submitted.
+                    접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.
                   </p>
                 </div>
               );
@@ -268,7 +268,7 @@ function NextActions({
               </Button>
               {loadErrorFindingId === action.source_finding_id && (
                 <p className="text-sm text-text-danger" role="alert">
-                  Finding could not be loaded.
+                  Finding을 불러오지 못했습니다.
                 </p>
               )}
               {selectedFindingId === action.source_finding_id && (
@@ -315,7 +315,7 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
             </>
           )}
           <p className="mt-2 text-sm text-text-muted">
-            Question summaries and response distributions
+            질문 요약과 응답 분포입니다.
           </p>
           {results.identity_protected && (
             <p className="mt-3 text-sm text-text-muted">신원 보호 응답</p>
@@ -345,7 +345,7 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
                     params={{ surveyId: survey.id }}
                     to="/surveys/$surveyId/follow-up"
                   >
-                    Follow-up 검토
+                    후속 조치 검토
                   </Link>
                 )}
               </div>

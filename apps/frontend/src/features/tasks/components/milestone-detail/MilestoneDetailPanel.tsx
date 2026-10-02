@@ -105,7 +105,7 @@ export function MilestoneDetailPanel({
       {milestone === undefined ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {milestoneQuery.isLoading ? (
-            <div className="p-4 text-sm text-text-muted">Loading Milestone…</div>
+            <div className="p-4 text-sm text-text-muted">Milestone을 불러오는 중…</div>
           ) : error !== null && isPermissionDenied(error) ? (
             <PermissionBlockedPanel
               state="denied"

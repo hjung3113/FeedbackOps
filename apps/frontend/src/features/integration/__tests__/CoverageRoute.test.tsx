@@ -287,7 +287,7 @@ describe('integration coverage route', () => {
     const signals = within(screen.getByTestId('coverage-signals'));
     expect(signals.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
     expect(signals.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
-    expect(signals.getByText('High severity VOC 후속 조치')).toBeVisible();
+    expect(signals.getByText('높은 심각도 VOC 후속 조치')).toBeVisible();
     const table = within(screen.getByTestId('coverage-table'));
     expect(table.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
     expect(table.getByText('Analytics Area가 지정된 VOC')).toBeVisible();

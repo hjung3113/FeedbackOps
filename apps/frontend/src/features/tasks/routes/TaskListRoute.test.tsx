@@ -284,7 +284,7 @@ describe('TaskListRoute display ids', () => {
     );
     renderWithClient(<TaskListRoute />);
 
-    const panel = await screen.findByText('Task list');
+    const panel = await screen.findByText('Task 목록');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
     expect(
       screen.getByText(
@@ -467,7 +467,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     // Positive control for the negatives: the blocked panel really renders.
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'summary_visible',
     );
@@ -498,7 +498,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
 
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'denied',
     );
@@ -526,7 +526,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     expect(trail.querySelector('[data-state]')).toBeNull();
-    expect(screen.queryByText('Source VOC')).not.toBeInTheDocument();
+    expect(screen.queryByText('출처 VOC')).not.toBeInTheDocument();
     expect(trail.querySelector('[data-entity-type="voc"]')).toBeNull();
     // Positive control: the Finding node still renders as before.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();

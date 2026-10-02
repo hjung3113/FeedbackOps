@@ -48,13 +48,13 @@ export const RAIL_ITEMS: Array<{
   href: string;
   icon: React.ElementType<{ className?: string }>;
 }> = [
-  { key: 'home', label: 'Home', href: '/home', icon: House },
+  { key: 'home', label: '홈', href: '/home', icon: House },
   { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
   { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
   { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
   { key: 'integration', label: '연동', href: '/integration', icon: Boxes },
   { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
-  { key: 'admin', label: 'Admin', href: '/admin/managed-systems', icon: Shield },
+  { key: 'admin', label: '관리자', href: '/admin/managed-systems', icon: Shield },
 ];
 
 export function railForPathname(pathname: string): RailDomain {

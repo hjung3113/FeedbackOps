@@ -168,10 +168,10 @@ export function MilestoneDetailContent({
                   size="sm"
                   disabled={titleMutation.isPending || statusMutation.isPending}
                 >
-                  저장
+                  {GLOSSARY.save}
                 </Button>
                 <Button type="button" variant="subtle" size="sm" onClick={cancelTitleEdit}>
-                  취소
+                  {GLOSSARY.cancel}
                 </Button>
                 {titleError !== null && (
                   <span className="text-sm text-accent-danger">{titleError}</span>
@@ -193,7 +193,7 @@ export function MilestoneDetailContent({
                 onClick={() => startTitleEdit(statusMutation.isPending)}
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
-                Edit title
+                {GLOSSARY.editTitle}
               </Button>
             </div>
           )}
@@ -223,21 +223,21 @@ export function MilestoneDetailContent({
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.released_done}
                 </span>{' '}
-                released/done
+                Released/Done
               </span>
               <span aria-hidden="true">·</span>
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.in_flight}
                 </span>{' '}
-                in flight
+                진행 중
               </span>
               <span aria-hidden="true">·</span>
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.queued}
                 </span>{' '}
-                queued
+                대기 중
               </span>
             </div>
           </div>
@@ -350,12 +350,14 @@ export function MilestoneDetailContent({
               // with domain-safe copy.
               <PermissionBlockedPanel
                 state="denied"
-                category="Task list"
+                category="Task 목록"
                 reason={PERMISSION_BLOCKED_REASONS.milestoneTasks}
               />
             ) : (
               // Same terminal copy as the Tasks list route (TaskListRoute).
-              <div className="py-3 text-center text-xs text-text-muted">Task list unavailable.</div>
+              <div className="py-3 text-center text-xs text-text-muted">
+                Task 목록을 표시할 수 없습니다.
+              </div>
             )
           ) : childTasks !== undefined && childTasks.length === 0 ? (
             <div className="py-3 text-center text-xs text-text-muted">
@@ -387,7 +389,7 @@ export function MilestoneDetailContent({
           {/* No evidence read path in these slices (manual linking is §7 item 14);
               empty copy only — no Outcome survey controls (FOP-OUT-014). */}
           <div className="py-3 text-center text-xs text-text-muted">
-            연결된 evidence highlight 가 없습니다.
+            연결된 {GLOSSARY.evidenceHighlight}가 없습니다.
           </div>
         </div>
 

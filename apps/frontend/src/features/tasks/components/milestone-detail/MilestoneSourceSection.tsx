@@ -70,8 +70,7 @@ export function MilestoneSourceSection({
           // No Finding → Milestone writer exists (#514 out-of-scope list):
           // ship the prototype's standalone copy without a Link control.
           <div className="mt-2 text-sm text-text-muted">
-            {'근거 Finding 이 연결되어 있지 않습니다. ' +
-              'Standalone milestone 으로 운영 중입니다.'}
+            {'근거 Finding이 연결되어 있지 않습니다. ' + '단독 Milestone으로 운영 중입니다.'}
           </div>
         )}
       </div>

@@ -19,10 +19,10 @@ export interface DetailPanelHeaderActionsProps {
 }
 
 const DEFERRED_ITEMS: Array<{ label: string; disabledReason: string }> = [
-  { label: '읽음 표시', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '스누즈', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '구독', disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '보관', disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '읽음 표시', disabledReason: '이후 제공 예정입니다' },
+  { label: '스누즈', disabledReason: '이후 제공 예정입니다' },
+  { label: '구독', disabledReason: '이후 제공 예정입니다' },
+  { label: '보관', disabledReason: '이후 제공 예정입니다' },
 ];
 
 /**

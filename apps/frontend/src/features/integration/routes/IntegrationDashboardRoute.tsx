@@ -162,7 +162,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             <IntegrationJumpCard
               href={`/integration/coverage${surfaceScopeSearch}`}
               title={GLOSSARY.coverage}
-              description="VOC→Task · Finding→Execution · Milestone→Outcome 같이 워크플로 단절을 임계값으로 추적합니다."
+              description="VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다."
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
               {...(coveragePercent !== undefined

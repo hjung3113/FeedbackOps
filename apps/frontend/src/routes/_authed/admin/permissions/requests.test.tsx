@@ -390,22 +390,22 @@ describe("/admin/permissions/requests", () => {
 
     const submit = screen.getByTestId("permission-decision-submit");
     expect(submit).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/Policy citation/), {
+    fireEvent.change(screen.getByLabelText(/정책 근거/), {
       target: { value: "  policy7  " },
     });
-    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+    fireEvent.change(screen.getByLabelText(/동료 검토자 부재 사유/), {
       target: { value: "  reviewer absence  " },
     });
     expect(submit).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/Policy citation/), {
+    fireEvent.change(screen.getByLabelText(/정책 근거/), {
       target: { value: "  policy-8  " },
     });
     expect(submit).toBeEnabled();
-    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+    fireEvent.change(screen.getByLabelText(/동료 검토자 부재 사유/), {
       target: { value: "  absence  " },
     });
     expect(submit).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+    fireEvent.change(screen.getByLabelText(/동료 검토자 부재 사유/), {
       target: { value: "  reviewer  " },
     });
     expect(submit).toBeEnabled();
@@ -425,7 +425,7 @@ describe("/admin/permissions/requests", () => {
     installFetch({ actorId: "actor-pending", selfApprovalPolicy: "forbidden" });
     renderRoute();
     await waitFor(() =>
-      expect(screen.getByText(/Workspace policy에서 self-approval을 금지합니다/)).toBeInTheDocument(),
+      expect(screen.getByText(/워크스페이스 정책에서 직접 승인을 금지합니다/)).toBeInTheDocument(),
     );
     expect(screen.getByRole("button", { name: "승인" })).toBeDisabled();
     expect(screen.getByTestId("permission-decision-submit")).toBeDisabled();
@@ -454,10 +454,10 @@ describe("/admin/permissions/requests", () => {
       await waitFor(() =>
         expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
       );
-      fireEvent.change(screen.getByLabelText(/Policy citation/), {
+      fireEvent.change(screen.getByLabelText(/정책 근거/), {
         target: { value: "policy-8" },
       });
-      fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      fireEvent.change(screen.getByLabelText(/동료 검토자 부재 사유/), {
         target: { value: "reviewer absence" },
       });
       fireEvent.click(screen.getByTestId("permission-decision-submit"));

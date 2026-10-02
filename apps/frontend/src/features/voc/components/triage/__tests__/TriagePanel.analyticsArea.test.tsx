@@ -180,7 +180,7 @@ describe('TriagePanel Analytics Area and optional owner', () => {
         }),
     ) as typeof globalThis.fetch;
     renderPanel({ ...VOC, analytics_area_id: null });
-    fireEvent.click(screen.getByRole('button', { name: /Low/i }));
+    fireEvent.click(screen.getByRole('button', { name: /낮음/ }));
 
     const confirm = screen.getByRole('button', { name: /Triage 확정 & 다음 VOC/i });
     expect(confirm).toBeEnabled();
@@ -202,9 +202,9 @@ describe('TriagePanel Analytics Area and optional owner', () => {
   it('AC-B10b labels Owner as optional and explains that unassigned is valid', async () => {
     renderPanel();
 
-    expect(screen.getByText('Owner 배정 (선택)')).toBeInTheDocument();
+    expect(screen.getByText('담당자 배정 (선택)')).toBeInTheDocument();
     expect(
-      screen.getByText('미지정 상태로 확정할 수 있으며 Owner는 나중에 지정할 수 있습니다.'),
+      screen.getByText('미지정 상태로 확정할 수 있으며 담당자는 나중에 지정할 수 있습니다.'),
     ).toBeInTheDocument();
   });
 });

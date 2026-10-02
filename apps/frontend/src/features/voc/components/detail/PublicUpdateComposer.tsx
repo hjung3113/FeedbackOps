@@ -329,7 +329,7 @@ export function PublicUpdateComposer({
 
       {/* ComposerFooter — shared across all three composer surfaces */}
       <ComposerFooter
-        submitLabel="Publish update"
+        submitLabel="공개 업데이트 게시"
         onPreview={() => setPreviewOpen(true)}
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
@@ -353,7 +353,7 @@ export function PublicUpdateComposer({
         />
         <div className="flex justify-end gap-2 border-t border-border-subtle pt-3">
           <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
-            Continue editing
+            이어서 편집
           </Button>
           <Button
             type="button"
@@ -362,7 +362,7 @@ export function PublicUpdateComposer({
             disabled={isSubmitBlocked}
             onClick={handlePreviewPublish}
           >
-            Publish update
+            공개 업데이트 게시
           </Button>
         </div>
       </PreviewModal>

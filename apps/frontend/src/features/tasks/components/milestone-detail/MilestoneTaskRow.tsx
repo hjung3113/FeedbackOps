@@ -25,7 +25,7 @@ export function MilestoneTaskRow({
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
           <InternalTaskBadge status={task.status} />
           {task.due_date !== null && <span>· {formatDateOnly(task.due_date)}</span>}
-          <span>· updated {formatDate(task.updated_at)}</span>
+          <span>· 업데이트 {formatDate(task.updated_at)}</span>
         </div>
       </div>
       {assigneeName !== undefined ? (

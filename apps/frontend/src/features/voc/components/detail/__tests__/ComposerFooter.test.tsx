@@ -21,8 +21,8 @@ describe('<ComposerFooter>', () => {
         isSubmitting={false}
       />,
     );
-    expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /preview/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /미리보기/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /미리보기/ })).not.toBeDisabled();
   });
 
   it('disables the Submit button when document is empty', () => {

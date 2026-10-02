@@ -32,7 +32,7 @@ type ResolutionFilter = OutcomeFollowUpItem['resolution'];
 type DecisionAction = 'mark' | 'reopen';
 
 const NOT_CLASSIFIABLE_BODY =
-  '후속 검토는 마감된 Outcome 설문 중 충분한 응답이 모인 경우에만 제공됩니다.';
+  '후속 검토는 마감된 성과 Survey 중 충분한 응답이 모인 경우에만 제공됩니다.';
 
 function displayResponseNumber(value: number): string {
   // Option B pads single-digit response numbers in both the list and detail header.
@@ -276,7 +276,7 @@ function OutcomeFollowUpDetailPanel({
                   권한 요청
                 </Button>
                 <p className="text-sm text-text-muted">
-                  Access details are unavailable, so this request cannot be submitted.
+                  접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.
                 </p>
               </div>
             );
@@ -392,7 +392,7 @@ function EmptyReviewPage({
           params={{ surveyId: survey.id }}
           to="/surveys/$surveyId/results"
         >
-          Results로 돌아가기
+          결과로 돌아가기
         </Link>
       </div>
     </div>
@@ -598,7 +598,7 @@ export function OutcomeFollowUpReview({
       {decisionNotice && <DecisionNotice message={decisionNotice} />}
       {resultsError && (
         <output className="sr-only">
-          승인된 발췌를 불러오지 못했습니다. Create Finding을 사용할 수 없습니다.
+          승인된 발췌를 불러오지 못했습니다. Finding 생성을 사용할 수 없습니다.
         </output>
       )}
     </div>

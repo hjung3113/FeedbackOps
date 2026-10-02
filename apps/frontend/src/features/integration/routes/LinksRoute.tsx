@@ -282,7 +282,7 @@ export function LinksRoute() {
         onTabChange={handleStatusChange}
         action={
           <div className="flex items-center gap-2">
-            <SearchInput placeholder="Entity link 검색…" />
+            <SearchInput placeholder={`${GLOSSARY.entityLinks} 검색…`} />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
               values={currentFilters}
@@ -302,7 +302,7 @@ export function LinksRoute() {
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              새로고침
+              {GLOSSARY.refresh}
             </Button>
           </div>
         }

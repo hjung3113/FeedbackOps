@@ -60,7 +60,7 @@ const TAB_CONFIGS: TabConfig[] = [
   },
   {
     surface: 'internal',
-    label: '내부 메모',
+    label: '내부 코멘트',
     activeBorderClass: 'border-b-status-reporter-assigned',
     visibilityKey: 'showInternal',
   },

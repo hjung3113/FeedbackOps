@@ -159,7 +159,7 @@ export function TaskRequestPanel({
                 <span className="text-xs text-text-muted">
                   · {GLOSSARY.requestedBy}{' '}
                   <strong className="text-text-secondary">
-                    {requester?.display_name ?? '알 수 없는 사용자'}
+                    {requester?.display_name ?? GLOSSARY.unknownUser}
                   </strong>
                 </span>
                 <span className="text-xs text-text-muted">
@@ -179,7 +179,7 @@ export function TaskRequestPanel({
                 <span className="text-xs text-text-muted">
                   검토자{' '}
                   <strong className="text-text-secondary">
-                    {reviewer?.display_name ?? '알 수 없는 사용자'}
+                    {reviewer?.display_name ?? GLOSSARY.unknownUser}
                   </strong>
                   {item.decided_at && <> · {formatShortDateTime(item.decided_at)}</>}
                 </span>
@@ -620,7 +620,7 @@ export function TaskRequestPanel({
           </FieldRow>
           <FieldRow label="본인 승인">
             <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
-              requires scoped capability
+              범위 내 권한 필요
             </span>
           </FieldRow>
         </section>
@@ -630,7 +630,7 @@ export function TaskRequestPanel({
           <div className="flex flex-col gap-2 border-l border-border-subtle pl-3">
             <div className="text-xs text-text-muted">
               <strong className="text-text-secondary">
-                {requester?.display_name ?? '알 수 없는 사용자'}
+                {requester?.display_name ?? GLOSSARY.unknownUser}
               </strong>
               {' · 요청 작성 · '}
               {formatShortDateTime(item.created_at)}
@@ -638,7 +638,7 @@ export function TaskRequestPanel({
             {item.decided_at && (
               <div className="text-xs text-text-muted">
                 <strong className="text-text-secondary">
-                  {reviewer?.display_name ?? 'Reviewer'}
+                  {reviewer?.display_name ?? GLOSSARY.unknownUser}
                 </strong>
                 {' · '}
                 {TASK_REQUEST_STATUS_LABELS[item.status]}

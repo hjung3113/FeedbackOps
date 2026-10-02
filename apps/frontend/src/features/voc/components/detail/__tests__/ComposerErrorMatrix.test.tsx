@@ -240,7 +240,7 @@ describe('Composer error matrix (C5.5)', () => {
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.click(screen.getByRole('button', { name: /publish update/i }));
+    fireEvent.click(screen.getByRole('button', { name: /공개 업데이트 게시/ }));
 
     await waitFor(() => {
       expect(publicMutate).toHaveBeenCalledTimes(1);
@@ -268,7 +268,7 @@ describe('Composer error matrix (C5.5)', () => {
 
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.click(screen.getByRole('button', { name: /send reply/i }));
+    fireEvent.click(screen.getByRole('button', { name: /답변 보내기/ }));
 
     await waitFor(() => {
       expect(replyMutate).toHaveBeenCalledTimes(1);
@@ -296,7 +296,7 @@ describe('Composer error matrix (C5.5)', () => {
 
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.click(screen.getByRole('button', { name: /add note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /내부 코멘트 추가/ }));
 
     await waitFor(() => {
       expect(internalMutate).toHaveBeenCalledTimes(1);
@@ -325,8 +325,8 @@ describe('Composer error matrix (C5.5)', () => {
     fireEvent.click(screen.getByRole('textbox'));
 
     await waitFor(() => {
-      const previewBtn = screen.getByRole('button', { name: /preview/i });
-      const submitBtn = screen.getByRole('button', { name: /publish update/i });
+      const previewBtn = screen.getByRole('button', { name: /미리보기/ });
+      const submitBtn = screen.getByRole('button', { name: /공개 업데이트 게시/ });
       // Both must be disabled when idempotency_key_reuse error is active
       expect(previewBtn).toBeDisabled();
       expect(submitBtn).toBeDisabled();

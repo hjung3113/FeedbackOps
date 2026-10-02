@@ -8,10 +8,10 @@ export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
   'finding.read': 'Finding 조회',
   'finding.manage': 'Finding 관리',
   'task_request.self_approve': '본인 Task Request 직접 승인',
-  'survey.read': '설문 조회',
-  'survey.manage': '설문 관리',
+  'survey.read': 'Survey 조회',
+  'survey.manage': 'Survey 관리',
   'survey.read_personal_responses': '개인 응답 조회',
-  'survey.export': '설문 데이터 내보내기',
+  'survey.export': 'Survey 데이터 내보내기',
 };
 
 export function getCapabilityDisplayLabel(capability: string): string {

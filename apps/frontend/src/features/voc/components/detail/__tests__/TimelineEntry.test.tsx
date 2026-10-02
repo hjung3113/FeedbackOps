@@ -58,6 +58,14 @@ describe('<TimelineEntry>', () => {
     expect(screen.queryByText(`Actor ${BASE.actor_id.slice(0, 8)}`)).not.toBeInTheDocument();
   });
 
+  // #679 FIX2: unresolved conversation actors fall back to the glossary's
+  // unknown-user name instead of an English chrome label.
+  it('falls back to 알 수 없는 사용자 when the actor name cannot be resolved', () => {
+    const entry: ConversationEntry = { ...BASE, kind: 'public_update', visibility: 'public' };
+    render(<TimelineEntry entry={entry} />);
+    expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
+  });
+
   it('renders status transition pair when both status fields present', () => {
     const entry: ConversationEntry = {
       ...BASE,

@@ -330,7 +330,7 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     // Read view: the B2e-status control is the only combobox; Managed System
     // stays stored text.
     expect(screen.queryByRole('combobox', { name: 'Managed System' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
 
     // Edit state: the title becomes an input — still no Managed System control.
     const titleInput = screen.getByRole('textbox', { name: '제목' });
@@ -369,7 +369,7 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'My local rename' },
     });
@@ -441,7 +441,7 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Draft rename' },
     });
@@ -567,7 +567,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
     // The draft is composed against V1 while the editor is open.
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Local draft' },
     });
@@ -604,7 +604,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Local draft' },
     });
@@ -889,7 +889,7 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
@@ -934,7 +934,7 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     const { queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'My local draft' },
     });
@@ -998,7 +998,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
@@ -1050,7 +1050,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
@@ -1107,7 +1107,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
   async function openDirtyTitleEditor(): Promise<void> {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
@@ -1156,7 +1156,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     mockTwoRecords();
     const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
@@ -1214,7 +1214,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
 
     // A fresh draft on B: New milestone is still protected as well.
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'B draft' },
     });
@@ -1234,7 +1234,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     mockTwoRecords();
     const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
     fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
@@ -1416,7 +1416,7 @@ describe('MilestonesRoute tab switch draft preservation (R6)', () => {
       });
     } else {
       await screen.findByRole('heading', { name: 'SSO Stabilization' });
-      fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+      fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
       fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
         target: { value: 'SSO draft' },
       });

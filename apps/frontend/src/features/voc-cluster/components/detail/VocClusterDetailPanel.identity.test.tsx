@@ -124,12 +124,15 @@ describe('VocClusterDetailPanel identity', () => {
     }
   });
 
-  it('uses a safe owner label when the actor name is unavailable', () => {
+  it('uses safe labels when owner and confirmer actor names are unavailable', () => {
     clusterState.actors = [];
 
     render(<VocClusterDetailPanel clusterId={cluster.id} />);
 
     expect(screen.getByTestId('cluster-detail-owner')).toHaveTextContent('알 수 없는 사용자');
+    expect(screen.getByTestId('cluster-detail-confirmed-by')).toHaveTextContent(
+      '알 수 없는 사용자',
+    );
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
   });
 

@@ -1,3 +1,7 @@
+import {
+  DASHBOARD_ACTION_LABELS,
+  DASHBOARD_QUEUE_ACTION_LABELS,
+} from '@/lib/copy/dashboard-actions';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
@@ -15,11 +19,11 @@ const QUEUE_COPY: Record<QueueId, { title: string; detail: (count: number) => st
   },
   'high-severity-unlinked': {
     title: GLOSSARY.highNoLink,
-    detail: () => 'High/Critical severity인 VOC 중 Finding 연결이 없는 항목.',
+    detail: () => '높음·심각 심각도인 VOC 중 Finding 연결이 없는 항목.',
   },
   'actionable-finding-no-execution': {
     title: '실행 계획 없는 Finding',
-    detail: () => 'Active 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
+    detail: () => '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
   },
   'released-task-unresolved-voc': {
     title: 'Released Task · 미해결 VOC',
@@ -27,12 +31,12 @@ const QUEUE_COPY: Record<QueueId, { title: string; detail: (count: number) => st
       'Task는 Released지만 연결된 공개 상태가 해결됨이 아닙니다. 공개 업데이트 검토가 필요합니다.',
   },
   'bad-outcome-no-followup': {
-    title: '후속 조치 없는 부정 Outcome Survey',
-    detail: () => 'Negative outcome survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
+    title: '후속 조치 없는 부정 성과 Survey',
+    detail: () => '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
   },
   'permission-requests-pending': {
     title: '검토 대기 중인 권한 요청',
-    detail: () => 'Workspace Admin 검토를 기다리는 elevated/scope 권한 요청.',
+    detail: () => '워크스페이스 관리자 검토를 기다리는 상위 권한 요청.',
   },
 };
 
@@ -103,7 +107,7 @@ export function IntegrationDashboardQueueCard({
             data-testid={`integration-queue-secondary-${queue.id}`}
             href={queue.secondary_action.route}
           >
-            {queue.secondary_action.label}
+            {DASHBOARD_ACTION_LABELS[queue.secondary_action.intent] ?? queue.secondary_action.label}
           </a>
         ) : (
           <span />
@@ -114,7 +118,9 @@ export function IntegrationDashboardQueueCard({
             data-testid={`integration-queue-primary-${queue.id}`}
             href={queue.next_action.route}
           >
-            {queue.next_action.label}
+            {DASHBOARD_QUEUE_ACTION_LABELS[queue.id] ??
+              DASHBOARD_ACTION_LABELS[queue.next_action.intent] ??
+              queue.next_action.label}
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
           </a>
         </Button>
@@ -169,7 +175,7 @@ export function IntegrationJumpCard({
       </span>
       <span className="text-xs leading-5 text-text-muted">{description}</span>
       <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-primary">
-        Open <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        열기 <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
     </a>
   );

@@ -47,7 +47,7 @@ describe('EntityLinksInventoryTable identity', () => {
   it('uses user-facing language while loading entity links', () => {
     render(<EntityLinksInventoryTable items={[]} loading />);
 
-    expect(screen.getByText('Entity links를 불러오는 중…')).toBeInTheDocument();
+    expect(screen.getByText('엔티티 링크를 불러오는 중…')).toBeInTheDocument();
     expect(screen.queryByText(/entity_links/)).not.toBeInTheDocument();
   });
 
@@ -59,7 +59,7 @@ describe('EntityLinksInventoryTable identity', () => {
       row.textContent?.indexOf('TASK-1000') ?? -1,
     );
     expect(screen.getByRole('checkbox', { name: 'FIN-12 → TASK-1000 선택' })).toBeInTheDocument();
-    expect(screen.getByText('Link 10000000')).toHaveClass('text-text-muted');
+    expect(screen.getByText('엔티티 링크 10000000')).toHaveClass('text-text-muted');
     expect(screen.getByText('Managed System')).toBeInTheDocument();
     expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
     expect(

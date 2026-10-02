@@ -25,7 +25,7 @@ describe('<ComposerTabs>', () => {
     );
     expect(screen.queryByText('공개 업데이트')).not.toBeInTheDocument();
     expect(screen.getByText('제출자 답변')).toBeInTheDocument();
-    expect(screen.getByText('내부 메모')).toBeInTheDocument();
+    expect(screen.getByText('내부 코멘트')).toBeInTheDocument();
   });
 
   it('defaults to leftmost visible tab (first in order: public > reply > internal)', () => {
@@ -62,7 +62,7 @@ describe('<ComposerTabs>', () => {
         onTabChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /내부 메모/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /내부 코멘트/i }));
     expect(onChange).toHaveBeenCalledWith('internal');
   });
 });

@@ -3,6 +3,7 @@ import { ObjectRow, UnassignedBadge } from '@fops/ui';
 import { Fragment, type ReactNode } from 'react';
 
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
@@ -116,7 +117,7 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
       trailing={
         <>
           <span className="text-xs text-text-muted">
-            by <span>{requester?.display_name ?? '알 수 없는 사용자'}</span>
+            요청자 <span>{requester?.display_name ?? GLOSSARY.unknownUser}</span>
             {!requester && (
               <span className="block font-mono text-text-muted">
                 {shortId(item.requester_actor_id)}

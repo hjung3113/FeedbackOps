@@ -181,7 +181,7 @@ describe('<PublicUpdateComposer>', () => {
     render(<PublicUpdateComposer voc={vocGated} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     // The Publish button must be disabled when gate blocks the staged next status.
-    const publishBtn = screen.getByRole('button', { name: /publish update/i });
+    const publishBtn = screen.getByRole('button', { name: /공개 업데이트 게시/ });
     expect(publishBtn).toBeDisabled();
   });
 
@@ -199,7 +199,7 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).toBeDisabled();
     publish.click();
     expect(mutationMock.mutate).not.toHaveBeenCalled();
@@ -219,7 +219,7 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^publish update$/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /^공개 업데이트 게시$/ })).not.toBeDisabled();
   });
 
   it('keeps the response status through the delayed detail refetch after publishing', async () => {
@@ -252,7 +252,7 @@ describe('<PublicUpdateComposer>', () => {
 
     fireEvent.click(screen.getByRole('textbox'));
     await chooseReporterStatus('검토 중');
-    fireEvent.click(screen.getByRole('button', { name: /^publish update$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^공개 업데이트 게시$/ }));
 
     expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
     await React.act(async () => {
@@ -330,7 +330,7 @@ describe('<PublicUpdateComposer>', () => {
   it('blocks Publish when the staged status is no longer an allowed transition', async () => {
     await renderThenMoveVoc();
 
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).toBeDisabled();
 
     fireEvent.click(publish);
@@ -340,9 +340,9 @@ describe('<PublicUpdateComposer>', () => {
   it('blocks the PreviewModal Publish for a stale staged status too', async () => {
     await renderThenMoveVoc();
 
-    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^미리보기/ }));
     const modalPublish = screen
-      .getAllByRole('button', { name: /^publish update$/i })
+      .getAllByRole('button', { name: /^공개 업데이트 게시$/ })
       .find((btn) => btn.closest('[role="dialog"]') != null);
     expect(modalPublish).toBeDefined();
     expect(modalPublish).toBeDisabled();
@@ -372,7 +372,7 @@ describe('<PublicUpdateComposer>', () => {
     expect(
       screen.queryByText('선택한 상태로는 더 이상 전환할 수 없습니다'),
     ).not.toBeInTheDocument();
-    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    const publish = screen.getByRole('button', { name: /^공개 업데이트 게시$/ });
     expect(publish).not.toBeDisabled();
 
     fireEvent.click(publish);

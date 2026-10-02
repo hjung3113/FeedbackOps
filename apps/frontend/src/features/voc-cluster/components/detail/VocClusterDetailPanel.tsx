@@ -130,7 +130,7 @@ export function VocClusterDetailPanel({
     return (
       <div
         className="flex flex-col gap-4 p-6"
-        aria-label="클러스터 상세 불러오는 중"
+        aria-label="Cluster 상세 불러오는 중"
         data-testid="cluster-detail-skeleton"
       >
         <Skeleton className="h-7 w-1/2" />
@@ -150,7 +150,7 @@ export function VocClusterDetailPanel({
       >
         <p className="text-sm text-text-danger">
           {code === 'not_found.record'
-            ? '클러스터를 찾을 수 없습니다.'
+            ? 'Cluster를 찾을 수 없습니다.'
             : '데이터를 불러오지 못했습니다.'}
         </p>
         <Button
@@ -170,7 +170,7 @@ export function VocClusterDetailPanel({
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
-      onSuccess: () => toast.success('클러스터가 확정되었습니다.'),
+      onSuccess: () => toast.success('Cluster가 확정되었습니다.'),
       onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
     });
   }
@@ -179,7 +179,7 @@ export function VocClusterDetailPanel({
     removeMemberMutation.mutate(
       { clusterId, vocId },
       {
-        onSuccess: () => toast.success('VOC가 클러스터에서 제거되었습니다.'),
+        onSuccess: () => toast.success('VOC가 Cluster에서 제거되었습니다.'),
         onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
       },
     );
@@ -430,7 +430,7 @@ export function VocClusterDetailPanel({
             <FieldRow label="담당자" className="px-0">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
                 <span>
-                  {data.owner_user_id ? (ownerName ?? '알 수 없는 사용자') : <UnassignedBadge />}
+                  {data.owner_user_id ? (ownerName ?? GLOSSARY.unknownUser) : <UnassignedBadge />}
                 </span>
                 {data.owner_user_id && !ownerName && (
                   <span className="font-mono text-xs text-text-muted">
@@ -439,10 +439,10 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="확인자" className="px-0">
+            <FieldRow label="확정자" className="px-0">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-confirmed-by">
                 <span>
-                  {data.confirmed_by ? (confirmerName ?? '알 수 없는 사용자') : '대기 중'}
+                  {data.confirmed_by ? (confirmerName ?? GLOSSARY.unknownUser) : '대기 중'}
                 </span>
                 {data.confirmed_by && !confirmerName && (
                   <span className="font-mono text-xs text-text-muted">
@@ -451,7 +451,7 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="확인일" className="px-0">
+            <FieldRow label="확정일" className="px-0">
               <span data-testid="cluster-detail-confirmed-at">
                 {data.confirmed_at ? formatShortDate(data.confirmed_at) : '대기 중'}
               </span>
@@ -499,7 +499,7 @@ export function VocClusterDetailPanel({
           </>
         ) : (
           <span className="text-xs text-text-muted" data-testid="cluster-cta-hint">
-            Admin 또는 Developer 권한이 있어야 클러스터를 관리할 수 있습니다.
+            관리자 또는 개발자 권한이 있어야 Cluster를 관리할 수 있습니다.
           </span>
         )}
       </div>
@@ -588,3 +588,4 @@ function MemberRow({
     />
   );
 }
+import { GLOSSARY } from '@/lib/copy/glossary';

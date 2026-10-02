@@ -1,5 +1,6 @@
 import type { MilestoneStatusFilter, TaskDto } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
+import { GLOSSARY } from '@/lib/copy/glossary';
 
 // ADR-0057 A2 amendment localizes Korean navigation; Timeline stays Slice C.
 // MilestoneDetailContent appends the child-row count to Tasks when loaded.
@@ -24,10 +25,10 @@ export const PRIORITY_SEVERITY: Record<
 // PATCH is free among them. Labels verbatim from MILESTONE_STATUS_META in
 // screen-milestones.jsx.
 export const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label: string }> = [
-  { value: 'planning', label: '계획 중' },
-  { value: 'in_progress', label: '진행 중' },
+  { value: 'planning', label: GLOSSARY.milestoneStatusPlanning },
+  { value: 'in_progress', label: GLOSSARY.milestoneStatusInProgress },
   { value: 'blocked', label: '차단' },
-  { value: 'released', label: '릴리스됨' },
+  { value: 'released', label: GLOSSARY.milestoneStatusReleased },
 ];
 
 export const selectClassName =

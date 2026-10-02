@@ -138,7 +138,7 @@ describe('<ComposerSection>', () => {
       { wrapper: makeWrapper() },
     );
 
-    const internalTab = screen.getByRole('tab', { name: '내부 메모' });
+    const internalTab = screen.getByRole('tab', { name: '내부 코멘트' });
     fireEvent.click(internalTab);
     internalTab.focus();
     expect(internalTab).toHaveAttribute('aria-selected', 'true');
@@ -162,7 +162,7 @@ describe('<ComposerSection>', () => {
     render(<ComposerSection voc={VOC} me={ME} />, { wrapper: makeWrapper() });
 
     // Switch to internal tab (ComposerTabs renders buttons with role="tab")
-    const internalTab = screen.getByRole('tab', { name: /내부 메모/i });
+    const internalTab = screen.getByRole('tab', { name: /내부 코멘트/i });
     fireEvent.click(internalTab);
 
     // All three composer RichEditor stubs must remain in the DOM (kept mounted, CSS-hidden).

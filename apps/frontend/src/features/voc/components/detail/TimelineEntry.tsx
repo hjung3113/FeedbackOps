@@ -2,6 +2,7 @@
 
 import { useMe } from '@/lib/auth/useMe';
 import { formatRelativeTime } from '@/lib/format/datetime';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { ConversationEntry } from '@fops/shared';
 import {
   OutlineBadge,
@@ -39,7 +40,7 @@ export function TimelineEntry({ entry, actorDisplayName }: TimelineEntryProps): 
       ? { display_name: actorDisplayName }
       : me?.actor.id === entry.actor_id
       ? { display_name: me.actor.display_name }
-      : { display_name: 'Conversation actor' };
+      : { display_name: GLOSSARY.unknownUser };
 
   const rendererMode =
     entry.kind === 'internal_comment' ? 'internal' : 'reporter_visible';
