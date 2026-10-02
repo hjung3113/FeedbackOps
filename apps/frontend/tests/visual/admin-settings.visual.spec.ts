@@ -40,7 +40,7 @@ test.describe('/admin/settings visual harness', () => {
       }
       if (scenario === 'settings-self-approval-scoped') {
         await expect(
-          target.getByText('Permission Request 직접 승인', { exact: true }),
+          target.getByText('권한 요청 직접 승인', { exact: true }),
         ).toBeVisible();
         await expect(
           target.getByText('Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.', {

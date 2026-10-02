@@ -58,7 +58,7 @@ test.describe('/voc-clusters visual harness', () => {
     await page.goto(`/voc-clusters/${IDS.draft}`);
 
     await expect(page.getByTestId('cluster-cta-hint')).toHaveText(
-      'Admin 또는 Developer 권한이 있어야 클러스터를 관리할 수 있습니다.',
+      '관리자 또는 개발자 권한이 있어야 Cluster를 관리할 수 있습니다.',
     );
     await expect(page.getByTestId('cluster-add-voc-button')).toHaveCount(0);
     await expect(page.getByTestId('cluster-confirm-button')).toHaveCount(0);

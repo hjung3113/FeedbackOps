@@ -34,7 +34,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await installMockApi(page, { milestones: 'empty' });
     await page.goto('/tasks?view=milestones');
 
-    await expect(page.getByText('표시할 milestone 이 없습니다.')).toBeVisible();
+    await expect(page.getByText('표시할 Milestone이 없습니다.')).toBeVisible();
     for (const label of ['전체', '진행 중', '계획 중', '릴리스됨']) {
       await expect(page.getByRole('tab', { name: new RegExp(`^${label}`) })).toBeVisible();
     }
@@ -138,7 +138,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     // estimate slot; the word estimate never renders and no Add task exists.
     await expect(tasksSection).toContainText('2026. 6. 15.');
     await expect(tasksSection).not.toContainText('estimate');
-    await expect(tasksSection).toContainText('updated 2026. 7. 21.');
+    await expect(tasksSection).toContainText('업데이트 2026. 7. 21.');
     // Prototype TASK-902 assignee u-4 resolves to 최민서 (data.js:24, :382);
     // the avatar renders the initial.
     await expect(tasksSection).toContainText('최');

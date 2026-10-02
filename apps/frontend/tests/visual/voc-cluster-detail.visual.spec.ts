@@ -99,7 +99,7 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
     await page.goto(`/voc-clusters/${IDS.draft}`);
 
     await expect(page.getByTestId('cluster-detail-error')).toContainText(
-      '클러스터를 찾을 수 없습니다.',
+      'Cluster를 찾을 수 없습니다.',
     );
   });
 
