@@ -156,12 +156,7 @@ export function PublicUpdateReviewModal({
         ) : (
           <div className="grid gap-3">
             <div className="text-sm">
-              <FieldLabel
-                htmlFor="public-update-candidate"
-                className="text-inherit font-normal leading-5"
-              >
-                후보
-              </FieldLabel>
+              <label htmlFor="public-update-candidate">후보</label>
               <Select value={candidateId} onValueChange={setCandidateId}>
                 <SelectTrigger
                   id="public-update-candidate"
@@ -189,12 +184,7 @@ export function PublicUpdateReviewModal({
               />
             </div>
             <div className="text-sm">
-              <FieldLabel
-                htmlFor="public-update-reporter-status"
-                className="text-inherit font-normal leading-5"
-              >
-                {GLOSSARY.reporterFacingStatus}
-              </FieldLabel>
+              <label htmlFor="public-update-reporter-status">{GLOSSARY.reporterFacingStatus}</label>
               <Select
                 value={status || NO_STATUS}
                 onValueChange={(value) =>
