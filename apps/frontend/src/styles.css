@@ -10,3 +10,13 @@ body,
 #root {
   height: 100%;
 }
+
+@layer base {
+  /* Prototype body spec (docs/design-prototype/styles.css .body rule):
+     Pack 17 body size + leading on top of the Inter stack. */
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
+  }
+}

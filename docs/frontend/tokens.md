@@ -79,6 +79,16 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | heading-lg | 32px | 1.2 | -0.22px | `--text-heading-lg` |
 | display | 48px | 1.2 | -0.22px | `--text-display` |
 
+Since issue #672, the Tailwind preset (`packages/ui/tailwind.preset.ts`) maps
+`fontFamily.sans` / `fontFamily.mono` to `--font-sans` / `--font-mono` and the
+size utilities `text-xs` / `text-sm` / `text-base` / `text-lg` / `text-xl` /
+`text-2xl` to `--text-xs` / `--text-sm` / `--text-body` / `--text-lg` /
+`--text-xl` / `--text-heading`. `text-base` carries `--leading-normal` and
+`text-2xl` carries `--leading-tight` (the Type Scale pairs above); the other
+sizes set size only and inherit the body leading. The base layer
+(`apps/frontend/src/styles.css`) applies `--font-sans` and the body size +
+leading to `body`.
+
 ### Panel Title Block Scale (PR #59)
 
 `PanelTitleBlock` ships two title-scale variants via the `size` prop:
