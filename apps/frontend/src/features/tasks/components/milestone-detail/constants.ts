@@ -1,5 +1,5 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
-import type { MilestoneStatusFilter, TaskDto } from '@fops/shared';
+import type { MilestoneStatusFilter } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
 
 // ADR-0057 A2 amendment localizes Korean navigation; Timeline stays Slice C.
@@ -10,16 +10,6 @@ export const SECTIONS: PanelSection[] = [
   { id: 'evidence', label: 'Evidence' },
   { id: 'activity', label: '이력' },
 ];
-
-export const PRIORITY_SEVERITY: Record<
-  TaskDto['priority'],
-  'low' | 'medium' | 'high' | 'critical'
-> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  urgent: 'critical',
-};
 
 // B2e-status (ADR-0050) — the persisted set is exactly these four values and
 // PATCH is free among them. Labels verbatim from MILESTONE_STATUS_META in

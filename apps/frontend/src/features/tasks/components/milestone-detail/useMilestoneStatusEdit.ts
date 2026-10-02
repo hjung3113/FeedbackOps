@@ -72,3 +72,5 @@ export function useMilestoneStatusEdit({
 
   return { statusError, statusMutation, handleStatusChange };
 }
+
+export type UseMilestoneStatusEditResult = ReturnType<typeof useMilestoneStatusEdit>;

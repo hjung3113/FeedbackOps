@@ -2,7 +2,7 @@ import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { GENERIC_ERROR_MESSAGE, mapUnknownError } from '@/lib/api/errorMapper';
 import { listMilestones } from '@/lib/api/milestones';
-import { ApiError } from '@/lib/api/types';
+import { isPermissionDenied } from '@/lib/api/types';
 import { zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
@@ -224,11 +224,7 @@ export function useTaskRequestConversion({
   // distinguishable from an empty list, and a selection made from the
   // retained cache cannot be submitted.
   const milestonesError = milestonesQuery.error;
-  const milestonePickerDenied =
-    milestonesError instanceof ApiError &&
-    milestonesError.status === 403 &&
-    (milestonesError.code === 'permission.denied' ||
-      milestonesError.code === 'permission.scope_required');
+  const milestonePickerDenied = isPermissionDenied(milestonesError);
   const milestonePickerError =
     milestonesError === null
       ? null

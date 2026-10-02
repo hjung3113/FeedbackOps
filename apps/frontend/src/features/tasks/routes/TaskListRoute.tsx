@@ -1,18 +1,15 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
-import type { TaskDto } from '@fops/shared';
 import {
   InternalTaskBadge,
   ListShell,
   ObjectRow,
-  type ObjectRowSeverity,
   OutlineBadge,
   PermissionBlockedPanel,
   UnassignedBadge,
@@ -20,14 +17,12 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
+import {
+  resolveTaskAssignee,
+  taskPriorityToSeverity,
+  useTaskManagedSystemNames,
+} from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
-
-const PRIORITY_SEVERITY: Record<TaskDto['priority'], ObjectRowSeverity> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  urgent: 'critical',
-};
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
@@ -55,19 +50,11 @@ export function TaskListRoute({
     staleTime: 30 * 1000,
   });
   const { actors } = useWorkspaceActors();
-  const managedSystemsQuery = useQuery({
-    queryKey: ['managed-systems', 'all'] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
-    staleTime: 10 * 60 * 1000,
-  });
+  const managedSystemNamesById = useTaskManagedSystemNames();
   const items = tasksQuery.data?.items ?? [];
   const actorNamesById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
     [actors],
-  );
-  const managedSystemNamesById = React.useMemo(
-    () => new Map((managedSystemsQuery.data?.items ?? []).map((ms) => [ms.id, ms.name])),
-    [managedSystemsQuery.data?.items],
   );
 
   React.useEffect(() => {
@@ -122,37 +109,45 @@ export function TaskListRoute({
       }}
       list={
         <>
-          {items.map((task) => (
-            <ObjectRow
-              key={task.id}
-              id={task.display_id}
-              title={task.title}
-              selected={selected?.id === task.id}
-              density="default"
-              severity={PRIORITY_SEVERITY[task.priority]}
-              onClick={() => selectTask(task.id)}
-              badges={<InternalTaskBadge status={task.status} />}
-              meta={
-                <>
-                  <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
-                  {dot()}
-                  <span>
-                    {task.assignee_actor_id ? (
-                      (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
-                    ) : (
-                      <UnassignedBadge />
-                    )}
-                  </span>
-                  {dot()}
-                  <span>
-                    {managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
-                  </span>
-                  {dot()}
-                  <span>{formatShortDateTime(task.updated_at)}</span>
-                </>
-              }
-            />
-          ))}
+          {items.map((task) => {
+            const assignee = resolveTaskAssignee(task.assignee_actor_id, actorNamesById);
+            return (
+              <ObjectRow
+                key={task.id}
+                id={task.display_id}
+                title={task.title}
+                selected={selected?.id === task.id}
+                density="default"
+                severity={taskPriorityToSeverity(task.priority)}
+                onClick={() => selectTask(task.id)}
+                badges={<InternalTaskBadge status={task.status} />}
+                meta={
+                  <>
+                    <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
+                    {dot()}
+                    <span>
+                      {task.assignee_actor_id ? (
+                        assignee.kind === 'resolved' ? (
+                          assignee.displayName
+                        ) : (
+                          GLOSSARY.unknownUser
+                        )
+                      ) : (
+                        <UnassignedBadge />
+                      )}
+                    </span>
+                    {dot()}
+                    <span>
+                      {managedSystemNamesById.get(task.primary_managed_system_id) ??
+                        'Managed System'}
+                    </span>
+                    {dot()}
+                    <span>{formatShortDateTime(task.updated_at)}</span>
+                  </>
+                }
+              />
+            );
+          })}
           {items.length === 0 &&
             (view === 'my' ? (
               <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />

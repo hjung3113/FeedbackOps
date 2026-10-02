@@ -1,35 +1,37 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { mapUnknownError } from '@/lib/api/errorMapper';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
-import { ApiError, isPermissionDenied } from '@/lib/api/types';
+import { listTasks } from '@/lib/api/tasks';
+import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import { DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { type TaskDto, type TaskStatus, taskPrioritySchema } from '@fops/shared';
 import {
-  Button,
-  InternalTaskBadge,
   ListFilterButton,
   OutlineBadge,
   PermissionBlockedPanel,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  RadioGroup,
-  RadioGroupItem,
-  SeverityBadge,
-  UnassignedBadge,
-  UserAvatar,
   WorkbenchShell,
 } from '@fops/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Layers } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
+import { useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { TaskBoardColumn } from '../components/task-board/TaskBoardColumn';
+import {
+  type TaskBoardGroupBy,
+  TaskBoardGroupByButton,
+} from '../components/task-board/TaskBoardGroupByButton';
+import { useTaskStatusTransition } from '../hooks/useTaskStatusTransition';
 
 const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string }> = [
   { key: 'backlog', label: 'Backlog' }, { key: 'todo', label: 'Todo' },
@@ -37,122 +39,26 @@ const STATUS_COLUMNS: Array<{ key: TaskStatus; label: string }> = [
   { key: 'done', label: 'Done' }, { key: 'released', label: 'Released' },
   { key: 'reopened', label: 'Reopened' },
 ];
-const GROUP_OPTIONS = [
-  { value: 'status', label: '상태 (기본)' }, { value: 'priority', label: '우선순위' },
-  { value: 'managedSystem', label: 'Managed System' }, { value: 'assignee', label: '담당자' },
-];
-type GroupBy = (typeof GROUP_OPTIONS)[number]['value'];
 type Filters = Record<string, string[]>;
-
-function severity(priority: TaskDto['priority']): 'low' | 'medium' | 'high' | 'critical' {
-  return priority === 'urgent' ? 'critical' : priority;
-}
-function groupValue(task: TaskDto, groupBy: GroupBy): string {
+function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
   if (groupBy === 'managedSystem') return task.primary_managed_system_id;
   if (groupBy === 'assignee') return task.assignee_actor_id ?? '__unassigned';
   return task.status;
 }
-function uuid(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-}
-
-function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assigneeName, enabled }: {
-  task: TaskDto; selected: boolean; onSelect: () => void; managedSystemName: string; assigneeName?: string | undefined; enabled: boolean;
-}) {
-  const draggable = useDraggable({ id: task.id, data: { task }, disabled: !enabled });
-  return (
-    <button
-      ref={draggable.setNodeRef}
-      type="button"
-      {...draggable.listeners}
-      {...draggable.attributes}
-      onClick={onSelect}
-      aria-label={`${task.display_id}: ${task.title}`}
-      className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
-    >
-      <div className="flex items-center gap-1.5"><span className="font-mono text-xs text-text-muted">{task.display_id}</span><SeverityBadge severity={severity(task.priority)} label={TASK_PRIORITY_LABELS[task.priority]} /></div>
-      {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}
-      <div className="mt-2 text-sm font-medium text-text-primary">{task.title}</div>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <UnassignedBadge />}</div>
-      {!enabled && <span className="sr-only">상태 그룹화일 때만 드래그로 상태가 변경됩니다.</span>}
-    </button>
-  );
-}
-
-function BoardColumn({ id, label, tasks, groupBy, selectedId, selectTask, names, enabled }: {
-  id: string; label: string; tasks: TaskDto[]; groupBy: GroupBy; selectedId: string | null; selectTask: (id: string) => void;
-  names: { systems: ReadonlyMap<string, string>; actors: ReadonlyMap<string, string> }; enabled: boolean;
-}) {
-  const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
-  return <section ref={droppable.setNodeRef} className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`} aria-label={`${label} 열`}>
-    <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-      {groupBy === 'status' ? (
-        <InternalTaskBadge status={id as TaskStatus} />
-      ) : (
-        <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-          {label}
-        </span>
-      )}
-      <span className="text-xs tabular-nums text-text-muted">{tasks.length}</span>
-    </header>
-    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
-      {tasks.map((task) => <DraggableTaskCard key={task.id} task={task} selected={task.id === selectedId} onSelect={() => selectTask(task.id)} enabled={enabled} managedSystemName={names.systems.get(task.primary_managed_system_id) ?? 'Managed System'} assigneeName={task.assignee_actor_id ? names.actors.get(task.assignee_actor_id) : undefined} />)}
-      {tasks.length === 0 && <div className="p-3 text-center text-xs text-text-muted">비어있음</div>}
-    </div>
-  </section>;
-}
-
-function GroupByButton({ value, onChange }: { value: GroupBy; onChange: (value: GroupBy) => void }) {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" aria-expanded={open}>
-          <Layers className="h-4 w-4" />
-          그룹화
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" aria-label="그룹화 옵션" className="w-52 p-1">
-        <RadioGroup
-          value={value}
-          aria-label="그룹화"
-          className="gap-1"
-          onValueChange={(next) => {
-            onChange(next as GroupBy);
-            setOpen(false);
-          }}
-        >
-          {GROUP_OPTIONS.map((option) => (
-            <label
-              key={option.value}
-              htmlFor={`group-by-${option.value}`}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-text-primary hover:bg-surface-card"
-            >
-              <RadioGroupItem id={`group-by-${option.value}`} value={option.value} />
-              {option.label}
-            </label>
-          ))}
-        </RadioGroup>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
   const navigate = useNavigate();
-  const client = useQueryClient();
-  const [groupBy, setGroupBy] = React.useState<GroupBy>('status');
+  const [groupBy, setGroupBy] = React.useState<TaskBoardGroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
-  const mutationTokens = React.useRef(new Map<string, number>());
   const tasksKey = publicUpdate === 'missing' ? (['tasks', managedSystem, 'public_update:missing'] as const) : (['tasks', managedSystem] as const);
+  const mutation = useTaskStatusTransition(tasksKey);
   const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
-  const systemsQuery = useQuery({ queryKey: ['managed-systems', 'all'] as const, queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }), staleTime: 600_000 });
+  const systemNames = useTaskManagedSystemNames();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
-  const systemNames = React.useMemo(() => new Map((systemsQuery.data?.items ?? []).map((s) => [s.id, s.name])), [systemsQuery.data?.items]);
   const items = tasksQuery.data?.items ?? [];
   React.useEffect(() => { if (selectedParam !== undefined) setSelectedId(selectedParam); }, [selectedParam]);
   const filtered = React.useMemo(() => items.filter((task) => {
@@ -199,40 +105,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       },
     ];
   }, [actorNames, items]);
-  const mutation = useMutation({
-    mutationKey: ['task-status-transition'],
-    mutationFn: ({ task, status }: { task: TaskDto; status: TaskStatus }) => updateTaskStatus(task.id, status, { ifMatch: task.updated_at, idempotencyKey: uuid() }),
-    onMutate: async ({ task, status }) => {
-      const token = (mutationTokens.current.get(task.id) ?? 0) + 1;
-      mutationTokens.current.set(task.id, token);
-      await client.cancelQueries({ queryKey: ['tasks'] });
-      const previousStatus = client.getQueryData<{ items: TaskDto[] }>(tasksKey)?.items.find((item) => item.id === task.id)?.status ?? task.status;
-      client.setQueryData<{ items: TaskDto[] }>(tasksKey, (old) => old ? { ...old, items: old.items.map((item) => item.id === task.id ? { ...item, status } : item) } : old);
-      return { taskId: task.id, previousStatus, token };
-    },
-    onError: (error, _variables, context) => {
-      if (context && mutationTokens.current.get(context.taskId) === context.token) {
-        client.setQueryData<{ items: TaskDto[] }>(tasksKey, (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old);
-      }
-      if (
-        error instanceof ApiError &&
-        error.code === 'conflict.stale_write' &&
-        context &&
-        mutationTokens.current.get(context.taskId) === context.token
-      ) {
-        void client.invalidateQueries({ queryKey: ['tasks'] });
-        toast.error(mapUnknownError(error).message);
-        return;
-      }
-      toast.error(mapUnknownError(error).message);
-    },
-    onSettled: (_data, _error, _variables, context) => {
-      if (!context || mutationTokens.current.get(context.taskId) === context.token) {
-        void client.invalidateQueries({ queryKey: ['tasks'] });
-        if (context) void client.invalidateQueries({ queryKey: ['task', context.taskId] });
-      }
-    },
-  });
   function boardSearch(param?: string): { view: 'board'; param?: string; public_update?: 'missing' } {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
@@ -282,7 +154,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
               </Link>
             </span>
             <ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} />
-            <GroupByButton value={groupBy} onChange={setGroupBy} />
+            <TaskBoardGroupByButton value={groupBy} onChange={setGroupBy} />
           </>
         ),
       }}
@@ -360,7 +232,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
               <DndContext sensors={sensors} onDragEnd={onDragEnd}>
                 <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
                   {columns.map((column) => (
-                    <BoardColumn
+                    <TaskBoardColumn
                       key={column.key}
                       id={column.key}
                       label={column.label}

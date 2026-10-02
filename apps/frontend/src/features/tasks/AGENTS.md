@@ -33,15 +33,29 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - `apps/frontend/src/routes/_authed/tasks.tsx` — selects the Task view from URL state.
 - `apps/frontend/src/features/tasks/routes/TaskListRoute.tsx` — backlog list, filters, and selected detail.
 - `apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx` — Task board columns and grouping state.
+- `apps/frontend/src/features/tasks/components/task-board/` — Task board cards, columns, and grouping
+  control; the route retains URL state and DnD sensors.
+- `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — scoped optimistic Task status
+  writes, rollback, and stale-write handling.
+- `apps/frontend/src/features/tasks/adapters/taskDisplayAdapters.ts` — shared Managed System name
+  lookup, assignment resolution, and priority-to-severity projection.
 - `apps/frontend/src/features/tasks/routes/TaskRequestsRoute.tsx` — Task Request queue and selected detail.
 - `apps/frontend/src/features/tasks/routes/MilestonesRoute.tsx` — Milestone status tabs and list-state branches.
-- `apps/frontend/src/features/tasks/routes/task-requests/TaskRequestPanel.tsx` — Task Request detail and conversion actions.
+- `apps/frontend/src/features/tasks/routes/task-requests/TaskRequestPanel.tsx` — Task Request panel
+  composition, exactly-once decision callback, and dialog lifetime.
+- `apps/frontend/src/features/tasks/routes/task-requests/useTaskRequestPanelController.ts` — source Area
+  defaults and canonical outcome reconciliation; section components render the view.
 - `apps/frontend/src/features/tasks/components/TaskDetailPanel.tsx` — Task detail and status actions.
 - `apps/frontend/src/features/tasks/components/MilestoneRow.tsx` — Milestone list row.
 - `apps/frontend/src/features/tasks/components/MilestoneDetailPanel.tsx` —
   compatibility exports for the Milestone panels.
 - `apps/frontend/src/features/tasks/components/milestone-detail/` — Milestone
   panels, detail content, task row, and title/status edit hooks.
+- `apps/frontend/src/features/tasks/components/milestone-detail/useMilestoneChildTasks.ts` — one
+  error-suppressed child Task projection shared by section rows and navigation count.
+- `apps/frontend/src/features/tasks/components/milestone-detail/MilestoneTitlePresenter.tsx` and
+  `MilestonePropertiesPresenter.tsx` — render the title/property surfaces around the parent's
+  coordinated edit hooks.
 - `apps/frontend/src/features/tasks/components/MilestoneStatusBadge.tsx` — Milestone status labels and badge styles.
 - `packages/ui/src/badges/InternalTaskBadge.tsx` — shared internal Task status labels and badge styles.
 - `apps/frontend/src/lib/copy/permission-reasons.ts` — shared blocked copy for Task and Milestone views.
