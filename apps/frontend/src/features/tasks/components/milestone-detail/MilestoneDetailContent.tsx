@@ -1,5 +1,6 @@
 import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatDate, formatDateOnly } from '@/lib/format/datetime';
 import type { MilestoneDetailDto } from '@fops/shared';
@@ -149,9 +150,9 @@ export function MilestoneDetailContent({
               onSubmit={(event) => submitTitleEdit(event, statusMutation.isPending)}
             >
               <div className="flex flex-col gap-1 text-xs text-text-muted">
-                <span>Title</span>
+                <span>제목</span>
                 <Input
-                  aria-label="Title"
+                  aria-label="제목"
                   disabled={titleMutation.isPending}
                   value={titleDraft}
                   onChange={(event) => {
@@ -167,10 +168,10 @@ export function MilestoneDetailContent({
                   size="sm"
                   disabled={titleMutation.isPending || statusMutation.isPending}
                 >
-                  Save
+                  {GLOSSARY.save}
                 </Button>
                 <Button type="button" variant="subtle" size="sm" onClick={cancelTitleEdit}>
-                  Cancel
+                  {GLOSSARY.cancel}
                 </Button>
                 {titleError !== null && (
                   <span className="text-sm text-accent-danger">{titleError}</span>
@@ -192,7 +193,7 @@ export function MilestoneDetailContent({
                 onClick={() => startTitleEdit(statusMutation.isPending)}
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
-                Edit title
+                {GLOSSARY.editTitle}
               </Button>
             </div>
           )}
@@ -204,7 +205,7 @@ export function MilestoneDetailContent({
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-medium text-text-primary">
-                {milestone.progress.released_done} of {milestone.progress.total} tasks released
+                Task {milestone.progress.total}개 중 {milestone.progress.released_done}개 Released
               </span>
               <span className="text-sm font-semibold tabular-nums text-text-secondary">
                 {milestone.progress.percent}%
@@ -222,21 +223,21 @@ export function MilestoneDetailContent({
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.released_done}
                 </span>{' '}
-                released/done
+                Released/Done
               </span>
               <span aria-hidden="true">·</span>
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.in_flight}
                 </span>{' '}
-                in flight
+                진행 중
               </span>
               <span aria-hidden="true">·</span>
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">
                   {milestone.progress.queued}
                 </span>{' '}
-                queued
+                대기 중
               </span>
             </div>
           </div>
@@ -247,7 +248,9 @@ export function MilestoneDetailContent({
               border (shown in the reference baseline); only the type scale is
               corrected to the prototype 13px/1.6 (finding P3-1). */}
           <div className="mb-8">
-            <MilestonePanelSectionTitle>Why this milestone exists</MilestonePanelSectionTitle>
+            <MilestonePanelSectionTitle>
+              {GLOSSARY.whyThisMilestoneExists}
+            </MilestonePanelSectionTitle>
             <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
@@ -263,7 +266,7 @@ export function MilestoneDetailContent({
             <MilestonePanelSectionTitle>속성</MilestonePanelSectionTitle>
             {/* The scroll container owns horizontal padding. These local rows
                 use the prototype's 120px value column and left alignment. */}
-            <FieldRow label="Status" className={milestonePropertyFieldClassName}>
+            <FieldRow label="상태" className={milestonePropertyFieldClassName}>
               {/* B2e-status (ADR-0050): the closed set is accepted, so the
                   control offers exactly these four values; PATCH is free
                   among them. The title-block badge above stays read-only. */}
@@ -274,7 +277,7 @@ export function MilestoneDetailContent({
                   onValueChange={(value) => handleStatusChange(value, titleMutation.isPending)}
                 >
                   <SelectTrigger
-                    aria-label="Status"
+                    aria-label="상태"
                     value={milestone.status}
                     className={`${selectClassName} h-8 px-2 py-1`}
                   >
@@ -309,24 +312,24 @@ export function MilestoneDetailContent({
                 keeps avatar + display name at the prototype 18px/9px avatar
                 geometry; an actor missing from the directory keeps the
                 explicit — fallback (missing-actor handling preserved). */}
-            <FieldRow label="Owner" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.owner} className={milestonePropertyFieldClassName}>
               {ownerName !== undefined ? (
                 <MilestoneOwnerChip name={ownerName} />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Start" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.start} className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">
                 {formatDateOnly(milestone.start_date)}
               </span>
             </FieldRow>
-            <FieldRow label="Target" className={milestonePropertyFieldClassName}>
+            <FieldRow label={GLOSSARY.target} className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">
                 {formatDateOnly(milestone.target_date)}
               </span>
             </FieldRow>
-            <FieldRow label="Created" className={milestonePropertyFieldClassName}>
+            <FieldRow label="생성일" className={milestonePropertyFieldClassName}>
               {formatDate(milestone.created_at)}
             </FieldRow>
           </div>
@@ -347,12 +350,14 @@ export function MilestoneDetailContent({
               // with domain-safe copy.
               <PermissionBlockedPanel
                 state="denied"
-                category="Task list"
+                category="Task 목록"
                 reason={PERMISSION_BLOCKED_REASONS.milestoneTasks}
               />
             ) : (
               // Same terminal copy as the Tasks list route (TaskListRoute).
-              <div className="py-3 text-center text-xs text-text-muted">Task list unavailable.</div>
+              <div className="py-3 text-center text-xs text-text-muted">
+                Task 목록을 표시할 수 없습니다.
+              </div>
             )
           ) : childTasks !== undefined && childTasks.length === 0 ? (
             <div className="py-3 text-center text-xs text-text-muted">
@@ -366,11 +371,11 @@ export function MilestoneDetailContent({
                   task={task}
                   // B2d fixup F2 — a non-null assignee id missing from the
                   // directory (lookup pending or failed) keeps the explicit
-                  // '담당자 지정됨' fallback from the Task list/detail; the avatar
+                  // glossary unknown-user fallback from the Task list/detail; the avatar
                   // slot renders it until the name resolves.
                   assigneeName={
                     task.assignee_actor_id !== null
-                      ? (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                      ? (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
                       : undefined
                   }
                 />
@@ -384,7 +389,7 @@ export function MilestoneDetailContent({
           {/* No evidence read path in these slices (manual linking is §7 item 14);
               empty copy only — no Outcome survey controls (FOP-OUT-014). */}
           <div className="py-3 text-center text-xs text-text-muted">
-            연결된 evidence highlight 가 없습니다.
+            연결된 {GLOSSARY.evidenceHighlight}가 없습니다.
           </div>
         </div>
 

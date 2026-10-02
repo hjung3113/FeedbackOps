@@ -258,7 +258,10 @@ describe('/surveys/:surveyId/follow-up route', () => {
     expect(await screen.findByTestId('follow-up-row-4')).toBeInTheDocument();
     expect(screen.queryByTestId('follow-up-row-9')).not.toBeInTheDocument();
     expect(screen.queryByTestId('follow-up-row-12')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '미해소 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('button', { name: '해소됨 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '후속 없음 1' })).toBeInTheDocument();
     expect(screen.getByText('만족도 2 / 5 (하위 구간)')).toBeInTheDocument();
@@ -292,7 +295,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
     expect(
       screen.getByText('개인 응답 열람 권한이 있어야 응답별로 검토할 수 있습니다.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Results로 돌아가기' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '결과로 돌아가기' })).toHaveAttribute(
       'href',
       `/surveys/${surveyId}/results`,
     );
@@ -369,9 +372,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
 
     expect(await screen.findByText('후속 검토를 사용할 수 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        '후속 검토는 마감된 Outcome 설문 중 충분한 응답이 모인 경우에만 제공됩니다.',
-      ),
+      screen.getByText('후속 검토는 마감된 성과 Survey 중 충분한 응답이 모인 경우에만 제공됩니다.'),
     ).toBeInTheDocument();
   });
 
@@ -583,9 +584,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
 
     const createFinding = await screen.findByRole('button', { name: 'Finding 생성' });
     expect(createFinding).toBeDisabled();
-    expect(
-      screen.getByText('No approved excerpts are available for a response you can access.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.')).toBeInTheDocument();
   });
 
   it('reopens a no-follow-up response with a required reason', async () => {

@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TriagePanelLocalState } from '../../../hooks/useTriagePanelState';
@@ -22,7 +23,7 @@ describe('TriageSummaryCard', () => {
     expect(screen.getByText('변경 없음 — 현재 값 그대로 확정됩니다.')).toBeInTheDocument();
     expect(screen.queryByTestId(/^summary-diff-row-/)).not.toBeInTheDocument();
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('접수됨');
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
@@ -39,13 +40,13 @@ describe('TriageSummaryCard', () => {
       />,
     );
     const row = screen.getByTestId('summary-diff-row-Severity');
-    expect(row).toHaveTextContent('medium');
-    expect(row).toHaveTextContent('critical');
-    expect(row.querySelector('.line-through')).toHaveTextContent('medium');
-    expect(row.querySelector('.text-text-primary')).toHaveTextContent('critical');
+    expect(row).toHaveTextContent('중간');
+    expect(row).toHaveTextContent('심각');
+    expect(row.querySelector('.line-through')).toHaveTextContent('중간');
+    expect(row.querySelector('.text-text-primary')).toHaveTextContent('심각');
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('검토 중');
   });
@@ -67,10 +68,19 @@ describe('TriageSummaryCard', () => {
     expect(row.querySelector('.line-through')).toHaveTextContent('미지정');
     expect(row.querySelector('.text-text-primary')).toHaveTextContent('김철수');
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent(
-      '확정 시 Reporter status:',
+      '확정 시 공개 상태:',
     );
     expect(screen.getByTestId('reporter-status-transition')).toHaveTextContent('담당자 배정됨');
     expect(screen.queryByText('Cluster')).not.toBeInTheDocument();
+  });
+
+  it('uses the glossary unknown-user label when the owner actor cannot be resolved', () => {
+    const panelState = { ...BASE_STATE, ownerUserId: 'unresolved-actor' };
+    render(
+      <TriageSummaryCard panelState={panelState} baseline={BASE_STATE} actorMap={new Map()} />,
+    );
+
+    expect(screen.getByTestId('summary-diff-row-Owner')).toHaveTextContent(GLOSSARY.unknownUser);
   });
 
   it('uses the neutral Owner team label without leaking an unresolved team id', () => {
@@ -78,7 +88,7 @@ describe('TriageSummaryCard', () => {
     const panelState = { ...BASE_STATE, ownerTeamId: null };
     const { container } = render(<TriageSummaryCard panelState={panelState} baseline={baseline} />);
     const row = screen.getByTestId('summary-diff-row-Owner');
-    expect(within(row).getByText('Owner team')).toBeInTheDocument();
+    expect(within(row).getByText('알 수 없는 팀')).toBeInTheDocument();
     expect(row).toHaveTextContent('미지정');
     expect(container).not.toHaveTextContent('00000000');
   });

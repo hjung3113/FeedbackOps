@@ -25,7 +25,7 @@ export function DescriptionSection({
 
   return (
     <div className="mt-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3.5">BODY</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3.5">본문</p>
       <div
         data-testid="description-body-card"
         className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"

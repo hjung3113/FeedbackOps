@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe('PublicUpdateReviewModal shared pickers', () => {
-  it('submits the selected candidate and reporter status with the same public update body', async () => {
+  it('submits the selected candidate and reporter status with the same 공개 업데이트 body', async () => {
     render(
       <PublicUpdateReviewModal
         voc={{ id: 'voc-1' } as VocDetailEnvelope}
@@ -46,12 +46,12 @@ describe('PublicUpdateReviewModal shared pickers', () => {
 
     fireEvent.click(screen.getByRole('combobox', { name: '후보' }));
     fireEvent.click(await screen.findByRole('option', { name: /Released Task 후보/ }));
-    fireEvent.click(screen.getByRole('combobox', { name: 'Reporter-facing status' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '공개 상태' }));
     fireEvent.click(await screen.findByRole('option', { name: '해결됨' }));
     fireEvent.change(screen.getByRole('textbox', { name: '공개 업데이트' }), {
       target: { value: '작업 완료 내용을 공유합니다.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Apply public update' }));
+    fireEvent.click(screen.getByRole('button', { name: '공개 업데이트 적용' }));
 
     expect(reviewHooks.mutate.mock.calls[0]?.[0]).toEqual({
       action: 'apply',

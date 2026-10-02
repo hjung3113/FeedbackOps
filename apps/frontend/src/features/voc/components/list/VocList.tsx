@@ -9,9 +9,9 @@
  * hooks inside .map() and keeps fetch count constant regardless of row count.
  *
  * BULK ACTIONS (#89): selection state + the bar UI are wired here. The
- * individual mutations (Assign / Set severity / Add to cluster / Create finding)
+ * individual mutations (담당자 지정 / 심각도 설정 / Cluster에 추가 / Finding 생성)
  * have no batch endpoint yet, so their buttons are present-but-disabled and the
- * action is deferred to a follow-up issue. "Clear" is fully wired.
+ * action is deferred to a follow-up issue. "선택 해제" is fully wired.
  */
 
 import { ListStateMessage } from '@/components/ListStateMessage';
@@ -264,11 +264,11 @@ function ReporterMyVocRow(props: ReporterMyVocRowProps): React.ReactElement {
 }
 
 // ---------------------------------------------------------------------------
-// BulkActionBar — appears when ≥1 row is checked. Mirrors prototype copy:
-// "N selected · Assign / Set severity / Add to cluster / Create finding · Clear".
+// BulkActionBar — appears when ≥1 row is checked. Korean adaptation of the
+// prototype copy: "N selected · Assign / Set severity / Add to cluster / Create finding · Clear".
 //
 // DEFERRED (#89): the four mutating actions have no batch endpoint yet, so they
-// are disabled with a tooltip-able title. "Clear" is wired.
+// are disabled with a tooltip-able title. "선택 해제" is wired.
 // ---------------------------------------------------------------------------
 
 interface BulkActionBarProps {
@@ -286,27 +286,27 @@ function BulkActionBar({ count, onClear }: BulkActionBarProps) {
       aria-label="일괄 작업"
       className="flex items-center gap-2 border-b border-border-subtle bg-surface-raised px-4 py-2"
     >
-      <span className="text-sm text-text-primary">{count} selected</span>
+      <span className="text-sm text-text-primary">{count}개 선택됨</span>
       <span className="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
       <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
         <User className="h-3.5 w-3.5" aria-hidden="true" />
-        Assign
+        담당자 지정
       </Button>
       <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
         <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-        Set severity
+        심각도 설정
       </Button>
       <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
         <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-        Add to cluster
+        Cluster에 추가
       </Button>
       <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
         <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-        Create finding
+        Finding 생성
       </Button>
       <div className="flex-1" />
       <Button variant="subtle" size="sm" onClick={onClear} type="button">
-        Clear
+        선택 해제
       </Button>
     </div>
   );

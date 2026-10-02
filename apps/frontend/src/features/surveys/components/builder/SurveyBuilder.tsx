@@ -154,7 +154,7 @@ export function SurveyBuilder({
         <div className="border-b border-border-subtle bg-surface-detail px-4 py-3 text-sm text-text-muted">
           {survey.status !== 'draft'
             ? `${surveyStatusLabel(survey.status)} 상태 — 질문 변경은 잠겨 있습니다.`
-            : '설문 관리 권한이 없습니다.'}
+            : 'Survey 관리 권한이 없습니다.'}
         </div>
       )}
       {saveFailed && (

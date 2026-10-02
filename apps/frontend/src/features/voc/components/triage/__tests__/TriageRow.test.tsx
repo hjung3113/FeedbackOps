@@ -45,9 +45,9 @@ describe('TriageRow', () => {
     );
   });
 
-  it('shows "Area 미지정" when analytics_area_id is null', () => {
+  it('shows "Analytics Area 미지정" when analytics_area_id is null', () => {
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={vi.fn()} />);
-    expect(screen.getByText('Area 미지정')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area 미지정')).toBeInTheDocument();
   });
 
   it('uses danger tone only for missing owner while area and similar count stay neutral', () => {
@@ -57,7 +57,7 @@ describe('TriageRow', () => {
 
     const owner = screen.getByText('담당자 없음');
     expect(owner).toHaveClass('text-accent-danger', 'bg-accent-danger/10');
-    for (const text of ['Area 미지정', '같은 Managed System의 VOC 3건']) {
+    for (const text of ['Analytics Area 미지정', '같은 Managed System의 VOC 3건']) {
       const item = screen.getByText(text);
       expect(item).toHaveClass('text-text-muted');
       expect(item).not.toHaveClass('text-text-danger');
@@ -87,9 +87,9 @@ describe('TriageRow', () => {
     expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
-  it('does NOT show "Area 미지정" when analytics_area_id is set', () => {
+  it('does NOT show "Analytics Area 미지정" when analytics_area_id is set', () => {
     const vocWithArea = { ...BASE_VOC, analytics_area_id: 'aa-1' };
     render(<TriageRow voc={vocWithArea} selected={false} onSelect={vi.fn()} />);
-    expect(screen.queryByText('Area 미지정')).not.toBeInTheDocument();
+    expect(screen.queryByText('Analytics Area 미지정')).not.toBeInTheDocument();
   });
 });

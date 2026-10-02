@@ -166,7 +166,7 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await user.click(screen.getByRole('button', { name: '내부 코멘트 추가' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
@@ -200,7 +200,7 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
-    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await user.click(screen.getByRole('button', { name: '내부 코멘트 추가' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {
@@ -219,7 +219,7 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
     expect(screen.queryByTestId('attachment-row')).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId('rich-editor-internal-comment'));
-    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await user.click(screen.getByRole('button', { name: '내부 코멘트 추가' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
 
     const secondCall = mutateMock.mock.calls[1];
@@ -251,7 +251,7 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('error');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await user.click(screen.getByRole('button', { name: '내부 코멘트 추가' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
@@ -282,14 +282,14 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add note' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '내부 코멘트 추가' })).toBeDisabled();
     });
 
     await act(async () => {
       resolveUpload(ATTACHMENT);
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add note' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: '내부 코멘트 추가' })).not.toBeDisabled();
     });
   });
 });

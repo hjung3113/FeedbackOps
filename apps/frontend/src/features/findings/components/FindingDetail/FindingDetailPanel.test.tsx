@@ -9,6 +9,9 @@ import { FindingDetailPanel } from './FindingDetailPanel';
 import { FullFindingDetail } from './FullFindingDetail';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
+const workspaceActors = vi.hoisted(() => ({
+  actors: [] as Array<{ id: string; display_name: string }>,
+}));
 const findingSourceType = vi.hoisted(() => ({
   value: 'manual' as 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual',
 }));
@@ -82,9 +85,7 @@ vi.mock('@/lib/cross-system/useVocDetail', () => ({
 }));
 
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
-  useWorkspaceActors: () => ({
-    actors: [{ id: '40000000-0000-0000-0000-000000000004', display_name: '분석가' }],
-  }),
+  useWorkspaceActors: () => ({ actors: workspaceActors.actors }),
 }));
 
 vi.mock('@/lib/api/analytics-areas', () => ({
@@ -145,6 +146,9 @@ const mediumFinding: FindingDto = {
 describe('FindingDetailPanel', () => {
   beforeEach(() => {
     findingSourceType.value = 'manual';
+    workspaceActors.actors = [
+      { id: '40000000-0000-0000-0000-000000000004', display_name: '분석가' },
+    ];
     globalThis.fetch = vi.fn(
       async () =>
         new Response(JSON.stringify({ items: [] }), {
@@ -166,12 +170,21 @@ describe('FindingDetailPanel', () => {
     expect(panel.querySelector('[data-token="--severity-medium"]')).toHaveTextContent('중간');
   });
 
+  // #679 FIX2: an unresolvable creator is unknown, not absent — the fallback must
+  // not imply the Finding has no creator.
+  it('falls back to 알 수 없는 사용자 when the creator is missing from actorsById', () => {
+    workspaceActors.actors = [];
+    renderWithClient(<FullFindingDetail finding={mediumFinding} />);
+
+    expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
+  });
+
   it.each([
     ['voc', 'VOC'],
     ['voc_cluster', 'VOC Cluster'],
     ['survey', 'Survey'],
-    ['survey_response', 'Survey Response'],
-    ['manual', 'Manual'],
+    ['survey_response', 'Survey 응답'],
+    ['manual', '수동'],
   ] as const)('renders source type %s as %s without raw enum values', (sourceType, label) => {
     findingSourceType.value = sourceType;
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);

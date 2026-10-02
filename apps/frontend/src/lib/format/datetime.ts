@@ -30,6 +30,8 @@ export function formatRelativeTime(iso: string): string {
 
   const diffMs = date.getTime() - Date.now();
   const diffMin = Math.round(diffMs / 60000);
+  // #679: Intl renders the 0-minute case as '현재 분'; chrome copy is '방금'.
+  if (diffMin === 0) return '방금';
   const relativeTime = new Intl.RelativeTimeFormat('ko-KR', { numeric: 'auto' });
   if (Math.abs(diffMin) < 60) return relativeTime.format(diffMin, 'minute');
 

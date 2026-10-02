@@ -56,7 +56,7 @@ export function LinkExistingFindingModal({
       {
         onSuccess: () => {
           markConsumed();
-          toast.success('Finding이 클러스터에 연결되었습니다.');
+          toast.success('Finding이 Cluster에 연결되었습니다.');
           closeAndReset();
         },
         onError: (err: ApiError) => {

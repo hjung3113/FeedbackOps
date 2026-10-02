@@ -1,3 +1,5 @@
+import { DASHBOARD_QUEUE_ACTION_LABELS, dashboardActionLabel } from '@/lib/copy/dashboard-actions';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
@@ -8,30 +10,30 @@ type QueueId = DashboardQueue['id'];
 
 const QUEUE_COPY: Record<QueueId, { title: string; detail: (count: number) => string }> = {
   'unassigned-voc': {
-    title: 'Unassigned VOC',
+    title: '미배정 VOC',
     detail: (count) =>
       `담당자가 지정되지 않은 VOC가 ${count}건 누적되어 있습니다. 우선 분류와 담당 배정이 필요합니다.`,
   },
   'high-severity-unlinked': {
-    title: 'High Severity VOC unlinked',
-    detail: () => 'High/Critical severity인 VOC 중 Finding 연결이 없는 항목.',
+    title: GLOSSARY.highNoLink,
+    detail: () => '높음·심각 심각도인 VOC 중 Finding 연결이 없는 항목.',
   },
   'actionable-finding-no-execution': {
-    title: 'Actionable Finding without execution',
-    detail: () => 'Active 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
+    title: '실행 계획 없는 Finding',
+    detail: () => '진행 중 상태의 Finding 중 Task Request 또는 Task 링크가 없는 항목입니다.',
   },
   'released-task-unresolved-voc': {
-    title: 'Released Task with unresolved VOC',
+    title: 'Released Task · 미해결 VOC',
     detail: () =>
-      'Task는 Released지만 연결된 Reporter-facing VOC Status가 해결됨이 아닙니다. 공개 업데이트 검토가 필요합니다.',
+      'Task는 Released지만 연결된 공개 상태가 해결됨이 아닙니다. 공개 업데이트 검토가 필요합니다.',
   },
   'bad-outcome-no-followup': {
-    title: 'Bad Outcome Survey without follow-up',
-    detail: () => 'Negative outcome survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
+    title: '후속 조치 없는 부정 성과 Survey',
+    detail: () => '부정 성과 Survey 결과에 대한 후속 Finding/Task가 구성되어 있지 않습니다.',
   },
   'permission-requests-pending': {
-    title: 'Permission requests awaiting review',
-    detail: () => 'Workspace Admin 검토를 기다리는 elevated/scope 권한 요청.',
+    title: '검토 대기 중인 권한 요청',
+    detail: () => '워크스페이스 관리자 검토를 기다리는 상위 권한 요청.',
   },
 };
 
@@ -40,17 +42,17 @@ const QUEUE_SEVERITY_TONE: Record<
   { label: string; count: string; badge: string }
 > = {
   urgent: {
-    label: 'Recovery',
+    label: '복구',
     count: 'text-accent-danger',
     badge: 'bg-accent-danger/10 text-accent-danger',
   },
   warn: {
-    label: 'Follow-up',
+    label: '후속 조치',
     count: 'text-accent-warn',
     badge: 'bg-accent-warn/10 text-accent-warn',
   },
   info: {
-    label: 'Review',
+    label: '검토',
     count: 'text-text-primary',
     badge: 'bg-accent-info/10 text-accent-info',
   },
@@ -102,7 +104,7 @@ export function IntegrationDashboardQueueCard({
             data-testid={`integration-queue-secondary-${queue.id}`}
             href={queue.secondary_action.route}
           >
-            {queue.secondary_action.label}
+            {dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label)}
           </a>
         ) : (
           <span />
@@ -113,7 +115,8 @@ export function IntegrationDashboardQueueCard({
             data-testid={`integration-queue-primary-${queue.id}`}
             href={queue.next_action.route}
           >
-            {queue.next_action.label}
+            {DASHBOARD_QUEUE_ACTION_LABELS[queue.id] ??
+              dashboardActionLabel(queue.next_action.intent, queue.next_action.label)}
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
           </a>
         </Button>
@@ -168,7 +171,7 @@ export function IntegrationJumpCard({
       </span>
       <span className="text-xs leading-5 text-text-muted">{description}</span>
       <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-primary">
-        Open <ArrowRight className="h-3 w-3" aria-hidden="true" />
+        열기 <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
     </a>
   );

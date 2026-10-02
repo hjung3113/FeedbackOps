@@ -3,6 +3,7 @@ import { listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
@@ -85,13 +86,13 @@ export function TaskListRoute({
   }
 
   if (tasksQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
+    return <div className="p-4 text-sm text-text-muted">Task를 불러오는 중…</div>;
   }
   if (isPermissionDenied(tasksQuery.error)) {
     return (
       <PermissionBlockedPanel
         state="denied"
-        category="Task list"
+        category="Task 목록"
         reason={PERMISSION_BLOCKED_REASONS.taskList}
         className="m-4"
       />
@@ -114,7 +115,7 @@ export function TaskListRoute({
       toolbar={{
         title: (
           <span className="flex items-center gap-2">
-            {view === 'my' ? 'My Tasks' : 'Tasks'}
+            {view === 'my' ? '내 Task' : 'Tasks'}
             <OutlineBadge>{items.length}건</OutlineBadge>
           </span>
         ),
@@ -137,7 +138,7 @@ export function TaskListRoute({
                   {dot()}
                   <span>
                     {task.assignee_actor_id ? (
-                      (actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨')
+                      (actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser)
                     ) : (
                       <UnassignedBadge />
                     )}

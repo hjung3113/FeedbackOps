@@ -28,7 +28,7 @@ describe('formatRelativeTime', () => {
     { input: '2026-10-01T03:05:00.000Z', expected: '3시간 전' },
     { input: '2026-09-30T04:05:00.000Z', expected: '어제' },
     { input: '2026-09-29T06:05:00.000Z', expected: '그저께' },
-    { input: '2026-10-01T06:05:00.000Z', expected: '현재 분' },
+    { input: '2026-10-01T06:05:00.000Z', expected: '방금' },
     { input: 'invalid', expected: '—' },
   ])('formats $input as $expected', ({ input, expected }) => {
     expect(formatRelativeTime(input)).toBe(expected);

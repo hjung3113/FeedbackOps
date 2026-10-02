@@ -174,7 +174,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalledTimes(1);
@@ -220,7 +220,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('error');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
 
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
@@ -255,7 +255,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
 
     // Server accepted the publish and linked the attachment.
@@ -280,7 +280,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
 
     // Compose a second update and publish again.
     await user.click(screen.getByTestId('rich-editor-public-update'));
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
 
     const secondCall = mutateMock.mock.calls[1];
@@ -322,7 +322,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
     });
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
 
     // User attaches another file while the publish request is still in flight.
@@ -365,7 +365,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     });
 
     await user.click(screen.getByTestId('rich-editor-public-update'));
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
     const secondCall = mutateMock.mock.calls[1];
     if (!secondCall) throw new Error('expected a second public-update mutation call');
@@ -407,7 +407,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
       ).toEqual(['uploaded', 'error']);
     });
 
-    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await user.click(screen.getByRole('button', { name: '공개 업데이트 게시' }));
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {
@@ -449,14 +449,14 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Publish update' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '공개 업데이트 게시' })).toBeDisabled();
     });
 
     await act(async () => {
       resolveUpload(ATTACHMENT);
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Publish update' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: '공개 업데이트 게시' })).not.toBeDisabled();
     });
   });
 });

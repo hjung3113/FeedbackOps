@@ -1,6 +1,7 @@
 // TriageBlock — read-only triage fields; edits happen in the triage console (#363).
 
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { VocDetailEnvelope } from '@fops/shared';
 import {
   Button,
@@ -30,7 +31,7 @@ export function TriageBlock({
   return (
     <div className="mt-8">
       <div className="flex items-center justify-between">
-        <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
+        <PanelSectionTitle>Triage (읽기 전용)</PanelSectionTitle>
         {canTriage && (
           <Button
             variant="ghost"
@@ -38,7 +39,7 @@ export function TriageBlock({
             data-testid="triage-open-console"
             onClick={onOpenTriage}
           >
-            트리아지에서 변경
+            Triage에서 변경
           </Button>
         )}
       </div>
@@ -55,23 +56,23 @@ export function TriageBlock({
       {/* 담당자 */}
       <FieldRow label="담당자" className="px-0">
         {voc.owner_user_id !== null ? (
-          <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
+          <UserChip user={{ display_name: ownerDisplayName ?? GLOSSARY.owner }} size="sm" />
         ) : (
           <UnassignedBadge />
         )}
       </FieldRow>
 
-      {/* 분석 영역 */}
-      <FieldRow label="분석 영역" className="px-0">
+      {/* Analytics Area */}
+      <FieldRow label="Analytics Area" className="px-0">
         {voc.analytics_area_id !== null ? (
-          <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics area'}</span>
+          <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics Area'}</span>
         ) : (
           <span className="text-sm text-text-warning">미지정</span>
         )}
       </FieldRow>
 
-      {/* 트리아지 상태 */}
-      <FieldRow label="트리아지 상태" className="px-0">
+      {/* Triage 상태 */}
+      <FieldRow label="Triage 상태" className="px-0">
         <span className="text-sm text-text-primary">{TRIAGE_STATE_LABELS[voc.triage_state]}</span>
       </FieldRow>
     </div>

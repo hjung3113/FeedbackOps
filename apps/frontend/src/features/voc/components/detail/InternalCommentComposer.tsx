@@ -183,7 +183,7 @@ export function InternalCommentComposer({
 
       {/* ComposerFooter — Preview disabled per D-5.4 */}
       <ComposerFooter
-        submitLabel="Add note"
+        submitLabel="내부 코멘트 추가"
         onPreview={() => {
           // Preview is DOM-disabled on internal composer per D-5.4; this is never called.
         }}

@@ -18,7 +18,7 @@ export function BranchEditor({
     <div className="space-y-2">
       <div>
         <label htmlFor="survey-branch-parent" className="block text-sm">
-          조건부로 다음 질문을 보여주기 (one-level)
+          조건부로 다음 질문을 보여주기 (한 단계)
         </label>
         <Select
           value={question.branch_parent_question_id ?? NO_BRANCH}

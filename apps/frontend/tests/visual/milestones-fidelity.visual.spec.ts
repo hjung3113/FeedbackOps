@@ -27,7 +27,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
 
     const detail = page.getByTestId('app-detail-slot');
     await expect(detail.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    await expect(detail.getByText('Owner', { exact: true })).toBeVisible();
+    await expect(detail.getByText('담당자', { exact: true })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
 
     const captured = await detail.evaluate((root) => {
@@ -69,10 +69,10 @@ test.describe('milestone fidelity (final pixel pass)', () => {
           marginBottom: style.marginBottom,
         };
       });
-      const sourceTitle = sections.find((section) => section.label === 'Source');
+      const sourceTitle = sections.find((section) => section.label === '출처');
       if (sourceTitle === undefined) throw new Error('Expected the Source section title');
       const sourceTitleEl = Array.from(root.querySelectorAll('h3')).find(
-        (title) => (title.textContent ?? '').trim() === 'Source',
+        (title) => (title.textContent ?? '').trim() === '출처',
       );
       if (sourceTitleEl === undefined) throw new Error('Expected the Source title element');
       const sourceCard = sourceTitleEl.parentElement?.nextElementSibling;
@@ -86,7 +86,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         throw new Error('Expected the source finding title and id');
       }
 
-      const headline = findByOwnText('0 of 1 tasks released');
+      const headline = findByOwnText('Task 1개 중 0개 Released');
 
       // Title block (Overview) — pill and area badge next to the h2.
       const heading = Array.from(root.querySelectorAll('h2')).find(
@@ -97,7 +97,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
 
       // Source header action — prototype .btn-sm: 24px high, 12px label,
       // 11px arrow (styles.css .btn-sm; screen-milestones.jsx source header).
-      const openButton = findByOwnText('Open finding');
+      const openButton = findByOwnText('Finding 열기');
       const openArrow = openButton.querySelector('svg');
       const openCss = {
         height: `${openButton.getBoundingClientRect().height}px`,
@@ -116,7 +116,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       const msValue = msLabel.parentElement?.querySelector(':scope > div');
       const areaLabel = findByOwnText('Analytics Area');
       const areaValue = areaLabel.parentElement?.querySelector(':scope > div');
-      const ownerLabel = findByOwnText('Owner');
+      const ownerLabel = findByOwnText('담당자');
       const ownerValue = ownerLabel.parentElement?.querySelector(':scope > div');
       const ownerChip = ownerValue?.firstElementChild;
       const ownerAvatar = ownerChip?.firstElementChild;
@@ -204,7 +204,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     // Section titles: 11px, 10px wrapper rhythm (Source title row is mb-0;
     // its 10px gap is asserted on the card below).
     for (const section of captured.sections) {
-      const expectedMargin = section.label === 'Source' ? '0px' : '10px';
+      const expectedMargin = section.label === '출처' ? '0px' : '10px';
       expect.soft(section.fontSize, `section ${section.label} font`).toBe('11px');
       expect
         .soft(section.marginBottom, `section ${section.label} bottom rhythm`)

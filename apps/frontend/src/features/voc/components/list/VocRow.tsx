@@ -191,7 +191,7 @@ export function VocRow({
               {voc.attachment_count > 0 && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-text-muted/10 px-1.5 py-0.5 text-xs font-medium text-text-muted shrink-0"
-                  aria-label={`${voc.attachment_count} attachments`}
+                  aria-label={`첨부 ${voc.attachment_count}개`}
                 >
                   <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
                   {voc.attachment_count}
@@ -216,7 +216,7 @@ export function VocRow({
               ) : voc.analytics_area_id === null ? (
                 <>
                   <RowDot />
-                  <span className="text-text-warning">No area</span>
+                  <span className="text-text-warning">Analytics Area 없음</span>
                 </>
               ) : null}
               <RowDot />

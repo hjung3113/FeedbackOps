@@ -10,6 +10,7 @@
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { VOC_TRIAGE_QUEUE_TOTAL_LABELS, VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { ListTabs, type ListToolbarTab } from '@fops/ui';
@@ -144,7 +145,7 @@ export function VocTriageScreen({
             data-testid="triage-kicker-console"
             className="text-xs font-medium uppercase tracking-[0.04em] text-text-muted"
           >
-            Console
+            {GLOSSARY.console}
           </span>
           <span className="text-[10px] text-text-muted" aria-hidden="true">
             ·
@@ -157,7 +158,7 @@ export function VocTriageScreen({
           </span>
         </div>
         <Flag size={14} className="text-text-warning shrink-0" aria-hidden="true" />
-        <span className="text-sm font-semibold text-text-primary">Triage queue</span>
+        <span className="text-sm font-semibold text-text-primary">{GLOSSARY.triageQueue}</span>
         {/* #680 separates the whole-queue total from the selected tab's count. */}
         <output
           data-testid="triage-queue-total"
@@ -166,8 +167,8 @@ export function VocTriageScreen({
         >
           {queueTotal === undefined ? '— VOC' : `${queueTotal} VOC`}
         </output>
-        <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → severity">
-          미배정 → severity 순
+        <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → 심각도">
+          미배정 → 심각도 순
         </span>
         {/* Processed-count progress — emerald/accent toned. Prototype ref:
             screen-voc-create.jsx:652-656 ("· N건 처리됨"). */}

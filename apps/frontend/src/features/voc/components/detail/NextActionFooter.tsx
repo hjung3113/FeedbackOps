@@ -99,7 +99,7 @@ export function NextActionFooter({
           {secondaryAction.label}
         </Button>
       )}
-      {restCount > 0 && <span className="text-xs text-text-muted">+{restCount} more</span>}
+      {restCount > 0 && <span className="text-xs text-text-muted">+{restCount}개 더보기</span>}
       {hasOverflowActions && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

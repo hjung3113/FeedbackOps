@@ -26,7 +26,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
         return;
       }
       const detail = page.getByTestId('permission-request-detail-panel');
-      await expect(detail.getByText('Permission Request', { exact: true })).toBeVisible();
+      await expect(detail.getByText('권한 요청', { exact: true })).toBeVisible();
       await expect(detail.getByText('Named Requester', { exact: true })).toBeVisible();
       await expect(detail.getByText('named.requester@example.test', { exact: true })).toHaveCount(
         0,
@@ -173,8 +173,8 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await approve.click();
     await expect(approve).toHaveAttribute('aria-pressed', 'true');
     await expect(detail.getByTestId('self-approval-audit-capture')).toBeVisible();
-    await detail.getByLabel(/Policy citation/).fill('workspace policy §4.3');
-    await detail.getByLabel(/Peer reviewer 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
+    await detail.getByLabel(/정책 근거/).fill('workspace policy §4.3');
+    await detail.getByLabel(/동료 검토자 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
     // The detail panel is its own scroll container, so expectVisual's window.scrollTo(0, 0)
     // cannot normalise it: filling the textarea scrolls it by a timing-dependent amount.
     // Wait for fonts (they change content height) and then clamp the panel to its scroll

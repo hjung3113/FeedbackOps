@@ -1,11 +1,12 @@
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
+import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import {
   formatUnreadBadge,
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
-import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import type { RoleLevel } from '@fops/shared';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,13 +49,13 @@ export const RAIL_ITEMS: Array<{
   href: string;
   icon: React.ElementType<{ className?: string }>;
 }> = [
-  { key: 'home', label: 'Home', href: '/home', icon: House },
+  { key: 'home', label: '홈', href: '/home', icon: House },
   { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
   { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
   { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
-  { key: 'integration', label: 'Integration', href: '/integration', icon: Boxes },
+  { key: 'integration', label: '연동', href: '/integration', icon: Boxes },
   { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
-  { key: 'admin', label: 'Admin', href: '/admin/managed-systems', icon: Shield },
+  { key: 'admin', label: '관리자', href: '/admin/managed-systems', icon: Shield },
 ];
 
 export function railForPathname(pathname: string): RailDomain {
@@ -125,7 +126,7 @@ export function AppRail({
         className,
       )}
       style={{ width: 'var(--rail-width)' }}
-      aria-label="System selector"
+      aria-label="시스템 선택"
       data-testid="app-rail"
     >
       <div
@@ -172,8 +173,8 @@ export function AppRail({
           <button
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
-            title="Profile"
-            aria-label="Profile"
+            title="프로필"
+            aria-label="프로필"
           >
             <UserRound className="h-4 w-4" />
           </button>
@@ -185,7 +186,8 @@ export function AppRail({
               /me shape; logout below stays reachable either way. */}
           {me?.actor && (
             <DropdownMenuLabel>
-              {me.actor.display_name} · {ROLE_LEVEL_LABELS[me.actor.role_level as RoleLevel]}
+              {me.actor.display_name} ·{' '}
+              {ROLE_LEVEL_DISPLAY_LABELS[me.actor.role_level as RoleLevel]}
             </DropdownMenuLabel>
           )}
           <DropdownMenuItem disabled={isLoggingOut} onSelect={handleLogout}>

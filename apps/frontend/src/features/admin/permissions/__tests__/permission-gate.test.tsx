@@ -152,9 +152,9 @@ describe('<PermissionGate>', () => {
       </PermissionGate>,
     );
 
-    const liveRegion = screen.getByText('Checking access…').closest('[aria-live="polite"]');
+    const liveRegion = screen.getByText('접근 확인 중…').closest('[aria-live="polite"]');
     expect(liveRegion).not.toBeNull();
-    expect(liveRegion).toHaveTextContent('Checking access…');
+    expect(liveRegion).toHaveTextContent('접근 확인 중…');
 
     resolvePermissionCheck(
       new Response(

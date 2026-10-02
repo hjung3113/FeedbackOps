@@ -4,6 +4,7 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 import type { TaskDto, TaskPriority, TaskRequestDto } from '@fops/shared';
@@ -112,9 +113,9 @@ export function TaskRequestPanel({
         : UNRESOLVED_ANALYTICS_AREA;
   const analyticsAreaHint =
     conversion.analyticsAreaUnresolvedReason === 'source-unavailable'
-      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+      ? '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.'
       : conversion.analyticsAreaUnresolvedReason === 'selection-unavailable'
-        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.'
+        ? '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.'
         : null;
   const link = useTaskRequestLink({ item, currentRole });
   const resultingTask: TaskDto | null =
@@ -156,9 +157,9 @@ export function TaskRequestPanel({
               <>
                 <TaskRequestBadge status={item.status} />
                 <span className="text-xs text-text-muted">
-                  · Requested by{' '}
+                  · {GLOSSARY.requestedBy}{' '}
                   <strong className="text-text-secondary">
-                    {requester?.display_name ?? '알 수 없는 사용자'}
+                    {requester?.display_name ?? GLOSSARY.unknownUser}
                   </strong>
                 </span>
                 <span className="text-xs text-text-muted">
@@ -178,7 +179,7 @@ export function TaskRequestPanel({
                 <span className="text-xs text-text-muted">
                   검토자{' '}
                   <strong className="text-text-secondary">
-                    {reviewer?.display_name ?? '알 수 없는 사용자'}
+                    {reviewer?.display_name ?? GLOSSARY.unknownUser}
                   </strong>
                   {item.decided_at && <> · {formatShortDateTime(item.decided_at)}</>}
                 </span>
@@ -619,7 +620,7 @@ export function TaskRequestPanel({
           </FieldRow>
           <FieldRow label="본인 승인">
             <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
-              requires scoped capability
+              범위 내 권한 필요
             </span>
           </FieldRow>
         </section>
@@ -629,7 +630,7 @@ export function TaskRequestPanel({
           <div className="flex flex-col gap-2 border-l border-border-subtle pl-3">
             <div className="text-xs text-text-muted">
               <strong className="text-text-secondary">
-                {requester?.display_name ?? '알 수 없는 사용자'}
+                {requester?.display_name ?? GLOSSARY.unknownUser}
               </strong>
               {' · 요청 작성 · '}
               {formatShortDateTime(item.created_at)}
@@ -637,7 +638,7 @@ export function TaskRequestPanel({
             {item.decided_at && (
               <div className="text-xs text-text-muted">
                 <strong className="text-text-secondary">
-                  {reviewer?.display_name ?? 'Reviewer'}
+                  {reviewer?.display_name ?? GLOSSARY.unknownUser}
                 </strong>
                 {' · '}
                 {TASK_REQUEST_STATUS_LABELS[item.status]}

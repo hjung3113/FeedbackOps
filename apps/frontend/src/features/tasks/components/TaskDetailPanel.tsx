@@ -6,6 +6,7 @@ import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
@@ -260,7 +261,7 @@ export function TaskDetailPanel({
           <FieldRow label="담당자">
             {task.assignee_actor_id ? (
               <span className="text-sm text-text-primary">
-                {actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨'}
+                {actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser}
               </span>
             ) : (
               <UnassignedBadge />
@@ -289,7 +290,7 @@ export function TaskDetailPanel({
           <PanelSectionTitle>출처</PanelSectionTitle>
           {sourceFinding ? (
             <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
-              <span className="text-xs text-text-muted">From finding</span>
+              <span className="text-xs text-text-muted">{GLOSSARY.fromFinding}</span>
               <div className="text-sm font-medium text-text-primary">
                 {sourceFinding.title}
                 <span className="ml-2 font-mono text-xs text-text-muted">
@@ -307,7 +308,7 @@ export function TaskDetailPanel({
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-sm text-text-muted">Standalone task</div>
+            <div className="mt-2 text-sm text-text-muted">단독 Task</div>
           )}
         </div>
 
@@ -320,7 +321,7 @@ export function TaskDetailPanel({
           {sourceVoc && sourceVoc.visibility_state !== 'allowed' && (
             <PermissionBlockedPanel
               state={sourceVoc.visibility_state}
-              category="Source VOC"
+              category="출처 VOC"
               className="mt-2"
             />
           )}
@@ -394,7 +395,7 @@ export function TaskDetailPanel({
             onClick={() => onMoveToNextStatus(task.id)}
           >
             <ArrowRight className="h-4 w-4" />
-            Move to next status
+            다음 상태로 이동
           </Button>
         </div>
       )}

@@ -30,7 +30,7 @@ describe('AddEvidenceModal source kind options', () => {
 
     fireEvent.click(screen.getByTestId('evidence-source-type-select'));
 
-    expect(await screen.findByRole('option', { name: 'Manual note' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: '수동 메모' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'VOC' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Survey' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Note (manual)' })).not.toBeInTheDocument();

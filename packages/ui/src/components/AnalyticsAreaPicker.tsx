@@ -18,5 +18,5 @@ export interface AnalyticsAreaPickerProps {
 }
 
 export function AnalyticsAreaPicker(props: AnalyticsAreaPickerProps) {
-  return <ChipPicker {...props} placeholder={props.placeholder ?? 'Select Analytics Area'} testId={props.testId ?? 'analytics-area-picker'} />;
+  return <ChipPicker {...props} placeholder={props.placeholder ?? 'Analytics Area 선택'} testId={props.testId ?? 'analytics-area-picker'} />;
 }

@@ -14,8 +14,8 @@ export function newQuestion(
     is_required: false,
     options: choice
       ? [
-          { key: 'option-1', label: 'Option 1' },
-          { key: 'option-2', label: 'Option 2' },
+          { key: 'option-1', label: '옵션 1' },
+          { key: 'option-2', label: '옵션 2' },
         ]
       : null,
     rating_min: kind === 'rating' ? 1 : null,
@@ -78,8 +78,8 @@ export function questionForKind(
     kind,
     options: choice
       ? (question.options ?? [
-          { key: 'option-1', label: 'Option 1' },
-          { key: 'option-2', label: 'Option 2' },
+          { key: 'option-1', label: '옵션 1' },
+          { key: 'option-2', label: '옵션 2' },
         ])
       : null,
     rating_min: kind === 'rating' ? 1 : null,

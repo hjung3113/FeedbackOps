@@ -112,14 +112,14 @@ describe('TriagePanel Overview and grouped navigation', () => {
 
   it('renders exactly the four grouped section nav items in order without overflow', () => {
     renderPanel();
-    const overview = screen.getByRole('button', { name: 'Overview' });
+    const overview = screen.getByRole('button', { name: '개요' });
     const nav = overview.parentElement;
     expect(nav).not.toBeNull();
     const labels = within(nav as HTMLElement)
       .getAllByRole('button')
       .map((button) => button.textContent?.replace(/\s/g, ''));
     // #592: the recommendation section is named for the ADR-0034 surface, without the peer count.
-    expect(labels).toEqual(['Overview', 'Assignment', '유사VOC추천', 'Summary']);
+    expect(labels).toEqual(['개요', '담당배정', '유사VOC추천', '요약']);
     expect(within(nav as HTMLElement).queryByText('더보기')).not.toBeInTheDocument();
     for (const removed of ['Body', 'Severity', 'Owner', 'Area', 'Cluster']) {
       expect(
@@ -191,10 +191,10 @@ describe('TriagePanel Overview and grouped navigation', () => {
     expect(transition).toHaveTextContent('검토 중');
     expect(screen.getByTestId('summary-no-changes')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'low' }));
+    fireEvent.click(screen.getByRole('button', { name: '낮음' }));
 
     expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
-    expect(screen.getByTestId('summary-diff-row-Severity')).toHaveTextContent('low');
+    expect(screen.getByTestId('summary-diff-row-Severity')).toHaveTextContent('낮음');
     expect(screen.queryByTestId('summary-no-changes')).not.toBeInTheDocument();
   });
 

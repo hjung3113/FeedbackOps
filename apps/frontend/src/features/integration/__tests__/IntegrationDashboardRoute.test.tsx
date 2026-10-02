@@ -28,12 +28,12 @@ const queueFixtures = [
     next_action: {
       label: 'Review VOCs',
       route: '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=assign_owner',
-      intent: 'assign-owner',
+      intent: 'triage',
     },
     secondary_action: {
       label: 'Bulk assign',
       route: '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=bulk_assign',
-      intent: 'bulk-assign',
+      intent: 'bulk_assign',
     },
   },
   {
@@ -43,7 +43,7 @@ const queueFixtures = [
     next_action: {
       label: 'Request Tasks',
       route: '/findings?selected=finding-a&action=request_task',
-      intent: 'request-task',
+      intent: 'plan_execution',
     },
     secondary_action: null,
   },
@@ -54,7 +54,7 @@ const queueFixtures = [
     next_action: {
       label: 'Review Updates',
       route: '/tasks?view=board&selected=task-a&action=review_reporter_status',
-      intent: 'review-update',
+      intent: 'request_reporter_update',
     },
     secondary_action: null,
   },
@@ -65,7 +65,7 @@ const queueFixtures = [
     next_action: {
       label: 'Create Follow-up',
       route: '/surveys?selected=survey-a&action=create_follow_up',
-      intent: 'create-follow-up',
+      intent: 'create_followup',
     },
     secondary_action: null,
   },
@@ -76,7 +76,7 @@ const queueFixtures = [
     next_action: {
       label: 'Link Finding',
       route: '/vocs?view=inbox&tab=high-no-link&selected=voc-b&action=link_finding',
-      intent: 'link-finding',
+      intent: 'triage',
     },
     secondary_action: null,
   },
@@ -87,7 +87,7 @@ const queueFixtures = [
     next_action: {
       label: 'Open Requests',
       route: '/admin/permissions/requests?selected=request-a&action=review',
-      intent: 'review',
+      intent: 'review_permissions',
     },
     secondary_action: null,
   },
@@ -221,6 +221,14 @@ describe('integration action dashboard route', () => {
       'high-severity-unlinked',
       'permission-requests-pending',
     ] as const;
+    const expectedPrimaryLabels = {
+      'unassigned-voc': 'VOC 검토',
+      'actionable-finding-no-execution': 'Finding 검토',
+      'released-task-unresolved-voc': 'Released Task 검토',
+      'bad-outcome-no-followup': '성과 Survey 검토',
+      'high-severity-unlinked': '높은 심각도 VOC 검토',
+      'permission-requests-pending': '권한 요청 열기',
+    } as const;
     for (const id of orderedIds) {
       const queue = queueFixtures.find((entry) => entry.id === id);
       expect(queue).toBeDefined();
@@ -232,20 +240,31 @@ describe('integration action dashboard route', () => {
         'href',
         queue?.next_action.route,
       );
+      expect(screen.getByTestId(`integration-queue-primary-${id}`)).toHaveTextContent(
+        expectedPrimaryLabels[id],
+      );
     }
+    expect(screen.getByTestId('integration-queue-secondary-unassigned-voc')).toHaveTextContent(
+      '일괄 담당자 지정',
+    );
 
     expect(screen.getByTestId('integration-dashboard-gap-count').textContent).toBe('34');
     const surfaces = within(screen.getByTestId('integration-surfaces'));
-    expect(surfaces.getByRole('link', { name: /Coverage/ })).toBeVisible();
-    expect(surfaces.getByRole('link', { name: /Entity links/ })).toBeVisible();
+    expect(surfaces.getByRole('link', { name: /커버리지/ })).toBeVisible();
+    expect(surfaces.getByRole('link', { name: /엔티티 링크/ })).toBeVisible();
     expect(
       surfaces.getByText(
         'VOC·Finding·Task·Survey 사이의 연결 상태(활성·오래됨·분리됨)를 점검합니다.',
       ),
     ).toBeVisible();
+    expect(
+      surfaces.getByText(
+        'VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다.',
+      ),
+    ).toBeVisible();
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
-    expect(surfaces.getByText('평균 Coverage')).toBeVisible();
+    expect(surfaces.getByText('평균 커버리지')).toBeVisible();
     expect(surfaces.queryByText('active links')).toBeNull();
     expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_A}`).textContent).toBe(
       '18',
@@ -278,6 +297,32 @@ describe('integration action dashboard route', () => {
         .querySelector('[role="meter"] > span'),
     ).toHaveClass('bg-accent-warn');
   });
+
+  test.each(['__proto__', 'constructor', 'unrecognized_intent'] as const)(
+    'preserves the server label and route for the unknown %s action intent',
+    async (intent) => {
+      const fallbackRoute = '/vocs?view=inbox&tab=unassigned&selected=voc-a&action=keep';
+      const fallbackLabel = 'Keep this server action label';
+      const firstQueue = {
+        ...queueFixtures[0],
+        secondary_action: { label: fallbackLabel, route: fallbackRoute, intent },
+      };
+      const summary = dashboardSummarySchema.parse({
+        ...SUMMARY,
+        action_queues: [firstQueue, ...queueFixtures.slice(1)],
+      });
+      await renderDashboard('/integration', async (input) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('/dashboard/summary')) return response(summary);
+        if (url.includes('/managed-systems')) return managedSystemsResponse();
+        return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+      });
+
+      const action = await screen.findByTestId('integration-queue-secondary-unassigned-voc');
+      expect(action).toHaveTextContent(fallbackLabel);
+      expect(action).toHaveAttribute('href', fallbackRoute);
+    },
+  );
 
   test('omits an absent queue while preserving an explicit zero count', async () => {
     const summary = dashboardSummarySchema.parse({
@@ -408,11 +453,11 @@ describe('integration action dashboard route', () => {
       requestedUrls.some((url) => url.includes(`/dashboard/summary?managed_system_id=${MS_A}`)),
     ).toBe(true);
     const surfaces = within(screen.getByTestId('integration-surfaces'));
-    expect(surfaces.getByRole('link', { name: /Coverage/ })).toHaveAttribute(
+    expect(surfaces.getByRole('link', { name: /커버리지/ })).toHaveAttribute(
       'href',
       `/integration/coverage?managedSystem=${MS_A}`,
     );
-    expect(surfaces.getByRole('link', { name: /Entity links/ })).toHaveAttribute(
+    expect(surfaces.getByRole('link', { name: /엔티티 링크/ })).toHaveAttribute(
       'href',
       `/integration/links?managedSystem=${MS_A}`,
     );
@@ -433,7 +478,7 @@ describe('integration action dashboard route', () => {
     });
 
     const summaryError = await screen.findByTestId('integration-dashboard-summary-error');
-    expect(summaryError).toHaveTextContent('Integration 요약을 불러오지 못했습니다.');
+    expect(summaryError).toHaveTextContent('연동 요약을 불러오지 못했습니다.');
     expect(summaryError).toHaveTextContent(
       '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
     );
@@ -441,7 +486,7 @@ describe('integration action dashboard route', () => {
       'data-variant',
       'error',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => {
       expect(screen.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     });
@@ -459,7 +504,7 @@ describe('integration action dashboard route', () => {
     });
 
     const blocked = await screen.findByTestId('integration-dashboard-blocked');
-    const blockedPanel = within(blocked).getByText('Integration summary').closest('[data-state]');
+    const blockedPanel = within(blocked).getByText('연동 요약').closest('[data-state]');
     expect(blockedPanel).not.toBeNull();
     expect(blockedPanel).toHaveAttribute('data-state', 'denied');
     expect(screen.queryByTestId('integration-queue-card-unassigned-voc')).toBeNull();
@@ -469,9 +514,7 @@ describe('integration action dashboard route', () => {
   test('keeps the dashboard mounted at /integration', async () => {
     const { router } = await renderDashboard('/integration');
     expect(router.state.location.pathname).toBe('/integration');
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Integration Action Dashboard' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: '연동 액션 대시보드' })).toBeVisible();
   });
 
   test('strictly accepts the documented Managed System scope search values', () => {

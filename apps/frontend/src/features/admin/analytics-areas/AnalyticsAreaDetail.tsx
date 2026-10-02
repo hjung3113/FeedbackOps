@@ -1,3 +1,5 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
+
 import {
   Button,
   Callout,
@@ -50,12 +52,12 @@ export function AnalyticsAreaSlideOver({
   // Workload + Findings are Slice 4/5 surfaces (not built). Shells render with
   // "—" placeholders; no counts available from the DTO (locked decision #88).
   const sections: PanelSection[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'guardrail', label: 'Guardrail' },
-    { id: 'definition', label: 'Definition' },
-    { id: 'workload', label: 'Workload' },
+    { id: 'overview', label: '개요' },
+    { id: 'guardrail', label: '권한 경계' },
+    { id: 'definition', label: '정의' },
+    { id: 'workload', label: '작업량' },
     { id: 'findings', label: 'Findings' },
-    { id: 'used-by', label: 'Used by' },
+    { id: 'used-by', label: '사용 위치' },
   ];
 
   return (
@@ -67,7 +69,7 @@ export function AnalyticsAreaSlideOver({
       >
         <SheetTitle className="sr-only">{area.name}</SheetTitle>
         <SheetDescription className="sr-only">
-          Analytics Area detail — analytics-area/{area.slug}
+          Analytics Area 상세 — analytics-area/{area.slug}
         </SheetDescription>
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-primary/15 px-2 py-0.5 text-xs font-medium text-accent-primary">
@@ -89,7 +91,7 @@ export function AnalyticsAreaSlideOver({
                     name={ms?.name ?? area.managed_system_id}
                     {...(mark ? { mark: mark.color } : {})}
                   />
-                  <OutlineBadge>Filter dimension</OutlineBadge>
+                  <OutlineBadge>필터 차원</OutlineBadge>
                 </>
               }
             />
@@ -103,7 +105,7 @@ export function AnalyticsAreaSlideOver({
           </div>
 
           <div data-anchor="definition" className="px-4 py-3">
-            <PanelSectionTitle>Definition</PanelSectionTitle>
+            <PanelSectionTitle>정의</PanelSectionTitle>
             <FieldRow label="Managed System" className="px-0">
               <span className="flex items-center gap-1.5">
                 {mark && (
@@ -118,63 +120,63 @@ export function AnalyticsAreaSlideOver({
                 <span>{ms?.name ?? area.managed_system_id}</span>
               </span>
             </FieldRow>
-            <FieldRow label="Slug" className="px-0">
+            <FieldRow label="슬러그" className="px-0">
               <span className="font-mono text-xs">{area.slug}</span>
             </FieldRow>
-            <FieldRow label="Lead" className="px-0">
+            <FieldRow label="리드" className="px-0">
               {lead ? (
                 <UserChip user={{ display_name: lead }} size="sm" />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Created" className="px-0">
+            <FieldRow label="생성일" className="px-0">
               {created}
             </FieldRow>
-            <FieldRow label="Default visibility" className="px-0">
+            <FieldRow label="기본 공개 범위" className="px-0">
               <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-xs text-text-secondary">
                 <Shield className="h-2.5 w-2.5" />
-                Internal · MS-scoped
+                내부 · Managed System 범위
               </span>
             </FieldRow>
           </div>
 
           <div data-anchor="workload" className="px-4 py-3">
-            <PanelSectionTitle>Workload signal</PanelSectionTitle>
+            <PanelSectionTitle>작업량 신호</PanelSectionTitle>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1 rounded-md bg-surface-canvas p-3">
-                <span className="text-xs text-text-muted">Active findings</span>
+                <span className="text-xs text-text-muted">활성 Finding</span>
                 <span className="text-lg font-semibold text-text-primary">—</span>
-                <span className="text-xs text-text-muted">in this analytics area</span>
+                <span className="text-xs text-text-muted">이 Analytics Area 내</span>
               </div>
               <div className="flex flex-col gap-1 rounded-md bg-surface-canvas p-3">
-                <span className="text-xs text-text-muted">Evidence highlights</span>
+                <span className="text-xs text-text-muted">Evidence 하이라이트</span>
                 <span className="text-lg font-semibold text-text-primary">—</span>
-                <span className="text-xs text-text-muted">tagged to this AA</span>
+                <span className="text-xs text-text-muted">이 Analytics Area에 연결됨</span>
               </div>
             </div>
             <p className="mt-2 text-xs text-text-muted" data-testid="aa-workload-defer">
-              Findings · Evidence 집계는 Slice 4/5 surface 가 들어온 뒤 연결됩니다.
+              Findings · Evidence 집계는 이후 화면이 제공되면 연결됩니다.
             </p>
           </div>
 
           <div data-anchor="findings" className="px-4 py-3">
-            <PanelSectionTitle>Recent findings</PanelSectionTitle>
+            <PanelSectionTitle>최근 Finding</PanelSectionTitle>
             <div
               className="rounded-md border border-border-subtle bg-surface-card p-4 text-center text-xs text-text-muted"
               data-testid="aa-findings-defer"
             >
-              Findings 목록은 Slice 4/5 에서 연결됩니다.
+              Findings 목록은 이후 화면에서 연결됩니다.
             </div>
           </div>
 
           <div data-anchor="used-by" className="px-4 py-3">
-            <PanelSectionTitle>Used by</PanelSectionTitle>
+            <PanelSectionTitle>사용 위치</PanelSectionTitle>
             <div className="flex flex-col gap-1.5">
               {[
-                { label: 'VOC Triage', meta: 'filter dimension' },
-                { label: 'Findings list', meta: 'filter + grouping' },
-                { label: 'Survey targeting', meta: 'segment definition' },
+                { label: 'VOC Triage', meta: '필터 차원' },
+                { label: 'Findings 목록', meta: '필터 + 그룹화' },
+                { label: 'Survey 대상 지정', meta: '세그먼트 정의' },
               ].map((u) => (
                 <div
                   key={u.label}
@@ -197,7 +199,7 @@ export function AnalyticsAreaSlideOver({
             data-testid="aa-edit-button"
           >
             <Settings className="h-3 w-3" />
-            Edit area
+            {GLOSSARY.edit}
           </Button>
         </div>
       </SheetContent>

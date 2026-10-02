@@ -212,7 +212,7 @@ describe('Survey screens', () => {
     expect(row).not.toHaveTextContent('Responses');
     expect(row).not.toHaveTextContent('— / —');
     rerender(<SurveyList surveys={[]} isLoading={false} error={null} onSelect={select} />);
-    expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     rerender(<SurveyList surveys={[]} isLoading error={null} onSelect={select} />);
     expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
     rerender(
@@ -243,7 +243,7 @@ describe('Survey screens', () => {
     expect(screen.getByRole('tab', { name: /진행 중/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /초안/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /종료됨/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '설문 생성' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 생성' }));
     expect(onCreate).toHaveBeenCalledOnce();
   });
 
@@ -432,13 +432,13 @@ describe('Survey screens', () => {
     renderWithQuery(<RetryableSurveyList />);
 
     await waitFor(
-      () => expect(screen.getByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      () => expect(screen.getByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument(),
       { timeout: 4000 },
     );
     expect(apiRequest).toHaveBeenCalledTimes(2);
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
-    expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(apiRequest).toHaveBeenCalledTimes(3);
   });
 
@@ -649,7 +649,7 @@ describe('Survey screens', () => {
     );
 
     expect(
-      await screen.findByText('이 설문은 더 이상 시작할 수 없는 상태입니다.'),
+      await screen.findByText('이 Survey는 더 이상 시작할 수 없는 상태입니다.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
@@ -676,7 +676,7 @@ describe('Survey screens', () => {
       ),
     );
     expect(
-      await screen.findByText('이 설문은 더 이상 종료할 수 없는 상태입니다.'),
+      await screen.findByText('이 Survey는 더 이상 종료할 수 없는 상태입니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-close-confirmation')).toBeInTheDocument();
     fireEvent.click(
@@ -795,7 +795,7 @@ describe('Survey screens', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
-    await screen.findByRole('dialog', { name: 'Respondent preview' });
+    await screen.findByRole('dialog', { name: '응답자 미리보기' });
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -935,7 +935,7 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByTestId('survey-empty-create-button'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '신규 설문 제목' } });
-    fireEvent.click(screen.getByRole('combobox', { name: '설문 유형' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Survey 유형' }));
     fireEvent.click(screen.getByRole('option', { name: '검증' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Tableau' }));
@@ -1212,7 +1212,7 @@ describe('Survey screens', () => {
         <SurveyBuilder survey={survey} canManage={false} gateState={state} onBack={vi.fn()} />,
       );
       expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
-      expect(screen.queryByText('설문 생성')).not.toBeInTheDocument();
+      expect(screen.queryByText('Survey 생성')).not.toBeInTheDocument();
     },
   );
 
@@ -1322,23 +1322,23 @@ describe('Survey screens', () => {
         if (state === 'paused') {
           expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
           expect(screen.queryByRole('tab')).not.toBeInTheDocument();
-          expect(screen.queryByText('생성된 설문이 없습니다.')).not.toBeInTheDocument();
+          expect(screen.queryByText('생성된 Survey가 없습니다.')).not.toBeInTheDocument();
           return;
         }
         if (state === 'failed') {
-          expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+          expect(await screen.findByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument();
           expect(screen.queryByRole('tab')).not.toBeInTheDocument();
           return;
         }
         if (state === 'loaded-empty') {
-          expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
-          expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+          expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
           expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
           expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
           return;
         }
         expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'All 1' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '전체 1' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: '초안 1' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
       },
@@ -1354,7 +1354,7 @@ describe('Survey screens', () => {
           <SurveysIndexRoute />
         </QueryClientProvider>,
       );
-      expect(screen.getByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+      expect(screen.getByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument();
       expect(screen.queryByRole('tab')).not.toBeInTheDocument();
 
       // Post-error refetch resets to pending with no data (paused/non-fetching
@@ -1374,8 +1374,8 @@ describe('Survey screens', () => {
           <SurveysIndexRoute />
         </QueryClientProvider>,
       );
-      expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'All 0' })).toBeInTheDocument();
+      expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '초안 0' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: '진행 중 0' })).toBeInTheDocument();
     });

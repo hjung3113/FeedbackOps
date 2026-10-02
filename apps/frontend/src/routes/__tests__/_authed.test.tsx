@@ -100,15 +100,15 @@ describe('_authed sidebar navigation tree', () => {
           id: 'task-requests',
           label: 'Task Requests',
           href: '/tasks?view=requests',
-          section: 'TASKS',
+          section: 'Task',
         },
-        { id: 'tasks-board', label: 'Tasks', href: '/tasks?view=board', section: 'TASKS' },
-        { id: 'my-tasks', label: 'My Tasks', href: '/tasks?view=my', section: 'TASKS' },
+        { id: 'tasks-board', label: 'Tasks', href: '/tasks?view=board', section: 'Task' },
+        { id: 'my-tasks', label: '내 Task', href: '/tasks?view=my', section: 'Task' },
       ]),
     );
     expect(entries).toEqual(
       expect.arrayContaining([
-        { id: 'findings', label: 'All findings', href: '/findings', section: 'FINDINGS' },
+        { id: 'findings', label: '전체 Finding', href: '/findings', section: 'Finding' },
       ]),
     );
   });
@@ -116,9 +116,9 @@ describe('_authed sidebar navigation tree', () => {
   it('#532 puts the Action dashboard first in Integration navigation', () => {
     expect(NAV_TREE.integration[0]).toMatchObject({
       id: 'integration-dashboard',
-      label: 'Action dashboard',
+      label: '액션 대시보드',
       href: '/integration',
-      section: 'INTEGRATION',
+      section: '연동',
     });
   });
 
@@ -185,7 +185,7 @@ describe('_authed sidebar current destination', () => {
       searchStr: '?view=inbox&tab=no-link',
       expectedId: 'no-link',
     },
-    { route: 'My VOCs', pathname: '/vocs', searchStr: '?view=my', expectedId: 'my-vocs' },
+    { route: '내 VOC', pathname: '/vocs', searchStr: '?view=my', expectedId: 'my-vocs' },
     {
       route: 'Clusters',
       pathname: '/voc-clusters',

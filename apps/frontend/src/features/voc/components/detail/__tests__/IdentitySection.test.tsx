@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -80,6 +81,12 @@ describe('<IdentitySection>', () => {
     );
     expect(screen.getByText('박운영')).toBeInTheDocument();
     expect(screen.queryByText(`Actor ${OTHER_ACTOR_ID.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
+  it('uses the glossary unknown-user label when the reporter name is unresolved', () => {
+    render(<IdentitySection voc={{ ...DETAIL_ENVELOPE, reporter_id: OTHER_ACTOR_ID }} />);
+
+    expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
   });
 
   it('IdentityMetadataStrip renders analytics area name when provided', () => {

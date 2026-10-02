@@ -173,7 +173,7 @@ describe('/admin/analytics-areas route', () => {
     });
     expect(
       screen.getByText(
-        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 dashboard와 Triage에서 쓰는 필터 기준입니다.',
+        'Analytics Area는 Managed System 안의 분류 라벨입니다. 권한 범위가 아니라 대시보드와 Triage에서 쓰는 필터 기준입니다.',
       ),
     ).toBeVisible();
     expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
@@ -216,7 +216,7 @@ describe('/admin/analytics-areas route', () => {
       requests,
     });
     await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
-    expect(screen.getByText('2 areas · 2 systems')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area 2개 · Managed System 2개')).toBeInTheDocument();
     expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('aa-filter-button'));
@@ -229,7 +229,7 @@ describe('/admin/analytics-areas route', () => {
       expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
       expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
       expect(screen.queryByTestId('aa-group-ms-tab')).not.toBeInTheDocument();
-      expect(screen.getByText('1 area · 1 system')).toBeInTheDocument();
+      expect(screen.getByText('Analytics Area 1개 · Managed System 1개')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
@@ -244,7 +244,7 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(requests).toContain('/analytics-areas?include_archived=true');
       expect(screen.getByTestId('aa-row-legacy-revenue')).toBeInTheDocument();
-      expect(screen.getByText('3 areas · 2 systems')).toBeInTheDocument();
+      expect(screen.getByText('Analytics Area 3개 · Managed System 2개')).toBeInTheDocument();
       expect(screen.getAllByTestId(/^aa-row-/)).toHaveLength(3);
     });
 
@@ -311,12 +311,12 @@ describe('/admin/analytics-areas route', () => {
     expect(within(drawer).getAllByText('PM Tableau').length).toBeGreaterThanOrEqual(1);
     // Section nav exposes all six sections including deferred Workload/Findings.
     for (const label of [
-      'Overview',
-      'Guardrail',
-      'Definition',
-      'Workload',
+      '개요',
+      '권한 경계',
+      '정의',
+      '작업량',
       'Findings',
-      'Used by',
+      '사용 위치',
     ]) {
       expect(within(drawer).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
     }

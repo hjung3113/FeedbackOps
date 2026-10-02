@@ -47,7 +47,7 @@ function PreviewSheet({ survey }: { survey: Survey }) {
   });
   return (
     <section className="max-h-[90vh] overflow-y-auto bg-surface-canvas p-6">
-      <DialogTitle className="text-sm font-medium">Respondent preview</DialogTitle>
+      <DialogTitle className="text-sm font-medium">응답자 미리보기</DialogTitle>
       <DialogDescription className="sr-only">
         미리보기 — 실제 응답은 저장되지 않습니다.
       </DialogDescription>

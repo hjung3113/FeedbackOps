@@ -103,7 +103,7 @@ describe('TaskBoardRoute', () => {
     renderBoard();
     await screen.findByText('TASK-1000');
     for (const status of ['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']) {
-      expect(screen.getByLabelText(`${status[0]!.toUpperCase()}${status.slice(1)} column`)).toBeInTheDocument();
+      expect(screen.getByLabelText(`${status[0]!.toUpperCase()}${status.slice(1)} 열`)).toBeInTheDocument();
     }
     expect(screen.getAllByText('비어있음').length).toBe(6);
     expect(screen.getByText('Task는 Task Request에서 전환됩니다.')).toBeInTheDocument();
@@ -275,7 +275,7 @@ describe('TaskBoardRoute', () => {
       Sensor: expect.anything(),
       options: { activationConstraint: { distance: 5 } },
     });
-    await screen.findByText('Standalone task');
+    await screen.findByText('단독 Task');
     expect(navigate).toHaveBeenCalledWith({ to: '/tasks', search: { view: 'board', param: task.id } });
   });
 
@@ -287,7 +287,7 @@ describe('TaskBoardRoute', () => {
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     await waitFor(() => expect(api.updateTaskStatus).toHaveBeenCalledWith(task.id, 'doing', expect.objectContaining({ ifMatch: task.updated_at, idempotencyKey: expect.any(String) })));
-    expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000');
+    expect(screen.getByLabelText('Doing 열')).toHaveTextContent('TASK-1000');
   });
 
   it('rolls back a failed mutation', async () => {
@@ -297,9 +297,9 @@ describe('TaskBoardRoute', () => {
     renderBoard();
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
-    await waitFor(() => expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Doing 열')).toHaveTextContent('TASK-1000'));
     update.reject(new Error('update failed'));
-    await waitFor(() => expect(screen.getByLabelText('Backlog column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Backlog 열')).toHaveTextContent('TASK-1000'));
   });
 
   it('does not allow an older failed mutation to clobber a newer optimistic move', async () => {
@@ -310,10 +310,10 @@ describe('TaskBoardRoute', () => {
     renderBoard();
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
-    await waitFor(() => expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Doing 열')).toHaveTextContent('TASK-1000'));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     first.reject(new Error('first failed'));
-    await waitFor(() => expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Doing 열')).toHaveTextContent('TASK-1000'));
   });
 
   it('rolls back and refetches after a stale-write conflict', async () => {
@@ -323,9 +323,9 @@ describe('TaskBoardRoute', () => {
     renderBoard();
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
-    await waitFor(() => expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Doing 열')).toHaveTextContent('TASK-1000'));
     update.reject(new ApiError(409, { code: 'conflict.stale_write', message: 'stale' }));
-    await waitFor(() => expect(screen.getByLabelText('Backlog column')).toHaveTextContent('TASK-1000'));
+    await waitFor(() => expect(screen.getByLabelText('Backlog 열')).toHaveTextContent('TASK-1000'));
     await waitFor(() => expect(api.listTasks.mock.calls.length).toBeGreaterThan(1));
     expect(toast.error).toHaveBeenCalledWith(
       '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?',
@@ -371,7 +371,7 @@ describe('TaskBoardRoute', () => {
     draggableOptions.length = 0;
     fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
     fireEvent.click(screen.getByRole('radio', { name: '우선순위' }));
-    await waitFor(() => expect(screen.getByLabelText('높음 column')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('높음 열')).toBeInTheDocument());
     await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: true })));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     expect(api.updateTaskStatus).not.toHaveBeenCalled();
@@ -438,13 +438,13 @@ describe('TaskBoardRoute', () => {
     api.updateTaskStatus.mockResolvedValue(releasedTask);
 
     renderBoard(doneTask.id);
-    const footerAction = await screen.findByRole('button', { name: 'Move to next status' });
+    const footerAction = await screen.findByRole('button', { name: '다음 상태로 이동' });
     expect(screen.getAllByText('Done').length).toBeGreaterThan(0);
 
     fireEvent.click(footerAction);
 
     await waitFor(() => expect(api.getTask).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Move to next status' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: '다음 상태로 이동' })).not.toBeInTheDocument());
     expect(screen.getAllByText('Released').length).toBeGreaterThan(0);
   });
 
@@ -461,7 +461,7 @@ describe('TaskBoardRoute', () => {
     api.updateTaskStatus.mockResolvedValue(todoTask);
 
     renderBoard(backlogTask.id);
-    const footerAction = await screen.findByRole('button', { name: 'Move to next status' });
+    const footerAction = await screen.findByRole('button', { name: '다음 상태로 이동' });
 
     fireEvent.click(footerAction);
 

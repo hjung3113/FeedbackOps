@@ -37,7 +37,7 @@ export function PermissionGate(props: PermissionGateProps) {
   if (query.isPending) {
     return (
       <div aria-live="polite">
-        <div className="text-text-muted text-sm">{props.loading ?? 'Checking access…'}</div>
+        <div className="text-text-muted text-sm">{props.loading ?? '접근 확인 중…'}</div>
       </div>
     );
   }

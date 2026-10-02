@@ -236,7 +236,7 @@ describe('TriageRoute', () => {
       expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
     });
     expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /미분류/ })).not.toHaveTextContent(/\d/);
     expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
@@ -255,7 +255,7 @@ describe('TriageRoute', () => {
     expect(total).toHaveAttribute('aria-label', '전체 대기열 불러오는 중');
     expect(total).not.toHaveTextContent(/\d/);
     expect(screen.getByRole('tab', { name: '미배정' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '높은 심각도' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '높음' })).toBeInTheDocument();
 
     await act(async () => {
       resolveCounts({
@@ -270,7 +270,7 @@ describe('TriageRoute', () => {
 
     await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
     expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
   });
 
   it('shows an unavailable queue total after nav counts fail', async () => {
@@ -292,10 +292,7 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /높은 심각도 1/ })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
+      expect(screen.getByRole('tab', { name: /높음 1/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
     });
   });
@@ -316,7 +313,7 @@ describe('TriageRoute', () => {
     });
 
     // Select a different tab so Radix emits a value change.
-    const highTab = screen.getByRole('tab', { name: /높은 심각도/i });
+    const highTab = screen.getByRole('tab', { name: /높음/i });
     fireEvent.mouseDown(highTab);
 
     expect(navigateMock).toHaveBeenCalled();

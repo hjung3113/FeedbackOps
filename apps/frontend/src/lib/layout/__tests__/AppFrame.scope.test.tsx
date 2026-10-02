@@ -222,11 +222,9 @@ describe('AppFrame managed-system scope', () => {
         requestedUrls.filter((u) => u === '/me/permissions/check?capability=workspace.admin'),
       ).toHaveLength(1);
       fireEvent.click(screen.getByTestId('scope-selector'));
-      expect(await screen.findAllByLabelText('Outside your grants')).toHaveLength(2);
+      expect(await screen.findAllByLabelText('범위 밖')).toHaveLength(2);
       expect(
-        screen
-          .getByTestId(`scope-option-${MS_TWO}`)
-          .querySelector('[aria-label="Outside your grants"]'),
+        screen.getByTestId(`scope-option-${MS_TWO}`).querySelector('[aria-label="범위 밖"]'),
       ).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
@@ -276,9 +274,7 @@ describe('AppFrame managed-system scope', () => {
       await waitFor(() => expect(screen.getByTestId('scope-selector')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByTestId(/^scope-option-[0-9]/)).toHaveLength(3);
-      await waitFor(() =>
-        expect(screen.queryByLabelText('Outside your grants')).not.toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.queryByLabelText('범위 밖')).not.toBeInTheDocument());
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -350,20 +346,20 @@ describe('AppFrame capability navigation', () => {
           ).toBe('success'),
         );
 
-        for (const label of ['Home', 'VOC', 'Findings', 'Tasks', 'Integration', 'Surveys']) {
+        for (const label of ['홈', 'VOC', 'Findings', 'Tasks', '연동', 'Surveys']) {
           expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
         }
         expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
 
         if (actor.canUseWorkspaceAdmin) {
-          expect(screen.getByRole('link', { name: 'Admin' })).toBeInTheDocument();
+          expect(screen.getByRole('link', { name: '관리자' })).toBeInTheDocument();
           expect(screen.getByTestId('sidebar-section-admin')).toBeInTheDocument();
           for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
             expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
           }
           expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
         } else {
-          expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+          expect(screen.queryByRole('link', { name: '관리자' })).not.toBeInTheDocument();
           expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
           for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
             expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();

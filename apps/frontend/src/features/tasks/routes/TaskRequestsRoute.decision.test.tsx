@@ -271,12 +271,12 @@ describe('TaskRequestsRoute decision dialogs', () => {
     queryClient.setQueryData(['task-requests', undefined], {
       items: [convertedItem, otherTaskRequest],
     });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /^All/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
     fireEvent.click(await screen.findByRole('button', { name: /REQ-1072/ }));
     fireEvent.click(screen.getByRole('button', { name: /REQ-1071/ }));
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /^All/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: /^전체/ })).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('button', { name: /REQ-1071/ })).toHaveTextContent('전환됨');
     });
   });

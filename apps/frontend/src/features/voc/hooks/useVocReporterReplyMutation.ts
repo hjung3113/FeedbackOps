@@ -12,7 +12,7 @@
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
 // On 201: caller should invalidate ['voc', vocId] and clear draft.
-// Toast copy: 리포터에게 답장이 전송되었습니다.
+// Toast copy: 제출자에게 답장이 전송되었습니다.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';

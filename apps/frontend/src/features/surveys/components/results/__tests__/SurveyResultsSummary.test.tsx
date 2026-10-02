@@ -231,8 +231,8 @@ describe('SurveyResultsSummary', () => {
       expect(screen.queryByText(rawLabel, { exact: true })).not.toBeInTheDocument();
     }
     expect(screen.getByText('내보내기가 너무 느립니다.')).toBeInTheDocument();
-    expect(screen.getByText('Identity protected responses')).toBeInTheDocument();
-    expect(screen.getByText('Outcome follow-up is available')).toBeInTheDocument();
+    expect(screen.getByText('신원 보호 응답')).toBeInTheDocument();
+    expect(screen.getByText('후속 조치 검토 사용 가능')).toBeInTheDocument();
   });
 
   it('renders approved excerpt text without rendering its personal response identifier', async () => {
@@ -306,8 +306,8 @@ describe('SurveyResultsSummary', () => {
     render(<SurveyResultsSummary survey={survey} results={{ ...results, next_actions: [] }} />);
 
     const row = screen.getByTestId(`survey-result-suppressed-${ids.suppressed}`);
-    expect(row).toHaveTextContent('Results are suppressed to protect anonymity.');
-    expect(row).not.toHaveTextContent(/0 responses|12 responses|response count/i);
+    expect(row).toHaveTextContent('익명 보호를 위해 이 질문의 결과는 숨겨집니다.');
+    expect(row).not.toHaveTextContent(/0 responses|12 responses|response count|응답\s*\d+\s*건/i);
   });
 
   it('shows the zero-response state with the configured threshold and no new action', () => {
@@ -350,7 +350,7 @@ describe('SurveyResultsSummary', () => {
     renderWithClient(<SurveyResultsSummary survey={survey} results={results} />);
 
     expect(screen.getByText('느린 로딩')).toBeInTheDocument();
-    expect(screen.getAllByText('12 responses')).toHaveLength(2);
+    expect(screen.getAllByText('응답 12건')).toHaveLength(2);
   });
 
   it('renders request access for a blocked create-finding action without issuing a request', async () => {
@@ -420,7 +420,10 @@ describe('SurveyResultsSummary', () => {
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
 
     await user.click(screen.getByRole('button', { name: 'Finding 생성' }));
-    expect(screen.getByText('Create or link Finding')).toBeInTheDocument();
+    // Panel heading and trigger share the glossary label; scope to the draft panel.
+    expect(
+      within(await screen.findByTestId('survey-create-finding-draft')).getByText('Finding 생성'),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Finding 생성' })).toHaveLength(1);
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
@@ -832,9 +835,7 @@ describe('SurveyResultsSummary', () => {
 
     const button = screen.getByRole('button', { name: 'Finding 생성' });
     expect(button).toBeDisabled();
-    expect(
-      screen.getByText('No approved excerpts are available for a response you can access.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('접근 가능한 응답에 승인된 발췌가 없습니다.')).toBeInTheDocument();
     await user.click(button);
     expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();
     expect(apiClient).not.toHaveBeenCalled();
@@ -860,7 +861,7 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByTestId('survey-result-next-actions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '권한 요청' })).toBeDisabled();
     expect(
-      screen.getByText('Access details are unavailable, so this request cannot be submitted.'),
+      screen.getByText('접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.'),
     ).toBeInTheDocument();
     expect(apiClient).not.toHaveBeenCalled();
   });
@@ -1108,7 +1109,7 @@ describe('SurveyResultsSummary', () => {
 
     const button = screen.getByRole('button', { name: 'Task 요청' });
     await user.click(button);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding을 불러오지 못했습니다.');
     expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await user.click(button);
@@ -1143,7 +1144,7 @@ describe('SurveyResultsSummary', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Task 요청' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding을 불러오지 못했습니다.');
     expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await act(async () => {
@@ -1154,6 +1155,6 @@ describe('SurveyResultsSummary', () => {
     ).toHaveLength(2);
     expect(queryClient.getQueryData(['finding', ids.finding])).toEqual(finding);
     expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Finding could not be loaded.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Finding을 불러오지 못했습니다.');
   });
 });

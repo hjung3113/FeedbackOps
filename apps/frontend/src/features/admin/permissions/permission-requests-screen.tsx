@@ -129,7 +129,7 @@ function PermissionRequestRow({
   return (
     <ObjectRow
       id="권한 요청"
-      title={`${actorName ?? '알 수 없는 사용자'} · ${getCapabilityDisplayLabel(request.requested_capability)}`}
+      title={`${actorName ?? GLOSSARY.unknownUser} · ${getCapabilityDisplayLabel(request.requested_capability)}`}
       selected={selected}
       onClick={onSelect}
       badges={<OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>}
@@ -170,3 +170,4 @@ function PermissionRequestRow({
     />
   );
 }
+import { GLOSSARY } from '@/lib/copy/glossary';

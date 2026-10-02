@@ -234,14 +234,14 @@ async function readOptionNames(label: string): Promise<string[]> {
 
 async function fillCreateForm(managedSystemId: string): Promise<void> {
   await chooseOption('Managed System', managedSystemId === IDS_F4.msErp ? 'ERP' : 'Power BI');
-  fireEvent.change(screen.getByLabelText('Title'), {
+  fireEvent.change(screen.getByLabelText('제목'), {
     target: { value: 'Launch review hardening' },
   });
-  fireEvent.change(screen.getByLabelText('Why this milestone exists'), {
+  fireEvent.change(screen.getByLabelText('이 Milestone의 목적'), {
     target: { value: '출시 리뷰 전 필수 정리 항목입니다.' },
   });
-  fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-08-01' } });
-  fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-09-01' } });
+  fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-08-01' } });
+  fireEvent.change(screen.getByLabelText('목표일'), { target: { value: '2026-09-01' } });
 }
 
 beforeEach(() => {
@@ -270,10 +270,10 @@ describe('MilestonesRoute create (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
     await fillCreateForm(IDS.msPowerBi);
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
     const createCall = vi.mocked(createMilestone).mock.calls[0];
@@ -297,10 +297,10 @@ describe('MilestonesRoute create (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
     await fillCreateForm(IDS.msPowerBi);
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith(
@@ -330,15 +330,15 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     // Read view: the B2e-status control is the only combobox; Managed System
     // stays stored text.
     expect(screen.queryByRole('combobox', { name: 'Managed System' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
 
     // Edit state: the title becomes an input — still no Managed System control.
-    const titleInput = screen.getByRole('textbox', { name: 'Title' });
+    const titleInput = screen.getByRole('textbox', { name: '제목' });
     expect(screen.queryByRole('combobox', { name: 'Managed System' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Power BI').length).toBeGreaterThan(0);
 
     fireEvent.change(titleInput, { target: { value: 'SSO Stabilization v2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     const patchCall = vi.mocked(updateMilestone).mock.calls[0];
@@ -369,18 +369,18 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'My local rename' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     // The stale write drops the typed title, refetches, and shows the server row.
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(
       await screen.findByRole('heading', { name: 'Renamed on another device' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'My local rename' })).not.toBeInTheDocument();
   });
@@ -395,7 +395,7 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
     // Selecting an existing row while create is open hands the slot over.
@@ -417,9 +417,9 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     // Dirty create form: decline keeps the panel and draft, confirm discards.
     renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Draft to discard' } });
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: 'Draft to discard' } });
 
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
     expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
@@ -427,7 +427,7 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Title')).toHaveValue('Draft to discard');
+    expect(screen.getByLabelText('제목')).toHaveValue('Draft to discard');
 
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
     fireEvent.click(await screen.findByRole('button', { name: '이동' }));
@@ -441,8 +441,8 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Draft rename' },
     });
 
@@ -450,7 +450,7 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Draft rename');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('Draft rename');
 
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
     fireEvent.click(await screen.findByRole('button', { name: '이동' }));
@@ -467,19 +467,14 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
 // and never carries primary_managed_system_id. An error keeps the prior
 // status locally; a stale write refetches and shows the server row.
 describe('MilestonesRoute status (#514 B2e-status)', () => {
-  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' });
+  const statusSelect = () => screen.getByRole('combobox', { name: '상태' });
 
   it('offers exactly the ADR-0050 set with the prototype labels', async () => {
     vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    expect(await readOptionNames('Status')).toEqual([
-      'Planning',
-      'In progress',
-      'Blocked',
-      'Released',
-    ]);
+    expect(await readOptionNames('상태')).toEqual(['계획 중', '진행 중', '차단', '릴리스됨']);
     expect(statusSelect()).toHaveValue('in_progress');
   });
 
@@ -490,7 +485,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    await chooseOption('Status', 'Released');
+    await chooseOption('상태', '릴리스됨');
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     const patchCall = vi.mocked(updateMilestone).mock.calls[0];
@@ -515,7 +510,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    await chooseOption('Status', 'Blocked');
+    await chooseOption('상태', '차단');
 
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     // The old status is not overwritten locally: the select stays on it and
@@ -537,7 +532,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    await chooseOption('Status', 'Blocked');
+    await chooseOption('상태', '차단');
 
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
@@ -572,19 +567,19 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
     // The draft is composed against V1 while the editor is open.
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Local draft' },
     });
 
     // The status PATCH carries V1 and loses the race against V2.
-    await chooseOption('Status', 'Blocked');
+    await chooseOption('상태', '차단');
 
     // The refetched V2 row wins; the editor and its stale draft are gone, so
     // the draft can never be saved against V2's concurrency token.
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('heading', { name: 'Remote title' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
     expect(screen.queryByText('Local draft')).not.toBeInTheDocument();
     expect(statusSelect()).toHaveValue('blocked');
     // Only the status PATCH happened: the stale draft was never re-sent.
@@ -609,15 +604,15 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'Local draft' },
     });
-    await chooseOption('Status', 'Blocked');
+    await chooseOption('상태', '차단');
 
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     expect(statusSelect()).toHaveValue('in_progress');
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Local draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('Local draft');
     expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(1);
   });
 });
@@ -631,7 +626,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
 describe('MilestonesRoute create retry (Astra finding 3)', () => {
   function openCreateForm(): Promise<void> {
     return (async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
       await screen.findByTestId('milestone-create-panel');
       await fillCreateForm(IDS.msPowerBi);
     })();
@@ -646,11 +641,11 @@ describe('MilestonesRoute create retry (Astra finding 3)', () => {
     await screen.findByText('MLS-1021');
     await openCreateForm();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
 
     // Same logical payload, resubmitted by the user after the lost response.
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(2));
     const firstCall = vi.mocked(createMilestone).mock.calls[0];
@@ -675,13 +670,13 @@ describe('MilestonesRoute create retry (Astra finding 3)', () => {
     await screen.findByText('MLS-1021');
     await openCreateForm();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('제목'), {
       target: { value: 'Launch review hardening v2' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(2));
     const firstCall = vi.mocked(createMilestone).mock.calls[0];
@@ -706,10 +701,10 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    expect(await readOptionNames('Managed System')).toEqual(['Select…', 'Power BI', 'ERP']);
+    expect(await readOptionNames('Managed System')).toEqual(['선택…', 'Power BI', 'ERP']);
 
     // With no system selected, no area can be valid yet.
     expect(await readOptionNames('Analytics Area')).toEqual(['—']);
@@ -726,7 +721,7 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
     const areaSelect = screen.getByRole('combobox', { name: 'Analytics Area' });
@@ -756,10 +751,10 @@ describe('MilestonesRoute create owner options (Opus P3-2)', () => {
     // lookup resolves her avatar initial even though she is not selectable.
     expect(screen.getByText('박')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    expect(await readOptionNames('Owner')).toEqual(['—', '김지원']);
+    expect(await readOptionNames('담당자')).toEqual(['—', '김지원']);
   });
 });
 
@@ -773,9 +768,9 @@ describe('MilestonesRoute create cancel sync (Opus P3-3)', () => {
     const { view, queryClient } = renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Draft to keep' } });
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: 'Draft to keep' } });
 
     // External URL change (Back/Forward) while the dirty create is open: the
     // discard confirmation opens and declining keeps the draft.
@@ -792,7 +787,7 @@ describe('MilestonesRoute create cancel sync (Opus P3-3)', () => {
 
     // Giving up on the draft closes the create; the panel must now show what
     // the URL says (param=MLS-1021), not the stale empty selection.
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
 
     expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
@@ -812,19 +807,19 @@ describe('MilestonesRoute create archived deep-link default (F4 followup)', () =
     renderWithClient(<MilestonesRoute managedSystem={IDS_F4.msArchived} />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
     // Every other field is filled; the hidden archived default stays untouched.
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('제목'), {
       target: { value: 'Launch review hardening' },
     });
-    fireEvent.change(screen.getByLabelText('Why this milestone exists'), {
+    fireEvent.change(screen.getByLabelText('이 Milestone의 목적'), {
       target: { value: '출시 리뷰 전 필수 정리 항목입니다.' },
     });
-    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-08-01' } });
-    fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-09-01' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('목표일'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     // The 409-bound body is never sent; the user must pick an active system.
     expect(vi.mocked(createMilestone)).not.toHaveBeenCalled();
@@ -840,18 +835,18 @@ describe('MilestonesRoute create archived deep-link default (F4 followup)', () =
     renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('제목'), {
       target: { value: 'Launch review hardening' },
     });
-    fireEvent.change(screen.getByLabelText('Why this milestone exists'), {
+    fireEvent.change(screen.getByLabelText('이 Milestone의 목적'), {
       target: { value: '출시 리뷰 전 필수 정리 항목입니다.' },
     });
-    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-08-01' } });
-    fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-09-01' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('목표일'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
 
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
     const createCall = vi.mocked(createMilestone).mock.calls[0];
@@ -872,7 +867,7 @@ describe('MilestonesRoute create archived deep-link default (F4 followup)', () =
 // draft onto the newest token — the draft stays bound to its own version and
 // still loses the race as a 409, preserving the external title change.
 describe('MilestonesRoute status-title coordination (R2)', () => {
-  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+  const statusSelect = () => screen.getByRole('combobox', { name: '상태' }) as HTMLSelectElement;
   const OWN_V2 = '2026-07-21T09:00:00.000Z';
   const EXTERNAL_V2 = '2026-07-21T09:45:00.000Z';
   const OWN_V3 = '2026-07-21T10:00:00.000Z';
@@ -894,20 +889,20 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
 
     // The user's own status change succeeds from the same version V1.
-    await chooseOption('Status', 'Released');
+    await chooseOption('상태', '릴리스됨');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusSelect()).toHaveValue('released'));
 
     // The draft survives, and saving it must use the status response's new
     // token — not the stale V1 it was composed against.
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO Stabilization v2');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO Stabilization v2');
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
     const titleCall = vi.mocked(updateMilestone).mock.calls[1];
@@ -939,8 +934,8 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     const { queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'My local draft' },
     });
 
@@ -951,11 +946,11 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
 
     // The status change the user makes now is sent from the externally newer
     // version and succeeds — but it must not lift the stale draft to V3.
-    await chooseOption('Status', 'Released');
+    await chooseOption('상태', '릴리스됨');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusSelect()).toHaveValue('released'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
     const titleCall = vi.mocked(updateMilestone).mock.calls[1];
@@ -977,7 +972,7 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
 // window; the same-version coordination from the earlier repair is retained
 // after the pending request settles.
 describe('MilestonesRoute title/status serialization (R3)', () => {
-  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+  const statusSelect = () => screen.getByRole('combobox', { name: '상태' }) as HTMLSelectElement;
   const OWN_V2 = '2026-07-21T09:00:00.000Z';
 
   it('blocks title submission while a status change is pending, then coordinates', async () => {
@@ -1003,18 +998,18 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
 
     // The status change is sent and never resolves: the in-flight window.
-    await chooseOption('Status', 'Released');
+    await chooseOption('상태', '릴리스됨');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
 
     // Save is disabled and the Enter-driven submit is guarded: no second
     // request can race the pending one.
-    const save = screen.getByRole('button', { name: 'Save' });
+    const save = screen.getByRole('button', { name: '저장' });
     expect(save).toBeDisabled();
     fireEvent.submit(save.closest('form') as HTMLFormElement);
     expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1);
@@ -1055,11 +1050,11 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO Stabilization v2' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
 
     // The status select is disabled and its handler ignores the event while
@@ -1073,7 +1068,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
       expect(screen.getByRole('heading', { name: 'SSO Stabilization v2' })).toBeInTheDocument(),
     );
     expect(statusSelect()).toBeEnabled();
-    await chooseOption('Status', 'Released');
+    await chooseOption('상태', '릴리스됨');
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
     const statusCall = vi.mocked(updateMilestone).mock.calls[1];
@@ -1112,8 +1107,8 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
   async function openDirtyTitleEditor(): Promise<void> {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
   }
@@ -1128,41 +1123,41 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     // Decline keeps the record, the editor, and the draft.
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
 
     // Cancelling the edit clears the dirty guard: the next switch is direct.
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
     fireEvent.click(screen.getByText('Beta milestone'));
     expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '제목' })).not.toBeInTheDocument();
   });
 
   it('confirms before New milestone replaces the draft; confirming opens the create block', async () => {
     mockTwoRecords();
     await openDirtyTitleEditor();
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     fireEvent.click(await screen.findByRole('button', { name: '이동' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
     // The detail editor is replaced by a fresh create form: the discarded
     // draft is not inherited (the create form owns its own empty Title).
     expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('');
   });
 
   it('confirms before a URL param change replaces the draft; declining preserves it', async () => {
     mockTwoRecords();
     const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
 
@@ -1177,7 +1172,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
   });
 
   it('needs no confirmation for a record switch after a successful title save', async () => {
@@ -1187,7 +1182,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
       title: 'SSO Stabilization v2',
     });
     await openDirtyTitleEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
@@ -1210,7 +1205,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     // the list row is the first match (list renders before the panel).
     fireEvent.click(screen.getAllByText('SSO Stabilization')[0] as HTMLElement);
     expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
 
     // B is still protected, and confirming it discards the draft.
     fireEvent.click(screen.getByText('Beta milestone'));
@@ -1219,14 +1214,14 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
 
     // A fresh draft on B: New milestone is still protected as well.
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'B draft' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('B draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('B draft');
   });
 
   // R3 followup (midreview P3) — a declined URL-driven switch restores the
@@ -1239,8 +1234,8 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     mockTwoRecords();
     const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
       target: { value: 'SSO draft' },
     });
 
@@ -1272,7 +1267,7 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     );
     expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
   });
 });
 
@@ -1295,25 +1290,25 @@ describe('MilestonesRoute create session (R5)', () => {
     renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
     await fillCreateForm(IDS.msPowerBi);
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
 
     for (const label of [
-      'Title',
-      'Why this milestone exists',
+      '제목',
+      '이 Milestone의 목적',
       'Managed System',
       'Analytics Area',
-      'Owner',
-      'Start',
-      'Target',
+      '담당자',
+      '시작일',
+      '목표일',
     ]) {
       expect(screen.getByLabelText(label)).toBeDisabled();
     }
     // Cancel stays available: dismissal is a UI decision, not a server one.
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
 
     resolveCreate(createdRow());
   });
@@ -1331,18 +1326,18 @@ describe('MilestonesRoute create session (R5)', () => {
     await screen.findByText('MLS-1021');
 
     // Session A: fill and submit; the response stays pending.
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
     await fillCreateForm(IDS.msPowerBi);
-    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: '생성' }));
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
 
     // Dismiss A (the Cancel action is an explicit UI decision), then open B.
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
     await waitFor(() =>
       expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
     // A completes: flush the resolution through React and require ACTUAL
@@ -1414,15 +1409,15 @@ describe('MilestonesRoute tab switch draft preservation (R6)', () => {
 
   async function openDirtyDraft(viaCreate: boolean): Promise<void> {
     if (viaCreate) {
-      fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Milestone 생성' }));
       await screen.findByTestId('milestone-create-panel');
-      fireEvent.change(screen.getByLabelText('Title'), {
+      fireEvent.change(screen.getByLabelText('제목'), {
         target: { value: 'Draft while switching' },
       });
     } else {
       await screen.findByRole('heading', { name: 'SSO Stabilization' });
-      fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
-      fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      fireEvent.click(screen.getByRole('button', { name: '제목 편집' }));
+      fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
         target: { value: 'SSO draft' },
       });
     }
@@ -1431,9 +1426,9 @@ describe('MilestonesRoute tab switch draft preservation (R6)', () => {
   function expectDraftIntact(viaCreate: boolean): void {
     if (viaCreate) {
       expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
-      expect(screen.getByLabelText('Title')).toHaveValue('Draft while switching');
+      expect(screen.getByLabelText('제목')).toHaveValue('Draft while switching');
     } else {
-      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+      expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('SSO draft');
     }
   }
 
@@ -1456,10 +1451,10 @@ describe('MilestonesRoute tab switch draft preservation (R6)', () => {
       await openDirtyDraft(viaCreate);
 
       // Tabs need a real user click (user-event), not fireEvent.
-      await user.click(screen.getByRole('tab', { name: /^Planning/ }));
+      await user.click(screen.getByRole('tab', { name: /^계획 중/ }));
 
       // During the tab refetch the shell and the draft are intact.
-      expect(await screen.findByText('Loading Milestones…')).toBeInTheDocument();
+      expect(await screen.findByText('Milestones 불러오는 중…')).toBeInTheDocument();
       expectDraftIntact(viaCreate);
 
       resolveTab({ items: [PLANNING_ROW] });
@@ -1484,8 +1479,8 @@ describe('MilestonesRoute tab switch draft preservation (R6)', () => {
     }
     await openDirtyDraft(viaCreate);
 
-    await user.click(screen.getByRole('tab', { name: /^Planning/ }));
-    await screen.findByText('Loading Milestones…');
+    await user.click(screen.getByRole('tab', { name: /^계획 중/ }));
+    await screen.findByText('Milestones 불러오는 중…');
     expectDraftIntact(viaCreate);
 
     rejectTab(new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }));

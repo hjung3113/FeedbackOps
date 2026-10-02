@@ -18,9 +18,7 @@ test.describe('VOC public-update review visual harness (#180)', () => {
 
     const dialog = page.getByTestId('public-update-review-modal');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('combobox', { name: 'Reporter-facing status' })).toContainText(
-      '상태 선택',
-    );
+    await expect(dialog.getByRole('combobox', { name: '공개 상태' })).toContainText('상태 선택');
     await page.evaluate(() => document.fonts.ready);
     // FullDetailView owns this independent scroll container; normalize it after fonts settle.
     await page
@@ -36,8 +34,8 @@ test.describe('VOC public-update review visual harness (#180)', () => {
     await page.goto(`/vocs?view=inbox&selected=${VOC_REVIEW_IDS.voc}`);
     await page.getByTestId('public-update-review-button').click();
     const dialog = page.getByTestId('public-update-review-modal');
-    await dialog.getByLabel('Dismiss reason').fill('릴리스 공지는 별도 검토가 필요합니다.');
-    await expect(dialog.getByRole('button', { name: 'Dismiss' })).toBeEnabled();
+    await dialog.getByLabel('기각 사유').fill('릴리스 공지는 별도 검토가 필요합니다.');
+    await expect(dialog.getByRole('button', { name: '기각' })).toBeEnabled();
     await page.evaluate(() => document.fonts.ready);
     await page
       .locator('[data-testid="voc-detail-panel"] > .overflow-y-auto')

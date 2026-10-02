@@ -2,6 +2,7 @@ import { getTask, listTasks } from '@/lib/api';
 import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   type MilestoneDetailDto,
   type TaskDetailDto,
@@ -145,7 +146,7 @@ describe('TaskListRoute display ids', () => {
       'bg-accent-danger/10',
       'text-accent-danger',
     );
-    expect(screen.getByText('담당자 지정됨')).toBeInTheDocument();
+    expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
     expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
     expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
   });
@@ -165,6 +166,24 @@ describe('TaskListRoute display ids', () => {
       'bg-accent-danger/10',
       'text-accent-danger',
     );
+  });
+
+  it('uses the glossary unknown-user label for an unresolved non-null Task assignee', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce({
+      ...priorityTaskDetail('high'),
+      assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+    });
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(GLOSSARY.unknownUser)).toBeInTheDocument();
+    expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
   });
 
   it('uses Korean Task detail navigation labels that match section headings', async () => {
@@ -284,7 +303,7 @@ describe('TaskListRoute display ids', () => {
     );
     renderWithClient(<TaskListRoute />);
 
-    const panel = await screen.findByText('Task list');
+    const panel = await screen.findByText('Task 목록');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
     expect(
       screen.getByText(
@@ -467,7 +486,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     // Positive control for the negatives: the blocked panel really renders.
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'summary_visible',
     );
@@ -498,7 +517,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
 
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
-    expect(within(trail).getByText('Source VOC').closest('[data-state]')).toHaveAttribute(
+    expect(within(trail).getByText('출처 VOC').closest('[data-state]')).toHaveAttribute(
       'data-state',
       'denied',
     );
@@ -526,7 +545,7 @@ describe('Task detail Linked context source VOC (#378)', () => {
     await screen.findByRole('button', { name: '맥락' });
     const trail = document.querySelector('[data-anchor="context"]') as HTMLElement;
     expect(trail.querySelector('[data-state]')).toBeNull();
-    expect(screen.queryByText('Source VOC')).not.toBeInTheDocument();
+    expect(screen.queryByText('출처 VOC')).not.toBeInTheDocument();
     expect(trail.querySelector('[data-entity-type="voc"]')).toBeNull();
     // Positive control: the Finding node still renders as before.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();

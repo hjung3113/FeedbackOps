@@ -15,7 +15,7 @@
  * — a richer layout than ToggleGroupItem supports.
  */
 
-import { cn } from '@fops/ui';
+import { SEVERITY_LABELS, cn } from '@fops/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@fops/ui';
 import { HelpCircle } from 'lucide-react';
 import type * as React from 'react';
@@ -85,7 +85,7 @@ export function SeverityPicker({
             <button
               key={level}
               type="button"
-              aria-label={level}
+              aria-label={SEVERITY_LABELS[level]}
               aria-pressed={isActive}
               data-active={isActive ? 'true' : 'false'}
               data-sev={level}
@@ -109,11 +109,11 @@ export function SeverityPicker({
                 {/* .severity-pick-label */}
                 <span
                   className={cn(
-                    'text-[13px] font-semibold capitalize leading-none mb-[3px]',
+                    'text-[13px] font-semibold leading-none mb-[3px]',
                     isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
                   )}
                 >
-                  {level}
+                  {SEVERITY_LABELS[level]}
                 </span>
                 {/* .severity-pick-meta */}
                 <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>

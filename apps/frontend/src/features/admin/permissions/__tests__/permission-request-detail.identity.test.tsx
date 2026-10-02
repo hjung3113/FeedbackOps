@@ -39,7 +39,7 @@ describe('PermissionRequestDetail identity', () => {
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
 
-    const header = screen.getByText('Permission Request').closest('header');
+    const header = screen.getByText('권한 요청').closest('header');
     expect(header?.querySelectorAll('p')).toHaveLength(2);
   });
 

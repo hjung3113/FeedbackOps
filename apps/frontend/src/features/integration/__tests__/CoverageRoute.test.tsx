@@ -283,17 +283,15 @@ describe('integration coverage route', () => {
 
   test('uses the canonical Coverage metric labels and the locked subtitle', async () => {
     await renderCoverage('/integration/coverage');
-    expect(screen.getByRole('heading', { level: 1, name: 'Coverage' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: '커버리지' })).toBeVisible();
     const signals = within(screen.getByTestId('coverage-signals'));
     expect(signals.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
     expect(signals.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
-    expect(signals.getByText('High severity VOC 후속 조치')).toBeVisible();
+    expect(signals.getByText('높은 심각도 VOC 후속 조치')).toBeVisible();
     const table = within(screen.getByTestId('coverage-table'));
     expect(table.getByText('공개 업데이트가 있는 Released Task')).toBeVisible();
     expect(table.getByText('Analytics Area가 지정된 VOC')).toBeVisible();
-    expect(
-      screen.getByText('Partial integration coverage. 정책이 요구하는 연결만 표시합니다.'),
-    ).toBeVisible();
+    expect(screen.getByText('부분 커버리지. 정책이 요구하는 연결만 표시합니다.')).toBeVisible();
   });
 
   test('keeps metric keys out of visible Coverage rows', async () => {
@@ -387,8 +385,8 @@ describe('integration coverage route', () => {
       expect(screen.getByTestId('coverage-empty')).toBeVisible();
     });
     // Omission is availability, not a zero count — the state must say so.
-    expect(screen.getByTestId('coverage-empty').textContent).toContain('omitted');
-    expect(screen.getByTestId('coverage-empty').textContent).toContain('not the same as zero');
+    expect(screen.getByTestId('coverage-empty').textContent).toContain('생략됩니다');
+    expect(screen.getByTestId('coverage-empty').textContent).toContain('0과 같지 않습니다');
     expect(screen.queryByTestId('coverage-row-voc-task')).toBeNull();
     expect(screen.queryByTestId('coverage-queue-row-unassigned-voc')).toBeNull();
     expect(screen.queryByTestId('coverage-table')).toBeNull();

@@ -3,6 +3,7 @@ import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +19,7 @@ const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
   { value: 'needs_more_evidence', label: TASK_REQUEST_STATUS_LABELS.needs_more_evidence },
   { value: 'approved', label: TASK_REQUEST_STATUS_LABELS.approved },
   { value: 'rejected', label: TASK_REQUEST_STATUS_LABELS.rejected },
-  { value: 'all', label: 'All' },
+  { value: 'all', label: GLOSSARY.all },
 ];
 
 export interface UseTaskRequestsQueueResult {

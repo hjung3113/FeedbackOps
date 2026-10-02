@@ -221,7 +221,7 @@ export function PermissionRequestDecisionForm({
       </div>
       {selfApprovalBlockedByPolicy ? (
         <p className="text-xs text-accent-danger">
-          Workspace policy에서 self-approval을 금지합니다. 다른 Admin이 이 요청을 승인해야 합니다.
+          워크스페이스 정책에서 직접 승인을 금지합니다. 다른 관리자가 이 요청을 승인해야 합니다.
         </p>
       ) : null}
       <label
@@ -316,41 +316,41 @@ export function PermissionRequestDecisionForm({
         >
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-text-primary">
-              Self-approval audit capture
+              직접 승인 감사 기록
             </span>
-            <OutlineBadge>SENSITIVE</OutlineBadge>
+            <OutlineBadge>민감</OutlineBadge>
           </div>
           <p className="text-xs leading-5 text-text-secondary">
-            이 결정은 본인이 작성한 요청을 본인이 승인하는 self-approval 입니다. 감사 로그에
+            이 결정은 본인이 작성한 요청을 본인이 승인하는 직접 승인입니다. 감사 로그에
             SELF_APPROVAL 라벨이 부여되고 다음 두 항목이 함께 캡처됩니다.
           </p>
           <label
             className="flex flex-col gap-2 text-sm text-text-secondary"
             htmlFor="self-approval-policy-citation"
           >
-            Policy citation <span className="text-accent-danger">· 필수 (≥ 8자)</span>
+            정책 근거 <span className="text-accent-danger">· 필수 (≥ 8자)</span>
             <Input
               id="self-approval-policy-citation"
               value={policyCitation}
               onChange={(event) => setPolicyCitation(event.target.value)}
-              placeholder="예: task.self_approve_request scoped capability — workspace policy §4.3"
+              placeholder="예: task.self_approve_request 범위 내 권한 — 워크스페이스 정책 §4.3"
             />
           </label>
           <label
             className="flex flex-col gap-2 text-sm text-text-secondary"
             htmlFor="self-approval-peer-reviewer-absence"
           >
-            Peer reviewer 부재 사유 <span className="text-accent-danger">· 필수 (≥ 8자)</span>
+            동료 검토자 부재 사유 <span className="text-accent-danger">· 필수 (≥ 8자)</span>
             <Textarea
               id="self-approval-peer-reviewer-absence"
               value={peerReviewerAbsence}
               onChange={(event) => setPeerReviewerAbsence(event.target.value)}
-              placeholder="예: powerbi scope 의 다른 reviewer 모두 PTO. 정시 release 마감 때문에 대기 불가."
+              placeholder="예: 같은 범위의 다른 검토자가 모두 부재중이라 릴리스 마감까지 기다릴 수 없습니다."
               rows={2}
             />
           </label>
           <div className="flex flex-col gap-1 rounded bg-surface-detail p-3 text-xs text-text-secondary">
-            <span className="uppercase tracking-wide text-text-muted">감사 envelope 미리보기</span>
+            <span className="uppercase tracking-wide text-text-muted">감사 기록 미리보기</span>
             <span>label: SELF_APPROVAL</span>
             <span>
               actor: {me.data?.actor.id ?? '—'} · subject: {request.requester_actor_id}
@@ -377,13 +377,12 @@ export function PermissionRequestDecisionForm({
           </div>
           {selfApprovalForbidden ? (
             <p className="text-xs text-accent-danger">
-              Workspace policy에서 self-approval을 금지합니다. 다른 Admin이 이 요청을 승인해야
-              합니다.
+              워크스페이스 정책에서 직접 승인을 금지합니다. 다른 관리자가 이 요청을 승인해야 합니다.
             </p>
           ) : null}
           <p className="text-xs text-text-muted">
-            이 envelope 는 Workspace Admin Audit · Compliance Export 에 모두 노출됩니다. 정책 근거가
-            모호하면 self-approval 대신 Need more info 로 변경하세요.
+            이 감사 기록은 워크스페이스 관리자 감사 내역과 규정 준수 내보내기에 모두 포함됩니다.
+            정책 근거가 모호하면 직접 승인 대신 추가 정보 요청을 선택하세요.
           </p>
         </section>
       ) : null}
@@ -395,7 +394,7 @@ export function PermissionRequestDecisionForm({
         data-testid="permission-decision-submit"
       >
         {showSelfApprovalCapture
-          ? 'Self-approve 확정 · 감사 캡처'
+          ? '직접 승인 확정 · 감사 캡처'
           : selectedAction
             ? `${selectedAction.label} 처리`
             : '결정을 선택하세요'}

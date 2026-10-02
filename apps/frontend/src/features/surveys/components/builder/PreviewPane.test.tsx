@@ -75,24 +75,24 @@ describe('survey respondent preview modal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
 
-    expect(await screen.findByRole('dialog', { name: 'Respondent preview' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '응답자 미리보기' })).toBeInTheDocument();
     expect(
       screen.getByTestId('survey-editor').closest('[aria-hidden="true"], [inert]'),
     ).not.toBeNull();
-    expect(screen.queryByRole('button', { name: '닫기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '닫기' })).toBeInTheDocument();
   });
 
   it.each([
     ['Escape', () => fireEvent.keyDown(document.body, { key: 'Escape' })],
     [
       'the shared close button',
-      () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
+      () => fireEvent.click(screen.getByRole('button', { name: '닫기' })),
     ],
   ])('closes with %s and returns focus to Preview', async (_label, close) => {
     renderPreview();
     const trigger = screen.getByRole('button', { name: '미리보기' });
     fireEvent.click(trigger);
-    await screen.findByRole('dialog', { name: 'Respondent preview' });
+    await screen.findByRole('dialog', { name: '응답자 미리보기' });
 
     close();
 
@@ -105,9 +105,9 @@ describe('survey respondent preview modal', () => {
     renderPreview();
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Respondent preview' });
+    const dialog = await screen.findByRole('dialog', { name: '응답자 미리보기' });
     const firstFocusable = within(dialog).getByRole('radio', { name: '예' });
-    const lastFocusable = within(dialog).getByRole('button', { name: 'Close' });
+    const lastFocusable = within(dialog).getByRole('button', { name: '닫기' });
 
     firstFocusable.focus();
     await user.tab({ shift: true });
@@ -125,11 +125,11 @@ describe('survey respondent preview modal', () => {
     renderPreview(draft);
 
     fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
-    await screen.findByRole('dialog', { name: 'Respondent preview' });
+    await screen.findByRole('dialog', { name: '응답자 미리보기' });
     fireEvent.click(screen.getByRole('radio', { name: '예' }));
     fireEvent.click(screen.getByRole('button', { name: '제출 (미리보기)' }));
     expect(await screen.findByText('응답이 제출되었습니다')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(draft).toEqual(before);

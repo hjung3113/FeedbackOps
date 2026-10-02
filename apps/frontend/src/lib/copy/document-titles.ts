@@ -1,42 +1,43 @@
+import { GLOSSARY } from './glossary';
 import { ROUTER_FALLBACK_COPY } from './router';
 
 export const DOCUMENT_TITLE_COPY = {
   app: 'FeedbackOps',
-  home: 'Home',
+  home: '홈',
   voc: {
-    inbox: 'Inbox',
+    inbox: GLOSSARY.inbox,
     triage: 'Triage',
-    my: 'My VOCs',
+    my: GLOSSARY.myVocs,
     create: '새 VOC 작성',
   },
-  vocClusters: 'VOC 클러스터',
+  vocClusters: 'VOC Cluster',
   findings: 'Findings',
   findingDetail: 'Finding 상세',
   tasks: {
     requests: 'Task Requests',
     backlog: 'Tasks',
-    board: 'Board',
-    my: 'My Tasks',
+    board: GLOSSARY.board,
+    my: '내 Task',
     milestones: 'Milestones',
   },
   integration: {
-    dashboard: 'Integration Action Dashboard',
-    coverage: 'Coverage',
-    links: 'Entity links',
+    dashboard: '연동 액션 대시보드',
+    coverage: GLOSSARY.coverage,
+    links: GLOSSARY.entityLinks,
   },
   surveys: {
     list: 'Surveys',
     detail: 'Surveys',
-    results: 'Results',
-    followUp: 'Follow-up',
+    results: '결과',
+    followUp: '후속 조치',
   },
   admin: {
-    managedSystems: 'Managed systems',
-    analyticsAreas: 'Analytics areas',
+    managedSystems: 'Managed System',
+    analyticsAreas: 'Analytics Area',
     permissionRequests: '권한 요청 검토',
-    settings: 'Workspace settings',
+    settings: '워크스페이스 설정',
   },
-  login: 'Login',
+  login: '로그인',
   notFound: ROUTER_FALLBACK_COPY.notFound.title,
   error: ROUTER_FALLBACK_COPY.error.title,
 } as const;

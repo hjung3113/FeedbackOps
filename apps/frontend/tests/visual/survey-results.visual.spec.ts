@@ -41,7 +41,7 @@ test.describe('/surveys/:surveyId/results visual harness', () => {
       }
       const target =
         scenario === 'no-permission'
-          ? page.getByText('Survey Result')
+          ? page.getByText('Survey 결과', { exact: true })
           : page.getByTestId('survey-results-summary');
       await expect(target).toBeVisible();
       if (scenario === 'non-outcome') {

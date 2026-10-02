@@ -492,13 +492,13 @@ describe('document titles from production detail panels', () => {
     await waitFor(() =>
       expect(document.title).toBe(`${DOCUMENT_TITLE_COPY.tasks.milestones} · FeedbackOps`),
     );
-    expect(screen.getByText('Loading Milestone…')).toBeInTheDocument();
+    expect(screen.getByText('Milestone을 불러오는 중…')).toBeInTheDocument();
 
     missingRead.reject(
       new ApiError(404, { code: 'not_found.record', message: 'Milestone missing' }),
     );
     await waitFor(() =>
-      expect(screen.getByText('Milestone detail unavailable.')).toBeInTheDocument(),
+      expect(screen.getByText('Milestone 상세를 불러오지 못했습니다.')).toBeInTheDocument(),
     );
     expect(document.title).toBe(`${DOCUMENT_TITLE_COPY.tasks.milestones} · FeedbackOps`);
     expect(screen.queryByTestId('milestone-record')).not.toBeInTheDocument();

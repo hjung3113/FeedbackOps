@@ -39,10 +39,10 @@ describe('<TimelineEntry>', () => {
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
   });
 
-  it('renders "Reporter 답변" kind chip', () => {
+  it('renders "제출자 답변" kind chip', () => {
     const entry: ConversationEntry = { ...BASE, kind: 'reporter_reply', visibility: 'reporter' };
     render(<TimelineEntry entry={entry} />);
-    expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
+    expect(screen.getByText('제출자 답변')).toBeInTheDocument();
   });
 
   it('renders "내부 코멘트" kind chip', () => {
@@ -56,6 +56,14 @@ describe('<TimelineEntry>', () => {
     render(<TimelineEntry entry={entry} actorDisplayName="박운영" />);
     expect(screen.getByText('박운영')).toBeInTheDocument();
     expect(screen.queryByText(`Actor ${BASE.actor_id.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
+  // #679 FIX2: unresolved conversation actors fall back to the glossary's
+  // unknown-user name instead of an English chrome label.
+  it('falls back to 알 수 없는 사용자 when the actor name cannot be resolved', () => {
+    const entry: ConversationEntry = { ...BASE, kind: 'public_update', visibility: 'public' };
+    render(<TimelineEntry entry={entry} />);
+    expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
   });
 
   it('renders status transition pair when both status fields present', () => {

@@ -452,7 +452,7 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
 
       await openConvertForm();
       const hint = await screen.findByText(
-        '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Area를 선택하거나 없음을 선택하세요.',
+        '원본 Finding의 Analytics Area가 보관되어 있습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.',
       );
       const areaPicker = screen.getByRole('combobox', { name: 'Analytics Area' });
       expect(areaPicker).toHaveTextContent('Analytics Area 선택 필요');
@@ -528,7 +528,7 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
     });
 
     const hint = await screen.findByText(
-      '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Area를 선택하거나 없음을 선택하세요.',
+      '선택한 Analytics Area를 더 이상 사용할 수 없습니다. 다른 Analytics Area를 선택하거나 없음을 선택하세요.',
     );
     const areaPicker = screen.getByRole('combobox', { name: 'Analytics Area' });
     expect(areaPicker).toHaveTextContent('Analytics Area 선택 필요');

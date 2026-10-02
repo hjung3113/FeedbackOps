@@ -1,6 +1,7 @@
 // TimelineEntry — single conversation entry with kind chip + rich body.
 
 import { useMe } from '@/lib/auth/useMe';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatRelativeTime } from '@/lib/format/datetime';
 import type { ConversationEntry } from '@fops/shared';
 import {
@@ -18,7 +19,7 @@ import { AttachmentChipList } from './AttachmentChip';
 
 const KIND_LABELS: Record<ConversationEntry['kind'], string> = {
   public_update:     '공개 업데이트',
-  reporter_reply:    'Reporter 답변',
+  reporter_reply:    '제출자 답변',
   internal_comment:  '내부 코멘트',
 };
 
@@ -39,7 +40,7 @@ export function TimelineEntry({ entry, actorDisplayName }: TimelineEntryProps): 
       ? { display_name: actorDisplayName }
       : me?.actor.id === entry.actor_id
       ? { display_name: me.actor.display_name }
-      : { display_name: 'Conversation actor' };
+      : { display_name: GLOSSARY.unknownUser };
 
   const rendererMode =
     entry.kind === 'internal_comment' ? 'internal' : 'reporter_visible';

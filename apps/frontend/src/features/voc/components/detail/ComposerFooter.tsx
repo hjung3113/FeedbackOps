@@ -98,7 +98,7 @@ export function ComposerFooter({
           )}
         >
           <Expand size={11} aria-hidden="true" />
-          Preview
+          미리보기
         </button>
 
         <button

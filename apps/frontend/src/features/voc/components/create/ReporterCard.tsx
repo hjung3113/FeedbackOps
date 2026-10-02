@@ -3,7 +3,8 @@
 // renders nothing on error (auth guard in _authed.tsx handles redirect).
 
 import { useMe } from '@/lib/auth/useMe';
-import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
+import type { RoleLevel } from '@fops/shared';
 import { Avatar, AvatarFallback, Card, CardContent, Skeleton, cn } from '@fops/ui';
 import type * as React from 'react';
 
@@ -18,7 +19,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
     return (
       <Card className={cn('p-3.5', className)}>
         <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
-          Reporter
+          제출자
         </div>
         <CardContent className="flex items-center gap-3 p-0">
           <Skeleton className="h-8 w-8 rounded-full" />
@@ -43,7 +44,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
   return (
     <Card className={cn('p-3.5', className)}>
       <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
-        Reporter
+        제출자
       </div>
       <CardContent className="flex items-center gap-2.5 p-0">
         <Avatar className="h-8 w-8">
@@ -52,7 +53,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-text-primary">{actor.display_name}</span>
           <span className="text-xs text-text-muted">
-            Role: {ROLE_LEVEL_LABELS[actor.role_level as RoleLevel]}
+            역할: {ROLE_LEVEL_DISPLAY_LABELS[actor.role_level as RoleLevel]}
           </span>
         </div>
       </CardContent>

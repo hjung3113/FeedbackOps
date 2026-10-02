@@ -14,9 +14,7 @@ test.describe('/integration action dashboard visual harness', () => {
       integrationDashboard: createIntegrationDashboardScenario('populated'),
     });
     await page.goto('/integration');
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Integration Action Dashboard' }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '연동 액션 대시보드' })).toBeVisible();
     await expect(page.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     await expect(page.getByTestId('integration-managed-system-table')).toBeVisible();
     await expect(page.getByTestId('sidebar-nav-integration-dashboard')).toHaveAttribute(
@@ -31,7 +29,7 @@ test.describe('/integration action dashboard visual harness', () => {
       integrationDashboard: createIntegrationDashboardScenario('empty'),
     });
     await page.goto('/integration');
-    await expect(page.getByText('No recovery queues are available for this scope.')).toBeVisible();
+    await expect(page.getByText('이 범위에서 표시할 큐가 없습니다.')).toBeVisible();
     await expect(page.getByTestId('integration-surface-coverage-stat')).toHaveCount(0);
     await expectVisual(
       page,

@@ -89,7 +89,7 @@ function renderCapturedToast(container: HTMLElement): HTMLElement | null {
 }
 
 function clickSeverity() {
-  const chips = screen.getAllByRole('button', { name: /low|medium|high|critical/i });
+  const chips = screen.getAllByRole('button', { name: /낮음|중간|높음|심각/ });
   if (chips[0]) fireEvent.click(chips[0]);
 }
 

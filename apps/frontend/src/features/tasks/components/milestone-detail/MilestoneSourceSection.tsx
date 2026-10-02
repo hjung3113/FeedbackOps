@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneDetailDto } from '@fops/shared';
 import { Button, DirtyConfirmation } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -24,7 +25,7 @@ export function MilestoneSourceSection({
             source Finding is linked (finding 3): navigation to the existing
             Finding detail route only — no Finding → Milestone writer. */}
         <div className="flex items-center justify-between">
-          <MilestonePanelSectionTitle className="mb-0">Source</MilestonePanelSectionTitle>
+          <MilestonePanelSectionTitle className="mb-0">출처</MilestonePanelSectionTitle>
           {sourceFinding !== null && (
             <Button
               variant="subtle"
@@ -44,13 +45,13 @@ export function MilestoneSourceSection({
               }}
             >
               <ArrowRight className="h-[11px] w-[11px]" aria-hidden="true" />
-              Open finding
+              Finding 열기
             </Button>
           )}
         </div>
         {sourceFinding ? (
           <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
-            <span className="text-xs text-text-muted">From finding</span>
+            <span className="text-xs text-text-muted">{GLOSSARY.fromFinding}</span>
             <div className="text-[13px] font-medium text-text-primary">
               <span className="mr-1.5 font-mono text-xs text-text-muted">
                 {sourceFinding.display_id}
@@ -70,8 +71,7 @@ export function MilestoneSourceSection({
           // No Finding → Milestone writer exists (#514 out-of-scope list):
           // ship the prototype's standalone copy without a Link control.
           <div className="mt-2 text-sm text-text-muted">
-            {'근거 Finding 이 연결되어 있지 않습니다. ' +
-              'Standalone milestone 으로 운영 중입니다.'}
+            {'근거 Finding이 연결되어 있지 않습니다. ' + '단독 Milestone으로 운영 중입니다.'}
           </div>
         )}
       </div>

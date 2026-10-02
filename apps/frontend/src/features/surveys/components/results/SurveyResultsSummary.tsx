@@ -20,7 +20,7 @@ export interface SurveyResultsSummaryProps {
 }
 
 function questionPrompt(survey: Survey, questionId: string): string {
-  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? 'Question';
+  return survey.questions?.find((question) => question.id === questionId)?.prompt ?? '질문';
 }
 
 function QuestionResult({
@@ -39,7 +39,9 @@ function QuestionResult({
         data-testid={`survey-result-suppressed-${result.question_id}`}
       >
         <p className="text-sm font-medium text-text-primary">Q{index + 1}</p>
-        <p className="mt-2 text-sm text-text-muted">Results are suppressed to protect anonymity.</p>
+        <p className="mt-2 text-sm text-text-muted">
+          익명 보호를 위해 이 질문의 결과는 숨겨집니다.
+        </p>
       </section>
     );
   }
@@ -51,13 +53,13 @@ function QuestionResult({
         <span className="rounded border border-border-subtle px-1.5 py-0.5 text-xs capitalize">
           {SURVEY_RESULT_KIND_LABELS[result.kind]}
         </span>
-        <span>{result.answer_count} responses</span>
+        <span>응답 {result.answer_count}건</span>
       </div>
       <h2 className="mt-2 text-base font-semibold text-text-primary">
         {questionPrompt(survey, result.question_id)}
       </h2>
       {result.kind === 'choice' && (
-        <ul className="mt-4 space-y-2" aria-label="Response distribution">
+        <ul className="mt-4 space-y-2" aria-label="응답 분포">
           {result.option_buckets.map((bucket) => (
             <li className="flex items-center justify-between gap-4 text-sm" key={bucket.key}>
               <span className="text-text-secondary">{bucket.label}</span>
@@ -67,7 +69,7 @@ function QuestionResult({
         </ul>
       )}
       {result.kind === 'rating' && (
-        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="Rating distribution">
+        <dl className="mt-4 grid grid-cols-3 gap-2" aria-label="평점 분포">
           {(['low', 'mid', 'high'] as const).map((band) => (
             <div className="rounded bg-surface-card p-3" key={band}>
               <dt className="text-xs text-text-muted">{RATING_BAND_LABELS[band]}</dt>
@@ -81,7 +83,7 @@ function QuestionResult({
       {result.kind === 'text' && (
         <div className="mt-4 space-y-2">
           {result.excerpts.length === 0 ? (
-            <p className="text-sm text-text-muted">No approved excerpts are available.</p>
+            <p className="text-sm text-text-muted">승인된 발췌가 없습니다.</p>
           ) : (
             result.excerpts.map((excerpt) => (
               <blockquote
@@ -186,9 +188,7 @@ function NextActions({
       className="sticky top-4 self-start rounded-md border border-border-subtle bg-surface-raised p-4"
       data-testid="survey-result-next-actions"
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-        Follow-up actions
-      </h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">후속 조치</h2>
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
           const label = action.id === 'create_finding' ? 'Finding 생성' : 'Task 요청';
@@ -204,7 +204,7 @@ function NextActions({
                     권한 요청
                   </Button>
                   <p className="text-sm text-text-muted">
-                    Access details are unavailable, so this request cannot be submitted.
+                    접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.
                   </p>
                 </div>
               );
@@ -240,7 +240,7 @@ function NextActions({
                 </Button>
                 {unavailable && (
                   <p className="text-sm text-text-muted">
-                    No approved excerpts are available for a response you can access.
+                    접근 가능한 응답에 승인된 발췌가 없습니다.
                   </p>
                 )}
                 {draftOpen && <CreateFindingDraftPanel groups={groups} surveyId={surveyId} />}
@@ -268,7 +268,7 @@ function NextActions({
               </Button>
               {loadErrorFindingId === action.source_finding_id && (
                 <p className="text-sm text-text-danger" role="alert">
-                  Finding could not be loaded.
+                  Finding을 불러오지 못했습니다.
                 </p>
               )}
               {selectedFindingId === action.source_finding_id && (
@@ -314,17 +314,15 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
               <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
             </>
           )}
-          <p className="mt-2 text-sm text-text-muted">
-            Question summaries and response distributions
-          </p>
+          <p className="mt-2 text-sm text-text-muted">질문 요약과 응답 분포입니다.</p>
           {results.identity_protected && (
-            <p className="mt-3 text-sm text-text-muted">Identity protected responses</p>
+            <p className="mt-3 text-sm text-text-muted">신원 보호 응답</p>
           )}
           {hasOutcomeFollowUp &&
             (followUpRead === undefined ? (
               // Legacy direct-render branch keeps the develop-era Summary test green.
               <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
-                Outcome follow-up is available
+                후속 조치 검토 사용 가능
               </p>
             ) : (
               <div
@@ -345,7 +343,7 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
                     params={{ surveyId: survey.id }}
                     to="/surveys/$surveyId/follow-up"
                   >
-                    Follow-up 검토
+                    후속 조치 검토
                   </Link>
                 )}
               </div>

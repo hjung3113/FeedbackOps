@@ -88,7 +88,7 @@ export function ComposerReplyPreview({
     <div className="flex flex-col gap-3">
       {/* Disclaimer */}
       <span className="text-xs text-text-muted">
-        Reporter 1:1 답장 화면 미리보기입니다. 공개 타임라인에도 기록됩니다.
+        제출자 1:1 답장 화면 미리보기입니다. 공개 타임라인에도 기록됩니다.
       </span>
 
       {/* Preview card — prototype: padding 14, bg pitch-black, inset border */}

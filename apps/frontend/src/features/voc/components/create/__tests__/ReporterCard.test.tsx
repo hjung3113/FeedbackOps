@@ -56,10 +56,10 @@ function makeQuery(
 
 describe('<ReporterCard>', () => {
   it.each([
-    ['admin', 'Admin'],
-    ['developer', 'Developer'],
-    ['user', 'User'],
-  ] as const)('renders the canonical role label for %s', (role_level, label) => {
+    ['admin', '관리자'],
+    ['developer', '개발자'],
+    ['user', '사용자'],
+  ] as const)('renders the Korean role label for %s', (role_level, label) => {
     vi.mocked(useMe).mockReturnValue(
       makeQuery({
         data: {
@@ -70,7 +70,7 @@ describe('<ReporterCard>', () => {
     );
     render(<ReporterCard />);
     expect(screen.getByText('김호중')).toBeInTheDocument();
-    expect(screen.getByText(`Role: ${label}`)).toBeInTheDocument();
+    expect(screen.getByText(`역할: ${label}`)).toBeInTheDocument();
     expect(screen.queryByText(role_level, { exact: true })).not.toBeInTheDocument();
   });
 

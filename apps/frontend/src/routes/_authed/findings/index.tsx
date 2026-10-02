@@ -158,7 +158,7 @@ function FindingsListShell({
     <ListShell
       toolbar={{
         title: 'Findings',
-        subtitle: 'VOC evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
+        subtitle: 'VOC Evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
       }}
       list={
         <FindingsListBody

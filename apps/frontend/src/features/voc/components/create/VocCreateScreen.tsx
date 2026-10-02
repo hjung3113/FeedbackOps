@@ -122,7 +122,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             <div className="flex flex-col gap-2">
               <FieldLabel
                 className={SECTION_LABEL_CLASS}
-                tip="기본은 Direct Use. 다른 팀원·고객사 경험을 대신 등록할 때는 Proxy Report."
+                tip="기본은 직접 사용. 다른 팀원·고객사 경험을 대신 등록할 때는 대신 보고."
               >
                 출처
               </FieldLabel>
@@ -196,7 +196,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
               <FieldLabel
                 htmlFor="analytics_area_id"
                 className={SECTION_LABEL_CLASS}
-                tip="선택사항. 선택한 Managed System 안의 분석 영역만 고를 수 있어요."
+                tip="선택사항. 선택한 Managed System 안의 Analytics Area만 고를 수 있어요."
               >
                 ANALYTICS AREA
               </FieldLabel>

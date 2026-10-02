@@ -31,7 +31,7 @@
 // No ReporterStatusChangeBlock on this surface (reply is body-only, no status change).
 //
 // Submit endpoint: POST /vocs/:id/reporter-replies
-// On success: invalidate ['voc', voc.id], clear draft, toast 리포터에게 답장이 전송되었습니다.
+// On success: invalidate ['voc', voc.id], clear draft, toast 제출자에게 답장이 전송되었습니다.
 //
 // Error matrix (D-5.6: Callout copy sourced from backend detail.reason, not errorMapper):
 //   reporter_facing_status.gate_blocked → amber Callout inline
@@ -127,7 +127,7 @@ export function ReporterReplyComposer({
       // #354: linked to the sent reply now — re-sending would be already_linked.
       // attachmentIds clears through the dropzone's onChange, not from here.
       setAttachmentResetToken((n) => n + 1);
-      toast.success('리포터에게 답장이 전송되었습니다.');
+      toast.success('제출자에게 답장이 전송되었습니다.');
     },
     onError: (error) => {
       if (getComposerErrorTone(error.code) == null) {
@@ -168,10 +168,10 @@ export function ReporterReplyComposer({
     id: me?.actor.id ?? '',
     display_name: me?.actor.display_name ?? '—',
   };
-  // Reporter identity — use VOC reporter context (display_name not on envelope; use fallback).
+  // The envelope carries no reporter display name, so the preview identifies the role.
   const reporter = {
     id: voc.reporter_id,
-    display_name: 'Reporter',
+    display_name: '제출자',
   };
 
   return (
@@ -182,7 +182,7 @@ export function ReporterReplyComposer({
         // REV-3 Cluster Z: explicit value (null = clear).
         value={draftDoc}
         onChange={(doc) => setDraftDoc(doc)}
-        placeholder="리포터에게 보낼 답장 내용을 입력하세요..."
+        placeholder="제출자에게 보낼 답장 내용을 입력하세요..."
         minHeight={84}
         onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
@@ -218,7 +218,7 @@ export function ReporterReplyComposer({
 
       {/* ComposerFooter — shared across all three composer surfaces */}
       <ComposerFooter
-        submitLabel="Send reply"
+        submitLabel="답변 보내기"
         onPreview={() => setPreviewOpen(true)}
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
@@ -232,7 +232,7 @@ export function ReporterReplyComposer({
       <PreviewModal
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="Reporter reply preview"
+        title="제출자 미리보기"
       >
         <ComposerReplyPreview voc={voc} owner={owner} reporter={reporter} draftDoc={draftDoc} />
       </PreviewModal>

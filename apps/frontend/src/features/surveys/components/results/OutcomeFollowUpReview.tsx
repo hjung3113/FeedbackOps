@@ -32,7 +32,7 @@ type ResolutionFilter = OutcomeFollowUpItem['resolution'];
 type DecisionAction = 'mark' | 'reopen';
 
 const NOT_CLASSIFIABLE_BODY =
-  '후속 검토는 마감된 Outcome 설문 중 충분한 응답이 모인 경우에만 제공됩니다.';
+  '후속 검토는 마감된 성과 Survey 중 충분한 응답이 모인 경우에만 제공됩니다.';
 
 function displayResponseNumber(value: number): string {
   // Option B pads single-digit response numbers in both the list and detail header.
@@ -40,13 +40,13 @@ function displayResponseNumber(value: number): string {
 }
 
 const FILTER_LABELS: Record<ResolutionFilter, string> = {
-  open: 'Open',
+  open: '미해소',
   finding: '해소됨',
   no_follow_up: '후속 없음',
 };
 
 function resolutionLabel(item: OutcomeFollowUpItem): string {
-  if (item.resolution === 'open') return 'Open';
+  if (item.resolution === 'open') return '미해소';
   // Option B shows the populated Finding display ID alone in list rows.
   if (item.resolution === 'finding') return item.finding?.display_id ?? 'Finding';
   return '후속 없음';
@@ -63,7 +63,7 @@ function submittedDate(value: string): string {
 }
 
 function currentStateText(item: OutcomeFollowUpItem): string {
-  if (item.resolution === 'open') return 'Open — Finding 없음, 후속 없음 결정 없음';
+  if (item.resolution === 'open') return '미해소 — Finding 없음, 후속 없음 결정 없음';
   if (item.resolution === 'finding')
     return `해소됨 — ${item.finding?.display_id ? `Finding ${item.finding.display_id}` : 'Finding'}`;
   return '후속 없음';
@@ -276,7 +276,7 @@ function OutcomeFollowUpDetailPanel({
                   권한 요청
                 </Button>
                 <p className="text-sm text-text-muted">
-                  Access details are unavailable, so this request cannot be submitted.
+                  접근 정보를 확인할 수 없어 요청을 제출할 수 없습니다.
                 </p>
               </div>
             );
@@ -303,7 +303,7 @@ function OutcomeFollowUpDetailPanel({
                   </p>
                 ) : excerptsUnavailable ? (
                   <p className="text-sm text-text-muted">
-                    No approved excerpts are available for a response you can access.
+                    접근 가능한 응답에 승인된 발췌가 없습니다.
                   </p>
                 ) : null}
                 {draftOpen && (
@@ -392,7 +392,7 @@ function EmptyReviewPage({
           params={{ surveyId: survey.id }}
           to="/surveys/$surveyId/results"
         >
-          Results로 돌아가기
+          결과로 돌아가기
         </Link>
       </div>
     </div>
@@ -598,7 +598,7 @@ export function OutcomeFollowUpReview({
       {decisionNotice && <DecisionNotice message={decisionNotice} />}
       {resultsError && (
         <output className="sr-only">
-          승인된 발췌를 불러오지 못했습니다. Create Finding을 사용할 수 없습니다.
+          승인된 발췌를 불러오지 못했습니다. Finding 생성을 사용할 수 없습니다.
         </output>
       )}
     </div>

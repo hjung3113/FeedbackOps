@@ -141,7 +141,7 @@ describe('TaskListRoute My Tasks view', () => {
   });
 
   it.each([
-    { view: 'my' as const, title: 'My Tasks' },
+    { view: 'my' as const, title: '내 Task' },
     { view: 'backlog' as const, title: 'Tasks' },
   ])('shows the $title toolbar with a count', async ({ view, title }) => {
     renderWithClient(<TasksRouteView search={{ view }} />);

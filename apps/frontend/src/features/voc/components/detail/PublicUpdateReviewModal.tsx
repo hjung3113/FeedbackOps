@@ -3,6 +3,7 @@ import {
   useResolvePublicUpdateReviewCandidate,
 } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { mapUnknownError } from '@/lib/api/errorMapper';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import { formatDate } from '@/lib/format/datetime';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
@@ -131,7 +132,7 @@ export function PublicUpdateReviewModal({
         <DialogHeader>
           <DialogTitle>공개 업데이트 리뷰</DialogTitle>
           <DialogDescription>
-            Task 상태를 자동 반영하지 않습니다. Reporter-facing status를 직접 선택하세요.
+            Task 상태를 자동 반영하지 않습니다. 공개 상태를 직접 선택하세요.
           </DialogDescription>
         </DialogHeader>
         {candidates.isLoading ? (
@@ -183,7 +184,7 @@ export function PublicUpdateReviewModal({
               />
             </div>
             <div className="text-sm">
-              <label htmlFor="public-update-reporter-status">Reporter-facing status</label>
+              <label htmlFor="public-update-reporter-status">{GLOSSARY.reporterFacingStatus}</label>
               <Select
                 value={status || NO_STATUS}
                 onValueChange={(value) =>
@@ -192,7 +193,7 @@ export function PublicUpdateReviewModal({
               >
                 <SelectTrigger
                   id="public-update-reporter-status"
-                  aria-label="Reporter-facing status"
+                  aria-label={GLOSSARY.reporterFacingStatus}
                   className="mt-1 w-full"
                 >
                   <SelectValue />
@@ -209,7 +210,7 @@ export function PublicUpdateReviewModal({
             </div>
             <div className="grid gap-1.5 text-sm">
               <FieldLabel htmlFor="public-update-review-dismissal-reason">
-                Dismiss reason
+                {GLOSSARY.dismissReason}
               </FieldLabel>
               <Input
                 id="public-update-review-dismissal-reason"
@@ -226,16 +227,16 @@ export function PublicUpdateReviewModal({
             onClick={dismiss}
             disabled={!dismissalReason.trim() || resolve.isPending}
           >
-            Dismiss
+            {GLOSSARY.dismiss}
           </Button>
           <Button
             onClick={apply}
             disabled={!candidateId || !status || !message.trim() || resolve.isPending}
           >
-            Apply public update
+            {GLOSSARY.applyPublicUpdate}
           </Button>
           <Button variant="secondary" onClick={close} disabled={resolve.isPending}>
-            취소
+            {GLOSSARY.cancel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -67,7 +67,7 @@ export function VocClusterListShell({
   return (
     <ListShell
       toolbar={{
-        title: 'VOC 클러스터',
+        title: 'VOC Cluster',
         subtitle: 'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
         actions: toolbarActions,
       }}
@@ -172,7 +172,7 @@ function ClusterListBody({
           tabs={tabs}
           activeTab={activeTab}
           onTabChange={(next) => onTabChange(next as typeof activeTab)}
-          tabsAriaLabel="클러스터 필터"
+          tabsAriaLabel="Cluster 필터"
           action={<span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>}
         />
       ) : null}
@@ -217,7 +217,7 @@ function ClusterListBody({
           // Prototype title casing is surface-specific; the reset action follows ADR-0052.
           <ListStateMessage
             variant="filtered"
-            title="이 필터에 해당하는 cluster가 없습니다"
+            title="이 필터에 해당하는 Cluster가 없습니다"
             body={`선택한 조건: ${activeTab === 'confirmed' ? '확정' : 'Finding 없음'}`}
             action={{
               label: '필터 초기화',

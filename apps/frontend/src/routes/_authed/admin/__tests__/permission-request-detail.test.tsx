@@ -104,7 +104,7 @@ describe('Permission Requests public page', () => {
     installFetch();
     renderPage();
     const panel = await screen.findByTestId('permission-request-detail-panel');
-    expect(panel).toHaveTextContent('Permission Request');
+    expect(panel).toHaveTextContent('권한 요청');
     expect(screen.queryByText('Task', { exact: true })).not.toBeInTheDocument();
   });
 

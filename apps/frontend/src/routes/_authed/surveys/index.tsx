@@ -228,7 +228,7 @@ export function CreateSurveyDialog({
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>설문 생성</DialogTitle>
+          <DialogTitle>Survey 생성</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -264,9 +264,9 @@ export function CreateSurveyDialog({
             />
           </label>
           <div className="block text-sm">
-            설문 유형
+            Survey 유형
             <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
-              <SelectTrigger aria-label="설문 유형">
+              <SelectTrigger aria-label="Survey 유형">
                 <SelectValue placeholder="유형 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -337,7 +337,9 @@ export function CreateSurveyDialog({
               </SelectContent>
             </Select>
           </div>
-          {create.isError && <p className="text-sm text-text-danger">설문을 만들지 못했습니다.</p>}
+          {create.isError && (
+            <p className="text-sm text-text-danger">Survey를 만들지 못했습니다.</p>
+          )}
           <DialogFooter>
             <Button
               type="button"

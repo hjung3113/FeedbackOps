@@ -64,7 +64,7 @@ export function MentionPickerButton({
         <button
           type="button"
           disabled={disabled}
-          aria-label="@Mention"
+          aria-label="@멘션"
           aria-haspopup="listbox"
           aria-expanded={open}
           onMouseDown={(e) => {

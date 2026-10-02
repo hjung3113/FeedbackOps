@@ -160,8 +160,8 @@ describe('/surveys/:surveyId route', () => {
         <SurveyDetailRoute />
       </QueryClientProvider>,
     );
-    const settings = screen.getByText('설문 설정').closest('aside');
-    if (!settings) throw new Error('Expected the builder 설문 설정 rail');
+    const settings = screen.getByText('Survey 설정').closest('aside');
+    if (!settings) throw new Error('Expected the builder Survey 설정 rail');
     expect(within(settings).getByText('Revenue Analytics')).toBeInTheDocument();
   });
 
@@ -179,7 +179,7 @@ describe('/surveys/:surveyId route', () => {
 
     render(<SurveyDetailRoute />);
 
-    expect(screen.getByText('설문을 찾을 수 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('Survey를 찾을 수 없습니다.')).toBeInTheDocument();
   });
 
   it('retries the survey list from the detail route error state', async () => {
@@ -202,7 +202,7 @@ describe('/surveys/:surveyId route', () => {
 
     render(<SurveyDetailRoute />);
 
-    expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(await screen.findByText('Survey 목록을 불러오지 못했습니다')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

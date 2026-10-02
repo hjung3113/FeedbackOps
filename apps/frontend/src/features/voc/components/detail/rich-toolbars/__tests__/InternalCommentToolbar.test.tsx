@@ -1,7 +1,7 @@
 // InternalCommentToolbar.test.tsx
 //
 // Tests:
-//   1. Renders Bold, Italic, Code, List, Link, @Mention.
+//   1. Renders 굵게, Italic, Code, List, Link, @Mention.
 //   2. PLAN-22 C8: Attach button renders only when `onAttach` is wired and is
 //      enabled (no longer the legacy disabled-deferred state).
 //
@@ -17,12 +17,12 @@ describe('<InternalCommentToolbar>', () => {
   it('renders Bold, Italic, Code, List, Link, @Mention', () => {
     render(<InternalCommentToolbar editor={null} onInsertMention={() => {}} />);
 
-    expect(screen.getByTitle('Bold')).toBeInTheDocument();
-    expect(screen.getByTitle('Italic')).toBeInTheDocument();
-    expect(screen.getByTitle('Code')).toBeInTheDocument();
-    expect(screen.getByTitle('Bullet list')).toBeInTheDocument();
-    expect(screen.getByTitle('Link')).toBeInTheDocument();
-    expect(screen.getByTitle('@Mention')).toBeInTheDocument();
+    expect(screen.getByTitle('굵게')).toBeInTheDocument();
+    expect(screen.getByTitle('기울임')).toBeInTheDocument();
+    expect(screen.getByTitle('코드')).toBeInTheDocument();
+    expect(screen.getByTitle('글머리 기호')).toBeInTheDocument();
+    expect(screen.getByTitle('링크')).toBeInTheDocument();
+    expect(screen.getByTitle('@멘션')).toBeInTheDocument();
   });
 
   it('hides Attach when onAttach is not provided', () => {

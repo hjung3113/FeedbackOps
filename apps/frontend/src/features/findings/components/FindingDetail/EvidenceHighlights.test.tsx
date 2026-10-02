@@ -18,7 +18,7 @@ vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
 const SOURCE_TYPE_LABELS: Record<EvidenceHighlightSourceType, string> = {
   voc: 'VOC',
   survey_response: 'Survey',
-  note: 'Manual note',
+  note: '수동 메모',
 };
 
 const IMPORTANCE_LABELS: Record<EvidenceHighlightImportance, string> = {

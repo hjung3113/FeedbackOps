@@ -26,6 +26,7 @@ import * as React from 'react';
 
 import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
 import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 
 type ByManagedSystemRow = DashboardSummary['by_managed_system'][number];
@@ -39,8 +40,7 @@ interface CoverageSearch {
 
 // The prototype subtitle pitches editable thresholds (direction C, deferred);
 // the integration guide requires the partial-integration-coverage label.
-const PARTIAL_COVERAGE_SUBTITLE =
-  'Partial integration coverage. 정책이 요구하는 연결만 표시합니다.';
+const PARTIAL_COVERAGE_SUBTITLE = '부분 커버리지. 정책이 요구하는 연결만 표시합니다.';
 
 // Coverage columns are the five rollup ratios; the queue columns are the five
 // per-system queues. permission-requests-pending is workspace review, never a
@@ -201,7 +201,9 @@ export function CoverageRoute(): React.ReactElement {
       <section data-testid="integration-coverage">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-text-primary">Coverage</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-text-primary">
+              {GLOSSARY.coverage}
+            </h1>
             <p className="mt-3 text-sm text-text-muted">{PARTIAL_COVERAGE_SUBTITLE}</p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -209,7 +211,7 @@ export function CoverageRoute(): React.ReactElement {
               <PopoverTrigger asChild>
                 <Button variant="subtle" size="sm" data-testid="coverage-filter-button">
                   <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                  Filter
+                  {GLOSSARY.filter}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="space-y-1.5">
@@ -219,10 +221,10 @@ export function CoverageRoute(): React.ReactElement {
                     id="coverage-filter-managed-system"
                     data-testid="coverage-filter-managed-system"
                   >
-                    <SelectValue placeholder="All Managed Systems" />
+                    <SelectValue placeholder="전체 Managed System" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Managed Systems</SelectItem>
+                    <SelectItem value="all">전체 Managed System</SelectItem>
                     {(systemsQuery.data?.items ?? []).map((system) => (
                       <SelectItem key={system.id} value={system.id}>
                         {system.name}
@@ -234,12 +236,12 @@ export function CoverageRoute(): React.ReactElement {
             </Popover>
             <Button variant="subtle" size="sm" onClick={refresh} data-testid="coverage-refresh">
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Refresh
+              {GLOSSARY.refresh}
             </Button>
           </div>
         </header>
         {summary.isError && (
-          <p className="mb-5 text-sm text-accent-danger">Coverage summary unavailable.</p>
+          <p className="mb-5 text-sm text-accent-danger">커버리지 요약을 불러올 수 없습니다.</p>
         )}
 
         {summary.isPending ? (
@@ -254,15 +256,15 @@ export function CoverageRoute(): React.ReactElement {
             className="rounded-md border border-border-subtle bg-surface-card p-8 text-center"
             data-testid="coverage-empty"
           >
-            <p className="text-sm font-medium text-text-primary">No coverage available</p>
+            <p className="text-sm font-medium text-text-primary">표시할 커버리지가 없습니다</p>
             <p className="mt-2 text-sm text-text-muted">
-              The dashboard returned no coverage or missing-link projections for this scope.
-              Projections you cannot receive are omitted — that is not the same as zero.
+              이 범위에 대한 커버리지 또는 연결 없음 항목이 대시보드에 없습니다. 받을 수 없는 항목은
+              생략됩니다 — 0과 같지 않습니다.
             </p>
           </div>
         ) : (
           <>
-            <PanelSectionTitle>Coverage signals</PanelSectionTitle>
+            <PanelSectionTitle>커버리지 신호</PanelSectionTitle>
             <div
               className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               data-testid="coverage-signals"
@@ -304,7 +306,7 @@ export function CoverageRoute(): React.ReactElement {
               })}
             </div>
 
-            <PanelSectionTitle>Missing-link queries</PanelSectionTitle>
+            <PanelSectionTitle>연결 없음 항목</PanelSectionTitle>
             <div
               className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               data-testid="coverage-queues"
@@ -336,14 +338,14 @@ export function CoverageRoute(): React.ReactElement {
                       <div className={`text-lg font-semibold tabular-nums ${tone.text}`}>
                         {queue.count}
                       </div>
-                      <div className="text-xs text-text-muted">records</div>
+                      <div className="text-xs text-text-muted">건</div>
                     </div>
                   </a>
                 );
               })}
             </div>
 
-            <PanelSectionTitle>Coverage by Managed System</PanelSectionTitle>
+            <PanelSectionTitle>Managed System별 커버리지</PanelSectionTitle>
             <div
               className="overflow-x-auto rounded-md border border-border-subtle bg-surface-card"
               data-testid="coverage-by-system"

@@ -1,5 +1,6 @@
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import { CREATE_OR_LINK_FINDING_LABEL } from '@/lib/copy/glossary';
 import {
   type FindingDto,
   type FindingSeverity,
@@ -89,7 +90,7 @@ export function CreateFindingDraftPanel({
       className="mt-3 space-y-3 border-t border-border-subtle pt-3"
       data-testid="survey-create-finding-draft"
     >
-      <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
+      <p className="text-sm font-medium text-text-primary">{CREATE_OR_LINK_FINDING_LABEL}</p>
       {scopedResponseId ? (
         <p className="text-sm text-text-secondary">선택한 응답의 승인된 발췌</p>
       ) : (
@@ -124,9 +125,7 @@ export function CreateFindingDraftPanel({
         </fieldset>
       )}
       {scopedResponseId && !selectedGroup ? (
-        <p className="text-sm text-text-muted">
-          No approved excerpts are available for a response you can access.
-        </p>
+        <p className="text-sm text-text-muted">접근 가능한 응답에 승인된 발췌가 없습니다.</p>
       ) : (
         selectedGroup && (
           <fieldset className="space-y-2">

@@ -1,3 +1,4 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   Button,
   Callout,
@@ -41,7 +42,7 @@ export function AnalyticsAreasFilter({
       <PopoverTrigger asChild>
         <Button variant="subtle" size="sm" data-testid="aa-filter-button">
           <Filter className="h-4 w-4" />
-          Filter
+          {GLOSSARY.filter}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="space-y-3">
@@ -74,7 +75,7 @@ export function AnalyticsAreasFilter({
             onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
             data-testid="aa-filter-include-archived"
           />
-          Archived 포함
+          보관됨 포함
         </label>
       </PopoverContent>
     </Popover>
@@ -120,15 +121,14 @@ export function AnalyticsAreasCatalog({
 
       <div>
         <div className="mb-3.5 flex items-center justify-between">
-          <PanelSectionTitle className="mb-0">Catalog</PanelSectionTitle>
+          <PanelSectionTitle className="mb-0">카탈로그</PanelSectionTitle>
           <span className="text-xs text-text-muted">
-            {renderedAreaCount} {renderedAreaCount === 1 ? 'area' : 'areas'} ·{' '}
-            {renderedSystems.length} {renderedSystems.length === 1 ? 'system' : 'systems'}
+            Analytics Area {renderedAreaCount}개 · Managed System {renderedSystems.length}개
           </span>
         </div>
 
         {pending ? (
-          <p className="text-sm text-text-muted">Loading…</p>
+          <p className="text-sm text-text-muted">불러오는 중…</p>
         ) : areasIsError ? (
           <p className="text-sm text-accent-danger" data-testid="aa-list-error">
             오류: {envelopeMessage(areasError)}
@@ -203,10 +203,8 @@ function GroupCard({
           {mark.label}
         </div>
         <span className="text-sm font-semibold text-text-primary">{ms.name}</span>
-        {ms.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
-        <span className="text-xs text-text-muted">
-          · {areas.length} {areas.length === 1 ? 'area' : 'areas'}
-        </span>
+        {ms.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
+        <span className="text-xs text-text-muted">· Analytics Area {areas.length}개</span>
         <div className="flex-1" />
         <Button
           variant="subtle"
@@ -215,7 +213,7 @@ function GroupCard({
           data-testid={`aa-add-area-${ms.slug}`}
         >
           <Plus className="h-3 w-3" />
-          Add area
+          Analytics Area 생성
         </Button>
       </div>
 
@@ -245,13 +243,13 @@ function GroupCard({
               <span className="flex min-w-0 items-center gap-2">
                 <Layers className="h-3 w-3 shrink-0 text-text-muted" />
                 <span className="truncate font-medium text-text-primary">{a.name}</span>
-                {a.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
+                {a.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
               </span>
               <span className="truncate font-mono text-xs text-text-muted">
                 analytics-area/{a.slug}
               </span>
               <span className="truncate text-xs text-text-muted">
-                Lead: <span className="text-text-secondary">{lead ?? '—'}</span>
+                리드: <span className="text-text-secondary">{lead ?? '—'}</span>
               </span>
               <div className="text-right">
                 <Button
@@ -263,7 +261,7 @@ function GroupCard({
                   }}
                   data-testid={`aa-detail-${a.slug}`}
                 >
-                  Detail
+                  상세
                 </Button>
               </div>
             </div>

@@ -1,3 +1,5 @@
+import { GLOSSARY } from '@/lib/copy/glossary';
+
 import { Button, FieldRow, OutlineBadge, PanelSectionTitle } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
@@ -26,9 +28,9 @@ export function PermissionRequestDetail({
     >
       <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-text-muted">Permission Request</p>
+          <p className="text-xs font-medium text-text-muted">권한 요청</p>
           <p className="truncate text-sm font-medium text-text-primary">
-            {actorName ?? '알 수 없는 사용자'}
+            {actorName ?? GLOSSARY.unknownUser}
             {' · '}
             {getCapabilityDisplayLabel(request.requested_capability)}
           </p>
@@ -44,7 +46,7 @@ export function PermissionRequestDetail({
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
             <FieldRow label="요청자" className="px-0">
               <span className="flex flex-col gap-0.5">
-                <span>{actorName ?? '알 수 없는 사용자'}</span>
+                <span>{actorName ?? GLOSSARY.unknownUser}</span>
                 <span className="font-mono text-xs text-text-muted">
                   {shortId(request.requester_actor_id)}
                 </span>

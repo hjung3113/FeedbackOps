@@ -8,6 +8,7 @@ import type {
   FindingSeverity,
   FindingStatus,
   RatingBand,
+  RoleLevel,
   SurveyQuestionKind,
   SurveyQuestionResult,
   SurveyStatus,
@@ -20,6 +21,13 @@ import type {
 import { SEVERITY_LABELS } from '@fops/ui';
 
 // #613 applies the Korean-first enum-label decisions from #579/#580 over prototype raw values.
+// #679 (ADR-0057 A2): role names are Korean chrome; this supersedes the prototype's `Role: User`.
+export const ROLE_LEVEL_DISPLAY_LABELS: Record<RoleLevel, string> = {
+  admin: '관리자',
+  developer: '개발자',
+  user: '사용자',
+};
+
 export const TRIAGE_STATE_LABELS: Record<TriageStateEnum, string> = {
   untriaged: '미분류',
   triaged: '분류 완료',
@@ -65,14 +73,14 @@ export const FINDING_SOURCE_TYPE_LABELS: Record<FindingDto['source_type'], strin
   voc: 'VOC',
   voc_cluster: 'VOC Cluster',
   survey: 'Survey',
-  survey_response: 'Survey Response',
-  manual: 'Manual',
+  survey_response: 'Survey 응답',
+  manual: '수동',
 };
 
 export const EVIDENCE_SOURCE_TYPE_LABELS: Record<EvidenceHighlightSourceType, string> = {
   voc: 'VOC',
   survey_response: 'Survey',
-  note: 'Manual note',
+  note: '수동 메모',
 };
 
 export const EVIDENCE_SENTIMENT_LABELS: Record<EvidenceHighlightSentiment, string> = {

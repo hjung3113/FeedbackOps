@@ -75,7 +75,7 @@ function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assign
       {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}
       <div className="mt-2 text-sm font-medium text-text-primary">{task.title}</div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <UnassignedBadge />}</div>
-      {!enabled && <span className="sr-only">Drag changes status only when grouped by status.</span>}
+      {!enabled && <span className="sr-only">상태 그룹화일 때만 드래그로 상태가 변경됩니다.</span>}
     </button>
   );
 }
@@ -85,7 +85,7 @@ function BoardColumn({ id, label, tasks, groupBy, selectedId, selectTask, names,
   names: { systems: ReadonlyMap<string, string>; actors: ReadonlyMap<string, string> }; enabled: boolean;
 }) {
   const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
-  return <section ref={droppable.setNodeRef} className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`} aria-label={`${label} column`}>
+  return <section ref={droppable.setNodeRef} className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`} aria-label={`${label} 열`}>
     <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
       {groupBy === 'status' ? (
         <InternalTaskBadge status={id as TaskStatus} />

@@ -42,7 +42,7 @@ describe('AppSidebar', () => {
     ).toEqual([
       {
         id: 'high-severity',
-        label: '높은 심각도',
+        label: '높음',
         href: '/vocs?view=triage&tab=high',
         countKey: 'voc.tab.high',
       },
@@ -56,7 +56,7 @@ describe('AppSidebar', () => {
 
     const noLink = NAV_TREE.voc.find((entry) => entry.id === 'no-link');
     expect(noLink).toMatchObject({
-      label: 'No link',
+      label: '연결 없음',
       href: '/vocs?view=inbox&tab=no-link',
       section: '보기',
       countKey: 'voc.inbox.no-link',
@@ -209,6 +209,33 @@ describe('AppSidebar', () => {
     ]);
   });
 
+  // #679 FIX2: renamed section headers must keep their develop-era Latin test ids.
+  it('keeps Latin sidebar-section test ids for every renamed section header', () => {
+    render(
+      <AppSidebar
+        entries={[
+          { id: 'queue-unassigned-voc', label: '미배정 VOC', href: '/vocs', section: '액션 큐' },
+          ...NAV_TREE.findings,
+          ...NAV_TREE.tasks,
+          ...NAV_TREE.surveys,
+          ...NAV_TREE.integration,
+          ...NAV_TREE.admin,
+        ]}
+      />,
+    );
+
+    for (const testId of [
+      'sidebar-section-action-queues',
+      'sidebar-section-findings',
+      'sidebar-section-tasks',
+      'sidebar-section-surveys',
+      'sidebar-section-integration',
+      'sidebar-section-admin',
+    ]) {
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+    }
+  });
+
   it('hides section labels when collapsed', () => {
     render(<AppSidebar entries={entries} defaultCollapsed={true} />);
 
@@ -234,7 +261,7 @@ describe('AppSidebar', () => {
     expect(screen.queryByTestId('sidebar-count-view-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
     expect(apply).toHaveBeenCalledWith('view-1');
-    fireEvent.change(screen.getByLabelText('Saved view name'), { target: { value: 'Mine' } });
+    fireEvent.change(screen.getByLabelText('저장된 보기 이름'), { target: { value: 'Mine' } });
     fireEvent.click(screen.getByTestId('saved-view-save'));
     expect(save).toHaveBeenCalledWith('Mine');
     fireEvent.click(screen.getByTestId('saved-view-delete-view-1'));
@@ -342,7 +369,7 @@ describe('AppSidebar', () => {
 
     fireEvent.click(screen.getByTestId('scope-selector'));
     expect(screen.getByTestId('scope-option-outside')).toBeVisible();
-    expect(screen.getByLabelText('Outside your grants')).toBeVisible();
+    expect(screen.getByLabelText('범위 밖')).toBeVisible();
   });
 
   it('AC-E5a shows granted and total counts without claiming zero systems', () => {

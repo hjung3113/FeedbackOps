@@ -339,9 +339,9 @@ describe('InboxPanel', () => {
       renderInbox();
 
       await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
-      fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+      fireEvent.click(screen.getByRole('radio', { name: '전체' }));
       const row = await screen.findByTestId(`home-inbox-row-${REFERENCED_NOTIFICATION_ID}`);
-      const archive = within(row).getByRole('button', { name: 'Archive' });
+      const archive = within(row).getByRole('button', { name: '보관' });
 
       expect(within(row).queryByRole('link')).not.toBeInTheDocument();
       expect(within(row).getAllByRole('button')).toEqual([archive]);
@@ -354,7 +354,7 @@ describe('InboxPanel', () => {
       if (interaction === 'hover') {
         fireEvent.pointerMove(archive, { pointerType: 'mouse' });
       } else {
-        screen.getByRole('radio', { name: 'All' }).focus();
+        screen.getByRole('radio', { name: '전체' }).focus();
         for (let tab = 0; tab < 4; tab += 1) await user.tab();
         expect(archive).toHaveFocus();
       }
@@ -375,10 +375,13 @@ describe('InboxPanel', () => {
     renderInbox();
     await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
-    expect(screen.getByRole('radio', { name: 'Unread' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'false');
 
-    fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+    fireEvent.click(screen.getByRole('radio', { name: '전체' }));
     await waitFor(() =>
       expect(calls.some(({ path, method }) => method === 'GET' && path === '/notifications')).toBe(
         true,
@@ -387,8 +390,11 @@ describe('InboxPanel', () => {
 
     expect(calls.some(({ path }) => path.includes('unread=true'))).toBe(true);
     expect(calls.some(({ path }) => path === '/notifications?unread=false')).toBe(false);
-    expect(screen.getByRole('radio', { name: 'Unread' })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: '읽지 않음' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    expect(screen.getByRole('radio', { name: '전체' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('marks an unread VOC as read and navigates to its detail route', async () => {
@@ -414,7 +420,7 @@ describe('InboxPanel', () => {
     ]);
     const { push } = renderInbox();
 
-    fireEvent.click(await screen.findByRole('radio', { name: 'All' }));
+    fireEvent.click(await screen.findByRole('radio', { name: '전체' }));
     fireEvent.click(await screen.findByRole('link', { name: /VOC 담당자로/ }));
     await act(async () => {
       await Promise.resolve();
@@ -437,7 +443,7 @@ describe('InboxPanel', () => {
     const { push } = renderInbox();
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /권한 요청이 처리되었습니다.*Mark as read/ }),
+      await screen.findByRole('button', { name: /권한 요청이 처리되었습니다.*읽음으로 표시/ }),
     );
 
     await waitFor(() =>
@@ -462,14 +468,14 @@ describe('InboxPanel', () => {
     installNotificationFetch([permissionDecision]);
     renderInbox();
 
-    fireEvent.click(await screen.findByRole('radio', { name: 'All' }));
+    fireEvent.click(await screen.findByRole('radio', { name: '전체' }));
     const row = await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
     expect(within(row).queryByRole('link')).not.toBeInTheDocument();
     expect(
       within(row).queryByRole('button', { name: /권한 요청이 처리되었습니다/ }),
     ).not.toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: '보관' })).toBeInTheDocument();
     expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
@@ -481,9 +487,9 @@ describe('InboxPanel', () => {
     renderInbox();
     await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
-    const loadMore = screen.getByRole('button', { name: 'Load more' });
+    const loadMore = screen.getByRole('button', { name: '더 불러오기' });
     expect(loadMore).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    fireEvent.click(screen.getByRole('button', { name: '보관' }));
     await waitFor(() =>
       expect(
         calls.filter(({ method, path }) => method === 'GET' && path.startsWith('/notifications')),
@@ -500,7 +506,7 @@ describe('InboxPanel', () => {
     renderInbox();
     await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    fireEvent.click(screen.getByRole('button', { name: '보관' }));
 
     await waitFor(() =>
       expect(screen.queryByTestId(`home-inbox-row-${NOTIFICATION_ID}`)).not.toBeInTheDocument(),
@@ -514,7 +520,7 @@ describe('InboxPanel', () => {
     const unreadEmpty = await screen.findByTestId('list-state-message');
     expect(unreadEmpty).toHaveAttribute('data-variant', 'empty');
     expect(within(unreadEmpty).getByText('읽지 않은 알림이 없습니다.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+    fireEvent.click(screen.getByRole('radio', { name: '전체' }));
     const allEmpty = await screen.findByTestId('list-state-message');
     expect(allEmpty).toHaveAttribute('data-variant', 'empty');
     expect(within(allEmpty).getByText('받은 알림이 없습니다.')).toBeInTheDocument();
@@ -525,7 +531,7 @@ describe('InboxPanel', () => {
     renderInbox();
 
     await screen.findByText('알림을 불러오지 못했습니다.');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await screen.findByText('읽지 않은 알림이 없습니다.');
     expect(calls.filter(({ method }) => method === 'GET')).toHaveLength(2);
   });

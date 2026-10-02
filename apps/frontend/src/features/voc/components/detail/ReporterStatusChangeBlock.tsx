@@ -160,7 +160,7 @@ export function ReporterStatusChangeBlock({
         <span
           className="text-xs font-semibold uppercase tracking-[0.04em] text-accent-primary"
         >
-          Reporter-facing status 변경
+          공개 상태 변경
         </span>
       </div>
 
@@ -180,7 +180,7 @@ export function ReporterStatusChangeBlock({
           <SelectTrigger
             value={nextStatus}
             className="h-8 w-auto min-w-[9rem] max-w-[10rem] rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-none focus:ring-1 focus:ring-focus-ring"
-            aria-label="다음 reporter-facing status 선택"
+            aria-label="다음 공개 상태 선택"
           >
             <SelectValue />
           </SelectTrigger>
@@ -250,7 +250,7 @@ export function ReporterStatusChangeBlock({
       <div className="flex flex-col gap-1.5 mt-3">
         <span className="text-xs text-text-muted flex items-center gap-1.5">
           <User size={10} aria-hidden="true" />
-          Reporter가 보게 될 화면 미리보기
+          제출자가 보게 될 화면 미리보기
         </span>
 
         <div

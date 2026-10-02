@@ -3,19 +3,19 @@ import { cn } from '@fops/ui';
 
 const STATUS_META: Record<EntityLinkStatus, { label: string; className: string }> = {
   active: {
-    label: 'Active',
+    label: '활성',
     className: 'bg-[rgb(var(--text-success)/0.12)] text-text-success',
   },
   stale: {
-    label: 'Stale',
+    label: '오래됨',
     className: 'bg-[rgb(var(--text-warning)/0.12)] text-text-warning',
   },
   detached: {
-    label: 'Detached',
+    label: '분리됨',
     className: 'bg-[rgb(var(--text-muted)/0.12)] text-text-muted',
   },
   revoked: {
-    label: 'Revoked',
+    label: '취소됨',
     className: 'bg-[rgb(var(--text-danger)/0.12)] text-text-danger',
   },
 };

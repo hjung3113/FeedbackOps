@@ -21,14 +21,14 @@ export function homeSidebarEntries(
     id: `queue-${queue.id}`,
     label: HOME_QUEUE_COPY[queue.id].sidebarLabel,
     href: queue.next_action.route,
-    section: 'ACTION QUEUES',
+    section: '액션 큐',
     countKey: QUEUE_COUNT_KEY[queue.id],
     count: queue.count,
     urgent: queue.severity === 'urgent',
   })) ?? [];
   // #585: Show actor-safe backend queues only; prototype Command/RECENT items are placeholders.
   return [
-    { id: 'home', label: 'Home', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
+    { id: 'home', label: '홈', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
     ...queues,
   ];
 }

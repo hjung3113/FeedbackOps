@@ -36,7 +36,7 @@ export function TaskRequestsRoute({
   useDocumentTitle(selectedDocumentTitle);
 
   if (queue.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Task Requests…</div>;
+    return <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>;
   }
 
   if (queue.permissionDeniedError) {

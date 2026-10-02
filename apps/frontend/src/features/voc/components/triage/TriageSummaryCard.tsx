@@ -1,7 +1,8 @@
 /** Summary of staged changes in the triage panel. */
 
-import { FieldRow, ReporterStatusBadge, cn } from '@fops/ui';
-import type { AvatarUser, ReporterFacingStatusEnum } from '@fops/ui';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { FieldRow, ReporterStatusBadge, SEVERITY_LABELS, cn } from '@fops/ui';
+import type { AvatarUser, ReporterFacingStatusEnum, SeverityEnum } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
 import type * as React from 'react';
 import type { TriagePanelLocalState } from '../../hooks/useTriagePanelState';
@@ -23,15 +24,15 @@ function ownerLabel(
   actorMap: Map<string, AvatarUser> | undefined,
   ownerTeamName: string | null | undefined,
 ): string {
-  if (ownerUserId !== null) return actorMap?.get(ownerUserId)?.display_name ?? 'Owner';
-  if (ownerTeamId !== null) return ownerTeamName ?? 'Owner team';
+  if (ownerUserId !== null) return actorMap?.get(ownerUserId)?.display_name ?? GLOSSARY.unknownUser;
+  if (ownerTeamId !== null) return ownerTeamName ?? '알 수 없는 팀';
   return '미지정';
 }
 
-function DiffRow({ label, from, to }: { label: string; from: string; to: string }) {
+function DiffRow({ id, label, from, to }: { id: string; label: string; from: string; to: string }) {
   return (
     <FieldRow label={label}>
-      <span className="flex items-center gap-1.5 text-sm" data-testid={`summary-diff-row-${label}`}>
+      <span className="flex items-center gap-1.5 text-sm" data-testid={`summary-diff-row-${id}`}>
         <span className="text-text-muted line-through">{from}</span>
         <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
         <span className="text-text-primary font-medium">{to}</span>
@@ -68,14 +69,24 @@ export function TriageSummaryCard({
         <>
           {severityChanged && (
             <DiffRow
-              label="Severity"
-              from={baseline.severity ?? '미지정'}
-              to={panelState.severity ?? '미지정'}
+              id="Severity"
+              label="심각도"
+              from={
+                baseline.severity === null
+                  ? '미지정'
+                  : (SEVERITY_LABELS[baseline.severity as SeverityEnum] ?? baseline.severity)
+              }
+              to={
+                panelState.severity === null
+                  ? '미지정'
+                  : (SEVERITY_LABELS[panelState.severity as SeverityEnum] ?? panelState.severity)
+              }
             />
           )}
           {ownerChanged && (
             <DiffRow
-              label="Owner"
+              id="Owner"
+              label={GLOSSARY.owner}
               from={ownerLabel(baseline.ownerUserId, baseline.ownerTeamId, actorMap, ownerTeamName)}
               to={ownerLabel(
                 panelState.ownerUserId,
@@ -87,16 +98,17 @@ export function TriageSummaryCard({
           )}
           {areaChanged && (
             <DiffRow
+              id="Analytics Area"
               label="Analytics Area"
               from={
                 baseline.analyticsAreaId === null
                   ? '미지정'
-                  : (baselineAnalyticsAreaName ?? 'Analytics area')
+                  : (baselineAnalyticsAreaName ?? 'Analytics Area')
               }
               to={
                 panelState.analyticsAreaId === null
                   ? '미지정'
-                  : (analyticsAreaName ?? 'Analytics area')
+                  : (analyticsAreaName ?? 'Analytics Area')
               }
             />
           )}
@@ -108,7 +120,7 @@ export function TriageSummaryCard({
           className="flex items-center gap-1.5 text-xs text-text-muted"
           data-testid="reporter-status-transition"
         >
-          <span>확정 시 Reporter status:</span>
+          <span>확정 시 공개 상태:</span>
           <ReporterStatusBadge status={currentReporterStatus} />
           <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
           <ReporterStatusBadge status={stagedOwnerMissing ? 'reviewing' : 'assigned'} />

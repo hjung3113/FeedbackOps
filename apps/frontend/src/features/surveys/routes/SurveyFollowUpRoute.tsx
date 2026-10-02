@@ -33,14 +33,14 @@ export function SurveyFollowUpRouteView({ surveyId }: { surveyId: string }) {
   }
   if (surveyQuery.isError || !surveyQuery.data) {
     return (
-      <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="설문을 찾을 수 없습니다." />
+      <EmptyState body="삭제되었거나 접근 권한이 없습니다." title="Survey를 찾을 수 없습니다." />
     );
   }
   if (!gate.canRead) {
     return (
       <div className="p-6">
         <PermissionBlockedPanel
-          category="Survey Result"
+          category="Survey 결과"
           reason={PERMISSION_BLOCKED_REASONS.surveyResult}
           state="denied"
         />

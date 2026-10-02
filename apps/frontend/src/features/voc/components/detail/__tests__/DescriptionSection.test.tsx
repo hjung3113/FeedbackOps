@@ -30,12 +30,12 @@ const ENVELOPE_WITH_BODY = {
 };
 
 describe('<DescriptionSection>', () => {
-  it('renders the BODY section label (English, per .review/title-reference.png)', () => {
+  it('renders the Korean 본문 section label (#679 supersedes the reference BODY variance)', () => {
     render(<DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />);
-    // Per relaxed copy convention (root AGENTS.md): the reference shows
-    // 'BODY' in English uppercase. Mirror verbatim.
-    expect(screen.getByText('BODY')).toBeInTheDocument();
-    // Old Korean label '설명' is removed in favor of the reference.
+    // #679 FIX2: the old prototype's relaxed 'BODY' variance is superseded by the
+    // Korean-chrome policy; the label is now 본문.
+    expect(screen.getByText('본문')).toBeInTheDocument();
+    // Old Korean label '설명' stays removed.
     expect(screen.queryByText('설명')).not.toBeInTheDocument();
   });
 
