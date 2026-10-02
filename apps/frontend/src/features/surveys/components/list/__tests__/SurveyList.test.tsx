@@ -100,7 +100,7 @@ describe('SurveyList empty state', () => {
 
     expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('request-access-survey.manage')).toBeInTheDocument();
     expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
@@ -111,7 +111,7 @@ describe('SurveyList empty state', () => {
 
     expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',
@@ -125,7 +125,7 @@ describe('SurveyList empty state', () => {
 
     expect(screen.getByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
     expect(
-      screen.getByText('Survey를 만들려면 survey.manage 권한이 필요합니다.'),
+      screen.getByText('Survey를 만들려면 Survey 관리 권한이 필요합니다.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-empty-contact-admin')).toHaveTextContent(
       '담당 관리자에게 문의하세요.',
