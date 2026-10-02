@@ -397,3 +397,4 @@ packages/ui/__tests__/combobox.test.tsx format -- pre-existing on develop (measu
 packages/ui/__tests__/combobox.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 packages/ui/__tests__/combobox.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 packages/ui/__tests__/combobox.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
+apps/backend/src/modules/nav/routes.ts format -- pre-existing on develop (measured 2026-10-02); #731 adds the resolve route

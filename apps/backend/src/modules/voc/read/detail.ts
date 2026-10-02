@@ -69,7 +69,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     actor: ReadActorContext;
     displayId: string;
   }): Promise<{ id: string } | null> {
-    const row = await repoRead.selectVocIdByDisplayId(deps.db, args.actor.workspace_id, args.displayId);
+    const row = await repoRead.selectVocIdByDisplayId(
+      deps.db,
+      args.actor.workspace_id,
+      args.displayId,
+    );
     if (!row) return null;
     try {
       const access = await resolveVocAccess({ actor: args.actor, vocId: row.id });

@@ -12,7 +12,7 @@ import { loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability, denyCapability } from '../../../test-support/permissions-fixtures.js';
+import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { seedSecondWorkspace } from '../../../test-support/seed-second-workspace.js';
 import { insertTaskRequestRow, insertTaskRow } from '../../../test-support/task-fixtures.js';
 import {
@@ -66,6 +66,11 @@ function routeIntentFor(entityType: EntityType, id: string) {
   return { route: '/tasks', search: { view: 'board', param: id } };
 }
 
+/** Fails the test when a fixture query unexpectedly returns no row. */
+function missingRow(): never {
+  throw new Error('expected a fixture row');
+}
+
 describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
   let dbHandle: DbHandle;
   let migrateHandle: DbHandle;
@@ -106,18 +111,20 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     reporterCookie = await loginAs(app, 'mock-user-1');
-    adminActorId = (
-      await dbHandle.pool.query<{ id: string }>(
-        `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
-        [WORKSPACE_ID],
-      )
-    ).rows[0]!.id;
-    reporterId = (
-      await dbHandle.pool.query<{ id: string }>(
-        `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
-        [WORKSPACE_ID],
-      )
-    ).rows[0]!.id;
+    adminActorId =
+      (
+        await dbHandle.pool.query<{ id: string }>(
+          `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+          [WORKSPACE_ID],
+        )
+      ).rows[0]?.id ?? missingRow();
+    reporterId =
+      (
+        await dbHandle.pool.query<{ id: string }>(
+          `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
+          [WORKSPACE_ID],
+        )
+      ).rows[0]?.id ?? missingRow();
     const foreign = await seedSecondWorkspace(dbHandle);
     foreignWorkspaceId = foreign.workspaceId;
     foreignUserActorId = foreign.userActorId;
@@ -138,10 +145,11 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       `delete from finding.findings where workspace_id = $1 and primary_managed_system_id in (${msSub})`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );
-    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, PREFIX);
-    // This suite's plain-User cohort (mock-user-plain-*) — the mock-dev-read-*
-    // cleanup above does not cover it (#731 FIX1 R4).
+    // This suite's plain-User cohort (mock-user-plain-*), which cleanupReadTestTables
+    // does not cover (#731 FIX1 R4). Runs first: their grants reference the test
+    // Managed Systems that cleanupReadTestTables deletes.
     await cleanupTestActorsByExternalIdPrefix(dbHandle, WORKSPACE_ID, 'mock-user-plain-');
+    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, PREFIX);
     await dbHandle.pool.query(
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in (${msSub})`,
       [foreignWorkspaceId, `${PREFIX}%`],
@@ -169,12 +177,13 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       'Nav resolve MS',
     );
     const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'Nav resolve VOC');
-    const vocDisplay = (
-      await dbHandle.pool.query<{ display_id: string }>(
-        'select display_id from voc.vocs where id = $1',
-        [voc.id],
-      )
-    ).rows[0]!.display_id;
+    const vocDisplay =
+      (
+        await dbHandle.pool.query<{ display_id: string }>(
+          'select display_id from voc.vocs where id = $1',
+          [voc.id],
+        )
+      ).rows[0]?.display_id ?? missingRow();
     const finding = await insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: ms,
@@ -263,11 +272,13 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
   /** Id of the single Managed System the latest seedScenario created (PREFIX slug). */
   async function scenarioMsId(): Promise<string> {
     return (
-      await dbHandle.pool.query<{ id: string }>(
-        `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
-        [WORKSPACE_ID, `${PREFIX}%`],
-      )
-    ).rows[0]!.id;
+      (
+        await dbHandle.pool.query<{ id: string }>(
+          `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
+          [WORKSPACE_ID, `${PREFIX}%`],
+        )
+      ).rows[0]?.id ?? missingRow()
+    );
   }
 
   /**
@@ -379,12 +390,13 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     'keeps a developer with the record Managed System scope able to resolve $entity_type',
     async (c) => {
       const seed = await seedScenario();
-      const msId = (
-        await dbHandle.pool.query<{ id: string }>(
-          `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
-          [WORKSPACE_ID, `${PREFIX}%`],
-        )
-      ).rows[0]!.id;
+      const msId =
+        (
+          await dbHandle.pool.query<{ id: string }>(
+            `select id from core.managed_systems where workspace_id = $1 and slug like $2 limit 1`,
+            [WORKSPACE_ID, `${PREFIX}%`],
+          )
+        ).rows[0]?.id ?? missingRow();
       const cookie = await scopedDeveloperCookie(msId);
 
       const { response } = await resolveVia(cookie, c.display(seed));
@@ -575,6 +587,6 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
     const after = await auditCount();
 
     expect(response.statusCode).toBe(200);
-    expect(after.rows[0]!.n).toBe(before.rows[0]!.n);
+    expect(after.rows[0]?.n ?? missingRow()).toBe(before.rows[0]?.n ?? missingRow());
   });
 });
