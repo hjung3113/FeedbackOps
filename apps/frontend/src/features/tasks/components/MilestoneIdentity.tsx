@@ -37,7 +37,7 @@ export function MilestoneManagedSystemPill({ name }: { name: string }) {
     <span className={`${COMPACT_BADGE_CLASS} text-text-secondary`}>
       <span
         aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
         style={{ backgroundColor: `rgb(var(${managedSystemToken(name)}) / 1)` }}
       />
       {name}
@@ -60,7 +60,7 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
     <span
-      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[9px] font-semibold leading-none text-white"
+      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-(--radius-pill) text-[9px] font-semibold leading-none text-white"
       style={{ backgroundColor: 'rgb(var(--color-aether-blue) / 1)' }}
     >
       {name.charAt(0).toUpperCase()}

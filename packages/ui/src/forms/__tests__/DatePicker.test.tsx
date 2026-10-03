@@ -31,7 +31,7 @@ describe('DatePicker', () => {
   });
 
   it.each(['2026-', '2026-06', '2026-02-30'])(
-    'keeps malformed typed date %s out of onChange and shows its error after blur-sm',
+    'keeps malformed typed date %s out of onChange and shows its error after blur',
     (value) => {
       const onChange = vi.fn();
       const onValidityChange = vi.fn();
@@ -61,7 +61,7 @@ describe('DatePicker', () => {
     },
   );
 
-  it('shows the error when a native form submit is attempted without a blur-sm', () => {
+  it('shows the error when a native form submit is attempted without a blur', () => {
     const onSubmit = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
     render(
       <form onSubmit={onSubmit}>

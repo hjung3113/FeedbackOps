@@ -245,7 +245,7 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('shows the touched field error on blur-sm and preserves its value', async () => {
+  it('shows the touched field error on blur and preserves its value', async () => {
     renderModal(null);
     const title = screen.getByLabelText(/제목/);
     const summary = screen.getByLabelText(/요약/);

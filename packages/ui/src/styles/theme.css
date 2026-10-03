@@ -6,20 +6,22 @@
  * key here ALIASES a token variable; nothing duplicates a value.
  *
  * `@theme inline` is required: theme variables share namespaces with token
- * names (`--radius-sm`, `--shadow-sm`, `--text-xs`, `--font-sans`, …), and an
- * inline theme emits no `:root` variables, so tokens.css stays the single
- * value authority regardless of import order or cascade layer (ADR-0058).
+ * names (`--radius-sm`, `--shadow-sm`, `--text-xs`, `--font-sans`, …). Inline
+ * only means the utility VALUES are inlined (`rounded-sm` embeds
+ * `var(--radius-sm)` instead of a theme-variable name); Tailwind still emits
+ * self-referencing declarations (`--radius-sm: var(--radius-sm)`) into the
+ * theme layer. Tokens stay the single value authority because the layer order
+ * puts the `layer(base)` token imports AFTER the theme layer — import order
+ * `tailwindcss` → tokens/base → theme is a consumer invariant, not an
+ * optional arrangement (ADR-0058).
  *
  * Consumers: `@import 'tailwindcss'; @import '@fops/ui/styles/tokens.css'
  * layer(base); @import '@fops/ui/styles/semantic.css' layer(base); @import
- * '@fops/ui/styles/theme.css';` then `@source` your component trees.
+ * '@fops/ui/styles/theme.css'; @import '@fops/ui/styles/compat.css';` then
+ * `@source` your component trees (including this package's `src`).
  *
- * Legacy-name compat shims (`leading-*`, `tracking-*`) sit at the bottom:
- * tokens.css defines `--leading-tight/normal/relaxed` and
- * `--tracking-tight/normal/wide`, which collide with Tailwind's default
- * utility namespaces. The shims pin those utilities to the Tailwind v3
- * default values this design system was rendered with, so the utility names
- * keep rendering identically while the token variables remain untouched.
+ * Legacy-name compat shims (`leading-*`, `tracking-*`) and the v3 `space-y-*`
+ * / Preflight pins live in `./compat.css` — import it right after this file.
  */
 @theme inline {
   /* --- Surface tokens --- */
@@ -163,49 +165,6 @@
   --shadow-focus: var(--shadow-focus);
 }
 
-/* --- Legacy-name compat shims ---
- * tokens.css `--leading-*` / `--tracking-*` token names shadow Tailwind's
- * default utility namespaces in v4 (utilities resolve `var(--leading-tight)`
- * etc.). v3 rendered these utilities from Tailwind's default scale because
- * the JS preset never overrode lineHeight/letterSpacing; pin the same values
- * here so the classes keep rendering identically. `leading-none`/`snug`/
- * `loose`, `tracking-tighter/wider/widest` have no token counterpart and keep
- * Tailwind's defaults, which match v3. The text-base/text-2xl Type Scale
- * pairs are unaffected: they reference the token variables directly (above).
- * The `initial` declarations remove the default theme keys so these six
- * utilities are generated ONLY by the shims — otherwise the built-in
- * utilities (which resolve the token variables) get merged into the same
- * selector by the CSS minifier and win the cascade.
- */
-@theme inline {
-  --leading-tight: initial;
-  --leading-normal: initial;
-  --leading-relaxed: initial;
-  --tracking-tight: initial;
-  --tracking-normal: initial;
-  --tracking-wide: initial;
-}
-@utility leading-tight {
-  --tw-leading: 1.25;
-  line-height: 1.25;
-}
-@utility leading-normal {
-  --tw-leading: 1.5;
-  line-height: 1.5;
-}
-@utility leading-relaxed {
-  --tw-leading: 1.625;
-  line-height: 1.625;
-}
-@utility tracking-tight {
-  --tw-tracking: -0.025em;
-  letter-spacing: -0.025em;
-}
-@utility tracking-normal {
-  --tw-tracking: 0;
-  letter-spacing: 0;
-}
-@utility tracking-wide {
-  --tw-tracking: 0.025em;
-  letter-spacing: 0.025em;
-}
+/* The legacy-name `leading-*` / `tracking-*` shims moved to `./compat.css`
+ * together with the v3 `space-y-*` and Preflight pins: they are consumer
+ * parity rules every @fops/ui app needs, not theme mappings. */
