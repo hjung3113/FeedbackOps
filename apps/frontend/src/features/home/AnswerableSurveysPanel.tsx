@@ -60,7 +60,7 @@ export function AnswerableSurveysPanel() {
               <div className="flex items-center gap-3 px-4 py-3">
                 <SurveyParticipationLink
                   surveyId={survey.survey_id}
-                  className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                 >
                   <span className="block text-sm font-medium text-text-primary">
                     {survey.title}

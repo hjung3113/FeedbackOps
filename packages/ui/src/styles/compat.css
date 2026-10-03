@@ -1,0 +1,114 @@
+/*
+ * Consumer parity layer for @fops/ui (ADR-0058): the rules @fops/ui components
+ * depend on that Tailwind v4 does not ship by default. Every app that renders
+ * this package must import this file after the theme:
+ *
+ *   @import 'tailwindcss';
+ *   @import '@fops/ui/styles/tokens.css' layer(base);
+ *   @import '@fops/ui/styles/semantic.css' layer(base);
+ *   @import '@fops/ui/styles/theme.css';
+ *   @import '@fops/ui/styles/compat.css';
+ *
+ * The layer order is a consumer invariant: the `layer(base)` token imports must
+ * come after `tailwindcss` establishes `theme, base, components, utilities`, so
+ * tokens.css (base) keeps priority over the theme-layer variables (ADR-0058).
+ * App-only rules (body typography, webfonts, screen scaffolding) stay in the
+ * consuming app — this file carries only what the package components rely on.
+ */
+
+/*
+ * v3 Preflight pins, kept at the exact v3 values:
+ * - default border color `theme(colors.gray.200)` #e5e7eb (v4: currentcolor);
+ * - input/textarea placeholder `theme(colors.gray.400)` #9ca3af (v4: 50%
+ *   currentcolor);
+ * - `cursor: pointer` on buttons (dropped in v4 — Button relies on it).
+ * Removing a pin requires adding explicit utilities at the affected sites.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * v3 `space-y-*` compat as a variant-aware functional utility. v3 set
+ * `margin-top` on `> :not([hidden]) ~ :not([hidden])` (and the reverse-toggle
+ * `margin-bottom`); v4 sets `margin-block-*` on `> :not(:last-child)`. The v3
+ * selector keeps hidden children out of the chain (a `[hidden]` first child no
+ * longer grants the first visible child a margin) and the functional form lets
+ * variants compose (`space-y-2 sm:space-y-4`). The v4 built-in rules that also
+ * emit are `:where(...)`-wrapped (specificity zero) and always lose to these.
+ */
+@utility space-y-* {
+  /* v4's built-in rule (zero specificity) also puts the gap on the preceding
+     sibling's margin-block-end; cancel it so the gap is applied once, v3-style. */
+  & > :not(:last-child) {
+    margin-block-end: 0;
+  }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(--spacing(--value(number)) * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(--spacing(--value(number)) * var(--tw-space-y-reverse));
+  }
+}
+
+/* --- Legacy-name compat shims (moved from theme.css, ADR-0058) ---
+ * tokens.css `--leading-*` / `--tracking-*` token names shadow Tailwind's
+ * default utility namespaces in v4 (utilities resolve `var(--leading-tight)`
+ * etc.). v3 rendered these utilities from Tailwind's default scale because
+ * the JS preset never overrode lineHeight/letterSpacing; pin the same values
+ * here so the classes keep rendering identically. `leading-none`/`snug`/
+ * `loose`, `tracking-tighter/wider/widest` have no token counterpart and keep
+ * Tailwind's defaults, which match v3. The text-base/text-2xl Type Scale
+ * pairs are unaffected: they reference the token variables directly
+ * (theme.css). The `initial` declarations remove the default theme keys so
+ * these six utilities are generated ONLY by the shims — otherwise the
+ * built-in utilities (which resolve the token variables) get merged into the
+ * same selector by the CSS minifier and win the cascade.
+ */
+@theme inline {
+  --leading-tight: initial;
+  --leading-normal: initial;
+  --leading-relaxed: initial;
+  --tracking-tight: initial;
+  --tracking-normal: initial;
+  --tracking-wide: initial;
+}
+@utility leading-tight {
+  --tw-leading: 1.25;
+  line-height: 1.25;
+}
+@utility leading-normal {
+  --tw-leading: 1.5;
+  line-height: 1.5;
+}
+@utility leading-relaxed {
+  --tw-leading: 1.625;
+  line-height: 1.625;
+}
+@utility tracking-tight {
+  --tw-tracking: -0.025em;
+  letter-spacing: -0.025em;
+}
+@utility tracking-normal {
+  --tw-tracking: 0;
+  letter-spacing: 0;
+}
+@utility tracking-wide {
+  --tw-tracking: 0.025em;
+  letter-spacing: 0.025em;
+}

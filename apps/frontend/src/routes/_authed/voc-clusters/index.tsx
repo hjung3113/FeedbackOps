@@ -293,7 +293,7 @@ function CreateClusterModal({
                   ? { 'aria-describedby': 'cluster-managed-system-error' }
                   : {})}
                 data-testid="cluster-managed-system-select"
-                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <SelectValue />
               </SelectTrigger>

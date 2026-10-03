@@ -1,7 +1,7 @@
 # VOC Frontend Implementation Spec — Slice 3
 
 > Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008.
-> Stack: React 18 + TypeScript 5 + Tailwind 3 + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
+> Stack: React 18 + TypeScript 5 + Tailwind 4.3.3 (CSS-first theme, ADR-0058) + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
 > Authority: AGENTS.md > CONTEXT.md > docs/adr > docs/implementation. Spec docs win every disagreement with the prototype (HANDOFF.md Rule 4).
 
 ---
@@ -455,7 +455,7 @@ Full event vocab lives in backend audit module; this spec lists VOC-touching nam
 
 ## 6. Visual Contract
 
-Tailwind config lives in `apps/frontend/tailwind.config.ts`. **CSS custom properties from `docs/design-prototype/styles.css` port verbatim**; Tailwind config exposes them as kebab-case theme keys.
+There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is the CSS-first `packages/ui/src/styles/theme.css` (v4 `@theme inline` aliasing the token variables). **CSS custom properties from `docs/design-prototype/styles.css` port verbatim**; the theme exposes them as kebab-case utility keys.
 
 ### 6.1 Surface tokens
 

@@ -6,7 +6,7 @@
  *
  * Token translations (PROTOTYPE-TO-PACK17.md):
  *   .panel-section-nav                → sticky top-0 z-10 flex items-center gap-0
- *                                        px-6 pt-1.5 pb-2 bg-surface-detail/95 backdrop-blur-sm
+ *                                        px-6 pt-1.5 pb-2 bg-surface-detail/95 backdrop-blur-xs
  *                                        border-b border-border-subtle overflow-x-auto scrollbar-none
  *   .panel-section-nav-button         → inline-flex items-center gap-1.5 px-2.5 py-1.5
  *                                        border-0 border-b-2 border-transparent bg-transparent
@@ -226,7 +226,7 @@ export function DetailPanelSectionNav({
               <button
                 type="button"
                 aria-label="이전 탭 보기"
-                className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                 onClick={() => scrollTabs('left')}
               >
                 <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -240,14 +240,14 @@ export function DetailPanelSectionNav({
         <div className="relative min-w-0 flex-1">
           {overflowState.canScrollLeft && (
             <span
-              className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-surface-detail to-transparent"
+              className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-linear-to-r/srgb from-surface-detail to-transparent"
               aria-hidden="true"
             />
           )}
           <div
             ref={navRef}
             data-testid="detail-panel-section-nav-track"
-            className="flex min-w-0 items-center gap-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 items-center gap-0 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
           >
             {pinned.map((s) => {
               const isActive = activeSection === s.id;
@@ -264,7 +264,7 @@ export function DetailPanelSectionNav({
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5',
                     'border-0 border-b-2 bg-transparent cursor-pointer',
                     'text-xs font-medium whitespace-nowrap leading-none',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
                     isActive
                       ? 'border-accent-primary text-text-primary'
                       : 'border-transparent text-text-muted hover:text-text-secondary',
@@ -288,7 +288,7 @@ export function DetailPanelSectionNav({
           </div>
           {overflowState.canScrollRight && (
             <span
-              className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-surface-detail to-transparent"
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-linear-to-l/srgb from-surface-detail to-transparent"
               aria-hidden="true"
             />
           )}
@@ -302,7 +302,7 @@ export function DetailPanelSectionNav({
                   'inline-flex items-center gap-1.5 px-2.5 py-1.5',
                   'border-0 border-b-2 bg-transparent cursor-pointer',
                   'text-xs font-medium whitespace-nowrap leading-none',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
                   overflowed.some((s) => activeSection === s.id)
                     ? 'border-accent-primary text-text-primary'
                     : 'border-transparent text-text-muted hover:text-text-secondary',
@@ -337,7 +337,7 @@ export function DetailPanelSectionNav({
               <button
                 type="button"
                 aria-label="다음 탭 보기"
-                className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                 onClick={() => scrollTabs('right')}
               >
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

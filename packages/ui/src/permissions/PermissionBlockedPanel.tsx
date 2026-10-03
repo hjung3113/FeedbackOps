@@ -67,7 +67,7 @@ export function PermissionBlockedPanel({
     >
       {/* Common header */}
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-text-muted flex-shrink-0" aria-hidden="true" />
+        <Icon className="h-4 w-4 text-text-muted shrink-0" aria-hidden="true" />
         <h4 className="font-medium text-sm text-text-primary">{category}</h4>
       </div>
 

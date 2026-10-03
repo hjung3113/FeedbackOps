@@ -4,7 +4,7 @@
  * Prototype ref: screen-voc-create.jsx:444-464
  * Token translations (PROTOTYPE-TO-PACK17.md §3.12):
  *   .severity-grid → grid grid-cols-2 gap-2
- *   .severity-pick → grid [grid-template-columns:4px_1fr_auto] gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle
+ *   .severity-pick → grid grid-cols-[4px_1fr_auto] gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle
  *   .severity-pick-bar → w-1 h-full rounded-full
  *   .severity-pick-label → text-[13px] font-semibold capitalize text-text-primary
  *   active state → bg-severity-{level}/10 ring-1 ring-inset ring-severity-{level}/40
@@ -95,7 +95,7 @@ export function SeverityPicker({
               }}
               className={cn(
                 'grid items-center gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle text-left',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
                 'disabled:opacity-40 disabled:pointer-events-none',
                 isActive && ACTIVE_CLASS[level],
               )}

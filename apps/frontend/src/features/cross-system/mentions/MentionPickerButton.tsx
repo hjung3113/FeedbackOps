@@ -95,7 +95,7 @@ export function MentionPickerButton({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="멤버 검색…"
-            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
+            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-hidden"
             aria-label="멤버 검색"
           />
         </div>

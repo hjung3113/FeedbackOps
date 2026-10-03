@@ -7,15 +7,15 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import postcss from 'postcss';
-import resolveConfig from 'tailwindcss/resolveConfig';
 import { describe, it, expect } from 'vitest';
 import { PACK_17_TOKENS } from './token-fidelity.fixture';
 
 // Paths resolved relative to this test file (packages/ui/src/styles/__tests__/)
 // tokens.css: all Pack 17 prototype tokens (closed-world set-equality)
 // semantic.css: shadcn HSL var remaps only (not checked for set-equality)
+// theme.css: CSS-first Tailwind theme keys (ADR-0058, replaces the JS preset)
 const TOKENS_CSS_PATH = path.resolve(__dirname, '../tokens.css');
-const PRESET_PATH = path.resolve(__dirname, '../../../tailwind.preset.ts');
+const THEME_CSS_PATH = path.resolve(__dirname, '../theme.css');
 
 /** Parse a CSS file and extract all custom property declarations from all :root blocks. */
 function parseCustomProps(cssPath: string): Map<string, string> {
@@ -92,20 +92,19 @@ describe('token-fidelity: tokens.css + semantic.css against Pack 17 fixture', ()
   });
 });
 
-describe('token-fidelity: Tailwind preset key resolvability', () => {
-  // Import the preset dynamically via require (vitest handles ESM imports)
-  // We walk the resolved config to verify every semantic key exists.
-  it('preset color keys are resolvable via resolveConfig', async () => {
-    // Dynamic import to handle ESM preset
-    const presetModule = await import(PRESET_PATH);
-    const preset = presetModule.default ?? presetModule;
+describe('token-fidelity: Tailwind theme key resolvability', () => {
+  // Parse the CSS-first theme (ADR-0058) and verify every semantic key the
+  // components use exists as a `--color-*` theme key aliasing its token.
+  it('theme color keys are resolvable in theme.css', () => {
+    const source = fs.readFileSync(THEME_CSS_PATH, 'utf-8');
+    const root = postcss.parse(source);
+    const themeKeys = new Set<string>();
 
-    const resolved = resolveConfig(preset as Parameters<typeof resolveConfig>[0]);
-    const colors = resolved.theme?.colors as unknown as Record<string, unknown> | undefined;
-
-    if (!colors) {
-      throw new Error('Tailwind resolveConfig returned no theme.colors');
-    }
+    root.walkAtRules('theme', (atRule) => {
+      atRule.walkDecls(/^--color-/, (decl) => {
+        themeKeys.add(decl.prop.replace(/^--color-/, ''));
+      });
+    });
 
     const expectedKeys = [
       'surface-canvas',
@@ -164,10 +163,10 @@ describe('token-fidelity: Tailwind preset key resolvability', () => {
       'confidence-high',
     ];
 
-    const missing = expectedKeys.filter((k) => !(k in colors));
+    const missing = expectedKeys.filter((k) => !themeKeys.has(k));
     expect(
       missing,
-      `Tailwind preset is missing color keys: ${missing.join(', ')}`,
+      `Tailwind theme is missing color keys: ${missing.join(', ')}`,
     ).toHaveLength(0);
   });
 });

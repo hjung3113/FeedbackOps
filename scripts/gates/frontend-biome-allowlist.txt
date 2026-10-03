@@ -398,3 +398,35 @@ packages/ui/__tests__/combobox.test.tsx lint/correctness/noUnusedImports -- pre-
 packages/ui/__tests__/combobox.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 packages/ui/__tests__/combobox.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 apps/backend/src/modules/nav/routes.ts format -- pre-existing on develop (measured 2026-10-02); #731 adds the resolve route
+# #743 (Tailwind v4). The identity below was measured against the develop copy
+# (2026-10-03) with the gate's own invocation; the upgrade-tool commit f5f625b8
+# carried it and this branch only reverts one test title string in the file.
+packages/ui/src/rich-content/__tests__/AttachButton.test.tsx format -- pre-existing on develop (measured 2026-10-03); the render() call block predates biome formatting, this branch only reverts a test title
+# #743 (Tailwind v4). All three identities below measured identical on the
+# develop copy of the file (2026-10-03, gate's own invocation); this branch
+# only swaps the tailwindcss/resolveConfig import for a theme.css parse and
+# rewrites the preset-resolvability describe block.
+packages/ui/src/styles/__tests__/token-fidelity.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-03, same line content)
+packages/ui/src/styles/__tests__/token-fidelity.test.ts organizeImports -- pre-existing on develop; import order predates biome
+packages/ui/src/styles/__tests__/token-fidelity.test.ts format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/voc/components/triage/TriageActions.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+apps/frontend/src/features/voc/components/triage/TriageActions.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/Button.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/Button.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/badge.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/badge.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/badge.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/checkbox.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/dropdown-menu.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/dropdown-menu.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/hover-card.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/popover.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/radio-group.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/radio-group.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/select.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/tabs.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/entity/LinkedEntityTrail.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/entity/LinkedEntityTrail.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/panel/Callout.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/panel/Callout.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/rich-content/toolbar/AttachButton.tsx lint/suspicious/noConfusingVoidType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file

@@ -85,15 +85,19 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | heading-lg | 32px | 1.2 | -0.22px | `--text-heading-lg` |
 | display | 48px | 1.2 | -0.22px | `--text-display` |
 
-Since issue #672, the Tailwind preset (`packages/ui/tailwind.preset.ts`) maps
-`fontFamily.sans` / `fontFamily.mono` to `--font-sans` / `--font-mono` and the
-size utilities `text-xs` / `text-sm` / `text-base` / `text-lg` / `text-xl` /
-`text-2xl` to `--text-xs` / `--text-sm` / `--text-body` / `--text-lg` /
-`--text-xl` / `--text-heading`. `text-base` carries `--leading-normal` and
-`text-2xl` carries `--leading-tight` (the Type Scale pairs above); the other
-sizes set size only and inherit the body leading. The base layer
-(`apps/frontend/src/styles.css`) applies `--font-sans` and the body size +
-leading to `body`.
+Since issue #672, the Tailwind theme maps `fontFamily.sans` / `fontFamily.mono`
+to `--font-sans` / `--font-mono` and the size utilities `text-xs` / `text-sm` /
+`text-base` / `text-lg` / `text-xl` / `text-2xl` to `--text-xs` / `--text-sm` /
+`--text-body` / `--text-lg` / `--text-xl` / `--text-heading`. `text-base`
+carries `--leading-normal` and `text-2xl` carries `--leading-tight` (the Type
+Scale pairs above); the other sizes set size only and inherit the body leading.
+The base layer (`apps/frontend/src/styles.css`) applies `--font-sans` and the
+body size + leading to `body`.
+
+Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
+`packages/ui/src/styles/theme.css` (`@theme inline` aliasing the token
+variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
+mapping above is unchanged.
 
 ### Panel Title Block Scale (PR #59)
 
@@ -299,4 +303,27 @@ The shipped CSS custom-property names and values are defined in `packages/ui/src
 
 ### Frontend Stylesheet
 
-`apps/frontend/src/styles.css` imports `@fops/ui/styles/tokens.css` and `@fops/ui/styles/semantic.css` before Tailwind's base, components, and utilities layers.
+`apps/frontend/src/styles.css` imports `tailwindcss`, then
+`@fops/ui/styles/tokens.css` and `@fops/ui/styles/semantic.css` (both in
+`layer(base)`), then the CSS-first theme `@fops/ui/styles/theme.css`, then
+the parity layer `@fops/ui/styles/compat.css` (ADR-0058; v3 Preflight pins,
+`space-y-*`, and legacy leading/tracking values). Text-size line-height
+companions are pinned in the exported `theme.css`. Tailwind sources are
+declared explicitly with `@source` (index.html, app `src/`,
+`packages/ui/src`) on top of auto-detection; the typography plugin stays
+UNLOADED (ADR-0058 §5).
+
+Downstream consumers of `@fops/ui` (e.g. analytics-platform) use the same
+import order — `tailwindcss` → tokens/semantic (`layer(base)`) → theme →
+compat; theme before base is a consumer invariant — plus:
+
+- body prerequisites: Pack 17 body typography
+  (`font-family: var(--font-sans); font-size: var(--text-body);
+  line-height: var(--leading-normal)`) on `body`, and the webfont imports
+  (`@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono`,
+  `pretendard` dynamic subset) unlayered;
+- an explicit `@source` for this submodule's `packages/ui/src` next to the
+  consumer's own sources, e.g. `@source '../FeedbackOps/packages/ui/src';`.
+
+See ADR-0058 for the full contract and the consumer-contract test in
+`packages/ui/src/styles/__tests__/consumer-contract.test.ts`.

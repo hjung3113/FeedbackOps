@@ -82,7 +82,7 @@ export function AttachButton({
         className={cn(
           'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
           'hover:bg-surface-row-hover hover:text-text-primary',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-primary',
           'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent',
           className,
         )}

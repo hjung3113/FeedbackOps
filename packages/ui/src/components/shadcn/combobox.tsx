@@ -157,7 +157,7 @@ export function Combobox({
           onKeyDown={handleTriggerKeyDown}
           className={cn(
             'flex h-10 w-full items-center justify-between rounded-md border border-border-subtle bg-surface-field px-3 py-2 text-sm text-text-primary',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
             'disabled:cursor-not-allowed disabled:opacity-50',
             !selected && 'text-text-muted',
             className,
@@ -167,7 +167,7 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+      <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
         <div className="border-b border-border-subtle px-3 py-2">
           <input
             // biome-ignore lint/a11y/noAutofocus: WAI-ARIA APG §combobox requires search input to auto-focus when popup opens so keyboard users can immediately type to filter
@@ -179,7 +179,7 @@ export function Combobox({
             aria-autocomplete="list"
             aria-controls={listboxId}
             aria-activedescendant={activeOptionId}
-            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
+            className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-hidden"
           />
         </div>
         {/* biome-ignore lint/a11y/useFocusableInteractive: WAI-ARIA APG §combobox — listbox focus managed via aria-activedescendant on the search input; container itself does not need tabIndex */}
@@ -207,7 +207,7 @@ export function Combobox({
                 aria-selected={option.value === value}
                 tabIndex={-1}
                 className={cn(
-                  'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-text-primary outline-none',
+                  'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-text-primary outline-hidden',
                   'hover:bg-surface-card focus:bg-surface-card',
                   option.value === value && 'font-medium',
                   activeIndex === idx && 'bg-surface-card',
