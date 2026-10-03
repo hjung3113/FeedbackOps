@@ -214,9 +214,9 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
     }
     expect(functions.map((fn) => [fn.proname, fn.provolatile])).toEqual([
       ['lock_response_evidence_subject', 'v'],
+      ['read_approved_response_excerpts', 's'],
       ['read_approved_result_excerpts', 's'],
       ['read_approved_result_excerpts_personal', 's'],
-      ['read_approved_response_excerpts', 's'],
       ['read_my_answerable_surveys', 's'],
       ['read_my_survey_response_history', 's'],
       ['read_response_excerpt_approval', 's'],
