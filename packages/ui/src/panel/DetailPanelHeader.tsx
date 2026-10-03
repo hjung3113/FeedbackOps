@@ -86,7 +86,7 @@ export function DetailPanelHeader({
           >
             <span
               aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
               style={{ backgroundColor: accentColor }}
             />
             {KIND_LABELS[kind]}

@@ -54,6 +54,9 @@ it(
 
     // v3 `space-y` selector, not the v4 `> :not(:last-child)` shape.
     expect(css).toContain('.space-y-1\\.5 > :not([hidden]) ~ :not([hidden])');
+    // v4's built-in rule also adds the gap to the preceding sibling; the compat
+    // utility must cancel it so the gap is applied once.
+    expect(css).toMatch(/\.space-y-1\\\.5 > :not\(:last-child\) \{\s*margin-block-end: 0;/);
     expect(css).toContain(
       'margin-top: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));',
     );
