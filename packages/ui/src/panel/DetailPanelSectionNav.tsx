@@ -240,7 +240,7 @@ export function DetailPanelSectionNav({
         <div className="relative min-w-0 flex-1">
           {overflowState.canScrollLeft && (
             <span
-              className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-linear-to-r from-surface-detail to-transparent"
+              className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-linear-to-r/srgb from-surface-detail to-transparent"
               aria-hidden="true"
             />
           )}
@@ -288,7 +288,7 @@ export function DetailPanelSectionNav({
           </div>
           {overflowState.canScrollRight && (
             <span
-              className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-linear-to-l from-surface-detail to-transparent"
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-linear-to-l/srgb from-surface-detail to-transparent"
               aria-hidden="true"
             />
           )}

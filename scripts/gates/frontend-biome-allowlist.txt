@@ -398,3 +398,14 @@ packages/ui/__tests__/combobox.test.tsx lint/correctness/noUnusedImports -- pre-
 packages/ui/__tests__/combobox.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 packages/ui/__tests__/combobox.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-02); #679 only changes the empty-state string
 apps/backend/src/modules/nav/routes.ts format -- pre-existing on develop (measured 2026-10-02); #731 adds the resolve route
+# #743 (Tailwind v4). The identity below was measured against the develop copy
+# (2026-10-03) with the gate's own invocation; the upgrade-tool commit f5f625b8
+# carried it and this branch only reverts one test title string in the file.
+packages/ui/src/rich-content/__tests__/AttachButton.test.tsx format -- pre-existing on develop (measured 2026-10-03); the render() call block predates biome formatting, this branch only reverts a test title
+# #743 (Tailwind v4). All three identities below measured identical on the
+# develop copy of the file (2026-10-03, gate's own invocation); this branch
+# only swaps the tailwindcss/resolveConfig import for a theme.css parse and
+# rewrites the preset-resolvability describe block.
+packages/ui/src/styles/__tests__/token-fidelity.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (measured 2026-10-03, same line content)
+packages/ui/src/styles/__tests__/token-fidelity.test.ts organizeImports -- pre-existing on develop; import order predates biome
+packages/ui/src/styles/__tests__/token-fidelity.test.ts format -- pre-existing on develop; the file predates biome formatting

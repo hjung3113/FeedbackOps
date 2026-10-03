@@ -85,15 +85,19 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | heading-lg | 32px | 1.2 | -0.22px | `--text-heading-lg` |
 | display | 48px | 1.2 | -0.22px | `--text-display` |
 
-Since issue #672, the Tailwind preset (`packages/ui/tailwind.preset.ts`) maps
-`fontFamily.sans` / `fontFamily.mono` to `--font-sans` / `--font-mono` and the
-size utilities `text-xs` / `text-sm` / `text-base` / `text-lg` / `text-xl` /
-`text-2xl` to `--text-xs` / `--text-sm` / `--text-body` / `--text-lg` /
-`--text-xl` / `--text-heading`. `text-base` carries `--leading-normal` and
-`text-2xl` carries `--leading-tight` (the Type Scale pairs above); the other
-sizes set size only and inherit the body leading. The base layer
-(`apps/frontend/src/styles.css`) applies `--font-sans` and the body size +
-leading to `body`.
+Since issue #672, the Tailwind theme maps `fontFamily.sans` / `fontFamily.mono`
+to `--font-sans` / `--font-mono` and the size utilities `text-xs` / `text-sm` /
+`text-base` / `text-lg` / `text-xl` / `text-2xl` to `--text-xs` / `--text-sm` /
+`--text-body` / `--text-lg` / `--text-xl` / `--text-heading`. `text-base`
+carries `--leading-normal` and `text-2xl` carries `--leading-tight` (the Type
+Scale pairs above); the other sizes set size only and inherit the body leading.
+The base layer (`apps/frontend/src/styles.css`) applies `--font-sans` and the
+body size + leading to `body`.
+
+Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
+`packages/ui/src/styles/theme.css` (`@theme inline` aliasing the token
+variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
+mapping above is unchanged.
 
 ### Panel Title Block Scale (PR #59)
 
@@ -299,4 +303,10 @@ The shipped CSS custom-property names and values are defined in `packages/ui/src
 
 ### Frontend Stylesheet
 
-`apps/frontend/src/styles.css` imports `@fops/ui/styles/tokens.css` and `@fops/ui/styles/semantic.css` before Tailwind's base, components, and utilities layers.
+`apps/frontend/src/styles.css` imports `tailwindcss`, then
+`@fops/ui/styles/tokens.css` and `@fops/ui/styles/semantic.css` (both in
+`layer(base)`), then the CSS-first theme `@fops/ui/styles/theme.css`
+(ADR-0058). Tailwind sources are declared explicitly with `@source` and the
+typography plugin loads via `@plugin '@tailwindcss/typography'`. Downstream
+consumers of `@fops/ui` (e.g. analytics-platform) use the same import order;
+see ADR-0058 for the contract.

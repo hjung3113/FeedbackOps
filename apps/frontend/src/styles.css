@@ -1,25 +1,42 @@
-@import '@fops/ui/styles/tokens.css' layer(base);
-@import '@fops/ui/styles/semantic.css' layer(base);
+/* Tailwind v4 first: its `@layer theme, base, components, utilities` statement
+   must establish layer order before our `layer(base)` imports so tokens.css
+   (base) keeps priority over any theme-layer output (ADR-0058). */
+@import "tailwindcss";
+@import "@fops/ui/styles/tokens.css" layer(base);
+@import "@fops/ui/styles/semantic.css" layer(base);
+/* CSS-first Pack 17 theme (ADR-0058) — replaces the v3 JS preset + @config. */
+@import "@fops/ui/styles/theme.css";
 
 /* Pack 17 webfonts (#715): variable faces registered by these packages.
    Inter has no Hangul, so --font-sans falls Korean glyphs through to
-   Pretendard Variable (dynamic unicode-range subsets). */
-@import '@fontsource-variable/inter' layer(base);
-@import '@fontsource-variable/jetbrains-mono' layer(base);
-@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
-  layer(base);
+   Pretendard Variable (dynamic unicode-range subsets). @font-face must stay
+   UNLAYERED — browsers drop @font-face declared inside @layer. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
-@import 'tailwindcss';
+/* Explicit sources, equivalent to the v3 `content` globs (index.html, app
+   src incl. its tests, ui package src). Auto-detection from the app root adds
+   the same trees; the explicit entries pin the contract for the ui package. */
+@source '../index.html';
+@source './';
+@source '../../../packages/ui/src';
 
-@config '../tailwind.config.ts';
+/* #743 finding: `@tailwindcss/typography` was declared but never wired in v3
+   (no `plugins` array in tailwind.config.ts), so `prose prose-sm` rendered
+   unstyled — baseline parity means the plugin stays UNLOADED. */
 
 /*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+  Tailwind v4 compatibility block (ADR-0058), pinned to the exact v3 values:
 
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
+  - v3 Preflight set the default border color to `theme(colors.gray.200)`
+    (#e5e7eb); v4 defaults to `currentcolor`.
+  - v3 Preflight set input/textarea placeholder color to
+    `theme(colors.gray.400)` (#9ca3af); v4 uses 50% currentcolor.
+  - v3 Preflight set `cursor: pointer` on buttons; v4 dropped it.
+
+  Removing these requires adding explicit utilities wherever elements relied
+  on the v3 defaults.
 */
 @layer base {
   *,
@@ -27,7 +44,17 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: #e5e7eb;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
 }
 
@@ -36,6 +63,58 @@
   body,
   #root {
     height: 100%;
+  }
+
+  /*
+    v3 `space-y-*` compat (ADR-0058): v3 set margin-top on `> * + *`; v4 sets
+    margin-block-end on `> :not(:last-child)`. Layout diverges when children
+    mix inline and block boxes (an inline element drops the bottom margin, a
+    block followed by an inline gains one). Zero the v4 margin and restore the
+    v3 margin-top so both mixed and uniform chains render as before.
+  */
+  .space-y-1 > :not(:last-child),
+  .space-y-1\.5 > :not(:last-child),
+  .space-y-2 > :not(:last-child),
+  .space-y-3 > :not(:last-child),
+  .space-y-4 > :not(:last-child),
+  .space-y-5 > :not(:last-child),
+  .space-y-6 > :not(:last-child),
+  .space-y-8 > :not(:last-child) {
+    margin-block-end: 0;
+  }
+  .space-y-1 > * + * {
+    margin-block-start: 4px;
+  }
+  .space-y-1\.5 > * + * {
+    margin-block-start: 6px;
+  }
+  .space-y-2 > * + * {
+    margin-block-start: 8px;
+  }
+  .space-y-3 > * + * {
+    margin-block-start: 12px;
+  }
+  .space-y-4 > * + * {
+    margin-block-start: 16px;
+  }
+  .space-y-5 > * + * {
+    margin-block-start: 20px;
+  }
+  .space-y-6 > * + * {
+    margin-block-start: 24px;
+  }
+  .space-y-8 > * + * {
+    margin-block-start: 32px;
+  }
+
+  /*
+    v3 `rounded-full` computed `border-radius: 9999px`; v4's built-in emits
+    `calc(infinity * 1px)` (computed 3.35544e+07px). Rendered pixels are
+    identical, but computed-value assertions and CSS math see a different
+    number. Doubled class selector beats the built-in at any layer order.
+  */
+  .rounded-full.rounded-full {
+    border-radius: 9999px;
   }
 }
 
