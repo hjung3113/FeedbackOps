@@ -139,7 +139,7 @@ function AnswerableSurveysRegion({
               <Link
                 to="/surveys/$surveyId/respond"
                 params={{ surveyId: survey.survey_id }}
-                className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="min-w-0 flex-1 rounded-sm hover:bg-surface-row-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
               >
                 <span className="block text-sm font-medium text-text-primary">{survey.title}</span>
                 <span className="mt-1 block text-xs text-text-muted">

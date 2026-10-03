@@ -179,7 +179,7 @@ export function ReporterStatusChangeBlock({
         >
           <SelectTrigger
             value={nextStatus}
-            className="h-8 w-auto min-w-[9rem] max-w-[10rem] rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-none focus:ring-1 focus:ring-focus-ring"
+            className="h-8 w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-hidden focus:ring-1 focus:ring-focus-ring"
             aria-label="다음 공개 상태 선택"
           >
             <SelectValue />
@@ -293,7 +293,7 @@ export function ReporterStatusChangeBlock({
               </span>
 
               {showBody ? (
-                <div className="text-sm text-text-primary leading-snug break-words">
+                <div className="text-sm text-text-primary leading-snug wrap-break-word">
                   {/* Sanitized via RichContentRenderer — no dangerouslySetInnerHTML here */}
                   <RichContentRenderer
                     doc={draftDoc as TipTapDoc}

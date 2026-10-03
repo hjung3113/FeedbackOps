@@ -27,6 +27,12 @@ A pre-commit CI check using `axe-core` runs against the component sandbox and th
 
 ## Tokens: CSS variables + Tailwind theme.extend
 
+> **Superseded (2026-10-03):** the theme-exposure mechanism in this section
+> (JS preset + `theme.extend`) is replaced by the Tailwind v4 CSS-first theme;
+> see [ADR-0058](0058-tailwind-v4-css-first-theme.md). The token vocabulary
+> itself (CSS variables, semantic names, raw tokens private to the token
+> files) remains in force under ADR-0021.
+
 Tokens flow in three layers, top to bottom:
 
 ```text

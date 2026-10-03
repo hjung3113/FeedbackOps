@@ -51,7 +51,7 @@ export function MilestoneStatusBadge({ status, className }: MilestoneStatusBadge
     >
       <span
         aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
         style={{ backgroundColor: `rgb(var(${meta.token}) / 1)` }}
       />
       {meta.label}

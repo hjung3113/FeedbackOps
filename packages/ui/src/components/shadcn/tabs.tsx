@@ -27,7 +27,7 @@ export const TabsTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-surface-canvas transition-all',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+      'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
       'disabled:pointer-events-none disabled:opacity-50',
       'data-[state=active]:bg-surface-card data-[state=active]:text-text-primary data-[state=active]:shadow-sm',
       className,
@@ -45,7 +45,7 @@ export const TabsContent = React.forwardRef<
     ref={ref}
     className={cn(
       'mt-2 ring-offset-surface-canvas',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+      'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
       className,
     )}
     {...props}

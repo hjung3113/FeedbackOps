@@ -86,7 +86,7 @@ export function DetailPanelHeader({
           >
             <span
               aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
               style={{ backgroundColor: accentColor }}
             />
             {KIND_LABELS[kind]}
@@ -108,7 +108,7 @@ export function DetailPanelHeader({
             className={cn(
               'flex items-center justify-center rounded p-1',
               'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
               extras === undefined && 'ml-auto',
             )}
           >

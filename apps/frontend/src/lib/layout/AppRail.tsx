@@ -216,7 +216,7 @@ function RailButton({
           href={href}
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
             active && 'bg-surface-row-selected text-accent-primary',
           )}
           aria-label={item.label}

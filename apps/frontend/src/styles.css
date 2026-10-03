@@ -1,21 +1,48 @@
-@import "@fops/ui/styles/tokens.css";
-@import "@fops/ui/styles/semantic.css";
+/* Tailwind v4 first: its `@layer theme, base, components, utilities` statement
+   must establish layer order before our `layer(base)` imports so tokens.css
+   (base) keeps priority over any theme-layer output (ADR-0058). */
+@import "tailwindcss";
+@import "@fops/ui/styles/tokens.css" layer(base);
+@import "@fops/ui/styles/semantic.css" layer(base);
+/* CSS-first Pack 17 theme (ADR-0058) — replaces the v3 JS preset + @config. */
+@import "@fops/ui/styles/theme.css";
+/* v3 Preflight pins, v3 `space-y-*`, leading/tracking legacy shims (ADR-0058). */
+@import "@fops/ui/styles/compat.css";
 
 /* Pack 17 webfonts (#715): variable faces registered by these packages.
    Inter has no Hangul, so --font-sans falls Korean glyphs through to
-   Pretendard Variable (dynamic unicode-range subsets). */
+   Pretendard Variable (dynamic unicode-range subsets). These imports stay
+   UNLAYERED: during the v3→v4 migration, wrapping them in layer(base)
+   measurably disabled every webfont, while the compiler retains all @font-face
+   rules either way (layered or not — CSS Cascade 5 defines layered
+   @font-face). The failure was specific to that pipeline step, so the imports
+   are pinned unlayered. */
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Explicit sources, equivalent to the v3 `content` globs (index.html, app
+   src incl. its tests, ui package src). Auto-detection from the app root adds
+   the same trees; the explicit entries pin the contract for the ui package. */
+@source '../index.html';
+@source './';
+@source '../../../packages/ui/src';
 
-html,
-body,
-#root {
-  height: 100%;
+/* #743 finding: `@tailwindcss/typography` was declared but never wired in v3
+   (no `plugins` array in tailwind.config.ts), so `prose prose-sm` rendered
+   unstyled — baseline parity means the plugin stays UNLOADED. */
+
+/* v3 Preflight pins (border color, placeholder color, button cursor), the v3
+   `space-y-*` semantics, and the leading/tracking legacy shims ship from the
+   package as `@fops/ui/styles/compat.css` (imported above) so analytics-
+   platform gets the same parity behavior through the documented imports. */
+
+@layer utilities {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 }
 
 @layer base {

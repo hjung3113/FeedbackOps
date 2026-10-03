@@ -37,7 +37,7 @@ function FirstQuestionOnboarding({ onAdd }: { onAdd: (kind: QuestionKind) => voi
                 key={kind}
                 type="button"
                 onClick={() => onAdd(kind)}
-                className="rounded-md border border-border-subtle bg-surface-detail p-4 text-left hover:border-border-strong hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                className="rounded-md border border-border-subtle bg-surface-detail p-4 text-left hover:border-border-strong hover:bg-surface-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-primary"
                 data-testid={`survey-question-kind-${kind}`}
                 data-question-kind={kind}
               >

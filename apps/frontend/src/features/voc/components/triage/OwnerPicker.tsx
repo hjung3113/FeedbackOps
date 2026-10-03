@@ -149,7 +149,7 @@ function OwnerRow({
       className={cn(
         // .entity-node: grid [18px 1fr auto], gap-2.5, padding, rounded, bg
         'grid items-center gap-2.5 px-3 py-2.5 rounded-md bg-surface-canvas shadow-subtle text-left w-full',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
         'disabled:opacity-40 disabled:pointer-events-none',
         isActive && 'bg-accent-primary/5 ring-1 ring-inset ring-accent-primary/40',
       )}
