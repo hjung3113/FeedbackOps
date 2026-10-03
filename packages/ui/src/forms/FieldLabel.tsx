@@ -30,7 +30,7 @@ export function FieldLabel({ required, tip, children, className, ...props }: Fie
               <button
                 type="button"
                 aria-label={`도움말: ${tip}`}
-                className="ml-1 inline-flex cursor-default items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="ml-1 inline-flex cursor-default items-center rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                 data-testid="field-label-tip-trigger"
               >
                 <HelpCircle size={12} className="text-text-muted" aria-hidden="true" />

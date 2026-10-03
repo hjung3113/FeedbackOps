@@ -112,7 +112,7 @@ export function AddVocModal({
                   <Button
                     key={candidate.voc_id}
                     type="button"
-                    variant={vocId === candidate.voc_id ? 'secondary' : 'outline'}
+                    variant={vocId === candidate.voc_id ? 'secondary' : 'outline-solid'}
                     size="sm"
                     disabled={candidate.included}
                     onClick={() => setVocId(candidate.voc_id)}

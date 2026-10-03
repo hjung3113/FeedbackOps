@@ -53,7 +53,7 @@ export function TriageActions({
           'w-full inline-flex items-center justify-center gap-1.5',
           'h-8 px-3.5 rounded-md text-sm font-semibold',
           'bg-accent-primary text-text-on-accent',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
           'disabled:opacity-40 disabled:pointer-events-none',
         )}
       >
@@ -77,7 +77,7 @@ export function TriageActions({
             'h-7 px-2.5 rounded-md text-[13px] font-medium',
             'bg-surface-card text-text-primary shadow-subtle',
             'hover:bg-surface-popover',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
             'disabled:opacity-40 disabled:pointer-events-none',
           )}
         >
@@ -96,7 +96,7 @@ export function TriageActions({
             'h-7 px-2.5 rounded-md text-[13px] font-medium',
             'text-text-secondary',
             'hover:bg-surface-card hover:text-text-primary',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
             'disabled:opacity-40 disabled:pointer-events-none',
           )}
         >

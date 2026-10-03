@@ -121,7 +121,7 @@ export function ListTabs({
                   aria-hidden={!overflowState.canScrollLeft}
                   disabled={!overflowState.canScrollLeft}
                   className={cn(
-                    'mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    'mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
                     !overflowState.canScrollLeft && 'invisible',
                   )}
                   onClick={() => scrollTabs('left')}
@@ -136,7 +136,7 @@ export function ListTabs({
           )}
           <div
             ref={tabViewportRef}
-            className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap scrollbar-none [&::-webkit-scrollbar]:hidden"
             data-list-toolbar-tabs
             data-fade-left={overflowState.canScrollLeft ? 'true' : 'false'}
             data-fade-right={overflowState.canScrollRight ? 'true' : 'false'}
@@ -192,7 +192,7 @@ export function ListTabs({
                   aria-hidden={!overflowState.canScrollRight}
                   disabled={!overflowState.canScrollRight}
                   className={cn(
-                    'ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    'ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-text-secondary shadow-sm hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
                     !overflowState.canScrollRight && 'invisible',
                   )}
                   onClick={() => scrollTabs('right')}

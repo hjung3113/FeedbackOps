@@ -29,7 +29,7 @@ const KBD_CLASS =
   'rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted';
 
 const ITEM_CLASS =
-  'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-[7px] text-left text-[13.5px] text-text-primary outline-none aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:shadow-[inset_0_0_0_1px_rgba(20,40,160,0.28)]';
+  'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-[7px] text-left text-[13.5px] text-text-primary outline-hidden aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:shadow-[inset_0_0_0_1px_rgba(20,40,160,0.28)]';
 
 export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPaletteProps) {
   const { open, setOpen, toggle } = useCommandPalette();
@@ -140,8 +140,8 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
       loop
       label={COMMAND_PALETTE_COPY.accessibleName}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      overlayClassName="fixed inset-0 z-[60] bg-[rgba(20,40,160,0.16)] backdrop-blur-[4px]"
-      contentClassName="fixed left-1/2 top-[14vh] z-[60] flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl"
+      overlayClassName="fixed inset-0 z-60 bg-[rgba(20,40,160,0.16)] backdrop-blur-xs"
+      contentClassName="fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl"
       data-testid="command-palette-dialog"
     >
       <div className="flex shrink-0 items-center gap-2.5 border-b border-border-subtle px-4 py-3.5">
@@ -153,7 +153,7 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
             setResolveError(null);
           }}
           placeholder={COMMAND_PALETTE_COPY.placeholder}
-          className="h-6 flex-1 bg-transparent text-[15px] text-text-primary outline-none placeholder:text-text-muted"
+          className="h-6 flex-1 bg-transparent text-[15px] text-text-primary outline-hidden placeholder:text-text-muted"
         />
         <span className={KBD_CLASS}>{COMMAND_PALETTE_COPY.escHint}</span>
       </div>

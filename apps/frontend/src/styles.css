@@ -1,21 +1,42 @@
-@import "@fops/ui/styles/tokens.css";
-@import "@fops/ui/styles/semantic.css";
+@import '@fops/ui/styles/tokens.css' layer(base);
+@import '@fops/ui/styles/semantic.css' layer(base);
 
 /* Pack 17 webfonts (#715): variable faces registered by these packages.
    Inter has no Hangul, so --font-sans falls Korean glyphs through to
    Pretendard Variable (dynamic unicode-range subsets). */
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/jetbrains-mono";
-@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+@import '@fontsource-variable/inter' layer(base);
+@import '@fontsource-variable/jetbrains-mono' layer(base);
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
+  layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-html,
-body,
-#root {
-  height: 100%;
+@config '../tailwind.config.ts';
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@layer utilities {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 }
 
 @layer base {

@@ -31,7 +31,7 @@ describe('DatePicker', () => {
   });
 
   it.each(['2026-', '2026-06', '2026-02-30'])(
-    'keeps malformed typed date %s out of onChange and shows its error after blur',
+    'keeps malformed typed date %s out of onChange and shows its error after blur-sm',
     (value) => {
       const onChange = vi.fn();
       const onValidityChange = vi.fn();
@@ -61,7 +61,7 @@ describe('DatePicker', () => {
     },
   );
 
-  it('shows the error when a native form submit is attempted without a blur', () => {
+  it('shows the error when a native form submit is attempted without a blur-sm', () => {
     const onSubmit = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
     render(
       <form onSubmit={onSubmit}>
@@ -98,7 +98,7 @@ describe('DatePicker', () => {
     fireEvent.click(screen.getByRole('button', { name: '달력 열기' }));
 
     expect(screen.getByRole('button', { name: '2026년 6월 12일' })).toHaveClass(
-      'aria-[pressed=true]:bg-surface-row-selected',
+      'aria-pressed:bg-surface-row-selected',
     );
   });
 

@@ -341,7 +341,7 @@ function ActionQueueRow({
           className="max-w-full h-auto min-h-8 py-1 whitespace-normal"
         >
           <a href={queue.next_action.route}>
-            <span className="min-w-0 break-words">{copy.primaryAction}</span>
+            <span className="min-w-0 wrap-break-word">{copy.primaryAction}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           </a>
         </Button>

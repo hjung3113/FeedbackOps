@@ -113,7 +113,7 @@ describe('AttachButton', () => {
     );
   });
 
-  it('a11y: button role and focus-visible ring class present', () => {
+  it('a11y: button role and focus-visible ring-3 class present', () => {
     render(<AttachButton onPick={vi.fn()} data-testid="attach" />);
     const btn = screen.getByRole('button', { name: '첨부 파일 추가' });
     expect(btn.className).toMatch(/focus-visible:ring/);

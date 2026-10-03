@@ -191,7 +191,7 @@ export function DatePicker({
         <div
           className={cn(
             'flex h-10 w-full items-center rounded-md border border-border-subtle bg-surface-field px-3 py-2 text-sm text-text-primary',
-            'focus-within:outline-none focus-within:ring-2 focus-within:ring-focus-ring focus-within:ring-offset-2',
+            'focus-within:outline-hidden focus-within:ring-2 focus-within:ring-focus-ring focus-within:ring-offset-2',
             disabled && 'cursor-not-allowed opacity-50',
             showDanger && 'border-accent-danger',
             className,
@@ -220,7 +220,7 @@ export function DatePicker({
             max={max}
             aria-invalid={isInvalid ? true : ariaInvalid}
             aria-describedby={describedBy || undefined}
-            className="h-full min-w-0 flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-muted"
+            className="h-full min-w-0 flex-1 bg-transparent text-text-primary outline-hidden placeholder:text-text-muted"
             {...inputProps}
           />
           {draft !== '' ? (
@@ -229,7 +229,7 @@ export function DatePicker({
                 <button
                   type="button"
                   aria-label="날짜 지우기"
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                   disabled={disabled}
                   onClick={() => {
                     setDraft('');
@@ -261,7 +261,7 @@ export function DatePicker({
                     ref={triggerRef}
                     type="button"
                     aria-label="달력 열기"
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-surface-card hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                     disabled={disabled}
                   >
                     <CalendarDays aria-hidden="true" className="h-4 w-4" />
@@ -301,7 +301,7 @@ export function DatePicker({
                       <button
                         type="button"
                         aria-label="이전 달"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                         onClick={() => focusDate(addMonths(visibleMonth, -1))}
                       >
                         <ChevronLeft aria-hidden="true" className="h-4 w-4" />
@@ -317,7 +317,7 @@ export function DatePicker({
                       <button
                         type="button"
                         aria-label="다음 달"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
                         onClick={() => focusDate(addMonths(visibleMonth, 1))}
                       >
                         <ChevronRight aria-hidden="true" className="h-4 w-4" />
@@ -374,7 +374,7 @@ export function DatePicker({
                                   tabIndex={dateValue === activeDate ? 0 : -1}
                                   disabled={isDisabled}
                                   aria-pressed={dateValue === value}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-[pressed=true]:bg-surface-row-selected aria-[pressed=true]:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-text-primary hover:bg-surface-card focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring aria-[current=date]:font-semibold aria-pressed:bg-surface-row-selected aria-pressed:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
                                   onClick={() => selectDate(date)}
                                   onKeyDown={(event) => handleDayKeyDown(event, date)}
                                 >

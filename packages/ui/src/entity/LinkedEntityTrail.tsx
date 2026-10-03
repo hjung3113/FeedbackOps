@@ -55,7 +55,7 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
     return (
       <div className={cn('flex items-center gap-2', className)}>
         <span
-          className="inline-flex items-center justify-center border border-dashed border-border-subtle rounded-full flex-shrink-0"
+          className="inline-flex items-center justify-center border border-dashed border-border-subtle rounded-full shrink-0"
           style={{ width: 22, height: 22 }}
           aria-hidden="true"
         />
@@ -80,11 +80,11 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
             />
             {(node.title ?? node.meta) && (
               <span className="flex min-w-0 flex-col leading-tight">
-                <span className="max-w-[12rem] truncate text-xs font-medium text-text-primary">
+                <span className="max-w-48 truncate text-xs font-medium text-text-primary">
                   {label}
                 </span>
                 {node.meta && (
-                  <span className="max-w-[12rem] truncate text-[11px] text-text-muted">
+                  <span className="max-w-48 truncate text-[11px] text-text-muted">
                     {node.meta}
                   </span>
                 )}
@@ -99,7 +99,7 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
               <button
                 type="button"
                 onClick={node.onNavigate}
-                className="inline-flex min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-selected"
+                className="inline-flex min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-left hover:bg-surface-row-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-border-selected"
               >
                 {body}
               </button>

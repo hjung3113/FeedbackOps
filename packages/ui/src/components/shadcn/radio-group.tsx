@@ -26,7 +26,7 @@ export const RadioGroupItem = React.forwardRef<
       ref={ref}
       className={cn(
         'aspect-square h-4 w-4 rounded-full border border-border-strong text-accent-primary',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}

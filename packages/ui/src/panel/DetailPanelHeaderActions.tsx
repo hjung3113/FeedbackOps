@@ -68,7 +68,7 @@ async function writeToClipboard(text: string): Promise<boolean> {
 const iconButtonCls = cn(
   'flex items-center justify-center rounded p-1',
   'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
 );
 
 export function DetailPanelHeaderActions({

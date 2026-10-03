@@ -46,7 +46,7 @@ export function Callout({ tone, icon, title, children, action, className }: Call
           <>
             <div className="flex items-center gap-2 mb-1.5">
               {icon !== undefined && (
-                <span style={{ color: toneColor }} className="flex-shrink-0">
+                <span style={{ color: toneColor }} className="shrink-0">
                   {icon}
                 </span>
               )}
@@ -60,7 +60,7 @@ export function Callout({ tone, icon, title, children, action, className }: Call
         ) : (
           <div className="flex items-start gap-2">
             {icon !== undefined && (
-              <span style={{ color: toneColor }} className="flex-shrink-0 mt-0.5">
+              <span style={{ color: toneColor }} className="shrink-0 mt-0.5">
                 {icon}
               </span>
             )}
