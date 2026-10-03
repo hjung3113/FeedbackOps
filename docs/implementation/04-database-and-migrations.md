@@ -38,6 +38,14 @@ Applied migrations are the final database authority.
   keeps the response table hidden from `fops_app` without adding column grants
   to the definer owner. None of these functions return answer bodies or
   respondent Actor IDs.
+- `survey.survey_response_excerpt_approvals` grants `fops_app` `INSERT`, column-level
+  `SELECT` on every column except `response_id`, and column-level `UPDATE ("revoked_at")`
+  (0057; before 0057 the `SELECT` was table-wide). A compromised app handle therefore
+  cannot join respondent audit rows to approved excerpt text through `response_id`;
+  every per-response binding read — highlight projections, the stored-highlight
+  active check, and the revoke binding check — runs through the
+  `survey.read_approved_response_excerpts` and `survey.read_response_excerpt_approval`
+  `SECURITY DEFINER` readers owned by `fops_survey_evidence_reader_owner`.
 ```
 
 ### Database prerequisite: pgvector (ADR-0034 D1)
