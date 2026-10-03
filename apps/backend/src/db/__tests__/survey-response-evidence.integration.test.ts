@@ -13,7 +13,7 @@ function requiredId(row: { id: string } | undefined, label: string): string {
   return row.id;
 }
 
-describe.skipIf(!runIntegration)('Survey response evidence access migrations 0039/0040', () => {
+describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057', () => {
   let appHandle: DbHandle;
   let migrateHandle: DbHandle;
   const workspaceId = randomUUID();
@@ -195,13 +195,16 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
          left join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl on true
          left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
         where n.nspname = 'survey'
-          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts', 'read_approved_result_excerpts_personal', 'read_my_survey_response_history', 'read_my_answerable_surveys')
+          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts', 'read_approved_result_excerpts_personal', 'read_my_survey_response_history', 'read_my_answerable_surveys', 'read_response_excerpt_approval', 'read_approved_response_excerpts')
         group by p.proname, owner_role.rolname, p.prosecdef, p.proconfig, p.provolatile
         order by p.proname`,
     );
     // #548 adds read_my_survey_response_history (respondent-owned history, no response id).
     // #718 adds read_my_answerable_surveys (open, not-yet-answered Survey discovery).
-    expect(functions).toHaveLength(6);
+    // #569 adds read_response_excerpt_approval (revoke binding check) and
+    // read_approved_response_excerpts (per-response active approval projection);
+    // fops_app no longer selects excerpt_approvals.response_id directly.
+    expect(functions).toHaveLength(8);
     for (const fn of functions) {
       expect(fn.owner).toBe('fops_survey_evidence_reader_owner');
       expect(fn.prosecdef).toBe(true);
@@ -211,10 +214,12 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
     }
     expect(functions.map((fn) => [fn.proname, fn.provolatile])).toEqual([
       ['lock_response_evidence_subject', 'v'],
+      ['read_approved_response_excerpts', 's'],
       ['read_approved_result_excerpts', 's'],
       ['read_approved_result_excerpts_personal', 's'],
       ['read_my_answerable_surveys', 's'],
       ['read_my_survey_response_history', 's'],
+      ['read_response_excerpt_approval', 's'],
       ['read_response_text_candidate', 's'],
     ]);
 
@@ -324,8 +329,10 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
         privilege_types: ['INSERT'],
       },
       {
+        // #569: SELECT is column-level now, so has_table_privilege no longer
+        // sees it; the column inventory below pins the exact SELECT columns.
         table_name: 'survey_response_excerpt_approvals',
-        privilege_types: ['INSERT', 'SELECT'],
+        privilege_types: ['INSERT'],
       },
       {
         table_name: 'survey_responses',
@@ -334,10 +341,13 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
     ]);
     const { rows: appColumnPrivileges } = await migrateHandle.pool.query<{
       table_name: string;
-      update_columns: string[];
+      select_columns: string[] | null;
+      update_columns: string[] | null;
       privilege_types: string[];
     }>(
       `select table_name,
+              array_agg(column_name order by column_name)
+                filter (where privilege_type = 'SELECT')::text[] as select_columns,
               array_agg(column_name order by column_name)
                 filter (where privilege_type = 'UPDATE')::text[] as update_columns,
               array_agg(distinct privilege_type order by privilege_type)::text[] as privilege_types
@@ -352,16 +362,30 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
       {
         table_name: 'survey_response_answers',
         privilege_types: ['INSERT'],
+        select_columns: null,
         update_columns: null,
       },
       {
+        // #569: every column except response_id; INSERT stays table-wide
+        // (response_id INSERT is required to write approval rows).
         table_name: 'survey_response_excerpt_approvals',
         privilege_types: ['INSERT', 'SELECT', 'UPDATE'],
+        select_columns: [
+          'approved_at',
+          'approved_by',
+          'id',
+          'question_id',
+          'redacted_excerpt',
+          'revoked_at',
+          'survey_id',
+          'workspace_id',
+        ],
         update_columns: ['revoked_at'],
       },
       {
         table_name: 'survey_responses',
         privilege_types: ['INSERT'],
+        select_columns: null,
         update_columns: null,
       },
     ]);
@@ -502,5 +526,107 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
       [otherWorkspaceId, surveyId],
     );
     expect(crossWorkspaceExcerpts.rows).toEqual([]);
+  });
+
+  // #569: fops_app must not link a respondent (core.audit_log submission row) to
+  // approved excerpt text through excerpt_approvals.response_id.
+  it('denies fops_app response_id on excerpt approvals and the audit-log respondent join', async () => {
+    await expect(
+      appHandle.pool.query('select response_id from survey.survey_response_excerpt_approvals'),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      appHandle.pool.query(
+        'select response_id from survey.survey_response_excerpt_approvals where id = $1::uuid',
+        [activeApprovalId],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    // The column revoke is targeted: non-response columns stay readable.
+    const safeColumns = await appHandle.pool.query<{ id: string; redacted_excerpt: string }>(
+      'select id, redacted_excerpt from survey.survey_response_excerpt_approvals where id = $1::uuid',
+      [activeApprovalId],
+    );
+    expect(safeColumns.rows).toEqual([
+      { id: activeApprovalId, redacted_excerpt: 'active redacted excerpt' },
+    ]);
+    const probeEvent = 'test.569_submission_probe';
+    await migrateHandle.pool.query('delete from core.audit_log where event_type = $1', [
+      probeEvent,
+    ]);
+    await migrateHandle.pool.query(
+      `insert into core.audit_log (workspace_id, actor_id, event_type, subject_type, subject_id, summary, detail)
+       values ($1, $2, $3, 'survey_response', $4, 'submission probe', '{}'::jsonb)`,
+      [workspaceId, actorId, probeEvent, responseId],
+    );
+    // The issue's join — respondent (audit submission actor) to approved excerpt
+    // text — now fails instead of returning rows as fops_app.
+    await expect(
+      appHandle.pool.query(
+        `select al.actor_id as respondent_actor_id, a.redacted_excerpt
+           from core.audit_log al
+           join survey.survey_response_excerpt_approvals a
+             on a.response_id = al.subject_id::uuid
+          where al.event_type = $1
+            and al.workspace_id = $2::uuid`,
+        [probeEvent, workspaceId],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await migrateHandle.pool.query('delete from core.audit_log where event_type = $1', [
+      probeEvent,
+    ]);
+  });
+
+  it('resolves approval bindings and active per-response excerpts through the 0057 readers', async () => {
+    const revoked = await migrateHandle.pool.query<{ id: string }>(
+      'select id from survey.survey_response_excerpt_approvals where workspace_id = $1 and revoked_at is not null',
+      [workspaceId],
+    );
+    const revokedApprovalId = requiredId(revoked.rows[0], 'revoked approval');
+    const active = await appHandle.pool.query<{
+      question_id: string;
+      redacted_excerpt: string;
+      is_active: boolean;
+    }>('select * from survey.read_response_excerpt_approval($1::uuid, $2::uuid, $3::uuid)', [
+      workspaceId,
+      responseId,
+      activeApprovalId,
+    ]);
+    expect(active.rows).toEqual([
+      {
+        question_id: textQuestionId,
+        redacted_excerpt: 'active redacted excerpt',
+        is_active: true,
+      },
+    ]);
+    const revokedRow = await appHandle.pool.query<{ is_active: boolean }>(
+      'select is_active from survey.read_response_excerpt_approval($1::uuid, $2::uuid, $3::uuid)',
+      [workspaceId, responseId, revokedApprovalId],
+    );
+    expect(revokedRow.rows).toEqual([{ is_active: false }]);
+    const foreign = await appHandle.pool.query(
+      'select * from survey.read_response_excerpt_approval($1::uuid, $2::uuid, $3::uuid)',
+      [otherWorkspaceId, responseId, activeApprovalId],
+    );
+    expect(foreign.rows).toEqual([]);
+    const perResponse = await appHandle.pool.query<{
+      approved_excerpt_id: string;
+      question_id: string;
+      redacted_excerpt: string;
+    }>('select * from survey.read_approved_response_excerpts($1::uuid, $2::uuid, $3::uuid[])', [
+      workspaceId,
+      responseId,
+      [activeApprovalId, revokedApprovalId],
+    ]);
+    expect(perResponse.rows).toEqual([
+      {
+        approved_excerpt_id: activeApprovalId,
+        question_id: textQuestionId,
+        redacted_excerpt: 'active redacted excerpt',
+      },
+    ]);
+    const crossWorkspace = await appHandle.pool.query(
+      'select * from survey.read_approved_response_excerpts($1::uuid, $2::uuid, $3::uuid[])',
+      [otherWorkspaceId, responseId, [activeApprovalId]],
+    );
+    expect(crossWorkspace.rows).toEqual([]);
   });
 });

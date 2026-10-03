@@ -117,9 +117,11 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'survey.survey_responses': ['INSERT'],
   'survey.survey_response_answers': ['INSERT'],
-  // UPDATE is deliberately column-scoped and asserted by the #187 evidence
-  // access integration test. role_table_grants must remain without table-wide UPDATE.
-  'survey.survey_response_excerpt_approvals': ['SELECT', 'INSERT'],
+  // UPDATE ("revoked_at") is column-scoped, and since #569 SELECT is also
+  // column-level (every column except response_id); both are asserted by the
+  // #187 evidence access integration test. role_table_grants must remain
+  // without table-wide UPDATE or SELECT on this table.
+  'survey.survey_response_excerpt_approvals': ['INSERT'],
   'voc.workspace_display_counters': ['SELECT'],
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],

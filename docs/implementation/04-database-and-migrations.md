@@ -25,8 +25,10 @@ Applied migrations are the final database authority.
   `survey.read_my_survey_response_history`, and `survey.read_my_answerable_surveys`
   functions are narrow
   `SECURITY DEFINER` projections owned by `fops_survey_evidence_reader_owner`:
-  the first returns `response_id` and is called by the app only behind
-  `survey.read_personal_responses` (an app-layer gate),
+  the first returns `response_id` with approved excerpts; the API projects
+  `response_id` and writes the per-row personal-read audits only for
+  `survey.read_personal_responses` holders (an app-layer gate, not a SQL-level
+  one — `fops_app` holds EXECUTE),
   the second returns only `survey_id`, Survey title, `submitted_at`, and
   `identity_protected` for the session Actor's responses after the Surveys
   service supplies the session `workspace_id` and `actor_id`, and does
@@ -38,6 +40,17 @@ Applied migrations are the final database authority.
   keeps the response table hidden from `fops_app` without adding column grants
   to the definer owner. None of these functions return answer bodies or
   respondent Actor IDs.
+- `survey.survey_response_excerpt_approvals` grants `fops_app` `INSERT`, column-level
+  `SELECT` on every column except `response_id`, and column-level `UPDATE ("revoked_at")`
+  (0057; before 0057 the `SELECT` was table-wide). The **direct table join** on
+  `survey_response_excerpt_approvals.response_id` is therefore denied to `fops_app`;
+  this is not SQL-level unlinkability: audit `detail` linkage, Finding / evidence-highlight
+  provenance, internal `survey_response` entity links, and the `fops_app`-executable
+  Survey definers remain composable paths, tracked as #569 follow-ups;
+  every per-response binding read — highlight projections, the stored-highlight
+  active check, and the revoke binding check — runs through the
+  `survey.read_approved_response_excerpts` and `survey.read_response_excerpt_approval`
+  `SECURITY DEFINER` readers owned by `fops_survey_evidence_reader_owner`.
 ```
 
 ### Database prerequisite: pgvector (ADR-0034 D1)

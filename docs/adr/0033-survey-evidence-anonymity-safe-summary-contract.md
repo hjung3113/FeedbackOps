@@ -93,8 +93,38 @@ Actor and returns only Survey ID and title, submission time, and the immutable
 its own respondent; this route reveals no answers or other respondents' rows
 and grants no operator read access. Self-history reads are not audited because
 the reader is the data subject. The projection omits response IDs as defense in
-depth: it adds no new respondent-to-response link. (At the database-role level
-`fops_app` can already join `survey_response_submitted` audit rows to excerpt
-approvals; that pre-existing path is tracked in #569.) All other
+depth: it adds no new respondent-to-response link. (#569 closed the direct
+database-role join: since migration 0057 `fops_app` has no `SELECT` on
+`survey.survey_response_excerpt_approvals.response_id`. The audit-mediated
+variant — approval audit rows whose `detail` carries both the response and the
+approval id, joined to the still-selectable approval id and redacted excerpt —
+remains and is tracked in #569 follow-ups.) All other
 personal-response reads and exports retain the explicit capability requirements
 in this ADR.
+
+## Addendum — #569 / #737 identity-protection guarantee scope (owner decision 2026-10-03)
+
+The identity protection this ADR promises is defined as:
+
+1. **API authorization.** Respondent identity, response IDs, raw answers and personal excerpts reach an Actor only through
+   the capability gates in this ADR (`survey.read`, `survey.read_personal_responses`, `survey.manage`), with the per-row
+   personal-read audits in section I.
+2. **Direct-table isolation for the application role.** `fops_app` cannot read the respondent↔response binding directly
+   from the Survey response tables or from `survey.survey_response_excerpt_approvals.response_id` (migration 0057). Narrow
+   `SECURITY DEFINER` readers project only what the API needs.
+
+It is **not** a guarantee of SQL-level unlinkability against a compromised `fops_app` database handle. Such a handle can
+still compose app-executable Survey definers, audit `detail` linkage, Finding / evidence-highlight provenance and
+internal-only `survey_response` entity links. The owner accepted this residual because the API surfaces are gated and
+audited, and because a compromised application handle already reaches far broader workspace data. A trusted read boundary
+that arbitrary `fops_app` SQL cannot invoke (a separate role, connection or service) was considered and deferred.
+
+Consequences:
+
+- Audit `detail` linkage is unchanged. ADR-0008's actor attribution and append-only history stay as they are (#738 closed
+  under this decision).
+- Further direct-table hardening of the remaining single-table paths (#739 Finding/highlight provenance, #740 internal
+  entity links) is optional defense in depth, decided per issue after a cost review.
+
+Reopening trigger: a requirement for unlinkability against a compromised application database credential, or an
+application route that exposes any of the residual paths.
