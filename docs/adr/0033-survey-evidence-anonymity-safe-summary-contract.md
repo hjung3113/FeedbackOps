@@ -93,8 +93,11 @@ Actor and returns only Survey ID and title, submission time, and the immutable
 its own respondent; this route reveals no answers or other respondents' rows
 and grants no operator read access. Self-history reads are not audited because
 the reader is the data subject. The projection omits response IDs as defense in
-depth: it adds no new respondent-to-response link. (At the database-role level
-`fops_app` can already join `survey_response_submitted` audit rows to excerpt
-approvals; that pre-existing path is tracked in #569.) All other
+depth: it adds no new respondent-to-response link. (#569 closed the direct
+database-role join: since migration 0057 `fops_app` has no `SELECT` on
+`survey.survey_response_excerpt_approvals.response_id`. The audit-mediated
+variant — approval audit rows whose `detail` carries both the response and the
+approval id, joined to the still-selectable approval id and redacted excerpt —
+remains and is tracked in #569 follow-ups.) All other
 personal-response reads and exports retain the explicit capability requirements
 in this ADR.
