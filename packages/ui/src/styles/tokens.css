@@ -41,6 +41,15 @@
   --text-info: var(--color-cyan-spark);
   --text-on-accent: 255 255 255;       /* #ffffff */
 
+  /* #750 semantic text labels: same hue/saturation, HLS lightness lowered only
+   * until small text clears 4.5:1 on supported light surfaces, its own 14% tint,
+   * and the actual tinted LinkStatusBadge row states (danger also: the blocked
+   * MilestoneStatusBadge tint on a selected row). */
+  --text-success-label: 16 115 74;   /* #10734a — 4.53:1 */
+  --text-info-label: 0 111 148;      /* #006f94 — 4.52:1 */
+  --text-warning-label: 142 85 0;    /* #8e5500 — 4.54:1 */
+  --text-danger-label: 178 32 43;    /* #b2202b — 4.51:1 */
+
   /* --- Surface tokens --- */
   --surface-canvas: var(--color-pitch-black);
   --surface-sidebar: 238 244 251;      /* #eef4fb */

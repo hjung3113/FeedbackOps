@@ -15,14 +15,14 @@ export interface MilestoneStatusBadgeProps {
 // (emerald) match the prototype colors; planning uses the muted internal token.
 // Blocked has no internal-status token yet, so it consumes --text-danger
 // (the same warning-red value).
-const STATUS_META: Record<string, { label: string; token: string }> = {
+const STATUS_META: Record<string, { label: string; token: string; labelToken?: string }> = {
   planning: { label: GLOSSARY.milestoneStatusPlanning, token: '--status-internal-todo' },
   in_progress: { label: GLOSSARY.milestoneStatusInProgress, token: '--status-internal-doing' },
-  blocked: { label: '차단', token: '--text-danger' },
+  blocked: { label: '차단', token: '--text-danger', labelToken: '--text-danger-label' },
   released: { label: GLOSSARY.milestoneStatusReleased, token: '--status-internal-done' },
 };
 
-const FALLBACK_STATUS_META = {
+const FALLBACK_STATUS_META: { label: string; token: string; labelToken?: string } = {
   label: GLOSSARY.milestoneStatusPlanning,
   token: '--status-internal-todo',
 };
@@ -44,7 +44,8 @@ export function MilestoneStatusBadge({ status, className }: MilestoneStatusBadge
         className,
       )}
       style={{
-        color: `rgb(var(${meta.token}) / 1)`,
+        // #750: the AA label color departs from the prototype; keep base color for tint and dot.
+        color: `rgb(var(${meta.labelToken ?? meta.token}) / 1)`,
         backgroundColor: `rgb(var(${meta.token}) / 0.12)`,
       }}
       data-token={meta.token}

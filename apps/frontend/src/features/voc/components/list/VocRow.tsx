@@ -216,7 +216,7 @@ export function VocRow({
               ) : voc.analytics_area_id === null ? (
                 <>
                   <RowDot />
-                  <span className="text-text-warning">Analytics Area 없음</span>
+                  <span className="text-text-warning-label">Analytics Area 없음</span>
                 </>
               ) : null}
               <RowDot />

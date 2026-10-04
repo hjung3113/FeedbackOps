@@ -28,8 +28,8 @@ const RING_ALPHA: Record<CalloutTone, string> = {
 };
 
 const TITLE_VAR: Record<CalloutTone, string> = {
-  amber: '--text-warning',
-  red: '--text-danger',
+  amber: '--text-warning-label',
+  red: '--text-danger-label',
   blue: '--text-secondary',
   cyan: '--text-secondary',
   emerald: '--text-secondary',

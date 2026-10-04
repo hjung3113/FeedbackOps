@@ -415,10 +415,8 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               <SummaryCell
                 label={GLOSSARY.milestoneStatusReleased}
                 value={countsUnavailable ? null : summary.released}
-                // Prototype colors the Released KPI with the emerald token
-                // (screen-milestones.jsx); `text-success` is not a generated
-                // utility — the semantic class is `text-text-success`.
-                valueClassName="text-text-success"
+                // #750: keep the prototype's emerald hue and use its AA label token for small text.
+                valueClassName="text-text-success-label"
                 testId="milestone-summary-released"
               />
               {/* #670: the prototype's schedule-risk string is designer guidance, not shipped copy. */}

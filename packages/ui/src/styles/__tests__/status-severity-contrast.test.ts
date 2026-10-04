@@ -120,3 +120,95 @@ describe('#525 status/severity label contrast (WCAG AA)', () => {
     });
   }
 });
+
+const semanticTextLabelPairs = [
+  ['success', '--text-success', '--text-success-label', [24, 168, 107]],
+  ['info', '--text-info', '--text-info-label', [0, 169, 224]],
+  ['warning', '--text-warning', '--text-warning-label', [165, 99, 0]],
+  ['danger', '--text-danger', '--text-danger-label', [217, 45, 58]],
+] as const;
+
+const semanticTextSurfaces = [
+  '--surface-canvas',
+  '--surface-card',
+  '--surface-card-elevated',
+  '--surface-sidebar',
+  '--surface-row-hover',
+  '--surface-row-selected',
+  '--surface-blocked',
+  '--surface-field-filled',
+] as const;
+
+describe('#750 semantic text label contrast (WCAG AA)', () => {
+  const props = parseCustomProps(TOKENS_CSS_PATH);
+
+  it('keeps the base semantic text colors unchanged', () => {
+    for (const [, baseToken, , expectedRgb] of semanticTextLabelPairs) {
+      expect(resolveRgb(props, baseToken)).toEqual(expectedRgb);
+    }
+  });
+
+  it.each(
+    semanticTextLabelPairs.flatMap(([name, baseToken, labelToken]) =>
+      semanticTextSurfaces.map((surfaceToken) => ({
+        name,
+        baseToken,
+        labelToken,
+        surfaceToken,
+      })),
+    ),
+  )('$labelToken clears 4.5:1 on $surfaceToken', ({ labelToken, surfaceToken }) => {
+    const labelColor = resolveRgb(props, labelToken);
+    const surfaceColor = resolveRgb(props, surfaceToken);
+    expect(contrastRatio(labelColor, surfaceColor)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+  });
+
+  it.each(semanticTextLabelPairs)(
+    '--text-%s-label clears 4.5:1 on its 14% card tint',
+    (_name, baseToken, labelToken) => {
+      const baseHue = resolveRgb(props, baseToken);
+      const labelColor = resolveRgb(props, labelToken);
+      const card = resolveRgb(props, '--surface-card');
+      const tintBackground = blend(baseHue, card, 0.14);
+      expect(contrastRatio(labelColor, tintBackground)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+    },
+  );
+
+  const badgeSurfaces = [
+    { name: 'canvas row', surfaceToken: '--surface-canvas', blocked: false },
+    { name: 'card', surfaceToken: '--surface-card', blocked: false },
+    { name: 'hovered row', surfaceToken: '--surface-row-hover', blocked: false },
+    { name: '60% blocked row over canvas', surfaceToken: '--surface-blocked', blocked: true },
+  ] as const;
+  const badgePairs = semanticTextLabelPairs.filter(([name]) =>
+    ['success', 'warning', 'danger'].includes(name),
+  );
+
+  it.each(
+    badgePairs.flatMap(([name, baseToken, labelToken]) =>
+      badgeSurfaces.map((surface) => ({ name, baseToken, labelToken, surface })),
+    ),
+  )(
+    '$labelToken clears 4.5:1 on its 12% tint over $surface.name',
+    ({ baseToken, labelToken, surface }) => {
+      const baseHue = resolveRgb(props, baseToken);
+      const labelColor = resolveRgb(props, labelToken);
+      const rowSurface = resolveRgb(props, surface.surfaceToken);
+      const canvas = resolveRgb(props, '--surface-canvas');
+      const rowBackground = surface.blocked ? blend(rowSurface, canvas, 0.6) : rowSurface;
+      const tintBackground = blend(baseHue, rowBackground, 0.12);
+      expect(contrastRatio(labelColor, tintBackground)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+    },
+  );
+
+  it('--text-danger-label clears 4.5:1 on the blocked Milestone badge tint over a selected row', () => {
+    const selectedTint = blend(
+      resolveRgb(props, '--text-danger'),
+      resolveRgb(props, '--surface-row-selected'),
+      0.12,
+    );
+    expect(
+      contrastRatio(resolveRgb(props, '--text-danger-label'), selectedTint),
+    ).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+  });
+});
