@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FeedbackOps 사용자 안내</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f7fe;
+      --surface: #fbfdff;
+      --elevated: #edf3fb;
+      --border: #cbd6e6;
+      --border-strong: #b8c4d6;
+      --text: #101828;
+      --secondary: #374151;
+      --muted: #667083;
+      --accent: #1428a0;
+      --success: #10734a;
+      --warning: #8e5500;
+      --danger: #b2202b;
+      --info: #006f94;
+      --shadow: 0 8px 24px rgb(16 24 40 / 8%);
+      --focus: 0 0 0 3px rgb(20 40 160 / 24%);
+      --font: Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        color-scheme: dark;
+        --bg: #0c111d;
+        --surface: #131a2a;
+        --elevated: #1a2337;
+        --border: #28324a;
+        --border-strong: #3a4661;
+        --text: #e8edf6;
+        --secondary: #bcc6d8;
+        --muted: #8a95ab;
+        --accent: #9aabff;
+        --success: #5dd09a;
+        --warning: #f5bd62;
+        --danger: #ff858a;
+        --info: #65c9e9;
+        --shadow: 0 8px 28px rgb(0 0 0 / 24%);
+        --focus: 0 0 0 3px rgb(154 171 255 / 28%);
+      }
+    }
+    html[data-theme='dark'] {
+      color-scheme: dark;
+      --bg: #0c111d;
+      --surface: #131a2a;
+      --elevated: #1a2337;
+      --border: #28324a;
+      --border-strong: #3a4661;
+      --text: #e8edf6;
+      --secondary: #bcc6d8;
+      --muted: #8a95ab;
+      --accent: #9aabff;
+      --success: #5dd09a;
+      --warning: #f5bd62;
+      --danger: #ff858a;
+      --info: #65c9e9;
+      --shadow: 0 8px 28px rgb(0 0 0 / 24%);
+      --focus: 0 0 0 3px rgb(154 171 255 / 28%);
+    }
+    html[data-theme='light'] { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+    body {
+      margin: 0;
+      max-width: 100%;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 var(--font);
+    }
+    button, input, select { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { color: inherit; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    :focus-visible { outline: none; box-shadow: var(--focus); }
+    code, kbd { font-family: var(--mono); font-size: .92em; }
+    code { overflow-wrap: anywhere; }
+    .skip-link {
+      position: fixed; z-index: 100; top: 8px; left: 8px; transform: translateY(-150%);
+      padding: 8px 12px; border-radius: 8px; background: var(--surface); color: var(--text);
+    }
+    .skip-link:focus { transform: none; }
+    .guide-header {
+      display: grid; grid-template-columns: minmax(240px, 1fr) auto; gap: 18px;
+      align-items: end; padding: 22px clamp(16px, 3vw, 44px) 18px;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .eyebrow { margin: 0 0 3px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+    h1 { margin: 0; font-size: clamp(22px, 3vw, 30px); line-height: 1.2; letter-spacing: -.035em; }
+    .header-summary { margin: 7px 0 0; color: var(--secondary); }
+    .header-controls { display: grid; justify-items: end; gap: 9px; }
+    .role-filter, .header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .control-label { margin-right: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .pill-button, .icon-button, .small-button, .action-button {
+      border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface);
+      padding: 6px 10px; cursor: pointer;
+    }
+    .pill-button[aria-pressed='true'], .small-button.primary, .action-button.primary {
+      border-color: var(--accent); background: var(--accent); color: var(--surface);
+    }
+    .search-wrap { display: flex; align-items: center; gap: 8px; width: min(100%, 400px); }
+    .search-wrap input {
+      width: 280px; max-width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-strong);
+      border-radius: 8px; color: var(--text); background: var(--surface);
+    }
+    #search-status { min-width: 78px; color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
+    .layout { display: grid; grid-template-columns: 252px minmax(0, 1fr); align-items: start; gap: 24px; padding: 22px clamp(16px, 3vw, 44px) 44px; }
+    .sidebar { position: sticky; top: 16px; min-width: 0; max-height: calc(100dvh - 32px); overflow: auto; }
+    .nav-toggle { display: none; width: 100%; text-align: left; }
+    .guide-nav { display: grid; gap: 3px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+    .nav-label { margin: 12px 8px 4px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .nav-label:first-child { margin-top: 2px; }
+    .nav-link { display: block; padding: 6px 8px; border-radius: 7px; color: var(--secondary); font-size: 12px; text-decoration: none; }
+    .nav-link:hover, .nav-link[aria-current='location'] { background: var(--elevated); color: var(--text); }
+    .nav-link[aria-current='location'] { box-shadow: inset 3px 0 var(--accent); font-weight: 700; }
+    main { min-width: 0; max-width: 1180px; }
+    .chapter, .tour-section, .screen-index {
+      min-width: 0; margin: 0 0 20px; padding: clamp(16px, 2.3vw, 26px);
+      border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow);
+    }
+    .chapter.muted { border-style: dashed; }
+    .chapter.muted .chapter-copy, .chapter.muted .screen-grid { opacity: .68; }
+    .chapter-header { display: flex; justify-content: space-between; gap: 14px; align-items: start; margin-bottom: 14px; }
+    .chapter-header h2, .tour-section h2, .screen-index h2 { margin: 0; font-size: clamp(18px, 2vw, 23px); line-height: 1.3; letter-spacing: -.02em; }
+    .chapter-kicker { margin: 0 0 4px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+    .role-note { display: none; margin: 0 0 16px; padding: 9px 11px; border-left: 3px solid var(--warning); background: var(--elevated); color: var(--secondary); }
+    .chapter.muted .role-note { display: block; }
+    .chapter-copy { color: var(--secondary); }
+    .chapter-copy > :first-child { margin-top: 0; }
+    .chapter-copy > :last-child { margin-bottom: 0; }
+    .chapter-copy h3 { margin: 20px 0 7px; color: var(--text); font-size: 16px; }
+    .chapter-copy p { margin: 9px 0; }
+    .chapter-copy ul, .chapter-copy ol { padding-left: 22px; }
+    .chapter-copy li + li { margin-top: 4px; }
+    .chapter-copy blockquote, .callout { margin: 13px 0; padding: 10px 13px; border-left: 3px solid var(--info); background: var(--elevated); color: var(--text); }
+    .chapter-copy table, .permission-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    th, td { padding: 8px 9px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--elevated); color: var(--text); }
+    .state-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+    .state-lane { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--elevated); }
+    .state-lane h3 { margin: 0 0 9px; font-size: 14px; }
+    .state-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+    .state-choice { border: 1px solid var(--border-strong); border-radius: 999px; padding: 4px 8px; background: var(--surface); color: var(--secondary); font-size: 12px; cursor: pointer; }
+    .state-choice[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .state-arrow { color: var(--muted); }
+    .state-note { min-height: 38px; margin: 8px 0 0; color: var(--secondary); font-size: 12px; }
+    .state-separation { grid-column: 1 / -1; padding: 11px 13px; border: 1px solid var(--warning); border-radius: 9px; color: var(--text); text-align: center; font-weight: 750; }
+    .state-separation span { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .screen-grid { display: grid; gap: 14px; margin-top: 18px; }
+    .screen-card { min-width: 0; padding: 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg); }
+    .screen-card h3 { margin: 0; font-size: 15px; }
+    .screen-description { margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+    .screen-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 245px); gap: 12px; align-items: start; }
+    .shot-media { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--elevated); }
+    .shot-media img { display: block; width: 100%; max-width: 100%; height: auto; }
+    .shot-media.has-active::after { position: absolute; z-index: 1; inset: 0; background: rgb(8 13 25 / 48%); content: ''; pointer-events: none; }
+    .hotspot {
+      position: absolute; z-index: 2; min-width: 20px; min-height: 20px; display: grid; place-items: start;
+      padding: 0; border: 2px solid #fff; border-radius: 5px; background: rgb(20 40 160 / 12%);
+      box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgb(0 0 0 / 38%); cursor: pointer;
+    }
+    .hotspot span { position: absolute; top: -10px; left: -10px; display: grid; width: 22px; height: 22px; place-items: center; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); color: var(--surface); font: 700 11px/1 var(--font); }
+    .hotspot[aria-pressed='true'] { z-index: 3; background: rgb(255 221 89 / 20%); box-shadow: 0 0 0 3px #ffdc5e, 0 0 16px #ffdc5e; }
+    .shot-actions { display: flex; justify-content: end; margin-top: 6px; }
+    .small-button { padding: 4px 9px; font-size: 12px; }
+    .hotspot-legend { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .hotspot-legend button { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: left; cursor: pointer; }
+    .hotspot-legend button[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+    .legend-title { display: block; color: var(--text); font-size: 12px; font-weight: 750; }
+    .legend-claim { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .screen-index-intro { color: var(--secondary); }
+    .screen-group { margin: 15px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .screen-group > summary { padding: 10px 12px; color: var(--text); font-weight: 750; cursor: pointer; }
+    .screen-catalog { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 10px 10px; }
+    .screen-catalog > .screen-card { grid-column: 1 / -1; }
+    .catalog-card { min-width: 0; display: grid; grid-template-columns: minmax(100px, 36%) minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+    .catalog-card img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 5px; cursor: zoom-in; }
+    .catalog-card h3 { margin: 0; font-size: 13px; }
+    .catalog-card p { margin: 4px 0; color: var(--muted); font-size: 11px; }
+    .catalog-card a { font-size: 11px; }
+    .tour-section { scroll-margin-top: 18px; }
+    .tour-intro { color: var(--secondary); }
+    .tour-layout { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); gap: 16px; margin-top: 14px; }
+    .tour-steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .tour-steps button { width: 100%; padding: 7px 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--secondary); text-align: left; cursor: pointer; }
+    .tour-steps button[aria-current='step'] { border-color: var(--border); background: var(--elevated); color: var(--text); font-weight: 750; }
+    .tour-current { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--elevated); }
+    .tour-current h3 { margin: 0 0 6px; font-size: 18px; }
+    .tour-current p { margin: 7px 0; }
+    .tour-meta { color: var(--muted); font-size: 12px; }
+    .tour-progress { height: 6px; margin: 10px 0 14px; overflow: hidden; border-radius: 6px; background: var(--border); }
+    .tour-progress span { display: block; height: 100%; background: var(--accent); transition: width .18s ease; }
+    .tour-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 13px; }
+    .tour-actions button { min-width: 78px; }
+    .role-row-active { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+    .role-badge { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 7px; border: 1px solid var(--border); border-radius: 99px; color: var(--secondary); font-size: 11px; }
+    .term-wrap { position: relative; display: inline; }
+    .term-button { padding: 0; border: 0; border-bottom: 1px dotted var(--accent); background: transparent; color: inherit; font-weight: 750; cursor: help; }
+    .term-popover { position: absolute; z-index: 20; bottom: calc(100% + 6px); left: 0; width: min(260px, 70vw); padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--secondary); box-shadow: var(--shadow); font-size: 12px; }
+    .footer { padding: 18px clamp(16px, 3vw, 44px) 28px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+    .footer p { max-width: 1100px; margin: 4px 0; }
+    dialog#viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--bg); color: var(--text); }
+    dialog#viewer::backdrop { background: rgb(5 8 16 / 92%); }
+    .viewer-shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: 100%; height: 100%; padding: 14px clamp(12px, 3vw, 32px); }
+    .viewer-header, .viewer-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .viewer-header p, .viewer-footer p { margin: 0; color: var(--secondary); }
+    .viewer-stage { display: grid; min-height: 0; place-items: center; }
+    .viewer-stage img { display: block; max-width: 100%; max-height: calc(100dvh - 120px); object-fit: contain; }
+    .viewer-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+    .empty-state { padding: 12px; color: var(--muted); }
+    [hidden] { display: none !important; }
+    @media (min-width: 1000px) {
+      .sidebar { top: 16px; }
+      .nav-toggle { display: none; }
+      .guide-nav { display: grid !important; }
+    }
+    @media (max-width: 999px) {
+      .guide-header { grid-template-columns: 1fr; align-items: start; }
+      .header-controls { justify-items: start; }
+      .layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+      .sidebar { position: static; max-height: none; }
+      .nav-toggle { display: block; }
+      .guide-nav { display: none; margin-top: 8px; }
+      .guide-nav.is-open { display: grid; }
+      .screen-row { grid-template-columns: minmax(0, 1fr); }
+      .hotspot-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .layout { padding-top: 12px; }
+      .guide-header { padding-top: 16px; }
+      .role-filter { gap: 4px; }
+      .pill-button { padding: 5px 8px; }
+      .state-board, .tour-layout, .screen-catalog { grid-template-columns: minmax(0, 1fr); }
+      .catalog-card { grid-template-columns: 110px minmax(0, 1fr); }
+      .hotspot-legend { grid-template-columns: minmax(0, 1fr); }
+      .chapter-header { display: block; }
+      .chapter, .tour-section, .screen-index { padding: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#guide-main">본문으로 건너뛰기</a>
+  <header class="guide-header">
+    <div>
+      <p class="eyebrow">FeedbackOps · 사용자 안내</p>
+      <h1>하려는 일부터 찾는 안내서</h1>
+      <p class="header-summary">매뉴얼의 흐름을 따라 화면과 상태를 살펴봅니다.</p>
+    </div>
+    <div class="header-controls">
+      <div class="role-filter" id="role-filter" role="group" aria-label="역할 필터"></div>
+      <div class="header-actions">
+        <button class="icon-button" id="theme-toggle" type="button" aria-pressed="false">어두운 테마</button>
+        <label class="search-wrap" for="guide-search">
+          <span class="control-label">검색</span>
+          <input id="guide-search" type="search" autocomplete="off" placeholder="한국어로 찾기">
+        </label>
+        <output id="search-status" aria-live="polite">전체 안내</output>
+      </div>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" aria-label="안내서 탐색">
+      <button class="nav-toggle small-button" id="nav-toggle" type="button" aria-expanded="false" aria-controls="guide-nav">목차 펼치기</button>
+      <nav class="guide-nav" id="guide-nav" aria-label="안내서 목차"></nav>
+    </aside>
+    <main id="guide-main" tabindex="-1"></main>
+  </div>
+  <footer class="footer" id="guide-footer"></footer>
+  <dialog id="viewer" aria-label="스크린샷 확대 보기">
+    <div class="viewer-shell">
+      <div class="viewer-header">
+        <p id="viewer-title"></p>
+        <div class="viewer-controls">
+          <button class="small-button" id="viewer-prev" type="button" aria-label="이전 화면">← 이전</button>
+          <button class="small-button" id="viewer-next" type="button" aria-label="다음 화면">다음 →</button>
+          <button class="small-button" id="viewer-close" type="button">닫기 Esc</button>
+        </div>
+      </div>
+      <div class="viewer-stage"><img id="viewer-image" alt=""></div>
+      <div class="viewer-footer"><p id="viewer-caption"></p><p>← / → 이동 · Esc 닫기</p></div>
+    </div>
+  </dialog>
+  <script>
+    const hit = (element, pixels, label, claim, source) => ({
+      element,
+      box: [pixels[0] / 14.4, pixels[1] / 9.6, pixels[2] / 14.4, pixels[3] / 9.6],
+      pixels,
+      label,
+      claim,
+      source
+    });
+
+    const GUIDE = {
+      capture: { date: '2026-10-04', commit: '859cf4aa', viewport: '1440×960' },
+      roles: [
+        { id: 'all', label: '전체' },
+        { id: 'admin', label: 'Admin' },
+        { id: 'developer', label: 'Developer' },
+        { id: 'user', label: 'User' }
+      ],
+      glossary: {
+        VOC: '하나의 Managed System에 대한 하나의 피드백입니다. 리포터에게 보이는 상태와 내부 처리 상태를 따로 갖습니다.',
+        Finding: '근거에 기반한 판단입니다. 피드백에서 실행 후보로 넘어가는 다리입니다.',
+        'Task Request': '검토를 거치지 않은 후보가 Task 백로그에 바로 들어가지 않도록 하는 실행 작업 후보입니다.',
+        Task: '실제로 수행하는 내부 실행 작업이며 리포터 상태와 독립된 상태를 가집니다.',
+        'Entity link': '서로 다른 레코드 사이의 저장된 연결로, 교차 시스템의 추적 경로를 만듭니다.',
+        'Managed System': 'FeedbackOps가 피드백과 개선 작업을 추적하는 사내 시스템입니다.',
+        'Analytics Area': '하나의 Managed System 안에 있는 분석 메뉴, 보고서 그룹 또는 업무 분석 영역입니다.'
+      },
+      chapters: [
+        {
+          id: 'ch-0', number: 0, nav: '시작하기', title: '0. 5분 안에 알아야 할 것',
+          audience: ['admin', 'developer', 'user'], permission: '누구나 읽을 수 있습니다.', screens: ['home-dashboard', 'command-palette'],
+          copy: `
+            <h3>다섯 개의 개념</h3>
+            <table><thead><tr><th>개념</th><th>무엇인가</th></tr></thead><tbody>
+              <tr><th>VOC</th><td>하나의 Managed System에 대한 하나의 피드백. 리포터에게 보이는 상태와 내부 처리 상태를 <strong>따로</strong> 갖습니다.</td></tr>
+              <tr><th>Finding</th><td>근거에 기반한 판단. “사람들이 이렇게 말한다”에서 “그래서 뭘 해야 한다”로 넘어가는 다리입니다.</td></tr>
+              <tr><th>Task Request</th><td>실행 작업 후보. 검토를 거치지 않은 것이 백로그에 바로 쌓이지 않게 막는 장치입니다.</td></tr>
+              <tr><th>Task</th><td>실제 실행 작업. 리포터에게 보이는 것과 <strong>독립된</strong> 자체 상태를 갖습니다.</td></tr>
+              <tr><th>Entity link</th><td>위 항목들 사이의 저장된 연결. 추적 경로를 실제 데이터로 만드는 것이 이것입니다.</td></tr>
+            </tbody></table>
+            <div class="callout"><strong>리포터 상태와 Task 상태는 자동으로 연동되지 않습니다.</strong> Task를 <code>released</code>로 옮겨도 VOC가 저절로 <code>resolved</code>가 되지 않습니다. 릴리스는 공개 상태 검토 후보를 만들 뿐이고, 확정은 사람이 합니다.</div>
+            <div class="callout"><strong>권한이 없을 때 화면은 비어 있지 않고 경로를 알려줍니다.</strong> 승인된 요약이나 권한 요청 경로가 표시될 수 있습니다. 요청이 불가능한 차단 상태라면 관리자에게 문의합니다.</div>
+            <h3>화면 구조</h3>
+            <p>왼쪽 레일이 큰 영역(Home · VOC · Findings · Tasks · Integration · Surveys · Admin)이고, 그 옆 사이드바가 해당 영역의 세부 화면입니다. 사이드바 위쪽의 <strong>Managed System 선택기</strong>는 필터가 아니라 <strong>권한 범위</strong>입니다. 내 권한 밖 시스템을 고르면 화면이 그에 맞게 제한됩니다.</p>
+            <!-- Source: CONTEXT.md lines 85-99 and 250-252. Managed System and Analytics Area definitions and scope. -->
+            <p><strong>Managed System</strong>은 피드백과 개선 작업의 범위를 정하는 사내 시스템입니다. 그 안의 <strong>Analytics Area</strong>는 분류와 집계를 위한 영역이며 권한 경계가 아닙니다.</p>
+            <!-- Source: CONTEXT.md lines 209-211 and docs/design/08-dashboard-system.md lines 5-22. Home and Integration are operational queue surfaces. -->
+            <p>Home은 내가 지금 처리할 항목을 모으고, Integration은 시스템 사이에서 끊긴 근거·실행·검증 연결을 살펴보는 화면입니다.</p>
+          `
+        },
+        {
+          id: 'ch-1', number: 1, nav: '1. 겪은 문제를 알리고 싶다', title: '1. 겪은 문제를 알리고 싶다',
+          audience: ['admin', 'developer', 'user'], permission: '누구나 할 수 있습니다. 권한이 따로 필요 없습니다.', screens: ['voc-create'],
+          copy: `
+            <p><strong>누구나 할 수 있습니다.</strong> 권한이 따로 필요 없습니다.</p>
+            <p><code>VOC 생성</code> (<code>/vocs?action=create</code>)으로 갑니다.</p>
+            <table><thead><tr><th>항목</th><th>필수</th><th>메모</th></tr></thead><tbody>
+              <tr><th>Managed System</th><td>필수</td><td>어느 시스템 얘기인지. 이 선택이 이후 담당자·권한 범위를 결정합니다.</td></tr>
+              <tr><th>제목</th><td>필수</td><td>200자까지</td></tr>
+              <tr><th>상세 설명</th><td>필수</td><td>서식·목록·링크를 쓸 수 있는 편집기입니다.</td></tr>
+              <tr><th>Analytics Area</th><td>선택</td><td>알면 지정하고, 모르면 비워도 됩니다. Triage에서 채울 수 있습니다.</td></tr>
+              <tr><th>출처</th><td>선택</td><td>직접 사용 중 겪었는지, 남의 얘기를 대신 올리는지 등을 적습니다.</td></tr>
+              <tr><th>첨부</th><td>선택</td><td>스크린샷·로그</td></tr>
+            </tbody></table>
+            <p>Managed System을 고르면 오른쪽에 비슷한 VOC가 뜹니다. 같은 얘기가 이미 있으면 거기에 붙는 편이 더 빨리 처리됩니다. 중복은 신호일 수 있고, 진행 중인 건에 맥락을 보탤 수 있습니다.</p>
+            <blockquote><strong>팁 — 상세 설명 칸이 안 눌리는 것 같다면</strong> 예전 버전 얘기입니다. 지금은 편집기 박스 어디를 눌러도 활성화됩니다.</blockquote>
+          `
+        },
+        {
+          id: 'ch-2', number: 2, nav: '2. 내가 올린 건이 어떻게 되고 있는지 보고 싶다', title: '2. 내가 올린 건이 어떻게 되고 있는지 보고 싶다',
+          audience: ['admin', 'developer', 'user'], permission: '내 VOC를 확인하거나 리포터 답장을 남길 수 있습니다.', screens: ['voc-reporter-view', 'home-inbox'],
+          copy: `
+            <p><code>내 VOC</code> (<code>/vocs?view=my</code>)에 내가 올린 것만 모입니다.</p>
+            <p><strong>내게 온 알림</strong>은 <code>홈</code> (<code>/home?tab=inbox</code>)의 <code>수신함</code> 탭이나 왼쪽 레일의 <code>알림</code> 버튼에서 봅니다. <code>읽지 않음</code> 또는 <code>전체</code>를 선택하고, 읽음 처리하거나 보관할 수 있습니다. 이 알림함은 VOC 목록의 <code>수신함</code> (<code>/vocs?view=inbox</code>)과 다릅니다.</p>
+            <h3>리포터에게 보이는 상태</h3>
+            <p><code>received</code> → <code>reviewing</code> → <code>assigned</code> → <code>progress</code> → <code>prep</code> → <code>resolved</code>와 <code>reopened</code> / <code>closed</code>까지 여덟 단계입니다.</p>
+            <p>담당자가 직접 바꾸며, Task가 어떻게 진행되든 자동으로 움직이지 않습니다. 상태가 바뀌었다면 누군가 그렇게 판단했다는 뜻이며, 대개 공개 업데이트가 함께 있습니다.</p>
+            <h3>상세 화면에서 볼 수 있는 것</h3>
+            <ul><li><strong>공개 타임라인</strong> — 담당자의 업데이트와 내 답장</li><li><strong>연결된 Task</strong> — 권한에 따라 전체, 공개 가능한 요약 또는 표시되지 않는 상태가 될 수 있습니다.</li></ul>
+            <p><strong>답장을 쓰려면</strong> 상세 화면의 리포터 답장 편집기를 사용합니다. 내부 코멘트와는 물리적으로 다른 입력창입니다.</p>
+          `
+        },
+        {
+          id: 'ch-3', number: 3, nav: '3. 들어온 VOC를 처리해야 한다', title: '3. 들어온 VOC를 처리해야 한다',
+          audience: ['admin', 'developer'], permission: '해당 Managed System의 <code>voc.triage</code>. Admin은 역할만으로 가집니다.', screens: ['voc-inbox-detail', 'voc-triage', 'voc-inbox-high-no-link'],
+          copy: `
+            <p><strong>필요 권한:</strong> 해당 Managed System에 <code>voc.triage</code>. Admin은 역할만으로 가집니다.</p>
+            <h3>어디서 보나</h3>
+            <table><thead><tr><th>화면</th><th>용도</th></tr></thead><tbody>
+              <tr><th><code>수신함</code> (<code>/vocs?view=inbox</code>)</th><td>내 범위의 전체 VOC</td></tr>
+              <tr><th><code>Triage</code> (<code>/vocs?view=triage</code>)</th><td><strong>처리 대기 큐.</strong> 실제 작업 공간입니다.</td></tr>
+              <tr><th><code>높음</code> / <code>미배정</code> / <code>연결 없음</code></th><td>Triage 큐의 저장된 관점입니다. 사이드바 숫자가 남은 건수입니다.</td></tr>
+            </tbody></table>
+            <h3>Triage에서 정하는 것</h3>
+            <p>VOC를 고르면 오른쪽 패널에서 <strong>심각도</strong>(low / medium / high / critical), <strong>담당자</strong>(개인 또는 팀 중 하나), <strong>Analytics Area</strong>, <strong>처리 상태</strong>를 판단합니다.</p>
+            <p>상태는 <code>untriaged</code> → <code>triaged</code>이며, 정보가 부족하면 <code>needs_more_information</code>, 실행할 것이 아니면 <code>dismissed_not_actionable</code>로 둘 수 있습니다.</p>
+            <p><strong>변경은 즉시 반영되고 4초 동안 되돌릴 수 있습니다.</strong> 토스트의 되돌리기를 누르면 원복됩니다. 4초가 지나면 다시 바꾸면 됩니다.</p>
+            <h3>이미 판단한 건을 다시 바꾸려면</h3>
+            <p>VOC 상세 패널의 Triage 영역에서 <code>Triage에서 변경</code>을 누르면 선택된 VOC와 함께 Triage 콘솔로 이동합니다. 상세 패널 자체는 읽기 전용입니다.</p>
+            <h3>내부용 메모</h3>
+            <p><strong>내부 코멘트</strong> 편집기는 리포터에게 보이지 않습니다. 리포터 답장·공개 업데이트와 나란히 있지만 세 입력창은 서로 다르며 합쳐지지 않습니다.</p>
+          `
+        },
+        {
+          id: 'ch-4', number: 4, nav: '4. 리포터에게 상황을 알려야 한다', title: '4. 리포터에게 상황을 알려야 한다',
+          audience: ['admin', 'developer'], permission: 'Admin 또는 같은 Managed System 범위의 Developer가 Public Update를 쓸 수 있습니다.', screens: ['voc-detail-composer', 'public-update-review'],
+          copy: `
+            <p><strong>공개 업데이트</strong>가 리포터에게 보이는 유일한 창구입니다. 리포터 상태를 바꾸는 경로이기도 합니다.</p>
+            <p>상태를 바꾸면 시스템이 공개 업데이트를 쓰거나, 건너뛰는 이유를 적도록 요구합니다. 리포터 몰래 상태만 바뀌지 않으며, 건너뛴 이유도 감사 기록에 남습니다.</p>
+            <ul><li><strong>상태를 바꾸며 설명한다</strong> → 공개 업데이트를 쓰고 새 상태를 함께 지정</li><li><strong>상태만 바꾼다</strong> → 건너뛰기를 고르고 사유를 기록</li></ul>
+            <p>작성 전에 미리보기로 리포터에게 어떻게 보이는지 확인할 수 있습니다.</p>
+            <!-- Source: CONTEXT.md lines 298-302. Public Update writer roles and the separate public and internal timelines. -->
+          `
+        },
+        {
+          id: 'ch-5', number: 5, nav: '5. 같은 얘기가 반복해서 들어온다', title: '5. 같은 얘기가 반복해서 들어온다',
+          audience: ['admin', 'developer'], permission: 'Developer와 Admin이 내부 Triage를 위해 Cluster를 관리합니다.', screens: ['voc-clusters', 'voc-cluster-detail'],
+          copy: `
+            <p><code>Clusters</code> (<code>/voc-clusters</code>)에서 여러 VOC를 하나로 묶습니다.</p>
+            <p>Cluster는 <code>draft</code>로 시작해 <code>confirmed</code>가 됩니다. 초안 동안 구성원을 넣고 빼며 같은 문제인지 확인하고, 확정하면 묶음이 이후 근거의 단위가 됩니다.</p>
+            <ul><li><strong>한 번에 공개 업데이트를 보낼 수 있습니다</strong> — 같은 문제를 제보한 사람들에게 같은 소식을 각각 쓰지 않아도 됩니다.</li><li><strong>Finding의 근거가 튼튼해집니다</strong> — 반복된 문제 제보가 판단의 근거가 됩니다.</li><li><strong>Cluster에서 바로 Task Request를 올릴 수 있습니다.</strong></li></ul>
+            <!-- Source: CONTEXT.md lines 213-215 and 310-313. Cluster membership is manually curated; VOC records remain independent. -->
+          `
+        },
+        {
+          id: 'ch-6', number: 6, nav: '6. 근거를 모아 판단으로 남기고 싶다', title: '6. 근거를 모아 판단으로 남기고 싶다',
+          audience: ['admin', 'developer'], permission: '<code>finding.read</code> / <code>finding.manage</code>. Admin은 역할만으로 가집니다.', screens: ['findings-list', 'finding-detail'],
+          copy: `
+            <p><strong>필요 권한:</strong> <code>finding.read</code> / <code>finding.manage</code>. Admin은 역할만으로 가집니다.</p>
+            <p><code>Findings</code> (<code>/findings</code>)로 갑니다. Finding은 “근거를 보니 이렇다”는 판단이고, 실행 요청의 출발점입니다.</p>
+            <p>만들 때 제목, 요약, 심각도, 신뢰도(low / medium / high), 대상 Managed System, 필요하면 Analytics Area를 적습니다.</p>
+            <h3>출처는 두 가지입니다</h3>
+            <ul><li><strong>VOC에서</strong> — 특정 VOC를 근거로</li><li><strong>설문 응답에서</strong> — 승인된 발췌만 사용합니다. 익명 응답이나 신원 보호된 응답은 가린 뒤 명시적으로 승인해야 근거로 붙습니다.</li></ul>
+            <p>Finding 상태는 <code>draft</code> → <code>active</code> → <code>converted</code>(실행으로 넘어감), 또는 <code>not_actionable</code> / <code>archived</code>입니다.</p>
+            <p>Finding 상세에서 근거를 더 붙이는 현재 UI 이름은 <code>Evidence 추가</code>와 <code>기존 Evidence 연결</code>입니다. 연결된 VOC·Task로 이동할 수 있습니다.</p>
+            <blockquote><strong>신뢰도를 낮게 적는 것을 두려워하지 마세요.</strong> <code>low</code>는 더 살펴봐야 한다는 정직한 신호이고, 근거가 쌓이면 올릴 수 있습니다.</blockquote>
+          `
+        },
+        {
+          id: 'ch-7', number: 7, nav: '7. 실제로 고치는 일로 넘기고 싶다', title: '7. 실제로 고치는 일로 넘기고 싶다',
+          audience: ['admin', 'developer'], permission: 'Task Request 검토는 Admin 또는 같은 Managed System 범위의 Developer가 합니다. 본인 요청 자체 승인에는 <code>task_request.self_approve</code>가 필요합니다. Milestone은 Admin 또는 해당 범위에서 <code>finding.manage</code>가 있는 Developer가 관리합니다.', screens: ['task-requests', 'task-board', 'milestones', 'integration-links'],
+          copy: `
+            <h3>왜 바로 Task를 못 만드나</h3>
+            <p><strong>Task Request</strong>를 거칩니다. 검토되지 않은 후보가 백로그를 채우면 백로그가 우선순위 신호로서 의미를 잃기 때문입니다.</p>
+            <div class="callout"><code>Finding / VOC / Cluster</code> → <code>Task Request</code> → <code>pending_review</code> → <code>approved</code> → <code>converted</code> (Task 생성 또는 기존 Task 연결)<br><code>pending_review</code>에서 <code>needs_more_evidence</code> 또는 <code>rejected</code>로 갈 수도 있습니다.</div>
+            <p><code>Task Requests</code> (<code>/tasks?view=requests</code>)에서 검토합니다. 승인·반려·근거 보강 요청 중에 고르고, 승인하면 Task로 전환하거나 이미 있는 Task에 연결합니다.</p>
+            <p>자기가 올린 요청을 자기가 승인하는 경우(self-approval)는 워크스페이스 정책이 허용할 때만 가능하고, 감사 기록에 별도 라벨이 붙습니다. 필요 권한은 <code>task_request.self_approve</code>이며 Admin은 역할만으로 가집니다.</p>
+            <!-- Source: CONTEXT.md lines 282-286. Task Request Review roles, scope, self-approval reason, and audit metadata. -->
+            <h3>Task 다루기</h3>
+            <p><code>Tasks</code> (<code>/tasks?view=board</code>)는 칸반 보드입니다. 카드를 끌어 <code>backlog</code> → <code>todo</code> → <code>doing</code> → <code>review</code> → <code>done</code> → <code>released</code>로 옮길 수 있고 <code>reopened</code>될 수 있습니다.</p>
+            <p><code>내 Task</code> (<code>/tasks?view=my</code>)에는 내게 배정된 것만 모입니다.</p>
+            <p>Milestone은 관련 Task를 묶는 계획 단위입니다. <code>Milestones</code> (<code>/tasks?view=milestones</code>)에서 만들고, 열어 연결된 Task 목록을 확인합니다.</p>
+            <p><strong>Milestone 필요 권한:</strong> Admin 또는 해당 Managed System에 <code>finding.manage</code>가 있는 Developer.</p>
+            <p>Task 상세의 <code>맥락</code>에서 이 작업이 어느 Finding에서 나왔는지 볼 수 있고, Finding으로 이동할 수 있습니다.</p>
+            <blockquote><strong>다시 강조 — <code>released</code>로 옮겨도 VOC 리포터 상태는 바뀌지 않습니다.</strong> 리포터에게 알리려면 해당 VOC의 공개 업데이트를 씁니다.</blockquote>
+            <!-- Source: docs/design/11-entity-linking.md, Purpose and FR-LINK-002. Entity Links preserve cross-system context subject to visibility and both endpoint permissions. -->
+            <p>Integration의 엔티티 링크 목록은 VOC, Finding, Task Request, Task 등 독립 레코드 사이의 저장된 연결을 보여줍니다.</p>
+          `
+        },
+        {
+          id: 'ch-8', number: 8, nav: '8. 고친 뒤에 정말 나아졌는지 확인하고 싶다', title: '8. 고친 뒤에 정말 나아졌는지 확인하고 싶다',
+          audience: ['admin', 'developer', 'user'], permission: '결과 읽기는 <code>survey.read</code>, 설문 운영은 <code>survey.manage</code>. 응답 참여는 인증된 사용자가 할 수 있습니다.',
+          screens: ['surveys-list', 'survey-builder', 'survey-results', 'survey-results-below-threshold', 'survey-results-poor-outcome', 'survey-follow-up', 'survey-participate', 'survey-respond'],
+          copy: `
+            <p><strong>필요 권한:</strong> 읽기는 <code>survey.read</code>, 만들고 운영하는 것은 <code>survey.manage</code>. Admin은 둘 다 역할로 가집니다. 해당 권한에 명시적 거부가 있으면 거부가 이깁니다.</p>
+            <p><code>Surveys</code> (<code>/surveys</code>)로 갑니다.</p>
+            <h3>수명 주기</h3>
+            <p><code>draft</code> (편집 가능) → <code>open</code> (응답 수집) → <code>closed</code> (결과 확정)</p>
+            <p><code>draft</code>일 때만 질문을 편집할 수 있습니다. 열고 나면 문항이 고정되므로 질문 순서 변경·추가·삭제는 초안 단계에서 끝냅니다.</p>
+            <h3>결과 보기</h3>
+            <p><code>/surveys/{id}/results</code>에서 집계를 봅니다. 응답이 5건 미만인 구간은 표시되지 않습니다. 필터를 걸어 대상을 좁혔을 때도 같고, 필터를 바꿔 특정인의 응답을 역산하는 것도 막습니다. Workspace Admin이라고 기준이 완화되지 않습니다.</p>
+            <p>개별 응답 원문은 <code>survey.read_personal_responses</code>, 내려받기는 <code>survey.export</code>가 따로 필요합니다. 이 둘은 Admin도 역할로 우회할 수 없고 명시적 권한을 받아야 합니다.</p>
+            <p>자유 응답을 Finding 근거로 쓰려면 가림 처리 후 승인을 거쳐야 발췌가 붙습니다.</p>
+            <h3>저조한 응답의 후속 조치</h3>
+            <p>응답 수가 익명성 기준 이상인 닫힌 <code>Outcome</code> 설문에 미해결 저조 평점 응답이 있으면 결과 화면에 후속 조치 안내가 나타납니다. <code>survey.read_personal_responses</code>가 있으면 <code>후속 조치</code>를 열어 응답별 화면을 확인합니다.</p>
+            <p>응답에 승인된 발췌가 있으면 Finding을 만들 수 있습니다. 후속 조치가 필요 없으면 <code>후속 조치 없음…</code>을 선택하고 사유를 기록합니다. Finding 생성과 두 결정에는 해당 Managed System의 <code>finding.manage</code>가 필요합니다. 다시 판단하려면 <code>다시 열기…</code>를 선택하고 새 사유를 기록합니다.</p>
+            <!-- Source: docs/design/07-survey-system.md lines 5-8, 53-79, and 116-139. Survey participation and respondent history stay in Survey; responses do not create VOC. -->
+            <p>인증된 사용자는 <code>survey.read</code> 없이 응답 가능한 open Survey 목록을 확인해 참여할 수 있습니다. 참여 화면에서는 응답 Survey와 내가 제출한 응답 이력을 확인합니다. Survey Response는 VOC로 변환되지 않습니다.</p>
+          `
+        },
+        {
+          id: 'ch-9', number: 9, nav: '9. 권한이 없다고 나온다', title: '9. 권한이 없다고 나온다',
+          audience: ['admin', 'developer', 'user'], permission: '민감한 권한 요청에는 사유가 필요합니다.',
+          screens: ['permission-request-compose', 'survey-results-no-permission', 'admin-settings-no-permission', 'admin-permissions'],
+          copy: `
+            <p>정상적인 흐름입니다. 이 제품은 권한을 미리 다 주지 않고, 필요할 때 요청받는 방식입니다.</p>
+            <h3>화면이 보여주는 네 가지 상태</h3>
+            <table><thead><tr><th>보이는 것</th><th>뜻</th><th>할 일</th></tr></thead><tbody>
+              <tr><th>정상 표시</th><td>권한 있음</td><td>—</td></tr>
+              <tr><th>승인된 요약만</th><td>전체는 못 보지만 안전한 요약은 볼 수 있음</td><td>전체가 필요하면 요청</td></tr>
+              <tr><th><strong>권한 요청</strong> 버튼</th><td>요청할 수 있음</td><td>사유를 적고 요청</td></tr>
+              <tr><th>차단 안내(요청 불가)</th><td>명시적으로 거부됐거나 요청 대상이 아님</td><td>관리자에게 문의</td></tr>
+            </tbody></table>
+            <h3>요청하고 승인받기</h3>
+            <ol><li>막힌 화면에서 <strong>권한 요청</strong>을 누르고 사유를 적습니다. 민감한 권한은 사유가 필수입니다.</li><li>Admin이 <code>/admin/permissions/requests</code>에서 승인·거절·추가 정보 요청을 검토합니다.</li><li>승인되면 해당 Managed System 범위로 권한이 생깁니다.</li></ol>
+            <h3>Admin이 스스로에게 권한을 주는 경우</h3>
+            <p>워크스페이스 정책이 self-approval을 허용해야 합니다. 승인 시 근거 정책 조항과 사유를 입력해야 하고, 감사 기록에 <code>SELF_APPROVAL</code> 라벨이 붙습니다.</p>
+            <h3>알아둘 것</h3>
+            <!-- Source: docs/adr/0048-role-level-extension.md:93-126. Admin has domain-specific role bypass exceptions to general capability grants. -->
+            <ul><li><strong>명시적 거부는 일반 권한 허용보다 우선합니다.</strong> Admin의 도메인별 역할 우회 예외는 역할과 권한 표를 확인하세요.</li><li><strong>권한은 Managed System 단위입니다.</strong> A 시스템의 <code>voc.triage</code>가 B 시스템에는 적용되지 않습니다.</li><li>사이드바의 Managed System 선택기에서 권한 밖 시스템은 아이콘으로 표시됩니다.</li></ul>
+          `
+        },
+        {
+          id: 'ch-10', number: 10, nav: '10. 워크스페이스를 관리해야 한다', title: '10. 워크스페이스를 관리해야 한다',
+          audience: ['admin'], permission: 'Admin 전용 (<code>/admin/*</code>).', screens: ['admin-managed-systems', 'admin-analytics-areas', 'admin-settings'],
+          copy: `
+            <p><strong>Admin 전용</strong> (<code>/admin/*</code>).</p>
+            <table><thead><tr><th>화면</th><th>하는 일</th></tr></thead><tbody>
+              <tr><th><strong>Managed System</strong> (<code>/admin/managed-systems</code>)</th><td>시스템 등록·보관, 기본 담당자/검토자 지정</td></tr>
+              <tr><th><strong>Analytics Area</strong> (<code>/admin/analytics-areas</code>)</th><td>시스템 하위 분석 영역 관리</td></tr>
+              <tr><th><strong>권한 요청</strong> (<code>/admin/permissions/requests</code>)</th><td>권한 요청 검토</td></tr>
+              <tr><th><strong>워크스페이스 설정</strong> (<code>/admin/settings</code>)</th><td>운영 정책. self-approval 허용 여부 등</td></tr>
+            </tbody></table>
+            <p>기본 담당자를 지정해 두면 VOC와 Finding 생성 시 자동으로 채워집니다. 다만 기본값이 채워졌다는 것이 Triage가 끝났다는 뜻은 아닙니다. 담당자만 정해진 미처리 상태가 될 수 있으니 큐를 계속 봅니다.</p>
+            <p>Managed System을 보관하면 그 아래로 새 VOC·Finding·설문을 만들 수 없습니다. 기존 데이터는 남습니다.</p>
+          `
+        },
+        {
+          id: 'ch-11', number: 11, nav: '자주 막히는 지점', title: '11. 자주 막히는 지점',
+          audience: ['admin', 'developer', 'user'], permission: '모든 역할이 참고할 수 있습니다.', type: 'faq',
+          copy: '<p>자주 묻는 상황과 매뉴얼의 해결 방법입니다.</p>',
+          screens: []
+        },
+        {
+          id: 'ch-12', number: 12, nav: '역할과 권한', title: '12. 참고 — 역할과 권한 실측표',
+          audience: ['admin', 'developer', 'user'], permission: '역할 필터를 바꾸면 권한표에서 해당 역할 행을 강조합니다.', type: 'permissions',
+          copy: '<p>데모 시드와 Admin 역할 권한을 기준으로 한 표입니다. 최종 권한 판정은 언제나 백엔드가 합니다.</p>',
+          screens: []
+        }
+      ],
+      states: [
+        {
+          id: 'reporter', title: '리포터 상태', flow: ['received', 'reviewing', 'assigned', 'progress', 'prep', 'resolved'],
+          links: [['resolved', 'reopened'], ['resolved', 'closed']],
+          items: {
+            received: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            reviewing: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            assigned: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            progress: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            prep: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            resolved: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            reopened: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.',
+            closed: '매뉴얼에 나열된 리포터 상태 값입니다. 상태는 담당자가 직접 바꿉니다.'
+          }
+        },
+        {
+          id: 'triage', title: 'Triage 상태', flow: ['untriaged', 'triaged'],
+          branches: [['untriaged', 'needs_more_information'], ['untriaged', 'dismissed_not_actionable']],
+          items: {
+            untriaged: '매뉴얼에 나열된 Triage 상태 값입니다.',
+            triaged: '매뉴얼에 나열된 Triage 상태 값입니다.',
+            needs_more_information: '정보가 부족해 추가 정보가 필요한 상태입니다.',
+            dismissed_not_actionable: '실행할 사안이 아니라고 판단한 상태입니다.'
+          }
+        },
+        {
+          id: 'finding', title: 'Finding 상태', flow: ['draft', 'active', 'converted'], alternatives: ['not_actionable', 'archived'],
+          items: {
+            draft: '매뉴얼에 나열된 Finding 상태 값입니다.',
+            active: '매뉴얼에 나열된 Finding 상태 값입니다.',
+            converted: '실행으로 넘어간 Finding입니다.',
+            not_actionable: '매뉴얼에 나열된 Finding 상태 값입니다.',
+            archived: '매뉴얼에 나열된 Finding 상태 값입니다.'
+          }
+        },
+        {
+          id: 'request', title: 'Task Request 상태', flow: ['pending_review', 'approved', 'converted'],
+          branches: [['pending_review', 'needs_more_evidence'], ['pending_review', 'rejected']],
+          items: {
+            pending_review: '검토 결정을 기다리는 실행 후보입니다.',
+            approved: '실행 후보로 승인된 상태입니다.',
+            converted: 'Task로 전환되었거나 기존 Task에 연결된 상태입니다.',
+            needs_more_evidence: '근거 보강을 요청한 상태입니다.',
+            rejected: '실행 후보가 반려된 상태입니다.'
+          }
+        },
+        {
+          id: 'task', title: 'Task 상태', flow: ['backlog', 'todo', 'doing', 'review', 'done', 'released'], links: [['released', 'reopened']],
+          items: {
+            backlog: '매뉴얼에 나열된 Task 상태 값입니다.',
+            todo: '매뉴얼에 나열된 Task 상태 값입니다.',
+            doing: '매뉴얼에 나열된 Task 상태 값입니다.',
+            review: '매뉴얼에 나열된 Task 상태 값입니다.',
+            done: '매뉴얼에 나열된 Task 상태 값입니다.',
+            released: '작업이 릴리스된 상태입니다. VOC 상태는 자동으로 바뀌지 않습니다.',
+            reopened: '매뉴얼에 나열된 Task 상태 값입니다.'
+          }
+        },
+        {
+          id: 'survey', title: 'Survey 상태', flow: ['draft', 'open', 'closed'],
+          items: {
+            draft: '질문을 편집할 수 있는 초안입니다.',
+            open: '응답을 수집하는 상태이며 질문은 고정됩니다.',
+            closed: '결과가 확정된 상태입니다.'
+          }
+        }
+      ],
+      tour: [
+        { title: '등록', screen: 'voc-create', who: '누구나 제출할 수 있습니다.', permission: '필요 권한: 없음', what: 'VOC 생성 화면에서 문제, Managed System, 필요한 설명과 선택 정보를 입력합니다.', change: 'VOC가 등록되고 리포터와 내부 상태는 분리되어 시작합니다.', chapter: 'ch-1', source: 'docs/USER-MANUAL.md:57-74' },
+        { title: 'Triage', screen: 'voc-triage', who: '해당 Managed System의 Developer 또는 Admin.', permission: '필요 권한: voc.triage (Admin은 역할로 보유)', what: '심각도, 담당자, Analytics Area, 처리 상태를 결정합니다.', change: 'untriaged 상태를 triaged, needs_more_information 또는 dismissed_not_actionable로 판단합니다.', chapter: 'ch-3', source: 'docs/USER-MANUAL.md:105-124' },
+        { title: '묶기', screen: 'voc-clusters', who: 'Developer 또는 Admin.', permission: '', what: '비슷한 VOC를 Cluster에 모아 구성원을 확인하고 필요하면 확정합니다.', change: 'Cluster는 draft에서 confirmed로 바뀌며 VOC는 각각 독립된 채 남습니다.', chapter: 'ch-5', source: 'docs/USER-MANUAL.md:153-155; CONTEXT.md:213-215, 310-313' },
+        { title: 'Finding', screen: 'finding-detail', who: 'Finding을 읽거나 관리할 권한이 있는 담당자.', permission: '필요 권한: finding.read / finding.manage', what: 'VOC나 승인된 설문 발췌를 근거로 판단을 기록합니다.', change: 'Finding은 draft에서 active가 되고 실행으로 넘어가면 converted가 됩니다.', chapter: 'ch-6', source: 'docs/USER-MANUAL.md:167-180' },
+        { title: 'Task Request 검토', screen: 'task-requests', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '본인 요청 승인에는 task_request.self_approve가 필요합니다.', what: '요청을 승인·반려하거나 근거를 더 요청하고, 승인 후 Task로 전환하거나 기존 Task에 연결합니다.', change: '승인된 요청은 converted가 되거나 연결된 Task를 가리킵니다.', chapter: 'ch-7', source: 'CONTEXT.md:282-286' },
+        { title: 'Task 실행', screen: 'task-board', who: 'Task 실행을 맡은 Developer 또는 Admin.', permission: '', what: '보드에서 카드를 옮기며 실행 상태를 갱신합니다.', change: 'backlog → todo → doing → review → done → released 흐름을 따르며 reopened로 다시 열릴 수 있습니다.', chapter: 'ch-7', source: 'docs/USER-MANUAL.md:210-226; docs/USER-MANUAL.md:346-347' },
+        { title: '릴리스 후 공개 업데이트 후보 확인', screen: 'public-update-review', who: 'VOC의 공개 업데이트를 쓸 수 있는 Admin 또는 같은 범위 Developer.', permission: '', what: 'Released Task가 만든 후보를 확인하고 공개 상태를 직접 결정합니다.', change: '릴리스는 후보를 만들 뿐 VOC 상태를 자동으로 resolved로 바꾸지 않습니다.', chapter: 'ch-4', source: 'CONTEXT.md:298-302, 314-315' },
+        { title: '리포터에게 알리기', screen: 'voc-detail-composer', who: 'Admin 또는 같은 Managed System 범위의 Developer.', permission: '', what: '공개 업데이트를 쓰고 새 리포터 상태를 함께 지정합니다. 공개 업데이트 없이 상태만 바꾸려면 건너뛰기를 고르고 사유를 기록합니다.', change: '리포터 상태는 담당자가 직접 바꿉니다. 공개 업데이트를 쓴 경우 공개 타임라인에 남고, 건너뛴 경우 사유가 감사 기록에 남습니다.', chapter: 'ch-4', source: 'docs/USER-MANUAL.md:138-147; CONTEXT.md:298-302' },
+        { title: '리포터가 보는 화면', screen: 'voc-reporter-view', who: '해당 VOC의 Reporter.', permission: '필요 권한: 자신의 VOC를 확인하고 답장합니다.', what: '공개 상태, 공개 타임라인, 볼 수 있는 연결 요약을 확인합니다.', change: 'Reporter Reply는 내부 후속 대기열에 영향을 줄 수 있지만 리포터 상태를 자동 변경하지 않습니다.', chapter: 'ch-2', source: 'docs/USER-MANUAL.md:92-99; CONTEXT.md:304-309' },
+        { title: '설문으로 개선 확인', screen: 'survey-results', who: 'Survey 결과를 읽을 수 있는 담당자.', permission: '필요 권한: survey.read; 개인 응답은 survey.read_personal_responses', what: '익명성 기준이 적용된 결과 요약을 살펴보고, 저조한 Outcome에는 정해진 후속 조치를 검토합니다.', change: 'Survey 응답은 Survey에 남고 VOC로 변환되지 않습니다.', chapter: 'ch-8', source: 'docs/USER-MANUAL.md:232-261; docs/design/07-survey-system.md:5-8' }
+      ],
+      faq: [
+        { q: 'Task를 옮겼는데 리포터 화면이 그대로다', a: '설계된 동작입니다. 해당 VOC에서 공개 업데이트를 써야 리포터 상태가 바뀝니다.', line: '317-318' },
+        { q: '설문 질문이 수정이 안 된다', a: '설문이 이미 open입니다. 문항은 draft에서만 편집됩니다.', line: '320-321' },
+        { q: '설문 결과가 비어 있다', a: '해당 구간 응답이 5건 미만일 수 있습니다. 필터를 풀어 보세요. Admin이어도 기준은 같습니다.', line: '323-324' },
+        { q: 'Admin인데 권한이 없다고 나온다', a: 'survey.read_personal_responses와 survey.export는 Admin도 명시적 권한이 필요합니다. 해당 권한에 명시적 거부가 걸려 있을 수도 있습니다.', line: '326-327' },
+        { q: '담당자를 개인과 팀 둘 다 지정하려는데 안 된다', a: '하나만 지정할 수 있습니다. 다운스트림이 담당자 한 명을 확정할 수 있어야 하기 때문입니다.', line: '329-330' },
+        { q: 'Triage 변경을 되돌리고 싶다', a: '4초 안에 토스트의 되돌리기를 누르세요. 시간이 지났으면 다시 바꾸면 됩니다.', line: '332-333' },
+        { q: '“링크를 복사하지 못했습니다”가 뜬다', a: '브라우저가 클립보드 접근을 막는 환경일 수 있습니다. 주소창의 URL을 직접 복사하세요. 복사되지 않았는데 성공이라고 표시되지는 않습니다.', line: '335-336' }
+      ],
+      permissionRoles: [
+        { role: 'Admin', id: 'admin', description: '워크스페이스 전체 권한. 설정, 권한 승인, 시스템 등록, 운영 정책' },
+        { role: 'Developer', id: 'developer', description: '하나 이상의 Managed System 범위를 가진 실무자. Triage, Finding, Task 실행' },
+        { role: 'User', id: 'user', description: '제보하고 자기 건을 추적. Triage 불가' },
+        { role: 'Reporter', id: 'reporter', description: '역할이 아니라 관계입니다. 역할과 무관하게 자기 VOC의 Reporter입니다.' }
+      ],
+      demoPermissions: [
+        ['Mock Admin / Mock Admin Two', 'admin', '별도 부여 없음 (역할 기반 권한만)'],
+        ['Mock Developer One', 'developer', 'tableau: voc.read, voc.triage, finding.read, finding.manage, survey.read, task_request.self_approve'],
+        ['Mock Developer Two', 'developer', 'power-bi: voc.read, voc.triage, finding.read, survey.read, survey.manage'],
+        ['Mock User / Mock User Two', 'user', '없음']
+      ],
+      adminRights: [
+        ['workspace.read · workspace.admin · voc.triage · voc.read', '역할로 보유'],
+        ['finding.read · finding.manage · task_request.self_approve', '있음 (명시적 거부보다 우선)'],
+        ['survey.read · survey.manage', '있음 (단, 명시적 거부가 이깁니다)'],
+        ['survey.read_personal_responses · survey.export', '없음 — 명시적 권한 필요']
+      ],
+      screenGroups: [
+        { area: '홈', ids: ['home-dashboard', 'home-inbox', 'command-palette'] },
+        { area: 'VOC', ids: ['voc-create', 'voc-reporter-view', 'voc-inbox-detail', 'voc-inbox-high-no-link', 'voc-triage', 'voc-detail-composer', 'public-update-review', 'voc-clusters', 'voc-cluster-detail'] },
+        { area: 'Findings', ids: ['findings-list', 'finding-detail'] },
+        { area: 'Tasks', ids: ['task-requests', 'task-board', 'milestones'] },
+        { area: '연동', ids: ['integration-dashboard', 'integration-links', 'integration-coverage'] },
+        { area: 'Survey', ids: ['surveys-list', 'survey-builder', 'survey-results', 'survey-results-below-threshold', 'survey-results-poor-outcome', 'survey-results-no-permission', 'survey-follow-up', 'survey-participate', 'survey-respond'] },
+        { area: '관리자', ids: ['admin-managed-systems', 'admin-analytics-areas', 'admin-permissions', 'admin-settings', 'admin-settings-no-permission', 'permission-request-compose'] }
+      ],
+      screens: [
+        {
+          id: 'home-dashboard', title: '홈 대시보드', area: '홈', chapters: ['ch-0'],
+          alt: '왼쪽 레일과 Managed System 선택기 옆에 운영 큐, 내게 배정된 항목, 커버리지 요약이 배치된 홈 대시보드.',
+          description: '복구·후속 조치 큐와 개인 배정 목록, 커버리지 요약을 보여줍니다.', sourceComment: 'CONTEXT.md lines 209-211; docs/design/08-dashboard-system.md lines 5-22',
+          hotspots: [
+            hit('testid:app-rail · name=시스템 선택', [0,0,52,960], '왼쪽 레일', '큰 영역을 레일에서 고르고, 세부 화면은 옆 사이드바에서 찾습니다.', 'docs/USER-MANUAL.md:51'),
+            hit('testid:scope-selector · name=전체 Managed System', [60,58,223,38], 'Managed System 선택기', '선택기는 필터가 아니라 권한 범위입니다.', 'docs/USER-MANUAL.md:51'),
+            hit('testid:sidebar-nav-queue-unassigned-voc · name=미배정 VOC 12', [60,237,223,30], '미배정 VOC 큐', 'Home은 현재 내가 처리할 수 있는 항목을 모읍니다.', 'CONTEXT.md:209-211')
+          ]
+        },
+        {
+          id: 'command-palette', title: '명령 메뉴', area: '홈', chapters: ['ch-0'],
+          alt: '명령 메뉴 대화상자에 항목 검색 입력란과 홈, VOC, Findings, Tasks 등 이동 명령이 나열된 화면.',
+          description: '검색 입력란과 영역별 이동 명령이 열려 있습니다.',
+          hotspots: [
+            hit('testid:command-palette-dialog · name=명령 메뉴', [401,135,638,689], '명령 메뉴', '큰 영역과 세부 화면으로 이동하는 항목을 보여줍니다.', 'docs/USER-MANUAL.md:51'),
+            hit('role=combobox · name=명령 또는 항목 검색… (예: New VOC, Tasks Board, Tableau)', [441,149,542,24], '명령 검색', '명령 또는 항목 검색… 입력란입니다.', '화면 캡처: command-palette'),
+            hit('testid:command-palette-item-nav-rail-voc · name=이동 VOC · 수신함', [407,256,626,36], 'VOC 수신함 이동', '현재 화면의 VOC 세부 화면 이름은 수신함입니다.', 'docs/USER-MANUAL.md:111-112')
+          ]
+        },
+        {
+          id: 'voc-create', title: 'VOC 생성', area: 'VOC', chapters: ['ch-1'],
+          alt: '새 VOC 작성 화면에 제목과 상세 설명 편집기, 출처, Managed System과 Analytics Area 선택, 비슷한 VOC 패널이 보이는 화면.',
+          description: '필수 설명과 시스템 범위, 선택 정보, 유사 VOC 안내가 한 화면에 있습니다.',
+          hotspots: [
+            hit('role=heading · name=새 VOC 작성', [308,15,69,18], '새 VOC 작성', 'VOC 생성 화면에서 문제를 등록합니다.', 'docs/USER-MANUAL.md:59'),
+            hit('testid:ms-picker · name=Managed System 선택', [369,607,728,36], 'Managed System 선택', '필수 시스템 선택이 이후 담당자와 권한 범위를 정합니다.', 'docs/USER-MANUAL.md:65'),
+            hit('testid:similar-voc-panel · name=같은 MANAGED SYSTEM의 최근 VOC', [1142,202,241,159], '비슷한 VOC', '같은 시스템의 유사 VOC가 표시되면 기존 건에 맥락을 더할 수 있습니다.', 'docs/USER-MANUAL.md:72')
+          ]
+        },
+        {
+          id: 'voc-reporter-view', title: '리포터가 보는 VOC', area: 'VOC', chapters: ['ch-2'],
+          alt: '내 VOC 상세 패널에 리포터 상태와 공개 정보, 연결된 Task 요약, 대화 영역이 보이는 화면.',
+          description: '리포터 상태, 연결 작업의 공개 가능한 요약, 공개 대화를 확인합니다.',
+          hotspots: [
+            hit('testid:detail-panel-header-content · name=VOC VOC-179', [1005,0,435,49], 'VOC 상세 헤더', '리포터는 자신의 VOC 상세 내용을 확인합니다.', 'docs/USER-MANUAL.md:94-99'),
+            hit('testid:linked-task-summary · name=데이터 새로고침 오류 개선 진행 중', [1059,763,323,23], '연결된 Task 요약', '연결된 실행은 권한에 따라 요약으로 보일 수 있습니다.', 'docs/USER-MANUAL.md:96-97'),
+            hit('role=heading · name=대화', [1025,820,391,17], '공개 대화', '리포터 답장은 내부 코멘트와 다른 입력 영역입니다.', 'docs/USER-MANUAL.md:99')
+          ]
+        },
+        {
+          id: 'home-inbox', title: '홈 수신함 알림', area: '홈', chapters: ['ch-2'],
+          alt: '홈의 수신함 탭 아래에 읽지 않음과 전체 선택, VOC와 Task Request 알림 행이 보이는 화면.',
+          description: '알림을 읽지 않음 또는 전체로 좁혀 확인합니다.',
+          hotspots: [
+            hit('role=tab · name=수신함 3', [397,115,82,30], '수신함 탭', '알림 수신함은 VOC 목록 수신함과 다른 화면입니다.', 'docs/USER-MANUAL.md:82'),
+            hit('role=radio · name=읽지 않음', [327,169,70,36], '읽지 않음', '읽지 않은 알림만 선택할 수 있습니다.', 'docs/USER-MANUAL.md:82'),
+            hit('testid:home-inbox-list · name=읽지 않음 전체', [324,166,1083,236], '알림 목록', '전체를 고르면 읽음 여부와 관계없이 알림을 확인합니다.', 'docs/USER-MANUAL.md:82')
+          ]
+        },
+        {
+          id: 'voc-inbox-detail', title: 'VOC 상세 패널', area: 'VOC', chapters: ['ch-3'],
+          alt: 'VOC 상세 패널에 읽기 전용 Triage 정보와 Triage에서 변경 버튼, 공개 업데이트·제출자 답변·내부 코멘트 탭이 보이는 화면.',
+          description: '상세 패널에서 현재 판단을 확인하고 Triage 콘솔로 이동할 수 있습니다.',
+          hotspots: [
+            hit('role=heading · name=TRIAGE (읽기 전용)', [1025,219,104,17], '읽기 전용 Triage', '상세 패널의 Triage 정보 자체는 읽기 전용입니다.', 'docs/USER-MANUAL.md:128'),
+            hit('testid:triage-open-console · name=Triage에서 변경', [1304,219,112,32], 'Triage에서 변경', '선택한 VOC를 Triage 콘솔로 이동해 재판단합니다.', 'docs/USER-MANUAL.md:128'),
+            hit('role=tab · name=내부 코멘트', [1286,820,130,34], '내부 코멘트 탭', '내부 코멘트는 공개 업데이트·제출자 답변과 분리되어 있습니다.', 'docs/USER-MANUAL.md:132')
+          ]
+        },
+        {
+          id: 'voc-triage', title: 'Triage 콘솔', area: 'VOC', chapters: ['ch-3'],
+          alt: 'Triage 콘솔에서 VOC를 열어 심각도, 담당자, Analytics Area를 선택하고 판단을 확정하는 화면.',
+          description: '심각도, 담당자, 분석 영역과 Triage 판단을 검토합니다.',
+          hotspots: [
+            hit('role=heading · name=Looker 모델 변경 후 알림이 오지 않음', [1024,161,391,23], '선택한 VOC', 'VOC를 고른 뒤 오른쪽 패널에서 구조화된 판단을 합니다.', 'docs/USER-MANUAL.md:117'),
+            hit('role=button · name=높음', [1024,374,192,67], '심각도 선택', '심각도는 low / medium / high / critical 중 판단합니다.', 'docs/USER-MANUAL.md:119'),
+            hit('testid:triage-aa-picker · name=Analytics Area 선택', [1024,616,391,36], 'Analytics Area 연결', 'Triage에서 Analytics Area를 연결할 수 있습니다.', 'docs/USER-MANUAL.md:121')
+          ]
+        },
+        {
+          id: 'voc-inbox-high-no-link', title: 'VOC 저장된 보기', area: 'VOC', chapters: ['ch-3'],
+          alt: 'VOC 목록 위쪽에 미분류, 높음, 미배정, 연결 없음, 높음·연결 없음, Task 없음 탭이 있는 화면.',
+          description: '목록을 상태와 연결 여부에 따라 빠르게 좁힙니다.',
+          hotspots: [
+            hit('role=tab · name=높음', [382,11,60,28], '높음', '높은 심각도 VOC를 보는 저장된 관점입니다.', 'docs/USER-MANUAL.md:113'),
+            hit('role=tab · name=미배정', [444,11,72,28], '미배정', '담당자가 정해지지 않은 항목을 보는 관점입니다.', 'docs/USER-MANUAL.md:113'),
+            hit('role=tab · name=연결 없음', [518,11,86,28], '연결 없음', '화면의 현재 레이블은 연결 없음입니다.', 'docs/USER-MANUAL.md:113')
+          ]
+        },
+        {
+          id: 'voc-detail-composer', title: 'VOC 대화 작성', area: 'VOC', chapters: ['ch-4'],
+          alt: 'VOC 대화 작성 영역에서 공개 업데이트, 제출자 답변, 내부 코멘트 탭이 나란히 표시된 화면.',
+          description: '세 입력 유형은 별도 탭과 작성 영역으로 구분됩니다.',
+          hotspots: [
+            hit('role=tab · name=공개 업데이트', [1025,194,130,34], '공개 업데이트', '리포터에게 보이는 업데이트를 작성하는 입력입니다.', 'docs/USER-MANUAL.md:138-147'),
+            hit('role=tab · name=제출자 답변', [1155,194,130,34], '제출자 답변', '리포터 답장은 공개 대화 입력입니다.', 'docs/USER-MANUAL.md:132'),
+            hit('role=tab · name=내부 코멘트', [1286,194,130,34], '내부 코멘트', '내부용 메모는 공개 입력과 합쳐지지 않습니다.', 'docs/USER-MANUAL.md:132')
+          ]
+        },
+        {
+          id: 'public-update-review', title: '공개 업데이트 리뷰', area: 'VOC', chapters: ['ch-4'],
+          alt: '공개 업데이트 리뷰 대화상자에 Released Task 후보, 공개 상태 선택과 업데이트 적용 버튼이 보이는 화면.',
+          description: '후보를 검토하고 공개 상태와 업데이트 내용을 직접 결정합니다.',
+          hotspots: [
+            hit('testid:public-update-review-modal · name=공개 업데이트 리뷰', [464,235,512,490], '공개 업데이트 리뷰', 'Task 상태를 자동 반영하지 않고 공개 상태를 직접 선택합니다.', 'docs/USER-MANUAL.md:140-147'),
+            hit('role=combobox · name=공개 상태', [489,529,462,40], '공개 상태 선택', '새 공개 상태를 직접 선택합니다.', 'docs/USER-MANUAL.md:144'),
+            hit('role=button · name=공개 업데이트 적용', [758,660,129,40], '공개 업데이트 적용', '리포터에게 보이는 업데이트를 적용합니다.', 'docs/USER-MANUAL.md:138-147')
+          ]
+        },
+        {
+          id: 'voc-clusters', title: 'Clusters 목록', area: 'VOC', chapters: ['ch-5'],
+          alt: 'VOC Cluster 목록에서 전체, 확정, Finding 없음 탭과 draft·confirmed 항목, Cluster 생성 버튼이 보이는 화면.',
+          description: 'Cluster 목록에서 상태를 확인하고 새 Cluster를 시작합니다.',
+          hotspots: [
+            hit('testid:cluster-create-button · name=Cluster 생성', [865,9,119,32], 'Cluster 생성', '반복된 VOC를 모을 Cluster를 시작합니다.', 'docs/USER-MANUAL.md:153'),
+            hit('testid:cluster-list · name=VCL-003 초대 메일 지연', [292,100,708,198], 'Cluster 목록', 'Cluster는 draft에서 시작해 confirmed로 바뀝니다.', 'docs/USER-MANUAL.md:155'),
+            hit('testid:cluster-status-badge-confirmed · name=확정', [324,132,43,23], '확정 상태', '확정한 묶음이 이후 근거의 단위가 됩니다.', 'docs/USER-MANUAL.md:155')
+          ]
+        },
+        {
+          id: 'voc-cluster-detail', title: 'Cluster 상세', area: 'VOC', chapters: ['ch-5'],
+          alt: 'Cluster 상세 패널에 상태, 요약, 그룹화 사유, 멤버 VOC 목록이 보이는 화면.',
+          description: '묶음의 이유와 포함된 VOC를 확인합니다.',
+          hotspots: [
+            hit('testid:cluster-detail-title · name=인증 오류 패턴', [1025,136,391,28], 'Cluster 제목', '같은 문제라고 판단한 묶음의 이름을 확인합니다.', 'docs/USER-MANUAL.md:155-161'),
+            hit('testid:cluster-detail-rationale · name=동일 Managed System의 VOC를 묶었습니다.', [1025,313,391,44], '그룹화 사유', '멤버를 검토하며 같은 문제인지 확인합니다.', 'docs/USER-MANUAL.md:155'),
+            hit('testid:cluster-members-list · name=로그인 세션이 자주 만료됩니다', [1025,673,391,57], '멤버 VOC', 'Cluster는 VOC를 합치지 않고 관련 VOC를 묶어 둡니다.', 'CONTEXT.md:213-215, 310-313')
+          ]
+        },
+        {
+          id: 'findings-list', title: 'Findings 목록', area: 'Findings', chapters: ['ch-6'],
+          alt: 'Findings 목록과 선택된 Finding 상세 패널에 상태, 신뢰도와 근거 하이라이트가 보이는 화면.',
+          description: '목록에서 판단과 근거가 연결된 Finding을 살펴봅니다.',
+          hotspots: [
+            hit('testid:finding-list · name=FND-4102 OAuth 토큰 재발급 실패 패턴', [292,92,708,66], 'Finding 항목', 'Finding은 근거에서 실행 후보로 넘어가는 판단입니다.', 'docs/USER-MANUAL.md:169'),
+            hit('testid:finding-confidence-badge-FND-4102 · name=신뢰도 · 높음', [432,124,84,23], '신뢰도', '신뢰도는 low / medium / high로 기록합니다.', 'docs/USER-MANUAL.md:171'),
+            hit('testid:evidence-highlight-list · name=VOC d1000000 부정 높음', [1025,631,391,196], 'Evidence 하이라이트', 'VOC와 승인된 설문 발췌가 판단의 근거가 될 수 있습니다.', 'docs/USER-MANUAL.md:173-180')
+          ]
+        },
+        {
+          id: 'finding-detail', title: 'Finding 상세', area: 'Findings', chapters: ['ch-6'],
+          alt: 'Finding 상세 패널에서 상태와 Evidence 하이라이트를 보고 Evidence 추가 또는 기존 Evidence 연결을 할 수 있는 화면.',
+          description: '근거를 추가하고 연결된 VOC·Task의 맥락을 따라갑니다.',
+          hotspots: [
+            hit('testid:finding-status-badge-active · name=진행 중', [327,124,56,23], 'Finding 상태', 'Finding 상태는 draft, active, converted 또는 종료 상태로 기록됩니다.', 'docs/USER-MANUAL.md:178'),
+            hit('testid:evidence-highlight-list · name=VOC d1000000 부정 높음', [1025,631,391,196], '근거 목록', '근거는 Finding 판단을 뒷받침합니다.', 'docs/USER-MANUAL.md:173-180'),
+            hit('testid:add-evidence-btn · name=Evidence 추가', [1025,916,109,32], 'Evidence 추가', '현재 UI에서 Evidence 추가를 선택합니다.', 'docs/USER-MANUAL.md:180'),
+            hit('testid:link-evidence-btn · name=기존 Evidence 연결', [1142,916,135,32], '기존 Evidence 연결', '이미 있는 Evidence를 연결할 수 있습니다.', 'docs/USER-MANUAL.md:180')
+          ]
+        },
+        {
+          id: 'task-requests', title: 'Task Requests 검토', area: 'Tasks', chapters: ['ch-7'],
+          alt: 'Task Request 검토 화면에 상태별 탭, 요청 목록, 승인·근거 추가 요청·반려 결정 버튼이 보이는 화면.',
+          description: '승인 전에 요청과 출처 Finding을 확인합니다.',
+          hotspots: [
+            hit('role=tab · name=검토 대기 2', [308,11,82,28], '검토 대기', '검토가 필요한 Task Request를 모아 봅니다.', 'docs/USER-MANUAL.md:204'),
+            hit('role=button · name=REQ-42 검토 결과 → Task 변환 검토 대기 ↔ Finding Managed System 33333333 7월 10일 ', [292,50,708,66], '요청 항목', 'Task Request를 검토한 뒤 승인·반려·근거 보강을 결정합니다.', 'docs/USER-MANUAL.md:204'),
+            hit('role=button · name=승인', [1017,209,407,40], '승인', '승인 후 Task로 전환하거나 기존 Task에 연결합니다.', 'docs/USER-MANUAL.md:204'),
+            hit('role=button · name=근거 추가 요청', [1017,257,407,32], '근거 추가 요청', '검토 중 근거 보강을 요청할 수 있습니다.', 'docs/USER-MANUAL.md:204')
+          ]
+        },
+        {
+          id: 'task-board', title: 'Tasks 보드', area: 'Tasks', chapters: ['ch-7'],
+          alt: 'Tasks 보드에 Backlog, Todo, Doing, Review 열과 실행 Task 카드가 배치된 화면.',
+          description: '카드를 보드 열 사이에서 이동해 실행 상태를 갱신합니다.',
+          hotspots: [
+            hit('testid:sidebar-nav-tasks-board · name=Tasks', [60,171,223,30], 'Tasks 메뉴', 'Tasks는 칸반 보드에서 실행 상태를 다룹니다.', 'docs/USER-MANUAL.md:210'),
+            hit('role=button · name=TASK-902: 데이터 추출 안정화', [917,172,270,106], 'Task 카드', '카드를 끌어 backlog부터 released까지 상태를 옮깁니다.', 'docs/USER-MANUAL.md:210-216'),
+            hit('testid:sidebar-nav-my-tasks · name=내 Task', [60,203,223,30], '내 Task', '내게 배정된 항목만 모아 볼 수 있습니다.', 'docs/USER-MANUAL.md:218')
+          ]
+        },
+        {
+          id: 'milestones', title: 'Milestones', area: 'Tasks', chapters: ['ch-7'],
+          alt: 'Milestones 목록에 진행 중·계획 중·릴리스됨 상태와 선택된 Milestone의 연결 Task 및 Finding 요약이 보이는 화면.',
+          description: '관련 Task를 묶는 계획 단위와 그 안의 실행 맥락을 확인합니다.',
+          hotspots: [
+            hit('testid:milestones-summary · name=MILESTONES 5 진행 중 TASK 2', [292,50,708,63], 'Milestone 요약', 'Milestone은 관련 Task를 묶는 계획 단위입니다.', 'docs/USER-MANUAL.md:220'),
+            hit('role=button · name=MLS-1021 SSO Stabilization 진행 중 Power BI Product Usage Power BI 임베디드 보', [292,113,708,96], 'Milestone 항목', '목록에서 Milestone을 열어 연결된 Task 목록을 확인합니다.', 'docs/USER-MANUAL.md:220'),
+            hit('role=heading · name=SSO Stabilization', [1025,113,391,23], 'Milestone 상세', '상세 패널은 계획과 연결된 실행 맥락을 보여줍니다.', 'docs/USER-MANUAL.md:220-224')
+          ]
+        },
+        {
+          id: 'integration-links', title: '엔티티 링크', area: '연동', chapters: ['ch-7'],
+          alt: '연동 화면에 전체·활성·오래됨·분리됨·취소됨 탭과 Finding, Task Request, Task, VOC 사이의 엔티티 링크 행이 보이는 화면.',
+          description: '서로 다른 레코드 사이에 저장된 연결을 목록으로 확인합니다.', sourceComment: 'docs/design/11-entity-linking.md lines 1-14 and FR-LINK-002',
+          hotspots: [
+            hit('role=tab · name=전체 6', [308,11,56,28], '전체 링크', '저장된 Entity link를 상태별로 확인합니다.', 'docs/design/11-entity-linking.md:1-14'),
+            hit('role=checkbox · name=FND-142 → REQ-42 선택', [312,75,16,16], 'Finding → Task Request 행 선택', 'FND-142 → REQ-42 링크 행의 선택 체크박스입니다.', 'docs/design/11-entity-linking.md:1-14; 화면 캡처: integration-links'),
+            hit('role=checkbox · name=REQ-42 → TASK-901 선택', [312,143,16,16], 'Task Request → Task 행 선택', 'REQ-42 → TASK-901 링크 행의 선택 체크박스입니다.', 'docs/design/11-entity-linking.md:1-14; 화면 캡처: integration-links')
+          ]
+        },
+        {
+          id: 'surveys-list', title: 'Survey 관리 목록', area: 'Survey', chapters: ['ch-8'],
+          alt: 'Surveys 목록에서 상태 탭, Survey 생성 버튼, draft 상태의 설문 행이 보이는 화면.',
+          description: 'Surveys를 상태별로 살펴보고 새 설문을 시작합니다.',
+          hotspots: [
+            hit('testid:survey-list · name=전체 1 진행 중 0 초안 1', [292,50,1147,116], 'Survey 목록', 'Surveys 화면에서 설문을 관리합니다.', 'docs/USER-MANUAL.md:234'),
+            hit('testid:survey-create-button · name=Survey 생성', [1306,59,117,32], 'Survey 생성', '설문 생성과 운영에는 survey.manage가 필요합니다.', 'docs/USER-MANUAL.md:232-234'),
+            hit('testid:survey-status-draft · name=초안', [368,132,33,21], '초안 상태', 'draft에서 질문을 편집할 수 있습니다.', 'docs/USER-MANUAL.md:243')
+          ]
+        },
+        {
+          id: 'survey-builder', title: 'Survey Builder', area: 'Survey', chapters: ['ch-8'],
+          alt: 'Survey Builder 상단에 초안 상태, 저장·미리보기·시작 동작이 있고 왼쪽에 질문 목록이 보이는 화면.',
+          description: '초안에서 질문을 편집하고 Survey를 시작합니다.',
+          hotspots: [
+            hit('testid:survey-builder-toolbar · name=뒤로 초안 탐색 Revenue Analytics', [292,0,1147,50], 'Builder 작업줄', '질문 편집은 Survey가 draft일 때만 가능합니다.', 'docs/USER-MANUAL.md:243'),
+            hit('testid:survey-status-draft · name=초안', [694,14,33,21], 'draft 상태', '열고 나면 문항이 고정됩니다.', 'docs/USER-MANUAL.md:243'),
+            hit('testid:survey-question-row-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb · name=Q1 리포트를 얼마나 자주 사용하시나요?', [304,106,255,34], '질문 목록', '질문 순서 변경·추가·삭제는 초안 단계에서 마칩니다.', 'docs/USER-MANUAL.md:243')
+          ]
+        },
+        {
+          id: 'survey-results', title: 'Survey 결과', area: 'Survey', chapters: ['ch-8'],
+          alt: '종료된 Survey 결과에 질문별 집계와 오른쪽 후속 조치 Finding 생성 영역이 보이는 화면.',
+          description: '익명성 기준에 맞는 집계 결과를 검토합니다.',
+          hotspots: [
+            hit('testid:survey-results-summary · name=질문 요약과 응답 분포입니다.', [292,50,1147,910], '결과 요약', '결과 화면은 응답 구간별 집계를 보여줍니다.', 'docs/USER-MANUAL.md:247-251'),
+            hit('role=heading · name=리포트를 사용할 때 가장 불편한 점은 무엇인가요?', [333,223,761,20], '질문별 분포', '표시 여부는 응답 5건 익명성 기준을 따릅니다.', 'docs/USER-MANUAL.md:249-251'),
+            hit('testid:survey-result-next-actions · name=후속 조치 Finding 생성', [1135,175,280,104], '후속 조치', '저조한 Outcome에는 조건을 만족할 때 후속 안내가 표시됩니다.', 'docs/USER-MANUAL.md:259-261')
+          ]
+        },
+        {
+          id: 'survey-results-below-threshold', title: 'Survey 결과 · 익명성 기준', area: 'Survey', chapters: ['ch-8'],
+          alt: '응답이 5건 미만인 구간의 집계 대신 익명 보호 안내와 후속 조치 영역이 보이는 결과 화면.',
+          description: '5건 미만인 구간은 결과를 표시하지 않는다는 안내가 보입니다.',
+          hotspots: [
+            hit('testid:survey-results-summary · name=응답이 5건 이상 모이면 결과가 표시됩니다.', [292,50,1147,910], '익명 보호 안내', '응답이 5건 미만이면 해당 구간의 결과를 표시하지 않습니다.', 'docs/USER-MANUAL.md:249-251'),
+            hit('role=heading · name=후속 조치', [1152,192,246,18], '후속 조치 영역', 'Admin에게도 익명성 기준은 동일하게 적용됩니다.', 'docs/USER-MANUAL.md:249-253'),
+            hit('testid:survey-result-action-create-finding · name=Finding 생성', [1152,223,246,62], 'Finding 생성 조건', '허용된 발췌가 없으면 Finding 생성 동작은 사용할 수 없습니다.', 'docs/USER-MANUAL.md:255')
+          ]
+        },
+        {
+          id: 'survey-results-poor-outcome', title: 'Survey 결과 · 저조한 Outcome', area: 'Survey', chapters: ['ch-8'],
+          alt: 'Outcome Survey 결과의 응답 분포와 오른쪽 Finding 생성 후속 조치가 함께 표시된 화면.',
+          description: '저조한 응답이 있을 때 허용된 다음 조치를 검토합니다.',
+          hotspots: [
+            hit('testid:survey-results-summary · name=질문 요약과 응답 분포입니다.', [292,50,1147,910], 'Outcome 결과', '조건을 충족한 닫힌 Outcome에서 후속 조치 안내가 나타납니다.', 'docs/USER-MANUAL.md:259'),
+            hit('role=heading · name=리포트 내보내기 속도에 만족하시나요?', [333,358,761,20], '평점 응답 분포', '저조 평점은 후속 조치 검토 대상이 될 수 있습니다.', 'docs/USER-MANUAL.md:259-261'),
+            hit('testid:survey-result-action-create-finding · name=Finding 생성', [1152,223,246,40], 'Finding 후속 조치', '승인된 발췌가 있으면 Finding을 만들 수 있습니다.', 'docs/USER-MANUAL.md:261')
+          ]
+        },
+        {
+          id: 'survey-results-no-permission', title: 'Survey 결과 접근 안내', area: 'Survey', chapters: ['ch-9'],
+          alt: 'Survey 결과 본문에 권한이 없다는 안내가 보이는 화면.',
+          description: '결과 접근 권한이 없는 상태를 보여줍니다.',
+          hotspots: [
+            hit('testid:app-main · name=Survey 결과 Survey 결과를 볼 권한이 없습니다.', [292,0,1147,960], '결과 권한 안내', '권한 벽은 안내를 표시하며 빈 화면으로 남지 않습니다.', 'docs/USER-MANUAL.md:46-47, 232-251'),
+            hit('testid:sidebar-nav-surveys-participate · name=Survey 참여', [60,139,223,30], 'Survey 참여', '참여 화면과 개인 응답 열람은 서로 다른 권한 맥락입니다.', 'docs/design/07-survey-system.md:116-139'),
+            hit('testid:sidebar-nav-surveys · name=Survey 관리 5', [60,171,223,30], 'Survey 관리', '읽기는 survey.read, 운영은 survey.manage 권한에 따릅니다.', 'docs/USER-MANUAL.md:232-234')
+          ]
+        },
+        {
+          id: 'survey-follow-up', title: 'Survey 후속 조치 검토', area: 'Survey', chapters: ['ch-8'],
+          alt: '후속 조치 검토에서 익명 응답 번호 목록, 저조 판정 근거, 승인된 발췌와 Finding 생성 버튼이 보이는 화면.',
+          description: '개인 응답 권한이 있는 담당자가 익명 번호별 후속 조치를 살펴봅니다.',
+          hotspots: [
+            hit('testid:follow-up-row-4 · name=응답 #04 만족도 2 / 5', [292,100,708,43], '응답 번호 목록', '개인 응답 화면을 열려면 survey.read_personal_responses가 필요합니다.', 'docs/USER-MANUAL.md:259'),
+            hit('role=heading · name=후속 조치 필요', [1021,70,399,20], '후속 조치 필요', '저조 평점과 처리 근거를 확인합니다.', 'docs/USER-MANUAL.md:259-261'),
+            hit('role=button · name=Finding 생성', [1017,904,104,40], 'Finding 생성', '승인된 발췌가 있을 때 Finding을 만들 수 있습니다.', 'docs/USER-MANUAL.md:261')
+          ]
+        },
+        {
+          id: 'survey-participate', title: 'Survey 참여', area: 'Survey', chapters: ['ch-8'],
+          alt: 'Survey 참여 화면에 응답할 Survey 카드와 내가 제출한 응답 이력 영역이 보이는 화면.',
+          description: '응답 가능한 설문과 본인의 응답 이력을 보여줍니다.', sourceComment: 'docs/design/07-survey-system.md lines 116-139',
+          hotspots: [
+            hit('role=heading · name=응답할 Survey', [324,110,1083,18], '응답할 Survey', '내가 응답할 수 있는 설문을 살펴봅니다.', 'docs/design/07-survey-system.md:134-139'),
+            hit('role=link · name=응답하기', [1321,157,69,32], '응답하기', '응답 폼을 열어 Survey에 참여합니다.', 'docs/design/07-survey-system.md:129-139'),
+            hit('role=heading · name=내 응답 이력', [324,237,1083,18], '내 응답 이력', '응답 이력은 현재 Actor 본인의 요약만 제공합니다.', 'docs/design/07-survey-system.md:129-133')
+          ]
+        },
+        {
+          id: 'survey-respond', title: 'Survey 응답', area: 'Survey', chapters: ['ch-8'],
+          alt: '익명성 안내가 붙은 Survey 질문 응답 폼에 선택형, 평점형, 자유 응답 문항과 제출 버튼이 보이는 화면.',
+          description: 'Survey Response는 이 폼에서 Survey에 제출되며 VOC로 만들어지지 않습니다.', sourceComment: 'docs/design/07-survey-system.md lines 5-8, 116-125',
+          hotspots: [
+            hit('testid:survey-respondent-page · name=익명성 안내', [578,28,576,896], '응답 페이지', '응답을 Survey에 제출하며 Survey Response는 VOC를 만들지 않습니다.', 'docs/design/07-survey-system.md:5-8'),
+            hit('testid:survey-respondent-form · name=익명성 안내', [578,60,576,573], '문항 입력', '응답 폼은 문항을 입력하는 전용 화면입니다.', 'docs/design/07-survey-system.md:129-139'),
+            hit('role=button · name=제출', [1074,568,54,40], '제출', '제출 응답은 수정·삭제가 아닌 별도 응답 기록으로 저장됩니다.', 'docs/design/07-survey-system.md:116-125')
+          ]
+        },
+        {
+          id: 'permission-request-compose', title: '권한 요청 작성', area: '관리자', chapters: ['ch-9'],
+          alt: '권한 요청 대화상자에 요청 권한과 Managed System 범위, 필수 사유, 선택 만료일, 요청 제출 버튼이 보이는 화면.',
+          description: '요청 범위를 확인하고 필요한 최소 사유를 작성합니다.',
+          hotspots: [
+            hit('testid:permission-request-dialog · name=권한 요청', [464,270,512,421], '권한 요청', '막힌 화면에서 권한 요청을 시작할 수 있습니다.', 'docs/USER-MANUAL.md:280'),
+            hit('testid:permission-request-reason · name=사유 · 필수', [489,458,462,80], '필수 사유', '민감한 권한은 요청 사유를 적어야 합니다.', 'docs/USER-MANUAL.md:280'),
+            hit('testid:permission-request-expiration · name=만료일 · 선택', [502,582,412,22], '선택 만료일', '만료일은 선택 사항입니다.', 'docs/design/09-permission-access.md:168-183')
+          ]
+        },
+        {
+          id: 'admin-settings-no-permission', title: '워크스페이스 설정 차단 안내', area: '관리자', chapters: ['ch-9'],
+          alt: '워크스페이스 설정 본문에 현재 계정은 이 작업을 사용할 수 없으며 담당 관리자에게 문의하라는 안내가 보이는 화면.',
+          description: '요청 가능한 화면과 요청 불가 차단 안내의 차이를 보여줍니다.',
+          hotspots: [
+            hit('testid:app-main · name=접근할 수 없습니다. 현재 계정에서는 이 작업을 사용할 수 없습니다.', [292,0,1147,960], '차단 안내', '요청 대상이 아니거나 명시적으로 거부되면 관리자에게 문의합니다.', 'docs/USER-MANUAL.md:269-276'),
+            hit('testid:scope-selector · name=워크스페이스 전체', [60,58,223,38], '선택된 범위', '권한 범위가 다르면 해당 화면이 제한될 수 있습니다.', 'docs/USER-MANUAL.md:292-294'),
+            hit('testid:sidebar-system-label · name=관리자', [64,8,52,18], '관리자 영역', '관리 화면에도 현재 계정 권한에 따라 차단 안내가 표시됩니다.', 'docs/USER-MANUAL.md:267-276')
+          ]
+        },
+        {
+          id: 'admin-permissions', title: '권한 요청 검토', area: '관리자', chapters: ['ch-9'],
+          alt: 'Admin 권한 요청 검토 화면에 상태 탭과 요청 목록, 선택된 요청의 승인·추가 정보 요청·거절 결정 영역이 보이는 화면.',
+          description: 'Admin이 범위와 사유를 확인해 요청을 검토합니다.',
+          hotspots: [
+            hit('role=heading · name=권한 요청 검토', [308,15,74,18], '검토 화면', 'Admin이 권한 요청을 검토합니다.', 'docs/USER-MANUAL.md:281'),
+            hit('testid:permission-requests-list · name=권한 요청 Named Requester', [292,100,708,198], '요청 목록', '요청 범위와 신청 사유를 살펴봅니다.', 'docs/USER-MANUAL.md:281-282'),
+            hit('testid:permission-decision-section · name=결정 승인 추가 정보 요청 거절', [1025,540,391,312], '결정', '승인·거절·추가 정보 요청 중에 결정합니다.', 'docs/USER-MANUAL.md:281'),
+            hit('testid:permission-decision-submit · name=결정을 선택하세요', [1025,766,391,40], '결정 저장', 'Admin이 승인·거절·추가 정보 요청 중 결정합니다.', 'docs/USER-MANUAL.md:281')
+          ]
+        },
+        {
+          id: 'admin-managed-systems', title: 'Managed System 관리', area: '관리자', chapters: ['ch-10'],
+          alt: 'Managed System 레지스트리에 시스템별 기본 담당자와 설정 버튼, 결정 대기 권한 요청 요약이 보이는 화면.',
+          description: '시스템을 등록하고 기본 담당자나 검토자를 지정합니다.',
+          hotspots: [
+            hit('testid:ms-register-button · name=Managed System 등록', [1241,9,182,32], 'Managed System 등록', 'Admin이 Managed System을 등록합니다.', 'docs/USER-MANUAL.md:304'),
+            hit('testid:managed-systems-registry · name=IP Identity Platform', [324,109,1083,122], 'Managed System 레지스트리', '시스템별 기본 담당자를 설정할 수 있습니다.', 'docs/USER-MANUAL.md:304, 309'),
+            hit('testid:ms-review-button · name=검토', [1322,329,68,32], '검토', '대기 중인 권한 요청을 검토하는 화면으로 이동합니다.', 'docs/USER-MANUAL.md:306')
+          ]
+        },
+        {
+          id: 'admin-analytics-areas', title: 'Analytics Area 관리', area: '관리자', chapters: ['ch-10'],
+          alt: 'Managed System별 Analytics Area 목록과 권한 경계가 아니라는 안내, 생성 버튼이 보이는 화면.',
+          description: 'Managed System 안의 분류·집계용 Analytics Area를 관리합니다.',
+          hotspots: [
+            hit('testid:aa-guardrail-callout · name=Analytics Area는 권한 경계가 아닙니다', [324,78,1083,69], '권한 경계 안내', 'Analytics Area는 권한 범위가 아닙니다.', 'CONTEXT.md:97-99, 250-252'),
+            hit('testid:aa-row-growth · name=성장 지표 analytics-area/growth', [325,256,1081,52], 'Analytics Area 행', '각 Analytics Area는 하나의 Managed System 안에서 관리합니다.', 'docs/USER-MANUAL.md:305; CONTEXT.md:235-241'),
+            hit('testid:aa-new-area-button · name=Analytics Area 생성', [1259,9,164,32], 'Analytics Area 생성', '시스템 하위 분석 영역을 추가합니다.', 'docs/USER-MANUAL.md:305')
+          ]
+        },
+        {
+          id: 'admin-settings', title: '워크스페이스 설정', area: '관리자', chapters: ['ch-10'],
+          alt: '워크스페이스 설정에서 권한 정책, Survey 정책, Managed System 간 연결 정책과 기본값을 설정하는 화면.',
+          description: '권한 정책과 익명성 임계값, Survey 제한을 살펴봅니다.',
+          hotspots: [
+            hit('role=heading · name=워크스페이스 설정', [308,15,93,18], '워크스페이스 설정', '운영 정책을 관리하는 Admin 전용 화면입니다.', 'docs/USER-MANUAL.md:307'),
+            hit('role=heading · name=권한 정책', [324,78,1083,17], '권한 정책', 'self-approval이나 Managed System 범위 정책을 확인합니다.', 'docs/USER-MANUAL.md:286-292'),
+            hit('role=heading · name=SURVEY 정책', [324,371,1083,17], 'Survey 정책', 'Survey의 익명성 기준과 Survey Response → VOC 제한을 확인합니다.', 'docs/USER-MANUAL.md:249-253; docs/design/07-survey-system.md:7')
+          ]
+        },
+        {
+          id: 'integration-dashboard', title: '연동 액션 대시보드', area: '연동', chapters: [],
+          alt: '연동 액션 대시보드에 미배정 VOC, 실행 계획 없는 Finding, Released Task와 미해결 VOC, 권한 요청 복구 카드가 보이는 화면.',
+          description: '차트 대신 정책에 따라 조치가 필요한 연결 공백과 복구 큐를 보여줍니다.', sourceComment: 'docs/design/08-dashboard-system.md lines 5-22, 134-151; CONTEXT.md lines 209-211',
+          hotspots: [
+            hit('role=heading · name=연동 액션 대시보드', [324,28,582,28], '연동 액션 대시보드', 'Integration은 시스템 사이에서 끊긴 항목을 추적합니다.', 'docs/design/08-dashboard-system.md:5-22'),
+            hit('testid:integration-dashboard-queues · name=미배정 VOC', [324,141,1083,428], '복구·후속 조치 큐', '설정된 후속 조치가 필요한 항목을 모읍니다.', 'docs/design/08-dashboard-system.md:134-151'),
+            hit('testid:integration-queue-card-unassigned-voc · name=미배정 VOC', [324,141,353,208], '미배정 VOC 카드', '미배정 VOC 복구 항목을 확인합니다.', 'docs/design/08-dashboard-system.md:134')
+          ]
+        },
+        {
+          id: 'integration-coverage', title: '연동 커버리지', area: '연동', chapters: [],
+          alt: '커버리지 화면에 VOC→Task 연결, 실행 중인 Finding, 심각도 높은 VOC의 후속 조치 등 커버리지 신호가 막대와 비율로 보이는 화면.',
+          description: '통합 범위의 일부만 연결된 상태를 부분 커버리지로 표시합니다.', sourceComment: 'docs/design/08-dashboard-system.md lines 169-189 and 255-275',
+          hotspots: [
+            hit('role=heading · name=커버리지', [324,28,262,28], '커버리지', 'Coverage는 통합이 부분적일 수 있음을 분명히 보여줍니다.', 'docs/design/08-dashboard-system.md:169-189'),
+            hit('testid:coverage-signals · name=VOC → Task 연결', [324,141,1083,237], '커버리지 신호', '비율은 전체와 연결된 항목의 관계를 보여줍니다.', 'docs/design/08-dashboard-system.md:186-189'),
+            hit('testid:coverage-queues · name=미배정 VOC', [324,441,1083,395], '연결 없음 항목', '정책이나 워크플로가 기대하는 연결 공백을 보여줍니다.', 'docs/design/08-dashboard-system.md:5-7, 255-275')
+          ]
+        }
+      ],
+      footer: '캡처 날짜: 2026-10-04 · 기준 커밋: main 859cf4aa · 숫자와 이름은 모두 예시 데이터 · 텍스트 기준은 docs/USER-MANUAL.md입니다.'
+    };
+
+    const main = document.getElementById('guide-main');
+    const nav = document.getElementById('guide-nav');
+    const searchInput = document.getElementById('guide-search');
+    const searchStatus = document.getElementById('search-status');
+    const viewer = document.getElementById('viewer');
+    const viewerImage = document.getElementById('viewer-image');
+    const viewerTitle = document.getElementById('viewer-title');
+    const viewerCaption = document.getElementById('viewer-caption');
+    const screensById = Object.fromEntries(GUIDE.screens.map((screen) => [screen.id, screen]));
+    const chaptersById = Object.fromEntries(GUIDE.chapters.map((chapter) => [chapter.id, chapter]));
+    let selectedRole = 'all';
+    let activeScreenId = '';
+    let viewerIds = [];
+    let viewerIndex = 0;
+    let tourIndex = 0;
+
+    const esc = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+
+    function chapterScreen(screenId, chapterId, groupIds) {
+      const screen = screensById[screenId];
+      if (!screen) return '';
+      const sourceComment = screen.sourceComment ? `<!-- Source: ${esc(screen.sourceComment)}. -->` : '';
+      const catalogAttribute = chapterId === 'screens' ? `data-catalog-card="${screen.id}"` : '';
+      const hotspots = screen.hotspots.map((spot, index) => `
+        <button class="hotspot" type="button" data-hotspot-screen="${screen.id}" data-hotspot-index="${index}"
+          aria-label="${index + 1}. ${esc(spot.label)}" aria-pressed="false"
+          style="left:${spot.box[0]}%;top:${spot.box[1]}%;width:${spot.box[2]}%;height:${spot.box[3]}%"><span>${index + 1}</span></button>
+      `).join('');
+      const legend = screen.hotspots.map((spot, index) => `
+        ${(() => {
+          const sources = spot.source.split('; ').filter((source) => /^(CONTEXT\.md|docs\/design\/|화면 캡처:)/.test(source));
+          return sources.length ? `<!-- Source: ${esc(sources.join('; '))}. -->` : '';
+        })()}
+        <li><button type="button" data-hotspot-screen="${screen.id}" data-hotspot-index="${index}" aria-pressed="false">
+          <span class="legend-title">${index + 1}. ${esc(spot.label)}</span><span class="legend-claim">${esc(spot.claim)}</span>
+        </button></li>
+      `).join('');
+      return `
+        <article class="screen-card" ${catalogAttribute} data-screen-card="${screen.id}">
+          <h3>${esc(screen.title)}</h3>
+          <p class="screen-description">${esc(screen.description)} ${sourceComment}</p>
+          <div class="screen-row">
+            <div>
+              <div class="shot-media" data-shot-media="${screen.id}">
+                <img src="screens/${screen.id}.webp" alt="${esc(screen.alt)}" loading="lazy" width="1440" height="960">
+                ${hotspots}
+              </div>
+              <div class="shot-actions"><button class="small-button" type="button" data-open-screen="${screen.id}" data-open-group="${groupIds.join(',')}">확대</button></div>
+            </div>
+            <ol class="hotspot-legend" aria-label="${esc(screen.title)} 화면 설명">${legend}</ol>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderStateBoard() {
+      const lanes = GUIDE.states.map((group) => {
+        const renderChoices = (ids, separator = '→') => ids.map((id, index) => `
+          ${index ? `<span class="state-arrow" aria-hidden="true">${separator}</span>` : ''}
+          <button class="state-choice" type="button" data-state-group="${group.id}" data-state="${id}" aria-pressed="false">${esc(id)}</button>
+        `).join('');
+        const mainFlow = renderChoices(group.flow);
+        const alternatives = group.alternatives?.length
+          ? `<div class="state-flow" aria-label="${esc(group.title)} 대안 상태"><span class="state-arrow">또는</span>${renderChoices(group.alternatives, '/')}</div>`
+          : '';
+        const links = group.links?.map(([anchor, id]) => `<div class="state-flow branch-flow" aria-label="${esc(group.title)} 연결 상태"><span class="state-arrow">${esc(anchor)} ↕</span><button class="state-choice" type="button" data-state-group="${group.id}" data-state="${id}" aria-pressed="false">${esc(id)}</button></div>`).join('') || '';
+        const branches = group.branches?.map((pair) => `<div class="state-flow branch-flow" aria-label="${esc(group.title)} 분기"><span class="state-arrow" aria-hidden="true">${esc(pair[0])} →</span><button class="state-choice" type="button" data-state-group="${group.id}" data-state="${pair[1]}" aria-pressed="false">${esc(pair[1])}</button></div>`).join('') || '';
+        return `<section class="state-lane"><h3>${esc(group.title)}</h3><div class="state-flow">${mainFlow}</div>${alternatives}${links}${branches}<p class="state-note" data-state-note="${group.id}" aria-live="polite">상태를 누르면 매뉴얼에 적힌 설명을 볼 수 있습니다.</p></section>`;
+      }).join('');
+      return `<div class="state-board" aria-label="클릭 가능한 상태 흐름">${lanes}<div class="state-separation">리포터 상태 ↔ Task 상태는 자동 연동되지 않음<span>두 상태 흐름은 각각 담당자가 검토하고 기록합니다.</span></div></div>`;
+    }
+
+    function renderFaq() {
+      return `<div class="faq-list">${GUIDE.faq.map((item) => `
+        <details class="faq-item"><summary>${esc(item.q)}</summary><p>${esc(item.a)}</p></details>
+      `).join('')}</div>`;
+    }
+
+    function renderPermissions() {
+      const roleRows = GUIDE.permissionRoles.map((item) => `
+        <tr data-role-row="${item.id}"><th>${esc(item.role)}</th><td>${esc(item.description)}</td></tr>
+      `).join('');
+      const demoRows = GUIDE.demoPermissions.map((item) => `
+        <tr data-role-row="${item[1]}"><th>${esc(item[0])}</th><td>${esc(item[1])}</td><td>${esc(item[2])}</td></tr>
+      `).join('');
+      const rightRows = GUIDE.adminRights.map((item) => `<tr><th><code>${esc(item[0])}</code></th><td>${esc(item[1])}</td></tr>`).join('');
+      return `
+        <h3>역할</h3>
+        <table class="permission-table"><thead><tr><th>역할</th><th>무엇을 하는 사람인가</th></tr></thead><tbody>${roleRows}</tbody></table>
+        <h3>데모 시드(<code>SEED_MODE=personas</code>) 권한</h3>
+        <table class="permission-table"><thead><tr><th>액터</th><th>역할</th><th>부여된 권한</th></tr></thead><tbody>${demoRows}</tbody></table>
+        <h3>Admin이 역할만으로 갖는 것</h3>
+        <p><code>workspace.read</code> · <code>workspace.admin</code> · <code>voc.triage</code> · <code>voc.read</code>와 도메인 모듈 권한은 다음과 같습니다.</p>
+        <table class="permission-table"><thead><tr><th>권한</th><th>Admin 역할 우회</th></tr></thead><tbody>${rightRows}</tbody></table>
+        <p><strong>권한 판정의 최종 근거는 언제나 백엔드입니다.</strong> 화면 표시는 힌트일 뿐입니다.</p>
+      `;
+    }
+
+    function renderChapter(chapter) {
+      const special = chapter.type === 'faq' ? renderFaq() : chapter.type === 'permissions' ? renderPermissions() : '';
+      const screens = chapter.screens.length
+        ? `<div class="screen-grid">${chapter.screens.map((id) => chapterScreen(id, chapter.id, chapter.screens)).join('')}</div>`
+        : '';
+      return `
+        <section class="chapter" id="${chapter.id}" data-chapter="${chapter.id}" data-audience="${chapter.audience.join(',')}">
+          <div class="chapter-header"><div><p class="chapter-kicker">${chapter.number === 0 ? '시작하기' : `§${chapter.number}`}</p><h2>${esc(chapter.title)}</h2></div></div>
+          <p class="role-note">필요 권한: ${chapter.permission}</p>
+          <div class="chapter-copy">${chapter.copy}${special}</div>
+          ${chapter.number === 0 ? renderStateBoard() : ''}
+          ${screens}
+        </section>
+      `;
+    }
+
+    function renderTour() {
+      const stepButtons = GUIDE.tour.map((step, index) => `
+        <li><button type="button" data-tour-step="${index}" aria-current="${index === 0 ? 'step' : 'false'}">${index + 1}. ${esc(step.title)}</button></li>
+      `).join('');
+      return `
+        <section class="tour-section" id="tour" aria-labelledby="tour-heading">
+          <p class="chapter-kicker">안내 따라가기</p><h2 id="tour-heading">업무 흐름 투어</h2>
+          <p class="tour-intro">VOC 한 건의 여정을 단계별로 살펴봅니다. 각 단계는 해당 매뉴얼 장으로 이어집니다.</p>
+          <div class="tour-layout">
+            <ol class="tour-steps" aria-label="투어 단계">${stepButtons}</ol>
+            <div class="tour-current" id="tour-current" aria-live="polite"></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderScreenIndex() {
+      const groups = GUIDE.screenGroups.map((group) => {
+        const cards = group.ids.map((id) => {
+          const screen = screensById[id];
+          if (screen.chapters.length === 0) return chapterScreen(id, 'screens', group.ids);
+          const chapterId = screen.chapters[0] || '';
+          const chapterLink = chapterId
+            ? `<a href="#${chapterId}">매뉴얼 장으로 이동</a>`
+            : '<a href="#guide-footer">캡처 기준</a>';
+          const sourceComment = screen.sourceComment ? `<!-- Source: ${esc(screen.sourceComment)}. -->` : '';
+          return `
+            <article class="catalog-card" data-catalog-card="${screen.id}">
+              <img src="screens/${screen.id}.webp" alt="${esc(screen.alt)}" loading="lazy" width="1440" height="960"
+                data-open-screen="${screen.id}" data-open-group="${group.ids.join(',')}" tabindex="0" role="button" aria-label="${esc(screen.title)} 확대 보기">
+              <div><h3>${esc(screen.title)}</h3><p>${esc(screen.description)} ${sourceComment}</p>${chapterLink}</div>
+            </article>
+          `;
+        }).join('');
+        return `<details class="screen-group" open><summary>${esc(group.area)} · ${group.ids.length}개 화면</summary><div class="screen-catalog">${cards}</div></details>`;
+      }).join('');
+      return `
+        <section class="screen-index" id="screens" aria-labelledby="screens-heading">
+          <p class="chapter-kicker">화면 찾아보기</p><h2 id="screens-heading">메뉴별 화면</h2>
+          <p class="screen-index-intro">현재 빌드에서 캡처한 35개 화면입니다. 숫자와 이름은 예시 데이터이며, 본문 설명의 기준은 USER-MANUAL.md입니다.</p>
+          ${groups}
+        </section>
+      `;
+    }
+
+    nav.innerHTML = `
+      <p class="nav-label">둘러보기</p>
+      <a class="nav-link" href="#tour">업무 흐름 투어</a>
+      <a class="nav-link" href="#screens">메뉴별 화면</a>
+      <p class="nav-label">시작하기</p>
+      ${GUIDE.chapters.slice(0, 1).map((chapter) => `<a class="nav-link" href="#${chapter.id}">시작하기</a>`).join('')}
+      <p class="nav-label">하려는 일</p>
+      ${GUIDE.chapters.filter((chapter) => chapter.number >= 1 && chapter.number <= 10).map((chapter) => `<a class="nav-link" href="#${chapter.id}">${esc(chapter.nav)}</a>`).join('')}
+      <p class="nav-label">참고</p>
+      ${GUIDE.chapters.slice(11).map((chapter) => `<a class="nav-link" href="#${chapter.id}">${esc(chapter.nav)}</a>`).join('')}
+    `;
+    main.innerHTML = `${renderTour()}${GUIDE.chapters.map(renderChapter).join('')}${renderScreenIndex()}`;
+    document.getElementById('guide-footer').innerHTML = `
+      <p>${esc(GUIDE.footer)}</p>
+      <p><a href="../USER-MANUAL.md">docs/USER-MANUAL.md</a>가 사용자 설명의 텍스트 기준입니다. 이 안내서와 매뉴얼을 함께 업데이트하세요.</p>
+    `;
+
+    function decorateGlossary(container, glossary, chapterId) {
+      let serial = 0;
+      for (const [term, definition] of Object.entries(glossary)) {
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+          acceptNode(node) {
+            if (node.parentElement?.closest('a, button, code, script, style, .term-wrap')) return NodeFilter.FILTER_REJECT;
+            return node.nodeValue.includes(term) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          }
+        });
+        const node = walker.nextNode();
+        if (!node) continue;
+        const offset = node.nodeValue.indexOf(term);
+        const before = node.nodeValue.slice(0, offset);
+        const after = node.nodeValue.slice(offset + term.length);
+        const id = `term-${chapterId}-${serial++}`;
+        const wrapper = document.createElement('span');
+        wrapper.className = 'term-wrap';
+        const button = document.createElement('button');
+        button.className = 'term-button';
+        button.type = 'button';
+        button.textContent = term;
+        button.setAttribute('aria-describedby', `${id}-tip`);
+        const tip = document.createElement('span');
+        tip.className = 'term-popover';
+        tip.id = `${id}-tip`;
+        tip.setAttribute('role', 'tooltip');
+        tip.hidden = true;
+        tip.textContent = definition;
+        wrapper.append(button, tip);
+        const fragment = document.createDocumentFragment();
+        if (before) fragment.append(document.createTextNode(before));
+        fragment.append(wrapper);
+        if (after) fragment.append(document.createTextNode(after));
+        node.replaceWith(fragment);
+        button.addEventListener('focus', () => { tip.hidden = false; });
+        button.addEventListener('blur', () => { tip.hidden = true; });
+        button.addEventListener('click', () => { tip.hidden = false; });
+      }
+    }
+    GUIDE.chapters.forEach((chapter) => {
+      const copy = document.querySelector(`#${chapter.id} .chapter-copy`);
+      if (copy) decorateGlossary(copy, GUIDE.glossary, chapter.id);
+    });
+
+    function setRole(role) {
+      selectedRole = role;
+      document.querySelectorAll('#role-filter button').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.role === role));
+      });
+      document.querySelectorAll('[data-chapter]').forEach((chapterElement) => {
+        const chapter = chaptersById[chapterElement.dataset.chapter];
+        const allowed = role === 'all' || chapter.audience.includes(role);
+        chapterElement.classList.toggle('muted', !allowed);
+      });
+      document.querySelectorAll('[data-role-row]').forEach((row) => {
+        row.classList.toggle('role-row-active', role !== 'all' && row.dataset.roleRow === role);
+      });
+    }
+    const roleFilter = document.getElementById('role-filter');
+    roleFilter.innerHTML = `<span class="control-label">역할</span>${GUIDE.roles.map((role) => `<button class="pill-button" type="button" data-role="${role.id}" aria-pressed="${role.id === 'all'}">${esc(role.label)}</button>`).join('')}`;
+
+    function updateTour(index) {
+      tourIndex = (index + GUIDE.tour.length) % GUIDE.tour.length;
+      const step = GUIDE.tour[tourIndex];
+      const screen = screensById[step.screen];
+      const groupIds = GUIDE.tour.map((item) => item.screen);
+      const current = document.getElementById('tour-current');
+      const focusedControl = document.activeElement?.closest('[data-tour-prev], [data-tour-next]');
+      const focusSelector = focusedControl
+        ? (focusedControl.hasAttribute('data-tour-prev') ? '[data-tour-prev]' : '[data-tour-next]')
+        : null;
+      const supplementalSources = step.source.split('; ').filter((source) => /^(CONTEXT\.md|docs\/design\/)/.test(source));
+      const supplements = supplementalSources.length
+        ? `<!-- Source: ${esc(supplementalSources.join('; '))}. -->`
+        : '';
+      current.innerHTML = `
+        <p class="chapter-kicker">${tourIndex + 1} / ${GUIDE.tour.length}</p>
+        <h3>${esc(step.title)}</h3>
+        <div class="tour-progress" role="progressbar" aria-label="투어 진행률" aria-valuemin="0" aria-valuemax="${GUIDE.tour.length}" aria-valuenow="${tourIndex + 1}"><span style="width:${((tourIndex + 1) / GUIDE.tour.length) * 100}%"></span></div>
+        <p><strong>누가:</strong> ${esc(step.who)}</p>${step.permission ? `<p><strong>${esc(step.permission)}</strong></p>` : ''}
+        <p><strong>할 일:</strong> ${esc(step.what)}</p><p><strong>상태 변화:</strong> ${esc(step.change)}</p>
+        ${supplements}
+        <div class="catalog-card"><img src="screens/${screen.id}.webp" alt="${esc(screen.alt)}" width="1440" height="960" loading="lazy" data-open-screen="${screen.id}" data-open-group="${groupIds.join(',')}" tabindex="0" role="button" aria-label="${esc(screen.title)} 확대 보기"><div><h3>${esc(screen.title)}</h3><p>${esc(screen.description)}</p><button class="small-button" type="button" data-open-screen="${screen.id}" data-open-group="${groupIds.join(',')}">화면 확대</button></div></div>
+        <p class="tour-meta">${esc(step.source)}</p>
+        <p><a href="#${step.chapter}">매뉴얼의 해당 장으로 이동</a></p>
+        <div class="tour-actions"><button class="small-button" type="button" data-tour-prev>← 이전</button><button class="small-button" type="button" data-tour-next>다음 →</button></div>
+      `;
+      document.querySelectorAll('[data-tour-step]').forEach((button) => {
+        button.setAttribute('aria-current', String(Number(button.dataset.tourStep) === tourIndex ? 'step' : 'false'));
+      });
+      if (focusSelector) current.querySelector(focusSelector)?.focus();
+    }
+    updateTour(0);
+
+    document.querySelectorAll('.state-choice').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = GUIDE.states.find((item) => item.id === button.dataset.stateGroup);
+        document.querySelectorAll(`[data-state-group="${group.id}"]`).forEach((choice) => {
+          choice.setAttribute('aria-pressed', String(choice === button));
+        });
+        const note = document.querySelector(`[data-state-note="${group.id}"]`);
+        note.textContent = group.items[button.dataset.state] || `${button.dataset.state}: 매뉴얼에 상태 이름으로 나옵니다.`;
+      });
+    });
+
+    function setHotspot(screenId, index) {
+      activeScreenId = screenId;
+      document.querySelectorAll('.shot-media').forEach((media) => {
+        media.classList.toggle('has-active', media.dataset.shotMedia === screenId && index !== null);
+      });
+      document.querySelectorAll('[data-hotspot-screen]').forEach((button) => {
+        const active = button.dataset.hotspotScreen === screenId && Number(button.dataset.hotspotIndex) === index;
+        button.setAttribute('aria-pressed', String(active));
+      });
+    }
+
+    function showViewerSlide(index) {
+      if (!viewerIds.length) return;
+      viewerIndex = (index + viewerIds.length) % viewerIds.length;
+      const screen = screensById[viewerIds[viewerIndex]];
+      if (!screen) return;
+      viewerImage.src = `screens/${screen.id}.webp`;
+      viewerImage.alt = screen.alt;
+      viewerTitle.textContent = `${screen.title} · ${viewerIndex + 1} / ${viewerIds.length}`;
+      viewerCaption.textContent = screen.description;
+    }
+
+    function openViewer(screenId, ids) {
+      viewerIds = ids.filter((id) => screensById[id]);
+      if (!viewerIds.includes(screenId)) viewerIds.unshift(screenId);
+      showViewerSlide(viewerIds.indexOf(screenId));
+      if (!viewer.open) viewer.showModal();
+    }
+
+    function searchText(node) {
+      return `${node.textContent ?? ''} ${[...node.querySelectorAll('img')].map((image) => image.alt).join(' ')}`.toLocaleLowerCase();
+    }
+    function applySearch() {
+      const query = searchInput.value.trim().toLocaleLowerCase();
+      let matches = 0;
+      document.querySelectorAll('[data-chapter]').forEach((chapter) => {
+        const found = !query || searchText(chapter).includes(query);
+        chapter.hidden = !found;
+        if (found && query) matches += 1;
+      });
+      document.querySelectorAll('.faq-item').forEach((item) => {
+        const found = !query || searchText(item).includes(query);
+        item.hidden = !found;
+        if (found && query) matches += 1;
+      });
+      document.querySelectorAll('[data-catalog-card]').forEach((card) => {
+        const found = !query || searchText(card).includes(query);
+        card.hidden = !found;
+        if (found && query) matches += 1;
+      });
+      document.querySelectorAll('.screen-group').forEach((group) => {
+        group.hidden = !group.querySelector('[data-catalog-card]:not([hidden])');
+      });
+      document.querySelectorAll('.nav-link').forEach((link) => {
+        const targetId = link.getAttribute('href').slice(1);
+        const target = document.getElementById(targetId);
+        link.hidden = Boolean(query && target?.hidden);
+      });
+      searchStatus.textContent = query ? `${matches}곳에서 찾음` : '전체 안내';
+    }
+
+    document.addEventListener('click', (event) => {
+      const roleButton = event.target.closest('[data-role]');
+      if (roleButton) setRole(roleButton.dataset.role);
+      const hotspot = event.target.closest('[data-hotspot-screen]');
+      if (hotspot) setHotspot(hotspot.dataset.hotspotScreen, Number(hotspot.dataset.hotspotIndex));
+      const openButton = event.target.closest('[data-open-screen]');
+      if (openButton) openViewer(openButton.dataset.openScreen, (openButton.dataset.openGroup || openButton.dataset.openScreen).split(','));
+      const tourButton = event.target.closest('[data-tour-step]');
+      if (tourButton) updateTour(Number(tourButton.dataset.tourStep));
+      if (event.target.closest('[data-tour-prev]')) updateTour(tourIndex - 1);
+      if (event.target.closest('[data-tour-next]')) updateTour(tourIndex + 1);
+    });
+    document.addEventListener('focusin', (event) => {
+      const hotspot = event.target.closest('[data-hotspot-screen]');
+      if (hotspot) setHotspot(hotspot.dataset.hotspotScreen, Number(hotspot.dataset.hotspotIndex));
+    });
+    searchInput.addEventListener('input', applySearch);
+    document.getElementById('nav-toggle').addEventListener('click', (event) => {
+      const button = event.currentTarget;
+      const open = button.getAttribute('aria-expanded') !== 'true';
+      button.setAttribute('aria-expanded', String(open));
+      button.textContent = open ? '목차 접기' : '목차 펼치기';
+      nav.classList.toggle('is-open', open);
+    });
+    nav.addEventListener('click', (event) => {
+      if (event.target.closest('a') && window.matchMedia('(max-width: 999px)').matches) {
+        nav.classList.remove('is-open');
+        document.getElementById('nav-toggle').setAttribute('aria-expanded', 'false');
+        document.getElementById('nav-toggle').textContent = '목차 펼치기';
+      }
+    });
+    document.getElementById('viewer-prev').addEventListener('click', () => showViewerSlide(viewerIndex - 1));
+    document.getElementById('viewer-next').addEventListener('click', () => showViewerSlide(viewerIndex + 1));
+    document.getElementById('viewer-close').addEventListener('click', () => viewer.close());
+    document.getElementById('viewer').addEventListener('click', (event) => {
+      if (event.target === viewer) viewer.close();
+    });
+    document.getElementById('theme-toggle').addEventListener('click', (event) => {
+      const useDark = document.documentElement.dataset.theme
+        ? document.documentElement.dataset.theme !== 'dark'
+        : !window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = useDark ? 'dark' : 'light';
+      event.currentTarget.setAttribute('aria-pressed', String(useDark));
+      event.currentTarget.textContent = useDark ? '밝은 테마' : '어두운 테마';
+      try { localStorage.setItem('feedbackops-guide-theme', useDark ? 'dark' : 'light'); } catch (_) { /* file:// storage may be unavailable */ }
+    });
+    try {
+      const savedTheme = localStorage.getItem('feedbackops-guide-theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') document.documentElement.dataset.theme = savedTheme;
+    } catch (_) { /* file:// storage may be unavailable */ }
+    const themeToggle = document.getElementById('theme-toggle');
+    const initiallyDark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    themeToggle.setAttribute('aria-pressed', String(initiallyDark));
+    themeToggle.textContent = initiallyDark ? '밝은 테마' : '어두운 테마';
+
+    document.addEventListener('keydown', (event) => {
+      if (viewer.open) {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); showViewerSlide(viewerIndex - 1); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); showViewerSlide(viewerIndex + 1); }
+        if (event.key === 'Escape') viewer.close();
+        return;
+      }
+      if (event.key === 'Escape') {
+        if (searchInput.value) { searchInput.value = ''; applySearch(); }
+        if (activeScreenId) setHotspot(activeScreenId, null);
+        document.querySelectorAll('.term-popover:not([hidden])').forEach((tip) => { tip.hidden = true; });
+      }
+      if (event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const imageButton = event.target.closest('img[data-open-screen][role="button"]');
+      if (imageButton && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        imageButton.click();
+        return;
+      }
+      if (!event.target.closest('#tour')) return;
+      if (event.key === 'ArrowLeft') updateTour(tourIndex - 1);
+      if (event.key === 'ArrowRight') updateTour(tourIndex + 1);
+    });
+
+    document.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => {
+      document.querySelectorAll('.nav-link').forEach((item) => item.removeAttribute('aria-current'));
+      link.setAttribute('aria-current', 'location');
+    }));
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        document.querySelectorAll('.nav-link').forEach((link) => {
+          if (link.getAttribute('href') === `#${visible.target.id}`) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+      }, { rootMargin: '-10% 0px -78% 0px', threshold: 0 });
+      document.querySelectorAll('main > section[id]').forEach((section) => observer.observe(section));
+    }
+    setRole(selectedRole);
+    applySearch();
+  </script>
+</body>
+</html>

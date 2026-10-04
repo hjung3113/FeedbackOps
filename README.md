@@ -9,6 +9,7 @@ Without it, intake, triage decisions, evidence collection, execution tracking, a
 It is not a public-facing tool, not a marketing site, and not multi-tenant SaaS. Every screen serves an authenticated internal Actor working inside a known Managed System scope.
 
 - **Using the product?** → [`docs/USER-MANUAL.md`](docs/USER-MANUAL.md) — organised by what you are trying to get done.
+- **Want a visual walkthrough?** → [Interactive user guide](docs/user-guide/index.html) — Korean chapters with annotated screenshots.
 - **Changing the code?** → [`AGENTS.md`](AGENTS.md) is the binding rulebook. Read it before any change.
 - **Wondering why something is the way it is?** → [`docs/adr/`](docs/adr/) — decisions are recorded, and an ADR supersedes any other document on the decision it made.
 
