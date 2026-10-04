@@ -1,5 +1,9 @@
 # Severity enum is locked and distinct from Priority
 
+## Status
+
+Accepted.
+
 VOC **Severity** is `low | medium | high | critical` (defined canonically in `docs/design/15-data-contracts.md`) and is **not** the same concept as **Priority**. Severity describes how serious a problem is — assigned during VOC triage as objective operational impact. Priority is an execution-order signal carried by Finding and Task during planning, decided after triage, and never exposed to Reporters.
 
 We pick four severity bands rather than P0/P1/P2/P3 because the audience filing VOC is non-engineering as often as engineering; `critical/high/medium/low` reads consistently across triage UI, reporter-facing dashboards (severity is **not** reporter-visible but invariant text mentions it), and follow-up rules like "High Severity VOC eligible for follow-up". P-number bands would force a separate explanation layer for non-engineering Reporters and Developers.

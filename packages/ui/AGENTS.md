@@ -10,6 +10,7 @@
 ## Forbidden Content
 
 - API calls.
+- Imports from `@fops/shared` or `apps/*` (ADR-0016, enforced by `pnpm check:boundaries`); mirror the constant locally, as `src/rich-content/allowlist-local.ts` does.
 - Backend permission decisions as truth.
 - Domain mutation orchestration.
 - Feature-specific route state.

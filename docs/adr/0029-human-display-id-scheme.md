@@ -104,3 +104,7 @@ allocated through the same `core.display_counters` and
 `core.next_display_id(uuid, text)` contract, begin at `SRV-1000` per workspace,
 and are unique within `survey.surveys` by `(workspace_id, display_id)`. VOC
 remains the grandfathered exception described above.
+
+## Amended 2026-09-27 — Milestone stream
+
+Migration 0049 (#514) adds the sixth shared stream: `milestone -> MLS-`, same counter and function contract.

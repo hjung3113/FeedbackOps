@@ -1,5 +1,11 @@
 # Rich Content Editor (TipTap) and attachment storage
 
+> Amended 2026-05-22 (issue #22): the two-implementation storage design in "Inline Attachments and storage abstraction" and "What this ADR locks" is replaced by a single S3-compatible backend (STORAGE_S3_* env); see Amendment below. Editor, server-proxied transfer and Rich Table decisions are unchanged.
+
+## Status
+
+Accepted. Storage amended 2026-05-22.
+
 FeedbackOps has four rich-content surfaces (`VOC description`, `Reporter Reply`, `Public Update`, `Internal Comment`) that share one editor foundation per CONTEXT.md and `docs/design/15-data-contracts.md`. Each surface restricts toolbar actions and rendering separately. This ADR locks the editor choice, the attachment storage shape, and the Rich Table decision left open by the data contracts.
 
 ## Editor: TipTap

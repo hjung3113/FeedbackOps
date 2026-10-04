@@ -1,5 +1,7 @@
 # FeedbackOps Suite — Handoff Document
 
+> **Since 2026-10-05 (ADR-0060) this prototype is a design reference, not the spec.** The shipped UI, `apps/frontend/src/lib/copy/*`, and the committed visual baselines are the UI authority.
+
 > Hi-fi interactive prototype for the FeedbackOps Suite internal operating platform.
 > Bridge between design exploration (here) and production implementation.
 
@@ -483,10 +485,10 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
 
 - **Pack 20 — Baseline QA + nested-button polish** ✅ (Session 19)
   - Headless Playwright captured all 26 routes; pixel diff vs `final-baselines/` returned 23/26 IDENTICAL and 3 sub-1% diffs that are dynamic noise. Pack 19 file split confirmed as zero visual regression.
-  - `screenshots/pack20-current/voc-inbox-detail-full.png` captures the long VOC detail trail by expanding the inner `.panel-scroll` before fullPage shot.
+  - `screenshots/final-baselines/voc-inbox-detail-full.png` captures the long VOC detail trail by expanding the inner `.panel-scroll` before fullPage shot.
   - `screen-survey-builder.jsx · OutlineRow` no longer nests a `<button>` inside a `<button>` (React `validateDOMNesting` warning eliminated); outer element is `<div role="button" tabIndex={0}>` with Enter/Space activation.
-  - `qa-capture.js` + `qa-diff.js` left in repo for future re-runs.
-  - Screenshot folder cleanup: deleted ~95 stale loose PNGs directly under `screenshots/` (Pack 1–11 era working captures) plus 3 root-level temp PNGs (`test-playwright.png`, `mp9ir2hn-image.png`, `mp8o44dk-image.png`). Canonical sets retained: `screenshots/final-baselines/` (28 reference PNGs), `screenshots/pack20-current/` (28 fresh captures incl. VOC full-page), `screenshots/pack20-diff/` (4 diff artifacts).
+  - `qa-capture.js` + `qa-diff.js` were used for this run (removed on 2026-10-05 — `pack20-current/` was byte-identical to `final-baselines/`; visual regression now runs from `apps/frontend/tests/visual/`).
+  - Screenshot folder cleanup: deleted ~95 stale loose PNGs directly under `screenshots/` (Pack 1–11 era working captures) plus 3 root-level temp PNGs (`test-playwright.png`, `mp9ir2hn-image.png`, `mp8o44dk-image.png`). Canonical set retained: `screenshots/final-baselines/` (28 reference PNGs).
 
 - **Pack 19 — Rule 2 split cleanup** ✅ (Session 18)
   - Resolved the long-standing `screen-other.jsx` multi-host (adversarial review §3 weakest link) by splitting it into three single-surface files:
@@ -546,18 +548,18 @@ Playwright smoke + pixel diff against the 26 final-baseline PNGs, plus one DOM p
 - Pack 19 split caused **zero visual regression** — the budget cleanup is visually safe.
 
 **Full-page VOC detail**
-- `screenshots/pack20-current/voc-inbox-detail-full.png` (1452×1976) — the detail column has its own `.panel-scroll` so the standard viewport capture clipped at ~900px; the new capture temporarily expands the inner scroller and uses `fullPage:true` to keep the long-form trail / activity rhythm in view.
+- `screenshots/final-baselines/voc-inbox-detail-full.png` (1452×1976) — the detail column has its own `.panel-scroll` so the standard viewport capture clipped at ~900px; the new capture temporarily expands the inner scroller and uses `fullPage:true` to keep the long-form trail / activity rhythm in view.
 
 **Polish — survey-builder DOM nesting**
 - `screen-survey-builder.jsx · OutlineRow` was a `<button>` containing a `<button>` (`<Icon name="close" />` delete). React surfaced a `validateDOMNesting` warning in the headless run.
 - Outer element changed to `<div role="button" tabIndex={0}>` with keyboard activation on Enter/Space. Inner delete `<button>` retained. Visual baseline unchanged; warning gone.
 
-**Tooling left in the repo for next session**
-- `qa-capture.js`, `qa-diff.js`, `screenshots/pack20-current/`, `screenshots/pack20-diff/` — re-runnable. `pixelmatch` + `pngjs` were added as transient `npm install` (not saved to `package.json`).
+**Tooling**
+- `qa-capture.js`, `qa-diff.js`, the prototype `package.json`, `screenshots/pack20-current/`, and `screenshots/pack20-diff/` were removed on 2026-10-05 — `pack20-current/` was byte-identical to `final-baselines/`; visual regression now runs from `apps/frontend/tests/visual/`.
 
 **Screenshot folder cleanup**
 - Removed ~95 stale loose PNGs directly under `screenshots/` (Pack 1–11 era working captures) and 3 root-level temp PNGs (`test-playwright.png`, `mp9ir2hn-image.png`, `mp8o44dk-image.png`).
-- Retained sets: `screenshots/final-baselines/` (28 canonical reference PNGs — refreshed from pack20-current at end of Pack 20), `screenshots/pack20-current/` (28 fresh captures incl. `voc-inbox-detail-full.png`), `screenshots/pack20-diff/` (diff artifacts).
+- Retained set: `screenshots/final-baselines/` (28 canonical reference PNGs — refreshed from pack20-current at end of Pack 20).
 - `final-baselines/` was promoted from `pack20-current/` at end of Pack 20: 27 captured routes overwritten + `voc-inbox-detail-full.png` added + `probe-cmdk.png` re-captured via Meta+K (the harness in `qa-capture.js` does not cover the command palette overlay — capture it manually when refreshing). `manifest.json` `count` bumped to 28.
 
 ### Session 18 — 2026-05-17 — Pack 19 (Rule 2 split cleanup)

@@ -19,7 +19,7 @@ Evidence or Source Record
 → optional Task Request / Task link
 → optional Reporter-facing Update
 → optional Outcome Survey
-→ optional Follow-up Finding / Task Request when configured
+→ Follow-up Finding for a poor Outcome Survey response (ADR-0055), then optional Task Request
 ```
 
 ## Non-Negotiable Integration Rules
@@ -109,7 +109,7 @@ Home or Integration detects:
 - High Severity VOC eligible for follow-up and currently unlinked
 - Finding marked actionable without Task Request or linked Task
 - Released Task with unresolved Reporter-facing VOC Status
-- Bad Outcome Survey without configured follow-up
+- Poor Outcome Survey response without a follow-up decision (ADR-0055)
 
 User acts from Home or Integration:
 → create missing link

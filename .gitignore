@@ -46,3 +46,4 @@ opencode.json
 
 # impeccable engine binary (downloaded on first run)
 .claude/skills/impeccable/scripts/bin/
+.claude/hookify.*.local.md

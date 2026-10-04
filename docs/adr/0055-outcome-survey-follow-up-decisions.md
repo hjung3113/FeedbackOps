@@ -8,7 +8,7 @@ Accepted.
 
 Closes the decision record required by issue #510 sub-issue 1 and governs its
 storage, commands, and gap predicate (sub-issue 2). The research input is
-`docs/superpowers/specs/2026-09-26-outcome-survey-followup-design.md`.
+`docs/superpowers/specs/2026-09-26-outcome-survey-followup-design.md` (removed after implementation on 2026-10-05; read it from git history).
 
 ## Context
 
@@ -37,7 +37,7 @@ them.
    SQL classifier reproduces that exact partition through the IMMUTABLE helper
    `survey.rating_band_for_value`, and an integration parity test pins the two
    partitions together over every legal `(min, max, value)` combination. This
-   supersedes 0046's `answer_value <= rating_min` floor rule (on 1–5 the low
+   supersedes migration 0046's `answer_value <= rating_min` floor rule (on 1–5 the low
    band is 1–2, not only 1) and the prototype's aggregate
    `overallScore < 7` rule, which was never a shipped classifier.
 2. **Configured** — every `type = 'outcome'` survey is configured for
@@ -58,7 +58,7 @@ them.
    Finding's **current** status is `draft`, `active`, or `converted`;
    `not_actionable` or `archived` reopen the gap; or
    (b) a current `no_follow_up` decision on the state row.
-   This is a deliberate behavior change from 0046 in two narrows: `evidence_of`
+   This is a deliberate behavior change from migration 0046 in two narrows: `evidence_of`
    links no longer clear the gap (attaching evidence is context enrichment,
    per `08-dashboard-system.md`), and link existence alone no longer clears it
    when the linked Finding's current status is `not_actionable` or `archived`.
@@ -164,7 +164,7 @@ use the survey response as subject; detail is strict
   personal seam, and each exposed (response, low-answer question) pair writes
   one `survey_response_personal_read` audit row in the same transaction.
   Part D, the Survey-owned review UI (`/surveys/$surveyId/follow-up`),
-  remains open; the per-response disclosure rules above bind it.
+  shipped; the per-response disclosure rules above bind it.
 
 ## Reopening triggers
 

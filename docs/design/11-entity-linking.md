@@ -22,10 +22,9 @@ core.entity_links
 - created_at
 ```
 
-Slice 4.1 tracer (#112) implements the first production path: VOC → VOC
-`related_to` links with `visibility='internal_only'` and lifecycle
-`status='active'`. It also adds `managed_system_id`, `updated_at`, uniqueness
-for active links, and active source/target lookup indexes.
+The stored table also carries lifecycle `status`, `managed_system_id`, `updated_at`,
+and the `detached_*` columns, and enforces uniqueness for active links. The full
+column list is `15-data-contracts.md`.
 
 ## Relation Types
 
@@ -65,9 +64,8 @@ Acceptance Criteria:
 - Sensitive detach actions are audited.
 ```
 
-Slice 4.2 (#113) implements this for VOC↔VOC `related_to` as `detached` only.
-`revoked` remains reserved for future admin/policy flows and `stale` remains
-deferred.
+Detach writes `detached` only. `revoked` is reserved for future admin/policy
+flows and `stale` is not written.
 
 ### FR-LINK-002: Enforce Visibility
 
@@ -84,13 +82,11 @@ Acceptance Criteria:
 - Frontend must not synthesize linked-object summaries from raw data that the actor cannot otherwise read.
 ```
 
-Slice 4.1 exposes only `allowed` and `hidden` visibility states for VOC↔VOC
-`related_to` reads. Slice 4.3 extends hidden inventory rows with audit metadata
-needed by the read-only table (`status`, `managed_system_id`, `created_by`,
-`created_at`, `updated_at`) while still omitting source/target endpoint ids and
+Hidden inventory rows expose audit metadata (`status`, `managed_system_id`,
+`created_by`, `created_at`, `updated_at`) and omit source/target endpoint ids and
 any synthesized endpoint summary.
 
-Slice 4.4 (#115) locks the full enforcement in **ADR-0023**: the per-(stored
+**ADR-0023** locks the full enforcement: the per-(stored
 visibility × actor) decision table, the `hidden`/`denied` boundary, both-side
 enforcement on endpoint and inventory reads, the deferral of `request_access`
 (unreachable for VOC↔VOC until a requestable link target lands), and the
@@ -99,16 +95,13 @@ are `allowed | hidden | denied`; `summary_visible` is defined but never emitted
 for a `voc` target. `POST /entity-links` stays locked to `internal_only`; each
 visibility token is enforced via seeded rows, not API-created data.
 
-Issue #187 C5 pins generic-surface behavior and synchronizes documentation for
-the Survey Response→Finding registry rows that C1 added to the shared registry
-and C2 enforced through the database tuple CHECK: `(survey_response → finding,
+The Survey Response→Finding registry rows `(survey_response → finding,
 generated_finding)` and `(survey_response → finding, evidence_of)` are
-command-only provider relations. Generic
-`POST /entity-links` rejects them, generic lists hide them, and generic detach
-treats them as absent. Finding-domain commands are their only writers;
-`generated_finding` is reserved for the forthcoming
-`POST /survey-responses/:id/create-finding` lineage. `created_finding` is
-explicitly not used for Survey Response lineage.
+command-only provider relations, enforced through the database tuple CHECK.
+Generic `POST /entity-links` rejects them, generic lists hide them, and generic
+detach treats them as absent. Finding-domain commands are their only writers;
+`generated_finding` is written only by `POST /survey-responses/:id/create-finding`.
+`created_finding` is explicitly not used for Survey Response lineage.
 
 ### FR-LINK-003: Support Dashboard Missing-Link Queries
 

@@ -16,8 +16,6 @@ These documents convert product design into implementation constraints.
    - The capability matrix and default-user boundary are docs/design/09-permission-access.md. Do not duplicate the matrix here.
 7. 06-entity-linking-contract.md
 8. 07-testing-strategy.md
-9. 08-mvp-slice-plan.md
-   Shipped-slice record, not an open queue. Release grouping is docs/design/13-mvp-roadmap.md.
 ```
 
 ## Implementation Gates

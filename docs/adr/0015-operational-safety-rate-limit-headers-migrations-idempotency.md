@@ -1,5 +1,9 @@
 # Operational safety: rate limit, security headers, migrations, idempotency
 
+## Status
+
+Accepted.
+
 Four small but load-bearing decisions that the engineering skills and reviewers need a stable answer to. None of them is large enough to deserve a separate ADR; they share one document and one reopening discipline.
 
 ## Rate limit

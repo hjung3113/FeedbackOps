@@ -22,7 +22,7 @@ apps/frontend
 - typed API client usage
 
 packages/shared
-- generated API types
+- Zod schemas and inferred API/DTO types (no codegen, ADR-0007)
 - validation schemas
 - enum constants
 - DTO helpers
@@ -156,14 +156,14 @@ Examples:
 - Task Request -> Task
 - Finding -> linked existing Task
 - VOC -> Task Request
-- Finding -> Work Initiative or Milestone only when future execution grouping is enabled
+- Finding -> Work Initiative only when future execution grouping is enabled (Milestone exists as Task grouping; no Finding -> Milestone command yet)
 - Task Released -> reporter-facing status review candidate
 ```
 
 ## Managed System Scope
 
 MVP scope, filtering, defaulting, and Developer permission checks are based on
-Managed System, not Project. Core owns the Managed System Registry, Product
+Managed System, not Project. Core owns the Managed System Registry, Analytics
 Areas, Actors, Role Levels, audit logs, and shared attachment governance.
 
 Implementation implications:

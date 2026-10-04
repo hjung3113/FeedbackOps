@@ -2,7 +2,12 @@
 
 Frontend docs translate product intent into implementable UI contracts.
 
-Actor surface contracts live in `docs/frontend/specs/actors.md`.
+Surface specs live under `docs/frontend/specs/`:
+
+- `docs/frontend/specs/voc.md`: as-built VOC surface spec. API authority is `docs/implementation/api/voc.md`.
+- `docs/frontend/specs/actors.md`: the `GET /actors` workspace actor list contract, used by the Triage owner picker.
+
+The user-facing mirror of these surfaces is `docs/USER-MANUAL.md` (text) and `docs/user-guide/README.md` (interactive guide); the two are updated together.
 
 ## Precedence
 
@@ -14,7 +19,7 @@ Actor surface contracts live in `docs/frontend/specs/actors.md`.
    Owns reusable component patterns, state contracts, screen mapping, responsive behavior, and accessibility.
 
 3. docs/frontend/component-inventory.md
-   Owns implementation component inventory, variants, required states, and first consumers.
+   Owns implementation component inventory, variants, and required states.
 
 4. docs/frontend/interaction-patterns.md
    Owns workflow-level UX state machines, cross-system creation flows, and permission UX.
@@ -33,9 +38,9 @@ route behavior, workflow states, accessibility behavior, or frontend source
 paths.
 
 External design prompts, generated HTML files, and external screenshots are
-visual references only. The `docs/design-prototype/` files follow the root `AGENTS.md`
-`Prototype Is The Spec` rule and are the functional, visual, and copy
-specification for user-facing surfaces. External references may inform density,
+visual references only. The shipped UI is the UI authority (ADR-0060); the
+`docs/design-prototype/` files are a design reference for surfaces not built
+yet. External references may inform density,
 spacing, layout feel, interaction inspiration, and visual polish, but they must
 not override domain terminology, route contracts, workflow states, permission
 rules, API contracts, accessibility behavior, or component behavior contracts.

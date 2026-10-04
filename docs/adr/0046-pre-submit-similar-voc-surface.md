@@ -79,6 +79,8 @@ newest first, and render exactly the prototype panel. Do not send draft title
 or rich-content text to `EmbeddingProvider`, do not create a draft VOC, and do
 not call the existing ID-keyed recommendation resource.
 
+> Amended 2026-09-30 by ADR-0031 §Presentation: the heading is '같은 Managed System의 최근 VOC' and no count or total is shown; the 유사 VOC / N건 wording above is historical.
+
 This is a separate, read-only pre-submit module with a small interface:
 `{ managedSystemId } -> { items: PrototypeSimilarVocItem[] }`, where every
 candidate is filtered in SQL with `actorReadScope` / the existing
@@ -203,7 +205,7 @@ record and no persisted relationship. Consequently:
   those three, it is invisible to the author. The result can therefore be
   "implemented, but duplicates still occur." Whether to actually ship the
   semantic preview (candidate A) is a cost and quota decision tracked by §Open
-  questions, item 3. Adopting this ADR as Proposed means prioritizing candidate
+  questions, item 3. Adopting this ADR as Accepted means prioritizing candidate
   B for implementation, not that #293 is closed by it.
 
 ## Alternatives considered
@@ -261,7 +263,7 @@ No local authority justifies that additional surface in this design-only issue.
 
 1. **BE — pre-submit peer read module and route.** Reuse `actorReadScope` and
    `similarVocVisibilityPredicate`; accept a selected Managed System ID, return
-   at most three `{ id, title, created_at }` peers newest-first, and attach the
+   at most three `{ id, display_id, title, created_at }` peers newest-first, and attach the
    existing authenticated read rate-limit tier. Integration tests must seed
    visible, unreadable, archived, other-workspace, and other-system VOCs; assert
    only the three authorized same-system IDs/fields are returned in exact order

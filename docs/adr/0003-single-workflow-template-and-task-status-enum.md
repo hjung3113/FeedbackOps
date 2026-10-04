@@ -1,6 +1,12 @@
 # Single Workflow Template and Task Status enum in MVP
 
+## Status
+
+Accepted. Amended by ADR-0027 (seventh status `reopened`).
+
 FeedbackOps spans multiple Managed Systems (Tableau, Power BI, Looker, etc.) but MVP uses **one shared Workflow Template** across all of them rather than per-Managed-System customization. The canonical **Task Status** enum is fixed at `Backlog → Todo → Doing → Review → Done → Released` and lives in `docs/design/06-task-project-system.md`; CONTEXT.md must reference it, not redeclare it.
+
+> Amended by ADR-0027: the enum gained a seventh value, Reopened (Backlog, Todo, Doing, Review, Done, Released, Reopened). The canonical list is docs/design/06-task-project-system.md.
 
 We chose this because per-Managed-System workflow customization triples the surface area of permissions, audit, defaulting, and Reporter-Facing VOC Status mapping, and we have no MVP signal that any Managed System needs a different status set. Locking the enum also lets Reporter Summary, Dashboard counters, and entity-link relation types like `task_validated_by_survey` assume a single state machine.
 

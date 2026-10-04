@@ -15,7 +15,7 @@ Each item is an independent, measured trap. Check this list before blaming a sel
 - `TabsTrigger` activates on `fireEvent.mouseDown`, not `click`. An already-selected tab does not fire `onValueChange`; assert the active tab via `aria-selected`.
 - `DropdownMenu` opens with neither `mouseDown` nor `pointerDown` in jsdom. Open it with `fireEvent.keyDown(trigger, { key: 'Enter' })`.
 - `ChipPicker`, `ManagedSystemPicker`, and `AnalyticsAreaPicker` are single-select `ToggleGroup`s: items are `role="radio"` inside a `radiogroup`, not `role="button"`.
-- `DialogContent` renders a built-in sr-only `Close` button. Close a dialog with `fireEvent.keyDown(document.body, { key: 'Escape' })`, and target buttons inside a dialog by `data-testid` rather than by name.
+- `DialogContent` renders a built-in sr-only close button named by the Korean `closeLabel` default (overridable per call). Close a dialog with `fireEvent.keyDown(document.body, { key: 'Escape' })`, and target buttons inside a dialog by `data-testid` rather than by name.
 - TipTap/ProseMirror accepts no text in jsdom. When a test needs body text, replace `RichEditor` with a textarea stand-in in that file only (`vi.mock('@fops/ui', importOriginal)`).
 - jsdom has no `document.execCommand` (stub it) and no `Element.prototype.scrollIntoView` (polyfilled in `apps/frontend/src/test/setup.ts`; without it Radix Select crashes and unmounts the tree).
 - `userEvent.setup()` installs its own `navigator.clipboard`. Install a clipboard stub after calling it, via `Object.defineProperty(navigator, 'clipboard', { value, configurable: true })`, and delete it in `afterEach`. `vi.stubGlobal('navigator', …)` does not work in jsdom.
@@ -33,6 +33,6 @@ Each item is an independent, measured trap. Check this list before blaming a sel
 
 ## Environment
 
-- "No registered route" usually means a stale generated `apps/frontend/src/routeTree.gen.ts` (gitignored). It is missing in a fresh worktree and stale after adding a route or rebasing. Check `grep -c <route symbol> apps/frontend/src/routeTree.gen.ts`; regenerate with `pnpm --filter frontend build`.
+- "No registered route" usually means a stale generated `apps/frontend/src/routeTree.gen.ts` (gitignored). It is missing in a fresh worktree and stale after adding a route or rebasing. Check `grep -c <route symbol> apps/frontend/src/routeTree.gen.ts`; regenerate with `pnpm gen:routes`.
 - Run frontend vitest on Node 22 (`.nvmrc`). Newer default Node versions produce false failures from a missing `localStorage`.
 - Outside a secure context (http on a non-localhost origin) browsers drop `crypto.randomUUID` and `navigator.clipboard`. Test fallback paths as primary paths (stub `crypto` both with only `getRandomValues` and as `undefined`), copy the backend's validation regex into the test oracle, and branch success messages on the actual result.

@@ -5,6 +5,11 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 ## Permission
 
 ```text
+GET /me/permissions/check?capability={capability}&managed_system_id={uuid?}
+  -> 200 { state, decision }
+  -> 401 auth.session_invalid
+  -> 422 validation.unknown_capability
+
 GET /me/permissions/scope?capability={capability}
   -> 200 { scope: { kind: "all" } }
   -> 200 { scope: { kind: "scoped", managed_system_ids: [uuid, ...] } }
@@ -21,6 +26,47 @@ POST /permissions/requests/:id/need-more-info
 POST /permissions/requests/:id/deny
 POST /permission-requests/:id/submit-more-info
 ```
+
+### `GET /me/permissions/check`
+
+Point check of one capability for the session actor. `capability` is required
+and must be a known capability; `managed_system_id` is an optional UUID. A
+missing `capability` or a non-UUID `managed_system_id` returns
+`422 validation.failed`; an unknown capability returns
+`422 validation.unknown_capability`. The route is a read: it takes no
+`Idempotency-Key` and carries no per-route rate-limit tier.
+
+Response `200`:
+
+```ts
+{
+  state: "approved" | "blocked_non_requestable" | "request_access" |
+    "pending_request" | "hidden_existence" | "rejected" | "expired" |
+    "revoked" | "summary_visible";
+  decision:
+    | { allow: true; via: "direct_grant" | "role" | "managed_system_scope"; grant_id?: uuid }
+    | {
+        allow: false;
+        reason: "workspace_mismatch" | "explicit_deny" | "no_grant" |
+          "grant_expired" | "grant_revoked" | "sensitive_reason_missing";
+        requestable: Array<{ workspace_id: uuid; managed_system_id?: uuid }> | null;
+      };
+}
+```
+
+`state` is a display hint derived from `decision` plus the caller's own open
+(`pending` | `needs_more_info`) Permission Request for the same capability and
+the same `managed_system_id` scope (a request without a Managed System matches
+only a check without one). Backend decisions on the enforcing routes stay
+authoritative.
+
+The generic check answers for the role layer only. For a caller whose role level
+is `admin`, the route re-applies the per-capability admin module bypass declared
+in `CAPABILITY_META.adminModuleBypass` (`packages/shared/src/enums/capabilities.ts`)
+through `applyAdminModuleBypass`, so the hint matches the module route that
+enforces the capability. `always` turns any non-`workspace_mismatch` denial
+into `allow: true, via: "role"`; `unless_denied` does the same except for an
+`explicit_deny`; `none` leaves the decision unchanged.
 
 ### `POST /permission-requests`
 
@@ -106,7 +152,8 @@ membership in its result is identical to a point check on every Managed System.
 Managed-System-scoped deny forces `scoped` enumeration.
 
 `GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
-open (`pending` | `needs_more_info`) requests, plus a `count`. Guarded by the
+open (`pending` | `needs_more_info`) requests by default, plus a `count`; it
+accepts the same `status` filter as `GET /permissions/requests`. Guarded by the
 `workspace.admin` capability (mirrors the managed-systems mutation gate); a
 non-admin caller receives `permission.denied` → `403`. Response:
 
@@ -120,7 +167,7 @@ non-admin caller receives `permission.denied` → `403`. Response:
       "requested_managed_system_id": "uuid | null",
       "requested_expiration": "iso8601 | null",
       "reason": "string",
-      "status": "pending | needs_more_info",
+      "status": "pending | needs_more_info | approved | rejected",
       "created_at": "iso8601"
     }
   ],
@@ -155,3 +202,75 @@ or before the current time returns `422 validation.failed` with
 `fields: [{ path: ['expiration'], code: 'custom' }]`. The grant's `expires_at`
 is the resolved value. The `permission_approved` audit detail records both
 `requested_expiration` and `granted_expiration`, each as `iso8601 | null`.
+
+### `POST /permissions/requests/:id/reject`, `/need-more-info`, `/deny`
+
+The three non-approving decisions share the approve route's gate and
+transaction shape. Each requires `workspace.admin` (checked before any
+`Idempotency-Key` replay, so a cached response never bypasses it); a
+non-admin caller receives `403 permission.denied`. The request row is locked
+inside the transaction. An unknown id or one from another workspace returns
+`404 not_found.record`. Only `pending` and `needs_more_info` requests are
+decidable; any other status returns `409 conflict.stale_write`. Unknown body
+keys, or a value over 2000 characters, return `422 validation.failed`. An
+invalid UUIDv4 `Idempotency-Key` returns `422 validation.malformed_idempotency_key`;
+a valid one stores and replays the `200` response for the same actor, key, and
+body, and reuse with a different body returns `409 conflict.idempotency_key_reuse`.
+The four decision routes use the `sensitive` rate-limit tier (5 per minute per
+Actor).
+
+A decision never executes the originally blocked domain action. Each success
+writes one audit event, with `capability`, `managed_system_id`, and
+`requester_actor_id` in its detail.
+
+#### `POST /permissions/requests/:id/reject`
+
+```ts
+{ reason?: string } // max 2000 characters; must be non-empty after trimming
+```
+
+An empty or whitespace-only `reason` returns `422 validation.failed` with
+`fields: [{ path: ['reason'], code: 'too_small' }]`. The request moves to
+`rejected`; no grant or deny row is written. The requester receives a
+`permission_request.decided` notification (`outcome: "rejected"`). The audit
+event is `permission_rejected`, with `reason` in its detail.
+
+```json
+{ "id": "uuid", "status": "rejected" }
+```
+
+#### `POST /permissions/requests/:id/need-more-info`
+
+```ts
+{ note?: string } // max 2000 characters; must be non-empty after trimming
+```
+
+An empty or whitespace-only `note` returns `422 validation.failed` with
+`fields: [{ path: ['note'], code: 'too_small' }]`. The request moves to
+`needs_more_info` and stays decidable. This decision sends no
+`permission_request.decided` notification. The audit event is
+`permission_needs_more_info`, with `note` in its detail.
+
+```json
+{ "id": "uuid", "status": "needs_more_info" }
+```
+
+#### `POST /permissions/requests/:id/deny`
+
+```ts
+{ reason?: string } // max 2000 characters; must be non-empty after trimming
+```
+
+An empty or whitespace-only `reason` returns `422 validation.failed` with
+`fields: [{ path: ['reason'], code: 'too_small' }]`. Deny writes an explicit
+deny row for the requester, the requested capability, and the requested
+Managed System (with `reason`, created by the deciding admin), and moves the
+request to `rejected`. If the requester already has an active deny for that
+scope, the route returns `409 conflict.capability_already_denied`. The
+requester receives a `permission_request.decided` notification
+(`outcome: "rejected"`). The audit event is `permission_denied`, with
+`reason` and `deny_id` in its detail.
+
+```json
+{ "id": "uuid", "status": "rejected", "deny_id": "uuid" }
+```

@@ -1,5 +1,9 @@
 # Managed System Registry shape: slug identifier, archive cascade, audit detail
 
+## Status
+
+Accepted. Amended by ADR-0019.
+
 **ADR-0019 (Sections A, B, D, E) amends the archived-row mutation policy, cascade-race recovery, and concurrency lock for this ADR. The decisions below remain in force; consult ADR-0019 for the additions.**
 
 `docs/implementation/04-database-and-migrations.md:104-110` locks the existence of `core.managed_systems` + `core.analytics_areas`, the AA→MS belonging rule, the workspace-plus-MS uniqueness intent for AA, and the "archive over hard delete" mandate. `docs/implementation/api/core.md` §Core / Managed System / Analytics Area locks the eight Slice 2 endpoints: `GET /managed-systems`, `POST /managed-systems`, `PATCH /managed-systems/:id`, `POST /managed-systems/:id/archive`, `GET /analytics-areas`, `POST /analytics-areas`, `PATCH /analytics-areas/:id`, `POST /analytics-areas/:id/archive`. Routes added later in that same section (`GET /actors`, `GET /actors/resolve`, `GET /workspace/settings`, `PATCH /workspace/settings`) are not part of those eight. `CONTEXT.md` (Managed System / Managed System Registry / Analytics Area / Default Owner) locks the domain vocabulary.

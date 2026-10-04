@@ -11,7 +11,7 @@ FeedbackOps is an internal, AD-authenticated operating console for one Workspace
 Per `CONTEXT.md`, four real role contracts exist:
 
 - **Admin** — Workspace-wide authority. Manages settings, permissions, Managed System Registry, Analytics Areas, operating policy, and approves Permission Requests. Lives mostly in `/admin/*` routes.
-- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/integration/*` (Findings, Evidence, Coverage, Links).
+- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/findings`, `/integration/coverage`, and `/integration/links` (Evidence route planned).
 - **User** — Lowest Role Level. Submits VOC, tracks own submissions in `/vocs?view=my`, responds to outcome surveys. Cannot triage, cannot see out-of-scope VOC bodies (only `out_of_scope_summary` peeks).
 - **Reporter** — Role-shaped, not Role-Level-shaped. The Actor who submitted a specific VOC. The system separates reporter-facing status from internal workflow status visually and structurally (Product Invariant).
 
@@ -76,7 +76,7 @@ Five strategic principles derived from `AGENTS.md`, `apps/frontend/AGENTS.md`, A
 
 ## Accessibility & Inclusion
 
-- **WCAG 2.2 AA target inherited from ADR-0016 and re-validated under ADR-0021.** Dark-theme contrast guarantees do NOT transfer to the inverted light palette; every component contrast pair must be re-verified. Slice 3 final review includes an axe-core scan against touched routes.
+- **WCAG 2.2 AA target inherited from ADR-0016 and re-validated under ADR-0021.** Dark-theme contrast guarantees do NOT transfer to the inverted light palette; every component contrast pair must be re-verified.
 - **Primary locale is Korean (`<html lang="ko">`) per ADR-0010** (amended 2026-09-24: no i18next catalog; chrome is inline or `lib/copy/*`, API errors are `errorMapper.ts` `CATALOG`), with English preserved verbatim for domain / role / system terms. No machine translation of either side.
 - **Icon-only controls require accessible labels.** `lucide-react` is the icon set; every icon-only button carries an `aria-label` or visible adjacent text.
 - **Keyboard focus, hover, selected, active, disabled, loading, error, and permission-limited states are visually distinct** (per `apps/frontend/AGENTS.md`). Focus ring uses `--color-neon-lime` (now Samsung-blue `#1428a0`, name preserved for token continuity per ADR-0021).

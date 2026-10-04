@@ -62,9 +62,11 @@ error.
 
 This is a flat-file convention. Do not introduce layered directories such as
 `controller/`, `application/`, `domain/`, or `repository/`; service/repository
-splits are expressed with file suffixes. The `core` module is the current
-exception, with subdirectories such as `idempotency/`, `managed-systems/`,
-`audit/`, and `jobs/`.
+splits are expressed with file suffixes. Subdirectories are the exception, not
+the rule: `core/` (`audit/`, `health/`, `idempotency/`, `jobs/`), `voc/`
+(`commands/`, `conversation/`, `embedding/`, `jobs/`, `pre-submit-peers/`,
+`public-update-review-candidates/`, `read/`, `recommendations/`, `routes/`), and
+`notifications/jobs/`. Other modules stay flat.
 
 ## Frontend Feature Layout
 
@@ -78,7 +80,8 @@ src/features/{feature}/     # representative structure; feature-specific subsets
 ```
 
 This is a representative structure; not every feature owns every folder. For
-example, `voc-cluster/` currently owns only `hooks/`. There is no dedicated
+example, `my-work/` currently holds only its AGENTS.md/CLAUDE.md, and `home/` is
+flat files plus `__tests__/`. There is no dedicated
 `screens/` directory or `api.ts` convention; API calls live under `hooks/` and
 `lib/`.
 

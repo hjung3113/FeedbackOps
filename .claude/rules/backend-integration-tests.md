@@ -26,9 +26,9 @@ The gate, env, reset contract, and teardown rules are in `apps/backend/AGENTS.md
 ## Fixtures and teardown
 
 - Session rows are not per-test garbage: deleting `core.sessions` in `beforeEach` revokes cookies minted in `beforeAll`, and later requests return `401 auth.session_invalid`. Clean sessions in `afterAll` only.
-- Tear down children before parents: grant → managed system → session → actor, and vocs/managed systems/actors before workspaces.
+- Tear down children before parents: grant → managed system → session → actor, and vocs/managed systems/actors before workspaces. Audit-log and permission-request rows go first; see `apps/backend/AGENTS.md` → Verification.
 - `db.execute` returns `timestamptz` as text, not `Date`. Normalize with `v instanceof Date ? v : new Date(v)`; an empty-result test never exercises the mapping.
 
 ## Authorization is two layers
 
-`roleSatisfies` (`modules/permissions/check-service.ts`) is only the bottom layer. Domain modules add an admin bypass on top, declared in `CAPABILITY_META.adminModuleBypass` (`packages/shared/src/enums/capabilities.ts`: `always`, `unless_denied`, or `none`). To decide whether an actor has a capability, read the enforcement path the route actually calls. Persona grants for `SEED_MODE=personas` are pinned in `apps/backend/src/db/__tests__/persona-seed.integration.test.ts`.
+`roleSatisfies` is only the bottom layer; the admin-bypass layer on top is described in `apps/backend/src/modules/permissions/AGENTS.md`. To decide whether an actor has a capability, read the enforcement path the route actually calls. Persona grants for `SEED_MODE=personas` are pinned in `apps/backend/src/db/__tests__/persona-seed.integration.test.ts`.

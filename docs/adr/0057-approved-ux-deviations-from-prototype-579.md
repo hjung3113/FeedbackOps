@@ -4,10 +4,12 @@ Date: 2026-10-01
 
 ## Status
 
-Accepted 2026-09-30 by the owner (#579; language policy #580). All nine deviations are approved; B2 additionally
+Accepted 2026-09-30 by the owner (#579; language policy #580). All nine originally proposed deviations (A1, A2, B1-B7) are approved; B8-B10 were added by the owner on 2026-10-01 (#669, #683, #675); B2 additionally
 requires the owner to see a rendered design of the first implementation before it merges.
 
 B8 and B9 came from the 2026-10-01 pre-release audit (#685).
+
+Amended by ADR-0060 (2026-10-05): the prototype is no longer the spec for items not listed here; the shipped UI is the UI authority. The decisions below stand.
 
 ## Context
 
@@ -44,4 +46,4 @@ Owner amendment (2026-10-01, #675): all UI chrome is Korean, and only domain nou
 
 ## Consequences
 
-Frontend copy maps render labels without changing enum values sent to APIs. Korean-language field labels and action buttons may differ from the prototype where A2 applies. ADR-0010's former screen-mixing rule is refined for these labels and buttons only.
+Frontend copy maps render labels without changing enum values sent to APIs. Korean-language field labels and action buttons may differ from the prototype where A2 applies. ADR-0010's former screen-mixing rule is superseded by A2 as amended by #675 (all UI chrome Korean; domain nouns and Task workflow statuses stay English).

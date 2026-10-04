@@ -19,6 +19,8 @@ Owns:
 - Audit Log baseline
 ```
 
+Team is a placeholder table only in MVP (ADR-0018): there is no Team CRUD, and `core.teams` rows are operator-populated via migration.
+
 Does not own:
 
 ```text
@@ -40,7 +42,6 @@ Depends on:
 ## Core Concepts
 
 ```text
-- Organization
 - Workspace
 - User / Actor
 - Team
@@ -50,7 +51,6 @@ Depends on:
 - Managed System
 - Analytics Area
 - Entity Link
-- Taxonomy / Tag
 - Notification
 - Audit Log
 ```
@@ -69,17 +69,13 @@ It does not force sync with:
 - code module structure
 ```
 
-It may optionally store:
-
-```text
-- external_key
-- url_pattern
-```
+`external_key` is optional reference metadata on the Managed System row, not a sync key (ADR-0017). Analytics Area stores no external reference or URL pattern.
 
 Analytics Area rules:
 
 ```text
 - Analytics Area belongs to exactly one Managed System.
+- Analytics Area is flat under its Managed System; visual grouping is by naming convention (ADR-0017).
 - VOC Analytics Area is optional and selectable only under the chosen Primary Managed System.
 - Analytics Area is not an MVP permission boundary.
 - Analytics Area is a secondary classification, filter, and dashboard grouping below Managed System.
@@ -102,41 +98,19 @@ Managed System may be used as:
 - Analytics Area grouping context
 ```
 
-Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided; they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
+Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (only the Survey operator default is built; the rest is deferred, ADR-0059); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
 
 Project language in older docs is superseded for MVP. If needed later, use Work Initiative for execution grouping instead of scope, permissions, and defaults.
 
+## Notification
+
+Notification is a per-Actor in-app inbox (`core.notifications`, shown in the Home Inbox tab) with an optional email channel per event type. It is not a second audit log: audit history stays in `core.audit_log`.
+
+Dispatch is code-driven. A catalogue in `apps/backend/src/modules/notifications/catalogue.ts` declares the closed event set, recipients, and channels; producers call `notify()` in the same transaction as the mutation. There are no per-Actor notification preferences in MVP. Decision: `docs/adr/0014-notifications-in-app-and-email-channels.md`. Endpoints and producers: `docs/implementation/api/notifications.md`.
+
 ## Data Model Draft
 
-```text
-core.managed_systems
-- id
-- workspace_id
-- name
-- description
-- default_voc_owner_user_id nullable
-- default_voc_owner_team_id nullable
-- default_task_reviewer_user_id nullable
-- default_survey_operator_user_id nullable
-- status
-- created_at
-- updated_at
-
-core.analytics_areas
-- id
-- workspace_id
-- managed_system_id
-- parent_id nullable
-- name
-- description
-- owner_team_id nullable
-- status
-- sort_order
-- external_key nullable
-- url_pattern nullable
-- created_at
-- updated_at
-```
+Field lists and enums for `core.managed_systems` and `core.analytics_areas` are in `15-data-contracts.md`.
 
 ## Functional Requirements
 
@@ -167,7 +141,7 @@ Acceptance Criteria:
 
 ```text
 - Managed Systems are managed inside the workspace, not as separate app shells.
-- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators.
+- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators. (Only the Survey operator default is built; ADR-0059 D1.)
 - Default owner or team may prefill the actual owner field, but does not mean the record is triaged.
 - Authorized users can override defaults on individual records.
 - Managed System filters are available on managed-system-scoped lists and dashboards.
@@ -183,12 +157,12 @@ Admins can create and maintain a lightweight Analytics Area catalog.
 Acceptance Criteria:
 
 ```text
-- Analytics Area supports an optional parent field for lightweight analytics menu grouping.
+- Analytics Area is flat under its Managed System; there is no parent Analytics Area (ADR-0017).
 - Analytics Area belongs to exactly one Managed System.
 - Analytics Area can be linked directly from VOC, Finding, Task, and Survey records for the same Managed System.
 - Analytics Area can be archived without deleting historical links.
 - Analytics Area may reflect real analytics menus, but does not require automatic menu, route, or code-module synchronization in MVP.
-- external_key and url_pattern are optional reference metadata, not sync contracts.
+- Managed System external_key is optional reference metadata, not a sync contract (ADR-0017).
 - Analytics Area owner_team_id is a routing/defaulting hint only; it does not grant access.
 - Analytics Area is not used as an MVP permission boundary.
 ```

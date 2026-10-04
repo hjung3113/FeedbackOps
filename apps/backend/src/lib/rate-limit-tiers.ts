@@ -1,9 +1,9 @@
 import type { FastifyRequest } from 'fastify';
 
-// Per-route tiers (ADR-0015:11-13). Registered as helper factories the
-// mutation handlers will attach in later slices. Slice 1 #3 has no
-// consumer of the sensitive tier — the plumbing is in place so #4/#5
-// pick it up without touching server.ts again.
+// Per-route tiers (ADR-0015:11-13). Registered as helper factories that route
+// modules attach through `config.rateLimit`. The sensitive tier is consumed by
+// the four `POST /permissions/requests/:id/{approve,reject,need-more-info,deny}`
+// decision routes (modules/permissions/routes.ts).
 //
 // The key generator is injected by the caller: it closes over
 // sessionService and the rate-limit actor cache, which stay in server.ts

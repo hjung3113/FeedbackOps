@@ -242,7 +242,7 @@ Invariants:
 - Analytics Area is not an MVP permission boundary.
 - VOC Analytics Area is optional and selectable only under the chosen Primary Managed System.
 - Analytics Area may reflect real analytics menus, but is not forced to sync automatically with app menus, URLs, or code modules in MVP.
-- Analytics Area may have an optional parent for lightweight grouping.
+- Analytics Area is flat under its Managed System; visual grouping is by naming convention (ADR-0017).
 - Analytics Area can be archived while preserving historical links.
 - Analytics Area is a classification and defaulting context, not a navigation partition.
 ```
@@ -260,7 +260,7 @@ Loose cross-system relation with relation_type and visibility.
 Invariants:
 
 ```text
-- relation_type comes from the registry in 11-entity-linking.md.
+- relation_type comes from the runtime registry in docs/implementation/06-entity-linking-contract.md.
 - visibility must be enforced at read time.
 - generated_voc is not allowed.
 ```

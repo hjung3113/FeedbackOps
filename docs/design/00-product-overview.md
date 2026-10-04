@@ -1,7 +1,5 @@
 # FeedbackOps Suite Product Overview
 
-Source: `feedbackops_design_v0.4_consolidated.md`
-
 ## Purpose
 
 FeedbackOps Suite is an internal AD-gated operating system that connects submitted VOC, survey results, execution work, and outcome validation without forcing VOC, Task, and Survey into one rigid workflow.
@@ -79,7 +77,7 @@ FeedbackOps Suite
 9. Dashboard는 단순 현황판이 아니라 Action Dashboard로 설계한다.
 10. 사내 AD 연동 후 기본 Role Level은 User로 둔다.
 11. 추가 권한은 Permission Request를 통해 요청하고 관리자가 승인한다.
-12. 최상위 내비게이션은 Home, My Work, VOC, Surveys, Tasks, Integration, Admin으로 제한한다.
+12. 최상위 내비게이션은 Home, VOC, Findings, Tasks, Integration, Surveys, Admin으로 제한한다 (`apps/frontend/src/lib/layout/AppRail.tsx`).
 13. Finding, Evidence, Entity Link, Coverage, Action Dashboard는 Integration Layer에 속한다.
 14. 한 팀이 여러 Managed System을 관리해도 VOC, Survey, Task 시스템을 Managed System별로 복제하지 않는다.
 15. Analytics Area는 하나의 Managed System에 속하며 MVP 권한 경계가 아니다.
@@ -102,7 +100,7 @@ Implementation agents should read these required documents in order:
 9. docs/implementation/README.md
 10. The target system document
 11. 09-permission-access.md
-12. 13-mvp-roadmap.md
+12. 13-mvp-roadmap.md (release phases, MVP success flow, explicit MVP exclusions)
 ```
 
 Reference and draft documents:
@@ -110,7 +108,6 @@ Reference and draft documents:
 ```text
 - docs/frontend/tokens.md: visual token seed only; not a component or route contract.
 - 15-data-contracts.md: field and enum authority (not superseded by migrations; see docs/design/README.md).
-- docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority. Endpoint authority is docs/implementation/03-api-contracts.md plus docs/implementation/api/*.md.
 ```
 
 Implementation-facing decisions live in `docs/implementation`.
@@ -140,7 +137,7 @@ Source Record or Evidence
 → optional Task Request / Task link
 → optional Reporter-facing Update
 → optional Outcome Survey
-→ optional Follow-up Finding / Task Request when configured
+→ Follow-up Finding for a poor Outcome Survey response (ADR-0055), then optional Task Request
 ```
 
 See also:

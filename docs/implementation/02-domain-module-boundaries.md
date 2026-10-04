@@ -113,7 +113,7 @@ Workspace Settings owns:
 Consumers read the barrel seam (`getResolvedWorkspaceSettings`, `getResolvedWorkspaceSettingsForUpdate`). Policy behavior stays in the consuming module.
 ```
 
-The fence above is ownership. The table above it is the directory. They differ where a domain is implemented outside the owner's folder: Core's Managed System Registry, Analytics Area, and attachment governance live in `managed-systems/`, `analytics-areas/`, and `attachments/`; VOC's clusters, recommendations, and pre-submit peers live in `voc-clusters/` and under `voc/recommendations/` and `voc/pre-submit-peers/`; Task's Task Request lives in `task-requests/`. Authentication, Navigation, Saved Views, and Workspace Settings match in both places.
+The fence above is ownership. The table above it is the directory. They differ where a domain is implemented outside the owner's folder: Core's Managed System Registry, Analytics Area, and attachment governance live in `managed-systems/`, `analytics-areas/`, and `attachments/`; VOC's clusters, recommendations, and pre-submit peers live in `voc-clusters/` and under `voc/recommendations/` and `voc/pre-submit-peers/`; Task's Task Request lives in `task-requests/` and its Milestone in `milestones/`. Authentication, Navigation, Saved Views, and Workspace Settings match in both places.
 
 Core owns the Notification concept and shared storage contract. The
 `modules/notifications` directory owns its catalogue, dispatch, delivery job,
@@ -151,7 +151,7 @@ These imports are read surfaces, not repo bypasses, and the repo-import lint mus
 
 Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone. Rule 7 (`outside-voc-imports-voc-jobs`, #517) rejects imports of `modules/voc/jobs/*` from outside VOC; reach job behavior through the VOC barrel (`enqueueReleasedTaskReviewCandidates`, `registerVocJobs`). Rule 9 (`foreign-test-seed-helpers`, #517, widened in #574) rejects any import of another module's `__tests__/_seed-helpers`; helpers shared across modules live in `src/test-support`.
 
-When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas` outside their owner modules; tests and migrations are excluded.
+When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas`, and imports of the owner tables' Drizzle symbols (`managedSystems`, `analyticsAreas` from `db/schema/core`), outside their owner modules; tests and migrations are excluded, and `src/test-support` is also barred from importing those symbols.
 
 ## Core Boundary
 
@@ -185,16 +185,7 @@ Managed-System scoped for Developers.
 
 ## Entity Link Provider Contract
 
-Each linkable domain module must register a provider:
-
-```text
-entity_type
-assertExists(id, workspace_id)
-getPermissionSubject(id)
-getReporterSummary(id)
-getInternalSummary(id)
-listExpectedLinks(id) when needed by Dashboard
-```
+Each linkable domain module must register a provider. The provider contract lives in `06-entity-linking-contract.md` (Provider Interface) and `apps/backend/src/modules/entity-links/provider-types.ts`.
 
 Entity Linking uses providers to enforce:
 
@@ -210,7 +201,7 @@ Entity Linking uses providers to enforce:
 
 ```text
 - packages/ui implements reusable visual and interaction primitives.
-- apps/frontend/src/features/{home,my-work,voc,findings,voc-cluster,surveys,tasks,integration,admin} own route and screen composition.
+- apps/frontend/src/features/{home,my-work,voc,findings,voc-cluster,surveys,tasks,cross-system,integration,admin} own route and screen composition.
 - Evidence, Coverage, and Links are Integration feature surfaces. Findings is its own feature surface (features/findings/).
 - Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController` under `apps/frontend/src/features/findings`; shared UI and hooks are under `apps/frontend/src/features/cross-system` and `apps/frontend/src/lib/cross-system`.
 - Analytics Areas, Permission Requests, Managed System Registry, and settings are Admin feature surfaces.

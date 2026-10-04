@@ -56,7 +56,7 @@ Finding
 - workspace_id
 - title
 - summary
-- source_type: voc_cluster / survey / manual
+- source_type: voc / voc_cluster / survey / survey_response / manual
 - source_id
 - managed_system_id
 - evidence_count
@@ -168,8 +168,8 @@ Acceptance Criteria:
 
 ```text
 - Admin or same-scope Developer with finding.manage can update Finding status.
-- Slice 6 supports draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
-- converted is reserved for the Convert Finding To Task flow; archived is out of scope for this slice.
+- Supported transitions are draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
+- converted is reserved for the Convert Finding To Task flow and archived is not written; no status command writes either.
 - Same-status updates are safe no-ops and return the current Finding.
 - Status changes are audited with from/to status and optional reason.
 - A successful status change appends one `status_change` progress note in the same transaction. A same-status no-op does not.

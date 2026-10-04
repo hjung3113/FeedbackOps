@@ -9,7 +9,7 @@ Accepted
 ## Context
 
 Issue #514 introduces `task.milestones`. Design
-`docs/superpowers/specs/2026-09-26-milestone-domain-design.md` §7 item 2
+`docs/superpowers/specs/2026-09-26-milestone-domain-design.md` (removed after implementation on 2026-10-05; read it from git history) §7 item 2
 proposes the persisted labels `planning | in_progress | blocked | released`,
 default `planning`, and an authorized PATCH that may move among those labels.
 That item is explicitly a proposal, not a spec. The same design says the

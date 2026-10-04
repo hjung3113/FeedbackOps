@@ -1,5 +1,9 @@
 # Slice 2 review follow-ups: archived-row mutation, MS-scope step ordering, teams grants, cascade race lock
 
+## Status
+
+Accepted.
+
 `.review/F010-AND-SLICE2-REVIEW-{db,services,http,tests}.md` (2026-05-17) surfaced four locked decisions that ADR-0012, ADR-0017, and ADR-0018 left ambiguous or self-contradictory. This ADR locks the answers. Each section names the original ADR clause it amends and the in-tree commit that lands the change.
 
 This is a follow-up ADR — the originals (0012, 0017, 0018) keep a one-line pointer in their intro section directing readers here for these specific decisions. The originals' other locked decisions remain in force unamended.

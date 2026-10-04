@@ -42,6 +42,10 @@ _Avoid_: Survey response, task, finding
 An evidence-based judgment object that summarizes a problem, pattern, or execution candidate for one **Managed System**.
 _Avoid_: Task, survey result, VOC
 
+**Evidence Highlight**:
+A compact evidence fragment stored on one **Finding**, taken from a **VOC**, a Survey Response, or a manual note, that explains why the **Finding** exists. It keeps its source reference and its visibility never exceeds its source's; a Survey Response highlight is an approved, redacted excerpt, never respondent identity or raw response text (ADR-0033).
+_Avoid_: Quote, tag, attachment
+
 **Task Request**:
 A reviewed execution candidate for one **Managed System**.
 _Avoid_: Task, VOC follow-up note
@@ -71,16 +75,24 @@ An append-only internal comment on one **Finding** or one **Task**. A person wri
 _Avoid_: VOC Internal Comment, Public Update, Reporter Reply
 
 **My Work**:
-An actor-centered queue that gathers assigned VOC triage work, Task Requests, Tasks, Surveys, and review actions.
+An actor-centered queue that gathers assigned VOC triage work, Task Requests, Tasks, Surveys, and review actions. Not an MVP surface (ADR-0038, ADR-0040): Home's assigned-work panel and `/tasks?view=my` cover the need.
 _Avoid_: Domain owner, task board
 
 **Inbox**:
 An ambiguous label for three distinct surfaces: **VOC Inbox** (`/vocs?view=inbox`), the Tasks list (`/tasks?view=inbox`), and the Home notification Inbox (`/home?tab=inbox`). Name the surface when referring to one.
 _Avoid_: Unqualified inbox
 
+**Notification**:
+A per-**Actor** in-app row (`core.notifications`) about an event directed at that Actor, such as an assignment, a Reporter Reply, or a Task Request or Permission Request decision, with an optional email copy per event type. It is read and archived per Actor and shown in the Home notification Inbox; it is not an audit record (ADR-0014).
+_Avoid_: Audit event, Dashboard action queue
+
 **Survey**:
 A structured question set for one **Managed System**.
 _Avoid_: VOC, task
+
+**Outcome Survey**:
+A **Survey** of type `outcome`, used to check whether released work improved the experience. A closed Outcome Survey with a poor result (a rating answer in the low band) and no follow-up decision is a follow-up gap; follow-up goes through a **Finding**, never directly from a Survey Response to a **Task Request** (ADR-0055).
+_Avoid_: Requested outcome (a **Task Request** field), VOC
 
 **Managed System**:
 An internal company system that FeedbackOps tracks feedback and improvement work for.
@@ -102,6 +114,10 @@ _Avoid_: Managed system, app route, code module, permission boundary
 A larger improvement effort that may group tasks or milestones after triage.
 _Avoid_: Managed system, analytics area, project
 
+**Milestone**:
+A lightweight Task-system grouping for work larger than one **Task**, with a Why, an owner **Actor**, start and target dates, and exactly one **Primary Managed System** (immutable after create). Its status is one of `planning`, `in_progress`, `blocked`, or `released` (ADR-0050) and does not depend on child **Task** status.
+_Avoid_: Work Initiative, project, sprint
+
 **Managed System Permission Scope**:
 An authorization boundary granting an **Actor** access to work for one **Managed System**.
 _Avoid_: Project scope, analytics-area permission
@@ -111,7 +127,7 @@ The single **Managed System** that owns the scope, permissions, defaults, and da
 _Avoid_: Multi-system ownership
 
 **Default Owner**:
-The **Actor** or team prefilled as responsible for a **Managed System** when a new **VOC** is created.
+The **Actor** or team prefilled as responsible for a **Managed System** when a new **VOC** is created. Stored on the Managed System; the prefill itself is deferred (ADR-0059 D1).
 _Avoid_: Final assignee, triage decision
 
 **VOC Source Context**:
@@ -171,7 +187,7 @@ The operational impact level assigned to a **VOC** during triage. Describes how 
 _Avoid_: Priority, urgency, P0/P1, user-submitted urgency, reporter emotion
 
 **Priority**:
-The execution-order signal carried by **Finding** and **Task** during planning. Decided after triage, distinct from **Severity**. Not exposed to **Reporters**.
+The execution-order signal carried by **Task** during planning (a **Finding** carries Severity and Confidence, not Priority). Decided after triage, distinct from **Severity**. Not exposed to **Reporters**.
 _Avoid_: Severity, impact, importance, business value
 
 **Reporter-Facing VOC Status**:
@@ -181,6 +197,10 @@ _Avoid_: Task status, triage state
 **Task Status**:
 The internal execution state of a **Task**.
 _Avoid_: Reporter-facing VOC status
+
+**Display ID**:
+The human-readable identifier of a record: a prefix plus a per-**Workspace** sequence number (`VOC-`, `FIN-`, `CLU-`, `REQ-`, `TASK-`, `SRV-`, `MLS-`), unique within the **Workspace** and assigned at creation. The UUID `id` stays the primary key; the Display ID is the label people and the command palette use (ADR-0029).
+_Avoid_: Ticket number, primary key
 
 **Workflow Template**:
 The shared default status configuration used by all **Managed Systems** in MVP.
@@ -210,13 +230,17 @@ _Avoid_: Visibility, permission, frontend filter
 An action-queue surface that groups outstanding **VOC**, **Task Request**, **Task**, **Survey**, and **Finding** work needing an **Actor**'s attention within their **Managed System Permission Scope**. Not a chart-only reporting page.
 _Avoid_: Chart page, BI report, analytics view, KPI tile board
 
+**Coverage**:
+The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage`, so partial integration is not mistaken for total system truth.
+_Avoid_: Test coverage, BI metric
+
 **VOC Cluster**:
 A manually curated grouping of related **VOC** records used by **Developer** and **Admin** for internal triage and bulk operations. **VOC** records remain independent and are not merged. Not visible to **Reporters** in MVP.
 _Avoid_: VOC merge, deduplication, duplicate group, parent VOC
 
 **Cluster Candidate**:
 A **VOC** selected as a target of a cluster-scoped bulk action; bulk actions apply individually to each candidate rather than to the cluster as a single record.
-_Avoid_: Cluster member as a single bulk target, merged record
+_Avoid_: Cluster member as a single bulk target, merged record, bare "candidate" (the code also uses it for a candidate peer in the cluster membership picker, a similar-VOC recommendation candidate, and a Public Update review candidate created when a linked **Task** is released; name which one)
 
 ## Relationships
 
@@ -278,7 +302,7 @@ _Avoid_: Cluster member as a single bulk target, merged record
 - **Finding** is optional; simple VOC follow-up may go directly to **Task Request** without creating a **Finding**.
 - **Finding** is used when multiple evidence sources, clusters, survey results, or explicit analysis need to be summarized before execution.
 - **VOC** follow-up creates a **Task Request**, not a **Task** directly.
-- **Task** is created after **Task Request** review, except for standalone internal work created from the Tasks surface.
+- **Task** is created after **Task Request** review, except for standalone internal work created from the Tasks surface (standalone create is deferred, ADR-0027).
 - **Task Request Review** may be performed by workspace **Admin** or by **Developer** within the same **Managed System Permission Scope**.
 - A **Developer** cannot review **Task Requests** for sibling **Managed Systems** without that scope.
 - MVP allows the same **Developer** to create and approve a **Task Request** only when they have **Task Request Self-Approval** capability within their **Managed System Permission Scope**.
@@ -287,8 +311,8 @@ _Avoid_: Cluster member as a single bulk target, merged record
 - A **Task** converted from an approved **Task Request** starts in Backlog by default.
 - Approval means the work is accepted into the execution backlog; it does not mean immediate execution has started.
 - A Backlog **Task** may have an assignee, but execution has not started until it moves to Todo or Doing.
-- Assigned Backlog **Tasks** may appear in **My Work** as planned work.
-- **My Work** aggregates work assigned to an **Actor**; it does not own the lifecycle of VOC, Task Request, Task, Survey, or Finding.
+- Assigned Backlog **Tasks** may appear in My Tasks (`/tasks?view=my`) as planned work.
+- Assigned-work views (Home's assigned-work panel, `/tasks?view=my`) aggregate work assigned to an **Actor**; they do not own the lifecycle of VOC, Task Request, Task, Survey, or Finding.
 - A **Reporter** may see reporter-facing VOC status, public updates, and **Reporter Summary** for linked work on their own **VOC**.
 - **Reporter Summary** must not expose **Finding** detail, **Task** internal comments, backlog priority, or Developer discussion.
 - **Reporter Summary** may include public title, reporter-facing status, owning team public name, expected resolution date, last public update time, and a public update excerpt.
@@ -300,7 +324,7 @@ _Avoid_: Cluster member as a single bulk target, merged record
 - **Internal Comment** and **Public Update** are separate communication types.
 - MVP VOC conversation is an append-only timeline, not real-time chat.
 - MVP has a public VOC conversation timeline for **Reporter Reply** and **Public Update**, and a separate internal timeline for **Internal Comment**.
-- MVP does not include mentions, reactions, read receipts, threaded replies, or general message editing.
+- The public VOC conversation has no mentions, reactions, read receipts, threaded replies, or general message editing; **Internal Comments** and **Finding**/**Task** **Progress notes** allow @mentions.
 - A **Reporter** may add **Reporter Replies** to their own **VOC**.
 - **Reporter Reply** belongs to the public VOC conversation and is visible to scoped **Developer** and **Admin** users.
 - **Reporter Reply** must not be stored as **Internal Comment**.
@@ -315,15 +339,15 @@ _Avoid_: Cluster member as a single bulk target, merged record
 - **Task Status** reaching Released may create a reporter-facing status review candidate; it does not automatically resolve the **VOC**.
 - MVP uses one shared **Workflow Template** across all **Managed Systems**.
 - **Managed System Workflow** customization is a future extension, not an MVP feature.
-- An **Entity Link** connects two records of any combination of **VOC**, **Finding**, **Task Request**, **Task**, **Survey**, Dashboard, or Permission record within one **Workspace**.
+- An **Entity Link** connects two records of type **VOC**, Survey Response, **Finding**, **VOC Cluster**, **Task Request**, or **Task** within one **Workspace**, and only for the source/target/relation pairs in the runtime registry (`docs/implementation/06-entity-linking-contract.md`).
 - **Entity Link** carries one **Relation Type** from the controlled vocabulary; ad hoc strings are not allowed.
 - Cross-system history is canonical through **Entity Link**, not via convenience columns on each table.
 - **Entity Link** does not grant write ownership; the source-shaped route does not own the target.
 - **Dashboard** surfaces actionable records; it does not aggregate chart metrics as its primary purpose in MVP.
 - **Dashboard** is scoped by **Managed System Permission Scope** and is not duplicated per **Analytics Area** in MVP.
-- **My Work** is filtered by assignee = the current **Actor**; **Dashboard** is filtered by **Managed System Permission Scope** regardless of assignee.
-- A record may appear in both **My Work** (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
-- **My Work** never widens beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
+- Assigned-work views are filtered by assignee = the current **Actor**; **Dashboard** is filtered by **Managed System Permission Scope** regardless of assignee.
+- A record may appear in both an assigned-work view (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
+- Assigned-work views never widen beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
 - A **Permission Request** is created by the requesting **Actor** and decided by an **Admin** within the same **Workspace**.
 - A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission.
 - **Sensitive Permission** grants and uses require a reason and are audited.
@@ -404,7 +428,7 @@ _Avoid_: Cluster member as a single bulk target, merged record
 > **Domain expert:** "No. Finding is optional. Use it when evidence or analysis needs to be summarized; simple VOC follow-up can go directly to Task Request."
 >
 > **Dev:** "Can a VOC create a Task directly?"
-> **Domain expert:** "No. VOC follow-up becomes a Task Request first. A reviewed Task Request can be converted to a Task; standalone internal Tasks are created from the Tasks surface."
+> **Domain expert:** "No. VOC follow-up becomes a Task Request first. A reviewed Task Request can be converted to a Task; standalone internal Tasks are created from the Tasks surface (standalone create is deferred, ADR-0027)."
 >
 > **Dev:** "Who can approve a Task Request?"
 > **Domain expert:** "Workspace Admins can review all Task Requests. Developers can review Task Requests only inside their Managed System scope."
