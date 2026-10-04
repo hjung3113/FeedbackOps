@@ -200,4 +200,15 @@ describe('#750 semantic text label contrast (WCAG AA)', () => {
       expect(contrastRatio(labelColor, tintBackground)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
     },
   );
+
+  it('--text-danger-label clears 4.5:1 on the blocked Milestone badge tint over a selected row', () => {
+    const selectedTint = blend(
+      resolveRgb(props, '--text-danger'),
+      resolveRgb(props, '--surface-row-selected'),
+      0.12,
+    );
+    expect(
+      contrastRatio(resolveRgb(props, '--text-danger-label'), selectedTint),
+    ).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+  });
 });
