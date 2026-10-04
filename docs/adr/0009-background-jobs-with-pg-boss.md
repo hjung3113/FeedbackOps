@@ -1,5 +1,9 @@
 # Background jobs use pg-boss inside the backend process
 
+## Status
+
+Accepted. Amended 2026-07-13 (jobs/ directory).
+
 FeedbackOps has work that must run outside the request lifecycle:
 
 - Creating a Public-Update review candidate when a Task moves to `Released` (ADR-0005 forbids automatic Reporter-Facing status writes).
@@ -46,6 +50,8 @@ Defaults locked here:
 - **Idempotency**: every job handler must be safe to run more than once on the same input. Handlers either use `INSERT … ON CONFLICT DO NOTHING` against a deterministic key, or check current state before mutating. Job payloads include a `correlation_id` so handlers can detect a re-run.
 - **Audit emission**: a job that performs an audited action emits its `core.audit_log` row inside the same transaction as the mutation, just like a request-driven handler would. The `actor_id` for system-triggered work is the seeded `system` Actor; the `event_type` carries a `system.` prefix when no user initiated the work.
 - **Dead-letter**: pg-boss moves jobs that exhaust retries to its built-in failed-job state. A daily probe job lists failed jobs into the Admin Dashboard so a human can decide retry, drop, or fix-and-retry. We do not silently delete failed jobs.
+
+> Not implemented: the daily failed-job probe and Admin Dashboard surface. Failures are visible only through pg-boss state and the job.failure log line (ADR-0013 Amended 2026-09-22 (jobs)).
 
 ## What this ADR locks
 

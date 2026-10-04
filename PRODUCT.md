@@ -11,7 +11,7 @@ FeedbackOps is an internal, AD-authenticated operating console for one Workspace
 Per `CONTEXT.md`, four real role contracts exist:
 
 - **Admin** — Workspace-wide authority. Manages settings, permissions, Managed System Registry, Analytics Areas, operating policy, and approves Permission Requests. Lives mostly in `/admin/*` routes.
-- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/integration/*` (Findings, Evidence, Coverage, Links).
+- **Developer** — Mid-level Actor with one or more **Managed System Permission Scopes**. Triages VOC, investigates evidence, owns Findings, executes Task work, and closes the loop with Reporter Reply / Public Update. Lives in `/vocs?view=triage`, `/tasks/*`, `/findings`, `/integration/coverage`, and `/integration/links` (Evidence route planned).
 - **User** — Lowest Role Level. Submits VOC, tracks own submissions in `/vocs?view=my`, responds to outcome surveys. Cannot triage, cannot see out-of-scope VOC bodies (only `out_of_scope_summary` peeks).
 - **Reporter** — Role-shaped, not Role-Level-shaped. The Actor who submitted a specific VOC. The system separates reporter-facing status from internal workflow status visually and structurally (Product Invariant).
 
@@ -58,25 +58,25 @@ What FeedbackOps deliberately is NOT, drawn from the locked decisions in `docs/a
 - **Identical-card-grids** — Notion-template-gallery / Pinterest-style equal-weight cards. FeedbackOps is dense, list-first, and operational; equal-weight grids hide priority and bury the decision the Actor came to make.
 - **Decorative imagery, illustrations, oversized whitespace** — per docs/frontend/tokens.md "Do's and Don'ts," the design is compact, leveraging an 8px element gap as a standard measurement. Empty states are terse Korean strings + one CTA, not full-bleed illustrated empty states.
 
-**NOT to be used as an anti-reference:** the prototype in `docs/design-prototype/` itself. The prototype IS the source of truth for layout, hierarchy, density, spacing, and copy. Deviating from it requires an explicit ADR or a user-recorded OK in the PR body.
+**NOT to be used as an anti-reference:** the prototype in `docs/design-prototype/`. It is the original design and a starting reference for surfaces not built yet; for existing surfaces the shipped UI is the authority (ADR-0060).
 
 ## Design Principles
 
-Five strategic principles derived from `AGENTS.md`, `apps/frontend/AGENTS.md`, ADR-0020, ADR-0021, and `.review/PROTOTYPE-TO-PACK17.md`:
+Five strategic principles derived from `AGENTS.md`, `apps/frontend/AGENTS.md`, ADR-0020, ADR-0021, and ADR-0060:
 
 1. **Pack 17 light tokens only — no raw hex, no raw px outside the scale.** Per ADR-0021, the canonical palette is Samsung-light (`#f3f7fe` canvas, `#1428a0` accent, `#101828` text). Implementations consume semantic tokens (`--text-primary`, `--surface-detail`, `--border-selected`); raw hex in feature screens is a review block. Spacing uses the fixed scale (4 / 8 / 12 / 16 / 20 / 24 / 28 / 32 / 36 / 40 / 48 / 64). Radii are 6px for cards/buttons/inputs, 2px for tags, 4px for badges. New tokens land in docs/frontend/tokens.md and `packages/ui/src/styles/tokens.css` before broad use.
 
 2. **Three-shell topology — `PageShell`, `ListShell`, `WorkbenchShell`, and nothing else.** ADR-0020 locks the route-layout vocabulary. Every screen classifies into one of the three. Backlog, Survey builder/result, and Roadmap are explicit *extensions* of those three, not new shells. All five header surfaces (sidebar system header, ListShell toolbar, WorkbenchShell toolbar, drawer panel header, Survey preview drawer header) share a single 50px baseline. Adding a fourth shell requires an ADR amendment.
 
-3. **Prototype is the spec — mirror within 1px, do not invent.** `docs/design-prototype/screen-*.jsx` + `data.js` + `screenshots/final-baselines/*.png` define every user-facing surface. First action of any frontend chunk: open the prototype, open the baseline PNG, write a five-line matching plan into the PR description. If the prototype is silent on a behavior, stop and ask — do not fill the gap with framework defaults or personal taste. `.review/PROTOTYPE-TO-PACK17.md` (637 lines) is the canonical class→component translation reference.
+3. **The shipped UI is the UI authority (ADR-0060).** A change to an existing screen extends its current pattern and reuses `packages/ui` and `apps/frontend/src/lib/copy/*`. A new surface the prototype drew starts from that screen as a reference; otherwise it starts from the closest shipped screen. If the shipped UI, specs and ADRs are all silent, ask; do not fill the gap with framework defaults or personal taste.
 
-4. **Pixel-diff baselines per page; ≥99% prototype match target.** Every page-level frontend issue runs a structured Playwright pixel-diff against `docs/design-prototype/screenshots/final-baselines/<page>.png` at desktop 1440 before PR merge. The report enumerates every visible difference in a Region / Category / Prototype / Impl / Severity / Resolution table. Any HIGH severity or any copy-category mismatch blocks merge. The merged PR carries the post-fix diff report, not the initial one. Component-only issues are exempt; pages without a baseline queue a prototype refresh issue rather than silently shipping.
+4. **Visual regression against committed baselines.** Routes with a spec in `apps/frontend/tests/visual/` run `test:visual` against their own committed baselines. A baseline changes only in a commit that declares the intended visual change (`apps/frontend/AGENTS.md` → Visual Baselines).
 
 5. **Trust by receipt — separate state machines, canonical cross-system links, no synthetic convenience columns.** Reporter-facing VOC status and internal Task status are separate state machines (Product Invariant). Cross-system history is canonical through `entity_links`, never through duplicated convenience columns. VOC is AD-authenticated internal voice and is never auto-created from Survey Response. Permission-limited content shows an approved summary or a request path, not a blank failure. Every visible state change in the UI maps to an auditable backend transition; the audit trail is the trust mechanism.
 
 ## Accessibility & Inclusion
 
-- **WCAG 2.2 AA target inherited from ADR-0016 and re-validated under ADR-0021.** Dark-theme contrast guarantees do NOT transfer to the inverted light palette; every component contrast pair must be re-verified. Slice 3 final review includes an axe-core scan against touched routes.
+- **WCAG 2.2 AA target inherited from ADR-0016 and re-validated under ADR-0021.** Dark-theme contrast guarantees do NOT transfer to the inverted light palette; every component contrast pair must be re-verified.
 - **Primary locale is Korean (`<html lang="ko">`) per ADR-0010** (amended 2026-09-24: no i18next catalog; chrome is inline or `lib/copy/*`, API errors are `errorMapper.ts` `CATALOG`), with English preserved verbatim for domain / role / system terms. No machine translation of either side.
 - **Icon-only controls require accessible labels.** `lucide-react` is the icon set; every icon-only button carries an `aria-label` or visible adjacent text.
 - **Keyboard focus, hover, selected, active, disabled, loading, error, and permission-limited states are visually distinct** (per `apps/frontend/AGENTS.md`). Focus ring uses `--color-neon-lime` (now Samsung-blue `#1428a0`, name preserved for token continuity per ADR-0021).

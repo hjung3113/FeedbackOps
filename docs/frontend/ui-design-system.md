@@ -73,7 +73,7 @@ Anatomy:
 
 ```text
 - AppRail + AppSidebar
-- ManagedSystemScopeSwitcher when applicable
+- ManagedSystemScopeSwitcher when applicable (built as the AppSidebar scope control)
 - MainRegion
 - RightDetailPanel optional
 - CommandMenu overlay
@@ -100,14 +100,14 @@ Rules:
 - Avoid full-screen modals for routine workflow actions.
 - AppSidebar renders route-owned navigation entries. Admin discovery entries use the approved
   `workspace.admin` capability as a display hint; Admin route `PermissionGate`s remain authoritative.
-- ManagedSystemScopeSwitcher appears on scoped operational views when the actor has access to more than one Managed System.
+- ManagedSystemScopeSwitcher is built as the AppSidebar scope control: it is rendered whenever the sidebar is expanded, `All` is always offered, Managed Systems outside the actor's grants are dimmed and marked `범위 밖`, and the control is disabled on Admin and Survey respondent routes (routes-and-layout.md "Managed System Scope Switcher").
 - Switching Managed System scope updates URL state and list queries; it must not navigate to a duplicated per-Managed-System app tree.
 - `All` in ManagedSystemScopeSwitcher means the actor's effective Managed System scope union; only Admin sees true workspace-wide all.
-- Do not show `All` on User own-work views or Survey respondent surfaces.
-- For Developers, show `All` only when the actor has more than one Managed System scope.
 ```
 
 ### Responsive Behavior
+
+Desktop (≥1024px) only is built; the tablet/mobile rules below are the target contract, out of scope until responsive lands — `apps/frontend/AGENTS.md`.
 
 Breakpoints:
 
@@ -142,6 +142,8 @@ Desktop:
 ```
 
 ## Core Components
+
+Component names in this section are design-time names; see `docs/frontend/component-inventory.md` "Built Mapping" for what shipped.
 
 ### ObjectList
 
@@ -183,11 +185,11 @@ ObjectRow anatomy:
 Sizing:
 
 ```text
-- compact row height: 40px
-- default row height: 52px
-- expanded row min height: 88px
-- row horizontal padding: 12px
-- row gap: 8px
+- compact row min height: 44px
+- default row min height: 60px
+- expanded row min height: 96px
+- row horizontal padding: 20px
+- row column gap: 12px
 ```
 
 States:
@@ -268,6 +270,9 @@ VOC next action examples:
 VOC next actions must be rendered from backend-provided `next_actions`.
 Frontend components must not infer whether actions are allowed by combining
 status badges, Role Level labels, or linked-object indicators.
+
+Status: only Survey result and outcome follow-up `next_actions` are populated today; VOC detail returns `[]`
+(`docs/implementation/api/next-actions.md`), so the VOC action examples above are target vocabulary, not shipped ids.
 
 ### DataTable
 
@@ -441,12 +446,12 @@ Families:
 - permission-request-status
 ```
 
-Survey status labels:
+Survey status labels (`apps/frontend/src/lib/copy/enum-labels.ts`):
 
 ```text
-- draft → Draft (neutral)
-- open → Open (accent)
-- closed → Closed (muted-strong)
+- draft → 초안 (neutral)
+- open → 진행 중 (accent)
+- closed → 종료됨 (muted-strong)
 ```
 
 Rules:
@@ -566,7 +571,8 @@ Rules:
 - Internal Comment is private operational discussion and uses a separate internal-comment editor surface.
 - Internal Comment must never share the same input, submit action, or default visibility as Public Update.
 - Public Update and Reporter Reply render in a public timeline; Internal Comment renders in a separate internal timeline.
-- MVP conversation does not include real-time chat, mentions, reactions, read receipts, threaded replies, or general message editing.
+- MVP conversation does not include real-time chat, reactions, read receipts, threaded replies, or general message editing.
+- In the VOC conversation, mentions are supported only in the Internal Comment surface (picker-button insertion, no inline `@` autocomplete).
 - Cluster update candidates must show selected target VOCs before applying; applying creates individual Public Updates and does not change Reporter-facing VOC Status automatically.
 ```
 
@@ -684,10 +690,12 @@ Sections:
 ```text
 - Navigate
 - Create
-- Current Selection Actions
-- Recent Objects
+- Current Selection Actions (not built — first version, #611)
+- Recent Objects (not built — first version, #611)
 - Admin / Settings when allowed
 ```
+
+Shipped as `CommandPalette` with the groups `이동`, `생성`, and `열기`; see `docs/frontend/routes-and-layout.md` "Global command palette (#611)".
 
 Command row anatomy:
 
@@ -703,10 +711,10 @@ Rules:
 
 ```text
 - Command verbs must match visible UI actions.
-- Permission-blocked commands can appear disabled with reason.
-- Commands should be context-aware based on current screen, selected object, and Managed System scope.
+- Permission-blocked commands can appear disabled with reason (not built — first version, #611).
+- Commands should be context-aware based on current screen, selected object, and Managed System scope (not built — first version, #611).
 - Command results must be filtered by the current effective workspace/Managed System scope.
-- Blocked commands may appear only with backend-provided disabled reasons.
+- Blocked commands may appear only with backend-provided disabled reasons (not built — first version, #611).
 ```
 
 ### ActionToolbar
@@ -830,71 +838,16 @@ Rules:
 - On failure, rollback visual state and show retry.
 ```
 
-## Semantic Tokens To Add On Top Of The Token Seed
+## Semantic Tokens (shipped in `packages/ui/src/styles/tokens.css`)
 
-Text:
-
-```text
---text-primary
---text-secondary
---text-muted
---text-disabled
---text-danger
---text-warning
---text-success
---text-info
-```
-
-Surfaces:
+The semantic token set is defined in `packages/ui/src/styles/tokens.css`; `docs/frontend/tokens.md` is the seed and documents the `-label` text pairs under "Semantic Text Label Tokens". Application code consumes these groups, not the raw color tokens:
 
 ```text
---surface-canvas
---surface-sidebar
---surface-list
---surface-row-hover
---surface-row-selected
---surface-detail
---surface-popover
---surface-field
---surface-blocked
-```
-
-Borders and focus:
-
-```text
---border-subtle
---border-strong
---border-selected
---focus-ring
---focus-ring-danger
-```
-
-Workflow:
-
-```text
---status-internal-*
---status-reporter-*
---severity-*
---confidence-*
---priority-*
---permission-*
---visibility-*
-```
-
-Layout:
-
-```text
---sidebar-width
---sidebar-width-collapsed
---detail-panel-width
---detail-panel-width-min
---detail-panel-width-max
---toolbar-height
---row-height-compact
---row-height-default
---badge-height
---icon-size-sm
---icon-size-md
+Text: --text-*
+Surfaces: --surface-*
+Borders and focus: --border-*, --focus-ring, --focus-ring-danger
+Workflow: --status-internal-*, --status-reporter-*, --severity-*, --confidence-*
+Layout: see `Layout tokens` in tokens.css
 ```
 
 ## Accessibility Rules
@@ -907,7 +860,7 @@ Layout:
 - Icon-only buttons require accessible labels and tooltips.
 - Error messages must be associated with fields.
 - Respect reduced motion settings.
-- Touch targets should be at least 40px on mobile.
+- Touch targets should be at least 40px on mobile (target contract; mobile is not built).
 ```
 
 ## Screen Mapping
@@ -937,6 +890,8 @@ Task Request UI labels:
 - Review conversion CTA: Convert to Task.
 - Do not use Create Task for VOC, Finding, or Survey follow-up.
 ```
+
+The English action names above are the canonical semantics; rendered copy is Korean per ADR-0057 A2 (`apps/frontend/src/lib/copy/*`).
 
 Task Board:
 

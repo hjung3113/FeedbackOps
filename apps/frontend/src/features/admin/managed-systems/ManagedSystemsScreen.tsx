@@ -3,7 +3,7 @@
 // Rebuilt from the raw HTML-table CRUD harness to the design prototype
 // (docs/design-prototype/screen-admin.jsx → AdminScreen). Live API data only;
 // the prototype's window globals / synthetic data are not ported (AGENTS.md
-// → Prototype Is The Spec). Maps the prototype's dark-token components to the
+// → UI Authority). Maps the prototype's dark-token components to the
 // real @fops/ui light-token components (ADR-0021 / Pack 17).
 //
 // Prototype-silent deviations recorded in the PR/commit body:

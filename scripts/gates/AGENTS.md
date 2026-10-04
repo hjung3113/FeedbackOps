@@ -1,11 +1,11 @@
 # Gate Scripts Agent Guide
 
-Frontend and migration gates. The full gate list is in root `AGENTS.md` → Verification. `verify.sh` (agent-workflow toolkit) is backend-only; frontend verification runs from `frontend-verify-profile.json` here.
+Frontend and migration gates. The full gate list is in root `AGENTS.md` → Verification. Whole-issue host checks that bundle these gates: `.claude/skills/issue-wave-conductor/scripts/verify-fe.sh` and `verify-be.sh`.
 
 ## Frontend typecheck gate (`pnpm gate:fe-typecheck`)
 
 - `fe-typecheck-gate.mjs` runs `tsc --noEmit` for the frontend and fails only on errors not listed in `frontend-typecheck-baseline.txt` (currently absent, so every error counts). Baseline lines are matched verbatim, line numbers included, so an unrelated edit can shift a baselined error into "new".
-- In a fresh worktree, generate the gitignored `apps/frontend/src/routeTree.gen.ts` first (`pnpm --filter frontend build`, or start dev). Without it, the gate reports about two dozen new errors that are setup noise, not baseline drift; they must never be added to the baseline. Regenerate it again after adding a route or after a rebase/merge that brought in routes.
+- In a fresh worktree, generate the gitignored `apps/frontend/src/routeTree.gen.ts` first (`pnpm gen:routes`). Without it, the gate reports about two dozen new errors that are setup noise, not baseline drift; they must never be added to the baseline. Regenerate it again after adding a route or after a rebase/merge that brought in routes.
 - vitest green does not mean type-green; run this gate separately.
 
 ## Frontend Biome gate (`pnpm gate:fe-lint`)
@@ -18,6 +18,12 @@ Frontend and migration gates. The full gate list is in root `AGENTS.md` → Veri
 - To prove a reported "NEW" identity already exists on `develop`, check `develop`'s content at the real path (swap the file in with `git show origin/develop:<path>`, run `biome check --reporter=json --max-diagnostics=500 <path>`, swap back). A copy under a different filename under-reports lint diagnostics.
 - Update `frontend-typecheck-baseline.txt`, or add a line to `frontend-biome-allowlist.txt`, only when the existing diagnostic is intentionally accepted and documented in review. An allowlist line is `<repo-relative-path> <biome-category> -- <reason>`. Each path carries its own lines; a split file needs a new line for each category.
 - Biome is not part of `pnpm typecheck` or any other gate, and a whole-repo `biome check` count is not a usable oracle. When fixing only import order in an existing file, use `biome check --write --formatter-enabled=false --linter-enabled=false <file>` so nothing else is reformatted.
+
+## Migration drift gate (`pnpm gate:db-migration-drift`)
+
+- `db-migration-drift-gate.mjs` needs no database: it forces `DATABASE_URL_MIGRATE` to an unreachable URL, even when your shell exports a real one.
+- It fails on any of three conditions: a `.sql` file in `apps/backend/migrations/` missing from `meta/_journal.json` (or a journal entry with no `.sql`, or a duplicate tag); a nonzero `drizzle-kit check` (`pnpm --filter backend db:check`); or `db:generate` run against a throwaway copy of the migrations emitting any new or rewritten file (the TS schema has drifted from the committed history).
+- Treat a failure as a real history problem. Migration traps: `.claude/rules/db-migrations.md`; the journal-registration rule: `apps/backend/AGENTS.md`.
 
 ## Other per-path allowlists
 

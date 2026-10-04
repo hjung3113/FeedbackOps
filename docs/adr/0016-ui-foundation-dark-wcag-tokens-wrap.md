@@ -1,6 +1,8 @@
 # UI foundation: dark-only MVP, WCAG AA, CSS-var tokens, full shadcn wrap
 
-> **Status:** Superseded by [ADR-0021](0021-pack-17-samsung-light-design-system.md) on 2026-05-20. The "dark-only in MVP" decision is reversed; FeedbackOps now ships light-only per Pack 17. This document is retained for historical context; do NOT use it for current decisions.
+## Status
+
+Partially superseded. Dark-only theme: [ADR-0021](0021-pack-17-samsung-light-design-system.md) (2026-05-20). Token exposure mechanism: [ADR-0058](0058-tailwind-v4-css-first-theme.md) (2026-10-03). The component-wrap rule, WCAG 2.2 AA target and icon pick remain in force.
 
 `docs/frontend/ui-design-system.md` (978 lines) + `DESIGN.md` + `docs/frontend/component-inventory.md` already cover anatomy, variants, states, breakpoints, semantic-token names, and accessibility rules. This ADR locks the four remaining decisions that those documents leave open.
 
@@ -80,6 +82,8 @@ These are small enough not to deserve a separate ADR but need an answer so scree
 - **Drag and drop**: deferred. No MVP screen requires DnD; the next requirement (e.g. Task board reorder) will land with its own ADR pick (`@dnd-kit/core` is the likely choice).
 - **Chart library**: deferred. Dashboard is action-queue (CONTEXT.md), not chart-first; charts arrive with a future analytics phase that will pick `Recharts` or `Visx` then.
 - **Component sandbox**: Storybook 8, served from `apps/frontend` workspace, with the axe-core integration above. Mandatory for `packages/ui` primitives; optional for `apps/frontend/src/features/*` screens.
+
+> Note (2026-10): only lucide-react was adopted. date-fns, Storybook 8 and the axe-core build check were not; visual parity is covered by apps/frontend/tests/visual.
 
 ## What this ADR locks
 

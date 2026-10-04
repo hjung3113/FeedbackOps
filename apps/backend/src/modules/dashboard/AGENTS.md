@@ -1,7 +1,5 @@
 # Dashboard Module Agent Guide
 
-Status: implemented (`GET /dashboard/summary`, see `docs/implementation/api/dashboard.md`). This document is the current contract for this module, not a target for future work.
-
 ## Ownership
 
 Dashboard owns Home/Integration action queues, coverage projections, missing-link projections, and dashboard read models.
@@ -9,7 +7,6 @@ Dashboard is not a passive reporting helper.
 
 ## Invariants
 
-- Dashboard is an operational action surface, not a chart-only reporting page.
 - Each actionable row must explain why it appears and what the next action is.
 - Dashboard must not mutate source records directly.
 - Dashboard completeness indicators must account for missing links and permission limits.

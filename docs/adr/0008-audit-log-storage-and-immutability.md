@@ -1,5 +1,9 @@
 # Audit log storage and immutability
 
+## Status
+
+Accepted.
+
 Sensitive Permission grants and uses, Permission Request decisions, Reporter-Facing VOC Status changes, Task Request approvals (including Task Request Self-Approval), workspace settings changes, and Managed System Registry edits must all be **audited** per `docs/implementation/05-permission-policy.md`, `docs/design/04-voc-system.md`, and CONTEXT.md invariants.
 
 ## Storage

@@ -4,38 +4,14 @@
 
 This document defines release scope. System documents describe behavior; this document decides when behavior ships.
 
-Implementation slice status is `docs/implementation/08-mvp-slice-plan.md`.
+Implementation slice status is the GitHub milestones on `hjung3113/FeedbackOps`.
 This document groups release scope and includes short shipped/open notes for partially delivered items. It is not an execution queue.
-
-## Alpha
-
-```text
-- Core / AD / Workspace
-- 기본 권한
-- VOC 등록 / Triage / Inbox
-- Managed System Registry and defaults
-- Analytics Area Catalog
-- Basic Task
-- Entity Link
-```
-
-## MVP
-
-```text
-- Finding
-- Task Request
-- VOC follow-up to Task Request
-- Survey Type 구분
-- optional Survey → Finding → Task Request → Task 연결
-- VOC 유사 추천
-- Action Dashboard 기본형
-```
 
 ## Phase 1
 
 ```text
 - VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
-- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided)
+- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided, see `docs/research/permission-request-cancel-edit.md`; admin revoke of an active grant/deny, direct grant without a request, and risk scoring are not built)
 - Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; editable thresholds deferred)
 - Analytics Area별 리포트
 ```
@@ -50,76 +26,6 @@ This document groups release scope and includes short shipped/open notes for par
 - 외부 도구 연동
 - 고급 Audit / Export
 - Executive Report
-```
-
-## MVP Feature Matrix
-
-```text
-Core Platform:
-- AD Login: MUST
-- Workspace: MUST
-- User / Actor: MUST
-- Team: MUST
-- Basic Role / Permission: MUST
-- Permission Request: MUST
-- Managed System Registry: MUST
-- Analytics Area Catalog: MUST
-- Basic Entity Link: MUST
-- Basic Audit Log: MUST
-
-VOC:
-- VOC 등록: MUST
-- 본인 VOC 상태 조회: MUST
-- VOC Triage: MUST
-- Primary Managed System: MUST
-- VOC Source Context: SHOULD
-- Unassigned VOC queue: MUST
-- 관리자 VOC Inbox: MUST
-- VOC Detail: MUST
-- 상태 변경: MUST
-- Category / Severity: MUST
-- Owner / Assignee: MUST
-- Analytics Area 연결: SHOULD
-- Reporter Reply: MUST
-- Public Update: MUST
-- VOC Cluster 수동 생성: MUST
-- 유사 VOC 추천: SHOULD
-- Finding 생성: SHOULD
-- Task Request 생성: MUST
-
-Task:
-- Backstage 접근 제어: MUST
-- Managed System 기반 필터: MUST
-- Milestone: SHOULD
-- Task 생성 / 수정: MUST
-- Task Board / List: MUST
-- 담당자 / 기한 / 우선순위: MUST
-- Task Request 승인: MUST
-- Entity Link support: MUST
-- VOC / Survey / Finding 개별 연결: SHOULD
-
-Survey:
-- Survey 생성: MUST
-- Primary Managed System: MUST
-- Survey Type: MUST
-- Template 기반 생성: MUST
-- 기본 Builder: MUST
-- Link 배포: MUST
-- 응답 저장: MUST
-- 개인 응답 목록: 노출 안 함 (승인된 발췌 경로만 존재)
-- 기본 결과 요약: MUST
-- Finding 생성: SHOULD
-- Task Request / Task 연결: SHOULD
-- Analytics Area 연결: SHOULD
-
-Dashboard:
-- System Dashboard: MUST
-- Action Dashboard: MUST
-- 연결된 데이터 조회: MUST
-- policy-driven follow-up gap 조회: MUST
-- Managed System 현황: MUST
-- Analytics Area별 현황: SHOULD when Analytics Area data exists
-- Coverage 지표: SHOULD
 ```
 
 ## MVP Success Flow

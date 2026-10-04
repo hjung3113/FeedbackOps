@@ -14,7 +14,9 @@ DELETE /saved-views/:id
 
 `GET /saved-views` accepts an optional `surface` query with one of `voc`,
 `tasks`, `task_requests`, or `findings`. Create requires `surface`, `name`, and
-`filter`; update accepts `name` and/or `filter`.
+`filter`; update accepts `name` and/or `filter`. Create and update return
+`409 conflict.saved_view_name_taken` when the actor already has a saved view
+with that `surface` + `name`.
 
 On create and update, the `filter` object is parsed against the list-query
 schema for its selected surface: VOC, Tasks, Task Requests, or Findings. The

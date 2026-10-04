@@ -14,7 +14,7 @@ Owns:
 - Survey
 - Survey Response
 - Survey Result
-- Survey templates
+- Survey templates (deferred, ADR-0059 D2)
 ```
 
 Does not own:
@@ -45,7 +45,7 @@ Validation Survey:
 - VOC, 가설, 개선 필요성 검증용
 
 Outcome Survey:
-- Task 또는 Milestone 완료 후 개선 효과 확인용
+- Task 또는 Milestone 완료 후 개선 효과 확인용 (Task / Milestone trigger: future, WF-X-004)
 ```
 
 ## Key Workflows
@@ -72,11 +72,13 @@ Survey Result
 
 ### WF-SURVEY-003: Outcome Survey
 
+The Task / Milestone Released trigger is future (WF-X-004). An Outcome Survey is created like any Survey and has no Task or Milestone link. Every Outcome Survey is configured for follow-up (ADR-0055).
+
 ```text
 Task / Milestone Released
 → optional Outcome Survey
 → Result Summary
-→ optional Follow-up Finding / Task Request if result is poor and workflow is configured
+→ optional Follow-up Finding / Task Request if result is poor
 ```
 
 ## Functional Requirements
@@ -91,8 +93,8 @@ Acceptance Criteria:
 - Survey Operator can create Discovery, Validation, or Outcome Survey.
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
-- Survey can be created from template.
-- Survey supports link distribution.
+- Survey can be created from template. (Deferred, ADR-0059 D2.)
+- Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links are ADR-0035/0036, unscheduled per ADR-0059 D4.)
 ```
 
 ### FR-SURVEY-002: Basic Builder
@@ -158,7 +160,7 @@ Priority: SHOULD
 Acceptance Criteria:
 
 ```text
-- Result screen has Create Finding and Request Task CTAs when the actor has permission and the workflow is enabled; Link Finding is deferred out of MVP scope (ADR-0037).
+- Result screen has Create Finding and Request Task CTAs when the actor has permission; Link Finding is deferred out of MVP scope (ADR-0037).
 - Result and Response screens must not show Create VOC.
 - Survey Response can become Evidence Highlight or Finding evidence; it must not become a new VOC.
 - Attach to Existing VOC may be allowed only as evidence attachment to an already existing VOC, not as Survey Response to VOC conversion.
@@ -259,7 +261,7 @@ response viewing permission.
 ## Permissions
 
 ```text
-- Basic User can answer assigned Survey.
+- Basic User can answer open Survey.
 - Survey Operator can create and manage Survey.
 - Personal response viewing requires explicit permission.
 - Export requires explicit permission.
@@ -269,7 +271,7 @@ response viewing permission.
 
 ```text
 - Survey Result creates Finding, not VOC.
-- Survey can validate Task or Milestone.
+- Survey validation of Task or Milestone is future (WF-X-004).
 - Outcome Survey can reveal unresolved user experience after release.
 - Survey may optionally link Analytics Area to context inside one Managed System.
 ```

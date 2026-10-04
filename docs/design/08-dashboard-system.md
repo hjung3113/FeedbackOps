@@ -14,6 +14,8 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
+The recovery-item model in this section (shared id, detail panel, snooze/mute, history, `computed_at`) is deferred target design (ADR-0059 D3); `GET /dashboard/summary` is what ships.
+
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
 

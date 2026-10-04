@@ -10,8 +10,6 @@ Managed System Registry belongs to Core. Task may consume Managed System scope a
 
 ## Invariants
 
-- Task Request protects the backlog from unreviewed execution candidates.
-- Task status and reporter-facing VOC status are separate.
 - Released Task creates a reporter-facing review candidate when required; it does not automatically resolve VOC.
 - Source evidence must remain visible or safely summarized in task detail.
 - Standalone Tasks are valid and do not require source evidence, Finding, VOC, or Survey links.

@@ -1,4 +1,4 @@
-# Intentionally empty. Add only documented, pre-existing diagnostic identities.
+# Exception list, grown only deliberately: add only documented, pre-existing diagnostic identities (one `<path> <category> -- <reason>` per line).
 apps/backend/src/config.ts format -- pre-existing on develop; the file predates biome formatting and this branch adds two lines to the env schema only
 apps/backend/src/seed/index.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
 apps/frontend/src/features/home/HomeScreen.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting

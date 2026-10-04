@@ -6,7 +6,6 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
 
 ## Invariants
 
-- Finding is the bridge from evidence to execution.
 - Evidence source must remain traceable after conversion to Task Request, Task, or Milestone.
 - A Finding can be not actionable; do not force every Finding into execution.
 - Impact and confidence are decision inputs, not automatic priority engines.

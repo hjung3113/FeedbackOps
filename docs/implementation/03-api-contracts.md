@@ -6,27 +6,27 @@ Endpoint authority is this index together with `docs/implementation/api/*.md`.
 
 This file owns global API rules, standard error codes, the endpoint contract template, default owner/reviewer resolution, and scoped-create requirements. Each file under `api/` owns one domain's behavior and its endpoint catalog. A route has one normative home. Do not restate it here.
 
-`docs/design/archive/14-api-draft.md` is archived historical input. Not endpoint authority. Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains the behavioral contract and this file remains the index.
+Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains the behavioral contract and this file remains the index.
 
 ## Index
 
 | Domain file | Sections |
 |---|---|
-| [`api/navigation.md`](api/navigation.md) | Navigation Count Contract |
+| [`api/navigation.md`](api/navigation.md) | Navigation Count Contract; Route Resolution Contract |
 | [`api/auth.md`](api/auth.md) | Authentication |
 | [`api/attachments.md`](api/attachments.md) | Attachments |
 | [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract |
-| [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC Similarity Projection; Task release side effect (Issue #165) |
+| [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC List And Triage Fields; VOC Similarity Projection; Task release side effect (Issue #165); POST /vocs/:id/create-finding; VOC Recommendations |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes |
-| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
+| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138); POST /tasks/:id/milestone — Task milestone assign (issue #514 B1b) |
 | [`api/milestones.md`](api/milestones.md) | Milestone Create Contract; Milestone List Contract; Milestone Detail Contract; Milestone Update Contract; Status; Not implemented |
-| [`api/surveys.md`](api/surveys.md) | Survey; GET /me/survey-responses — the session Actor's own response history; Forbidden Endpoint |
+| [`api/surveys.md`](api/surveys.md) | Survey; GET /me/survey-responses — the session Actor's own response history; GET /me/answerable-surveys; GET /surveys/:id/results; GET /surveys/:id/outcome-follow-up; Survey response evidence approval; POST /survey-responses/:id/create-finding; POST /survey-responses/:id/mark-no-follow-up and /reopen-follow-up; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Health / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
-| [`api/notifications.md`](api/notifications.md) | Notifications Inbox |
+| [`api/notifications.md`](api/notifications.md) | Notifications Inbox; Producers |
 | [`api/saved-views.md`](api/saved-views.md) | Saved Views |
-| [`api/entity-links.md`](api/entity-links.md) | Entity Links |
+| [`api/entity-links.md`](api/entity-links.md) | Entity Links; Workspace inventory pagination |
 | [`api/next-actions.md`](api/next-actions.md) | Next Action Contract |
 | [`api/cross-system.md`](api/cross-system.md) | Reporter Summary Contract; Cross-System Endpoint Decisions |
 
@@ -41,6 +41,7 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 - APIs must not expose Survey Response -> Create VOC.
 - APIs must not expose generated_voc relation_type.
 - List endpoints for Tasks, Task Requests, Findings, VOC triage, Surveys, and Dashboard queues must accept managed_system_id filters where scoped data can appear.
+- Target state — not implemented, deferred by ADR-0059 D3 (applies to the next eight bullets, through the `computed_at` and history rule). Today only `GET /dashboard/summary` ships; no recovery queue or recovery item detail endpoint, `recovery_item_id`, or `computed_at` field exists.
 - Dashboard, Home, and Integration recovery queue endpoints that expose the same workflow gap must return a stable `recovery_item_id` or equivalent source/action identity.
 - Recovery queue inclusion and resolution are backend/domain-service decisions. Frontend clients must not infer that a recovery item is resolved from linked-object presence alone.
 - Dashboard recovery queue endpoints may expose user-level snooze or mute state, but that state must not change the recovery item's domain resolution state.
@@ -87,11 +88,21 @@ Each endpoint must define:
 Audit-sensitive mutation endpoints must require an optimistic concurrency token
 such as `expected_version` or `last_seen_at`. On mismatch, APIs must return a
 conflict-style response with the current object version and must not auto-merge
-or apply the stale action. This applies to reporter-facing status changes,
-Public Update send, Task Request approval, Permission approval or rejection, and
-Survey evidence attachment to VOC.
+or apply the stale action. Only five endpoints implement this token, as a
+required `If-Match` header: `PATCH /vocs/:id`, `PATCH /vocs/:id/description`,
+`PATCH /tasks/:id`, `POST /tasks/:id/milestone`, and `PATCH /milestones/:id`.
+Public Update send, Task Request decisions, and Permission decisions take no
+token and are guarded by object state instead: Public Update send validates the
+requested reporter-facing status transition against the current status
+(`422 reporter_facing_status.invalid_transition`), Task Request decisions
+return `422 validation.failed` for a disallowed transition and a `200` no-op
+when the Task Request is already in the target status, and Permission decisions
+return `409 conflict.stale_write` when the request is no longer decidable.
+Survey evidence attachment to VOC has no route.
 
 ## Default Owner / Reviewer Resolution
+
+Target state — not implemented, deferred by ADR-0059 D1. Today only Managed System default-owner storage ships (`default_owner_actor_id` / `default_owner_team_id` are stored and editable); no VOC, Finding, Task Request, Task, or Survey create path reads them, and no `default_resolved` field exists.
 
 When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed System, application services resolve default owner or reviewer from:
 
@@ -102,7 +113,7 @@ When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed
 4. workspace fallback queue
 ```
 
-Resolved defaults are written to actual owner/reviewer fields and must be returned in creation responses when they affect routing, triage, review, or audit behavior. Default owner does not mark VOC triage complete, and default reviewer does not mark Task Request review complete. Analytics Area owner team is a routing/defaulting hint only and must not grant authorization. If a resolved owner or reviewer lacks required Managed System scope, the API returns validation_failed or a permission-requestable response instead of silently granting access. Creation responses and audit metadata should indicate default_resolved, the source rule, and managed_system_id. Failure to resolve a required reviewer returns validation_failed rather than creating unowned review work.
+Resolved defaults are written to actual owner/reviewer fields and must be returned in creation responses when they affect routing, triage, review, or audit behavior. Default owner does not mark VOC triage complete, and default reviewer does not mark Task Request review complete. Analytics Area owner team is a routing/defaulting hint only and must not grant authorization. If a resolved owner or reviewer lacks required Managed System scope, the API returns validation.failed or a permission-requestable response instead of silently granting access. Creation responses and audit metadata should indicate default_resolved, the source rule, and managed_system_id. Failure to resolve a required reviewer returns validation.failed rather than creating unowned review work.
 
 If a request includes analytics_area_id, the API must validate that the
 Analytics Area belongs to the same managed_system_id. Analytics Area ownership must not
@@ -123,10 +134,10 @@ Survey
 Milestone
 ```
 
-Milestone's create body field is `primary_managed_system_id`
-([api/milestones.md](api/milestones.md)). `primary_managed_system_id` is what
-this section means by managed_system_id; there is no Milestone create body
-field named `managed_system_id`.
+Milestone's and VOC's create body field is `primary_managed_system_id`
+([api/milestones.md](api/milestones.md), [api/voc.md](api/voc.md)).
+`primary_managed_system_id` is what this section means by managed_system_id;
+there is no Milestone or VOC create body field named `managed_system_id`.
 
 VOC and Finding follow-up must create Task Request first; approved Task Requests
 are then converted to Tasks.

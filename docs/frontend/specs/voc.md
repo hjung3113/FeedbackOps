@@ -1,6 +1,6 @@
 # VOC Frontend Implementation Spec — Slice 3
 
-> Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008.
+> Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008. API authority is `docs/implementation/api/voc.md`; token values are in `packages/ui/src/styles/tokens.css` and `docs/frontend/tokens.md`.
 > Stack: React 18 + TypeScript 5 + Tailwind 4.3.3 (CSS-first theme, ADR-0058) + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
 > Authority: AGENTS.md > CONTEXT.md > docs/adr > docs/implementation. Spec docs win every disagreement with the prototype (HANDOFF.md Rule 4).
 
@@ -11,7 +11,7 @@
 ### What this spec covers (Slice 3 VOC)
 
 - **Create VOC** — `/vocs?action=create` form, including attachments dropzone, MS / AA pickers, `voc-description` rich editor surface.
-- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / No-link); `tab=similar` remains accepted but its tab is hidden until a predicate exists (see `04-voc-system.md`, “Similar VOC Suggested”). Includes `<ListFilterButton>`, `<ListSortButton>`, and bulk-select toolbar.
+- **VOC Inbox** — `/vocs?view=inbox` list-first + RightDetailPanel, with tab filters (Untriaged / High / Unassigned / No-link / High-no-link / No-task); `tab=similar` remains accepted but its tab is hidden until a predicate exists (see `04-voc-system.md`, “Similar VOC Suggested”). Includes `<ListFilterButton>`, `<ListSortButton>`, and bulk-select toolbar.
 - **My VOCs** — `/vocs?view=my` reuses Inbox list mechanics filtered by `reporter_id = me`.
 - **Triage Console** — `/vocs?view=triage`, expanded-row queue, severity-decide / owner-assign / AA-link / cluster confirm, optimistic mutation + 4-second undo toast. Its right-panel navigation always includes `유사 VOC 추천`, independent of the same-Managed-System peer count, because ADR-0034 candidates are workspace-wide.
 - **VOC Detail Panel** — identity, triage block, description (TipTap read render), linked-execution section, linked-entity trail, public timeline, internal timeline, three-tab composer (Public Update / Reporter Reply / Internal Comment), Reporter-facing status change block, composer preview modal, sticky next-action footer.
@@ -26,7 +26,7 @@ These surfaces shipped in later slices and are governed by their ADRs plus the c
 - **Entity Links create UI** (free-form linking, bulk detach) — shipped in Slice 4. ADR-0023.
 - **Attachment upload backend** — covered by the ADR-0011 abstraction.
 - **Mobile / tablet layouts** — desktop-only per HANDOFF §11; basic responsive guardrails inherited from `AppShell`.
-- **Permission Request in-product creation UI** — reuses existing `/admin/permissions/requests` route per `docs/frontend/routes-and-layout.md`.
+- **Permission Request in-product creation UI** — shipped as the request-access dialog (`RequestAccessButton`, `apps/frontend/src/features/admin/permissions/request-access-button.tsx`); the Admin review console is `/admin/permissions/requests` per `docs/frontend/routes-and-layout.md`.
 
 ### Upstream references
 
@@ -46,7 +46,7 @@ These surfaces shipped in later slices and are governed by their ADRs plus the c
 | Slice 2 locked decisions | `docs/adr/0019-slice2-review-followups.md` Sections A/B/D/E |
 | Prototype operating rules | `docs/design-prototype/HANDOFF.md`, `docs/design-prototype/DESIGN-MAP.md` |
 | Prototype visual baselines | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png`, `voc-triage-console.png`, `voc-new.png`, `voc-clusters.png` (+ `manifest.json` for `mustSurvive` contract) |
-| Frontend module guide | `apps/frontend/AGENTS.md`, `apps/frontend/src/features/voc/AGENTS.md` (TBD — write at S3-006 prologue) |
+| Frontend module guide | `apps/frontend/AGENTS.md`, `apps/frontend/src/features/voc/AGENTS.md` |
 | Backend layer rules | `apps/backend/AGENTS.md` (Tx union, tx-not-pool for mutations, snake_case at HTTP / camelCase in services) |
 
 ---
@@ -57,21 +57,19 @@ Production uses TanStack Router (`apps/frontend/src/routes/`) with query-param s
 
 | ID | URL | Page / component owner | Required params | Optional params | Panel | Loading | Empty | Success | Error | Permission |
 |---|---|---|---|---|---|---|---|---|---|---|
-| R-VOC-INBOX | `/vocs?view=inbox` | `apps/frontend/src/features/voc/routes/InboxRoute.tsx` → `<VocInboxScreen>` | `view=inbox` | `managedSystem=:msId\|all`, `selected=:vocId`, `tab=untriaged\|high\|unassigned\|similar\|no-link`, `filter.severity=…`, `filter.reporterStatus=…`, `filter.owner=assigned\|unassigned`, `sort=createdAt:desc\|severity:asc\|status:asc` | `<VocDetailPanel>` when `selected=` resolves | Skeleton rows (10) in `<VocList>`; detail panel skeleton sections | "큐가 비었습니다" — `<EmptyState>` with `+ New VOC` CTA | — | Toast on list fetch fail; `<ErrorState>` row with retry | If actor has no VOC read capability for any MS in scope and the 403 carries no `requestable_permission` → render `<PermissionBlockedPanel state="blocked_not_requestable">` instead of the list, with a `My VOCs` link to `/vocs?view=my` (#562). A 403 naming one out-of-scope Managed System keeps the request-access path and says the selected Managed System is out of reach (no My VOCs link). |
+| R-VOC-INBOX | `/vocs?view=inbox` | `apps/frontend/src/features/voc/routes/InboxRoute.tsx` → `<VocInboxScreen>` | `view=inbox` | `managedSystem=:msId\|all`, `selected=:vocId`, `tab=untriaged\|high\|unassigned\|similar\|no-link\|no-task\|high-no-link`, `filter.severity=…`, `filter.reporterStatus=…`, `filter.owner=assigned\|unassigned`, `sort=created_at:desc\|created_at:asc\|severity:desc\|severity:asc\|reporter_facing_status:asc` | `<VocDetailPanel>` when `selected=` resolves | Skeleton rows (10) in `<VocList>`; detail panel skeleton sections | "큐가 비었습니다" — `<EmptyState>` with `+ New VOC` CTA | — | Toast on list fetch fail; `<ErrorState>` row with retry | If actor has no VOC read capability for any MS in scope and the 403 carries no `requestable_permission` → render `<PermissionBlockedPanel state="blocked_not_requestable">` instead of the list, with a `My VOCs` link to `/vocs?view=my` (#562). A 403 naming one out-of-scope Managed System keeps the request-access path and says the selected Managed System is out of reach (no My VOCs link). |
 | R-VOC-MY | `/vocs?view=my` | Same screen, `reporter_id=me` server filter | `view=my` | `selected=:vocId` | `<VocDetailPanel>` | Same | "내가 제출한 VOC가 없습니다" + Submit CTA | — | Same | Always available to authenticated actor |
-| R-VOC-TRIAGE | `/vocs?view=triage` | `apps/frontend/src/features/voc/routes/TriageRoute.tsx` → `<VocTriageScreen>` | `view=triage` | `triage=unassigned\|untriaged\|high\|waiting`, `managedSystem=:msId\|all`, `selected=:vocId` | `<TriagePanel>` (always — single-pane decision flow) | Skeleton expanded rows + panel skeleton | "모든 VOC를 triage 처리했습니다" — `<TriageEmpty>` | — | Toast on per-action failure; rollback optimistic state | Requires VOC triage capability (Admin or same-MS Developer). Out-of-scope VOCs surface a `<PermissionBlockedPanel state="summary_visible">` peek above the queue per backend `out_of_scope_summary` envelope. **Layout (V1 inline kicker, 2026-05-21):** `WorkbenchShell` renders without `toolbar` prop; route identity ("Console · Triage") is the first child of `VocTriageScreen`'s own 50px toolbar. ShellHeader is absent for this route only. Pixel-diff baseline `voc-triage-console.png` is stale (shows removed 50px header); re-capture is a follow-up. |
-| R-VOC-CREATE | `/vocs?action=create` | `apps/frontend/src/features/voc/routes/CreateRoute.tsx` → `<VocCreateScreen>` | `action=create` | `managedSystem=:msId` (seeds picker), `prefill=…` (future) | none (full-page form) | Skeleton form | n/a | Toast `접수 완료: <display_id>`, then navigate to `/vocs?view=my&selected=<id>` | Field-level `<FormError>` from `code='validation.failed'`; toast on transport failure; `<DirtyConfirmation>` modal on navigate-away | Any AD-authenticated Actor may submit (FR-VOC-001). Workspace + MS submission eligibility enforced server-side; the picker hides MSs the actor cannot submit to. |
+| R-VOC-TRIAGE | `/vocs?view=triage` | `apps/frontend/src/features/voc/routes/TriageRoute.tsx` → `<VocTriageScreen>` | `view=triage` | `tab=unassigned\|untriaged\|high\|waiting` (default `unassigned`), `managedSystem=:msId\|all`, `selected=:vocId` | `<TriagePanel>` (always — single-pane decision flow) | Skeleton expanded rows + panel skeleton | "모든 VOC를 triage 처리했습니다" — `<TriageEmpty>` | — | Toast on per-action failure; rollback optimistic state | Requires VOC triage capability (Admin or same-MS Developer). Out-of-scope VOCs surface a `<PermissionBlockedPanel state="summary_visible">` peek above the queue per backend `out_of_scope_summary` envelope. **Layout (V1 inline kicker, 2026-05-21):** `WorkbenchShell` renders without `toolbar` prop; route identity ("Console · Triage") is the first child of `VocTriageScreen`'s own 50px toolbar. ShellHeader is absent for this route only. Pixel-diff baseline `voc-triage-console.png` is stale (shows removed 50px header); re-capture is a follow-up. |
+| R-VOC-CREATE | `/vocs?action=create` | `apps/frontend/src/features/voc/routes/CreateRoute.tsx` → `<VocCreateScreen>` | `action=create` | `managedSystem=:msId` (seeds picker) | none (full-page form) | Skeleton form | n/a | Toast `접수 완료: <display_id>`, then navigate to `/vocs?view=my&selected=<id>` | Field-level `<FormError>` from `code='validation.failed'`; toast on transport failure; `<DirtyConfirmation>` modal on navigate-away | Any AD-authenticated Actor may submit (FR-VOC-001). Workspace + MS submission eligibility enforced server-side; the picker hides MSs the actor cannot submit to. |
 | R-VOC-DETAIL | `/vocs?view=inbox&selected=:vocId` (no standalone page in Slice 3) | `<VocDetailPanel>` mounts inside whichever list route owns selection | `selected=:vocId` | — | n/a (panel itself) | Panel skeleton blocks | n/a | — | If `GET /vocs/:id` returns `404 not_found.record` → render `<DetailPanelNotFound>` with "선택을 해제" CTA; if `403 permission.denied` → `<PermissionBlockedPanel state="denied">` | If actor lacks read permission on the targeted VOC, route still resolves but panel shows blocked state per `permission_decision` envelope. |
 
 **Route-state rules** (per `docs/frontend/routes-and-layout.md` §URL State Rules):
 - Filter, tab, sort, and `selected` MUST round-trip through URL; refresh on a selected URL must restore the panel.
 - Closing the panel clears `selected=` but preserves filters, sort, tab, scroll.
 - The Managed System scope switcher writes `managedSystem=` and re-fetches the list; switching does not change the route tree.
-- For Developers, `managedSystem=all` resolves to the actor's effective scope union (per ADR-0019 Section D + backend `actor.effective_scope`); for Users on My VOCs, `all` is hidden.
+- For Developers, `managedSystem=all` resolves to the actor's effective scope union (per ADR-0019 Section D + backend `actor.effective_scope`); for My VOCs, the backend rejects `managed_system_id=all` (`validation.failed`).
 - Browser back/forward must restore prior URL state intact.
 - Closing the panel during a dirty composer prompts the `<DirtyConfirmation>` modal (per `interaction-patterns.md`).
-
-**Future Slice 3+ routes (called out but not implemented here):** `/vocs/clusters?selected=:clusterId` — owned by VOC Cluster spec.
 
 ---
 
@@ -83,12 +81,12 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
-| `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task' \| ...10 kinds`, `id: string`, `onClose: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe) |
+| `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task_request' \| 'task' \| 'milestone' \| 'survey' \| 'cluster'` (7 kinds), `id?: string`, `onClose?: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe) |
 | `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `badges?: ReactNode`, `className?: string`, `size?: 'lg' \| 'xl'` (default `'lg'`) | `size='lg'`: `text-lg font-semibold tracking-tight leading-[1.35]` (prototype `.panel-title`, VOC detail and triage default). `size='xl'`: `text-xl font-bold tracking-tight` (legacy opt-in only). `children` prop does not exist — use `badges` slot. |
 | `<NestedTextBlock>` | `<NestedTextBlock>` in `packages/ui/src/panel/` | none | `padding?: number`, `children: ReactNode` | Default only |
 | `<FieldRow>` | `<FieldRow>` in `packages/ui/src/panel/` | none | `label: string`, `children: ReactNode` | Default |
 | `<PanelSectionTitle>` | `<PanelSectionTitle>` in `packages/ui/src/panel/` | none | `children: ReactNode`, `action?: ReactNode` | Default |
-| `<Callout tone icon title action>` | `<Callout>` in `packages/ui/src/feedback/` | shadcn `<Alert>` (variant prop replaced by `tone`) | `tone: 'amber' \| 'red' \| 'blue' \| 'cyan' \| 'emerald'`, `icon: IconName`, `title: string`, `action?: ReactNode`, `children: ReactNode` | 5 tones; each binds tone token (`--severity-medium` for amber, etc.) |
+| `<Callout tone icon title action>` | `<Callout>` in `packages/ui/src/panel/` | shadcn `<Alert>` (variant prop replaced by `tone`) | `tone: 'amber' \| 'red' \| 'blue' \| 'cyan' \| 'emerald'`, `icon?: ReactNode`, `title?: string`, `action?: ReactNode`, `children: ReactNode` | 5 tones; each binds a raw color token (amber `--color-amber`, red `--color-warning-red`, blue `--color-aether-blue`, cyan `--color-cyan-spark`, emerald `--color-emerald`) |
 | `<DetailPanelHeaderActions entityKind entityId copyHash extraMore?>` | `<DetailPanelHeaderActions>` in `packages/ui/src/panel/` | shadcn `<DropdownMenu>` for kebab, `<Tooltip>` for icon buttons | `entityKind: string` (display name), `entityId: string`, `copyHash: string` (production receives `copyUrl: string` instead), `extraMore?: MoreItem[]` | Default; "copied" toast state after clipboard write |
 | `useFullscreenPanel()` | `useFullscreenPanel()` hook in `apps/frontend/src/lib/panel/` | none | none | `(isFullscreen, toggle)`. Esc + route change collapse it. |
 
@@ -97,7 +95,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<VocList>` + `<VocRow>` | `<VocList>` + `<VocRow>` with paperclip + attachment count chip in `features/voc/components/list/` | none (Tailwind grid, `<Checkbox>` from shadcn for row checkbox) | `vocs: VocListItem[]`, `selectedId: string \| null`, `onSelect: (id) => void`, `checked: Set<string>`, `onToggleCheck: (id) => void` | default · hover · selected · checked · permission-limited (row body replaced by `<PermissionBlockedPanel state="summary_visible">`) · skeleton · error |
-| Bulk action bar (inline in `<VocList>`) | `<VocBulkActionBar>` in `features/voc/components/list/` | shadcn `<Button>` | `selectedIds: string[]`, `onAssign`, `onSetSeverity`, `onAddToCluster`, `onCreateFinding`, `onClear` | hidden when `selectedIds.length === 0` |
+| Bulk action bar (inline in `<VocList>`) | internal `BulkActionBar` in `features/voc/components/list/VocList.tsx` | shadcn `<Button>` | `count: number`, `onClear: () => void` | hidden when no row is checked; `담당자 지정` / `심각도 설정` / `Cluster에 추가` / `Finding 생성` render disabled by design (no batch endpoint), only `선택 해제` is wired |
 | `<ListToolbar tabs activeTab onTabChange action>` | `<ListToolbar>` in `packages/ui/src/toolbar/` | shadcn `<Tabs>` for tab strip | `tabs: TabDescriptor[]`, `activeTab: string`, `onTabChange`, `action?: ReactNode`, `children?: ReactNode` | default; `action` slot pinned right via `position: sticky` (per Pack 12 wiring rule) |
 | `<ListFilterButton categories applied onChange onClear>` | `<ListFilterButton>` in `packages/ui/src/toolbar/` | shadcn `<Popover>` + `<Checkbox>` group | `categories: FilterCategory[]`, `applied: Record<string, Set<string>>`, `onChange: (cat, value, on) => void`, `onClear: () => void` | closed · open · applied (count badge) |
 | `<ListSortButton fields value onChange>` | `<ListSortButton>` in `packages/ui/src/toolbar/` | shadcn `<Popover>` + `<RadioGroup>` | `fields: SortField[]`, `value: string` (`'<field>:<asc\|desc>'`), `onChange` | closed · open · sorted (chip on button) |
@@ -120,12 +118,12 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
-| `<PageShell>` | `<PageShell>` in `packages/ui/src/layout/` | none | `title`, `subtitle?`, `eyebrow?`, `actions?`, `back?`, `fluid?` | default |
+| `<PageShell>` | `<PageShell>` in `packages/ui/src/layout/` | none | `header?: ShellHeaderProps` (`title?`, `subtitle?`, `actions?`, `variant?`), `children`, `detailPanel?`, `fluid?`, `className?`, `contentClassName?` | default |
 | `<FieldLabel required tip>` | `<FieldLabel>` in `packages/ui/src/forms/` | shadcn `<Label>` + `<Tooltip>` (for `tip`) | `required?: boolean`, `tip?: string`, `children: ReactNode` | required · with-tip · default |
 | Managed System chip selector | `<ManagedSystemPicker>` in `packages/ui/src/components/ManagedSystemPicker.tsx` (already named in `component-inventory.md`) | shadcn `<ToggleGroup>` (chip style) | `value: string`, `onChange`, `options: ManagedSystemRef[]`, `disabled?: string[]` (MSs the actor cannot submit to) | default · disabled-chip (hover tooltip with reason) |
 | Analytics Area chip selector | `<AnalyticsAreaPicker>` in `packages/ui/src/components/AnalyticsAreaPicker.tsx` | shadcn `<ToggleGroup>` | `managedSystemId: string`, `value: string \| null`, `onChange`, `allowEmpty: true` (defaults to true; user may pick 없음) | default · empty-list (helper text) |
-| Source segmented control | shadcn `<Tabs>` (segmented variant) wrapped as `<SourceContextSegmented>` in `features/voc/components/create/` | shadcn `<Tabs>` | `value: 'Direct Use' \| 'Proxy Report' \| 'Operational Discovery' \| 'Stakeholder Request'`, `onChange` | 4 options; Proxy Report expands `<ProxyContextRow>` |
-| Dropzone + file list | `<AttachmentDropzone>` + `<AttachmentRow>` in `features/voc/components/create/` | none (HTML5 drag/drop + shadcn `<Card>` for rows) | `attachments: PendingAttachment[]`, `onAdd`, `onRemove`, `maxBytes: 25 * 1024 * 1024` (per file), `accept?: string[]` | empty · drag-over · with-files · over-limit (row-level error) |
+| Source segmented control | shadcn `<Tabs>` (segmented variant) wrapped as `<SourceContextSegmented>` in `features/voc/components/create/` | shadcn `<Tabs>` | `value: 'Direct Use' \| 'Proxy Report' \| 'Operational Discovery' \| 'Stakeholder Request'`, `onChange` | 4 options; no proxy sub-fields (Proxy Report adds no extra row) |
+| Dropzone + file list | `<AttachmentDropzone>` (with an internal `AttachmentRow`) in `features/voc/components/create/` | none (HTML5 drag/drop + shadcn `<Card>` for rows) | `attachments: PendingAttachment[]`, `onAdd`, `onRemove`, `maxBytes: 25 * 1024 * 1024` (per file), `accept?: string[]` | empty · drag-over · with-files · over-limit (row-level error) |
 | `<RichEditor surface="voc-description">` | `<RichEditor>` in `packages/ui/src/rich-content/` (TipTap-based per ADR-0011) | none (TipTap React) | `surface: 'voc-description' \| 'reporter-reply' \| 'public-update' \| 'internal-comment'`, `value?: TipTapDoc`, `defaultValue?: TipTapDoc`, `onChange: (doc: TipTapDoc) => void`, `placeholder?: string`, `onAttach?`, `onMention?`, `minHeight?: number`, `disabled?: boolean` | per-surface toolbar allowlist (see §5.7), focused · invalid · disabled · uploading |
 | `<DirtyConfirmation>` modal | `<DirtyConfirmation>` in `packages/ui/src/feedback/` | shadcn `<AlertDialog>` | `open`, `onConfirm`, `onCancel`, `title?`, `message?` | open · closed |
 
@@ -169,21 +167,18 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 |---|---|---|---|---|
 | `<PermissionBlockedPanel state category reason requiredScope summary>` | `<PermissionBlockedPanel>` in `packages/ui/src/permissions/` | shadcn `<Alert>` (custom layout) | `state: 'request_access' \| 'summary_visible' \| 'denied' \| 'blocked_not_requestable'`, `category: string`, `reason?: string`, `requiredScope?: string[]`, `summary?: ReactNode`, `decisionId?: string`, `evaluatedAt?: string`, `onRequestAccess?: () => void` | 4 state variants. `request_access` shows CTA into the permission-request creation flow; administrator review deep links use `/admin/permissions/requests?tab=…&selected=…` only (the strict search schema rejects `action`, `capability`, `scope`, and `source_entity`). `summary_visible` renders `summary` slot. `denied` is read-only. `blocked_not_requestable` hides CTA entirely. |
 | `<EntityHoverPreview type id blocked>` | `<EntityHoverPreview>` in `packages/ui/src/hover/` (미구현 설계) | shadcn `<HoverCard>` | `type: 'voc' \| 'finding' \| 'task' \| 'evidence' \| 'request'`, `id: string`, `blocked?: PermissionDecision \| null`, `children: ReactNode` | resolved (id · title · status · MS · owner · jump) · blocked (renders compact `<PermissionBlockedPanel state="summary_visible">`) · loading (skeleton) · error |
-| `<EntityRelationRow left/right title meta trailing onClick>` | `<EntityRelationRow>` in `packages/ui/src/entity/` | none | `left?: EntityRef`, `right?: EntityRef`, `title: string`, `meta: ReactNode`, `trailing?: ReactNode`, `onClick?` | single-entity · two-endpoint stem |
+| `<EntityRelationRow link compact? className? testId?>` | `<EntityRelationRow>` in `apps/frontend/src/features/integration/components/EntityRelationRow.tsx` (Integration-owned; VOC detail uses `<LinkedEntityTrail>` instead) | none | `link: EntityLinkDto`, `compact?: boolean`, `className?: string`, `testId?: string` | allowed (source → relation → target) · restricted (`권한 제한` lock chip) |
 | `<LinkedEntityTrail nodes selectedKey onNodeClick>` | `<LinkedEntityTrail>` in `packages/ui/src/entity/` | none | `nodes: TrailNode[]`, `selectedKey?: string`, `onNodeClick?` | default · selected-node · placeholder-node (dashed) · blocked-node (shield icon). In VOC detail, `LinkedEntityTrailSection` consumes `voc.links`; a Reporter renders a Task only from the `summary_visible.summary` payload (`public_title`, projected `reporter_facing_status`, and present optional public fields). `allowed` Task DTOs render only for explicit Admin/Developer identities; unknown and User identities fail closed. `hidden` renders nothing; `denied` uses a minimal acknowledged blocked surface. |
 | `<UserChip user size sub>` | `<UserChip>` in `packages/ui/src/identity/` | none (Tailwind + `<Avatar>`) | `user: ActorRef`, `size?: 'sm' \| 'md'`, `sub?: string` | default · unknown (renders "Unknown") |
-| `<Avatar user size>` | `<Avatar>` in `packages/ui/src/identity/` | shadcn `<Avatar>` | `user: ActorRef`, `size?: 'sm' \| 'md' \| 'lg'` | with-image (future) · initials |
+| `<UserAvatar user size>` | `<UserAvatar>` in `packages/ui/src/identity/` | shadcn `<Avatar>` | `user: { display_name: string }`, `size?: 'sm' \| 'md' \| 'lg'` | initials only (no image URL) |
 
 ### 3.8 Command palette (⌘K)
 
-| Prototype surface | Production component | shadcn/ui base | Props | State variants |
-|---|---|---|---|---|
-| `<CommandMenu>` | `<CommandMenu>` in `apps/frontend/src/lib/command-menu/` (미구현 설계) | shadcn `<Command>` (cmdk wrapper) | `open`, `onClose`, `onNavigate`, `onScopeChange`, `commands: CommandDescriptor[]` (resolved server-side per `interaction-patterns.md` §Command menu) | open · closed · filtered · empty |
-| VOC command entries | descriptors registered in `features/voc/command-catalog.ts` (미구현 설계) | n/a | descriptors: `go-voc-inbox`, `go-voc-triage`, `go-voc-my`, `go-clusters`, `new-voc`, `open-<id>` (recent VOCs) | each carries `disabledReason?` from backend |
+Shipped in #611 as `CommandPalette` (`apps/frontend/src/lib/layout/command-palette/`: `CommandPalette.tsx`, `commands.tsx`, `platform.ts`), hosted by `AppFrame`. See §5.2.
 
 ### 3.9 Form primitives (already in `packages/ui` per inventory)
 
-`<Button>`, `<Input>`, `<Textarea>`, `<Select>`, `<Combobox>`, `<Checkbox>`, `<RadioGroup>`, `<Tooltip>`, `<Popover>`, `<Dialog>`, `<Drawer>`, `<Toast>`, `<Skeleton>`. Use these directly — do not re-wrap.
+`<Button>`, `<Input>`, `<Textarea>`, `<Select>`, `<Combobox>`, `<Checkbox>`, `<RadioGroup>`, `<Tooltip>`, `<Popover>`, `<Dialog>`, `<Sheet>` (the drawer), `<Skeleton>`, and `sonner` for toasts (`<Toaster>` is mounted in `apps/frontend/src/routes/__root.tsx`). Use these directly — do not re-wrap.
 
 ---
 
@@ -207,7 +202,7 @@ Prototype mock entity → production DTO. **snake_case at HTTP boundary, camelCa
 | `internalState` (`triaged`/`unassigned`) | `triage_state: enum(untriaged\|triaged\|needs_more_information\|dismissed_not_actionable)` | `triageState: TriageState` | Prototype values (`unassigned`, `in_progress`, `assigned`, `done`) do not match the contract enum. **Use the contract values.** |
 | `owner` (`u-1`) | `owner_user_id: uuid \| null` | `ownerUserId: string \| null` | Mutually nullable with `owner_team_id`. |
 | n/a | `owner_team_id: uuid \| null` | `ownerTeamId: string \| null` | Teams are read-only in MVP per ADR-0018 / ADR-0019 Section C; the picker shows teams but cannot create them. |
-| `createdAt` (`'2시간 전'`) | `created_at: timestamp` (ISO 8601) | `createdAt: string` | Format via `formatRelative(createdAt, locale)` from `@/lib/datetime`. |
+| `createdAt` (`'2시간 전'`) | `created_at: timestamp` (ISO 8601) | `createdAt: string` | Format via `formatRelativeTime(createdAt)` from `@/lib/format/datetime`. |
 | n/a | `updated_at: timestamp` | `updatedAt: string` | Used as `If-Match`-equivalent for optimistic concurrency (see §5 Triage flow + ADR-0019). |
 | `similarCount` | `similar_count: integer` (from VOC list/detail responses) | `similarCount: number` | Authorized active peer total in the same workspace and primary Managed System. Retain the DTO field, but do not render it as a per-row list signal; detail and triage copy names the same-Managed-System peers. |
 | `linkedFindingId`, `linkedTaskId` | derived from `entity_links` per `docs/implementation/06-entity-linking-contract.md` | `links?: EntityLinkDto[]` on `GET /vocs/:id` | VOC detail consumes the backend-projected `links` read DTO already included in its detail response; it does not issue a separate entity-links request. Reporter-facing Task UI must never synthesize a summary from an `allowed` DTO. |
@@ -266,7 +261,7 @@ interface PendingAttachment {
 }
 ```
 
-Per-file limit: **25 MB** in the prototype Create form, **50 MB** in the RichEditor footer copy. Spec aligns to **25 MB per file** as the binding limit (the larger number is prototype copy drift). Production limit lives in ADR-0011 derivative — confirm with backend before S3-006.
+Per-file limit: **25 MB** in the prototype Create form, **50 MB** in the RichEditor footer copy. Spec aligns to **25 MB per file** as the binding limit (the larger number is prototype copy drift). Production limit lives in ADR-0011 derivative.
 
 ### 4.5 Reporter-facing status transitions
 
@@ -300,8 +295,8 @@ Prototype hardcodes the matrix in `data.js · REPORTER_STATUS_TRANSITIONS`. Prod
 
 | Surface | Categories | Sort fields | URL sync |
 |---|---|---|---|
-| Inbox (`/vocs?view=inbox`) | `severity` (low/medium/high/critical), `reporterStatus` (8 states), `owner` (assigned / unassigned) | `createdAt`, `severity`, `reporterStatus` (each asc/desc) | `filter.severity=high,critical`, `filter.reporterStatus=received`, `filter.owner=unassigned`, `sort=severity:asc` |
-| Triage (`/vocs?view=triage`) | inline filter on the toolbar mirrors Inbox categories; **no Sort popover** — queue is sorted server-side as `unassigned first → severity desc → created asc` | n/a | `triage=unassigned\|untriaged\|high\|waiting`; tab change writes URL |
+| Inbox (`/vocs?view=inbox`) | `severity` (low/medium/high/critical), `reporterStatus` (8 states), `owner` (assigned / unassigned) | `created_at` and `severity` (asc/desc), `reporter_facing_status` (asc) | `filter.severity=high,critical`, `filter.reporterStatus=received`, `filter.owner=unassigned`, `sort=severity:asc` |
+| Triage (`/vocs?view=triage`) | inline filter on the toolbar mirrors Inbox categories; **no Sort popover** — queue is sorted server-side as `unassigned first → severity desc → created asc` | n/a | `tab=unassigned\|untriaged\|high\|waiting` (default `unassigned`); tab change writes URL |
 | My (`/vocs?view=my`) | `reporterStatus` only | `createdAt`, `reporterStatus` | same shape as Inbox |
 
 **Multi-value encoding:** comma-separated in URL (`filter.severity=high,critical`); parsed back into `Set<string>` in component state.
@@ -312,20 +307,7 @@ Prototype hardcodes the matrix in `data.js · REPORTER_STATUS_TRANSITIONS`. Prod
 
 The shortcut is Ctrl+K on Windows/Linux and ⌘K on macOS.
 
-VOC verbs registered in `features/voc/command-catalog.ts`:
-
-| Command id | Group | Verb + label | Route intent |
-|---|---|---|---|
-| `voc.navigate.inbox` | Navigate | "Go to · VOC · Inbox" | `/vocs?view=inbox` |
-| `voc.navigate.triage` | Navigate | "Go to · VOC · Triage" | `/vocs?view=triage` |
-| `voc.navigate.my` | Navigate | "Go to · VOC · My VOCs" | `/vocs?view=my` |
-| `voc.create` | Create | "Create · New VOC" (`kbd: 'C'`) | `/vocs?action=create` |
-| `voc.scope.switch` (planned) | Switch scope | "Switch · Managed System scope" | writes `managedSystem=:msId` |
-| `voc.open.<id>` (recent 6, planned) | Open | `${id} · ${title}` | `/vocs?view=inbox&selected=<id>` |
-
-Per `docs/frontend/interaction-patterns.md` §Command menu: commands resolve via backend route-resolution endpoint when ambiguous (e.g. "Open VOC 2814" must be reachable even when the actor is on `/tasks`). Backend returns `route_intent: { route, search }` and the menu navigates via TanStack Router. VOC and Finding search intents use `selected`; Task Request and Task intents use `/tasks` `param` (`view=requests` or `view=board`). Frontend MUST NOT synthesize commands the backend marked `hidden`.
-
-> Shipped in #611 (`apps/frontend/src/lib/layout/command-palette/`, not `features/voc/command-catalog.ts`): the `voc.navigate.*` verbs are derived generically from `RAIL_ITEMS` + `NAV_TREE` (no per-domain catalog yet), `voc.create` ships, and display-id open (`voc.open.<display_id>` on demand via `GET /nav/resolve`) ships. `voc.scope.switch` and the recent-six `voc.open.<id>` rows are deferred. See `docs/frontend/routes-and-layout.md` → Global command palette (#611).
+> Shipped in #611 (`apps/frontend/src/lib/layout/command-palette/`, not `features/voc/command-catalog.ts`): the navigate commands (`이동`) are derived generically from `RAIL_ITEMS` + `NAV_TREE` (no per-domain catalog), `VOC 생성` (`/vocs?action=create`) is the only create verb, and display-id open (`열기`) resolves on demand via `GET /nav/resolve`, whose `route_intent: { route, search }` uses `selected` for VOC and Finding and the `/tasks` `param` for Task Request and Task (`view=requests` or `view=board`). Managed System scope switching and recent-record rows are out of scope for the first version, and the palette does not synthesize commands the backend does not resolve. See `docs/frontend/routes-and-layout.md` → Global command palette (#611).
 
 ### 5.3 Optimistic mutation + undo (Triage Console)
 
@@ -379,15 +361,15 @@ Surface keys NOT consumed by VOC (listed for completeness — checked in other s
 - `execution` → Finding spec
 - `linkedVoc` → Task spec
 
-`<PermissionBlockedPanel state="request_access">` CTA navigates to `/admin/permissions/requests?action=create&capability=read_finding&scope=<requiredScope>&source_entity=VOC:<vocId>&return=<currentUrl>`. Slice 3 does not ship in-product permission request creation UI — the link routes to the existing Permission Requests review console where Admin handles the request lifecycle.
+`<PermissionBlockedPanel state="request_access">` renders its CTA only when the caller supplies `onRequestAccess`. Where it is wired (for example the Inbox list 403 that carries `requestable_permission`), the CTA opens the request-access dialog (`RequestAccessButton`: required reason, optional expiration, `POST /permission-requests`). The Admin route's strict search schema accepts only `tab` and `selected`.
 
-Production hook signature:
+Production adapter (`apps/frontend/src/lib/cross-system/getPermissionDecision.ts`; returns `null` for a missing key or a schema failure):
 
 ```ts
-function usePermissionDecision(
-  entity: { permissionDecisions?: Record<string, PermissionDecision> },
-  key: 'linkedFinding' | 'execution' | 'linkedVoc' | 'source'
-): PermissionDecision | null;
+function getPermissionDecision(
+  entity: { permission_decisions?: Record<string, unknown> | null } | null | undefined,
+  key: string
+): PermissionDecisionView | null;
 ```
 
 ### 5.7 RichEditor per-surface contract
@@ -399,15 +381,15 @@ function usePermissionDecision(
 | `public-update` | Bold, Italic, List | "Reporter-facing status가 변경됩니다. 공개 안전한 표현인지 한 번 더 확인하세요." | "리포터에게 노출됩니다. 첨부 · 외부 링크 · @멘션은 사용할 수 없습니다." |
 | `internal-comment` | Bold, Italic, Code, List, Link, @Mention, Attach | "팀원에게만 보입니다. 코드 블록 · @멘션을 자유롭게 사용하세요." | none |
 
-Backend sanitization is authoritative (ADR-0011): the editor enforces the toolbar allowlist client-side as UX guidance only. The server rejects nodes/marks outside the surface allowlist with `code: 'rich_content.disallowed_node'` (added to ADR-0012 in Slice 3 #13). Attribute failures use first-class codes: `rich_content.disallowed_attr` for unknown attr keys, `rich_content.invalid_attr_value` for schema failures, and `rich_content.missing_required_attr` for absent required attrs. The shared allowlist contract also declares atomic `leafNodes`; `attachmentRef` and `mention` must be rejected with `rich_content.disallowed_node` when they carry non-empty `content[]`. FE/BE parity is pinned by the canonical corpus in `packages/shared/src/rich-content/fixtures.ts`; backend tests consume it directly, while `@fops/ui` keeps an ADR-0016-compliant local mirror plus drift/sanitize-on-render tests.
+Backend sanitization is authoritative (ADR-0011): the editor enforces the toolbar allowlist client-side as UX guidance only. The server rejects nodes/marks outside the surface allowlist with `code: 'rich_content.disallowed_node'` (added to ADR-0012 in Slice 3 #13). Attribute failures use first-class codes: `rich_content.disallowed_attr` for unknown attr keys, `rich_content.invalid_attr_value` for schema failures, and `rich_content.missing_required_attr` for absent required attrs. The shared allowlist contract also declares atomic `leafNodes`; `attachmentRef` and `mention` must be rejected with `rich_content.disallowed_node` when they carry non-empty `content[]`. FE/BE parity is pinned by the canonical corpus in `packages/shared/src/rich-content/fixtures.ts`; backend tests consume it directly, while `@fops/ui` keeps a local mirror (`scripts/check-boundaries.mjs` forbids `packages/ui` from importing `@fops/shared`) plus drift/sanitize-on-render tests.
 
-The canonical surface → rich-editor extension capability map lives in `packages/shared/src/rich-content/allowlist.ts`. `apps/backend/src/lib/rich-content/surface-allowlists.ts` may re-export it, while `packages/ui/src/rich-content/allowlist-local.ts` mirrors it locally because ADR-0016 forbids `@fops/ui` from importing `@fops/shared`.
+The canonical surface → rich-editor extension capability map lives in `packages/shared/src/rich-content/allowlist.ts`. `apps/backend/src/lib/rich-content/surface-allowlists.ts` may re-export it, while `packages/ui/src/rich-content/allowlist-local.ts` mirrors it locally because `scripts/check-boundaries.mjs` forbids `@fops/ui` from importing `@fops/shared`.
 
 Attachment uploads from inside the editor and from the Create form dropzone share the same backend interface (per ADR-0011 §Inline Attachments). The frontend abstraction: `useAttachmentUpload({ vocId?: string, scope: 'voc' | 'comment' })`.
 
 ### 5.8 Dirty-save patterns
 
-- **Create form:** unsaved changes prompt `<DirtyConfirmation>` on navigate-away (browser back, sidebar nav click, ⌘K navigation). Save Draft button (prototype copy "초안 저장") is **NOT in Slice 3** — strip from the production form or surface as `disabledReason: 'Drafts come in Slice 5'`. Confirm with PM before S3-006.
+- **Create form:** unsaved changes prompt `<DirtyConfirmation>` on navigate-away (browser back, sidebar nav click, ⌘K navigation). Save Draft button (prototype copy "초안 저장") is not built; the production form has none.
 - **Detail panel composers:** dirty state per surface (public / reply / internal). Switching tabs preserves each surface's draft in component state (per prototype `key={composerTab}` reset rule — production keeps drafts in a `useReducer` keyed by `(vocId, surface)`). Closing the panel with any dirty composer prompts `<DirtyConfirmation>`.
 - **Triage panel:** dirty when severity / owner / area / clusterAction differ from the loaded VOC. Confirm-and-next button is disabled until dirty.
 
@@ -425,7 +407,7 @@ Per `<ReporterStatusChangeBlock>` (Pack 8):
 4. If `voc.reporter_status_gate` blocks the staged status (e.g. linked Task not yet released), an amber `<Callout>` renders with an "Open task" CTA. **Publish button is disabled while the gate is active.**
 5. Reporter preview card mirrors the reporter inbox row: VOC id · new `<ReporterStatusBadge>` · 업데이트 chip · title · owner attribution · sanitized body excerpt · public-safe footer reminder.
 6. On Publish: `POST /vocs/:id/public-updates` with body `{ body_rich_content, next_reporter_facing_status, skip_public_update: false }`. **Status change and Public Update body are paired in one request** per ADR-0019 / API contract (atomic; one audit row each for `public_update_created` + `reporter_facing_status_changed`).
-7. If actor explicitly skips the public update (toggle TBD in Q3 — see §10), request becomes `{ skip_public_update: true, skip_reason: <text>, next_reporter_facing_status }`.
+7. The API also accepts the skip path `{ skip_public_update: true, skip_reason: <text>, next_reporter_facing_status }`, but the composer offers no skip toggle: `PublicUpdateComposer` always sends `skip_public_update: false`.
 
 ### 5.11 Triage flow
 
@@ -434,14 +416,15 @@ Per `<ReporterStatusChangeBlock>` (Pack 8):
 | Severity decide | Click chip in `<SeverityPicker>` → local dirty state | none yet |
 | Owner assign | Click `<OwnerPicker>` row → local dirty | none yet |
 | AA link | Click `<AnalyticsAreaPicker>` chip → local dirty | none yet |
-| Cluster confirm/dismiss | Click button in cluster section → local dirty | none yet |
-| Triage 확정 & 다음 VOC | Atomic `PATCH /vocs/:id` with `{ severity, owner_user_id, analytics_area_id, cluster_decision: 'confirm' \| 'dismiss' \| null, triage_state: 'triaged' }` + Idempotency-Key | `PATCH /vocs/:id` (backend service must apply `SELECT … FOR UPDATE` on the VOC row per ADR-0019 Section E pattern extended to VOC — see S3-002) |
-| Finding 만들기 | Same triage commit, then navigate to Finding create flow (Slice 5) | flagged Slice 5; in Slice 3 just navigate to `/vocs?view=triage&selected=<id>` and toast that Finding creation is in Slice 5 |
-| 보류 | Triage state stays `untriaged` but `triage_state_review_postponed_at: now()` writes (TBD field, S3-001) | TBD |
+| Cluster confirm/dismiss | Per-candidate actions in the `유사 VOC 추천` section (ADR-0034); not part of the triage PATCH | `POST /vocs/:id/recommendations/:candidate_id/confirm` · `…/dismiss` |
+| Triage 확정 & 다음 VOC | Atomic `PATCH /vocs/:id` with `{ severity, owner_user_id, owner_team_id, analytics_area_id, triage_state: 'triaged' }` + Idempotency-Key + `If-Match: <updated_at>` | `PATCH /vocs/:id` (backend service must apply `SELECT … FOR UPDATE` on the VOC row per ADR-0019 Section E pattern extended to VOC — see S3-002) |
+| Finding 만들기 | Same triage commit, then opens the Finding create flow (ADR-0024) | `PATCH /vocs/:id`, then `POST /vocs/:id/create-finding` |
+| 보류 | Triage state stays `untriaged`; sends `{ postpone_review: true }` and the backend sets `triage_state_review_postponed_at` (valid only while `untriaged`) | `PATCH /vocs/:id` |
 
 **Audit events emitted by backend** (consumed by Activity sections, frontend never invents these names):
 - `voc_created`
-- `voc_triage_committed` (severity / owner / AA / cluster decision)
+- `voc_triage_committed` (severity / owner / AA)
+- `voc_triage_postponed` (보류)
 - `voc_owner_assigned`
 - `voc_severity_set`
 - `voc_analytics_area_linked`
@@ -455,81 +438,9 @@ Full event vocab lives in backend audit module; this spec lists VOC-touching nam
 
 ## 6. Visual Contract
 
-There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is the CSS-first `packages/ui/src/styles/theme.css` (v4 `@theme inline` aliasing the token variables). **CSS custom properties from `docs/design-prototype/styles.css` port verbatim**; the theme exposes them as kebab-case utility keys.
+There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is the CSS-first `packages/ui/src/styles/theme.css` (v4 `@theme inline` aliasing the token variables). **CSS custom property names from `docs/design-prototype/styles.css` port verbatim** (values follow ADR-0021 light-only); the theme exposes them as kebab-case utility keys.
 
-### 6.1 Surface tokens
-
-| Semantic token | Tailwind key | Raw color | Usage rule |
-|---|---|---|---|
-| `--surface-canvas` | `bg-surface-canvas` | `#08090a` (Pitch Black) | App canvas, main scroll background |
-| `--surface-sidebar` | `bg-surface-sidebar` | `#0a0b0c` | Left sidebar only |
-| `--surface-list` | `bg-surface-list` | `#08090a` | List rows base |
-| `--surface-row-hover` | `bg-surface-row-hover` | `#131416` | Row hover (group-hover:bg-surface-row-hover) |
-| `--surface-row-selected` | `bg-surface-row-selected` | `#1a1c20` | Row selected (`aria-selected=true`) |
-| `--surface-detail` | `bg-surface-detail` | `#0f1011` (Graphite) | Right detail panel |
-| `--surface-card` | `bg-surface-card` | `#0f1011` | In-panel card sections |
-| `--surface-card-elevated` | `bg-surface-card-elevated` | `#161718` (Deep Slate) | DetailPanelHeader band, raised cards |
-| `--surface-popover` | `bg-surface-popover` | `#161718` | Popovers, command menu, dropdowns |
-| `--surface-field` | `bg-surface-field` | transparent | Default input bg |
-| `--surface-field-filled` | `bg-surface-field-filled` | `#161718` | Filled / focused input bg |
-| `--surface-blocked` | `bg-surface-blocked` | `#15161a` | PermissionBlockedPanel bg |
-
-### 6.2 Text tokens
-
-| Semantic token | Tailwind key | Raw color | Usage |
-|---|---|---|---|
-| `--text-primary` | `text-text-primary` | `#f7f8f8` | Body, titles |
-| `--text-secondary` | `text-text-secondary` | `#d0d6e0` | Subtitles, secondary labels |
-| `--text-muted` | `text-text-muted` | `#8a8f98` | Meta, timestamps |
-| `--text-disabled` | `text-text-disabled` | `#62666d` | Disabled |
-| `--text-danger` | `text-text-danger` | `#eb5757` | Errors, "Owner 없음" |
-| `--text-warning` | `text-text-warning` | `#f2c46d` | Warnings |
-| `--text-success` | `text-text-success` | `#27a644` | Success |
-| `--text-info` | `text-text-info` | `#02b8cc` | Info |
-
-### 6.3 Border + focus
-
-| Semantic token | Tailwind key | Raw color | Usage |
-|---|---|---|---|
-| `--border-subtle` | `border-border-subtle` | `#23252a` (Charcoal Grey) | Default 1px dividers |
-| `--border-strong` | `border-border-strong` | `#323334` | Inputs, popover edges |
-| `--border-selected` | `border-border-selected` | `#5e6ad2` (Aether Blue) | Row selected ring |
-| `--focus-ring` | `ring-focus-ring` | `#e4f222` (Neon Lime) | All keyboard focus (`focus-visible:ring-2 focus-visible:ring-focus-ring`) |
-| `--focus-ring-danger` | `ring-focus-ring-danger` | `#eb5757` | Destructive focus |
-
-### 6.4 Reporter-facing status (pill — `rounded-full`)
-
-| Status | Token | Tailwind class | Raw |
-|---|---|---|---|
-| `received` (접수됨) | `--status-reporter-received` | `bg-status-reporter-received/15 text-status-reporter-received` | `#02b8cc` |
-| `reviewing` (검토 중) | `--status-reporter-reviewing` | same | `#5e6ad2` |
-| `assigned` (담당자 배정됨) | `--status-reporter-assigned` | same | `#6366f1` |
-| `progress` (처리 중) | `--status-reporter-progress` | same | `#8b5cf6` |
-| `prep` (해결 준비 중) | `--status-reporter-prep` | same | `#f2c46d` |
-| `resolved` (해결됨) | `--status-reporter-resolved` | same | `#27a644` |
-| `reopened` (다시 처리 중) | `--status-reporter-reopened` | same | `#eb5757` |
-| `closed` (종료됨) | `--status-reporter-closed` | same | `#62666d` |
-
-### 6.5 Internal task status (squared — `rounded-sm`) — referenced from VOC linked execution row, not authored here
-
-| Status | Token | Raw |
-|---|---|---|
-| `backlog` | `--status-internal-backlog` | `#62666d` |
-| `todo` | `--status-internal-todo` | `#8a8f98` |
-| `doing` | `--status-internal-doing` | `#5e6ad2` |
-| `review` | `--status-internal-review` | `#8b5cf6` |
-| `done` | `--status-internal-done` | `#27a644` |
-| `released` | `--status-internal-released` | `#02b8cc` |
-| `reopened` | `--status-internal-reopened` | `#eb5757` |
-
-### 6.6 Severity (chip + 3×16px bar)
-
-| Severity | Token | Tailwind | Raw |
-|---|---|---|---|
-| `low` | `--severity-low` | `bg-severity-low/15 text-severity-low` | `#8a8f98` |
-| `medium` | `--severity-medium` | same | `#f2c46d` |
-| `high` | `--severity-high` | same | `#f08a4a` |
-| `critical` | `--severity-critical` | same | `#eb5757` |
+Values: `packages/ui/src/styles/tokens.css` and `docs/frontend/tokens.md` (ADR-0021 light-only).
 
 ### 6.7 Density + radii
 
@@ -548,16 +459,6 @@ There is no `tailwind.config.ts` any more: since ADR-0058 the Tailwind theme is 
 | `--radius-pill` | `rounded-full` | 9999px | Reporter status badge, MS pill |
 | `--focus-ring` shadow | `shadow-focus` | `0 0 0 2px var(--color-pitch-black), 0 0 0 4px var(--color-neon-lime)` | keyboard focus ring on all interactive |
 
-### 6.8 Neon Lime usage rule
-
-`#e4f222` (Neon Lime) is **reserved**:
-
-1. Primary action button background (`<Button variant="primary">`).
-2. Focus ring (always).
-3. The Reporter-facing-status-change accent stripe in `<ReporterStatusChangeBlock>` (its title color + 4% bg).
-
-**Forbidden uses:** status badges (reporter or internal), severity, hover row backgrounds, link text, info accents. Reviewers reject PRs that color non-action surfaces Neon Lime.
-
 ---
 
 ## 7. Permission Envelope Mapping
@@ -568,7 +469,7 @@ VOC reads the following keys:
 
 | Key | Where attached | Frontend surface | Hook |
 |---|---|---|---|
-| `linkedFinding` | `GET /vocs/:id` envelope: `permission_decisions.linkedFinding` | Detail panel `Linked Finding` section + trail node + `Open finding` footer button (changes copy to `Request Finding access`) | `usePermissionDecision(voc, 'linkedFinding')` |
+| `linkedFinding` | `GET /vocs/:id` envelope: `permission_decisions.linkedFinding` | Detail panel `Linked Finding` section + trail node + `Open finding` footer button (changes copy to `Request Finding access`) | `getPermissionDecision(voc, 'linkedFinding')` |
 | `execution` | (not on VOC envelope — lives on Finding) | n/a here — cross-spec reference only | n/a |
 | `linkedVoc` | (not on VOC envelope — lives on Task) | n/a here — cross-spec reference only | n/a |
 | `source` | (not on VOC envelope — lives on Evidence) | n/a here — cross-spec reference only | n/a |
@@ -577,8 +478,8 @@ VOC reads the following keys:
 
 ```text
 1. Frontend renders VOC detail.
-2. usePermissionDecision returns the envelope.
-3. If state === 'request_access': render CTA, on click navigate to /admin/permissions/requests?action=create with prefill.
+2. getPermissionDecision returns the parsed decision, or `null`.
+3. If state === 'request_access': render the panel; its CTA appears only when the caller supplies `onRequestAccess`, and opens the request-access dialog (`RequestAccessButton`).
 4. If state === 'summary_visible': render the safe summary slot.
 5. If state === 'denied' or 'blocked_not_requestable': render copy, no CTA.
 6. Below the panel, always render the audit footer:
@@ -591,103 +492,25 @@ The `decisionId` + `evaluatedAt` line is **mandatory** per Pack 8: reviewers cor
 
 ## 8. API Mapping
 
-All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` routing convention — confirm). All request bodies are snake_case JSON. All mutation endpoints accept optional `Idempotency-Key: <uuidv4>` (24-hour TTL). All responses follow ADR-0012 error envelope on non-2xx.
+Endpoint contracts (request and response bodies, error codes, permissions, audit events) are owned by `docs/implementation/api/voc.md`; the request and response schemas are the Zod schemas in `packages/shared/src/vocs/`. This section keeps only what is specific to the frontend. All request bodies are snake_case JSON and all non-2xx responses follow the ADR-0012 error envelope.
 
-### 8.1 `POST /vocs` — Create
-
-| Property | Value |
+| Endpoint | Contract |
 |---|---|
-| Method / Path | `POST /vocs` |
-| Headers | `Content-Type: application/json`, `Idempotency-Key: <uuidv4>` (required from frontend — prevents double-submit on Create), session cookie (`fops_session`, HttpOnly + SameSite=Lax — set by `POST /auth/mock-login` or production OIDC handler) |
-| Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachment_ids?: string[] }` (PLAN-22 C7b — `attachments: AttachmentRef[]` retired; `attachment_ids[]` references pre-uploaded `voc.voc_attachments` rows linked in the same tx) |
-| Forbidden fields | `reporter_id`, `severity`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id` (per `packages/shared/src/vocs/create-request.ts FORBIDDEN_CREATE_FIELDS`) — client validation drops them before send |
-| Success response | `201 Created` with full VOC envelope including server-resolved `reporter_id`, `triage_state: 'untriaged'`, `reporter_facing_status: 'received'`, `next_actions`, `permission_decisions` |
-| Error codes (ADR-0012) | `validation.failed` (422) · `validation.unexpected_field` (422 — forbidden server-resolved field in body) · `validation.malformed_idempotency_key` (422 — Idempotency-Key header present but not UUIDv4) · `voc.severity_not_user_settable` (422) · `permission.denied` (403) · `not_found.record` (404 on referenced MS or AA) · `conflict.parent_archived` (409 if MS or AA is archived, per ADR-0019 Section A/B) · `conflict.idempotency_key_reuse` (409) · `rate_limited.actor` (429) · `rich_content.disallowed_node` (422) · `rich_content.disallowed_attr` (422) · `rich_content.invalid_attr_value` (422) · `rich_content.missing_required_attr` (422) · `rich_content.external_image_forbidden` (422) · `attachment.too_large` (422 — file exceeds 25 MB) · `attachment.unsupported_type` (422 — disallowed MIME) · `storage.unavailable` (502 — upstream storage failure) |
-| Idempotency (ADR-0015) | Required from client; same key + same body returns the stored 201 verbatim; same key + different body returns `409 conflict.idempotency_key_reuse` |
-| tx-scoped checks (ADR-0019 Section E pattern) | Service `createVoc` runs in a single tx; `SELECT … FOR UPDATE` on the parent MS row (and AA row, when present) to serialize against archive transactions. Per `apps/backend/AGENTS.md` Layer Rules: mutation service receives `Tx` not `Pool`. |
-| Audit events | `voc_created` with `{ voc_id, primary_managed_system_id, analytics_area_id?, reporter_id, source_context }` |
+| `POST /vocs` | `docs/implementation/api/voc.md` → VOC Create And Conversation Contract |
+| `GET /vocs` | `docs/implementation/api/voc.md` → VOC (endpoint list); query schema `packages/shared/src/vocs/list-query.ts` |
+| `GET /vocs/:id`, `GET /vocs/:id/conversation` | `docs/implementation/api/voc.md` → VOC (endpoint list); response schema `packages/shared/src/vocs/detail.ts` |
+| `PATCH /vocs/:id` | `docs/implementation/api/voc.md` → VOC (endpoint list); request schema `packages/shared/src/vocs/patch-request.ts`; `If-Match` rule in `docs/implementation/03-api-contracts.md` |
+| `POST /vocs/:id/public-updates`, `POST /vocs/:id/reporter-replies`, `POST /vocs/:id/internal-comments` | `docs/implementation/api/voc.md` → VOC Create And Conversation Contract (VOC conversation endpoints) |
 
-### 8.2 `GET /vocs` — List (Inbox / My / Triage)
+### 8.1 Frontend-specific notes
 
-| Property | Value |
-|---|---|
-| Method / Path | `GET /vocs` |
-| Query params | `view=inbox\|my\|triage`, `managed_system_id=:id\|all`, `tab=untriaged\|high\|unassigned\|similar\|no-link\|waiting`, `pin_voc_id=:vocId` (view=triage only), `filter.severity=`, `filter.reporter_facing_status=`, `filter.owner=assigned\|unassigned`, `sort=created_at:desc\|severity:asc\|reporter_facing_status:asc`, `cursor=`, `limit=` |
-| `pin_voc_id` (#383) | Unions ONE VOC into a `view=triage` result even though the triage predicate (`triage_state IN ('untriaged','needs_more_information')`) excludes it, and returns it first. Exists so the detail panel's `트리아지에서 변경` deep link can re-triage an already-triaged VOC. Honoured **only inside the caller's existing triage scope** — an id outside scope, archived, in another workspace, or unknown is dropped **silently with 200** (a 403/404 here would be an existence probe). A VOC the tab already returns is not duplicated. The pinned row does **not** affect `page.has_more` / `page.cursor`, which stay computed from the tab query alone. `pin_voc_id` on any other `view` → `validation.failed`. |
-| Response | `{ items: VocListItem[], page: { cursor?, has_more: bool }, out_of_scope_summary?: { count, severity_distribution } }` |
-| `out_of_scope_summary` | Present when actor's effective scope union contains VOCs the actor cannot see; powers the Triage `<PermissionBlockedPanel state="summary_visible">` peek banner |
-| Errors | `permission.denied` (403 if actor lacks any VOC read scope) · `validation.failed` (bad cursor) |
-| Caching | Stale-while-revalidate on TanStack Query, key `[ 'vocs', view, managedSystem, tab, filters, sort, cursor, pinVocId ]` — `pinVocId` is part of the key so two deep links differing only by target cannot share a cached queue |
+- **Idempotency-Key per mutation.** `apiRequest` (`apps/frontend/src/lib/api/client.ts`) mints a UUIDv4 `Idempotency-Key` for every POST, PATCH, and DELETE unless the caller passes one; the triage undo's compensating PATCH passes a fresh key (§5.3). One key per logical user intent (ADR-0015).
+- **Query key shape.** `GET /vocs` uses `['vocs', view, managedSystemId, tab, filters, sort, cursor, pinVocId]`; `pinVocId` is part of the key so two deep links differing only by target cannot share a cached queue.
+- **Triage deep link.** The detail panel's `트리아지에서 변경` link opens `/vocs?view=triage&selected=:vocId`; `TriageRoute` forwards `selected` to `GET /vocs` as `pin_voc_id` (#383), which unions that one in-scope VOC into the triage queue even though the triage predicate excludes it. An out-of-scope or unknown id is dropped silently with 200.
+- **`out_of_scope_summary`.** `GET /vocs` may return `out_of_scope_summary: { count, severity_distribution }`; it powers the Triage `<PermissionBlockedPanel state="summary_visible">` peek banner.
+- **Conversation pagination.** The conversation infinite-query hook issues its first `GET /vocs/:id/conversation` without a `cursor`; later pages carry the cursor returned by the previous page.
 
-The inbox `tab=similar` URL key remains accepted for existing deep links and
-saved views, but its tab is hidden until a predicate exists (see `04-voc-system.md`,
-“Similar VOC Suggested”). The current `buildVocListPredicate` returns no predicate
-for this key and the repository returns an empty list; this spec does not claim a
-new backend filter.
-
-### 8.3 `GET /vocs/:id` — Detail
-
-| Property | Value |
-|---|---|
-| Method / Path | `GET /vocs/:id` |
-| Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline: ConversationEntry[], attachments: LinkedAttachment[], attachment_count }` |
-| `attachments[]` (PLAN-22 §Bug-1) | Always present; `[]` when none. Each item: `{ id, name, size_bytes, mime_type, uploaded_by_actor_id, created_at, linked_at }`. `storage_key`/`storage_uri` NOT exposed — clients reference by `id` and download via `GET /attachments/:id/download`. Archived rows excluded. |
-| `ConversationEntry.attachments[]` (PLAN-22 §Bug-1) | Same shape as `attachments[]`. Always present on every entry on `conversation_timeline[]` AND on `GET /vocs/:id/conversation` items. `[]` when the entry has no linked rows. |
-| `attachment_count` on list rows | `GET /vocs` includes `attachment_count: number` on each `VocListItem` (subquery, no full JOIN). Used by inbox to render a paperclip + count chip in `VocRow`. |
-| Errors | `not_found.record` (404) · `permission.denied` (403; backend may instead return summary envelope w/ permission_decision) |
-| Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **`cursor` is optional** (PLAN-22 §Bug-2): the endpoint accepts a first-page call (no cursor) and treats it as "start from oldest". The FE infinite-query hook issues its first GET without a cursor by design. Subsequent calls carry the encoded `{ createdAt, id }` cursor returned from the previous page. |
-
-### 8.4 `PATCH /vocs/:id` — Triage commit / metadata edit
-
-| Property | Value |
-|---|---|
-| Method / Path | `PATCH /vocs/:id` |
-| Headers | `Idempotency-Key: <uuidv4>` (required for optimistic Triage flow), `If-Match: <updated_at>` (proposed for optimistic concurrency — see ADR-0019 Section A/E pattern) |
-| Allowed fields | `severity` (Admin / Developer in MS scope only), `owner_user_id`, `owner_team_id`, `analytics_area_id`, `triage_state`, `cluster_decision` (`confirm` \| `dismiss` \| `null`). **NOT** `reporter_facing_status` (must go through `POST /vocs/:id/public-updates`). **NOT** `title`, `description_rich_content` after triage begins (Reporter pre-triage edit is a separate restricted PATCH — S3-002 to decide if same endpoint or `PATCH /vocs/:id/description`). |
-| Forbidden in MVP | `severity` change after triage commits — clarify in §10 Q-SEVRETRIAGE; archived VOC rejects PATCH per ADR-0019 Section A (`409 conflict.record_archived`) |
-| Errors | `validation.failed` · `permission.denied` · `permission.scope_required` (Developer outside MS) · `conflict.stale_write` (If-Match miss) · `conflict.record_archived` (ADR-0019 Section A) · `conflict.parent_archived` (ADR-0019 Section B if MS now archived) |
-| tx-scoped checks | `SELECT … FOR UPDATE` on the VOC row + parent MS row (ADR-0019 Section E extended pattern); permission re-check inside the same tx (ADR-0019 Section D step 5 for MS-scoped grants) |
-| Audit events | `voc_triage_committed` (atomic), and individual events for any field that changed (`voc_owner_assigned`, `voc_severity_set`, `voc_analytics_area_linked`, `voc_cluster_decision_recorded`) |
-
-### 8.5 `POST /vocs/:id/public-updates`
-
-| Property | Value |
-|---|---|
-| Method / Path | `POST /vocs/:id/public-updates` |
-| Headers | `Idempotency-Key: <uuidv4>` |
-| Permission | Admin or Developer in same MS scope only (per `docs/design/04-voc-system.md:90`) |
-| Request body (with status change) | `{ body_rich_content: TipTapDoc, next_reporter_facing_status: ReporterFacingStatus, skip_public_update: false }` |
-| Request body (status change without public update) | `{ skip_public_update: true, skip_reason: string (≥ 8 chars), next_reporter_facing_status }` |
-| Request body (public update without status change) | `{ body_rich_content, next_reporter_facing_status: <unchanged>, skip_public_update: false }` |
-| Success | `201` with the created entry + the recomputed `reporter_facing_status` + fresh `next_reporter_states` |
-| Errors | `permission.denied` · `permission.scope_required` · `reporter_facing_status.invalid_transition` (per ADR-0012 closed enum) · `reporter_facing_status.gate_blocked` (proposed — S3-002) when linked-Task gate fails · `validation.failed` (missing skip_reason) · `rich_content.external_image_forbidden` · `conflict.record_archived` |
-| tx-scoped checks | Status transition validated against backend matrix in tx; linked-Task gate re-evaluated in tx (linked-Task state may have moved since the frontend's last fetch) |
-| Audit events | Paired: `public_update_created` + `reporter_facing_status_changed` (when status changes), or `reporter_facing_status_changed` + `skipped_with_reason` (skip path) |
-
-### 8.6 `POST /vocs/:id/reporter-replies`
-
-| Property | Value |
-|---|---|
-| Method / Path | `POST /vocs/:id/reporter-replies` |
-| Headers | `Idempotency-Key: <uuidv4>` |
-| Permission | Reporter on their own VOC only |
-| Request body | `{ body_rich_content: TipTapDoc, attachment_ids?: string[] }` (PLAN-22 C7b) |
-| Side effect | May return Waiting Reporter VOCs to the follow-up queue (per API contract); **must not** auto-change `reporter_facing_status` |
-| Errors | `permission.denied` (non-reporter) · `validation.failed` · `rich_content.external_image_forbidden` · `conflict.record_archived` |
-| Audit events | `reporter_reply_created` |
-
-### 8.7 `POST /vocs/:id/internal-comments`
-
-| Property | Value |
-|---|---|
-| Method / Path | `POST /vocs/:id/internal-comments` |
-| Headers | `Idempotency-Key: <uuidv4>` |
-| Permission | Admin or Developer in same MS scope |
-| Request body | `{ body_rich_content: TipTapDoc, mentions?: ActorRef[] }` |
-| Errors | `permission.denied` · `permission.scope_required` · `validation.failed` · `conflict.record_archived` |
-| Audit events | `internal_comment_created` |
-
-### 8.8 Headers, rate limit, error rendering
+### 8.2 Headers, rate limit, error rendering
 
 - `Retry-After` honored on `429 rate_limited.actor` per ADR-0015 — frontend retry helper backs off and toasts "잠시 후 다시 시도해 주세요. (Nm Ns 후)".
 - All errors map through `apps/frontend/src/lib/api/errorMapper.ts`; its `CATALOG` directly defines user-facing copy keyed on `code`. Frontend **never** displays the raw English `message` field.
@@ -703,33 +526,14 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 |---|---|---|---|
 | `/vocs?view=inbox&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png` (full-page: `voc-inbox-detail-full.png`) | Reporter pill vs internal squared badge separation; 60px default row height; sticky `+ New VOC` action in toolbar; 3-tab composer; sticky next-action footer; entity trail action panel | Detail panel rhythm matches screenshot; Linked execution section sits above abstract trail; Compose tabs are visually distinct (megaphone icon for public) |
 | `/vocs?view=triage&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-triage-console.png` | Expanded 96px rows; severity color bar; "Owner 없음" / "Area 미지정" red/amber meta tags; out-of-scope summary peek banner; 4-second undo toast bottom-center; "큐가 비었습니다" empty state | Severity picker uses 4 chips with helper tooltips; Triage 결과 미리보기 card mirrors the screenshot's labels |
-| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + same-Managed-System peer card + severity-disclaimer card in sidebar; Source segmented control; Proxy Report expands proxy_for + observed_situation row |
+| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + same-Managed-System peer card + severity-disclaimer card in sidebar; Source segmented control (no proxy sub-fields are built) |
 | `/vocs?view=my&selected=<id>` | reuse inbox baseline | Same as inbox but with `reporter_id=me` filter applied | Empty state copy differs ("내가 제출한 VOC가 없습니다") |
 
 **Acceptance use** (per HANDOFF §5): for clean-room implementation, compare against the screenshots only after the source docs are followed; never let the implementation regress from the contract because the screenshot is missing.
 
 ---
 
-## 10. Open Questions / Unresolved Gaps
-
-These block specific routes/components and must be resolved before the corresponding backend or frontend issue closes. **Do not silently resolve in the spec.**
-
-| ID | Question | Blocked surfaces | Owner | When |
-|---|---|---|---|---|
-| Q1 (attachment storage) | Is the Slice 3 backend ready to accept attachment refs on `POST /vocs` (i.e. is the storage abstraction from ADR-0011 implemented), or does Slice 3 VOC ship without attachments? Frontend dropzone + `AttachmentRow` are spec'd either way; the binding decision is whether to wire the upload service in S3-006 or strip attachments to a follow-up. | Create form attachments; RichEditor Attach button on `voc-description`, `reporter-reply`, `internal-comment` | Backend lead (S3-001 prologue) | Before S3-001 migration ships |
-| Q2 (rich content format) | Confirm TipTap JSON in `jsonb` is locked for Slice 3 (ADR-0011 says yes; verify no downstream blocker). Frontend assumes TipTap throughout; if the decision flips to Lexical or sanitized HTML, every `<RichEditor>` and `<RichContentRenderer>` site has to migrate. | All four rich-content surfaces | Frontend + backend lead | Before S3-006 component scaffold |
-| Q3 (Public Update + status change paired or separate) | The prototype always pairs them in one request. The API contract allows a `skip_public_update: true` path (status change without composing a public update body). Slice 3 UI: should the composer offer a `Skip update with reason` toggle, or restrict reporter-status changes to always require a public update? | `<ReporterStatusChangeBlock>` + `<PublicUpdateComposer>`; `POST /vocs/:id/public-updates` request shape | PM + Design (review Slice 3 prologue) | Before S3-007 starts |
-| Q4 (AA owner vs MS default owner precedence) | ~~When the actor creates a VOC, multiple default-owner rules may apply…~~ **RESOLVED 2026-05-17 (Slice 3 #13):** `POST /vocs` does NOT resolve any default owner. `owner_user_id` and `owner_team_id` are NULL on the created VOC; ownership is assigned during manual triage in #14 (`PATCH /vocs/:id`). Triage "Owner 없음" wording stays accurate. Revisit if/when default-owner policy ships in a later slice. | Triage row meta; Triage panel Owner picker initial value | Backend (precedence rule lives in service code) | ✅ RESOLVED (Slice 3 #13) |
-| Q5 (VOC Cluster scope in Slice 3) | Cluster confirm / dismiss is in the Triage panel mockup, but cluster CRUD lives in Slice 3+. Slice 3 VOC must either render the cluster section read-only (showing `similar_count` and an out-of-scope CTA) or commit cluster_decision through `PATCH /vocs/:id`. | Triage panel `유사 VOC 추천` section | PM (Slice 3 vs Slice 3+ scoping) | Before S3-002 |
-| Q6 (dev/test seed) | Production needs deterministic VOC seed data for E2E + integration tests. The prototype's `Vocs` fixture is the design intent; backend issue S3-001 must commit a parallel seed (or fixture loader) that hydrates `permission_decisions` envelopes in the same shape the frontend consumes. | E2E (Playwright?) tests in S3-008; integration tests in S3-001..S3-005 | Backend test lead | Before S3-008 |
-| Q-DISPLAYID | ~~The prototype renders `VOC-2814` as the human id. Production uses UUID v7. Who renders the display slug — backend (`display_id` column) or frontend (formatter that hashes UUID prefix)?~~ **RESOLVED 2026-05-24 (Issue #34):** backend owns `display_id`, generated by `next_voc_display_id(workspace_id)` from a per-workspace counter. URLs still select by canonical UUID; command palette and visible labels render `display_id`. | All routes (URL shape) + command palette + copy-link | Backend + Frontend lead | ✅ RESOLVED |
-| Q-SEVRETRIAGE (newly surfaced) | Can severity change after triage commits, or is it locked? `docs/design/04-voc-system.md:117` says "severity is assigned during triage" but does not forbid retriage. Affects `PATCH /vocs/:id` allowed-fields list and the Detail panel "변경" button next to Severity. | Detail panel Triage block | PM | Before S3-002 |
-| Q-CONVPAGINATION (newly surfaced) | Is `conversation_timeline` inlined on `GET /vocs/:id` or always paginated via `GET /vocs/:id/conversation`? Affects panel initial load size and timeline rendering. | Detail panel public + internal timelines | Backend | Before S3-002 |
-| Q-STATUSGATECODE (newly surfaced) | The linked-Task gate (e.g. cannot mark `resolved` until task `released`) — does the backend return `reporter_facing_status.invalid_transition` (existing in ADR-0012 enum) or a new `reporter_facing_status.gate_blocked`? Affects error-mapper i18n keys. | Public Update composer error rendering | Backend + ADR-0012 maintainer | Before S3-002 |
-
----
-
-## 11. What This Spec Does Not Cover
+## 10. What This Spec Does Not Cover
 
 | Topic | Where it lives |
 |---|---|
@@ -739,25 +543,7 @@ These block specific routes/components and must be resolved before the correspon
 | Entity Links create UI, bulk-detach | Shipped in Slice 4 — ADR-0023 |
 | Attachment upload backend (storage abstraction wiring, virus scan policy) | ADR-0011 implementation |
 | Mobile / tablet layouts | Deferred per HANDOFF §11 |
-| In-product Permission Request creation UI | Not built; `<PermissionBlockedPanel state="request_access">` deep-links into `/admin/permissions/requests` |
 | Notifications (subscribe / unsubscribe on kebab menu) | Not built — ADR-0014 derivative |
 | VOC read-state, snooze, archive | Not built; menu items render disabled |
-| Saved list views (`/vocs?view=list`) | Not built — part of #143 (GlobalRail saved-view filters) |
+| Saved list views | Shipped as sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a route |
 | Draft VOC ("초안 저장") | Not built |
-
----
-
-## Self-review checklist
-
-- [x] §1 header + scope present with explicit non-scope
-- [x] §2 route matrix covers Inbox / My / Triage / Create / Detail
-- [x] §3 component mapping covers every VOC-touching surface (header, list, toolbar, triage queue + panel, create form, composers, status block, badges, permission, hover, command)
-- [x] §4 data mapping covers VOC record, permission envelope, conversation entries, pending attachment, reporter-status transitions
-- [x] §5 interaction contract covers filters/sort, command palette, optimistic + undo, header actions, preview modal, permission surfaces, RichEditor allowlist, dirty save, drag/drop (explicitly none), reporter-status change, triage flow + audit events
-- [x] §6 visual contract enumerates every cited token with Tailwind key + raw color + usage; Neon Lime rule called out
-- [x] §7 permission envelope maps four keys (only `linkedFinding` consumed by VOC) and specifies the `usePermissionDecision` hook + audit footer rule
-- [x] §8 API mapping covers POST /vocs, GET /vocs, GET /vocs/:id, PATCH /vocs/:id, POST /vocs/:id/{public-updates, reporter-replies, internal-comments} with headers, errors, idempotency, tx checks, audit events
-- [x] §9 acceptance per route; gaps flagged where curated screenshots are missing
-- [x] §10 open questions: original 6 + 4 newly surfaced
-- [x] §11 explicit non-scope
-- [x] File length: ~870 lines (within 800-1200 budget)

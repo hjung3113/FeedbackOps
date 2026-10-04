@@ -23,8 +23,6 @@ Code ownership and URL mount are not the same thing here:
 
 ## Invariants
 
-- Finding bridges evidence to execution.
-- Entity Links are canonical cross-system history for optional relationships.
 - Missing-link queues are policy-driven, not automatic guilt for every unlinked record.
 - Visibility must respect backend-provided link summaries and permission states.
 

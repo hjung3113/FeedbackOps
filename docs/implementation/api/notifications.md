@@ -12,9 +12,9 @@ workspace before enqueueing jobs.
 
 | Event | Producer | Recipients |
 | --- | --- | --- |
-| `voc.assigned_to_me` | `voc/service.ts` `updateVoc` | The newly assigned user owner; team-only ownership has no Actor recipient. |
+| `voc.assigned_to_me` | `voc/commands/update-triage.ts` `updateVoc` (exposed via `voc/service.ts`) | The newly assigned user owner; team-only ownership has no Actor recipient. |
 | `voc.reporter_replied` | `voc/conversation-service.ts` `postReporterReply` | The current user owner, if set, plus every workspace Actor with `role_level = admin`. |
-| `voc.severity_set_high_or_critical` | `voc/service.ts` `updateVoc` | On a change to `high` or `critical`, the current user owner, if set, plus every workspace Actor with `role_level = admin`. |
+| `voc.severity_set_high_or_critical` | `voc/commands/update-triage.ts` `updateVoc` (exposed via `voc/service.ts`) | On a change to `high` or `critical`, the current user owner, if set, plus every workspace Actor with `role_level = admin`. |
 | `task_request.approved`, `task_request.rejected`, `task_request.needs_more_evidence` | `task-requests/service.ts` `decideTaskRequest` | The Task Request creator (`requester_actor_id`), including self-approval. |
 | `task.assigned_to_me` | `tasks/service.ts` `convertTaskRequest` | The new assignee, only when `assignee_actor_id` is set. |
 | `task.released` | `voc/public-update-review-candidates/service.ts` `createForReleasedTask` | The linked VOC's current user owner, once per newly inserted review candidate, unless that owner is the releasing actor, Task assignee, or Reporter. |

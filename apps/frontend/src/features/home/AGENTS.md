@@ -18,7 +18,6 @@ Home is not a chart-only dashboard and must not duplicate source-system workflow
 - Prioritize backend-provided next actions over decorative metrics.
 - Show only queues and summaries allowed for the actor.
 - Include source object type, source object id, target route, selected object, and action intent in next-action links.
-- Managed System scope is a filter/defaulting context, not a separate Home tree.
 
 ## Key files
 

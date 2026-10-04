@@ -14,6 +14,8 @@ docs/design/12-ui-ux-principles.md
 
 It is not a generic package list. FeedbackOps has product-specific UI contracts that no third-party component library should own.
 
+The shipped component inventory is `packages/ui/src/index.ts`. Component contracts and required states live in `docs/frontend/component-inventory.md`. This document owns library governance: which libraries are approved, which are not adopted, and how a new one is added.
+
 ## Decision
 
 Use a governed shadcn/ui-style component architecture:
@@ -40,20 +42,18 @@ FeedbackOps is a dense operational SaaS with:
 - permission-limited content
 - workflow repair queues
 - separate internal and reporter-facing status
-- dark Linear-like visual density
+- light Pack 17 density (ADR-0021)
 ```
 
 Most full UI kits solve generic app components, but they do not solve:
 
 ```text
-- LinkedEntityTrail
-- EvidenceHighlight
-- ActionQueueRow
-- PermissionBlockedPanel
-- PublicUpdateComposer
-- RichContentEditor
-- ConversationComposer
-- ReporterSummaryBlock
+- linked-entity trails
+- evidence highlights
+- action queue rows
+- permission-blocked states
+- public update composition
+- rich content editing
 - reporter-facing vs internal status separation
 - permission-aware redaction states
 ```
@@ -67,28 +67,10 @@ Those components must be owned by this codebase.
 Owned path:
 
 ```text
-packages/ui/src/ui/*
+packages/ui/src/components/shadcn/*
 ```
 
-Examples:
-
-```text
-- Button
-- Input
-- Textarea
-- RichContentEditor
-- Select
-- Combobox
-- Dialog
-- Sheet
-- Popover
-- Tooltip
-- Tabs
-- Badge
-- Table
-- Command
-- Toast
-```
+The shipped primitives are listed in `packages/ui/src/components/shadcn/` and exported from `packages/ui/src/index.ts`.
 
 Recommended source:
 
@@ -102,94 +84,43 @@ Rules:
 - These components expose visual tokens and accessibility behavior.
 - They do not know FeedbackOps domain concepts.
 - They must be normalized to frontend semantic tokens derived from docs/frontend/tokens.md.
-- Feature screens should not import raw Radix primitives directly unless a wrapper does not exist yet.
+- Feature screens must not import @radix-ui/* directly (scripts/check-boundaries.mjs rule 3). They import the wrapper from @fops/ui.
 ```
 
-### Layer 2: Product Primitives
+### Layer 2: Product And Domain Components
 
 Owned path:
 
 ```text
-packages/ui/src/product/*
+packages/ui/src/<area>/*
 ```
 
-Examples:
+Areas: `badges`, `data`, `entity`, `feedback`, `forms`, `identity`, `indicators`, `layout`, `panel`, `permissions`, `rich-content`, `toolbar`. Shared pickers and `Button` live in `packages/ui/src/components/*`. The layout shells are exactly `PageShell`, `ListShell`, and `WorkbenchShell` (ADR-0020).
 
-```text
-- AppShell
-- ObjectList
-- InboxList
-- DataTable
-- DetailPanel
-- ActionToolbar
-- StatusBadge
-- SignalBadge
-- PermissionGate
-- RedactedValue
-- AccessRequestDialog
-```
+Components that only one feature uses stay feature-local, under `apps/frontend/src/features/<feature>/`.
 
 Rules:
 
 ```text
 - These components encode FeedbackOps layout, density, and state contracts.
 - Feature screens should prefer these over composing tables, badges, panels, and permission states independently.
-- ObjectList and DataTable should be built once and reused across VOC, Finding, Task Request, Survey, Home/Integration queue, and Permission screens.
-```
-
-### Layer 3: Domain Workflow Components
-
-Owned path:
-
-```text
-packages/ui/src/domain/*
-```
-
-Examples:
-
-```text
-- LinkedEntityTrail
-- EvidenceHighlight
-- PublicUpdateComposer
-- ConversationComposer
-- ReporterSummaryBlock
-- ActionQueueRow
-- PermissionBlockedPanel
-- FindingExecutionActions
-- TaskRequestDecisionPanel
-- SurveyResultSummaryBlock
-```
-
-Rules:
-
-```text
 - These components preserve product rules from docs/design.
 - They must not be replaced by generic card/table/chart blocks.
 - They should make missing links, restricted content, and next actions explicit.
+- They do not call APIs or own domain mutations.
 ```
 
-### Layer 4: Screens
+### Layer 3: Screens
 
 Owned path:
 
 ```text
 apps/frontend/src/features/*
-apps/frontend/src/app/*
+apps/frontend/src/routes/*
+apps/frontend/src/lib/*
 ```
 
 Screens compose product and domain components.
-
-Examples:
-
-```text
-- VOC Inbox
-- Finding Detail
-- Tasks Intake Queue
-- Task Detail
-- Survey Result
-- Home/Integration Action Queue
-- Admin Permission Requests
-```
 
 Rules:
 
@@ -205,6 +136,7 @@ Rules:
 ### Base UI And Interaction
 
 ```text
+React 19
 shadcn/ui
 Radix UI
 lucide-react
@@ -215,58 +147,63 @@ cmdk
 Use:
 
 ```text
-- shadcn/ui for source-owned UI wrappers
-- Radix UI for accessible primitives
+- shadcn/ui for source-owned UI wrappers (packages/ui/src/components/shadcn; shadcn is not a runtime dependency)
+- Radix UI for accessible primitives (@radix-ui/react-* dependencies of packages/ui)
 - lucide-react for icons
 - sonner for ephemeral mutation feedback
-- cmdk for the CommandMenu primitive
+- cmdk for the CommandPalette primitive
 ```
 
 Constraints:
 
 ```text
 - sonner is only for transient feedback. Meaningful workflow state must also appear inline in rows, detail panels, or activity history.
-- cmdk is only the visual/interaction primitive. FeedbackOps CommandMenu also needs a command registry, permission filtering, routing integration, and audit/telemetry hooks.
+- cmdk is only the visual/interaction primitive. The product command palette is apps/frontend/src/lib/layout/command-palette/ (see docs/frontend/routes-and-layout.md, Global command palette).
 - lucide-react requires an icon vocabulary so the same icon is not reused inconsistently across evidence, links, permissions, public updates, task requests, and risk signals.
 ```
 
-### Data Display
+### Routing, Data, And Forms
 
 ```text
-@tanstack/react-table
-@tanstack/react-virtual
+@tanstack/react-router
+@tanstack/react-query
+react-hook-form
+@hookform/resolvers
+zod
 ```
 
-Use:
+### Styling
 
 ```text
-- ObjectList for workflow-first lists
-- DataTable for comparison-heavy operational tables
-- virtualization for large VOC, response, and audit lists
+tailwindcss (v4, CSS-first theme, ADR-0058)
+@tailwindcss/vite
+tailwind-merge
+class-variance-authority
+clsx
 ```
 
 Constraints:
 
 ```text
-- Do not let each feature screen compose TanStack Table independently.
-- Build one canonical ObjectList/DataTable abstraction early.
-- Keyboard navigation, selection state, sticky headers, loading, empty, error, and permission-limited states belong in the shared abstraction.
+- Theme and tokens are CSS: packages/ui/src/styles/{tokens,semantic,theme,compat}.css. The Tailwind JS preset and tailwind.config are removed (ADR-0058).
+- Light is the only MVP theme (ADR-0021).
 ```
 
 ### Drag And Drop
 
 ```text
 @dnd-kit/core
-@dnd-kit/sortable
 ```
 
 Approved use:
 
 ```text
-- Product Area tree sorting
+- Analytics Area tree sorting
 - Survey Builder question ordering
 - bounded Task Board interactions
 ```
+
+As built, only the Task Board uses `@dnd-kit/core`. `@dnd-kit/sortable` is not installed.
 
 Avoid:
 
@@ -278,18 +215,7 @@ Avoid:
 
 ### Charts
 
-```text
-recharts
-```
-
-Use:
-
-```text
-- small inline distribution charts
-- coverage indicators
-- survey result summaries
-- product-area breakdowns
-```
+No chart library is installed.
 
 Constraint:
 
@@ -299,28 +225,19 @@ Home and Integration queue screens must remain action-queue-first, not BI-card-f
 
 ### Rich Content Editor
 
-Primary spike candidates:
-
 ```text
-Tiptap
-Plate
-```
-
-Prototype comparison only:
-
-```text
-Toast UI Editor
+TipTap (ADR-0011)
 ```
 
 Use:
 
 ```text
-- one shared WYSIWYG-first editor foundation
+- one shared WYSIWYG-first editor foundation in packages/ui/src/rich-content/ (RichEditor for authoring, RichContentRenderer for read-only rendering)
 - VOC description
 - Reporter Reply
 - Public Update
 - Internal Comment
-- surface-specific toolbar, embed, table, and rendering restrictions
+- surface-specific toolbar, embed, and rendering restrictions (docs/design/15-data-contracts.md)
 ```
 
 Constraints:
@@ -330,24 +247,22 @@ Constraints:
 - Images pasted, dropped, or uploaded appear inline but are stored as attachments.
 - Do not store base64 body images.
 - Do not render external image URLs inline in MVP.
-- Tables should be rich table nodes; large spreadsheets should be file attachments.
+- Rich Table is out of MVP (ADR-0011, Rich Table): the editor blocks the table toolbar action and rejects pasted table nodes; spreadsheets are file attachments.
 - Public-facing surfaces must preserve reporter-safe rendering.
 ```
 
-Spike criteria:
+### Not Adopted
+
+These libraries were considered and are not installed in any `package.json`:
 
 ```text
-- non-developer WYSIWYG usability
-- screenshot paste/drop with upload hooks and inline attachment rendering
-- Excel/table paste behavior
-- dark-theme quality
-- mobile editing
-- read-only rendering
-- surface-specific restrictions
-- safe storage/rendering model
-- internal SaaS licensing
-- maintenance activity
+- @tanstack/react-table
+- @tanstack/react-virtual
+- @dnd-kit/sortable
+- recharts
 ```
+
+Lists use the shared list shells and `ObjectRow` (`packages/ui/src/data`). Adopting any of these is a new dependency: add it to the owning package and move it into the Approved MVP Stack in the same change.
 
 ## Reference Registries
 
@@ -367,7 +282,7 @@ They are not approved as direct visual systems.
 Any component copied from a registry must go through this process:
 
 ```text
-1. Copy into packages/ui/src/ui, packages/ui/src/product, or packages/ui/src/domain.
+1. Copy into packages/ui/src/components/shadcn (primitives) or the matching packages/ui/src/<area> folder (product and domain components).
 2. Normalize colors, spacing, radius, typography, focus rings, and density to `docs/frontend/ui-design-system.md` semantic tokens.
 3. Remove unrelated variants and decorative styling.
 4. Verify accessibility behavior.
@@ -403,7 +318,7 @@ Tremor:
 ```text
 Useful as a dashboard/chart reference.
 Do not make it a default dependency for MVP unless a concrete chart component is accepted.
-Prefer Recharts directly for small charts.
+If a chart library is adopted, prefer Recharts directly for small charts.
 ```
 
 ## Deferred Or Not Recommended As Primary Stack
@@ -441,7 +356,7 @@ Not recommended as the primary UI stack.
 Reason:
 
 ```text
-These are full component systems with stronger visual and API opinions. They can speed up generic admin surfaces, but they work against the FeedbackOps requirement to own dense Linear-like visual language, permission-aware states, and evidence-to-action workflow components.
+These are full component systems with stronger visual and API opinions. They can speed up generic admin surfaces, but they work against the FeedbackOps requirement to own the dense Pack 17 light visual language (ADR-0021), permission-aware states, and evidence-to-action workflow components.
 ```
 
 Use only if:
@@ -468,16 +383,7 @@ They are useful Tailwind component accelerators, but FeedbackOps needs React-own
 
 ## Permission-Aware UI Requirements
 
-The stack must include explicit permission-aware components.
-
-Required components:
-
-```text
-- PermissionGate
-- RedactedValue
-- PermissionBlockedPanel
-- AccessRequestDialog
-```
+The stack must include explicit permission-aware components. `PermissionBlockedPanel` (`packages/ui/src/permissions/`) is the shared blocked state.
 
 Rules:
 
@@ -486,30 +392,6 @@ Rules:
 - A user should see a safe blocked state when the existence of restricted content is visible.
 - Redacted content must not leak internal task comments, personal survey responses, customer-sensitive data, or admin-only links.
 - Permission request paths must show scope and reason requirements.
-```
-
-## Command Menu Requirements
-
-CommandMenu is a product subsystem, not only a `cmdk` wrapper.
-
-Required pieces:
-
-```text
-- command registry
-- route integration
-- current selection actions
-- permission filtering
-- disabled reasons
-- recent object source
-- audit/telemetry hooks for sensitive actions
-```
-
-Rules:
-
-```text
-- Command verbs must match visible UI actions.
-- Permission-blocked actions may appear disabled with a reason.
-- Sensitive actions should route to a confirmation flow rather than execute directly.
 ```
 
 ## Icon Vocabulary
@@ -542,38 +424,31 @@ Rules:
 - Do not use Neon Lime for ordinary status icons.
 ```
 
-## Implementation Order
-
-Recommended order:
-
-```text
-1. Implement semantic frontend tokens derived from docs/frontend/tokens.md and the base theme.
-2. Add shadcn/ui Radix-backed primitives.
-3. Build AppShell, Button, Badge, Field, Dialog, Sheet, Popover, Tooltip, Command, Toast.
-4. Build StatusBadge, SignalBadge, PermissionGate, RedactedValue, PermissionBlockedPanel.
-5. Build ObjectList and DetailPanel.
-6. Build DataTable only after ObjectList behavior is stable.
-7. Build LinkedEntityTrail, EvidenceHighlight, PublicUpdateComposer, ActionQueueRow.
-8. Use domain screens to validate shared components.
-```
-
 ## Package Baseline
 
-Initial MVP package direction:
+As-built dependency direction (`apps/frontend/package.json`, `packages/ui/package.json`):
 
 ```text
 apps/frontend runtime dependencies:
-- lucide-react
-- sonner
-- cmdk
-- @tanstack/react-table
-- @tanstack/react-virtual
+- react, react-dom (19)
+- @tanstack/react-router, @tanstack/react-query
+- react-hook-form, @hookform/resolvers, zod
+- lucide-react, sonner, cmdk
 - @dnd-kit/core
-- @dnd-kit/sortable
-- recharts
+- @fontsource-variable/inter, @fontsource-variable/jetbrains-mono, pretendard
+- @fops/ui, @fops/shared (workspace)
+
+apps/frontend styling dev dependencies:
+- tailwindcss, @tailwindcss/vite (v4, ADR-0058)
+
+packages/ui dependencies:
+- @radix-ui/react-* (avatar, checkbox, dialog, dropdown-menu, hover-card, label, popover, radio-group, select, slot, tabs, toggle-group, tooltip)
+- @tiptap/* (core, react, pm, starter-kit, html, extension-link, extension-placeholder, extension-underline)
+- class-variance-authority, clsx, tailwind-merge
+- lucide-react, sonner
 ```
 
-Add shadcn/ui components through the shadcn CLI rather than treating shadcn as a normal runtime UI dependency.
+shadcn/ui is not a normal runtime UI dependency; its components are source files under `packages/ui/src/components/shadcn`.
 Install reusable component dependencies at the workspace root or target package
 according to the chosen workspace manager; do not create per-app lockfiles.
 
@@ -589,10 +464,8 @@ Accepted review changes:
 - Defer Base UI to future evaluation.
 - Treat ReUI, Kibo UI, Origin UI, and Tremor as reference registries only.
 - Require external component intake and token normalization.
-- Require canonical ObjectList/DataTable wrappers.
 - Add explicit permission-aware UI primitives.
 - Scope dnd-kit and chart usage.
-- Treat CommandMenu as a product subsystem.
 - Add icon vocabulary governance.
 ```
 

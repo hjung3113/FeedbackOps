@@ -135,7 +135,7 @@ VOC ownership state:
 - Assigned to Team
 ```
 
-New VOC starts Untriaged. It is Unassigned only when no explicit owner or default owner rule resolves ownership. When a default owner rule applies, the actual owner field is prefilled and the VOC is assigned but still Untriaged. Triage, owner assignment, reporter-facing status, Finding creation, and Task Request creation are separate decisions.
+New VOC starts Untriaged. It is Unassigned only when no explicit owner or default owner rule resolves ownership. (Default owner resolution is deferred, ADR-0059 D1; VOC create leaves the owner empty today.) When a default owner rule applies, the actual owner field is prefilled and the VOC is assigned but still Untriaged. Triage, owner assignment, reporter-facing status, Finding creation, and Task Request creation are separate decisions.
 
 Every VOC must have exactly one Primary Managed System. Analytics Area is optional and can only be selected from the chosen Primary Managed System.
 
@@ -217,7 +217,7 @@ Priority: MUST
 Acceptance Criteria:
 
 ```text
-- Admin and same-scope Developer can view Unassigned, Untriaged, High Severity, Waiting Reporter, Similar VOC Suggested, Linked to Finding, and No Follow-up views.
+- Admin and same-scope Developer can view Unassigned, Untriaged, High Severity, Waiting Reporter, Similar VOC Suggested, Linked to Finding, and No Follow-up views. Shipped tab sets: Triage per ADR-0022, Inbox per ADR-0040; `Similar` stays hidden until the ADR-0031 predicate exists.
 - Admin and same-scope Developer can assign owner or team directly from the list.
 - Unassigned can be filtered by Managed System and Analytics Area.
 - Admin and same-scope Developer can set severity, owner, category, Analytics Area, and Reporter-facing Status.
@@ -253,29 +253,11 @@ Acceptance Criteria:
 - Recommended matches can be dismissed.
 ```
 
-> **Implementation status (2026-07-27).** The ADR-0034 mechanism is now
-> shipped: pgvector-backed, versioned embeddings; a recommendation resource
-> with directional dismissal; and explicit confirmation that creates or joins
-> a cluster without auto-clustering. Its HTTP surface is `GET
-> /vocs/:id/recommendations`, `POST
-> /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
-> /vocs/:id/recommendations/:candidate_id/confirm`. ADR-0031's same-Managed-
-> System heuristic remains alongside this resource when recommendations are
-> unavailable.
->
-> A user-facing surface now exists as well: the triage panel's Cluster 추천
-> section renders per-candidate recommendations with confirm and dismiss
-> actions, so all three acceptance criteria above are reachable by a user and
-> not only through the API.
->
-> The 0.75 similarity threshold is still unvalidated against real embeddings.
-> The shipped fixture verifies query and threshold mechanics, not recommendation
-> quality, so this requirement's quality is not yet demonstrated.
->
-> **Implementation status (2026-08-04).** The VOC create screen's pre-submit
-> panel is a separate ADR-0031 same-Managed-System heuristic peer read. It is
-> distinct from the saved-VOC embedding recommendation resource and has no
-> embedding availability, score, dismiss, or confirm state.
+The recommendation mechanism (ADR-0034) is pgvector-backed, versioned embeddings, a recommendation resource with directional dismissal, and explicit confirmation that creates or joins a cluster without auto-clustering. Its HTTP surface is `GET /vocs/:id/recommendations`, `POST /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST /vocs/:id/recommendations/:candidate_id/confirm`. ADR-0031's same-Managed-System heuristic remains alongside this resource when recommendations are unavailable. The triage panel's Cluster 추천 section renders per-candidate recommendations with confirm and dismiss actions.
+
+The 0.75 similarity threshold (`VOC_RECOMMENDATION_SIMILARITY_THRESHOLD`) is unvalidated against real embeddings. The evaluation fixture verifies query and threshold mechanics, not recommendation quality.
+
+The VOC create screen's pre-submit panel is a separate ADR-0031 same-Managed-System heuristic peer read. It is distinct from the saved-VOC embedding recommendation resource and has no embedding availability, score, dismiss, or confirm state.
 
 ### FR-VOC-005: Public Update
 
@@ -325,15 +307,7 @@ Purpose:
 
 Views:
 
-```text
-- Unassigned
-- Untriaged
-- High Severity
-- Waiting Reporter
-- Similar VOC Suggested
-- Linked to Finding
-- No Follow-up
-```
+Triage tabs are the four-tab strip with a URL `tab` param defined by ADR-0022 (`미배정`, `미트리아지`, `높은 심각도`, `보류`).
 
 Quick Actions:
 
@@ -374,13 +348,7 @@ Purpose:
 
 Views:
 
-```text
-- All open
-- Assigned to me
-- My team
-- Recently updated
-- Closed
-```
+Inbox tabs follow `VOC_TABS` in `docs/design-prototype/screen-voc.jsx`. The `similar` tab (Similar VOC Suggested) is hidden until its predicate exists (ADR-0031). `/vocs?view=my` lists the VOCs the caller submitted.
 
 ## Permissions
 

@@ -4,7 +4,7 @@
 
 Core owns workspace and actor context, teams, Managed System Registry, Analytics Areas, Role Level vocabulary, shared identifiers, shared attachment governance, and audit log append APIs.
 
-Analytics Areas are implemented as a separate top-level module directory (`../analytics-areas/`) but logically owned by Core for boundary/permission purposes.
+Analytics Areas, the Managed System Registry, and attachment governance are implemented as separate top-level module directories (`../analytics-areas/`, `../managed-systems/`, `../attachments/`) but logically owned by Core for boundary/permission purposes.
 
 ## Boundaries
 

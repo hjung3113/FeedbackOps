@@ -21,8 +21,8 @@ Registering every migration in `migrations/meta/_journal.json` is a rule in `app
 ## drizzle and Postgres traps
 
 - drizzle-kit does not read `.env`; without `DATABASE_URL_MIGRATE` it falls back to port 5432 and fails with a misleading `password authentication failed`. `db:migrate` and `db:seed` also need the URLs exported in the shell.
-- `pnpm gate:db-migration-drift` runs `drizzle-kit check` on the migration history and fails on a nonzero exit; treat a failure there as a real history problem and investigate it.
+- `pnpm gate:db-migration-drift` needs no database and fails on an unregistered or missing migration, a nonzero `drizzle-kit check`, or schema-vs-migration drift (details: `scripts/gates/AGENTS.md`); treat a failure there as a real history problem and investigate it.
 - Editing a migration that is already applied is silently skipped by the journal. Recreate the database, or run the SQL in the suite via `readFileSync`.
 - A JS `null` in `.values()` becomes SQL `NULL`, not JSON `null`, so a `NOT NULL` jsonb column fails at runtime with a green typecheck. Use `{}` or `'null'::jsonb`.
 - `CREATE EXTENSION vector` needs a superuser; `fops_migrate` is not one. `scripts/db/init.sql` creates it on a fresh volume only, and migration 0042 only asserts it.
-- A throwaway database must be created with `owner fops_migrate`; otherwise schemas are owned by `postgres` and even `fops_migrate` gets `permission denied for schema …`.
+- A throwaway database must be created with `owner fops_migrate`: see `apps/backend/AGENTS.md` → Verification → Provisioning a throwaway database.

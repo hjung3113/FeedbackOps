@@ -16,7 +16,7 @@ alternative path.
 
 ## Decision
 
-The Task execution table is `task.tasks`. Task status values are:
+The Task execution table is `task.tasks`. Task status values (extends ADR-0003's six-value enum with `reopened`) are:
 
 ```text
 backlog

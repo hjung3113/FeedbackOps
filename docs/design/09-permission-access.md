@@ -52,7 +52,7 @@ Role Level order is Admin > Developer > User. Reporter is not a role; it is the 
 ```text
 - VOC 작성 without a permission request
 - 본인 VOC 상태 확인
-- 본인에게 할당된 Survey 응답
+- 열려 있는 Survey 응답
 - 공개 또는 허용된 Dashboard 일부 조회 optional
 ```
 
@@ -87,10 +87,10 @@ The backend returns effective navigation and capability states for the current w
 | Create Task Request | no | scoped | yes |
 | Approve Task Request | no | same Managed System scope | yes |
 | Self-approve own Task Request | no | explicit scoped capability | yes |
-| Create Task directly | no | scoped | yes |
+| Create Task directly (not built, ADR-0027; data shape valid) | no | scoped | yes |
 | Read Task internal comments | no | `finding.manage` on that Task's Managed System | yes |
 | Create Survey | no | scoped | yes |
-| Answer assigned Survey | yes | yes | yes |
+| Answer open Survey | yes | yes | yes |
 | Read personal Survey responses | no | permission required | no — explicit capability required |
 | Export Survey data (`survey.export`) | no | permission required | permission required |
 | Approve Permission Request | no | no | yes |
@@ -123,6 +123,8 @@ List-filter meaning of managed_system_id=all: docs/implementation/05-permission-
 
 ## Default Owner / Reviewer Resolution
 
+Deferred except the Survey operator default (ADR-0059 D1). The rules below are the target design.
+
 When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed System, the application service resolves default owner or reviewer from:
 
 ```text
@@ -132,7 +134,7 @@ When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed
 4. workspace fallback queue
 ```
 
-The resolved owner or reviewer is written to the actual owner/reviewer field and must be visible in list filters and audit-relevant creation responses. Default owner does not mean the record is triaged, and default reviewer does not mean the record is reviewed. Analytics Area owner team is a routing/defaulting hint only and does not grant Managed System scope. If a resolved owner or reviewer lacks required Managed System scope, the service returns validation_failed or directs the actor to the permission request flow instead of silently granting access. Default resolution should record creation metadata such as default_resolved, source rule, and managed_system_id. Failure to resolve a required reviewer returns validation_failed instead of creating unowned review work.
+The resolved owner or reviewer is written to the actual owner/reviewer field and must be visible in list filters and audit-relevant creation responses. Default owner does not mean the record is triaged, and default reviewer does not mean the record is reviewed. Analytics Area owner team is a routing/defaulting hint only and does not grant Managed System scope. If a resolved owner or reviewer lacks required Managed System scope, the service returns validation.failed or directs the actor to the permission request flow instead of silently granting access. Default resolution should record creation metadata such as default_resolved, source rule, and managed_system_id. Failure to resolve a required reviewer returns validation.failed instead of creating unowned review work.
 
 ## Permission Request Data Model
 
@@ -155,6 +157,8 @@ Permission Request
 - created_at
 - decided_at
 ```
+
+This is the conceptual shape. Stored columns are in `15-data-contracts.md`; the approver, decision time, and an Admin's more-info note are recorded on the audit event, not as columns on the request.
 
 ## Functional Requirements
 

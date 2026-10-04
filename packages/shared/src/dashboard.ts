@@ -93,7 +93,8 @@ export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
 
 export type DashboardCoverageId = DashboardSummary['coverage'][number]['id'];
 export type DashboardActionQueueId = DashboardSummary['action_queues'][number]['id'];
-// milestone-outcome has no MVP backing queue or filter, so it stays out of the
+// milestone-outcome is a reserved coverage id that is never emitted (no
+// Milestone-outcome coverage definition exists yet), so it stays out of the
 // hop map (plan-513: "milestone-outcome. Keep omitting it.").
 export type DashboardHopId = Exclude<DashboardCoverageId, 'milestone-outcome'> | DashboardActionQueueId;
 

@@ -1,9 +1,7 @@
 // Embedding recommendation service (#168 step 4, ADR-0034 D3/D4/D5/D6).
 //
-// Scope of this step is service + storage. There is no route here and no DTO
-// in @fops/shared: the HTTP and frontend surface is step 6, which also amends
-// ADR-0031 and FR-VOC-004. Until then the ADR-0031 same-Managed-System
-// heuristic remains the shipped "similar VOC" behaviour, untouched.
+// Service + storage. The HTTP surface is `routes.ts` in this directory
+// (GET /vocs/:id/recommendations, confirm, dismiss).
 
 import type { Db } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';

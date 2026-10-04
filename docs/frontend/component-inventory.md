@@ -47,12 +47,12 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 
 ## Composed Components
 
-This list is the original prescriptive inventory and several entries were never built under these names, or at all. The shell shipped as `AppFrame` / `AppRail` / `AppSidebar` (`apps/frontend/src/lib/layout/`), governed by ADR-0020, which supersedes the `AppShell` / `RoleLevelAwareSidebar` naming below. Route shells (`ListShell`, `PageShell`) and `ObjectRow` live in `@fops/ui`. Treat the code and ADR-0020 as authoritative when they disagree with a name here.
+This list is the original prescriptive inventory and several entries were never built under these names, or at all. The shell shipped as `AppFrame` / `AppRail` / `AppSidebar` (`apps/frontend/src/lib/layout/`), governed by ADR-0020, which supersedes the `AppShell` / `RoleLevelAwareSidebar` naming below. Route shells (`ListShell`, `PageShell`) and `ObjectRow` live in `@fops/ui`. Treat the code and ADR-0020 as authoritative when they disagree with a name here. The Built Mapping section below maps design-time names to what shipped.
 
 ```text
 AppShell (built as AppFrame)
 RoleLevelAwareSidebar (built as AppRail + AppSidebar)
-ManagedSystemScopeSwitcher (not built — #143)
+ManagedSystemScopeSwitcher (built as the AppSidebar scope control, #143)
 ScopeFilterBar
 ObjectList
 InboxList
@@ -75,6 +75,38 @@ ReviewerPicker
 UserPicker
 AuditTimeline
 ```
+
+## Built Mapping
+
+Names in the primitive table and the composed list above are design-time names. This table maps them to what shipped; `packages/ui/src/index.ts` remains the export inventory.
+
+| Design-time name | Shipped as | Path |
+| --- | --- | --- |
+| AppShell | `AppFrame` | `apps/frontend/src/lib/layout/AppFrame.tsx` |
+| RoleLevelAwareSidebar | `AppRail` + `AppSidebar` | `apps/frontend/src/lib/layout/` |
+| ManagedSystemScopeSwitcher | scope selector inside `AppSidebar` (`ManagedSystemScopeOption`) | `apps/frontend/src/lib/layout/AppSidebar.tsx` |
+| ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx`, `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
+| LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
+| DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock`, `FieldRow`, `PanelSectionTitle`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
+| StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
+| SignalBadge | `SeverityBadge`, `SeverityIndicator`, `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
+| RichContentEditor | `RichEditor` + `RichContentRenderer` | `packages/ui/src/rich-content/` |
+| PublicUpdateComposer | feature-local `PublicUpdateComposer` | `apps/frontend/src/features/voc/components/detail/` |
+| ConversationComposer | feature-local `ComposerSection` + `ComposerTabs` hosting `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` | `apps/frontend/src/features/voc/components/detail/` |
+| EvidenceHighlight | feature-local `EvidenceHighlights` | `apps/frontend/src/features/findings/components/FindingDetail/` |
+| ActionQueueRow | feature-local `ActionQueueRow` (Home); `IntegrationDashboardCards` (Integration) | `apps/frontend/src/features/home/HomeScreen.tsx`, `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
+| CommandMenu | `CommandPalette` | `apps/frontend/src/lib/layout/command-palette/` |
+| UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |
+| Drawer | `Sheet` | `packages/ui/src/components/shadcn/sheet.tsx` |
+| Toast | `sonner` `Toaster` mounted in the root route; `UndoToast` | `apps/frontend/src/routes/__root.tsx`, `packages/ui/src/feedback/UndoToast.tsx` |
+| Avatar | `Avatar`, `UserAvatar`, `UserChip` | `packages/ui/src/components/shadcn/avatar.tsx`, `packages/ui/src/identity/` |
+| TextInput | `Input` | `packages/ui/src/components/shadcn/input.tsx` |
+
+Built under the same name: `LinkedEntityTrail`, `PermissionBlockedPanel`, `ManagedSystemPicker`, `AnalyticsAreaPicker`.
+
+Never built: `IconButton`, `Table` / `DataTable`, `InboxList`, `ScopeFilterBar`, `ReporterSummaryBlock`, `ActionToolbar`, `ReviewerPicker`, `AuditTimeline`.
 
 ## Implemented Shared Flow Components
 
@@ -177,7 +209,7 @@ Rich content constraints:
 ## Visual State Requirements
 
 ```text
-- Focus-visible must be visible on dark surfaces.
+- Focus-visible must be visible on every surface (light canvas, tinted selected rows, cards).
 - Selected row and hover row must be distinguishable.
 - Disabled content must remain readable enough to explain why action is blocked.
 - Invalid fields must show text and border/ring state, not color alone.
