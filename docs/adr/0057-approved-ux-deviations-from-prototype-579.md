@@ -9,7 +9,7 @@ requires the owner to see a rendered design of the first implementation before i
 
 B8 and B9 came from the 2026-10-01 pre-release audit (#685).
 
-Amended by ADR-0060 (2026-10-05): the prototype is no longer the spec for items not listed here; the shipped UI is the UI authority. The decisions below stand.
+Amended by ADR-0060 (2026-10-05): the prototype is no longer the spec for items not listed here. A2's last sentence ("Prototype wording remains authoritative…") no longer applies; copy authority is `apps/frontend/src/lib/copy/*` and the shipped wording. The other decisions below stand.
 
 ## Context
 

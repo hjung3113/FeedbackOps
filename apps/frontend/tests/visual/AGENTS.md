@@ -1,6 +1,6 @@
 # Visual Harness Agent Guide
 
-Committed Playwright visual regression harness. Baseline discipline and the CP-pixel sign-off live in `apps/frontend/AGENTS.md` → Page-Level Pixel-Diff; this file covers running, extending, and debugging the harness.
+Committed Playwright visual regression harness. Baseline discipline lives in `apps/frontend/AGENTS.md` → Visual Baselines; this file covers running, extending, and debugging the harness.
 
 ## How it works
 

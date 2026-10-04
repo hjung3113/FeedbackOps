@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amended by ADR-0021 (removed the light-theme out-of-scope entry).
+Accepted. Amended by ADR-0021 (removed the light-theme out-of-scope entry). §3 and the "Frontend specs reference the manifest" consequence are superseded by ADR-0060 (2026-10-05); §1, §2 and the Amendment stand.
 
 ## Context
 

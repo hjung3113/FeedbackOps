@@ -21,8 +21,9 @@ in your report.
    assertions of existing tests** unless the task says the behaviour they pin is being removed — then say which
    test and why in the report.
 6. Scope is exactly the task file. No unrelated refactors. User-facing copy: reuse `apps/frontend/src/lib/copy/*`
-   and the screen's existing wording (ADR-0060), Korean per issue #580 (Korean-first; domain nouns such as VOC, Finding, Task
-   Request, Managed System, Analytics Area, Triage stay English). Update any doc the change makes wrong, in the
+   and the screen's existing wording (ADR-0060). UI chrome is Korean; domain nouns (VOC, Finding, Task, Task
+   Request, Survey, Cluster, Managed System, Analytics Area, Milestone, Evidence, Triage) and Task workflow statuses
+   stay English (ADR-0057 A2, amended by #675). Update any doc the change makes wrong, in the
    same diff.
 7. **Report:** write `.review/W-<issue>-REPORT.md` — files changed (one line why each), tests added (which
    acceptance criterion each covers), existing tests you changed and why, anything not done, open questions.

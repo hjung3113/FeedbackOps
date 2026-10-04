@@ -4,7 +4,7 @@ Date: 2026-10-05
 
 ## Status
 
-Accepted 2026-10-05 by the owner. Supersedes the "prototype remains the spec for everything not listed here" clause of ADR-0057 and the root `AGENTS.md` "Prototype Is The Spec" rule.
+Accepted 2026-10-05 by the owner. Supersedes the "prototype remains the spec for everything not listed here" clause of ADR-0057, the last sentence of ADR-0057 A2 ("Prototype wording remains authoritative…"), ADR-0020 §3 and its "Frontend specs reference the manifest" consequence, and the root `AGENTS.md` "Prototype Is The Spec" rule.
 
 ## Context
 

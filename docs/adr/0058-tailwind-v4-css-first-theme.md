@@ -1,9 +1,11 @@
 # Tailwind v4 CSS-first theme in `@fops/ui`
 
-> **Status:** Accepted (2026-10-03, issue #743). Supersedes the
-> [Tokens: CSS variables + Tailwind theme.extend](0016-ui-foundation-dark-wcag-tokens-wrap.md#tokens-css-variables--tailwind-themeextend)
-> section of ADR-0016. Token names (ADR-0021) and values (Pack 17) are
-> unchanged; only the exposure mechanism moves.
+## Status
+
+Accepted (2026-10-03, issue #743). Supersedes the
+[Tokens: CSS variables + Tailwind theme.extend](0016-ui-foundation-dark-wcag-tokens-wrap.md#tokens-css-variables--tailwind-themeextend)
+section of ADR-0016. Token names (ADR-0021) and values (Pack 17) are
+unchanged; only the exposure mechanism moves.
 
 ## Context
 

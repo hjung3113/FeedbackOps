@@ -45,7 +45,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## UI foundation and shell
 
 - [0016](0016-ui-foundation-dark-wcag-tokens-wrap.md) UI foundation — dark-only theme and token mechanism replaced; component wrap via `packages/ui` and WCAG AA remain. *Partially superseded by 0021, 0058*
-- [0020](0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md) Shell taxonomy — every route is `PageShell`, `ListShell` or `WorkbenchShell`; shared 50px header rhythm. *Accepted, amended by 0021*
+- [0020](0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md) Shell taxonomy — every route is `PageShell`, `ListShell` or `WorkbenchShell`; shared 50px header rhythm. *Accepted, amended by 0021, 0060*
 - [0021](0021-pack-17-samsung-light-design-system.md) Pack 17 Samsung-light design system — light is the only MVP theme; token names kept, RGB-triple runtime values. *Accepted*
 - [0052](0052-list-empty-filtered-error-state-contract.md) List empty / filtered / error states — shared `ListStateMessage` with reset and retry actions. *Accepted*
 - [0058](0058-tailwind-v4-css-first-theme.md) Tailwind v4 CSS-first theme — `@theme inline` in `@fops/ui` replaces the JS preset; no visual change. *Accepted*

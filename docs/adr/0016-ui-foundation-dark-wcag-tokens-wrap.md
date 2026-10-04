@@ -1,6 +1,8 @@
 # UI foundation: dark-only MVP, WCAG AA, CSS-var tokens, full shadcn wrap
 
-> **Status:** Partially superseded. Dark-only theme: [ADR-0021](0021-pack-17-samsung-light-design-system.md) (2026-05-20). Token exposure mechanism: [ADR-0058](0058-tailwind-v4-css-first-theme.md) (2026-10-03). The component-wrap rule, WCAG 2.2 AA target and icon pick remain in force.
+## Status
+
+Partially superseded. Dark-only theme: [ADR-0021](0021-pack-17-samsung-light-design-system.md) (2026-05-20). Token exposure mechanism: [ADR-0058](0058-tailwind-v4-css-first-theme.md) (2026-10-03). The component-wrap rule, WCAG 2.2 AA target and icon pick remain in force.
 
 `docs/frontend/ui-design-system.md` (978 lines) + `DESIGN.md` + `docs/frontend/component-inventory.md` already cover anatomy, variants, states, breakpoints, semantic-token names, and accessibility rules. This ADR locks the four remaining decisions that those documents leave open.
 
