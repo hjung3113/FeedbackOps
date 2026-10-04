@@ -2,6 +2,8 @@
 
 이 문서는 **하려는 일**을 기준으로 정리돼 있습니다. 기능 목록이 아니라 "이걸 하고 싶은데 어디로 가야 하나"에 답하는 순서입니다.
 
+화면과 함께 따라가려면 [대화형 사용자 안내](user-guide/index.html)를 여세요.
+
 기능 설명이 아니라 왜 그렇게 동작하는지가 궁금하면 [`docs/adr/`](adr/)를 보세요. 화면을 바꾸려면 [`AGENTS.md`](../AGENTS.md)가 먼저입니다.
 
 ---
@@ -54,7 +56,7 @@ Task를 `released`로 옮겨도 연결된 VOC가 저절로 `resolved`가 되지 
 
 **누구나 할 수 있습니다.** 권한이 따로 필요 없습니다.
 
-`New VOC`(`/vocs?action=create`)로 갑니다.
+`VOC 생성`(`/vocs?action=create`)으로 갑니다.
 
 적어야 하는 것:
 
@@ -75,9 +77,9 @@ Task를 `released`로 옮겨도 연결된 VOC가 저절로 `resolved`가 되지 
 
 ## 2. 내가 올린 건이 어떻게 되고 있는지 보고 싶다
 
-`My VOCs`(`/vocs?view=my`)에 내가 올린 것만 모입니다.
+`내 VOC`(`/vocs?view=my`)에 내가 올린 것만 모입니다.
 
-**내게 온 알림을 보려면** `Home`(`/home?tab=inbox`)의 `Inbox` 탭이나 왼쪽 레일의 종 모양 버튼을 누릅니다. `Unread` / `All`을 선택해 읽지 않은 알림만 보거나 읽음 여부와 상관없이 확인하고, 읽음 처리하거나 보관할 수 있습니다. 이 알림함은 VOC 목록의 `Inbox` 보기(`/vocs?view=inbox`)와 다릅니다.
+**내게 온 알림을 보려면** `홈`(`/home?tab=inbox`)의 `수신함` 탭이나 왼쪽 레일의 종 모양 버튼을 누릅니다. `읽지 않음` / `전체`를 선택해 읽지 않은 알림만 보거나 읽음 여부와 상관없이 확인하고, 읽음 처리하거나 보관할 수 있습니다. 이 알림함은 VOC 목록의 `수신함` 보기(`/vocs?view=inbox`)와 다릅니다.
 
 **리포터에게 보이는 상태**는 여덟 단계입니다:
 
@@ -106,9 +108,9 @@ received → reviewing → assigned → progress → prep → resolved
 
 | 화면 | 용도 |
 |---|---|
-| `Inbox` (`/vocs?view=inbox`) | 내 범위의 전체 VOC |
+| `수신함` (`/vocs?view=inbox`) | 내 범위의 전체 VOC |
 | `Triage` (`/vocs?view=triage`) | **처리 대기 큐.** 여기가 실제 작업 공간입니다 |
-| `High severity` / `Unassigned` / `No follow-up` | 트리아지 큐의 저장된 관점. 사이드바 숫자가 남은 건수입니다 |
+| `높음` / `미배정` / `연결 없음` | 트리아지 큐의 저장된 관점. 사이드바 숫자가 남은 건수입니다 |
 
 ### 트리아지에서 정하는 것
 
@@ -123,7 +125,7 @@ VOC를 고르면 오른쪽 패널에서 판단합니다:
 
 ### 이미 판단한 건을 다시 바꾸려면
 
-VOC 상세 패널의 트리아지 영역에서 **`트리아지에서 변경`** 버튼을 누르면 해당 VOC가 선택된 채로 트리아지 콘솔로 이동합니다. 상세 패널 자체는 읽기 전용입니다.
+VOC 상세 패널의 트리아지 영역에서 **`Triage에서 변경`** 버튼을 누르면 해당 VOC가 선택된 채로 트리아지 콘솔로 이동합니다. 상세 패널 자체는 읽기 전용입니다.
 
 ### 내부용 메모
 
@@ -175,7 +177,7 @@ VOC 상세 패널의 트리아지 영역에서 **`트리아지에서 변경`** �
 
 Finding 상태는 `draft` → `active` → `converted`(실행으로 넘어감) 또는 `not_actionable` / `archived`입니다.
 
-Finding 상세에서 **근거를 더 붙이거나**(Add Evidence / Link Existing Evidence) **연결된 VOC·Task로 바로 이동**할 수 있습니다.
+Finding 상세에서 **근거를 더 붙이거나**(Evidence 추가 / 기존 Evidence 연결) **연결된 VOC·Task로 바로 이동**할 수 있습니다.
 
 > **확신도를 낮게 적는 걸 두려워하지 마세요.** `low`로 적힌 Finding은 "더 봐야 한다"는 정직한 신호이고, 나중에 근거가 쌓이면 올리면 됩니다.
 
@@ -213,13 +215,13 @@ backlog → todo → doing → review → done → released
                                         reopened
 ```
 
-`My Tasks`(`/tasks?view=my`)에 내게 배정된 것만 모입니다.
+`내 Task`(`/tasks?view=my`)에 내게 배정된 것만 모입니다.
 
 Milestone은 관련 Task를 묶는 계획 단위입니다. `Milestones`(`/tasks?view=milestones`)에서 만들고, 열어 연결된 Task 목록을 확인합니다.
 
 **Milestone 필요 권한:** Admin 또는 해당 Managed System에 `finding.manage`가 있는 Developer.
 
-Task 상세의 **Linked context**에서 이 작업이 어느 Finding에서 나왔는지 보이고, 클릭하면 그 Finding으로 갑니다.
+Task 상세의 **맥락**에서 이 작업이 어느 Finding에서 나왔는지 보이고, 클릭하면 그 Finding으로 갑니다.
 
 > **다시 강조 — `released`로 옮겨도 VOC 리포터 상태는 바뀌지 않습니다.** 리포터에게 알리려면 해당 VOC로 가서 [공개 업데이트](#4-리포터에게-상황을-알려야-한다)를 쓰세요. 번거로워 보이지만, 이것이 "배포했으니 해결됐다"고 잘못 통보하는 것을 막습니다.
 
@@ -299,10 +301,10 @@ draft  ──►  open  ──►  closed
 
 | 화면 | 하는 일 |
 |---|---|
-| **Managed Systems** (`/admin/managed-systems`) | 시스템 등록·보관, 기본 담당자/검토자 지정 |
-| **Analytics Areas** (`/admin/analytics-areas`) | 시스템 하위 분석 영역 관리 |
-| **Permission requests** (`/admin/permissions/requests`) | 권한 요청 검토 |
-| **Workspace settings** (`/admin/settings`) | 운영 정책. self-approval 허용 여부 등 |
+| **Managed System** (`/admin/managed-systems`) | 시스템 등록·보관, 기본 담당자/검토자 지정 |
+| **Analytics Area** (`/admin/analytics-areas`) | 시스템 하위 분석 영역 관리 |
+| **권한 요청** (`/admin/permissions/requests`) | 권한 요청 검토 |
+| **워크스페이스 설정** (`/admin/settings`) | 운영 정책. self-approval 허용 여부 등 |
 
 **기본 담당자를 지정해 두면** VOC와 Finding 생성 시 자동으로 채워집니다. 다만 **기본값이 채워졌다는 것이 트리아지가 끝났다는 뜻은 아닙니다** — 담당자만 정해진 미처리 상태가 만들어질 수 있으니 큐를 계속 보세요.
 

@@ -7,6 +7,7 @@ This directory separates product design, frontend UI contracts, and implementati
 `USER-MANUAL.md` documents the shipped product organised by task ("I need to
 triage what came in", "I need permission I do not have"). It describes behaviour,
 not intent — for why a behaviour is what it is, follow it into `docs/adr/`.
+The [interactive Korean user guide](user-guide/index.html) adds annotated screenshots and a visual walkthrough.
 
 ## Reading For Implementation
 
