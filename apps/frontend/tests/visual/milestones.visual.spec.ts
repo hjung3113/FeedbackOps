@@ -355,7 +355,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
   // Finding 2 — the Released summary value used the non-existent `text-success`
   // utility and rendered black; it must consume the --text-success token.
-  test('cp-pixel: renders the Released summary value in the semantic success color', async ({
+  test('cp-pixel: renders the Released summary value in the semantic success label color (#750)', async ({
     page,
   }) => {
     await installMockApi(page, { milestones: true });
@@ -365,7 +365,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(releasedValue).toBeVisible();
     const { color, successRgb } = await releasedValue.evaluate((el) => {
       const cs = getComputedStyle(el);
-      return { color: cs.color, successRgb: cs.getPropertyValue('--text-success').trim() };
+      return { color: cs.color, successRgb: cs.getPropertyValue('--text-success-label').trim() };
     });
     const [r, g, b] = parseTriplet(successRgb);
     expect(color).toBe(`rgb(${r}, ${g}, ${b})`);
