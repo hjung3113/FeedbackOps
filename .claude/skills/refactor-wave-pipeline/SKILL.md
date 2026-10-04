@@ -236,7 +236,7 @@ before trusting it.
 
 ## Source documents
 
-- `.review/HANDOFF-2026-09-22-session42.md` — how the 42 issues were derived.
+- `.review/archive/handoffs/HANDOFF-2026-09-22-session42.md` (local only) — how the 42 issues were derived.
 - `.review/refactor-dag-final.md` — the DAG, wave membership, dependencies.
 - Issue depends-on edges are text (`Depends on #N`) in each issue body — no
   native GitHub DAG; read the body before dispatching a dependent issue.
