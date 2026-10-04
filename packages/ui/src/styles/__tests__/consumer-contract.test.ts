@@ -43,6 +43,10 @@ it(
       'rounded-(--radius-pill)',
       'leading-tight',
       'text-xs',
+      'text-text-success-label',
+      'text-text-info-label',
+      'text-text-warning-label',
+      'text-text-danger-label',
     ]);
 
     // v3 Preflight pins (compat.css base layer).
@@ -63,6 +67,10 @@ it(
 
     // Token color utility inlines the theme value.
     expect(css).toContain('.bg-accent-primary { background-color: rgb(var(--color-neon-lime)); }');
+    expect(css).toContain('.text-text-success-label { color: rgb(var(--text-success-label)); }');
+    expect(css).toContain('.text-text-info-label { color: rgb(var(--text-info-label)); }');
+    expect(css).toContain('.text-text-warning-label { color: rgb(var(--text-warning-label)); }');
+    expect(css).toContain('.text-text-danger-label { color: rgb(var(--text-danger-label)); }');
 
     // The token-backed pill radius compiles to the token variable.
     expect(css).toContain('.rounded-\\(--radius-pill\\) { border-radius: var(--radius-pill); }');

@@ -20,13 +20,13 @@ const TONE_STYLES: Record<
     colorVar: '--color-amber',
     backgroundAlpha: '0.08',
     ringAlpha: '0.3',
-    titleVar: '--text-warning',
+    titleVar: '--text-warning-label', // #750: AA label color departs from the prototype mapping.
   },
   red: {
     colorVar: '--color-warning-red',
     backgroundAlpha: '0.06',
     ringAlpha: '0.2',
-    titleVar: '--text-danger',
+    titleVar: '--text-danger-label', // #750: AA label color departs from the prototype mapping.
   },
   blue: {
     colorVar: '--color-aether-blue',

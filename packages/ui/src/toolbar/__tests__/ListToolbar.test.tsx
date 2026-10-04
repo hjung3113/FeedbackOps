@@ -141,17 +141,17 @@ describe('ListToolbar — tabs mode', () => {
     );
     expect(normalTab).not.toHaveClass('data-[state=active]:shadow-sm');
     expect(urgentTab).toHaveClass(
-      'text-text-danger',
-      'hover:text-text-danger',
-      'data-[state=active]:text-text-danger',
+      'text-text-danger-label',
+      'hover:text-text-danger-label',
+      'data-[state=active]:text-text-danger-label',
     );
 
     rerender(<ListTabs tabs={styledTabs} activeTab="urgent" />);
     expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Urgent' })).toHaveClass(
-      'text-text-danger',
+      'text-text-danger-label',
       'data-[state=active]:bg-surface-card-elevated',
-      'data-[state=active]:text-text-danger',
+      'data-[state=active]:text-text-danger-label',
     );
   });
 
@@ -218,15 +218,15 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.queryByRole('heading')).toBeNull();
   });
 
-  it('applies the danger token to an urgent tab', () => {
+  it('applies the danger label token to an urgent tab', () => {
     const urgentTabs: ListToolbarTab[] = [
       { value: 'untriaged', label: '미분류' },
       { value: 'unassigned', label: 'Unassigned', urgent: true },
     ];
     render(<ListToolbar tabs={urgentTabs} activeTab="untriaged" />);
-    expect(screen.getByText('Unassigned').className).toContain('text-text-danger');
+    expect(screen.getByText('Unassigned').className).toContain('text-text-danger-label');
     // Non-urgent tabs are not flagged.
-    expect(screen.getByText('미분류').className).not.toContain('text-text-danger');
+    expect(screen.getByText('미분류').className).not.toContain('text-text-danger-label');
   });
 
   it('renders action slot when provided', () => {

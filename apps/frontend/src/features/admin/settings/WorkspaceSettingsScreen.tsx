@@ -320,7 +320,7 @@ function SettingRow({
         </div>
         <p className="mt-1 text-xs leading-relaxed text-text-muted">{description}</p>
         {dirty && (
-          <p className="mt-1 text-xs text-text-warning">
+          <p className="mt-1 text-xs text-text-warning-label">
             이전 값: <strong>{previousValue}</strong>
           </p>
         )}

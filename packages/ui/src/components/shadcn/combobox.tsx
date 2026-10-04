@@ -12,6 +12,8 @@ import { Check, ChevronsUpDown } from 'lucide-react';
  *   onChange  — called with the newly selected value string
  *   placeholder — trigger placeholder text (optional, default "선택…")
  *   searchPlaceholder — search input placeholder (optional, default "검색…")
+ *   listboxLabel — accessible name for the options list (optional, default "옵션")
+ *   emptyText — text shown when no options match (optional, default "결과 없음")
  *   className — forwarded to the trigger button
  *
  * a11y:
@@ -35,6 +37,8 @@ export interface ComboboxProps {
   onChange: (value: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
+  listboxLabel?: string;
+  emptyText?: string;
   className?: string;
   /** When true, the trigger is disabled and the popover cannot be opened. */
   disabled?: boolean;
@@ -46,6 +50,8 @@ export function Combobox({
   onChange,
   placeholder = '선택…',
   searchPlaceholder = '검색…',
+  listboxLabel = '옵션',
+  emptyText = '결과 없음',
   className,
   disabled,
 }: ComboboxProps) {
@@ -188,12 +194,12 @@ export function Combobox({
           // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <ul role="listbox"> as scrollable container; native <select> does not support this layout
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <ul role="listbox"> is canonical ARIA listbox per APG §combobox; keyboard managed via search input onKeyDown
           role="listbox"
-          aria-label="옵션"
+          aria-label={listboxLabel}
           className="max-h-60 overflow-y-auto py-1"
         >
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-text-muted" role="presentation">
-              결과 없음
+              {emptyText}
             </li>
           ) : (
             filtered.map((option, idx) => (
