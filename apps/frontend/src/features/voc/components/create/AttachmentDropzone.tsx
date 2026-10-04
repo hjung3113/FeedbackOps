@@ -141,7 +141,7 @@ function AttachmentRow({ row, onRemove }: AttachmentRowProps): React.ReactElemen
       </span>
     );
   } else {
-    statusText = <span className="ml-1.5 text-text-danger">· {row.state.message}</span>;
+    statusText = <span className="ml-1.5 text-text-danger-label">· {row.state.message}</span>;
   }
 
   // Remove button hidden while uploading (per spec — block remove until terminal).

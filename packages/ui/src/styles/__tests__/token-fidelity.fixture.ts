@@ -16,6 +16,10 @@
  * entry below gained a paired `-label` token: same hue, darkened only,
  * until it clears 4.5:1 against its own tint background. The base token is
  * unchanged and still used for the dot/tint.
+ * #750 (2026-10-04): semantic text gained parallel `-label` tokens using the
+ * same hue/saturation and the lightest HLS value that clears 4.5:1 on the
+ * supported light surfaces, its 14% tint, and actual tinted badge row states.
+ * The semantic base tokens remain.
  */
 
 export interface TokenEntry {
@@ -57,6 +61,10 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--text-warning', raw: 'var(--color-amber)' },
   { tokenName: '--text-success', raw: 'var(--color-emerald)' },
   { tokenName: '--text-info', raw: 'var(--color-cyan-spark)' },
+  { tokenName: '--text-success-label', hex: '#10734a', rgb: '16 115 74' },
+  { tokenName: '--text-info-label', hex: '#006f94', rgb: '0 111 148' },
+  { tokenName: '--text-warning-label', hex: '#8e5500', rgb: '142 85 0' },
+  { tokenName: '--text-danger-label', hex: '#bb222e', rgb: '187 34 46' },
   { tokenName: '--text-on-accent', hex: '#ffffff', rgb: '255 255 255' },
 
   // --- Surface tokens ---

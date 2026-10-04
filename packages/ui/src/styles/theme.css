@@ -48,6 +48,10 @@
   --color-text-warning: rgb(var(--text-warning));
   --color-text-success: rgb(var(--text-success));
   --color-text-info: rgb(var(--text-info));
+  --color-text-success-label: rgb(var(--text-success-label));
+  --color-text-info-label: rgb(var(--text-info-label));
+  --color-text-warning-label: rgb(var(--text-warning-label));
+  --color-text-danger-label: rgb(var(--text-danger-label));
   --color-text-on-accent: rgb(var(--text-on-accent));
   --color-text-inverse: rgb(var(--color-pitch-black));
 

@@ -127,10 +127,12 @@ export function VocTriageScreen({
         <span className="text-xs text-text-muted ml-1" title="정렬: 미배정 → 심각도">
           미배정 → 심각도 순
         </span>
-        {/* Processed-count progress — emerald/accent toned. Prototype ref:
-            screen-voc-create.jsx:652-656 ("· N건 처리됨"). */}
+        {/* #750: retain the prototype's emerald tone with its AA label token. */}
         {processedCount > 0 && (
-          <span data-testid="triage-processed-count" className="text-xs text-text-success ml-1">
+          <span
+            data-testid="triage-processed-count"
+            className="text-xs text-text-success-label ml-1"
+          >
             · {processedCount}건 처리됨
           </span>
         )}

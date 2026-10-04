@@ -147,7 +147,7 @@ export function TaskRequestDraftCard({
             왜 필요한가를 설명하는 근거를 작성하세요.
           </p>
           {form.formState.errors.evidence_summary?.message && (
-            <p className="text-xs text-text-danger" id={`${summaryId}-error`} role="alert">
+            <p className="text-xs text-text-danger-label" id={`${summaryId}-error`} role="alert">
               {form.formState.errors.evidence_summary.message}
             </p>
           )}
@@ -174,7 +174,7 @@ export function TaskRequestDraftCard({
             승인되면 무엇이 달성돼야 하는지 작성하세요.
           </p>
           {form.formState.errors.requested_outcome?.message && (
-            <p className="text-xs text-text-danger" id={`${outcomeId}-error`} role="alert">
+            <p className="text-xs text-text-danger-label" id={`${outcomeId}-error`} role="alert">
               {form.formState.errors.requested_outcome.message}
             </p>
           )}

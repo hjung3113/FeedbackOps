@@ -521,9 +521,10 @@ export function OutcomeFollowUpReview({
                   응답 #{displayResponseNumber(item.response_number)}
                 </span>
                 <span className="truncate text-text-primary">{lowAnswerSummary(item)}</span>
+                {/* #750: open rows use the AA amber pair because their default background is canvas. */}
                 <span
                   className={
-                    item.resolution === 'open' ? 'text-text-warning' : 'text-text-secondary'
+                    item.resolution === 'open' ? 'text-text-warning-label' : 'text-text-secondary'
                   }
                 >
                   {resolutionLabel(item)}

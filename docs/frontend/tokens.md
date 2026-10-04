@@ -41,6 +41,31 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | Deep Violet | `#3157d5` | `--color-deep-violet` | Background accents in specific content blocks, indicating a distinct informational category. |
 | Amethyst | `#6a8dff` | `--color-amethyst` | Another variant of violet for backgrounds, used interchangeably with Deep Violet for visual diversity. |
 
+### Semantic Text Label Tokens (#750)
+
+Keep each base semantic text token for tints, icons, dots, borders, and text that
+already clears WCAG AA. For small text (under 18.66px bold / 24px regular) on a
+surface or tint where the base color fails 4.5:1, use its `-label` pair. The
+label keeps the base hue and saturation and lowers HLS lightness only until it
+clears 4.5:1 on the light surfaces and its own 14% tint over `--surface-card`.
+For success, warning, and danger, it also clears the 12% `LinkStatusBadge` tint
+on canvas, hovered, and 60%-blocked rows. The existing #525 reporter-status and
+severity `-label` pairs follow this same rule.
+
+Ratios below are `canvas / card / card-elevated / sidebar / row-hover /
+row-selected / blocked / field-filled / 14% card tint`.
+
+| Token | R G B | Hex | Ratios |
+|-------|-------|-----|--------|
+| `--text-success-label` | `16 115 74` | `#10734a` | `5.47 / 5.76 / 5.27 / 5.31 / 5.08 / 4.69 / 5.23 / 5.88 / 4.98` |
+| `--text-info-label` | `0 111 148` | `#006f94` | `5.28 / 5.56 / 5.08 / 5.13 / 4.90 / 4.52 / 5.05 / 5.67 / 4.84` |
+| `--text-warning-label` | `142 85 0` | `#8e5500` | `5.67 / 5.97 / 5.45 / 5.50 / 5.26 / 4.85 / 5.42 / 6.09 / 4.98` |
+| `--text-danger-label` | `187 34 46` | `#bb222e` | `5.78 / 6.09 / 5.56 / 5.61 / 5.37 / 4.95 / 5.52 / 6.21 / 4.94` |
+
+12% badge tint ratios (`canvas / card / hovered row / 60%-blocked row`):
+success `4.85 / 5.09 / 4.53 / 4.73`; warning `4.87 / 5.11 / 4.54 / 4.75`;
+danger `4.84 / 5.09 / 4.51 / 4.72`. Info has no current badge usage.
+
 ### Managed System Identity Tokens
 
 | Name | Value | Token | Role |
