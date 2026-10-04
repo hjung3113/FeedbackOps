@@ -87,8 +87,9 @@ Orca-terminal codex (only if needed): `orca terminal create` → `terminal wait 
    applied/deferred, verification numbers); `gh pr merge <n> --squash` from the main checkout; `git push origin
    --delete <branch>`; `gh issue close <n> --comment`; close the issue's terminals; `orca worktree rm --force`; drop
    its verify DB.
-10. Keep the session handoff (`.review/HANDOFF-*.md`) current every few merges; file follow-ups (flakes, deferred
-    nits, owner decisions) as issues in the wave's milestone.
+10. Keep the session handoff current every few merges: one local-only file at the repo root, `HANDOFF.md`, updated
+    in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
+    milestone.
 
 ## Traps (measured)
 
