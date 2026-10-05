@@ -58,8 +58,8 @@ export function PermissionGrantDetail({
           <section className="flex flex-col gap-2">
             <PanelSectionTitle>
               {kind === 'grants'
-                ? ADMIN_PERMISSIONS_COPY.activeTitle
-                : ADMIN_PERMISSIONS_COPY.deniesTab}
+                ? ADMIN_PERMISSIONS_COPY.grantInfo
+                : ADMIN_PERMISSIONS_COPY.denyInfo}
             </PanelSectionTitle>
             <FieldRow label={ADMIN_PERMISSIONS_COPY.target} className="px-0">
               <span className="flex flex-col gap-0.5">
@@ -94,6 +94,7 @@ export function PermissionGrantDetail({
             key={`${kind}:${item.id}`}
             kind={kind}
             id={item.id}
+            actorId={item.actor_id}
             onSuccess={onSuccess}
           />
         </div>

@@ -38,7 +38,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /admin/managed-systems
 /admin/analytics-areas?managedSystem=:managedSystemId&includeArchived=true&selected=:analyticsAreaId
 /admin/permissions/requests?tab=:tab&selected=:requestId
-/admin/permissions/grants?tab=grants|denies&selected=:permissionId
+/admin/permissions/grants?tab=denies&selected=:permissionId
 /admin/settings
 ```
 

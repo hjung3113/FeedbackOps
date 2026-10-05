@@ -32,6 +32,7 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - `apps/frontend/src/routes/_authed/admin/managed-systems.tsx` — mounts the Managed System registry.
 - `apps/frontend/src/routes/_authed/admin/analytics-areas.tsx` — mounts Analytics Areas and wires the URL search schema in `apps/frontend/src/features/admin/analytics-areas/search.ts`.
 - `apps/frontend/src/routes/_authed/admin/permissions/requests.tsx` — mounts Permission Request review and validates URL state.
+- `apps/frontend/src/routes/_authed/admin/permissions/grants.tsx` — mounts active grants and denies and validates URL state.
 - `apps/frontend/src/routes/_authed/admin/settings.tsx` — mounts workspace settings.
 - `apps/frontend/src/features/admin/managed-systems/ManagedSystemsScreen.tsx` — registry list and defaults.
 - `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreasScreen.tsx` — Analytics Area page composition.

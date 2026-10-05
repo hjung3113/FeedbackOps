@@ -38,8 +38,14 @@ export function useRevokePermission(): UseMutationResult<
         queryClient.invalidateQueries({ queryKey: permissionDeniesListKey }),
       ]);
     },
-    onError: (error: ApiError) => {
+    onError: async (error: ApiError) => {
       toast.error(errorMapper(error.envelope).message);
+      if (error.code === 'conflict.permission_not_active' || error.code === 'not_found.record') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: permissionGrantsListKey }),
+          queryClient.invalidateQueries({ queryKey: permissionDeniesListKey }),
+        ]);
+      }
     },
   });
 }

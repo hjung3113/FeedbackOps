@@ -24,8 +24,14 @@ import {
 const apiRequestMock = vi.hoisted(() => vi.fn());
 const fetchManagedSystemsMock = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const useMeMock = vi.hoisted(() => vi.fn());
+const useWorkspaceSettingsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/lib/auth/useMe', () => ({ useMe: useMeMock }));
+vi.mock('../settings/use-workspace-settings.js', () => ({
+  useWorkspaceSettings: useWorkspaceSettingsMock,
+}));
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
   return {
@@ -122,8 +128,13 @@ interface CapturedApiRequest {
 function installApi(
   options: {
     deferLists?: boolean;
+    deferRevoke?: boolean;
     listError?: 'grants' | 'denies';
-    revokeStatus?: number;
+    keepRevokedItem?: boolean;
+    revokeError?: {
+      status: 404 | 409;
+      code: 'conflict.permission_not_active' | 'not_found.record';
+    };
   } = {},
 ) {
   const grants = [...GRANTS];
@@ -137,10 +148,16 @@ function installApi(
   const denyWaiter = new Promise<void>((resolve) => {
     resolveDenies = resolve;
   });
+  let resolveRevoke: (() => void) | undefined;
+  const revokeWaiter = new Promise<void>((resolve) => {
+    resolveRevoke = resolve;
+  });
 
   fetchManagedSystemsMock.mockResolvedValue({
     items: [{ id: MANAGED_SYSTEM_ID, name: 'Payments' }],
   });
+  useMeMock.mockReturnValue({ data: undefined });
+  useWorkspaceSettingsMock.mockReturnValue({ data: undefined });
   apiRequestMock.mockReset();
   apiRequestMock.mockImplementation(
     async (
@@ -179,18 +196,21 @@ function installApi(
       if (method === 'POST' && revokeMatch) {
         const [, kind, id] = revokeMatch;
         const body = revokePermissionBodySchema.parse(requestOptions?.body);
-        if (options.revokeStatus === 409) {
-          throw new ApiError(409, {
-            code: 'conflict.permission_not_active',
+        if (options.revokeError) {
+          throw new ApiError(options.revokeError.status, {
+            code: options.revokeError.code,
             message: 'permission is not active',
           });
         }
-        if (kind === 'grants') {
-          const index = grants.findIndex((grant) => grant.id === id);
-          if (index >= 0) grants.splice(index, 1);
-        } else {
-          const index = denies.findIndex((deny) => deny.id === id);
-          if (index >= 0) denies.splice(index, 1);
+        if (options.deferRevoke) await revokeWaiter;
+        if (!options.keepRevokedItem) {
+          if (kind === 'grants') {
+            const index = grants.findIndex((grant) => grant.id === id);
+            if (index >= 0) grants.splice(index, 1);
+          } else {
+            const index = denies.findIndex((deny) => deny.id === id);
+            if (index >= 0) denies.splice(index, 1);
+          }
         }
         return {
           data: parser.parse(
@@ -212,6 +232,9 @@ function installApi(
     releaseLists() {
       resolveGrants?.();
       resolveDenies?.();
+    },
+    releaseRevoke() {
+      resolveRevoke?.();
     },
   };
 }
@@ -240,6 +263,8 @@ function renderScreen(initialPath = '/admin/permissions/grants') {
 describe('/admin/permissions/grants screen', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    useMeMock.mockReset();
+    useWorkspaceSettingsMock.mockReset();
     toast.success.mockReset();
     toast.error.mockReset();
   });
@@ -269,6 +294,9 @@ describe('/admin/permissions/grants screen', () => {
       expect(within(list).getByRole('button', { name: new RegExp(row) })).toBeInTheDocument();
       expect(within(list).getByText(scope, { exact: true })).toBeInTheDocument();
       expect(screen.getByTestId('permission-grants-detail-panel')).toHaveTextContent(detailField);
+      const detail = within(screen.getByTestId('permission-grants-detail-panel'));
+      expect(detail.getByText(tab === 'grants' ? '부여 정보' : '차단 정보')).toBeInTheDocument();
+      expect(detail.getByText('처리')).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: tab === 'grants' ? /권한/ : /차단/ })).toHaveAttribute(
         'aria-selected',
         'true',
@@ -294,7 +322,7 @@ describe('/admin/permissions/grants screen', () => {
     installApi({ listError: 'grants' });
     renderScreen();
 
-    await screen.findByText('권한을 불러오지 못했습니다.');
+    await screen.findByText('활성 권한을 불러오지 못했습니다.');
     expect(screen.getByRole('tab', { name: '권한' })).not.toHaveTextContent('0');
     expect(screen.getByRole('tab', { name: /차단 1/ })).toBeInTheDocument();
   });
@@ -319,7 +347,7 @@ describe('/admin/permissions/grants screen', () => {
   ] as const)(
     '$action requires a reason and posts a validated idempotent command',
     async ({ kind, id, action }) => {
-      const api = installApi();
+      const api = installApi({ keepRevokedItem: true });
       const path =
         kind === 'denies'
           ? `/admin/permissions/grants?tab=denies&selected=${id}`
@@ -367,20 +395,83 @@ describe('/admin/permissions/grants screen', () => {
     },
   );
 
-  test('maps a non-active conflict to the shared error toast', async () => {
-    installApi({ revokeStatus: 409 });
-    renderScreen();
+  test('shows a loading affordance while the revoke command is pending', async () => {
+    const api = installApi({ deferRevoke: true });
+    const { router } = renderScreen();
 
     const detail = await screen.findByTestId('permission-grants-detail-panel');
     fireEvent.change(within(detail).getByLabelText('사유 · 필수'), {
-      target: { value: '정책 변경' },
+      target: { value: '중복 권한입니다.' },
     });
-    fireEvent.click(within(detail).getByRole('button', { name: '권한 취소' }));
+    const submit = within(detail).getByRole('button', { name: '권한 취소' });
+    fireEvent.click(submit);
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
-        '이미 처리되었거나 만료되어 더 이상 활성 상태가 아닙니다.',
-      ),
-    );
+    await waitFor(() => {
+      expect(submit).toHaveAttribute('aria-busy', 'true');
+      expect(submit).toBeDisabled();
+    });
+    api.releaseRevoke();
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('selected'));
+  });
+
+  test.each([
+    {
+      label: 'a non-active conflict',
+      status: 409,
+      code: 'conflict.permission_not_active',
+      message: '이미 처리되었거나 만료되어 더 이상 활성 상태가 아닙니다.',
+    },
+    {
+      label: 'a missing record',
+      status: 404,
+      code: 'not_found.record',
+      message: '존재하지 않거나 접근할 수 없는 항목입니다.',
+    },
+  ] as const)(
+    'maps $label to the shared error toast and refetches both lists',
+    async ({ status, code, message }) => {
+      const api = installApi({ revokeError: { status, code } });
+      renderScreen();
+
+      const detail = await screen.findByTestId('permission-grants-detail-panel');
+      fireEvent.change(within(detail).getByLabelText('사유 · 필수'), {
+        target: { value: '정책 변경' },
+      });
+      fireEvent.click(within(detail).getByRole('button', { name: '권한 취소' }));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message));
+      await waitFor(() => {
+        expect(
+          api.requests.filter(
+            (request) => request.method === 'GET' && request.path === '/permissions/grants',
+          ).length,
+        ).toBeGreaterThan(1);
+        expect(
+          api.requests.filter(
+            (request) => request.method === 'GET' && request.path === '/permissions/denies',
+          ).length,
+        ).toBeGreaterThan(1);
+      });
+    },
+  );
+
+  test('blocks lifting your own deny when workspace policy forbids it', async () => {
+    installApi();
+    useMeMock.mockReturnValue({ data: { actor: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } } });
+    useWorkspaceSettingsMock.mockReturnValue({
+      data: { permission_self_approval: 'forbidden', survey_anonymity_threshold: 5 },
+    });
+    renderScreen(`/admin/permissions/grants?tab=denies&selected=${DENY_ID}`);
+
+    const detail = await screen.findByTestId('permission-grants-detail-panel');
+    const submit = within(detail).getByRole('button', { name: '차단 해제' });
+    fireEvent.change(within(detail).getByLabelText('사유 · 필수'), {
+      target: { value: '차단 사유가 해소되었습니다.' },
+    });
+
+    expect(submit).toBeDisabled();
+    expect(
+      within(detail).getByText('관리자는 본인에게 걸린 차단도 직접 해제할 수 없습니다.'),
+    ).toBeInTheDocument();
   });
 });
