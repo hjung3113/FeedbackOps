@@ -24,7 +24,9 @@ function mockPermissionState(
   globalThis.fetch = vi.fn(async (input) => {
     const url = new URL(String(input), 'http://localhost');
     if (url.pathname === '/me/permissions/check') {
-      const requestable = state === 'request_access' ? [{ workspace_id: 'ws' }] : null;
+      const requestable = ['request_access', 'revoked'].includes(state)
+        ? [{ workspace_id: 'ws' }]
+        : null;
       return new Response(
         JSON.stringify({
           state,
@@ -64,7 +66,7 @@ const BLOCKED_STATES = [
   },
   {
     state: 'revoked',
-    panelState: 'denied',
+    panelState: 'request_access',
     title: '권한이 취소되었습니다.',
     description: '이전에 받은 권한이 취소되었습니다.',
   },
@@ -227,7 +229,12 @@ describe('<PermissionGate>', () => {
       expect(panelTitle.closest('[data-state]')).toHaveAttribute('data-state', panelState);
       expect(screen.getByText(description)).toBeInTheDocument();
       expect(document.querySelector('[data-permission-state]')).toBeNull();
-      expect(screen.queryByRole('button', { name: '권한 요청' })).not.toBeInTheDocument();
+      if (state === 'revoked') {
+        fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
+        expect(await screen.findByTestId('permission-request-dialog')).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('button', { name: '권한 요청' })).not.toBeInTheDocument();
+      }
       expect(screen.queryByText('secret payload')).not.toBeInTheDocument();
       if (state === 'summary_visible') {
         expect(screen.queryByText('요약 정보가 없습니다.')).not.toBeInTheDocument();

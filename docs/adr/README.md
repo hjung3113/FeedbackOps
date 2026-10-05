@@ -25,6 +25,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0044](0044-permission-request-composition-and-managed-system-owner-selection.md) Permission request composition and owner selection — reason and return intent required; Managed System owner is none, one Actor, or one team. *Accepted*
 - [0048](0048-role-level-extension.md) Role Level extension — checklist for adding a role across enum, DB CHECK, local unions and domain gates. *Accepted*
 - [0056](0056-capability-based-admin-navigation.md) Capability-based Admin navigation — Admin entries appear only when `workspace.admin` is approved; direct links stay gated. *Accepted*
+- [0061](0061-admin-revoke-permission-grants-and-denies.md) Admin revokes active Permission grants and denies — revocation audit, notification, and re-request behavior. *Accepted*
 
 ## Managed System registry, teams and display IDs
 

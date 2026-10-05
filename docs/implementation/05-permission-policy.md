@@ -251,7 +251,7 @@ POST /permissions/requests/:id/deny            { reason: string }
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
 
-### Permission Request self-approval policy
+### Self-approval policy (Permission Requests and self deny lifts)
 
 An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that
@@ -264,6 +264,12 @@ Admin. If the workspace setting is `forbidden`, self-approval returns
 `permission.denied` without changing the pending request; another Admin may
 approve the same request normally.
 
+An Admin lifting an active deny on themself follows the same setting:
+`forbidden` returns `permission.denied` without changing the deny or writing an
+audit row, while `allowed` permits the lift and records `self_lift: true` in the
+audit detail. An Admin may revoke their own grant because that action only
+lowers privilege.
+
 The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) are aggregated in `packages/shared/src/enums/audit-events.ts`. The event literals and detail schemas are owned per domain in `packages/shared/src/audit/*.ts`.
 
 Audit events (the permission and task-request subset; the full vocabulary is in code):
@@ -275,6 +281,8 @@ permission_rejected
 permission_needs_more_info
 permission_denied
 permission_more_info_submitted
+permission_revoked
+permission_deny_revoked
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
@@ -286,12 +294,31 @@ task_created_from_request
 task_linked_to_request
 ```
 
-Revoke and expiry endpoints are not implemented yet. Planned event names remain:
+Expiry handling is not implemented yet. Its planned event remains:
 
 ```text
-permission_revoked
 permission_expired
 ```
+
+### Grant revoke and deny lift (ADR-0061)
+
+`POST /permissions/grants/:id/revoke` and `POST /permissions/denies/:id/revoke`
+are workspace-admin commands. They lock and update only active rows, require
+a trimmed reason, and append one strict audit event in the same transaction.
+An expired grant is not active and returns `conflict.permission_not_active`;
+an active deny is lifted by setting its revoke metadata. Permission Request
+status does not change. Revoke does not terminate sessions or change
+role-derived capabilities.
+
+The permission check treats a revoked grant as requestable using the same
+workspace scope as `no_grant`. The state mapper returns `pending_request` when
+the Actor has an open request for that capability and otherwise returns
+`revoked`. A revoke notification goes to the grant's Actor; deny lift sends no
+notification. There is no migration or grant change for these commands.
+Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage,
+conversation, and VOC Cluster conversion) are unchanged; paths keyed on
+`requestable !== null` (Survey results and follow-up) now include
+`requestable_permission` for a revoked grant.
 
 ## Summary-Visible Contract
 

@@ -31,3 +31,9 @@ export {
   type DecisionServiceDeps,
   type DecisionOptions,
 } from './decision-service.js';
+export {
+  createGrantAdminService,
+  type GrantAdminService,
+  type GrantAdminServiceDeps,
+  type GrantAdminServiceOptions,
+} from './grant-admin-service.js';

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amended 2026-09-22 (OIDC, #390). Promotion UI not built (ADR-0048 §7).
+Accepted. Amended 2026-09-22 (OIDC, #390). Amended by ADR-0061 (write path for permission revocation). Promotion UI not built (ADR-0048 §7).
 
 FeedbackOps authentication runs through an internal corporate identity provider that has not yet been provisioned. MVP development cannot wait for that procurement, so this ADR defines an **AuthProvider abstraction with two implementations** and the session/provisioning rules that both must honor.
 

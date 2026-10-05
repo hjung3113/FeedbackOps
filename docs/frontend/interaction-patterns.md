@@ -282,7 +282,7 @@ UX rules:
 - Sensitive permission requests require reason before submission.
 - Pending requests show who can approve when available.
 - Needs More Info requests show the Admin question and let the requester update reason, scope, or duration before resubmitting.
-- Rejected requests show safe rejection copy and may allow a new request.
+- Rejected requests show safe rejection copy and may allow a new request. Revoked grants keep the revoked copy and expose the request-access action when the backend marks the decision requestable (ADR-0061).
 - Approved requests return the user to the blocked object or action when possible.
 - Explicit Deny overrides allow and should show a non-requestable blocked state unless policy allows appeal.
 ```

@@ -297,7 +297,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({
       allow: false,
       reason: 'grant_revoked',
-      requestable: null,
+      requestable: [{ workspace_id: WORKSPACE_ID }],
     });
   });
 });

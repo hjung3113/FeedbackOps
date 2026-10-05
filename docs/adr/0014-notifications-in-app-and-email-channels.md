@@ -90,6 +90,7 @@ task.assigned_to_me                        new assignee                         
 task.released                              VOC owner (if linked) — for Public Update review candidate     Y       N
 permission_request.submitted               Admins of the Workspace                                         Y       Y
 permission_request.decided                 requester                                                      Y       Y
+permission_grant.revoked (ADR-0061)         grant grantee                                                   Y       Y
 survey.assigned_to_me                      resolved respondent                                            Y       N
 ```
 
@@ -177,3 +178,10 @@ implemented in `apps/backend/src/modules/notifications/catalogue.ts`; the
 earlier sentence "This notification catalogue itself is not implemented"
 records the pre-implementation state. Dispatch rules remain code-driven, as
 decided above; there is no DB-configured rule UI.
+
+## Amendment 2026-10-05 (ADR-0061 / #762)
+
+`permission_grant.revoked` notifies the grantee in-app and by email with the
+summary `권한이 취소되었습니다.`. Its subject reference is available to the
+grantee and workspace Admins; other Actors receive an unavailable reference.
+Lifting a deny does not notify.
