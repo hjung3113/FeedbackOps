@@ -196,7 +196,7 @@ function GroupCard({
     >
       <div className="flex items-center gap-2.5 border-b border-border-subtle px-4 py-2.5">
         <div
-          className="flex items-center justify-center rounded-md text-[10px] font-semibold text-white"
+          className="flex items-center justify-center rounded-md text-caption font-semibold text-white"
           style={{ width: 22, height: 22, background: mark.color }}
           aria-hidden="true"
         >

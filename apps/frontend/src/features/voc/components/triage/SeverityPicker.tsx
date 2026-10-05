@@ -6,7 +6,7 @@
  *   .severity-grid → grid grid-cols-2 gap-2
  *   .severity-pick → grid grid-cols-[4px_1fr_auto] gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle
  *   .severity-pick-bar → w-1 h-full rounded-full
- *   .severity-pick-label → text-[13px] font-semibold capitalize text-text-primary
+ *   .severity-pick-label → text-sm font-semibold capitalize text-text-primary
  *   active state → bg-severity-{level}/10 ring-1 ring-inset ring-severity-{level}/40
  *   .severity-pick-meta → text-xs text-text-muted leading-[1.45]
  *
@@ -109,7 +109,7 @@ export function SeverityPicker({
                 {/* .severity-pick-label */}
                 <span
                   className={cn(
-                    'text-[13px] font-semibold leading-none mb-[3px]',
+                    'text-sm font-semibold leading-none mb-[3px]',
                     isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
                   )}
                 >

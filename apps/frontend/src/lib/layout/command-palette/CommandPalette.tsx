@@ -26,7 +26,7 @@ export interface CommandPaletteProps {
 }
 
 const KBD_CLASS =
-  'rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted';
+  'rounded-sm border border-border-subtle bg-surface-row-hover px-1.25 py-px font-mono text-caption leading-body text-text-muted';
 
 const ITEM_CLASS =
   'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-[7px] text-left text-[13.5px] text-text-primary outline-hidden aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:shadow-[inset_0_0_0_1px_rgba(20,40,160,0.28)]';
@@ -178,14 +178,14 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
               className={ITEM_CLASS}
               data-testid="command-palette-open-record"
             >
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
+              <span className="flex size-5.5 items-center justify-center rounded-icon-chip bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
                 {busy ? (
                   <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
                 ) : (
                   <FileText className="h-3 w-3" aria-hidden />
                 )}
               </span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted">
+              <span className="text-tiny font-semibold uppercase tracking-kicker text-text-muted">
                 {COMMAND_PALETTE_COPY.verbs.open}
               </span>
               <span className="truncate">{`${displayId} ${COMMAND_PALETTE_COPY.verbs.open}`}</span>
@@ -278,10 +278,10 @@ function PaletteCommandRow({
       className={ITEM_CLASS}
       data-testid={`command-palette-item-${command.id}`}
     >
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
+      <span className="flex size-5.5 items-center justify-center rounded-icon-chip bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
         {command.icon}
       </span>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted">
+      <span className="text-tiny font-semibold uppercase tracking-kicker text-text-muted">
         {command.verb}
       </span>
       <span className="truncate">{command.label}</span>

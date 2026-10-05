@@ -158,7 +158,7 @@ export function ReporterStatusChangeBlock({
           className="shrink-0 text-accent-primary"
         />
         <span
-          className="text-xs font-semibold uppercase tracking-[0.04em] text-accent-primary"
+          className="text-xs font-semibold uppercase tracking-kicker text-accent-primary"
         >
           공개 상태 변경
         </span>
@@ -203,7 +203,7 @@ export function ReporterStatusChangeBlock({
         {/* 변경 예정 chip — shown when staged and no gate blocking */}
         {isStaged && !isGateBlocked && !isForbiddenSelected && (
           <span
-            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium text-accent-primary"
+            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary"
             style={{ background: 'rgb(var(--color-neon-lime) / 0.16)' }}
           >
             <Check size={9} aria-hidden="true" />
@@ -265,7 +265,7 @@ export function ReporterStatusChangeBlock({
             <ReporterStatusBadge status={nextStatus} />
             {isStaged && (
               <span
-                className="inline-flex items-center h-5 px-1.5 rounded-sm text-[10px] font-medium text-accent-primary"
+                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary"
                 style={{ background: 'rgb(var(--color-neon-lime) / 0.18)' }}
               >
                 업데이트

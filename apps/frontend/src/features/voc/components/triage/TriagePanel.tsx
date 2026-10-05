@@ -131,7 +131,7 @@ export function TriagePanel({
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between h-[50px] px-5 border-b border-border-subtle shrink-0">
+      <div className="flex items-center justify-between h-toolbar px-5 border-b border-border-subtle shrink-0">
         <span className="font-mono text-xs text-text-muted tabular-nums">{voc.display_id}</span>
         {/* Expand + more ghost icon buttons (prototype L423-426). No behavior
             yet — rendered disabled to preserve the prototype affordance.

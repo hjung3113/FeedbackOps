@@ -32,7 +32,7 @@ export function PermissionGrantDetail({
       className="flex h-full min-h-0 flex-col bg-surface-detail"
       data-testid="permission-grants-detail-panel"
     >
-      <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
+      <header className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-muted">
             {kind === 'grants'

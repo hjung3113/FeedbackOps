@@ -130,7 +130,7 @@ export function HomeScreen({
             <TabsTrigger value="inbox" className="gap-2">
               {HOME_INBOX_COPY.tabs.inbox}
               {unreadBadge !== undefined && (
-                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-[10px] font-semibold leading-4 text-white">
+                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-caption font-semibold leading-4 text-white">
                   {unreadBadge}
                 </span>
               )}
@@ -310,7 +310,7 @@ function ActionQueueRow({
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-text-primary">{copy.title}</h3>
             <span
-              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${chipClass}`}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide ${chipClass}`}
             >
               {homeSeverityLabel(queue.severity)}
             </span>
@@ -381,7 +381,7 @@ function MyWorkPanel({
             href={row.href}
             className="flex min-h-row-default items-center gap-3 border-b border-border-subtle px-4 last:border-b-0 hover:bg-surface-row-hover"
           >
-            <span className="h-4 w-[3px] rounded-pill bg-accent-warn" />
+            <span className="h-4 w-row-accent rounded-pill bg-accent-warn" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-text-primary">
                 {row.label}

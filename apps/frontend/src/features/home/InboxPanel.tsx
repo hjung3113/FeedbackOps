@@ -228,7 +228,7 @@ function NotificationRow({
       {notification.read_at === null && <span className="sr-only">{HOME_INBOX_COPY.unread}</span>}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-medium tracking-wide text-text-muted">
+          <span className="shrink-0 text-caption font-medium tracking-wide text-text-muted">
             {HOME_INBOX_COPY.categories[notification.subject_type]}
           </span>
           <span className="truncate text-sm text-text-primary">{notification.summary}</span>

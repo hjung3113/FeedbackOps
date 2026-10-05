@@ -85,9 +85,9 @@ Info has no current badge usage.
 - **CSS stack:** `'Inter Variable', 'Inter', 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
 - **Loading:** `@fontsource-variable/inter` (family `Inter Variable`), imported in `apps/frontend/src/styles.css`. Inter has no Hangul, so Korean glyphs fall through per glyph to `Pretendard Variable` (owner choice, 2026-10-02), then to the system faces.
 - **Weights:** 300, 400, 510, 590
-- **Sizes:** 8px, 10px, 11px, 12px, 13px, 14px, 15px, 17px, 20px, 24px, 32px, 48px
+- **Sizes:** 8px, 9px, 10px, 11px, 12px, 13px, 14px, 15px, 17px, 20px, 24px, 32px, 48px
 - **Line height:** 1.20, 1.40, 1.60
-- **Letter spacing:** -0.22px, -0.13px, 0.04em
+- **Letter spacing:** -0.22px, -0.13px, 0.01em, 0.04em
 - **Role:** Primary UI typeface for all content including headings, body text, and interactive elements.
 
 ### JetBrains Mono — Monospaced font for code snippets, technical details, and certain data displays, ensuring consistent character alignment and technical clarity. · `--font-mono`
@@ -108,6 +108,7 @@ Info has no current badge usage.
 | Role | Size | Line Height | Letter Spacing | Token |
 |------|------|-------------|----------------|-------|
 | system-mark | 8px | — | — | `--text-system-mark` |
+| micro | 9px | — | — | `--text-micro` |
 | caption | 10px | 1.4 | -0.13px | `--text-caption` |
 | tiny | 11px | — | — | `--text-tiny` |
 | xs | 12px | — | — | `--text-xs` |
@@ -133,6 +134,13 @@ Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
 `packages/ui/src/styles/theme.css` (`@theme inline` aliasing the token
 variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
 mapping above is unchanged.
+
+Since issue #782, `text-caption`, `text-tiny`, and `text-micro` expose their
+matching size tokens as size-only utilities. `leading-body` aliases
+`--leading-normal` (1.4), `tracking-kicker` aliases `--tracking-wide` (0.04em),
+and `tracking-kind-label` exposes `--tracking-kind-label` (0.01em). The v3
+compatibility utilities `leading-normal` (1.5) and `tracking-wide` (0.025em)
+keep their existing meanings.
 
 ### Panel Title Block Scale (PR #59)
 
@@ -177,6 +185,7 @@ mapping above is unchanged.
 | default | 6px |
 
 Token names: `--radius-sm` (2px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-xl` (12px), and `--radius-pill` (9999px).
+Icon chips use `--radius-icon-chip` (5px), exposed as `rounded-icon-chip`.
 
 ### Shadows
 
@@ -194,6 +203,7 @@ Token names: `--radius-sm` (2px), `--radius-md` (6px), `--radius-lg` (8px), `--r
 - **Section gap:** 24px
 - **Card padding:** 12px
 - **Element gap:** 8px
+- **Row accent stripe:** 3px (`--row-accent-width`, exposed as `w-row-accent`)
 - **Layout tokens:** see `Layout tokens` in `packages/ui/src/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 

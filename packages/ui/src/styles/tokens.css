@@ -144,6 +144,7 @@
   --row-height-compact: 44px;
   --row-height-default: 60px;
   --row-height-expanded: 96px;
+  --row-accent-width: 3px;
   --badge-height: 20px;
   --icon-size-sm: 12px;
   --icon-size-md: 16px;
@@ -168,6 +169,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+  --radius-icon-chip: 5px;
   --radius-pill: 9999px;
 
   /* --- Shadows --- */
@@ -185,6 +187,7 @@
   /* --- Typography: sizes --- */
   --text-caption: 10px;
   --text-tiny: 11px;
+  --text-micro: 9px;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-body: 14px;
@@ -205,4 +208,5 @@
   --tracking-tight: -0.22px;
   --tracking-normal: -0.13px;
   --tracking-wide: 0.04em;
+  --tracking-kind-label: 0.01em;
 }

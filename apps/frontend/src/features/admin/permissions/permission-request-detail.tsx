@@ -26,7 +26,7 @@ export function PermissionRequestDetail({
       className="flex h-full min-h-0 flex-col bg-surface-detail"
       data-testid="permission-request-detail-panel"
     >
-      <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
+      <header className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-muted">권한 요청</p>
           <p className="truncate text-sm font-medium text-text-primary">

@@ -88,7 +88,7 @@ export const ObjectRow = React.forwardRef<HTMLDivElement, ObjectRowProps>(
           {severity && (
             <span
               aria-hidden="true"
-              className="h-4 w-[3px] shrink-0 rounded-pill"
+              className="h-4 w-row-accent shrink-0 rounded-pill"
               style={{ backgroundColor: `rgb(var(--severity-${severity}) / 1)` }}
               data-token={`--severity-${severity}`}
             />

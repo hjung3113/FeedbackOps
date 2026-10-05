@@ -141,7 +141,7 @@ export function ClusterSectionReadOnly({
         {similarCount > 0 && (
           <span
             data-testid="cluster-similarity-badge"
-            className="inline-flex items-center gap-1 rounded-md bg-accent-primary/12 px-2 py-0.5 text-[11px] font-medium text-accent-primary"
+            className="inline-flex items-center gap-1 rounded-md bg-accent-primary/12 px-2 py-0.5 text-tiny font-medium text-accent-primary"
           >
             <Layers size={9} aria-hidden="true" />
             {formatSameManagedSystemVocCount(similarCount)}

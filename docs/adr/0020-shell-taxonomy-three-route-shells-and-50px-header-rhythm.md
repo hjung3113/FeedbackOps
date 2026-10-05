@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amended by ADR-0021 (removed the light-theme out-of-scope entry). §3 and the "Frontend specs reference the manifest" consequence are superseded by ADR-0060 (2026-10-05); §1, §2 and the Amendment stand.
+Accepted. Amended by ADR-0021 (removed the light-theme out-of-scope entry). §3 and the "Frontend specs reference the manifest" consequence are superseded by ADR-0060 (2026-10-05); §1, §2 and the Amendment stand. Amended 2026-10-06 (#782, kicker tokens).
 
 ## Context
 
@@ -88,6 +88,11 @@ Rules for routes that omit `WorkbenchShell.toolbar`:
 
 No new shell is introduced. `WorkbenchShell.toolbar` was already optional in the
 TypeScript interface; this amendment documents the intended pattern.
+
+## Amended 2026-10-06
+
+The kicker values are unchanged and now come from the tokens `tracking-kicker`,
+`text-sm`, and `h-5.5` (#782).
 
 ## Out of scope
 

@@ -40,7 +40,7 @@ export function MilestoneStatusBadge({ status, className }: MilestoneStatusBadge
   return (
     <span
       className={cn(
-        'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium',
+        'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-tiny font-medium',
         className,
       )}
       style={{

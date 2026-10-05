@@ -86,7 +86,7 @@ export function MilestoneDetailContent({
           {/* Progress strip — real child-Task buckets from progress (B1c); planned tasks are prototype-only. */}
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-medium text-text-primary">
+              <span className="text-sm font-medium text-text-primary">
                 Task {milestone.progress.total}개 중 {milestone.progress.released_done}개 Released
               </span>
               <span className="text-sm font-semibold tabular-nums text-text-secondary">
@@ -129,7 +129,7 @@ export function MilestoneDetailContent({
             <MilestonePanelSectionTitle>
               {GLOSSARY.whyThisMilestoneExists}
             </MilestonePanelSectionTitle>
-            <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
+            <NestedTextBlock className="p-3 text-sm leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
           </div>

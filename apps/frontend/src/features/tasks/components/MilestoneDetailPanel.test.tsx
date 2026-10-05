@@ -218,7 +218,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(why).toHaveClass('border-border-subtle');
     expect(why).toHaveClass('bg-surface-canvas');
     expect(why).toHaveClass('p-3');
-    expect(why).toHaveClass('text-[13px]');
+    expect(why).toHaveClass('text-sm');
     expect(why).toHaveClass('leading-[1.6]');
   });
 
