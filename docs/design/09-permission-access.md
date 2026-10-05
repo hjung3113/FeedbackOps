@@ -203,6 +203,9 @@ Acceptance Criteria:
 - Approved permissions are scoped when scope is provided.
 ```
 
+Status (ADR-0061, 2026-10-05): backend grant revocation and deny lifting ship
+in #762 round 1. The Admin console screen is delivered in round 2.
+
 ### FR-PERM-003: Enforce Explicit Deny
 
 Priority: MUST

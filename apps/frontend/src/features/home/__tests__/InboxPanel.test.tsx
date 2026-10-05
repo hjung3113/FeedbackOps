@@ -106,6 +106,12 @@ const TARGET_CASES: Array<{
     detail: {},
     target: null,
   },
+  {
+    eventType: 'permission_grant.revoked',
+    subjectType: 'permission_grant',
+    detail: { permission_grant_id: NOTIFICATION_ID },
+    target: null,
+  },
 ];
 
 function jsonResponse(body: unknown, status = 200): Response {

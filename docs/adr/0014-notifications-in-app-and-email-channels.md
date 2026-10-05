@@ -90,6 +90,7 @@ task.assigned_to_me                        new assignee                         
 task.released                              VOC owner (if linked) — for Public Update review candidate     Y       N
 permission_request.submitted               Admins of the Workspace                                         Y       Y
 permission_request.decided                 requester                                                      Y       Y
+permission_grant.revoked (ADR-0061)         grant grantee                                                   Y       Y
 survey.assigned_to_me                      resolved respondent                                            Y       N
 ```
 
@@ -143,6 +144,13 @@ insert in one transaction while calling the channel. If email succeeds but
 the transaction fails before commit, retry may deliver the email again.
 Part 1 provided only the Pino-backed `MockEmailChannel`; SMTP was deferred to
 part 3 (see the part 3 amendment below).
+
+## Amendment 2026-10-05 (ADR-0061 / #762)
+
+`permission_grant.revoked` notifies the grantee in-app and by email with the
+summary `권한이 취소되었습니다.`. Its subject reference is available to the
+grantee and workspace Admins; other Actors receive an unavailable reference.
+Lifting a deny does not notify.
 
 Issue #509 part 2b wires the Task Request decision, Task conversion assignment,
 and Permission Request submission and decision producers described in the

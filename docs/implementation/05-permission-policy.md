@@ -275,6 +275,8 @@ permission_rejected
 permission_needs_more_info
 permission_denied
 permission_more_info_submitted
+permission_revoked
+permission_deny_revoked
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
@@ -286,12 +288,27 @@ task_created_from_request
 task_linked_to_request
 ```
 
-Revoke and expiry endpoints are not implemented yet. Planned event names remain:
+Expiry handling is not implemented yet. Its planned event remains:
 
 ```text
-permission_revoked
 permission_expired
 ```
+
+### Grant revoke and deny lift (ADR-0061)
+
+`POST /permissions/grants/:id/revoke` and `POST /permissions/denies/:id/revoke`
+are workspace-admin commands. They lock and update only active rows, require
+a trimmed reason, and append one strict audit event in the same transaction.
+An expired grant is not active and returns `conflict.permission_not_active`;
+an active deny is lifted by setting its revoke metadata. Permission Request
+status does not change. Revoke does not terminate sessions or change
+role-derived capabilities.
+
+The permission check treats a revoked grant as requestable using the same
+workspace scope as `no_grant`. The state mapper returns `pending_request` when
+the Actor has an open request for that capability and otherwise returns
+`revoked`. A revoke notification goes to the grant's Actor; deny lift sends no
+notification. There is no migration or grant change for these commands.
 
 ## Summary-Visible Contract
 

@@ -194,7 +194,11 @@ export function createCheckService(deps: CheckServiceDeps) {
     // surface that distinct reason. Revoked takes precedence over expired
     // because revocation is an intentional action vs. passive expiry.
     if (sawRevoked) {
-      return { allow: false, reason: 'grant_revoked', requestable: null };
+      return {
+        allow: false,
+        reason: 'grant_revoked',
+        requestable: [{ workspace_id: actor.workspace_id }],
+      };
     }
     if (sawExpired) {
       return { allow: false, reason: 'grant_expired', requestable: null };

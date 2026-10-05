@@ -50,3 +50,11 @@ describe('errorCodeSchema — Slice 8 #185 survey response submission codes', ()
     },
   );
 });
+
+describe('errorCodeSchema — ADR-0061 permission revocation', () => {
+  it('parses conflict.permission_not_active', () => {
+    expect(errorCodeSchema.parse('conflict.permission_not_active')).toBe(
+      'conflict.permission_not_active',
+    );
+  });
+});

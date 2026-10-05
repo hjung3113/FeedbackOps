@@ -59,6 +59,7 @@ export function notificationTarget(notification: NotificationDto): string | null
     case 'permission_request.submitted':
       return `/admin/permissions/requests?tab=all&selected=${subjectId}`;
     case 'permission_request.decided':
+    case 'permission_grant.revoked':
       return null;
   }
 }

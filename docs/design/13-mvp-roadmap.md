@@ -11,7 +11,7 @@ This document groups release scope and includes short shipped/open notes for par
 
 ```text
 - VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
-- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided, see `docs/research/permission-request-cancel-edit.md`; admin revoke of an active grant/deny, direct grant without a request, and risk scoring are not built)
+- 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester cancel / pending edit undecided, see `docs/research/permission-request-cancel-edit.md`; active grant revoke and deny lifting backend ship in #762 round 1 per ADR-0061, with the Admin screen in round 2; direct grant without a request and risk scoring are not built)
 - Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; editable thresholds deferred)
 - Analytics Area별 리포트
 ```

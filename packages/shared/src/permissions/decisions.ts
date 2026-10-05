@@ -32,8 +32,18 @@ export const permissionDecisionResultSchema = z
   })
   .strict();
 
+export const revokePermissionBodySchema = z
+  .object({ reason: z.string().trim().min(1).max(2000) })
+  .strict();
+
+export const revokePermissionResultSchema = z
+  .object({ id: z.string().uuid(), revoked_at: z.string().datetime() })
+  .strict();
+
 export type ApprovePermissionRequest = z.infer<typeof approvePermissionRequestSchema>;
 export type RejectPermissionRequest = z.infer<typeof rejectPermissionRequestSchema>;
 export type DenyPermissionRequest = z.infer<typeof denyPermissionRequestSchema>;
 export type NeedMoreInfoPermissionRequest = z.infer<typeof needMoreInfoPermissionRequestSchema>;
 export type PermissionDecisionResult = z.infer<typeof permissionDecisionResultSchema>;
+export type RevokePermissionBody = z.infer<typeof revokePermissionBodySchema>;
+export type RevokePermissionResult = z.infer<typeof revokePermissionResultSchema>;

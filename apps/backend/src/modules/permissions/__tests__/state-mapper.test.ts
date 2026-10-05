@@ -78,10 +78,26 @@ describe('toFrontendState', () => {
     expect(toFrontendState(d, null)).toBe('expired');
   });
 
-  it('grant_revoked → revoked (dead branch in Slice 1)', () => {
-    const d: Decision = { allow: false, reason: 'grant_revoked', requestable: null };
+  it('grant_revoked without an open request → revoked', () => {
+    const d: Decision = {
+      allow: false,
+      reason: 'grant_revoked',
+      requestable: [{ workspace_id: WS }],
+    };
     expect(toFrontendState(d, null)).toBe('revoked');
   });
+
+  it.each([{ status: 'pending' }, { status: 'needs_more_info' }] as const)(
+    'grant_revoked with a $status request → pending_request',
+    (openRequest) => {
+      const d: Decision = {
+        allow: false,
+        reason: 'grant_revoked',
+        requestable: [{ workspace_id: WS }],
+      };
+      expect(toFrontendState(d, openRequest)).toBe('pending_request');
+    },
+  );
 
   it('sensitive_reason_missing → blocked_non_requestable (Slice 1 dead branch)', () => {
     const d: Decision = {

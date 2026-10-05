@@ -665,7 +665,7 @@ Rules:
 ```text
 - Never show blank space where restricted linked content exists.
 - Do not leak internal details in the blocked-state copy.
-- Render request access CTA only when the backend marks the state request_access or blocked_requestable.
+- Render request access CTA when the backend marks the state request_access or blocked_requestable. A revoked grant is also requestable; preserve its revoked copy and use the existing request-access action (ADR-0061).
 - If the backend marks linked content hidden, render nothing and do not show a placeholder.
 - If the backend marks linked content denied, show non-requestable restricted copy unless policy allows appeal.
 - Summary-visible linked content must use backend-provided safe summary fields only.

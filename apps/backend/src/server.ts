@@ -54,16 +54,17 @@ import {
   navRoutes,
 } from './modules/nav/index.js';
 import {
+  type NotificationDispatcher,
   createNoopNotificationDispatcher,
   createNotificationNotifier,
   createNotificationService,
   createPgBossNotificationDispatcher,
   notificationRoutes,
-  type NotificationDispatcher,
 } from './modules/notifications/index.js';
 import {
   createCheckService,
   createDecisionService,
+  createGrantAdminService,
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
@@ -393,11 +394,19 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     notify,
     resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
+  const grantAdminService = createGrantAdminService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+    notify,
+  });
   await app.register(permissionsRoutes, {
     sessionService,
     checkService,
     requestService,
     decisionService,
+    grantAdminService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -635,17 +644,19 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
             return subjectReferenceForAllowedRecord(summary.display_id, summary.title);
           }
           if (summary.type !== 'task_request') return { visibility_state: 'unavailable' };
-          const title =
-            summary.requested_outcome.trim() || summary.evidence_summary.trim();
+          const title = summary.requested_outcome.trim() || summary.evidence_summary.trim();
           return subjectReferenceForAllowedRecord(summary.display_id, title);
         }
         case 'permission_request': {
           const request = await requestService.resolveNotificationReference(actor, subjectId);
           return request
-            ? subjectReferenceForAllowedRecord(
-                request.id.slice(0, 8),
-                request.requested_capability,
-              )
+            ? subjectReferenceForAllowedRecord(request.id.slice(0, 8), request.requested_capability)
+            : { visibility_state: 'unavailable' };
+        }
+        case 'permission_grant': {
+          const grant = await grantAdminService.resolveNotificationReference(actor, subjectId);
+          return grant
+            ? subjectReferenceForAllowedRecord(grant.id.slice(0, 8), grant.capability)
             : { visibility_state: 'unavailable' };
         }
         case 'public_update_review_candidate': {
