@@ -59,13 +59,16 @@ vi.mock('@fops/ui', async (importOriginal) => {
   return {
     ...actual,
     PermissionBlockedPanel: ({
+      state,
       category,
       reason,
     }: {
+      state: string;
       category: string;
       reason?: string;
     }) => (
       <div data-testid="permission-blocked-panel">
+        <span data-testid="permission-blocked-state" data-state={state} />
         <span>{category}</span>
         {reason && <span>{reason}</span>}
       </div>
@@ -199,4 +202,27 @@ describe('TriageRoute capability gate (REV-2 #9 + NEW-3)', () => {
     const params = call?.[0] as { enabled?: boolean } | undefined;
     expect(params?.enabled).toBe(false);
   });
+
+  it.each([{ permissionState: 'revoked' }, { permissionState: 'expired' }] as const)(
+    '$permissionState permission state maps to request_access in the triage gate',
+    async ({ permissionState }) => {
+      vi.mocked(usePermissionCheck).mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: {
+          state: permissionState,
+          decision: { allow: false, reason: permissionState },
+        },
+      } as unknown as ReturnType<typeof usePermissionCheck>);
+
+      renderWithQc(<TriageRoute />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('permission-blocked-state')).toHaveAttribute(
+          'data-state',
+          'request_access',
+        );
+      });
+    },
+  );
 });

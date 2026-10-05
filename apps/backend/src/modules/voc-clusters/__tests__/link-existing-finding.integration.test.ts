@@ -9,6 +9,7 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { loginAs } from '../../../test-support/auth.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { revokeCapabilityGrant } from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupVocClusterFixtures,
   grantCapability,
@@ -297,6 +298,44 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
       [clusterId, deniedFindingId],
     );
     expect(after.rows).toEqual(before.rows);
+  });
+
+  it('treats a revoked finding.manage grant as requestable on the link-finding route', async () => {
+    const externalId = `link-revoked-manage-${randomUUID()}`;
+    const actor = await insertActorRow(ops, {
+      workspaceId: WORKSPACE_ID,
+      externalId,
+      roleLevel: 'developer',
+    });
+    fixtureActorIds.push(actor.id);
+    fixtureGrantIds.push(
+      (
+        await grantCapability(ops, {
+          workspaceId: WORKSPACE_ID,
+          actorId: actor.id,
+          capability: 'finding.read',
+          managedSystemId: clusterMsId,
+          grantedByActorId: adminId,
+        })
+      ).id,
+    );
+    const manageGrant = await grantCapability(ops, {
+      workspaceId: WORKSPACE_ID,
+      actorId: actor.id,
+      capability: 'finding.manage',
+      managedSystemId: clusterMsId,
+      grantedByActorId: adminId,
+    });
+    fixtureGrantIds.push(manageGrant.id);
+    await revokeCapabilityGrant(ops, manageGrant.id, adminId);
+    const cookie = await loginAs(app, externalId);
+
+    const response = await link(cookie, { findingId: sameMsFindingId });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json<{ code: string }>().code).toBe('permission.scope_required');
+    const body = response.json<{ requestable_permission: { permission: string } }>();
+    expect(body.requestable_permission).toEqual({ permission: 'finding.manage' });
   });
 
   it('returns the existing link on a duplicate without creating a second audit row', async () => {

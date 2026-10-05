@@ -71,7 +71,7 @@ Two existing behaviours shape the design:
      request for that capability. Otherwise it maps to `revoked`.
    - The frontend `revoked` state keeps its "취소되었습니다" copy and adds the existing request-access action.
    - `grant_expired` follows the same rule (#767).
-   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked or expired grant.
+   - Domain responses treat `grant_revoked` and `grant_expired` like `no_grant` (`isRequestableDenial`, #775); paths keyed on `requestable !== null` (Survey results and follow-up) include `requestable_permission` for them.
 7. **Notification.** Revoking a grant notifies the grantee through a new catalogue event `permission_grant.revoked`.
    - Subject type is `permission_grant`. It is in-app and email, like `permission_request.decided`.
    - The summary reuses the shipped wording "권한이 취소되었습니다.".

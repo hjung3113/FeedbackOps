@@ -12,6 +12,7 @@ import { listWorkspaceAdminActorIds } from '../../auth/index.js';
 import type { RoleLevel } from '../../auth/session-service.js';
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
+import { isRequestableDenial } from '../../permissions/index.js';
 import { selectVocForUpdate } from '../repo.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
@@ -48,11 +49,10 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       { tx },
     );
     if (decision.allow !== true) {
-      // F1: discriminate by reason. Only `no_grant` for a developer role maps
-      // to `permission.scope_required` (actor may request MS-scoped access).
-      // Explicit deny / revoke / expiry → `permission.denied` with no
-      // requestable_permission (ADR-0012 / ErrorEnvelope semantics).
-      if (decision.reason === 'no_grant' && actor.role_level === 'developer') {
+      // F1: `no_grant`, `grant_revoked`, and `grant_expired` map to
+      // `permission.scope_required` for developers (ADR-0061 §6).
+      // Explicit deny and workspace mismatch remain denied.
+      if (isRequestableDenial(decision.reason) && actor.role_level === 'developer') {
         throw new HttpError(
           'permission.scope_required',
           'voc.triage capability required; developer needs MS-scoped grant',
@@ -66,7 +66,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
           },
         );
       }
-      // explicit_deny / grant_revoked / grant_expired → generic denied.
+      // Explicit deny, workspace mismatch, and non-developer denials stay generic.
       throw new HttpError('permission.denied', `voc.triage denied: ${decision.reason}`, {
         reason: decision.reason,
       });

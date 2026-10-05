@@ -20,6 +20,32 @@ export async function grantCapability(
   return id;
 }
 
+export async function revokeCapabilityGrant(
+  dbHandle: DbHandle,
+  grantId: string,
+  revokedByActorId: string,
+): Promise<void> {
+  const result = await dbHandle.pool.query(
+    `update permission.permission_grants
+        set revoked_at = now(), revoked_by_actor_id = $2, revoked_reason = 'test'
+      where id = $1
+      returning id`,
+    [grantId, revokedByActorId],
+  );
+  if (result.rowCount !== 1) throw new Error(`revokeCapabilityGrant: grant not found: ${grantId}`);
+}
+
+export async function expireCapabilityGrant(dbHandle: DbHandle, grantId: string): Promise<void> {
+  const result = await dbHandle.pool.query(
+    `update permission.permission_grants
+        set expires_at = now() - interval '1 second'
+      where id = $1
+      returning id`,
+    [grantId],
+  );
+  if (result.rowCount !== 1) throw new Error(`expireCapabilityGrant: grant not found: ${grantId}`);
+}
+
 export async function denyCapability(
   dbHandle: DbHandle,
   workspaceId: string,

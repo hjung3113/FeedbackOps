@@ -21,7 +21,11 @@ import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
@@ -479,6 +483,52 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('permission.scope_required');
   });
+
+  it.each([{ grantState: 'revoked' }, { grantState: 'expired' }] as const)(
+    'developer with a $grantState voc.triage grant can request access through public update',
+    async ({ grantState }) => {
+      const msId = await insertMsDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        `${uid(SLUG_PREFIX)}-${grantState}-requestable`,
+        `Public Update ${grantState} MS`,
+      );
+      const voc = await insertVoc(msId, `Public Update ${grantState} VOC`);
+      const { id: devId, externalId } = await insertDevActor(
+        dbHandle,
+        WORKSPACE_ID,
+        `pubupd-${grantState}-${randomUUID().slice(0, 8)}`,
+      );
+      const grantId = await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        devId,
+        'voc.triage',
+        msId,
+        adminActorId,
+      );
+      if (grantState === 'revoked') {
+        await revokeCapabilityGrant(dbHandle, grantId, adminActorId);
+      } else {
+        await expireCapabilityGrant(dbHandle, grantId);
+      }
+      const devCookie = await loginAs(app, externalId);
+
+      const res = await postPublicUpdate(devCookie, voc.id, {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('requestable update'),
+        next_reporter_facing_status: 'received',
+      });
+
+      expect(res.statusCode).toBe(403);
+      const body = res.json();
+      expect(body.code).toBe('permission.scope_required');
+      expect(body.requestable_permission).toMatchObject({
+        permission: 'voc.triage',
+        managed_system_id: msId,
+      });
+    },
+  );
 
   // ── Sanitizer attr-injection (#23) ────────────────────────────────────
 
