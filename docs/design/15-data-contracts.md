@@ -425,7 +425,7 @@ Rules:
 ```text
 - source is null for standalone Tasks.
 - source.task_request is derived from source_task_request_id.
-- source.finding is derived from the active (finding, task_request, requested_task) link.
+- source.finding is derived from the active (finding, task_request, requested_task) link (for a Finding-sourced request, its own source Finding first, #773).
 ```
 
 ## Milestone
