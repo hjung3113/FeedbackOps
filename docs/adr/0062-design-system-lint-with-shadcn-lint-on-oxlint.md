@@ -24,15 +24,24 @@ for ESLint or Oxlint only; Biome cannot load it. Its setup guide picks Oxlint wh
   Tailwind, so `packages/ui/components.json` points the linter at the app entry; without it every theme utility
   (`h-toolbar`, `rounded-pill`) reads as unknown. That file is read by the linter only; it is not a shadcn CLI
   config, and primitives still enter through the copy-based intake in `docs/tech-stack/component-stack.md`.
-- **Rollout.** All six rules run at `warn`, with `no-restyle` allowing `layout` and the component-directory
-  override from the tool's guide. `--max-warnings` caps the count at the measured 592, so a change can lower the
-  findings but not add to them. A rule is promoted to `error` once it is clean; `no-restyle` contracts are a
-  design decision taken per component, not in this ADR.
+- **Boundary.** Screens may add only layout classes to `@fops/ui` components (`no-restyle` with
+  `allow: ["layout"]`); `DetailPanelHeader`, `ShellHeader`, and `ListToolbar` also refuse height classes, which
+  keeps the ADR-0020 50px rhythm. Inside `packages/ui`, `no-restyle` and `require-static-classes` are off and
+  arbitrary layout values pass, because components own their structural geometry; arbitrary typography, spacing,
+  and color still report there. `scanAllStrings` makes `no-raw-colors` and `no-arbitrary-values` read class
+  strings kept in constants.
+- **Rollout.** A rule is `error` in a scope where it is clean: `no-raw-colors` and `no-unknown-classes` in
+  `apps/frontend/src`. Everything else is `warn`, and `--max-warnings` caps the whole-repo count at the measured
+  614. Repeated overrides and hard-coded values are paid down by adding shared tokens, variants, and components,
+  not by lint exceptions; each paid-down scope is promoted to `error`.
 
 ## Consequences
 
-- `pnpm lint:design` joins the gate (root `AGENTS.md` → Verification). The cap is a whole-repo count: a PR that
-  fixes findings lowers the number in the same PR.
+- `pnpm lint:design` joins the gate (root `AGENTS.md` → Verification). The cap is one whole-repo count: it fails a
+  net increase, not a new finding offset by a fix elsewhere, so review still rejects new findings, and a PR that
+  fixes findings lowers the number in the same PR. Rules promoted to `error` need no cap.
+- Messages suggest replacements from the theme, but the theme's self-referencing aliases can make the "nearest"
+  size wrong; a replacement is checked against the computed value and line-height before it is applied.
 - The baseline exposed real defects, tracked separately: shadcn primitive enter/exit classes (`animate-in`,
   `fade-*`, `zoom-*`, `slide-*`) generate no CSS because no animation plugin is installed, and `FieldLabel` uses the
   raw palette color `text-red-500`.
