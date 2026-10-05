@@ -18,7 +18,7 @@ describe('cn with FeedbackOps theme keys', () => {
     ['tracking-kind-label', 'tracking-wide'],
     ['rounded-icon-chip', 'rounded-md'],
     ['w-row-accent', 'w-2'],
-  ])('lets a later %s override be replaced by %s', (first, later) => {
+  ])('%s is replaced by a later %s', (first, later) => {
     expect(cn(first, later)).toBe(later);
   });
 });

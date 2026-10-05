@@ -5,7 +5,8 @@
 Accepted (2026-10-03, issue #743). Supersedes the
 [Tokens: CSS variables + Tailwind theme.extend](0016-ui-foundation-dark-wcag-tokens-wrap.md#tokens-css-variables--tailwind-themeextend)
 section of ADR-0016. Token names (ADR-0021) and values (Pack 17) are
-unchanged; only the exposure mechanism moves.
+unchanged; only the exposure mechanism moves. Amended 2026-10-06 (#782,
+tailwind-merge theme keys).
 
 ## Context
 
@@ -201,3 +202,14 @@ mechanism is used as-is.
 Reintroducing a JS config, exposing non-inline theme variables (runtime
 theming), or changing a token name/value each warrant a new ADR. Adding token
 aliases in `theme.css` is not a reopen.
+
+## Amended 2026-10-06
+
+The `tailwind-merge` bullet in the Decision no longer holds once the theme adds
+keys outside Tailwind's default scales. tailwind-merge 3 reads an unknown
+`text-*` suffix as a color, so `cn('text-caption', 'text-text-muted')` dropped
+the size and every sidebar section header lost its 10px (#782, caught by the
+visual harness). `packages/ui/src/utils/cn.ts` now registers those keys with
+`extendTailwindMerge` (text caption/tiny/micro, leading body, tracking
+kicker/kind-label, radius icon-chip, spacing row-accent), and every new theme key
+is registered there in the same change (`packages/ui/AGENTS.md`).

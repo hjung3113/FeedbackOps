@@ -46,10 +46,10 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## UI foundation and shell
 
 - [0016](0016-ui-foundation-dark-wcag-tokens-wrap.md) UI foundation — dark-only theme and token mechanism replaced; component wrap via `packages/ui` and WCAG AA remain. *Partially superseded by 0021, 0058*
-- [0020](0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md) Shell taxonomy — every route is `PageShell`, `ListShell` or `WorkbenchShell`; shared 50px header rhythm. *Accepted, amended by 0021, 0060*
+- [0020](0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md) Shell taxonomy — every route is `PageShell`, `ListShell` or `WorkbenchShell`; shared 50px header rhythm. *Accepted, amended by 0021, 0060; amended 2026-10-06 (#782)*
 - [0021](0021-pack-17-samsung-light-design-system.md) Pack 17 Samsung-light design system — light is the only MVP theme; token names kept, RGB-triple runtime values. *Accepted*
 - [0052](0052-list-empty-filtered-error-state-contract.md) List empty / filtered / error states — shared `ListStateMessage` with reset and retry actions. *Accepted*
-- [0058](0058-tailwind-v4-css-first-theme.md) Tailwind v4 CSS-first theme — `@theme inline` in `@fops/ui` replaces the JS preset; no visual change. *Accepted*
+- [0058](0058-tailwind-v4-css-first-theme.md) Tailwind v4 CSS-first theme — `@theme inline` in `@fops/ui` replaces the JS preset; no visual change. *Accepted, amended 2026-10-06 (#782)*
 - [0060](0060-shipped-ui-replaces-prototype-as-ui-authority.md) Shipped UI replaces the prototype as UI authority — existing screens, `lib/copy` and visual baselines decide; the prototype is a reference for unbuilt surfaces. *Accepted*
 - [0062](0062-design-system-lint-with-shadcn-lint-on-oxlint.md) Design-system lint — `@shadcn/lint` rules run on Oxlint beside Biome; `error` where a scope is clean, `warn` under a count cap elsewhere. *Accepted*
 
