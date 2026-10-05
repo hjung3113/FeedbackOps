@@ -202,7 +202,7 @@ export function RichEditor({
       */}
       <EditorContent
         editor={editor}
-        className="prose prose-sm flex max-w-none flex-col focus:outline-hidden [&_.ProseMirror]:flex-1 [&_.ProseMirror]:px-3 [&_.ProseMirror]:py-2"
+        className="flex max-w-none flex-col focus:outline-hidden [&_.ProseMirror]:flex-1 [&_.ProseMirror]:px-3 [&_.ProseMirror]:py-2"
         style={
           minHeight
             ? { minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight }

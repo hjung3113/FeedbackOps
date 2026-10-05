@@ -101,7 +101,7 @@ export function RichContentRenderer({ doc, mode, surface, className }: RichConte
 
   return (
     <div
-      className={cn('prose prose-sm max-w-none', className)}
+      className={cn('max-w-none', className)}
       data-mode={mode}
       // biome-ignore lint/security/noDangerouslySetInnerHtml: BE sanitizer is authoritative per ADR-0011
       dangerouslySetInnerHTML={{ __html: html }}
