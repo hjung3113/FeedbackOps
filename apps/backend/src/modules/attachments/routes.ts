@@ -18,7 +18,7 @@
 // Rate-limit: 20/min per actor (admin bypass follow-up — server.ts already
 // carries a TODO for the admin-role helper).
 
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 
 import { HttpError, sendError } from '../../lib/errors.js';
 import { requireIdempotencyKey, RFC4122_UUID_REGEX as UUID_REGEX } from '../../lib/http-headers.js';
@@ -85,7 +85,7 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
             max_bytes: MAX_ATTACHMENT_BYTES,
           });
         }
-        throw err;
+        return sendMalformedMultipartRequest(req, reply, err);
       }
       if (!part) {
         throw new HttpError('validation.failed', 'file part missing', {
@@ -136,7 +136,7 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
             max_bytes: MAX_ATTACHMENT_BYTES,
           });
         }
-        throw err;
+        return sendMalformedMultipartRequest(req, reply, err);
       }
       // Defensive size re-check after buffering. @fastify/multipart's
       // `limits.fileSize` is the primary gate; this catches the edge case
@@ -227,7 +227,7 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
 interface MultipartFile {
   filename?: string;
   mimetype: string;
-  file: NodeJS.ReadableStream & { truncated?: boolean };
+  file: NodeJS.ReadableStream & AsyncIterable<Buffer | string> & { truncated?: boolean };
 }
 
 function isRequestFileTooLargeError(err: unknown): boolean {
@@ -235,30 +235,33 @@ function isRequestFileTooLargeError(err: unknown): boolean {
   return code === 'FST_REQ_FILE_TOO_LARGE' || code === 'FST_FILES_LIMIT';
 }
 
+function sendMalformedMultipartRequest(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  err: unknown,
+): FastifyReply {
+  const code = (err as { code?: unknown } | null | undefined)?.code;
+  req.log.info({ ...(typeof code === 'string' ? { code } : {}) }, 'malformed multipart request');
+  return sendError(reply, 'validation.malformed_request', 'malformed request');
+}
+
 async function drainPart(part: MultipartFile): Promise<void> {
-  await new Promise<void>((resolve) => {
-    part.file.on('data', () => {
-      /* drain */
-    });
-    part.file.on('end', () => resolve());
-    part.file.on('error', () => resolve());
-  });
+  try {
+    for await (const chunk of part.file) {
+      void chunk;
+    }
+  } catch {
+    // Draining is best-effort; early validation responses must still settle.
+  }
 }
 
 async function consumeToBuffer(part: MultipartFile): Promise<Buffer> {
   const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    part.file.on('data', (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-    part.file.on('end', () => {
-      if (part.file.truncated) {
-        reject(Object.assign(new Error('file too large'), { code: 'FST_REQ_FILE_TOO_LARGE' }));
-        return;
-      }
-      resolve();
-    });
-    part.file.on('error', (err) => reject(err));
-  });
+  for await (const chunk of part.file) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (part.file.truncated) {
+    throw Object.assign(new Error('file too large'), { code: 'FST_REQ_FILE_TOO_LARGE' });
+  }
   return Buffer.concat(chunks);
 }

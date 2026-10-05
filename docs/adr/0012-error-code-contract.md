@@ -209,3 +209,4 @@ no ADR-0012 error code, and no Zod `validation` array map to `422 validation.mal
 with the fixed message `malformed request`; the handler logs only the Fastify
 error `code` and `statusCode` at info level. This covers malformed or empty JSON,
 unsupported media types, oversized bodies, and invalid Content-Length.
+`POST /attachments` maps malformed multipart input the same way (#770).
