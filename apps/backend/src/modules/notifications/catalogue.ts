@@ -11,6 +11,7 @@ export interface NotificationSummaryParamsByEvent {
   'task.released': NoSummaryParams;
   'permission_request.submitted': NoSummaryParams;
   'permission_request.decided': { outcome: 'approved' | 'rejected' };
+  'permission_grant.revoked': NoSummaryParams;
 }
 
 export type NotificationSubjectType =
@@ -18,6 +19,7 @@ export type NotificationSubjectType =
   | 'task_request'
   | 'task'
   | 'permission_request'
+  | 'permission_grant'
   | 'public_update_review_candidate';
 
 type NotificationCatalogueShape = {
@@ -105,6 +107,13 @@ export const notificationCatalogue = {
     email: true,
     summary: ({ outcome }) =>
       outcome === 'approved' ? '권한 요청이 승인되었습니다.' : '권한 요청이 반려되었습니다.',
+  },
+  'permission_grant.revoked': {
+    recipients: 'Permission grant grantee.',
+    subject_type: 'permission_grant',
+    in_app: true,
+    email: true,
+    summary: () => '권한이 취소되었습니다.',
   },
 } satisfies NotificationCatalogueShape;
 

@@ -35,6 +35,7 @@ function installFetch(options: {
   permission?: PermissionResponse;
   settingsStatus?: number;
   patchStatus?: number;
+  permissionSelfApproval?: 'allowed' | 'forbidden';
   onPatch?: (body: unknown) => void;
 }) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -52,7 +53,11 @@ function installFetch(options: {
     if (url === '/workspace/settings' && (!init?.method || init.method === 'GET')) {
       return jsonResponse(
         options.settingsStatus === undefined || options.settingsStatus === 200
-          ? resolvedSettings
+          ? {
+              ...resolvedSettings,
+              permission_self_approval:
+                options.permissionSelfApproval ?? resolvedSettings.permission_self_approval,
+            }
           : { code: 'internal.unexpected', message: 'nope' },
         options.settingsStatus ?? 200,
       );
@@ -197,6 +202,22 @@ describe('/admin/settings route', () => {
     expect(
       screen.queryByText('소급 영향: 백로그 일부가 자동 해제될 수 있습니다'),
     ).not.toBeInTheDocument();
+  });
+
+  test('explains that an Admin cannot lift a deny against themself when the policy is forbidden', async () => {
+    installFetch({ permissionSelfApproval: 'allowed' });
+    renderRoute();
+
+    await screen.findByTestId('workspace-settings-screen');
+    const selfApprovalEditButton = screen.getAllByRole('button', { name: '편집' })[0];
+    if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
+    fireEvent.click(selfApprovalEditButton);
+    fireEvent.click(screen.getByRole('combobox', { name: '직접 승인' }));
+    fireEvent.click(await screen.findByRole('option', { name: '금지' }));
+
+    expect(
+      screen.getByText('관리자는 본인에게 걸린 차단도 직접 해제할 수 없습니다.'),
+    ).toBeInTheDocument();
   });
 
   test('patches only the changed field, applies its response, and discards local edits', async () => {

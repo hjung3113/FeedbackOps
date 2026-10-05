@@ -123,9 +123,9 @@ export function AppRail({
     <nav
       className={cn(
         'flex flex-col items-center gap-2 py-3 bg-surface-sidebar border-r border-border-subtle',
+        'w-(--rail-width)',
         className,
       )}
-      style={{ width: 'var(--rail-width)' }}
       aria-label="시스템 선택"
       data-testid="app-rail"
     >
@@ -162,7 +162,7 @@ export function AppRail({
         <span className="relative inline-flex">
           <Bell className="h-4 w-4" />
           {unreadBadge !== undefined && (
-            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-[9px] font-semibold leading-none text-white">
+            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-micro font-semibold leading-none text-white">
               {unreadBadge}
             </span>
           )}
@@ -226,7 +226,7 @@ function RailButton({
           <Icon className="h-4 w-4" />
         </a>
       </TooltipTrigger>
-      <TooltipContent side="right" className="text-xs">
+      <TooltipContent side="right" size="sm">
         {item.label}
       </TooltipContent>
     </Tooltip>

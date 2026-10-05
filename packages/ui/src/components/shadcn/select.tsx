@@ -7,10 +7,23 @@ export const Select = SelectPrimitive.Root;
 export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 
+type SelectAppearance = 'default' | 'canvas' | 'field';
+interface SelectTriggerProps
+  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  appearance?: SelectAppearance;
+  density?: 'default' | 'compact';
+}
+
+const SELECT_APPEARANCE_CLASSES: Record<Exclude<SelectAppearance, 'default'>, string> = {
+  canvas: 'rounded border-border-subtle bg-surface-canvas p-2',
+  field:
+    'h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary',
+};
+
 export const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  SelectTriggerProps
+>(({ className, children, appearance = 'default', density = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
@@ -18,6 +31,8 @@ export const SelectTrigger = React.forwardRef<
       'focus:outline-hidden focus:ring-2 focus:ring-focus-ring focus:ring-offset-2',
       'disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:line-clamp-1',
+      appearance !== 'default' && SELECT_APPEARANCE_CLASSES[appearance],
+      density === 'compact' && 'h-8 px-2 py-1',
       className,
     )}
     {...props}
@@ -67,11 +82,6 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       className={cn(
         'relative z-50 max-h-96 min-w-32 overflow-hidden rounded-md border border-border-subtle bg-surface-popover text-text-primary shadow-md',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out',
-        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2',
-        'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className,

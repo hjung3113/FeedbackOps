@@ -1,5 +1,9 @@
 # Core technology stack
 
+## Status
+
+Accepted. Zustand and GitHub Actions were chosen but are not in use (notes below). Amended by ADR-0062 (`@shadcn/lint` design-system rules run on Oxlint; Biome stays the formatter and general linter).
+
 FeedbackOps MVP uses one decision per layer rather than per-team or per-feature variation:
 
 - **Runtime**: Node.js 22 LTS.
@@ -11,12 +15,12 @@ FeedbackOps MVP uses one decision per layer rather than per-team or per-feature 
 - **End-to-end tests**: Playwright.
 - **Validation**: Zod, used at API boundaries, DTO definitions, and Form schemas; canonical schemas live in `packages/shared`.
 - **Server state on the frontend**: TanStack Query.
-- **Client state on the frontend**: Zustand.
+- **Client state on the frontend**: Zustand. (Not adopted so far: no store exists; server state is TanStack Query and UI state is local or URL state.)
 - **Forms**: React Hook Form with `@hookform/resolvers/zod`.
 - **Router**: TanStack Router.
 - **API type sharing**: shared Zod schemas in `packages/shared` consumed by Fastify Type Provider on the backend and TanStack Query hooks on the frontend. No OpenAPI codegen, no tRPC.
 - **Lint and format**: Biome.
-- **CI**: GitHub Actions.
+- **CI**: GitHub Actions. (No workflow is committed; the gates run locally, root `AGENTS.md` → Verification.)
 - **Frontend build**: Vite (already implied by `apps/frontend` and `docs/tech-stack/component-stack.md`).
 - **Frontend component layer**: shadcn/ui on Radix, governed as in `docs/tech-stack/component-stack.md`.
 
@@ -27,7 +31,7 @@ The shape constraints in `AGENTS.md` and `docs/implementation/00-architecture.md
 - "Backend controllers parse HTTP and map responses only; application services own transactions, permissions, audits, idempotency, and cross-system commands." That rules out frameworks that force a particular module shape on the domain layer. **Fastify** keeps controllers thin and lets application services be plain classes; **NestJS** would force the domain layer into a NestJS-decorator shape and couple repositories to a DI container we do not need.
 - The data contracts in `docs/design/15-data-contracts.md` already assume PostgreSQL semantics (uuid, enum, jsonb) and the entity-link table is heterogeneous-target. **PostgreSQL 16** is the only mainstream choice that natively supports all three; MySQL would force enum-as-string and jsonb-as-json compromises that ripple into Drizzle and Zod.
 - The repository layer is the only writer of its module's tables (`docs/implementation/02-domain-module-boundaries.md`). **Drizzle** gives raw-SQL-shaped queries with TS types, keeping the repository thin and the migration story explicit; Prisma's generated client and migration runner hide behavior we want visible during audits.
-- `packages/shared` is the boundary that both apps depend on. Choosing **Zod as the single schema language** lets one definition serve API validation, DTO type, drizzle-zod adapter input, and React Hook Form resolver. OpenAPI codegen would add a build step and a parallel type universe; tRPC would override the REST contract already drafted in `docs/design/archive/14-api-draft.md`.
+- `packages/shared` is the boundary that both apps depend on. Choosing **Zod as the single schema language** lets one definition serve API validation, DTO type, drizzle-zod adapter input, and React Hook Form resolver. OpenAPI codegen would add a build step and a parallel type universe; tRPC would override the REST contract in `docs/implementation/03-api-contracts.md` and `docs/implementation/api/*.md`.
 - Tests must verify product invariants that are visible to both backend and frontend (`docs/implementation/07-testing-strategy.md`). **Vitest** runs in both targets with one config language; **Playwright** handles multi-origin, file upload, and Korean input scenarios that Cypress cannot reliably do.
 
 ## Boundaries this ADR locks

@@ -9,6 +9,7 @@
  * A known record with an unsupported slug gets the neutral default token.
  * A missing record can omit `mark` and renders in the muted version.
  */
+import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export interface ManagedSystemPillProps {
@@ -35,21 +36,17 @@ export function ManagedSystemPill({ name, mark, archived, className }: ManagedSy
         isMuted
           ? 'border-border-subtle text-text-muted'
           : 'border-border-subtle text-text-secondary',
+        isMuted && 'opacity-60',
         className,
       )}
       data-archived={archived === true ? 'true' : 'false'}
-      style={isMuted ? { opacity: 0.6 } : undefined}
+      {...(mark !== undefined
+        ? { style: { '--managed-system-pill-mark-color': mark } as React.CSSProperties }
+        : {})}
     >
       {mark !== undefined && (
         <span
-          style={{
-            display: 'inline-block',
-            width: 6,
-            height: 6,
-            borderRadius: 9999,
-            backgroundColor: mark,
-            flexShrink: 0,
-          }}
+          className="inline-block size-1.5 shrink-0 rounded-pill bg-(--managed-system-pill-mark-color)"
           aria-hidden="true"
           data-mark={mark}
         />

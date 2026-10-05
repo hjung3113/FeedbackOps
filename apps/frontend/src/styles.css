@@ -30,7 +30,8 @@
 
 /* #743 finding: `@tailwindcss/typography` was declared but never wired in v3
    (no `plugins` array in tailwind.config.ts), so `prose prose-sm` rendered
-   unstyled — baseline parity means the plugin stays UNLOADED. */
+   unstyled — baseline parity means the plugin stays UNLOADED, and #785
+   removed the inert `prose` classes. */
 
 /* v3 Preflight pins (border color, placeholder color, button cursor), the v3
    `space-y-*` semantics, and the leading/tracking legacy shims ship from the

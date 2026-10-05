@@ -189,7 +189,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({ allow: true, via: 'direct_grant', grant_id: inserted[0]?.id });
   });
 
-  it('grant expired → grant_expired', async () => {
+  it('grant expired → grant_expired with requestable scope', async () => {
     const tempActor: ActorContext = {
       actor_id: tempActorId,
       workspace_id: WORKSPACE_ID,
@@ -208,7 +208,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({
       allow: false,
       reason: 'grant_expired',
-      requestable: null,
+      requestable: [{ workspace_id: WORKSPACE_ID }],
     });
   });
 
@@ -297,7 +297,7 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     expect(d).toEqual({
       allow: false,
       reason: 'grant_revoked',
-      requestable: null,
+      requestable: [{ workspace_id: WORKSPACE_ID }],
     });
   });
 });

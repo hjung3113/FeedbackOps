@@ -1,5 +1,9 @@
 # Authentication, sessions, and Actor provisioning
 
+## Status
+
+Accepted. Amended 2026-09-22 (OIDC, #390). Amended by ADR-0061 (write path for permission revocation). Promotion UI not built (ADR-0048 §7).
+
 FeedbackOps authentication runs through an internal corporate identity provider that has not yet been provisioned. MVP development cannot wait for that procurement, so this ADR defines an **AuthProvider abstraction with two implementations** and the session/provisioning rules that both must honor.
 
 ## AuthProvider abstraction
@@ -56,6 +60,8 @@ Batch import from AD and admin-managed invite whitelisting were rejected: batch 
 MVP maps Role Level **manually**: Admin promotes Actors via the Admin UI after first login. AD-group-driven mapping (claims.groups → Role Level) is a follow-up ADR once the concrete IdP and its group schema are known; making it up before that risks baking a vendor-specific assumption into the domain layer.
 
 The fallback for a freshly provisioned Actor is `User`, which can submit their own VOC, view their own `Reporter Summary`, and access assigned Surveys — nothing else. This matches `docs/design/09-permission-access.md` user-level scope.
+
+> Note (ADR-0048 §7): the promotion UI/route was not built; Role Level is assigned by seed or a direct core.actors write.
 
 ## Workspace resolution in MVP
 

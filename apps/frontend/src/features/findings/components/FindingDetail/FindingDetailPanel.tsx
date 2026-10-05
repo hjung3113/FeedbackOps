@@ -4,7 +4,13 @@
 
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
-import { Button, DetailPanelHeader, EmptyState, PermissionBlockedPanel, Skeleton } from '@fops/ui';
+import {
+  Button,
+  DetailPanelHeader,
+  EmptyState,
+  PermissionBlockedPanel,
+  SkeletonBlocks,
+} from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import type * as React from 'react';
 import { useFindingDetail } from '../../hooks/useFindingDetail';
@@ -43,15 +49,27 @@ function FindingPanelLayout({
 function FindingDetailSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-4 p-6" aria-label="Finding 상세 불러오는 중">
-      <Skeleton className="h-7 w-1/2" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-3/4" />
+      <SkeletonBlocks
+        blocks={[
+          { kind: 'title', size: 'large', width: 'half' },
+          { kind: 'line', width: 'full' },
+          { kind: 'line', width: 'three-quarters' },
+        ]}
+      />
       <div className="flex gap-2">
-        <Skeleton className="h-6 w-20" />
-        <Skeleton className="h-6 w-20" />
+        <SkeletonBlocks
+          blocks={[
+            { kind: 'badge', width: 'standard' },
+            { kind: 'badge', width: 'standard' },
+          ]}
+        />
       </div>
-      <Skeleton className="h-32 w-full" />
-      <Skeleton className="h-4 w-1/3" />
+      <SkeletonBlocks
+        blocks={[
+          { kind: 'body', size: 'large', width: 'full' },
+          { kind: 'line', width: 'third' },
+        ]}
+      />
     </div>
   );
 }
@@ -69,7 +87,7 @@ function FindingNotFound(): React.ReactElement {
           Findings 목록으로
         </Button>
       }
-      className="px-6"
+      padding="wide"
     />
   );
 }

@@ -26,7 +26,7 @@ export function PermissionRequestDetail({
       className="flex h-full min-h-0 flex-col bg-surface-detail"
       data-testid="permission-request-detail-panel"
     >
-      <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
+      <header className="flex h-toolbar items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-muted">권한 요청</p>
           <p className="truncate text-sm font-medium text-text-primary">
@@ -44,7 +44,7 @@ export function PermissionRequestDetail({
         <div className="flex flex-col gap-5">
           <section className="flex flex-col gap-2">
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
-            <FieldRow label="요청자" className="px-0">
+            <FieldRow label="요청자" inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>{actorName ?? GLOSSARY.unknownUser}</span>
                 <span className="font-mono text-xs text-text-muted">
@@ -52,10 +52,10 @@ export function PermissionRequestDetail({
                 </span>
               </span>
             </FieldRow>
-            <FieldRow label="요청 ID" className="px-0">
+            <FieldRow label="요청 ID" inset="none">
               <span className="font-mono text-xs text-text-muted">{shortId(request.id)}</span>
             </FieldRow>
-            <FieldRow label="요청 권한" className="px-0">
+            <FieldRow label="요청 권한" inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>{getCapabilityDisplayLabel(request.requested_capability)}</span>
                 <span className="font-mono text-xs text-text-muted">
@@ -63,7 +63,7 @@ export function PermissionRequestDetail({
                 </span>
               </span>
             </FieldRow>
-            <FieldRow label="범위" className="px-0">
+            <FieldRow label="범위" inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>
                   {request.requested_managed_system_id
@@ -77,17 +77,17 @@ export function PermissionRequestDetail({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="요청 만료일" className="px-0">
+            <FieldRow label="요청 만료일" inset="none">
               <span>
                 {request.requested_expiration
                   ? formatDateOnly(request.requested_expiration.slice(0, 10))
                   : '만료 없음'}
               </span>
             </FieldRow>
-            <FieldRow label="상태" className="px-0">
+            <FieldRow label="상태" inset="none">
               <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
             </FieldRow>
-            <FieldRow label="요청 일시" className="px-0">
+            <FieldRow label="요청 일시" inset="none">
               <span>{formatDateTime(request.created_at)}</span>
             </FieldRow>
           </section>

@@ -140,7 +140,10 @@ export function ListTabs({
             data-list-toolbar-tabs
             data-fade-left={overflowState.canScrollLeft ? 'true' : 'false'}
             data-fade-right={overflowState.canScrollRight ? 'true' : 'false'}
-            style={viewportStyle}
+            style={
+              // oxlint-disable-next-line shadcn/no-inline-styles -- the scroll-fade mask tracks the live overflow edges
+              viewportStyle
+            }
           >
             <Tabs
               className={cn(align === 'end' && 'ml-auto')}
@@ -163,7 +166,7 @@ export function ListTabs({
                       {...(tab.testId !== undefined ? { 'data-testid': tab.testId } : {})}
                       {...(tab.tip !== undefined ? { title: tab.tip } : {})}
                       className={cn(
-                        'group inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-0 text-[13px] font-medium text-text-muted transition-colors',
+                        'group inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-0 text-sm font-medium text-text-muted transition-colors',
                         'hover:bg-surface-card hover:text-text-primary',
                         'data-[state=active]:bg-surface-card-elevated data-[state=active]:text-text-primary data-[state=active]:shadow-none',
                         tab.urgent === true &&
@@ -173,7 +176,7 @@ export function ListTabs({
                       {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />}
                       {tab.label}
                       {tab.badgeCount !== undefined && (
-                        <span className="text-[11px] text-text-muted tabular-nums group-data-[state=active]:text-text-secondary">
+                        <span className="text-tiny text-text-muted tabular-nums group-data-[state=active]:text-text-secondary">
                           {tab.badgeCount}
                         </span>
                       )}

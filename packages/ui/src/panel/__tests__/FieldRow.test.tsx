@@ -40,4 +40,29 @@ describe('FieldRow', () => {
     );
     expect(screen.getByTestId('node-val')).toBeInTheDocument();
   });
+
+  it.each([
+    ['no horizontal inset', 'px-0', { inset: 'none' }],
+    [
+      'Milestone property layout',
+      'grid grid-cols-[120px_1fr] items-start gap-3 px-0 text-sm [&>div]:text-left',
+      { layout: 'property' },
+    ],
+  ] as const)('preserves legacy classes for %s', (_name, oldClassName, variantProps) => {
+    const before = render(
+      <FieldRow label="상태" className={oldClassName}>
+        값
+      </FieldRow>,
+    );
+    const oldClasses = [...(before.container.firstElementChild?.classList ?? [])].sort();
+    before.unmount();
+
+    const after = render(
+      <FieldRow label="상태" {...variantProps}>
+        값
+      </FieldRow>,
+    );
+    const variantClasses = [...(after.container.firstElementChild?.classList ?? [])].sort();
+    expect(variantClasses).toEqual(oldClasses);
+  });
 });

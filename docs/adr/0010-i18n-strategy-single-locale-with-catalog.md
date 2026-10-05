@@ -1,5 +1,9 @@
 # i18n: single Korean locale in MVP, no catalog runtime
 
+## Status
+
+Accepted. Mechanism replaced 2026-09-24.
+
 FeedbackOps MVP has one document locale: `<html lang="ko">`. There is no locale
 switcher and no `Accept-Language` negotiation. ADR-0005 names the
 Reporter-Facing VOC Status labels in Korean. This ADR is how the rest of the
@@ -28,10 +32,10 @@ not look that wording up in a catalog.
   `apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx`.
   A new label of this kind goes next to the component that renders it.
 - **A closed display set that already has a map** extends that map.
-  `apps/frontend/src/lib/copy/` has two: `home.ts` (`HOME_COPY` and the
+  `apps/frontend/src/lib/copy/` holds per-surface modules (see the directory); two examples are: `home.ts` (`HOME_COPY` and the
   queue/coverage maps; Korean and English in the same object) and
-  `reporter-status-labels.ts` (`REPORTER_STATUS_LABELS`). Do not start a
-  third file for one string.
+  `reporter-status-labels.ts` (`REPORTER_STATUS_LABELS`). Prefer an existing
+  module for a closed set.
 - **An API error** is a `CATALOG` entry in
   `apps/frontend/src/lib/api/errorMapper.ts`, keyed by `ErrorCode`.
   `errorMapper` uses that entry and ignores the envelope `message` when a
@@ -54,7 +58,7 @@ not look that wording up in a catalog.
 Korean and English may sit in the same screen. Do not translate one side
 into the other to make a file consistent. This was the former `PRODUCT.md`
 rule. Issue #580 and ADR-0057 refine it for field labels and action buttons on
-Korean-language surfaces; the prototype remains the authority for other copy.
+Korean-language surfaces (widened by ADR-0057 A2, #675); the prototype remains the authority for other copy.
 
 ## Backend
 

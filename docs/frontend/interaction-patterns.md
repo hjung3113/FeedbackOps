@@ -101,6 +101,11 @@ object versions, action no longer available, and already-resolved recovery
 items. Preserve local input when the action can be retried after refresh or
 permission request.
 
+Status: the shipped `next_actions` producers are Survey Result (`create_finding`, `request_task`) and outcome
+follow-up items (`create_finding`, `mark_no_follow_up`, `reopen_follow_up`); VOC detail returns `[]`. The VOC action
+ids below and `attach_evidence_to_existing_voc` are target vocabulary, not shipped ids
+(`docs/implementation/api/next-actions.md`).
+
 Common VOC action ids:
 
 ```text
@@ -182,7 +187,7 @@ UX rules:
 ```text
 - Survey Result and Survey Response surfaces must not show Create VOC.
 - Allowed follow-up actions are Create Finding, Link Finding (deferred out of MVP scope; ADR-0037), Request Task, Add Evidence Highlight, and optional Attach to Existing VOC.
-- Attach to Existing VOC uses action id `attach_evidence_to_existing_voc` and links survey evidence to an already existing VOC; it must not create a new VOC.
+- Attach to Existing VOC uses action id `attach_evidence_to_existing_voc` (target vocabulary, not shipped) and links survey evidence to an already existing VOC; it must not create a new VOC.
 - Do not label this action Create VOC, Convert to VOC, Generate VOC from Response, or Link Existing VOC.
 - Survey-derived Request Task follows the Task Request flow and review boundary.
 ```
@@ -208,7 +213,8 @@ MVP conversation constraints:
 - Public Update and Reporter Reply share a public VOC timeline.
 - Internal Comment uses a separate internal timeline.
 - Conversation is append-only and not real-time chat.
-- Mentions, reactions, read receipts, threaded replies, and general edit/delete flows are later features.
+- Reactions, read receipts, threaded replies, and general edit/delete flows are later features.
+- Mentions are supported only in the Internal Comment surface (picker-button insertion, no inline `@` autocomplete).
 - Cluster update candidates are not auto-sent; selected VOCs receive individual Public Updates when applied.
 ```
 
@@ -242,7 +248,7 @@ MVP conversation constraints:
 - Task Board is for internal execution work only.
 - VOC owner assignment is not Task assignee or kanban assignment.
 - Board cards show minimal linked context indicators only; source VOC, Finding, Survey, Evidence, and reporter-facing update detail belongs in Task Detail or the source object's route.
-- Assigned Backlog Tasks may appear in My Work as planned work, but execution starts only when the Task moves to Todo or Doing.
+- Assigned Backlog Tasks may appear in My Tasks (`/tasks?view=my`) or Home's assigned-to-you panel as planned work, but execution starts only when the Task moves to Todo or Doing.
 ```
 
 ## Milestone Timeline Boundary
@@ -276,7 +282,7 @@ UX rules:
 - Sensitive permission requests require reason before submission.
 - Pending requests show who can approve when available.
 - Needs More Info requests show the Admin question and let the requester update reason, scope, or duration before resubmitting.
-- Rejected requests show safe rejection copy and may allow a new request.
+- Rejected requests show safe rejection copy and may allow a new request. Revoked and expired grants keep their state copy and expose the request-access action when the backend marks the decision requestable (ADR-0061, #767).
 - Approved requests return the user to the blocked object or action when possible.
 - Explicit Deny overrides allow and should show a non-requestable blocked state unless policy allows appeal.
 ```

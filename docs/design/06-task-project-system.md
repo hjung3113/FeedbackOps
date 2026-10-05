@@ -86,7 +86,7 @@ UI language must keep Task Request and Task separate:
 ```text
 - Use "Request Task" when creating an execution candidate from VOC, VOC Cluster, Finding, or Survey-derived Finding.
 - Use "Convert to Task" when an approved Task Request becomes a Backlog Task.
-- Use "Create Task" only for standalone internal Tasks created from the Tasks surface.
+- Use "Create Task" only for standalone internal Tasks created from the Tasks surface (standalone create is deferred, ADR-0027).
 - Do not label VOC, Finding, or Survey follow-up actions as "Create Task".
 - Task Request screens are review/intake surfaces; Task screens are execution backlog, board, and detail surfaces.
 ```
@@ -115,7 +115,7 @@ Convert to Task owns final execution fields:
 Task fields may be suggested from the Task Request or source object, but they
 are finalized during Convert to Task.
 
-### Slice 6 Task Request Source Contracts
+### Task Request Source Contracts
 
 `POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
 `POST /voc-clusters/:id/request-task` create a Task Request from an existing
@@ -169,7 +169,7 @@ cluster Primary Managed System. Review decisions land in ADR-0026; conversion
 to Task and Link Existing Task land in ADR-0027. ADR-0028 documents the
 VOC/cluster source extension.
 
-### Slice 6 Conversion Contract: Task Request To Task
+### Conversion Contract: Task Request To Task
 
 `POST /task-requests/:id/convert` converts only an approved Task Request into a
 Backlog Task. The request body finalizes execution fields:
@@ -179,7 +179,7 @@ title required
 priority optional default medium
 assignee_actor_id optional nullable
 due_date optional nullable ISO date
-milestone_id optional nullable UUID placeholder
+milestone_id optional nullable, FK to task.milestones (ADR-0027 amendment)
 analytics_area_id optional nullable
 ```
 
@@ -189,8 +189,8 @@ Side effects are atomic:
 - insert task.tasks with status backlog
 - preserve entity_links:
   - (task_request, task, converted_to)
-  - (finding, task, requested_task)
-  - (voc, task, evidence_of) when existing Finding evidence links make this cheap
+  - (finding, task, requested_task), from the request's own source Finding only (#768)
+  - (voc, task, evidence_of) when that Finding's existing evidence links make this cheap
 - update task_request.task_requests.status to converted
 - audit task_created_from_request
 ```
@@ -317,7 +317,7 @@ Priority: SHOULD
 Acceptance Criteria:
 
 ```text
-- Milestone can be created from Finding.
+- Milestone is created from the Tasks surface; Finding -> Milestone creation is future (WF-TASK-002).
 - Milestone can group Tasks.
 - Milestone Detail shows Why this milestone exists, source, Analytics Area, evidence count, and linked objects.
 - Milestone lists show compact schedule risk with a mini timeline.
@@ -344,8 +344,8 @@ Actions:
 - Approve
 - Reject
 - Request More Evidence
-- Convert to Task (S6-4)
-- Link Existing Task (S6-4)
+- Convert to Task
+- Link Existing Task
 ```
 
 ### Task Detail
@@ -428,7 +428,7 @@ Developer discussion from the Gantt.
 ```text
 - Finding creates Task Request or links execution work.
 - VOC status may be updated after Released, but not automatically on Done.
-- Survey Outcome may validate Task or Milestone.
+- Survey Outcome validation of Task or Milestone is future (WF-X-004).
 - Entity Links preserve source and visibility.
 ```
 

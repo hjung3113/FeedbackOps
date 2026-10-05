@@ -34,7 +34,8 @@ export function BranchEditor({
           <SelectTrigger
             id="survey-branch-parent"
             aria-label="분기 부모 질문"
-            className="mt-1 w-full rounded border-border-subtle bg-surface-canvas p-2"
+            appearance="canvas"
+            className="mt-1 w-full"
           >
             <SelectValue />
           </SelectTrigger>
@@ -64,7 +65,8 @@ export function BranchEditor({
             <SelectTrigger
               id="survey-branch-option"
               aria-label="분기 조건 옵션"
-              className="mt-1 w-full rounded border-border-subtle bg-surface-canvas p-2"
+              appearance="canvas"
+              className="mt-1 w-full"
             >
               <SelectValue />
             </SelectTrigger>

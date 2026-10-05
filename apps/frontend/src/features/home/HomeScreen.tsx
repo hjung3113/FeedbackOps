@@ -4,7 +4,15 @@ import {
   type TaskDto,
   type TaskRequestDto,
 } from '@fops/shared';
-import { Button, PageShell, Tabs, TabsContent, TabsList, TabsTrigger } from '@fops/ui';
+import {
+  Button,
+  PageShell,
+  ProgressMeter,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import type * as React from 'react';
@@ -127,10 +135,11 @@ export function HomeScreen({
           </header>
           <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
+            {/* oxlint-disable-next-line shadcn/no-restyle -- the Inbox tab keeps an 8px gap before its unread-count badge */}
             <TabsTrigger value="inbox" className="gap-2">
               {HOME_INBOX_COPY.tabs.inbox}
               {unreadBadge !== undefined && (
-                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-[10px] font-semibold leading-4 text-white">
+                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-caption font-semibold leading-4 text-white">
                   {unreadBadge}
                 </span>
               )}
@@ -310,7 +319,7 @@ function ActionQueueRow({
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-text-primary">{copy.title}</h3>
             <span
-              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${chipClass}`}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide ${chipClass}`}
             >
               {homeSeverityLabel(queue.severity)}
             </span>
@@ -334,12 +343,7 @@ function ActionQueueRow({
         ) : (
           <span />
         )}
-        <Button
-          asChild
-          variant="primary"
-          size="sm"
-          className="max-w-full h-auto min-h-8 py-1 whitespace-normal"
-        >
+        <Button asChild variant="primary" size="sm" wrapText className="max-w-full">
           <a href={queue.next_action.route}>
             <span className="min-w-0 wrap-break-word">{copy.primaryAction}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
@@ -381,7 +385,7 @@ function MyWorkPanel({
             href={row.href}
             className="flex min-h-row-default items-center gap-3 border-b border-border-subtle px-4 last:border-b-0 hover:bg-surface-row-hover"
           >
-            <span className="h-4 w-[3px] rounded-pill bg-accent-warn" />
+            <span className="h-4 w-row-accent rounded-pill bg-accent-warn" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-text-primary">
                 {row.label}
@@ -423,18 +427,13 @@ function CoverageMetricRow({
           {item.value} / {item.total} · {item.percent}%
         </span>
       </div>
-      <div className="mt-2 h-1 rounded-full bg-surface-row-selected">
-        <div
-          className={
-            item.status === 'bad'
-              ? 'h-1 rounded-full bg-accent-danger'
-              : item.status === 'warn'
-                ? 'h-1 rounded-full bg-accent-warn'
-                : 'h-1 rounded-full bg-accent-success'
-          }
-          style={{ width: `${item.percent}%` }}
-        />
-      </div>
+      <ProgressMeter
+        value={item.percent}
+        size="thin"
+        tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
+        className="mt-2 w-full"
+        trackTone="row-selected"
+      />
     </>
   );
   return href === undefined ? (

@@ -63,6 +63,26 @@ capability checks locally.
 
 Explicit Deny overrides general Allow.
 
+Admin satisfaction has two layers. Do not conclude "Admin cannot X" from layer 1
+alone.
+
+```text
+1. roleSatisfies (check-service.ts, step 4 above): Admin satisfies only workspace.read,
+   workspace.admin, voc.triage, and voc.read. User satisfies only workspace.read.
+   Developer satisfies none and needs Managed System grants.
+2. Module bypass, declared per capability in CAPABILITY_META.adminModuleBypass
+   (packages/shared/src/enums/capabilities.ts):
+   - always: finding.read, finding.manage, task_request.self_approve
+   - unless_denied: survey.read, survey.manage (an explicit deny still wins, ADR-0033 section C)
+   - none: every other capability, including survey.read_personal_responses and survey.export
+```
+
+Layer 2 is enforced by `findings/authorization.ts`, `surveys/authorization.ts`,
+and `task-requests/service.ts`, and applied to scope resolution in
+`capabilityScope`. `applyAdminModuleBypass` (`check-service.ts`) mirrors it onto
+the advisory `GET /me/permissions/check` decision so the frontend display hint
+matches the enforcing route.
+
 `GET /me/permissions/scope` resolves a capability over every Managed System
 using the same order as a point check: workspace mismatch denies; active
 workspace-wide or matching Managed-System denies deny before grants; active
@@ -103,18 +123,19 @@ workspace-wide bypass.
 
 ## Sensitive Permissions
 
-Sensitive permission requests require a reason:
+Sensitive permission requests require a reason (`validation.sensitive_reason_required`).
+Sensitivity is per capability, `CAPABILITY_META.sensitive` in
+`packages/shared/src/enums/capabilities.ts`:
 
 ```text
-- Task backstage access
-- specific Managed System access
-- Survey creation
-- Survey personal response access
-- Export
-- Admin permission
-- Public Update creation
-- Task Request self-approval
+workspace.admin
+task_request.self_approve
+survey.manage
+survey.read_personal_responses
+survey.export
 ```
+
+Every other capability is non-sensitive and needs no reason beyond the route's `min(1)`.
 
 Scoped Developer permission requests should include a requested expiration. If
 the requester omits one, the API applies a default expiration such as 30 days.
@@ -230,7 +251,7 @@ POST /permissions/requests/:id/deny            { reason: string }
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
 
-### Permission Request self-approval policy
+### Self-approval policy (Permission Requests and self deny lifts)
 
 An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that
@@ -243,9 +264,15 @@ Admin. If the workspace setting is `forbidden`, self-approval returns
 `permission.denied` without changing the pending request; another Admin may
 approve the same request normally.
 
-The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) live in `packages/shared/src/enums/audit-events.ts`.
+An Admin lifting an active deny on themself follows the same setting:
+`forbidden` returns `permission.denied` without changing the deny or writing an
+audit row, while `allowed` permits the lift and records `self_lift: true` in the
+audit detail. An Admin may revoke their own grant because that action only
+lowers privilege.
 
-Audit events:
+The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) are aggregated in `packages/shared/src/enums/audit-events.ts`. The event literals and detail schemas are owned per domain in `packages/shared/src/audit/*.ts`.
+
+Audit events (the permission and task-request subset; the full vocabulary is in code):
 
 ```text
 permission_requested
@@ -254,22 +281,44 @@ permission_rejected
 permission_needs_more_info
 permission_denied
 permission_more_info_submitted
+permission_revoked
+permission_deny_revoked
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
 task_request_self_approval_denied
+task_request_created_from_finding
 task_request_created_from_voc
 task_request_created_from_voc_cluster
 task_created_from_request
 task_linked_to_request
 ```
 
-Revoke and expiry endpoints are not implemented yet. Planned event names remain:
+Expiry handling is not implemented yet. Its planned event remains:
 
 ```text
-permission_revoked
 permission_expired
 ```
+
+### Grant revoke and deny lift (ADR-0061)
+
+`POST /permissions/grants/:id/revoke` and `POST /permissions/denies/:id/revoke`
+are workspace-admin commands. They lock and update only active rows, require
+a trimmed reason, and append one strict audit event in the same transaction.
+An expired grant is not active and returns `conflict.permission_not_active`;
+an active deny is lifted by setting its revoke metadata. Permission Request
+status does not change. Revoke does not terminate sessions or change
+role-derived capabilities.
+
+The permission check treats a revoked grant or an expired grant as requestable
+using the same workspace scope as `no_grant`. The state mapper returns
+`pending_request` when the Actor has an open request for that capability and
+otherwise returns `revoked` or `expired`, respectively. A revoke notification
+goes to the grant's Actor; deny lift sends no notification. There is no migration
+or grant change for these commands.
+Domain responses treat `grant_revoked` and `grant_expired` like `no_grant`
+(`isRequestableDenial`, #775); paths keyed on `requestable !== null` (Survey
+results and follow-up) include `requestable_permission` for them.
 
 ## Summary-Visible Contract
 
@@ -278,8 +327,9 @@ When entity link visibility is `summary_visible`, the target module returns a sa
 ADR-0023 is the authoritative summary contract (Slice 4.4 #115): canonical Task
 field list, forbidden-field list, and the decision table. The fields below are
 the canonical list ADR-0023 reconciles to. No `voc` summary exists; `summary_visible`
-is not emitted for a `voc` target, and the runtime `getReporterSummary` resolver
-lands with the first non-VOC link target, not in #115.
+is not emitted for a `voc` target. Task is the only provider with a reporter
+summary (`tasks/entity-link-provider.ts`, ADR-0032); every other provider
+returns `{ available: false }`.
 
 Dashboard recovery visibility may be summary-safe even when the underlying
 source object is not fully visible. Gap visibility, source-object visibility,

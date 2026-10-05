@@ -1,5 +1,9 @@
 # Three separate VOC state machines and no automatic cross-mapping
 
+## Status
+
+Accepted.
+
 A **VOC** lives in three independent state machines, all defined canonically in `docs/design/15-data-contracts.md`:
 
 - **VOC Triage State** — internal workflow: `untriaged | triaged | needs_more_information | dismissed_not_actionable`.

@@ -111,6 +111,7 @@ export const HOME_INBOX_COPY = {
     task_request: 'Task Request',
     task: 'Task',
     permission_request: '권한 요청',
+    permission_grant: '권한',
     public_update_review_candidate: '공개 업데이트',
   },
   emptyUnread: '읽지 않은 알림이 없습니다.',

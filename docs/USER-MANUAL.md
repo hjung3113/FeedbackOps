@@ -303,6 +303,7 @@ draft  ──►  open  ──►  closed
 |---|---|
 | **Managed System** (`/admin/managed-systems`) | 시스템 등록·보관, 기본 담당자/검토자 지정 |
 | **Analytics Area** (`/admin/analytics-areas`) | 시스템 하위 분석 영역 관리 |
+| **활성 권한** (`/admin/permissions/grants`) | 부여된 권한 취소, 차단 해제 (사유 필수) |
 | **권한 요청** (`/admin/permissions/requests`) | 권한 요청 검토 |
 | **워크스페이스 설정** (`/admin/settings`) | 운영 정책. self-approval 허용 여부 등 |
 

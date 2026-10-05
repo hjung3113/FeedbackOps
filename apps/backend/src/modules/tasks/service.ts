@@ -248,9 +248,16 @@ async function preserveSourceLinks(args: {
     endpointId: args.taskRequest.id,
     side: 'target',
   });
-  const findingLink = sourceLinks.find(
-    (link) => link.source_type === 'finding' && link.relation_type === 'requested_task',
-  );
+  // #768: propagate only the Finding link that matches the request's own source.
+  const findingLink =
+    args.taskRequest.source_type === 'finding'
+      ? sourceLinks.find(
+          (link) =>
+            link.source_type === 'finding' &&
+            link.source_id === args.taskRequest.source_id &&
+            link.relation_type === 'requested_task',
+        )
+      : undefined;
   if (findingLink) {
     // #388: a legacy finding->task_request link created before cross-MS
     // enforcement can still carry a different Managed System than the task

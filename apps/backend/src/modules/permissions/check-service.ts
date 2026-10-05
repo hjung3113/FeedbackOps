@@ -48,6 +48,10 @@ export type DenyReason =
   | 'grant_revoked'
   | 'sensitive_reason_missing';
 
+export function isRequestableDenial(reason: DenyReason): boolean {
+  return reason === 'no_grant' || reason === 'grant_revoked' || reason === 'grant_expired';
+}
+
 export interface RequestableScope {
   workspace_id: string;
   managed_system_id?: string;
@@ -194,10 +198,18 @@ export function createCheckService(deps: CheckServiceDeps) {
     // surface that distinct reason. Revoked takes precedence over expired
     // because revocation is an intentional action vs. passive expiry.
     if (sawRevoked) {
-      return { allow: false, reason: 'grant_revoked', requestable: null };
+      return {
+        allow: false,
+        reason: 'grant_revoked',
+        requestable: [{ workspace_id: actor.workspace_id }],
+      };
     }
     if (sawExpired) {
-      return { allow: false, reason: 'grant_expired', requestable: null };
+      return {
+        allow: false,
+        reason: 'grant_expired',
+        requestable: [{ workspace_id: actor.workspace_id }],
+      };
     }
 
     // (6) requestable computation (Slice 1): no explicit deny here, so the

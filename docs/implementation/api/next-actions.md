@@ -4,6 +4,8 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 
 ## Next Action Contract
 
+Implemented producers: Survey Result (`create_finding`, `request_task`) and outcome follow-up items (`create_finding`, `mark_no_follow_up`, `reopen_follow_up`). VOC detail and create responses return `next_actions: []`, and no Finding or Task response carries a `next_actions` field today; the VOC id list and `attach_evidence_to_existing_voc` below are target state.
+
 Backend responses for work-object detail and queue rows must provide
 permission-filtered `next_actions` when an object has actionable workflow steps.
 The frontend renders and invokes these actions; it must not infer action

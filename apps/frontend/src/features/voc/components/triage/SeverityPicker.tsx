@@ -6,7 +6,7 @@
  *   .severity-grid → grid grid-cols-2 gap-2
  *   .severity-pick → grid grid-cols-[4px_1fr_auto] gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle
  *   .severity-pick-bar → w-1 h-full rounded-full
- *   .severity-pick-label → text-[13px] font-semibold capitalize text-text-primary
+ *   .severity-pick-label → text-sm font-semibold capitalize text-text-primary
  *   active state → bg-severity-{level}/10 ring-1 ring-inset ring-severity-{level}/40
  *   .severity-pick-meta → text-xs text-text-muted leading-[1.45]
  *
@@ -19,6 +19,7 @@ import { SEVERITY_LABELS, cn } from '@fops/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@fops/ui';
 import { HelpCircle } from 'lucide-react';
 import type * as React from 'react';
+import { PickerOptionGrid } from './PickerOptionGrid';
 
 export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
 
@@ -82,62 +83,63 @@ export function SeverityPicker({
             // (4px bar | 1fr label | auto HelpTip). The tooltip lives on the
             // inline HelpTip icon only — NOT on the whole chip — so the chip
             // click stays a clean severity-select affordance.
-            <button
-              key={level}
-              type="button"
-              aria-label={SEVERITY_LABELS[level]}
-              aria-pressed={isActive}
-              data-active={isActive ? 'true' : 'false'}
-              data-sev={level}
-              disabled={disabled}
-              onClick={() => {
-                onChange(level);
-              }}
-              className={cn(
-                'grid items-center gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle text-left',
-                'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
-                'disabled:opacity-40 disabled:pointer-events-none',
-                isActive && ACTIVE_CLASS[level],
-              )}
-              style={{ gridTemplateColumns: '4px 1fr auto' }}
-            >
-              {/* .severity-pick-bar */}
-              <span className={cn('w-1 self-stretch rounded-full shrink-0', BAR_CLASS[level])} />
+            <PickerOptionGrid key={level} columns="severity">
+              <button
+                type="button"
+                aria-label={SEVERITY_LABELS[level]}
+                aria-pressed={isActive}
+                data-active={isActive ? 'true' : 'false'}
+                data-sev={level}
+                disabled={disabled}
+                onClick={() => {
+                  onChange(level);
+                }}
+                className={cn(
+                  'grid items-center gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle text-left',
+                  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
+                  'disabled:opacity-40 disabled:pointer-events-none',
+                  isActive && ACTIVE_CLASS[level],
+                )}
+              >
+                {/* .severity-pick-bar */}
+                <span className={cn('w-1 self-stretch rounded-full shrink-0', BAR_CLASS[level])} />
 
-              {/* label column */}
-              <span className="flex flex-col min-w-0">
-                {/* .severity-pick-label */}
-                <span
-                  className={cn(
-                    'text-[13px] font-semibold leading-none mb-[3px]',
-                    isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
-                  )}
-                >
-                  {SEVERITY_LABELS[level]}
+                {/* label column */}
+                <span className="flex flex-col min-w-0">
+                  {/* .severity-pick-label */}
+                  <span
+                    className={cn(
+                      'text-sm font-semibold leading-none mb-[3px]',
+                      isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
+                    )}
+                  >
+                    {SEVERITY_LABELS[level]}
+                  </span>
+                  {/* .severity-pick-meta */}
+                  {/* oxlint-disable-next-line shadcn/no-arbitrary-values -- the severity picker hint preserves its compact 1.45 line height */}
+                  <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>
                 </span>
-                {/* .severity-pick-meta */}
-                <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>
-              </span>
 
-              {/* .field-help — inline HelpTip icon (prototype HelpTip). Tooltip
+                {/* .field-help — inline HelpTip icon (prototype HelpTip). Tooltip
                   is scoped to this icon only. Rendered as a span (not a nested
                   button) so it stays valid inside the chip <button>. */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    role="img"
-                    aria-label={tip}
-                    data-testid={`severity-helptip-${level}`}
-                    className="self-start text-text-muted hover:text-text-secondary shrink-0"
-                  >
-                    <HelpCircle size={10} strokeWidth={1.8} aria-hidden="true" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  {tip}
-                </TooltipContent>
-              </Tooltip>
-            </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="img"
+                      aria-label={tip}
+                      data-testid={`severity-helptip-${level}`}
+                      className="self-start text-text-muted hover:text-text-secondary shrink-0"
+                    >
+                      <HelpCircle size={10} strokeWidth={1.8} aria-hidden="true" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" size="sm">
+                    {tip}
+                  </TooltipContent>
+                </Tooltip>
+              </button>
+            </PickerOptionGrid>
           );
         })}
       </div>

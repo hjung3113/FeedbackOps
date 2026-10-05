@@ -1,5 +1,6 @@
-# Intentionally empty. Add only documented, pre-existing diagnostic identities.
+# Exception list, grown only deliberately: add only documented, pre-existing diagnostic identities (one `<path> <category> -- <reason>` per line).
 apps/backend/src/config.ts format -- pre-existing on develop; the file predates biome formatting and this branch adds two lines to the env schema only
+apps/backend/src/modules/permissions/__tests__/check-service.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-05, 2x at lines 225/260); #762 changes only the grant_revoked expectation
 apps/backend/src/seed/index.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
 apps/frontend/src/features/home/HomeScreen.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
 apps/frontend/src/features/home/HomeScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
@@ -430,3 +431,37 @@ packages/ui/src/entity/LinkedEntityTrail.tsx organizeImports -- pre-existing on 
 packages/ui/src/panel/Callout.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/panel/Callout.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/rich-content/toolbar/AttachButton.tsx lint/suspicious/noConfusingVoidType -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
+packages/ui/src/components/shadcn/tooltip.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
+packages/ui/src/components/shadcn/alert-dialog.tsx format -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
+packages/ui/src/components/shadcn/alert-dialog.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
+packages/ui/src/rich-content/RichContentRenderer.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
+packages/ui/src/panel/__tests__/PanelSectionTitle.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/PanelSectionTitle.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/PanelSectionTitle.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/FieldRow.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/a11y/useFocusableInteractive -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/a11y/useSemanticElements -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/card.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/toggle-group.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/toggle-group.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/badges/EntityIconBadge.tsx format -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
+packages/ui/src/badges/InternalTaskBadge.tsx format -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
+packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
+packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
+packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
+apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx format -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
+apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
+apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
+apps/backend/src/modules/attachments/routes.ts format -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
+apps/backend/src/modules/attachments/routes.ts lint/style/noNonNullAssertion -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
+apps/backend/src/modules/attachments/routes.ts organizeImports -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
+apps/backend/src/modules/attachments/__tests__/post-attachments-validation.integration.test.ts format -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
+apps/backend/src/modules/attachments/__tests__/post-attachments-validation.integration.test.ts organizeImports -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file

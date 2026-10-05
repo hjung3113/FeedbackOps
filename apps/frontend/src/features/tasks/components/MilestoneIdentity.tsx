@@ -1,4 +1,4 @@
-import { PanelSectionTitle } from '@fops/ui';
+import { PanelSectionTitle, StatusBadgeFrame } from '@fops/ui';
 import type * as React from 'react';
 
 // Milestone-local presentation wrappers for the #514 final fidelity pass
@@ -7,8 +7,8 @@ import type * as React from 'react';
 // semibold/primary text, muted mark); the milestone surfaces need the
 // prototype's compact .badge geometry (docs/design-prototype/styles.css:
 // 20px height, 6px padding, 4px radius, --text-tiny 11px, weight 500,
-// transparent + --shadow-subtle) without redesigning shared UI. Feature-local
-// only; no shared component changes.
+// transparent + --shadow-subtle). Badge and avatar geometry remains local to
+// milestones; the repeated title scale uses PanelSectionTitle's named variant.
 
 // Label → identity token mapping follows the established pattern in
 // packages/ui/src/components/ChipPicker.tsx (managedSystemColorToken); that
@@ -26,22 +26,27 @@ function managedSystemToken(label: string): string {
   return '--managed-system-default';
 }
 
-// Prototype .badge geometry shared by the pill and the outline badge.
-const COMPACT_BADGE_CLASS =
-  'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em] shadow-subtle';
-
 // Prototype ManagedSystemPill (badges.jsx): compact badge, secondary text,
 // 6px round dot in the system's semantic identity color.
 export function MilestoneManagedSystemPill({ name }: { name: string }) {
   return (
-    <span className={`${COMPACT_BADGE_CLASS} text-text-secondary`}>
-      <span
-        aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
-        style={{ backgroundColor: `rgb(var(${managedSystemToken(name)}) / 1)` }}
-      />
+    <StatusBadgeFrame
+      appearance="compact-identity"
+      style={
+        {
+          // oxlint-disable-next-line shadcn/no-inline-styles -- the Managed System color is resolved at runtime from managedSystemToken(name)
+          '--milestone-managed-system-color': `rgb(var(${managedSystemToken(name)}) / 1)`,
+        } as React.CSSProperties
+      }
+      indicator={
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill) bg-(--milestone-managed-system-color)"
+        />
+      }
+    >
       {name}
-    </span>
+    </StatusBadgeFrame>
   );
 }
 
@@ -49,7 +54,7 @@ export function MilestoneManagedSystemPill({ name }: { name: string }) {
 // the .badge muted text stays (the shared badge's primary/semibold look was
 // the fidelity deviation).
 export function MilestoneOutlineBadge({ children }: { children: React.ReactNode }) {
-  return <span className={`${COMPACT_BADGE_CLASS} text-text-muted`}>{children}</span>;
+  return <StatusBadgeFrame appearance="compact-outline">{children}</StatusBadgeFrame>;
 }
 
 // Prototype owner avatar geometry (styles.css .avatar-sm): 18px circle,
@@ -59,10 +64,7 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 // milestone avatar uses the single semantic fallback fill --color-aether-blue.
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
-    <span
-      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-(--radius-pill) text-[9px] font-semibold leading-none text-white"
-      style={{ backgroundColor: 'rgb(var(--color-aether-blue) / 1)' }}
-    >
+    <span className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) bg-accent-primary text-micro font-semibold leading-none text-white">
       {name.charAt(0).toUpperCase()}
     </span>
   );
@@ -74,7 +76,7 @@ export function MilestoneOwnerChip({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <MilestoneOwnerAvatar name={name} />
-      <span className="text-[13px] leading-[1.4] text-text-primary">{name}</span>
+      <span className="text-sm leading-body text-text-primary">{name}</span>
     </span>
   );
 }
@@ -91,7 +93,8 @@ export function MilestonePanelSectionTitle({
 }) {
   return (
     <PanelSectionTitle
-      className={className !== undefined ? `mb-2.5 text-[11px] ${className}` : 'mb-2.5 text-[11px]'}
+      size="tiny"
+      className={className !== undefined ? `mb-2.5 ${className}` : 'mb-2.5'}
     >
       {children}
     </PanelSectionTitle>

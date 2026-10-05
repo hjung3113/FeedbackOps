@@ -174,7 +174,15 @@ const genericEntityLinkPairs = registeredEntityLinkPairs.filter(
     // authorization, audit, and privacy obligations.
     pair.source_type !== 'survey_response',
 );
-const creatableEntityLinkPairs = genericEntityLinkPairs;
+// #760: /vocs/:id/request-task and /voc-clusters/:id/request-task own these writes.
+const creatableEntityLinkPairs = genericEntityLinkPairs.filter(
+  (pair) =>
+    !(
+      (pair.source_type === 'voc' || pair.source_type === 'voc_cluster') &&
+      pair.target_type === 'task_request' &&
+      pair.relation_type === 'requested_task'
+    ),
+);
 const listVisibleEntityLinkPairs = genericEntityLinkPairs;
 
 function tupleListIncludes(

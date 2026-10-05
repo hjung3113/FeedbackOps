@@ -31,6 +31,7 @@ describe('notification catalogue', () => {
       'task.released',
       'permission_request.submitted',
       'permission_request.decided',
+      'permission_grant.revoked',
     ]);
     expect(
       Object.fromEntries(
@@ -47,6 +48,7 @@ describe('notification catalogue', () => {
       'task.released': false,
       'permission_request.submitted': true,
       'permission_request.decided': true,
+      'permission_grant.revoked': true,
     });
   });
 
@@ -89,6 +91,9 @@ describe('notification catalogue', () => {
     expect(
       notificationCatalogue['permission_request.decided'].summary({ outcome: 'rejected' }),
     ).toBe('권한 요청이 반려되었습니다.');
+    expect(notificationCatalogue['permission_grant.revoked'].summary()).toBe(
+      '권한이 취소되었습니다.',
+    );
   });
 
   it('does not enqueue empty recipient lists and rejects unknown runtime event types', async () => {

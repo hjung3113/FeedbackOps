@@ -140,10 +140,10 @@ export function EntityLinksInventoryTable({
               key={link.id}
               role="listitem"
               className={cn(
-                'grid min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
+                'grid grid-cols-(--entity-link-row-columns) min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
                 link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
               )}
-              style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}
+              style={{ '--entity-link-row-columns': 'auto minmax(0, 1fr)' } as React.CSSProperties}
             >
               <div
                 className="flex items-center"

@@ -149,7 +149,11 @@ export function CreateFindingDraftPanel({
         )
       )}
       <FieldLabel
-        className="block text-sm text-text-secondary"
+        tone="secondary"
+        className={
+          // oxlint-disable-next-line shadcn/no-restyle -- re-applying text-sm makes cn drop Label's leading-none, so this label keeps the body line height beside its select
+          'block text-sm'
+        }
         htmlFor="survey-finding-severity"
         id="survey-finding-severity-label"
       >

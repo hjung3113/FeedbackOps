@@ -27,6 +27,7 @@ import {
   PermissionBlockedPanel,
   SeverityBadge,
   Skeleton,
+  SkeletonBlocks,
   UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -92,19 +93,27 @@ function TaskDetailSkeletonContent({ hasActionFooter }: { hasActionFooter: boole
         aria-hidden="true"
         className="flex shrink-0 gap-4 border-b border-border-subtle px-4 py-3"
       >
-        {TASK_DETAIL_SECTIONS.map((section) => (
-          <Skeleton className="h-4 w-12" key={section.id} />
-        ))}
+        <SkeletonBlocks
+          blocks={TASK_DETAIL_SECTIONS.map(() => ({ kind: 'line', width: 'w12' as const }))}
+        />
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-7 w-3/4" />
+        <SkeletonBlocks
+          blocks={[
+            { kind: 'line', width: 'w16' },
+            { kind: 'title', size: 'large', width: 'three-quarters' },
+          ]}
+        />
         <div className="grid gap-3 pt-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-2/3" />
+          <SkeletonBlocks
+            blocks={[
+              { kind: 'line', width: 'full' },
+              { kind: 'line', width: 'five-sixths' },
+              { kind: 'line', width: 'two-thirds' },
+            ]}
+          />
         </div>
-        <Skeleton className="h-24 w-full" />
+        <SkeletonBlocks blocks={[{ kind: 'body', size: 'regular', width: 'full' }]} />
       </div>
       {hasActionFooter ? (
         <div aria-hidden="true" className="shrink-0 border-t border-border-subtle p-3">
@@ -232,7 +241,7 @@ export function TaskDetailPanel({
       <DetailPanelSectionNav sections={TASK_DETAIL_SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
-          <PanelSectionTitle className="px-4">요약</PanelSectionTitle>
+          <PanelSectionTitle inset="panel">요약</PanelSectionTitle>
           <PanelTitleBlock
             title={task.title}
             badges={
@@ -248,7 +257,7 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="properties" className="border-t border-border-subtle py-2">
-          <PanelSectionTitle className="px-4">속성</PanelSectionTitle>
+          <PanelSectionTitle inset="panel">속성</PanelSectionTitle>
           <FieldRow label="상태">
             <InternalTaskBadge status={task.status} />
           </FieldRow>

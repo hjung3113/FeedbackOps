@@ -86,10 +86,13 @@ assertExists(db, workspaceId, id)
 getPermissionSubject(db, workspaceId, id)
 canRead(deps, actor, subject)                 # read visibility gate (required)
 canCreateTarget?(deps, actor, subject)        # creatable target gate (optional)
-getReporterSummary(id)
+getReporterSummary(db, workspaceId, id)       # single-id form; required
+getReporterSummaries?(db, workspaceId, ids)   # optional batch form; the runtime reporter-summary path uses it
 getInternalSummary(db, workspaceId, id)
-listExpectedLinks(id)
+listExpectedLinks(id)                         # reserved: every provider stubs it to [], no caller
 ```
+
+The contract is `EntityLinkProvider` in `apps/backend/src/modules/entity-links/provider-types.ts`. Only the Task provider returns a reporter summary (`getReporterSummary` / `getReporterSummaries`, ADR-0032); the others return `{ available: false }`. Dashboard missing-link queries are SQL read models, not provider calls.
 
 Slice 4.1 tracer registry (#112):
 
@@ -143,7 +146,7 @@ finding -> registered as a link TARGET type
   related_to behavior (#112-#115) is preserved unchanged
 ```
 
-Link creation endpoints map to registered pairs as of Slice 6:
+Link creation endpoints map to registered pairs:
 
 ```text
 POST /vocs/:id/create-finding          -> (voc, finding, created_finding)            [#122]
@@ -152,6 +155,7 @@ POST /voc-clusters/:id/link-finding    -> (voc_cluster, finding, evidence_of)   
 POST /findings/:id/request-task        -> (finding, task_request, requested_task)    [#132]
 POST /vocs/:id/request-task            -> (voc, task_request, requested_task)        [#136]
 POST /voc-clusters/:id/request-task    -> (voc_cluster, task_request, requested_task) [#136]
+POST /survey-responses/:id/create-finding -> (survey_response, finding, generated_finding)
 ```
 
 Direct `POST /entity-links` creation is narrower than the registered/DB tuple
@@ -169,12 +173,22 @@ set. As of #134, direct creation is allowed for these tuples:
 ```
 
 As of #136, the registered/DB allowlist also includes source-conversion tuples
-created by routes, not by direct `POST /entity-links`:
+created by routes:
 
 ```text
 (voc, task_request, requested_task)
 (voc_cluster, task_request, requested_task)
 ```
+
+Generic `POST /entity-links` rejects these tuples, and generic `PATCH
+/entity-links/:id` detach returns the same non-disclosing 404 envelope as an
+absent link. Generic endpoint and workspace listings continue to include their
+rows. Only `POST /vocs/:id/request-task` and
+`POST /voc-clusters/:id/request-task` create them.
+
+Task Request conversion propagates a `(finding, task_request, requested_task)` link
+only when its Finding ID matches the request's own source (#768). Other Finding
+links on the request stay record-only.
 
 `(voc_cluster, finding, evidence_of)` is registered for DB validation and is
 created only by `POST /voc-clusters/:id/link-finding`. Generic
@@ -183,6 +197,13 @@ detach are prohibited categorically; PATCH/detach returns the same
 non-disclosing 404 envelope as an absent link. Domain unlink is permitted only
 through `POST /voc-clusters/:id/unlink-finding`, which soft-detaches the exact
 active tuple.
+
+Every `survey_response`-source tuple, `(survey_response, finding, generated_finding)`
+and `(survey_response, finding, evidence_of)`, is command-only: it is registered
+for DB validation and created only by `POST /survey-responses/:id/create-finding`
+(which also writes the `evidence_of` link once per approved excerpt). Generic
+`POST /entity-links` and generic link listings exclude every `survey_response`
+source (`genericEntityLinkPairs` in the backend entity-links service).
 
 Independent value CHECKs are forbidden because they would admit invalid tuples.
 Creatable visibility stays `internal_only`.

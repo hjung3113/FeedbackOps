@@ -1,5 +1,9 @@
 # Notifications: in-app first, email as an abstracted channel
 
+## Status
+
+Accepted. Amended 2026-09-30.
+
 `docs/design/03-core-platform.md` and `docs/design/13-mvp-roadmap.md` list a Notification system as MVP scope but leave the data model and channel strategy open. This ADR locks both, and the catalogue of who gets notified for which event.
 
 ## In-app notifications
@@ -68,7 +72,7 @@ Modules that perform an audited action call `notify(event_type, subject)` from t
 
 Per-Actor preferences (opt-out per event_type, channel) are **not** in MVP. We accept the risk that a few event types may be noisy; if that becomes a real complaint, a follow-up ADR adds `core.notification_prefs` + UI without changing the dispatcher contract.
 
-DB-driven rules were rejected because they require an Admin UI to configure and an unfamiliar mental model for what is essentially a small fixed table. Adding a rule is a code PR that updates the catalogue. An error code's user-facing copy is `CATALOG` in `errorMapper.ts` (ADR-0012, ADR-0010 amendment), not an i18next file. This notification catalogue itself is not implemented.
+DB-driven rules were rejected because they require an Admin UI to configure and an unfamiliar mental model for what is essentially a small fixed table. Adding a rule is a code PR that updates the catalogue. An error code's user-facing copy is `CATALOG` in `errorMapper.ts` (ADR-0012, ADR-0010 amendment), not an i18next file. This notification catalogue itself is not implemented. (Implemented; see Amendment 2026-09-30.)
 
 ## Initial catalogue (MVP)
 
@@ -86,6 +90,7 @@ task.assigned_to_me                        new assignee                         
 task.released                              VOC owner (if linked) — for Public Update review candidate     Y       N
 permission_request.submitted               Admins of the Workspace                                         Y       Y
 permission_request.decided                 requester                                                      Y       Y
+permission_grant.revoked (ADR-0061)         grant grantee                                                   Y       Y
 survey.assigned_to_me                      resolved respondent                                            Y       N
 ```
 
@@ -173,3 +178,10 @@ implemented in `apps/backend/src/modules/notifications/catalogue.ts`; the
 earlier sentence "This notification catalogue itself is not implemented"
 records the pre-implementation state. Dispatch rules remain code-driven, as
 decided above; there is no DB-configured rule UI.
+
+## Amendment 2026-10-05 (ADR-0061 / #762)
+
+`permission_grant.revoked` notifies the grantee in-app and by email with the
+summary `권한이 취소되었습니다.`. Its subject reference is available to the
+grantee and workspace Admins; other Actors receive an unavailable reference.
+Lifting a deny does not notify.

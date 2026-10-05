@@ -11,6 +11,7 @@ export const notificationEventTypeSchema = z.enum([
   'task.released',
   'permission_request.submitted',
   'permission_request.decided',
+  'permission_grant.revoked',
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -35,6 +36,7 @@ export const notificationDtoSchema = z
       'task_request',
       'task',
       'permission_request',
+      'permission_grant',
       'public_update_review_candidate',
     ]),
     subject_id: z.string().uuid(),

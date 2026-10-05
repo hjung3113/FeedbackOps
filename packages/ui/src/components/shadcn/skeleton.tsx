@@ -1,10 +1,18 @@
 import * as React from 'react';
 import { cn } from '../../utils/cn.js';
 
-export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+  shape?: 'default' | 'rounded';
+}
+
+export function Skeleton({ className, shape = 'default', ...props }: SkeletonProps) {
   return (
     <div
-      className={cn('animate-pulse rounded-md bg-surface-blocked', className)}
+      className={cn(
+        'animate-pulse rounded-md bg-surface-blocked',
+        shape === 'rounded' && 'rounded',
+        className,
+      )}
       {...props}
     />
   );

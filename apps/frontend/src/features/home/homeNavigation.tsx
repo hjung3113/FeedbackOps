@@ -5,6 +5,7 @@ import { COMMAND_PALETTE_COPY } from '@/lib/copy/command-palette';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import type { SidebarNavItem } from '@/lib/layout/AppSidebar';
 import { shortcutLabel } from '@/lib/layout/command-palette/platform';
+import { KeyboardShortcut } from '@fops/ui';
 
 const QUEUE_COUNT_KEY = {
   'unassigned-voc': 'home.unassigned-voc',
@@ -39,11 +40,7 @@ export function homeSidebarEntries(
             label: COMMAND_PALETTE_COPY.rowLabel,
             section: 'FEEDBACKOPS',
             icon: <CommandIcon className="h-4 w-4" />,
-            trailing: (
-              <span className="rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted">
-                {shortcutLabel()}
-              </span>
-            ),
+            trailing: <KeyboardShortcut>{shortcutLabel()}</KeyboardShortcut>,
             onSelect: onOpenCommandPalette,
           },
         ];

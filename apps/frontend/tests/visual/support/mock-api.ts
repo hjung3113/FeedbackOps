@@ -3,6 +3,7 @@ import {
   populatedInboxNotifications,
   subjectReferenceInboxNotifications,
 } from '../fixtures/notifications';
+import { createPermissionGrantsScenario } from '../fixtures/permission-grants';
 import { createPermissionRequestsScenario } from '../fixtures/permissions';
 import { IDS } from '../fixtures/voc-clusters';
 import { VOC_REPORTER_TASK_SUMMARY_IDS } from '../fixtures/voc-reporter-task-summary';
@@ -16,7 +17,10 @@ import { createFindingHandlers } from './mock-api/finding';
 import { createHomeRequestHandlers } from './mock-api/home';
 import { createManagedSystemHandlers } from './mock-api/managed-systems';
 import { createMilestoneHandlers } from './mock-api/milestones';
-import { createPermissionRequestHandlers } from './mock-api/permissions';
+import {
+  createPermissionGrantHandlers,
+  createPermissionRequestHandlers,
+} from './mock-api/permissions';
 import { createSavedViewHandlers } from './mock-api/saved-views';
 import { matchMockApiHandler } from './mock-api/shared';
 import {
@@ -45,6 +49,7 @@ export async function installMockApi(
   const postedBodies: unknown[] = [];
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
+  const permissionGrants = createPermissionGrantsScenario(options.permissionGrantsScenario);
   const savedViews: SavedView[] = [];
   if (options.savedViews) {
     savedViews.push({
@@ -66,6 +71,7 @@ export async function installMockApi(
     postedBodies,
     postedRequests,
     permissionRequests,
+    permissionGrants,
     savedViews,
     notificationItems:
       options.notifications === 'populated'
@@ -94,6 +100,7 @@ export async function installMockApi(
     ...createWorkspaceSettingHandlers(context),
     ...createSurveyHandlers(context),
     ...createPermissionRequestHandlers(),
+    ...createPermissionGrantHandlers(),
     ...createVocClusterListHandlers(),
     ...createSurveyManagedSystemHandlers(context),
     ...createManagedSystemHandlers(),

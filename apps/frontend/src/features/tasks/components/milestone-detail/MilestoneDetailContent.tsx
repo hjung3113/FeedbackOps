@@ -1,6 +1,6 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneDetailDto } from '@fops/shared';
-import { DetailPanelSectionNav, EmptyState, NestedTextBlock } from '@fops/ui';
+import { DetailPanelSectionNav, EmptyState, NestedTextBlock, ProgressMeter } from '@fops/ui';
 import type * as React from 'react';
 
 import { MilestonePanelSectionTitle } from '../MilestoneIdentity';
@@ -86,7 +86,7 @@ export function MilestoneDetailContent({
           {/* Progress strip — real child-Task buckets from progress (B1c); planned tasks are prototype-only. */}
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-medium text-text-primary">
+              <span className="text-sm font-medium text-text-primary">
                 Task {milestone.progress.total}개 중 {milestone.progress.released_done}개 Released
               </span>
               <span className="text-sm font-semibold tabular-nums text-text-secondary">
@@ -94,12 +94,15 @@ export function MilestoneDetailContent({
               </span>
             </div>
             {/* Decorative bar — the strip's text already carries the numbers. */}
-            <div className="h-1 overflow-hidden rounded-full bg-border-subtle" aria-hidden="true">
-              <div
-                className="h-full bg-accent-primary"
-                style={{ width: `${milestone.progress.percent}%` }}
-              />
-            </div>
+            <ProgressMeter
+              clip
+              value={milestone.progress.percent}
+              size="thin"
+              tone="primary"
+              trackTone="subtle"
+              fillShape="square"
+              semantics="decorative"
+            />
             <div className="flex items-center gap-2.5 text-xs text-text-muted">
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">
@@ -129,7 +132,8 @@ export function MilestoneDetailContent({
             <MilestonePanelSectionTitle>
               {GLOSSARY.whyThisMilestoneExists}
             </MilestonePanelSectionTitle>
-            <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
+            {/* oxlint-disable-next-line shadcn/no-restyle -- milestone rationale uses an inset muted paragraph inside its nested text block */}
+            <NestedTextBlock className="p-3 text-sm leading-relaxed-ui text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
           </div>
@@ -161,7 +165,7 @@ export function MilestoneDetailContent({
           {/* No evidence read path in these slices (manual linking is §7 item 14); empty copy only. */}
           <EmptyState
             size="sm"
-            className="py-3 gap-0 text-xs"
+            density="compact"
             title={`연결된 ${GLOSSARY.evidenceHighlight}가 없습니다.`}
           />
         </div>
@@ -169,7 +173,7 @@ export function MilestoneDetailContent({
         <div data-anchor="activity" className="last:mb-0">
           <MilestonePanelSectionTitle>이력</MilestonePanelSectionTitle>
           {/* No audit_log read path exists (§7 item 9); the empty copy ships. */}
-          <EmptyState size="sm" className="py-3 gap-0 text-xs" title="활동 기록이 없습니다." />
+          <EmptyState size="sm" density="compact" title="활동 기록이 없습니다." />
         </div>
       </div>
     </>

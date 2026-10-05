@@ -1,6 +1,6 @@
 # Visual Harness Agent Guide
 
-Committed Playwright visual regression harness. Baseline discipline and the CP-pixel sign-off live in `apps/frontend/AGENTS.md` → Page-Level Pixel-Diff; this file covers running, extending, and debugging the harness.
+Committed Playwright visual regression harness. Baseline discipline lives in `apps/frontend/AGENTS.md` → Visual Baselines; this file covers running, extending, and debugging the harness.
 
 ## How it works
 
@@ -26,7 +26,7 @@ Committed Playwright visual regression harness. Baseline discipline and the CP-p
 
 - `pnpm test:visual -- --update-snapshots <filter>` does not take effect. From `apps/frontend`: `env -u NODE_OPTIONS npx playwright test -c playwright.config.ts --update-snapshots=changed <spec filter>` (modes: `all|changed|missing|none`; `changed` is the default when the flag is bare).
 - `--update-snapshots` leaves a file untouched when the difference is under the threshold. To force a sub-threshold change into a baseline, delete the PNG first, then regenerate.
-- Before regenerating, compare the actual screenshot against the prototype: a failing baseline may mean broken layout, not a stale image.
+- Before regenerating, look at the actual screenshot and the diff image: a failing baseline may mean broken layout, not a stale image.
 - Fresh machines may need `pnpm exec playwright install chromium` first.
 
 ## Evidence rules

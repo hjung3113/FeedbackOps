@@ -131,7 +131,7 @@ export function TriagePanel({
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between h-[50px] px-5 border-b border-border-subtle shrink-0">
+      <div className="flex items-center justify-between h-toolbar px-5 border-b border-border-subtle shrink-0">
         <span className="font-mono text-xs text-text-muted tabular-nums">{voc.display_id}</span>
         {/* Expand + more ghost icon buttons (prototype L423-426). No behavior
             yet — rendered disabled to preserve the prototype affordance.
@@ -139,21 +139,19 @@ export function TriagePanel({
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-xs"
             disabled
             aria-label="패널 확장"
             data-testid="triage-panel-expand"
-            className="h-7 w-7 p-0"
           >
             <Maximize2 size={14} aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-xs"
             disabled
             aria-label="더 보기"
             data-testid="triage-panel-more"
-            className="h-7 w-7 p-0"
           >
             <MoreHorizontal size={14} aria-hidden="true" />
           </Button>
@@ -167,7 +165,7 @@ export function TriagePanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
         {/* ADR-0051 intentionally groups the real description into Overview. */}
         <div className="mb-8" data-anchor="overview">
-          <PanelTitleBlock title={voc.title} className="px-0! py-0! mb-2" />
+          <PanelTitleBlock title={voc.title} inset="none" className="mb-2" />
           <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>

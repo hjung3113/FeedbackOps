@@ -1,5 +1,9 @@
 # Shell taxonomy: three route shells + 50px header rhythm
 
+## Status
+
+Accepted. Amended by ADR-0021 (removed the light-theme out-of-scope entry). §3 and the "Frontend specs reference the manifest" consequence are superseded by ADR-0060 (2026-10-05); §1, §2 and the Amendment stand. Amended 2026-10-06 (#782, kicker tokens).
+
 ## Context
 
 Pack 18 of the Open Design hi-fi prototype (`docs/design-prototype/`, 2026-05-17, refreshed through Pack 20) locked the route-layout vocabulary. Earlier packs let each screen invent its own toolbar / detail-panel / header geometry, which produced visible drift between Tasks board, VOC Triage, Survey builder, Evidence list, and Entity Links — every "list-ish" page had a slightly different toolbar height and header rhythm.
@@ -85,6 +89,11 @@ Rules for routes that omit `WorkbenchShell.toolbar`:
 No new shell is introduced. `WorkbenchShell.toolbar` was already optional in the
 TypeScript interface; this amendment documents the intended pattern.
 
+## Amended 2026-10-06
+
+The kicker values are unchanged and now come from the tokens `tracking-kicker`,
+`text-sm`, and `h-5.5` (#782).
+
 ## Out of scope
 
 - Mobile / tablet shell behaviour. Pack 13 landed responsive scaffolding (sidebar drawer < 900px, detail-panel drill-in overlays); a future ADR will codify the touch-target + breakpoint contract.
@@ -95,7 +104,7 @@ TypeScript interface; this amendment documents the intended pattern.
 
 - `docs/design-prototype/HANDOFF.md` §"Pack 18 — Route pattern shells + aligned headers" (Session 17 changelog); §"Pack 20 — Baseline QA + nested-button polish" (Session 19) confirms post-Pack-19-split visual stability.
 - `docs/design-prototype/DESIGN-MAP.md` §2 (route → screen → baseline mapping).
-- `docs/design-prototype/components.jsx` (`PageShell`, `ListShell`, `WorkbenchShell`, `ShellTitle` source-of-truth implementations — port these, do not re-derive).
-- ADR-0016 (Superseded by ADR-0021; historical UI foundation context).
+- `docs/design-prototype/shells.jsx` (`PageShell`, `ListShell`, `WorkbenchShell`, `ShellTitle` source-of-truth implementations — port these, do not re-derive).
+- ADR-0016 (partially superseded by ADR-0021 and ADR-0058; the component-wrap rule and WCAG AA target remain).
 - ADR-0021 (Pack 17 Samsung-light design system — current theme contract).
 - ADR-0011 (Rich content editor + attachment storage — RichEditor surfaces interact with shells but do not vary by shell type).

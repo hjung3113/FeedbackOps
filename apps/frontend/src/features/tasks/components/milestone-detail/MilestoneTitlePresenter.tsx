@@ -89,7 +89,7 @@ export function MilestoneTitlePresenter({
           <Button
             variant="subtle"
             size="sm"
-            className="gap-1.5"
+            spacing="compact"
             disabled={titleMutation.isPending || statusMutation.isPending}
             onClick={() => startTitleEdit(statusMutation.isPending)}
           >

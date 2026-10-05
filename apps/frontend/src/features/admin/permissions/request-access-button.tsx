@@ -224,6 +224,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
             <>
               <DialogHeader>
                 <DialogTitle>권한 요청</DialogTitle>
+                {/* oxlint-disable-next-line shadcn/no-restyle -- the multi-clause permission instruction wraps at natural phrase boundaries */}
                 <DialogDescription className="text-pretty">
                   권한을 확인하고, 필요한 최소 범위의 사유를 입력하세요.
                 </DialogDescription>

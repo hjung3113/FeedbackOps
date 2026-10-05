@@ -45,7 +45,7 @@ export function MilestoneRow({
         // Prototype .row-title (styles.css): 13px title at weight 600, badges
         // on a visible 8px axis; truncation stays on the title text.
         <span className="inline-flex min-w-0 max-w-full items-center gap-2 align-middle">
-          <span className="min-w-0 truncate text-[13px] font-semibold">{milestone.title}</span>
+          <span className="min-w-0 truncate text-sm font-semibold">{milestone.title}</span>
           <MilestoneStatusBadge status={milestone.status} />
           <MilestoneManagedSystemPill name={managedSystemName} />
           {areaName !== undefined && <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>}

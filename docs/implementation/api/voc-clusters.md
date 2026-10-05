@@ -18,6 +18,7 @@ POST /voc-clusters/:id/public-update-candidate
 POST /voc-clusters/:id/apply-public-update-candidate
 POST /voc-clusters/:id/create-finding
 POST /voc-clusters/:id/link-finding
+POST /voc-clusters/:id/unlink-finding
 POST /voc-clusters/:id/request-task
 ```
 

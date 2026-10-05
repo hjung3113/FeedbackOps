@@ -13,7 +13,7 @@
  *                                        text-text-muted cursor-pointer text-xs font-medium whitespace-nowrap
  *   .panel-section-nav-button:hover   → hover:text-text-secondary
  *   .panel-section-nav-button.active  → border-b-accent-primary text-text-primary
- *   .panel-section-nav-count          → px-1 py-px rounded-full bg-surface-canvas text-text-muted text-[10px] font-mono
+ *   .panel-section-nav-count          → px-1 py-px rounded-full bg-surface-canvas text-text-muted text-caption font-mono
  *
  * Sections flagged `overflow: true` render inside a trailing "더보기" dropdown instead of the
  * pinned strip (#519 — a deliberate deviation from the prototype, whose strip overflows a
@@ -276,7 +276,7 @@ export function DetailPanelSectionNav({
                       className={cn(
                         // .panel-section-nav-count
                         'px-1 rounded-full bg-surface-canvas text-text-muted font-mono',
-                        'text-[10px] leading-[1.4]',
+                        'text-caption leading-body',
                       )}
                     >
                       {s.count}
@@ -322,7 +322,7 @@ export function DetailPanelSectionNav({
                 >
                   {s.label}
                   {s.count !== undefined && (
-                    <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-[10px] leading-[1.4]">
+                    <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-caption leading-body">
                       {s.count}
                     </span>
                   )}

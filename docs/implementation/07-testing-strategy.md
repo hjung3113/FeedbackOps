@@ -49,24 +49,36 @@ Testing must protect the product invariants that are hardest to repair later.
 - cross-system creation pending/error tests
 - PublicUpdateComposer separation tests
 - ReporterReplyComposer and InternalCommentComposer visibility tests
-- CommandMenu action parity tests when CommandMenu is introduced
+- CommandPalette action parity tests
 - status badge family separation tests
 - Navigation renders from backend permission contract
 - ManagedSystemScopeSwitcher filters lists and preserves URL state
-- CommandMenu excludes or disables actions according to backend permission state when CommandMenu is introduced
+- CommandPalette excludes or disables actions according to backend permission state
 ```
 
-## Integration Slices
+## How Tests Run
+
+This document owns what must be tested, not the commands. Run commands, environment, and gates live in:
 
 ```text
-Slice 1: VOC inbox routing
+- AGENTS.md (root) -> Verification: the gate and what counts as green
+- apps/backend/AGENTS.md -> Verification: backend integration env, database reset contract, skip opt-out
+- scripts/gates/AGENTS.md: frontend typecheck and lint gates, baselines, allowlists
+- apps/frontend/tests/visual/AGENTS.md: visual harness and baselines
+```
+
+## Integration Flows
+
+Flow A-E are scenario clusters, not milestone slices.
+
+```text
+Flow A: VOC inbox routing
 - filters
 - selected detail panel
 - refresh restore
-- mobile drill-in
 - empty/loading/error states
 
-Slice 2: VOC -> Finding -> Task Request
+Flow B: VOC -> Finding -> Task Request
 - source preview
 - inline create
 - entity link creation
@@ -74,7 +86,7 @@ Slice 2: VOC -> Finding -> Task Request
 - rollback/retry
 - dashboard queue removal
 
-Slice 3: Permission blocked -> request -> admin decision
+Flow C: Permission blocked -> request -> admin decision
 - blocked panel
 - required reason
 - pending state
@@ -82,13 +94,13 @@ Slice 3: Permission blocked -> request -> admin decision
 - approval return path
 - explicit deny override
 
-Slice 4: Dashboard recovery
+Flow D: Dashboard recovery
 - each row explains reason
 - opens correct next action
 - respects permissions
 - refreshes after repair
 
-Slice 5: Survey result -> Finding, never VOC
+Flow E: Survey result -> Finding, never VOC
 - no create-VOC UI/API path
 - hidden personal responses render safely
 - evidence highlight preserves source
@@ -99,7 +111,7 @@ Slice 5: Survey result -> Finding, never VOC
 Frontend implementation should verify:
 
 ```text
-- desktop, tablet, and mobile layouts
+- desktop 1440 layout (tablet and mobile are out of scope until responsive lands; apps/frontend/AGENTS.md)
 - selected row and detail panel visibility
 - focus-visible states
 - light theme contrast

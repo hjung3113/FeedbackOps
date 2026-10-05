@@ -101,7 +101,7 @@ export function TaskRequestConversionForm({
           <DatePicker
             id="task-request-convert-due-date"
             aria-label="마감일"
-            className="bg-surface-detail"
+            appearance="detail"
             value={conversion.dueDate}
             onChange={(value) => conversion.setDueDate(value ?? '')}
           />

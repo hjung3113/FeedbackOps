@@ -7,11 +7,11 @@
  * Missing owners use the shared danger badge; the missing-area label stays neutral.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.8):
- *   .object-row.expanded → min-h-[96px] py-3.5 px-5
+ *   .object-row.expanded → min-h-row-expanded py-3.5 px-5
  *   .object-row.selected::before → before:absolute before:left-0 before:inset-y-0 before:w-0.5 before:bg-accent-primary
  *   .row-body → flex flex-col min-w-0 gap-0.5
- *   .row-title → text-[13px] font-medium text-text-primary truncate
- *   .row-meta → text-[12px] text-text-muted flex items-center gap-2 flex-wrap
+ *   .row-title → text-sm font-medium text-text-primary truncate
+ *   .row-meta → text-xs text-text-muted flex items-center gap-2 flex-wrap
  *   .row-meta .dot → w-0.5 h-0.5 rounded-full bg-text-disabled
  *   .row-trailing → flex items-center gap-2 shrink-0
  *   Semantic row color is limited to SeverityIndicator and ReporterStatusBadge.
@@ -71,7 +71,7 @@ export function TriageRow({
       onKeyDown={handleKeyDown}
       className={cn(
         // Base layout — .object-row.expanded (§3.8)
-        'relative flex w-full items-center gap-3 min-h-[96px] py-3.5 px-5 text-left',
+        'relative flex w-full items-center gap-3 min-h-row-expanded py-3.5 px-5 text-left',
         // Bottom border
         'border-b border-border-subtle',
         // Hover
@@ -93,7 +93,7 @@ export function TriageRow({
       {/* BODY: title + meta — .row-body (§3.8) */}
       <div className="flex flex-col min-w-0 gap-0.5 flex-1">
         {/* Title row — .row-title */}
-        <div className="flex items-center gap-2 text-[13px] font-medium text-text-primary">
+        <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
           <span className="font-mono text-xs text-text-disabled tabular-nums">
             {voc.display_id}
           </span>
@@ -101,7 +101,7 @@ export function TriageRow({
         </div>
 
         {/* Meta row — .row-meta */}
-        <div className="flex items-center gap-2 text-[12px] text-text-muted flex-wrap">
+        <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
           <ReporterStatusBadge status={voc.reporter_facing_status} />
 
           {areaMissing && (

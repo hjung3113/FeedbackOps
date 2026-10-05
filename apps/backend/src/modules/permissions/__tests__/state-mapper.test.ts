@@ -1,6 +1,6 @@
-// Mapping-table tests for `toFrontendState`. Pin every branch including the
-// Slice 1 dead branches (hidden_existence, rejected, expired, revoked,
-// summary_visible) so S1.2/S1.4 don't drift the contract.
+// Mapping-table tests for `toFrontendState`. Pin every branch, including the
+// rarely produced ones (hidden_existence, rejected, summary_visible), so later
+// slices don't drift the contract.
 
 import { describe, expect, it } from 'vitest';
 
@@ -73,15 +73,47 @@ describe('toFrontendState', () => {
     );
   });
 
-  it('grant_expired → expired (dead branch in Slice 1)', () => {
-    const d: Decision = { allow: false, reason: 'grant_expired', requestable: null };
+  it('grant_expired without an open request → expired', () => {
+    const d: Decision = {
+      allow: false,
+      reason: 'grant_expired',
+      requestable: [{ workspace_id: WS }],
+    };
     expect(toFrontendState(d, null)).toBe('expired');
   });
 
-  it('grant_revoked → revoked (dead branch in Slice 1)', () => {
-    const d: Decision = { allow: false, reason: 'grant_revoked', requestable: null };
+  it.each([{ status: 'pending' }, { status: 'needs_more_info' }] as const)(
+    'grant_expired with a $status request → pending_request',
+    (openRequest) => {
+      const d: Decision = {
+        allow: false,
+        reason: 'grant_expired',
+        requestable: [{ workspace_id: WS }],
+      };
+      expect(toFrontendState(d, openRequest)).toBe('pending_request');
+    },
+  );
+
+  it('grant_revoked without an open request → revoked', () => {
+    const d: Decision = {
+      allow: false,
+      reason: 'grant_revoked',
+      requestable: [{ workspace_id: WS }],
+    };
     expect(toFrontendState(d, null)).toBe('revoked');
   });
+
+  it.each([{ status: 'pending' }, { status: 'needs_more_info' }] as const)(
+    'grant_revoked with a $status request → pending_request',
+    (openRequest) => {
+      const d: Decision = {
+        allow: false,
+        reason: 'grant_revoked',
+        requestable: [{ workspace_id: WS }],
+      };
+      expect(toFrontendState(d, openRequest)).toBe('pending_request');
+    },
+  );
 
   it('sensitive_reason_missing → blocked_non_requestable (Slice 1 dead branch)', () => {
     const d: Decision = {
@@ -105,8 +137,8 @@ describe('toFrontendState', () => {
         { allow: false, reason: 'no_grant', requestable: [{ workspace_id: WS }] },
         { status: 'pending' },
       ],
-      [{ allow: false, reason: 'grant_expired', requestable: null }, null],
-      [{ allow: false, reason: 'grant_revoked', requestable: null }, null],
+      [{ allow: false, reason: 'grant_expired', requestable: [{ workspace_id: WS }] }, null],
+      [{ allow: false, reason: 'grant_revoked', requestable: [{ workspace_id: WS }] }, null],
       [{ allow: false, reason: 'sensitive_reason_missing', requestable: null }, null],
     ];
     for (const [d, r] of inputs) {

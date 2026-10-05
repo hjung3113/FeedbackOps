@@ -304,7 +304,7 @@ export function MilestoneCreatePanel({
           <FieldRow label={GLOSSARY.start}>
             <DatePicker
               aria-label={GLOSSARY.start}
-              className="bg-surface-detail"
+              appearance="detail"
               disabled={createMutation.isPending}
               value={startDate}
               onChange={(value) => setStartDate(value ?? '')}
@@ -313,7 +313,7 @@ export function MilestoneCreatePanel({
           <FieldRow label={GLOSSARY.target}>
             <DatePicker
               aria-label={GLOSSARY.target}
-              className="bg-surface-detail"
+              appearance="detail"
               disabled={createMutation.isPending}
               value={targetDate}
               onChange={(value) => setTargetDate(value ?? '')}

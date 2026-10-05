@@ -1,5 +1,9 @@
 # Entity link visibility decision and summary contract
 
+## Status
+
+Accepted. Amended by ADR-0024 (§C finding row) and ADR-0032 (§C, §E, §F: Task reporter summary).
+
 `docs/design/11-entity-linking.md` FR-LINK-002 locks that entity-link reads enforce all four stored visibility tokens (`internal_only`, `summary_visible`, `visible_to_reporter`, `admin_only`) on both source and target, and that the linked-object UI visibility is backend-decided. `docs/implementation/05-permission-policy.md` (Summary-Visible Contract) and `docs/implementation/06-entity-linking-contract.md` (Visibility Enforcement) sketch the summary fields. `CONTEXT.md:195` already canonicalises the per-request verdict vocabulary as **UI Visibility Decision** = `allowed | hidden | summary_visible | request_access | denied`.
 
 Those documents leave the operative shape open: exactly which decision each (stored-token × actor) pair yields, what `summary_visible` exposes when the only linkable entity is `voc`, where the evaluator lives, and which fields the Task reporter summary canonically carries (the three docs disagree). This ADR locks those decisions for issue #115 (Slice 4.4) and is the human-signed `summary_visible` contract the issue's HITL gate required.

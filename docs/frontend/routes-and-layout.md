@@ -12,10 +12,11 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 ```text
 /
 /home?tab=dashboard|inbox&managedSystem=:managedSystemId
-/vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
+/vocs?view=triage&tab=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
 /voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId
+/voc-clusters/:clusterId
 /surveys?managedSystem=:managedSystemId|all&selected=:surveyId
 /surveys/:surveyId
 /surveys/:surveyId?builder=true
@@ -25,18 +26,19 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId/respond
 /tasks?view=my&managedSystem=:managedSystemId|all&param=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
-/tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&param=:requestId
+/tasks?view=requests&managedSystem=:managedSystemId|all&param=:requestId
 /tasks?view=backlog&managedSystem=:managedSystemId|all&param=:taskId
-/tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId
+/tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId&public_update=missing
 /tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
-/integration
+/integration?managedSystem=:managedSystemId|all
 /findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
 /integration/coverage?managedSystem=:managedSystemId|all
-/integration/links?managedSystem=:managedSystemId|all
+/integration/links?managedSystem=:managedSystemId|all&status=active|stale|detached|revoked&type=related_to
 /admin/managed-systems
 /admin/analytics-areas?managedSystem=:managedSystemId&includeArchived=true&selected=:analyticsAreaId
 /admin/permissions/requests?tab=:tab&selected=:requestId
+/admin/permissions/grants?tab=denies&selected=:permissionId
 /admin/settings
 ```
 
@@ -48,8 +50,13 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/surveys/participate` | — | No search state |
 | `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/voc-clusters/:clusterId` | — | No search state; the cluster id is the path param and the cluster list stays as the list context |
+| `/tasks` | `view`, `param`, `managedSystem`, `public_update` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` unless filtering `view=board` to Tasks missing a public update (`missing` is the only value) |
+| `/integration` | `managedSystem` | `managedSystem` for the caller's effective scope union (`all` is also accepted) |
+| `/integration/links` | `managedSystem`, `status`, `type` | `managedSystem` for the caller's effective scope union; `status` and `type` when unfiltered |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
 | `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
+| `/admin/permissions/grants` | `tab`, `selected` | `tab` for grants; `selected` when none is selected |
 
 Route naming rules:
 
@@ -58,7 +65,8 @@ Route naming rules:
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
 - The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
-- Analytics Areas and Permission Requests are Admin routes, not top-level work routes.
+- Analytics Areas, Permission Requests, and active grants/denies are Admin routes,
+  not top-level work routes.
 - Managed Systems are MVP scope, filters, defaults, and dashboard grouping; they do not create per-Managed-System route trees.
 - Analytics Area is secondary classification under Managed System; it may appear as filter, column, detail metadata, Admin catalog item, or nested dashboard breakdown, but not as top-level navigation.
 - `managedSystem=all` means the actor's effective Managed System scope union. It is workspace-wide only for Admin.
@@ -81,7 +89,7 @@ VOC route views:
 - `/vocs?view=inbox` is the open-processing workspace for newly submitted, recently updated, waiting reporter, and follow-up-needed VOCs.
 - `/vocs?view=triage` is the structured decision workspace for ownership, severity, Analytics Area, similar VOC, follow-up, and no-follow-up decisions.
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
-- `/vocs?view=list` or saved list views may support broader browsing after the Inbox and Triage workspaces are defined.
+- Broader browsing is served by sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a registered route.
 - `/voc-clusters` owns cluster-specific list/detail behavior.
 - The global VOC rail uses loaded navigation counts for its landing: a `voc.inbox` key, including zero, links to `/vocs?view=inbox`; an omitted key links to `/vocs?view=my`. While counts are loading or unavailable after an error, keep the Inbox destination. This landing hint does not replace route or backend authorization.
 ```
@@ -90,7 +98,7 @@ Task route views:
 
 ```text
 - `/tasks?view=requests` is Task Requests. `/tasks?view=board` is the board.
-- `/tasks?view=backlog`, `/tasks?view=inbox`, and `/tasks` with no `view` render `TaskListRoute` in backlog mode. `/tasks?view=my` also renders `TaskListRoute`, filtered to Tasks assigned to the current actor (`assignee=me`). The Tasks rail labels that destination "My Tasks".
+- `/tasks?view=backlog`, `/tasks?view=inbox`, and `/tasks` with no `view` render `TaskListRoute` in backlog mode. `/tasks?view=my` also renders `TaskListRoute`, filtered to Tasks assigned to the current actor (`assignee=me`). The Task sidebar labels that destination `내 Task`.
 - `managedSystem` and `param` on that URL are the list's scope and selection, not a personal filter.
 ```
 
@@ -101,7 +109,7 @@ Navigation is a discovery surface; backend permission checks remain authoritativ
 ```text
 - Domain destinations (Home, VOC, Findings, Tasks, Integration, Surveys) stay visible to every Actor.
   Their route data and actions remain permission-gated by their owning contracts.
-- The Admin rail entry, ADMIN sidebar entries (Managed Systems, Analytics Areas, Permission requests,
+- The Admin rail entry, `관리자` sidebar entries (Managed Systems, Analytics Areas, Permission requests,
   Workspace settings), and Workspace settings footer link appear only after `workspace.admin` is
   approved by `/me/permissions/check`.
 - Keep those Admin entries hidden while the capability check is pending, failed, or not approved.
@@ -109,14 +117,13 @@ Navigation is a discovery surface; backend permission checks remain authoritativ
 ```
 
 Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which owns route
-labels and destinations. `AppFrame` filters its `ADMIN` entries using the same `workspace.admin` check
-as the Admin page gates. The other section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including
-Milestones), `INTEGRATION`, and `Survey`. The Survey sidebar has `Survey 참여`
+labels and destinations. `AppFrame` filters its `관리자` section entries using the same `workspace.admin` check
+as the Admin page gates. The section labels are `VOC`, `Triage 보기`, `보기`, `Finding`, `Task` (including
+Milestones), `연동`, `Survey`, and `관리자`. The Survey sidebar has `Survey 참여`
 at `/surveys/participate` followed by `Survey 관리` at `/surveys`; the active
 entry follows the participation and respondent routes versus the management
-routes. The Surveys rail destination opens `/surveys/participate`. Per the AGENTS.md two-consumer rule, each feature adds its
-entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries`
-(`apps/frontend/src/features/home/homeNavigation.tsx`).
+routes. The Surveys rail destination opens `/surveys/participate`. The Home rail's entries come from `homeSidebarEntries`
+(`apps/frontend/src/features/home/homeNavigation.tsx`); its sections are `FEEDBACKOPS` and `액션 큐`.
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login clears prior Actor data and seeds the `['me']` identity from the login response before routing so a new Actor never sees prior Actor data.
 
@@ -175,6 +182,12 @@ Frontend Home renders only backend-provided queue groups. It may choose layout,
 empty states, and ordering affordances, but it must not infer hidden queues from
 role labels alone.
 
+`/home?tab=inbox` (tab label `수신함`) is the Actor's notification inbox
+(`apps/frontend/src/features/home/InboxPanel.tsx`; contract
+`docs/implementation/api/notifications.md`), with an `읽지 않음` / `전체` filter. The
+global rail's bell links to it and shows an unread count badge. The Dashboard
+tab is the default and omits `tab`.
+
 The Home Surveys panel shows up to five backend-provided answerable surveys and
 links to the full participation list. Its list, loading, empty, and retry states
 use the same answerable-surveys query as `/surveys/participate`.
@@ -197,7 +210,7 @@ as the other surfaces.
   RightDetailPanel. Source-object jump actions navigate to the owning route
   while preserving the Dashboard filters in browser history.
 - In `view=milestones`, desktop selection opens Milestone Detail in RightDetailPanel; the list remains the primary context.
-- Mobile selection uses a drill-in route; back returns to the previous list filters.
+- Mobile selection uses a drill-in route (target contract, not built); back returns to the previous list filters.
 - Browser refresh on a selected URL restores AppShell, list context, and selected detail when data is accessible.
 - Finding creation from a selected VOC may carry `returnTo` with the same-origin `/vocs` URL; the selected Finding detail offers an action that restores the VOC view, scope, filters, and selection.
 - The `/findings/$findingId` deep link redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied.
@@ -211,12 +224,19 @@ as the other surfaces.
 
 ```text
 - Admin: `all` means true workspace-wide scope on Admin, Dashboard, VOC, Tasks, Surveys, and Integration views where the backend allows it.
-- Developer: `all` may appear on VOC, Tasks, Dashboard, and Integration views only when the actor has access to more than one Managed System; it means the union of the actor's effective Managed System scopes.
-- User: `all` is hidden on Home, My VOCs, Survey response, and other own-work views; the backend returns only actor-safe own work.
-- Survey respondent surfaces do not show Managed System `all`.
+- Developer: `all` means the union of the actor's effective Managed System scopes.
+- User: own-work views return only actor-safe own work; the backend rejects `managed_system_id=all` for VOC `view=my`.
+- Survey respondent surfaces do not carry Managed System scope; the control is disabled there.
 - `/surveys/participate` lists answerable Surveys and the current Actor's
   response history; `/surveys/:surveyId/respond` renders the respondent form.
-- A Developer with one Managed System scope should see that scope directly, not a redundant `all` option.
+```
+
+As built, the scope control is the `AppSidebar` scope selector (`data-testid="scope-selector"`):
+
+```text
+- It is rendered whenever the sidebar is expanded, for every Actor; it is disabled on Admin routes and on Survey respondent routes.
+- `All` ("전체 Managed System") is always offered; choosing it removes `managedSystem` from the URL.
+- Every workspace Managed System is listed. Systems outside the Actor's grants are dimmed and marked `범위 밖`, with a note that names are workspace-visible and access is requested separately (#282).
 ```
 
 Changing Managed System scope updates URL state and list queries. It must not
@@ -263,23 +283,18 @@ answer different user questions:
 - Integration: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-Home and Integration next-action links must include:
+The Dashboard queue links shown on Home and Integration are aggregate list routes, not per-record links. Each
+queue's `next_action` and `secondary_action` carry `label`, `route`, and an `intent` string
+(`packages/shared/src/dashboard.ts`). Navigation uses `route` only; `intent` maps to the Integration button label
+(`apps/frontend/src/lib/copy/dashboard-actions.ts`) and is not a URL search key, so no `action=` intent is carried on these links. Shipped queue routes:
 
 ```text
-- source object type
-- source object id
-- target route
-- selected detail object when applicable
-- action intent
-```
-
-Example:
-
-```text
-/vocs?view=triage&triage=high_severity&selected=:vocId&action=create_finding
-/findings?selected=:findingId&action=request_task
-/tasks?view=board&selected=:taskId&action=review_reporter_status
-/tasks?view=milestones&selected=:milestoneId&action=review_timeline
+/vocs?view=inbox&tab=unassigned
+/vocs?view=inbox&tab=high-no-link
+/findings
+/tasks?view=board
+/surveys
+/admin/permissions/requests
 ```
 
 ## Task And Milestone Layout Rules
@@ -295,6 +310,8 @@ Example:
 ```
 
 ## AppShell Layout
+
+Desktop (≥1024px) only is built; the tablet/mobile rules below are the target contract, out of scope until responsive lands — `apps/frontend/AGENTS.md`.
 
 ```text
 Desktop >= 1024px:

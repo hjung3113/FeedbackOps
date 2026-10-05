@@ -150,6 +150,9 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--row-height-compact', raw: '44px' },
   { tokenName: '--row-height-default', raw: '60px' },
   { tokenName: '--row-height-expanded', raw: '96px' },
+  // #782 (2026-10-06): shared token for values repeated as arbitrary classes (owner
+  // directive); not in the frozen prototype.
+  { tokenName: '--row-accent-width', raw: '3px' },
   { tokenName: '--badge-height', raw: '20px' },
   { tokenName: '--icon-size-sm', raw: '12px' },
   { tokenName: '--icon-size-md', raw: '16px' },
@@ -174,6 +177,9 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--radius-md', raw: '6px' },
   { tokenName: '--radius-lg', raw: '8px' },
   { tokenName: '--radius-xl', raw: '12px' },
+  // #782 (2026-10-06): shared token for values repeated as arbitrary classes (owner
+  // directive); not in the frozen prototype.
+  { tokenName: '--radius-icon-chip', raw: '5px' },
   { tokenName: '--radius-pill', raw: '9999px' },
 
   // --- Shadows ---
@@ -207,16 +213,25 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--text-heading-lg', raw: '32px' },
   { tokenName: '--text-display', raw: '48px' },
   { tokenName: '--text-system-mark', raw: '8px' },
+  // #782 (2026-10-06): shared token for values repeated as arbitrary classes (owner
+  // directive); not in the frozen prototype.
+  { tokenName: '--text-micro', raw: '9px' },
 
   // --- Typography: leading ---
   { tokenName: '--leading-tight', raw: '1.2' },
   { tokenName: '--leading-normal', raw: '1.4' },
   { tokenName: '--leading-relaxed', raw: '1.6' },
+  // #797 (2026-10-06): compact note leading shared by Callout and the milestone source summary; not in the
+  // frozen prototype token block (the prototype Callout used it inline).
+  { tokenName: '--leading-note', raw: '1.55' },
 
   // --- Typography: tracking ---
   { tokenName: '--tracking-tight', raw: '-0.22px' },
   { tokenName: '--tracking-normal', raw: '-0.13px' },
   { tokenName: '--tracking-wide', raw: '0.04em' },
+  // #782 (2026-10-06): shared token for values repeated as arbitrary classes (owner
+  // directive); not in the frozen prototype.
+  { tokenName: '--tracking-kind-label', raw: '0.01em' },
 ];
 
 /** Map from tokenName → TokenEntry for O(1) lookup in tests. */

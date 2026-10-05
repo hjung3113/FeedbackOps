@@ -1,5 +1,9 @@
 # Observability and deployment: structured logs on stdout, k8s for production
 
+## Status
+
+Accepted. Amended 2026-09-22.
+
 ## Deployment shape
 
 FeedbackOps deploys to a **Docker container running on the company's internal Kubernetes cluster**. The build artifact is a single OCI image per app (`apps/backend`, `apps/frontend`) plus a migration job image. Deployment manifests (namespace, ingress, secrets, ConfigMap, Postgres connection) are out of scope for this repository; no chart is kept here.
@@ -67,7 +71,7 @@ Neither endpoint requires authentication; both refuse to disclose internal versi
 ## Amended 2026-07-13
 
 At the time of this amendment the `/health/live` and `/health/ready` split
-above was not yet implemented; the backend exposed unauthenticated `GET /health`
+above was not yet implemented (superseded by the 2026-09-22 amendment below); the backend exposed unauthenticated `GET /health`
 as a simple process-health endpoint, and k8s deployment work had to implement
 the split before these probes could be used for production readiness. The split
 is now implemented — see "Amended 2026-09-22" below. `/health/ready` remains

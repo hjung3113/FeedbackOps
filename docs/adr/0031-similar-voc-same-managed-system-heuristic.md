@@ -97,7 +97,7 @@ tab until that predicate exists.
 > **Amended 2026-09-30 (#582, #592 fix round 1).** `similar_count` remains the authorized count
 > of active peers in the same primary Managed System; it is not a per-row
 > similarity signal. Remove it from VOC inbox rows. In detail and triage, label
-> peer counts as `같은 Managed System의 VOC N건`. The pre-submit panel shows at
+> peer counts as `같은 Managed System의 VOC N건`. The pre-submit panel (ADR-0046) shows at
 > most three peers under `같은 Managed System의 최근 VOC` and exposes no count
 > or total. Use a neutral `Layers` icon for heuristic count badges, distinct
 > from ADR-0034 recommendation iconography. Keep the inbox `tab=similar` URL key accepted for old links and saved

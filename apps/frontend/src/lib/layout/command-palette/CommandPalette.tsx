@@ -7,6 +7,7 @@ import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchNavResolve } from '@/lib/api/nav';
 import { ApiError } from '@/lib/api/types';
 import { COMMAND_PALETTE_COPY, normalizeDisplayId } from '@/lib/copy/command-palette';
+import { KeyboardShortcut } from '@fops/ui';
 import { useCommandPalette } from './CommandPaletteContext';
 import {
   type PaletteCommandDescriptor,
@@ -25,11 +26,9 @@ export interface CommandPaletteProps {
   canAccessWorkspaceAdmin: boolean;
 }
 
-const KBD_CLASS =
-  'rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted';
-
 const ITEM_CLASS =
-  'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-[7px] text-left text-[13.5px] text-text-primary outline-hidden aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:shadow-[inset_0_0_0_1px_rgba(20,40,160,0.28)]';
+  // oxlint-disable-next-line shadcn/no-arbitrary-values -- command palette labels keep the 13.5px size of the prototype .cmdk-item-label (styles.css:950)
+  'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-1.75 text-left text-[13.5px] text-text-primary outline-hidden aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:ring-inset data-[selected=true]:ring-1 data-[selected=true]:ring-accent-primary/28';
 
 export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPaletteProps) {
   const { open, setOpen, toggle } = useCommandPalette();
@@ -140,8 +139,11 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
       loop
       label={COMMAND_PALETTE_COPY.accessibleName}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      overlayClassName="fixed inset-0 z-60 bg-[rgba(20,40,160,0.16)] backdrop-blur-xs"
-      contentClassName="fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl"
+      overlayClassName="fixed inset-0 z-60 bg-accent-primary/16 backdrop-blur-xs"
+      contentClassName={
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps the 10px radius of the prototype .cmdk-panel (styles.css:865)
+        'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl'
+      }
       data-testid="command-palette-dialog"
     >
       <div className="flex shrink-0 items-center gap-2.5 border-b border-border-subtle px-4 py-3.5">
@@ -153,9 +155,9 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
             setResolveError(null);
           }}
           placeholder={COMMAND_PALETTE_COPY.placeholder}
-          className="h-6 flex-1 bg-transparent text-[15px] text-text-primary outline-hidden placeholder:text-text-muted"
+          className="h-6 flex-1 bg-transparent text-md text-text-primary outline-hidden placeholder:text-text-muted"
         />
-        <span className={KBD_CLASS}>{COMMAND_PALETTE_COPY.escHint}</span>
+        <KeyboardShortcut>{COMMAND_PALETTE_COPY.escHint}</KeyboardShortcut>
       </div>
 
       <Command.List className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5 pb-2">
@@ -178,14 +180,14 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
               className={ITEM_CLASS}
               data-testid="command-palette-open-record"
             >
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
+              <CommandPaletteItemIcon>
                 {busy ? (
                   <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
                 ) : (
                   <FileText className="h-3 w-3" aria-hidden />
                 )}
-              </span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted">
+              </CommandPaletteItemIcon>
+              <span className="text-tiny font-semibold uppercase tracking-kicker text-text-muted">
                 {COMMAND_PALETTE_COPY.verbs.open}
               </span>
               <span className="truncate">{`${displayId} ${COMMAND_PALETTE_COPY.verbs.open}`}</span>
@@ -232,26 +234,26 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
 
       <div className="flex shrink-0 items-center gap-3 border-t border-border-subtle bg-surface-canvas px-3.5 py-2">
         <span className="flex items-center gap-1">
-          <span className={KBD_CLASS}>↑</span>
-          <span className={KBD_CLASS}>↓</span>
+          <KeyboardShortcut>↑</KeyboardShortcut>
+          <KeyboardShortcut>↓</KeyboardShortcut>
           <span className="text-xs text-text-muted">
             {COMMAND_PALETTE_COPY.footer.navigateHint}
           </span>
         </span>
         <span className="flex items-center gap-1">
-          <span className={KBD_CLASS}>↵</span>
+          <KeyboardShortcut>↵</KeyboardShortcut>
           <span className="text-xs text-text-muted">{COMMAND_PALETTE_COPY.footer.runHint}</span>
         </span>
         <span className="flex items-center gap-1">
-          <span className={KBD_CLASS}>esc</span>
+          <KeyboardShortcut>esc</KeyboardShortcut>
           <span className="text-xs text-text-muted">{COMMAND_PALETTE_COPY.footer.closeHint}</span>
         </span>
         {/* #611 owner decision: the shortcut hint in the palette footer uses the
             platform-appropriate label (⌘K on macOS, Ctrl K elsewhere). */}
         <span className="flex items-center gap-1">
-          <span className={KBD_CLASS} data-testid="command-palette-shortcut-hint">
+          <KeyboardShortcut testId="command-palette-shortcut-hint">
             {shortcutLabel()}
-          </span>
+          </KeyboardShortcut>
           <span className="text-xs text-text-muted">{COMMAND_PALETTE_COPY.rowLabel}</span>
         </span>
         <div className="flex-1" />
@@ -278,14 +280,20 @@ function PaletteCommandRow({
       className={ITEM_CLASS}
       data-testid={`command-palette-item-${command.id}`}
     >
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[5px] bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
-        {command.icon}
-      </span>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted">
+      <CommandPaletteItemIcon>{command.icon}</CommandPaletteItemIcon>
+      <span className="text-tiny font-semibold uppercase tracking-kicker text-text-muted">
         {command.verb}
       </span>
       <span className="truncate">{command.label}</span>
     </Command.Item>
+  );
+}
+
+function CommandPaletteItemIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex size-5.5 items-center justify-center rounded-icon-chip bg-surface-card text-text-secondary group-data-[selected=true]:text-accent-primary">
+      {children}
+    </span>
   );
 }
 

@@ -130,7 +130,7 @@ export function VocRow({
       onKeyDown={handleKeyDown}
       className={cn(
         // Base layout — prototype .object-row: min-height 60px, padding 10px 20px, gap 12px
-        'relative flex w-full items-center gap-3 px-5 py-2.5 min-h-[60px] text-left cursor-pointer',
+        'relative flex w-full items-center gap-3 px-5 py-2.5 min-h-row-default text-left cursor-pointer',
         // Row divider — prototype .object-row { border-bottom: 1px solid var(--border-subtle) }
         'border-b border-border-subtle',
         // Hover
@@ -148,7 +148,7 @@ export function VocRow({
       <div
         data-testid="voc-row-left-bar"
         aria-hidden="true"
-        className={cn('absolute left-0 top-0 bottom-0 w-[3px] rounded-r-sm', severityBarClass)}
+        className={cn('absolute left-0 top-0 bottom-0 w-row-accent rounded-r-sm', severityBarClass)}
       />
 
       {/* LEAD: checkbox (bulk select) + severity indicator. Click here must not

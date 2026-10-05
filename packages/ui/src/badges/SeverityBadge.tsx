@@ -1,5 +1,6 @@
+import type * as React from 'react';
 import { type SeverityEnum, SeverityIndicator } from '../indicators/SeverityIndicator.js';
-import { cn } from '../utils/cn.js';
+import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 
 export interface SeverityBadgeProps {
   severity: SeverityEnum;
@@ -15,6 +16,13 @@ export const SEVERITY_LABELS: Record<SeverityEnum, string> = {
   critical: '심각',
 };
 
+const SEVERITY_CLASS: Record<SeverityEnum, string> = {
+  low: 'text-severity-low-label',
+  medium: 'text-severity-medium-label',
+  high: 'text-severity-high-label',
+  critical: 'text-severity-critical-label',
+};
+
 /**
  * Pill badge: SeverityIndicator prefix + Korean label.
  * Background uses `--severity-<level>` at 12 % opacity;
@@ -26,21 +34,20 @@ export const SEVERITY_LABELS: Record<SeverityEnum, string> = {
  */
 export function SeverityBadge({ severity, label, className }: SeverityBadgeProps) {
   const token = `--severity-${severity}`;
+  const severityClass = SEVERITY_CLASS[severity];
 
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-        className,
-      )}
-      style={{
-        color: `rgb(var(${token}-label) / 1)`,
-        backgroundColor: `rgb(var(${token}) / 0.12)`,
-      }}
-      data-token={token}
+    <StatusBadgeFrame
+      appearance="severity"
+      textClassName={severityClass}
+      tintClassName="bg-(--status-badge-tint)"
+      {...(className !== undefined ? { className } : {})}
+      token={token}
+      // oxlint-disable-next-line shadcn/no-inline-styles -- tint is picked from the closed severity map and keeps the exact rgb alpha measured for #525 contrast
+      style={{ '--status-badge-tint': `rgb(var(${token}) / 0.12)` } as React.CSSProperties}
+      indicator={<SeverityIndicator severity={severity} />}
     >
-      <SeverityIndicator severity={severity} />
       {label ?? SEVERITY_LABELS[severity]}
-    </span>
+    </StatusBadgeFrame>
   );
 }

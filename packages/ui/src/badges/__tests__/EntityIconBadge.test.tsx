@@ -31,19 +31,18 @@ describe('EntityIconBadge', () => {
   it('defaults to size=22', () => {
     const { container } = render(<EntityIconBadge type="voc" />);
     const el = container.querySelector('[data-entity-type="voc"]') as HTMLElement;
-    expect(el.style.width).toBe('22px');
-    expect(el.style.height).toBe('22px');
+    expect(el.style.getPropertyValue('--entity-icon-size')).toBe('22px');
   });
 
   it('uses border-radius 4 when size ≤ 18', () => {
     const { container } = render(<EntityIconBadge type="voc" size={18} />);
     const el = container.querySelector('[data-entity-type="voc"]') as HTMLElement;
-    expect(el.style.borderRadius).toBe('4px');
+    expect(el.style.getPropertyValue('--entity-icon-radius')).toBe('4px');
   });
 
   it('uses border-radius 6 when size > 18', () => {
     const { container } = render(<EntityIconBadge type="voc" size={22} />);
     const el = container.querySelector('[data-entity-type="voc"]') as HTMLElement;
-    expect(el.style.borderRadius).toBe('6px');
+    expect(el.style.getPropertyValue('--entity-icon-radius')).toBe('6px');
   });
 });

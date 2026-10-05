@@ -1,7 +1,14 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { DashboardSummary } from '@fops/shared';
-import { Button, PageShell, PanelSectionTitle, PermissionBlockedPanel, Skeleton } from '@fops/ui';
+import {
+  Button,
+  PageShell,
+  PanelSectionTitle,
+  PermissionBlockedPanel,
+  ProgressMeter,
+  Skeleton,
+} from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import { Layers, Link2, RefreshCw } from 'lucide-react';
@@ -120,7 +127,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               data-testid="integration-dashboard-queues-loading"
             >
               {INTEGRATION_DASHBOARD_QUEUE_ORDER.map((id) => (
-                <Skeleton key={id} className="h-52 rounded-md" />
+                <Skeleton key={id} className="h-52" />
               ))}
             </div>
           ) : summary.isError ? (
@@ -183,7 +190,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
           <div data-testid="integration-managed-system-overview">
             <PanelSectionTitle>Managed System 개요</PanelSectionTitle>
             {summary.isPending || systems.isPending ? (
-              <Skeleton className="h-48 rounded-md" />
+              <Skeleton className="h-48" />
             ) : summary.data === undefined || summary.data.by_managed_system.length === 0 ? (
               <ListStateMessage
                 variant="empty"
@@ -206,9 +213,9 @@ export function IntegrationDashboardRoute(): React.ReactElement {
 type ManagedSystemRow = DashboardSummary['by_managed_system'][number];
 
 const COVERAGE_TONE = {
-  good: { text: 'text-accent-success', bar: 'bg-accent-success' },
-  warn: { text: 'text-accent-warn', bar: 'bg-accent-warn' },
-  bad: { text: 'text-accent-danger', bar: 'bg-accent-danger' },
+  good: { text: 'text-accent-success', meter: 'success' },
+  warn: { text: 'text-accent-warn', meter: 'warning' },
+  bad: { text: 'text-accent-danger', meter: 'danger' },
 } as const;
 
 function ManagedSystemOverview({
@@ -226,7 +233,7 @@ function ManagedSystemOverview({
         data-testid="integration-managed-system-table"
       >
         <thead>
-          <tr className="border-b border-border-subtle text-[10px] uppercase tracking-wide text-text-muted">
+          <tr className="border-b border-border-subtle text-caption uppercase tracking-wide text-text-muted">
             <th scope="col" className="px-4 py-2 font-medium">
               Managed System
             </th>
@@ -309,19 +316,15 @@ function ManagedSystemOverview({
                     <span className="text-text-secondary">—</span>
                   ) : (
                     <span className="inline-flex items-center justify-end gap-2">
-                      <span
-                        role="meter"
-                        aria-label={GLOSSARY.coverage}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={coveragePercent}
-                        className="inline-block h-1.5 w-14 overflow-hidden rounded-full bg-surface-row-hover align-middle"
-                      >
-                        <span
-                          className={`block h-full rounded-full ${coverageTone.bar}`}
-                          style={{ width: `${coveragePercent}%` }}
-                        />
-                      </span>
+                      <ProgressMeter
+                        clip
+                        element="span"
+                        value={coveragePercent}
+                        semantics={{ role: 'meter', label: GLOSSARY.coverage }}
+                        tone={coverageTone.meter}
+                        className="inline-block w-14 align-middle"
+                        trackTone="row-hover"
+                      />
                       <span className={`min-w-8 tabular-nums ${coverageTone.text}`}>
                         {coveragePercent}%
                       </span>

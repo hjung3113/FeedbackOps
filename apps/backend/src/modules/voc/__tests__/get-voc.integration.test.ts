@@ -16,7 +16,12 @@ import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { randomUUID, uid } from '../../../test-support/ids.js';
-import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupReadTestTables,
   insertPublicUpdate,
@@ -887,6 +892,55 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.similar_count).toBeUndefined();
     expect(body.similar).toBeUndefined();
   });
+
+  it.each([{ grantState: 'revoked' }, { grantState: 'expired' }] as const)(
+    'AC16: SUMMARY treats a $grantState voc.read grant as requestable',
+    async ({ grantState }) => {
+      const msId = await insertMsDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        `${uid(SLUG_PREFIX)}-summary-${grantState}`,
+        `Summary ${grantState} MS`,
+      );
+      const { id: devId, externalId } = await insertDevActor(
+        dbHandle,
+        WORKSPACE_ID,
+        `summary-${grantState}`,
+      );
+      await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
+      const readGrantId = await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        devId,
+        'voc.read',
+        msId,
+        adminActorId,
+      );
+      if (grantState === 'revoked') {
+        await revokeCapabilityGrant(dbHandle, readGrantId, adminActorId);
+      } else {
+        await expireCapabilityGrant(dbHandle, readGrantId);
+      }
+      const devCookie = await loginAs(app, externalId);
+      const voc = await insertVoc(msId, `Summary ${grantState} VOC`);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/vocs/${voc.id}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ permission_decisions: Record<string, unknown> }>();
+      expect(body.permission_decisions._self).toMatchObject({
+        state: 'request_access',
+        requestable_permission: {
+          permission: 'voc.read',
+          managed_system_id: msId,
+        },
+      });
+    },
+  );
 
   it('AC17: SUMMARY explicit_deny returns blocked_not_requestable permission_decisions._self', async () => {
     const msId = await insertMsDirectly(

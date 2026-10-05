@@ -113,6 +113,7 @@
   --color-severity-high-label: rgb(var(--severity-high-label));
   --color-severity-critical-label: rgb(var(--severity-critical-label));
 
+
   /* --- Confidence tokens --- */
   --color-confidence-low: rgb(var(--color-storm-cloud));
   --color-confidence-medium: rgb(var(--color-cyan-spark));
@@ -130,8 +131,16 @@
    * size-only. */
   --text-xs: var(--text-xs);
   --text-xs--line-height: initial;
+  --text-caption: var(--text-caption);
+  --text-caption--line-height: initial;
+  --text-tiny: var(--text-tiny);
+  --text-tiny--line-height: initial;
+  --text-micro: var(--text-micro);
+  --text-micro--line-height: initial;
   --text-sm: var(--text-sm);
   --text-sm--line-height: initial;
+  --text-md: var(--text-md);
+  --text-md--line-height: initial;
   --text-base: var(--text-body);
   --text-base--line-height: var(--leading-normal);
   --text-lg: var(--text-lg);
@@ -151,6 +160,7 @@
   --spacing-row-compact: var(--row-height-compact);
   --spacing-row-default: var(--row-height-default);
   --spacing-row-expanded: var(--row-height-expanded);
+  --spacing-row-accent: var(--row-accent-width);
 
   /* --- Border radius (token names are canonical; v3 rounded-sm/xs mapping
    * is unchanged because templates kept the v3 class names) --- */
@@ -158,7 +168,15 @@
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
+  --radius-icon-chip: var(--radius-icon-chip);
   --radius-pill: var(--radius-pill);
+
+  /* --- Semantic leading and tracking utilities; compat.css retains v3 shims --- */
+  --leading-body: var(--leading-normal);
+  --leading-relaxed-ui: var(--leading-relaxed);
+  --leading-note: var(--leading-note);
+  --tracking-kicker: var(--tracking-wide);
+  --tracking-kind-label: var(--tracking-kind-label);
 
   /* --- Box shadows --- */
   --shadow-sm: var(--shadow-sm);

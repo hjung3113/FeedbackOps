@@ -35,18 +35,10 @@ export function MilestoneTasksSection({
           />
         ) : (
           // Same terminal copy as the Tasks list route (TaskListRoute).
-          <EmptyState
-            size="sm"
-            className="py-3 gap-0 text-xs"
-            title="Task 목록을 표시할 수 없습니다."
-          />
+          <EmptyState size="sm" density="compact" title="Task 목록을 표시할 수 없습니다." />
         )
       ) : childTasks !== undefined && childTasks.length === 0 ? (
-        <EmptyState
-          size="sm"
-          className="py-3 gap-0 text-xs"
-          title="아직 연결된 Task 가 없습니다."
-        />
+        <EmptyState size="sm" density="compact" title="아직 연결된 Task 가 없습니다." />
       ) : childTasks !== undefined ? (
         <div className="flex flex-col gap-1.5">
           {childTasks.map((task) => {

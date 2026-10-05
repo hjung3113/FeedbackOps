@@ -98,7 +98,7 @@ export function LinkExistingFindingModal({
                 aria-label="Finding"
                 aria-required="true"
                 data-testid="link-existing-finding-picker"
-                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary"
+                appearance="field"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -118,7 +118,7 @@ export function LinkExistingFindingModal({
             </p>
           )}
         </form>
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button
             type="button"
             variant="secondary"

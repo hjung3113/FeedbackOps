@@ -352,11 +352,14 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Milestone 검색…"
-                      className="w-full truncate pl-8"
+                      className={
+                        // oxlint-disable-next-line shadcn/no-restyle -- 32px left padding reserves the overlaid search icon and truncates long queries
+                        'w-full truncate pl-8'
+                      }
                     />
                   </div>
                   {/* Filter intentionally opens no menu in this slice. */}
-                  <Button variant="subtle" size="sm" className="shrink-0 gap-1.5 px-2">
+                  <Button variant="subtle" size="toolbar">
                     <Filter className="h-3.5 w-3.5" aria-hidden="true" />
                     {GLOSSARY.filter}
                   </Button>
@@ -364,8 +367,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                     detail slot; no separate create screen. */}
                   <Button
                     variant="primary"
-                    size="sm"
-                    className="shrink-0 gap-1.5 px-2"
+                    size="toolbar"
                     onClick={() => {
                       // R3 — an edited unsaved title confirms before the
                       // create block replaces the detail panel.
@@ -390,7 +392,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               evidence field (approved B2c plan). Slice C owns the per-row mini
               timeline, so only the prototype's schedule-risk label renders. */}
             <div
-              className="flex items-stretch gap-[18px] border-b border-border-subtle bg-surface-canvas px-5 py-3"
+              className="flex items-stretch gap-4.5 border-b border-border-subtle bg-surface-canvas px-5 py-3"
               data-testid="milestones-summary"
             >
               <SummaryCell

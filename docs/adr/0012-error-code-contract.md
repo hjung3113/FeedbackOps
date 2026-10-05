@@ -1,5 +1,9 @@
 # API error code contract
 
+## Status
+
+Accepted. Amended 2026-10-05 (families added since; see the amendment at the end).
+
 `docs/implementation/01-coding-conventions.md` requires that API errors use **stable codes**, that validation errors **identify field paths**, and that permission errors **include a requestable permission when safe**. This ADR locks the shape so backend handlers, the frontend `apiClient`, and `CATALOG` in `apps/frontend/src/lib/api/errorMapper.ts` can all rely on one structure.
 
 ## Response envelope
@@ -162,7 +166,7 @@ Domain errors that happen during an audited action emit an audit row with `event
 ## What this ADR locks
 
 - One envelope shape across the entire API.
-- `code` enum lives in `packages/shared` and is imported by both apps; adding a code is a single PR touching enum, i18n catalog, and (for permission codes) the requestable-permission table.
+- `code` enum lives in `packages/shared` and is imported by both apps; adding a code is a single PR touching enum, `CATALOG` in `errorMapper.ts` (ADR-0010), and (for permission codes) the requestable-permission table.
 - `detail` is a closed backend union covering emitted field errors, rate-limit retry metadata, resource identity, capability/reason payloads, requestable-permission details, stale-write timestamps, and triage-state conflicts.
 - `detail.fields` is the only validation error shape.
 - `requestable_permission` is conditional, never automatic.
@@ -170,3 +174,39 @@ Domain errors that happen during an audited action emit an audit row with `event
 ## Reopening
 
 Switching to RFC 7807, restructuring the validation shape, or making `requestable_permission` mandatory each warrants a new ADR with a migration plan for existing handlers and frontend error pipelines.
+
+## Amendment (2026-10-05)
+
+The original text above is unchanged. The family → status table near the top
+predates several families. `STATUS_BY_PREFIX` in
+`apps/backend/src/lib/errors.ts` is the runtime mapping and `ERROR_CODES` in
+`packages/shared/src/errors/codes.ts` is the code list; where they disagree
+with the table above, they win.
+
+**Families in `STATUS_BY_PREFIX` that the table does not list:**
+
+```text
+voc.*                       → 422
+rich_content.*              → 422
+attachment.*                → 422
+reporter_facing_status.*    → 422
+storage.*                   → 502
+not_implemented.*           → 501
+```
+
+Two table rows differ from the runtime mapping:
+
+- `auth.workspace_mismatch` → 403. It is matched before `auth.*` → 401.
+- `upstream.*` → 502 only. The runtime mapping has no 503 or 504 branch.
+
+**Retired code.** `attachment.unsupported_pending_storage_slice` is no longer in
+`ERROR_CODES`: the storage slice shipped and attachments ride as
+`attachment_ids: string[]`. The code's bullet in "Slice 3 #13 adds five codes"
+and its paired inner `detail.fields[].code` `unsupported` are historical.
+
+**Malformed JSON (#759).** Errors with a 4xx `statusCode` (Fastify and its plugins),
+no ADR-0012 error code, and no Zod `validation` array map to `422 validation.malformed_request`
+with the fixed message `malformed request`; the handler logs only the Fastify
+error `code` and `statusCode` at info level. This covers malformed or empty JSON,
+unsupported media types, oversized bodies, and invalid Content-Length.
+`POST /attachments` maps malformed multipart input the same way (#770).

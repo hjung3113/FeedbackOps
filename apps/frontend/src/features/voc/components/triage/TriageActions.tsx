@@ -74,7 +74,7 @@ export function TriageActions({
           onClick={onFinding}
           className={cn(
             'flex-1 inline-flex items-center justify-center gap-1.5',
-            'h-7 px-2.5 rounded-md text-[13px] font-medium',
+            'h-7 px-2.5 rounded-md text-sm font-medium',
             'bg-surface-card text-text-primary shadow-subtle',
             'hover:bg-surface-popover',
             'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
@@ -93,7 +93,7 @@ export function TriageActions({
           onClick={onSkip}
           className={cn(
             'flex-1 inline-flex items-center justify-center gap-1.5',
-            'h-7 px-2.5 rounded-md text-[13px] font-medium',
+            'h-7 px-2.5 rounded-md text-sm font-medium',
             'text-text-secondary',
             'hover:bg-surface-card hover:text-text-primary',
             'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',

@@ -28,13 +28,13 @@ Finding, Evidence, Entity Links, Coverage, Action Dashboard는 Integration Layer
 ## Global Layout
 
 ```text
-Top-Level Navigation:
+Top-Level Navigation (rail order, apps/frontend/src/lib/layout/AppRail.tsx):
 - Home
-- My Work
 - VOC
-- Surveys
+- Findings
 - Tasks
 - Integration
+- Surveys
 - Admin
 
 Navigation rule:
@@ -166,10 +166,10 @@ catalog in the same domain file). No other document is an endpoint authority.
 | Request Task from VOC | FOP-TASK-001 | `POST /vocs/:id/request-task` |
 | Request Task from VOC Cluster | FOP-TASK-001 | `POST /voc-clusters/:id/request-task` |
 | Link Existing Task from Finding | FOP-FIND-003 | `POST /findings/:id/link-task` |
-| Create Milestone | FOP-TASK-004 | Task-system grouping |
+| Create Milestone | FOP-TASK-004 | `POST /milestones` |
 | Create Work Initiative from Finding | future | future execution grouping |
-| Approve Permission Request | FOP-PERM-002 | `POST /permission-requests/:id/approve` |
-| Reject Permission Request | FOP-PERM-002 | `POST /permission-requests/:id/reject` |
+| Approve Permission Request | FOP-PERM-002 | `POST /permissions/requests/:id/approve` |
+| Reject Permission Request | FOP-PERM-002 | `POST /permissions/requests/:id/reject` |
 
 Forbidden UI action:
 

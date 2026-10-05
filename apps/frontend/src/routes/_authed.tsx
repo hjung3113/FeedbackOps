@@ -20,6 +20,7 @@ import {
   Plus,
   Settings,
   Shield,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import * as React from 'react';
@@ -27,17 +28,21 @@ import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
+import { ADMIN_PERMISSIONS_COPY } from '../lib/copy/admin-permissions';
 import { GLOSSARY, createLabel } from '../lib/copy/glossary';
 import { SURVEY_PARTICIPATION_COPY } from '../lib/copy/survey-participation';
 import { VOC_INBOX_NO_LINK_TAB_LABEL, VOC_TRIAGE_TAB_LABELS } from '../lib/copy/voc-views';
 import { AppFrame } from '../lib/layout/AppFrame';
-import { CommandPaletteProvider, useCommandPalette } from '../lib/layout/command-palette/CommandPaletteContext';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import {
   AuthenticatedRouteErrorFallback,
   AuthenticatedRoutePendingFallback,
 } from '../lib/layout/RouteFallback';
+import {
+  CommandPaletteProvider,
+  useCommandPalette,
+} from '../lib/layout/command-palette/CommandPaletteContext';
 import type { AppRouterContext } from './__root';
 import { VOC_DEFAULT_VIEW } from './_authed/vocs';
 
@@ -206,6 +211,13 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       href: '/admin/permissions/requests',
       section: '관리자',
       icon: <Shield className="h-4 w-4" />,
+    },
+    {
+      id: 'admin-permission-grants',
+      label: ADMIN_PERMISSIONS_COPY.activeTitle,
+      href: '/admin/permissions/grants',
+      section: '관리자',
+      icon: <ShieldCheck className="h-4 w-4" />,
     },
     {
       id: 'admin-settings',

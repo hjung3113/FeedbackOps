@@ -43,6 +43,7 @@ Task. VOC and VOC Cluster Task Request sources are implemented by
 requirement_id: FOP-TASK-002
 query:
   status optional pending_review|approved|rejected|needs_more_evidence|converted
+  managed_system_id optional uuid or all
 response body: { items: TaskRequestDto[] }
 auth and permission: Admin or Developer. Admin sees all Task Requests in the
   workspace. Developer rows are filtered per Task Request by `finding.manage`
@@ -124,8 +125,9 @@ validation errors:
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
-  - preserve (finding, task, requested_task)
-  - preserve (voc, task, evidence_of) when derived from existing Finding evidence
+  - preserve (finding, task, requested_task) from the request's own source Finding only
+    (Finding-sourced requests; other Finding links on the request are record-only, #768)
+  - preserve (voc, task, evidence_of) when derived from that Finding's evidence
   - update Task Request status to converted
 audit events:
   - task_created_from_request
@@ -159,6 +161,8 @@ query:
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
   milestone_id optional uuid
+  managed_system_id optional uuid or all
+  public_update optional: missing
 response body: { items: TaskDto[] }
 auth and permission: Admin or Developer. Admin sees all workspace Tasks.
   Developer rows are filtered by finding.manage on primary_managed_system_id.
@@ -176,7 +180,8 @@ source resolution:
   - source = null when source_task_request_id is null
   - source.task_request = { id, display_id, status } when source_task_request_id resolves
   - source.finding = { id, display_id, title, summary, evidence_count } via active
-    (finding, task_request, requested_task) when present
+    (finding, task_request, requested_task) when present; for a Finding-sourced
+    request, prefer its own source Finding (#773), otherwise the newest active link
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
     by the FE: allowed = { visibility_state, id, display_id, title };
     summary_visible and denied = { visibility_state } only; hidden = the key is
@@ -374,7 +379,7 @@ idempotency behavior: Idempotency-Key required. Replay of the same key and
 | Aspect | Contract |
 |---|---|
 | Purpose | Mutate the internal Task status for the Task board. Transitions are free: any of `backlog`, `todo`, `doing`, `review`, `done`, `released`, or `reopened` may move to any other status. ADR-0027 defined the status vocabulary but no transition edges; the audit trail provides the required traceability. |
-| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · session cookie |
 | Body | `{ status: TaskStatus, reason?: string }`; `.strict()` (zod) rejects unknown fields. `reason` is optional so the board's one-click transition remains valid. |
 | Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching `GET /tasks/:id`, convert, and link-existing authority. |
 | Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
@@ -396,7 +401,7 @@ Slice 6. It is created only through source transition routes:
 | Aspect | Contract |
 |---|---|
 | Purpose | Assign a Milestone to a Task, or unassign it. |
-| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · session cookie |
 | Body | `{ milestone_id: uuid \| null }`; `.strict()` (zod). `null` unassigns. |
 | Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching the status PATCH authority. |
 | Milestone scope | Unknown or other-workspace Milestone → 404 `not_found.record`. Milestone on another Managed System → 422 `validation.failed`, `out_of_scope` on `milestone_id`. The check goes through the milestones module's `lockMilestone`; the command writes no entity link. |

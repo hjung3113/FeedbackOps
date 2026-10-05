@@ -7,19 +7,40 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/shadcn/tooltip.js';
+import { cn } from '../utils/cn.js';
 
 export interface FieldLabelProps extends React.ComponentPropsWithoutRef<typeof Label> {
+  appearance?: 'default' | 'section';
   required?: boolean;
+  tone?: 'default' | 'secondary';
   tip?: string;
   children: React.ReactNode;
 }
 
-export function FieldLabel({ required, tip, children, className, ...props }: FieldLabelProps) {
+const APPEARANCE_CLASSES = {
+  default: '',
+  section: 'text-xs font-semibold uppercase tracking-wide text-text-muted',
+} as const;
+
+const TONE_CLASSES = {
+  default: '',
+  secondary: 'text-text-secondary',
+} as const;
+
+export function FieldLabel({
+  appearance = 'default',
+  required,
+  tone = 'default',
+  tip,
+  children,
+  className,
+  ...props
+}: FieldLabelProps) {
   return (
-    <Label className={className} {...props}>
+    <Label className={cn(APPEARANCE_CLASSES[appearance], TONE_CLASSES[tone], className)} {...props}>
       {children}
       {required === true && (
-        <span className="ml-1 text-red-500" aria-hidden="true">
+        <span className="ml-1 text-text-danger-label" aria-hidden="true">
           *
         </span>
       )}

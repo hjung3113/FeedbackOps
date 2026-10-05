@@ -32,25 +32,22 @@ describe('SeverityIndicator', () => {
         });
       });
 
-      // #525: the token is a raw RGB triplet (e.g. `165 99 0`), so a bare
-      // `var(--severity-X)` is not a valid CSS background-color and silently
-      // no-ops. Every bar must use the `rgb(...)`-wrapped form.
-      it('wraps the token in rgb(...) for backgroundColor', () => {
+      it('uses the severity color utility class on every bar', () => {
         const { container } = render(<SeverityIndicator severity={severity} />);
-        const bars = Array.from(container.querySelectorAll('[data-token]')) as HTMLElement[];
-        bars.forEach((bar) => {
-          expect(bar.style.backgroundColor).toBe(`rgb(var(--severity-${severity}))`);
-        });
+        const bars = Array.from(container.querySelectorAll('[data-token]'));
+        for (const bar of bars) {
+          expect(bar).toHaveClass(`bg-severity-${severity}`);
+        }
       });
 
-      it('filled bars have opacity 1 and dimmed bars have opacity 0.3', () => {
+      it('uses full opacity for filled bars and 30% opacity for dimmed bars', () => {
         const { container } = render(<SeverityIndicator severity={severity} />);
         const bars = Array.from(container.querySelectorAll('[data-filled]'));
-        bars.forEach((bar) => {
-          const isFilled = bar.getAttribute('data-filled') === 'true';
-          const el = bar as HTMLElement;
-          expect(el.style.opacity).toBe(isFilled ? '1' : '0.3');
-        });
+        for (const bar of bars) {
+          expect(bar).toHaveClass(
+            bar.getAttribute('data-filled') === 'true' ? 'opacity-100' : 'opacity-30',
+          );
+        }
       });
     });
   });

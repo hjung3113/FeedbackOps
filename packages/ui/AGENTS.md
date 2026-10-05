@@ -10,6 +10,7 @@
 ## Forbidden Content
 
 - API calls.
+- Imports from `@fops/shared` or `apps/*` (ADR-0016, enforced by `pnpm check:boundaries`); mirror the constant locally, as `src/rich-content/allowlist-local.ts` does.
 - Backend permission decisions as truth.
 - Domain mutation orchestration.
 - Feature-specific route state.
@@ -29,6 +30,11 @@
   Preflight pins, `space-y-*`, and `leading-*`/`tracking-*` shims) live in
   `src/styles/compat.css`, exported as `@fops/ui/styles/compat.css`; text-size
   line-height companions stay in the exported theme.
+- A new Tailwind theme key must also be registered in `src/utils/cn.ts`
+  (`extendTailwindMerge`). tailwind-merge knows only Tailwind's default scales, so
+  an unregistered `text-caption` reads as a text color and `cn` drops it next to
+  `text-text-muted` (#782). The CSS compiles either way; only the merge breaks.
+- `components.json` here only points `@shadcn/lint` at the app's Tailwind entry (ADR-0062). It is not a shadcn CLI config: primitives enter through the copy-based intake in `docs/tech-stack/component-stack.md`, not `shadcn add`.
 - Follow `docs/frontend/tokens.md` tokens for light surfaces, spacing, typography, and density; do not introduce a new visual theme from `packages/ui`.
 - Promote from feature-local code only after a second real consumer proves reuse.
 - Every reusable component must define loading, empty, error, disabled, focus-visible, and permission-limited behavior when applicable.

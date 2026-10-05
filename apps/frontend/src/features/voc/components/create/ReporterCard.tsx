@@ -5,7 +5,7 @@
 import { useMe } from '@/lib/auth/useMe';
 import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
 import type { RoleLevel } from '@fops/shared';
-import { Avatar, AvatarFallback, Card, CardContent, Skeleton, cn } from '@fops/ui';
+import { Avatar, AvatarFallback, Card, CardContent, Skeleton } from '@fops/ui';
 import type * as React from 'react';
 
 export interface ReporterCardProps {
@@ -17,11 +17,12 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
 
   if (isLoading) {
     return (
-      <Card className={cn('p-3.5', className)}>
+      <Card padding="compact" className={className}>
         <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
           제출자
         </div>
-        <CardContent className="flex items-center gap-3 p-0">
+        <CardContent padding="none" className="flex items-center gap-3">
+          {/* oxlint-disable-next-line shadcn/no-restyle -- the reporter loading placeholder reserves the circular 32px avatar shape */}
           <Skeleton className="h-8 w-8 rounded-full" />
           <div className="flex flex-col gap-1.5">
             <Skeleton className="h-4 w-28" />
@@ -42,11 +43,11 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
   // TODO: workspace name when Slice 4 exposes /workspaces/me
 
   return (
-    <Card className={cn('p-3.5', className)}>
+    <Card padding="compact" className={className}>
       <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
         제출자
       </div>
-      <CardContent className="flex items-center gap-2.5 p-0">
+      <CardContent padding="none" className="flex items-center gap-2.5">
         <Avatar className="h-8 w-8">
           <AvatarFallback>{initial}</AvatarFallback>
         </Avatar>

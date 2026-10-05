@@ -126,8 +126,6 @@ Status vocabulary: `registered` — route file exists and renders the screen · 
 | `admin-settings` | `screen-admin-settings.jsx` | `/admin/settings` | `routes/_authed/admin/settings.tsx` | `WorkspaceSettingsScreen` in `PageShell`, behind `PermissionGate` `workspace.admin` | `registered` | `api/core.md` |
 | (no prototype screen) | — | `/login` — behavior is the login paragraph in routes doc lines 101–103 | `routes/login.tsx` | `LoginPage` | `registered`. No prototype screen; do not invent a `screen-login.jsx` | — |
 
-`/dev-rich-editor` is a dev harness — excluded from this table.
-
 Do not build in this issue (gaps stay open): `my-work`, `view=milestones`, `tasks` roadmap, `/integration/evidence`, `/integration/coverage`, and an Integration action-dashboard page.
 
 Search-key disagreements to keep in mind on the tasks and links rows: tasks zod allows `param` where the contract says `selected`; links has no `selected` at all. Sidebar (`NAV_TREE`): rails are home, voc, findings, tasks, integration, surveys, admin. Integration entries are Action dashboard (`/integration`, which redirects), Findings (`/findings`), Entity links — no evidence, coverage, milestones, roadmap, backlog, or task-inbox items. The routes doc paragraph at line 99 (VOC section includes Findings; a MANAGED SYSTEMS group) does not match `NAV_TREE` — recorded; the routes doc is not fixed in this issue.
@@ -173,7 +171,7 @@ Pack 20 QA refresh: `screenshots/pack20-current/` (headless Chromium, 1440×960,
 Acceptance use:
 - For a continuation task, compare against these screenshots plus the live prototype.
 - For a clean-room implementation, compare against these screenshots only after the source docs and route contract are implemented.
-- Only `screenshots/final-baselines/`, `screenshots/pack20-current/`, and `screenshots/pack20-diff/` remain — Pack 20 deleted the loose PNGs directly under `screenshots/`, so there are no older PNGs to treat as working evidence.
+- Only `screenshots/final-baselines/` remains (`pack20-current/` and `pack20-diff/` were removed on 2026-10-05) — Pack 20 deleted the loose PNGs directly under `screenshots/`, so there are no older PNGs to treat as working evidence.
 
 ---
 
@@ -431,11 +429,11 @@ Outcome: every `screen-*.jsx` file is under the 900-line budget; the §6 adversa
 
 | Deliverable | Touched | Spec link |
 |---|---|---|
-| Playwright smoke + pixel diff harness | `qa-capture.js`, `qa-diff.js`, `screenshots/pack20-current/`, `screenshots/pack20-diff/diff-report.json` | handoff QA |
+| Playwright smoke + pixel diff harness | `qa-capture.js`, `qa-diff.js` (removed 2026-10-05; superseded by `apps/frontend/tests/visual/`) | handoff QA |
 | 26-route capture vs `final-baselines/` | 23/26 IDENTICAL, 3 sub-1% dynamic-noise diffs (`probe-rail-scope`, `surveys-list`, `home-action-dashboard`); zero visual regression from Pack 19 split | handoff QA |
-| VOC detail full-page capture | `screenshots/pack20-current/voc-inbox-detail-full.png` (1452×1976) — expands inner `.panel-scroll` then `fullPage:true` | 04 voc · QA |
+| VOC detail full-page capture | `screenshots/final-baselines/voc-inbox-detail-full.png` (1452×1976) — expands inner `.panel-scroll` then `fullPage:true` | 04 voc · QA |
 | Nested-button DOM polish | `screen-survey-builder.jsx · OutlineRow` — outer `<button>` → `<div role="button" tabIndex={0}>` with Enter/Space activation; React `validateDOMNesting` warning eliminated | ui-ds · accessibility |
-| Screenshot folder cleanup | removed ~95 loose PNGs (Pack 1–11 era) directly under `screenshots/` + 3 root temp PNGs; canonical sets retained: `final-baselines/`, `pack20-current/`, `pack20-diff/` | handoff QA |
+| Screenshot folder cleanup | removed ~95 loose PNGs (Pack 1–11 era) directly under `screenshots/` + 3 root temp PNGs; canonical set retained: `final-baselines/` | handoff QA |
 
 ### Pack 18 — route pattern shells + aligned headers
 

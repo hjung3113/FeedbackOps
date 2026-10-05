@@ -20,10 +20,3 @@ export const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label
   { value: 'blocked', label: '차단' },
   { value: 'released', label: GLOSSARY.milestoneStatusReleased },
 ];
-
-export const selectClassName =
-  'w-48 rounded border border-border-subtle bg-surface-detail ' +
-  'px-2 py-1.5 text-sm text-text-primary';
-
-export const milestonePropertyFieldClassName =
-  'grid grid-cols-[120px_1fr] items-start gap-3 px-0 text-[13px] [&>div]:text-left';

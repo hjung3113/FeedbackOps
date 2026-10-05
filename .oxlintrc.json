@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["@shadcn/lint"],
+  "ignorePatterns": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/routeTree.gen.ts"],
+  "settings": {
+    "shadcn": {
+      "ui": "@fops/ui",
+      "note": "New tokens go in packages/ui/src/styles/theme.css + tokens.css (ADR-0058)."
+    }
+  },
+  "rules": {
+    "shadcn/no-restyle": [
+      "error",
+      {
+        "allow": ["layout"],
+        "contracts": [
+          {
+            "pattern": "^(Card|EmptyState|PanelTitleBlock|ListToolbar)$|(Content|Header|Footer|Group|Panel|List|SectionTitle)$",
+            "allow": ["layout", "spacing"]
+          },
+          {
+            "pattern": "^(DetailPanelHeader|ShellHeader|ListToolbar)$",
+            "allow": ["layout", "spacing"],
+            "deny": ["h-*", "min-h-*", "max-h-*", "size-*"]
+          }
+        ]
+      }
+    ],
+    "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }],
+    "shadcn/no-arbitrary-values": [
+      "error",
+      { "allow": ["layout", "transition-[width]"], "scanAllStrings": true }
+    ],
+    "shadcn/no-inline-styles": "error",
+    "shadcn/no-unknown-classes": ["error", { "allow": ["rich-editor"] }],
+    "shadcn/require-static-classes": "error"
+  },
+  "overrides": [
+    {
+      "files": ["packages/ui/src/**"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"], "scanAllStrings": true }],
+        "shadcn/require-static-classes": "off"
+      }
+    }
+  ]
+}

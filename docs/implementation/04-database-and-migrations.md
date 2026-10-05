@@ -88,16 +88,21 @@ core
 - rate_limits
 - idempotency_keys
 - display_counters
+- workspace_settings
+- saved_views
 
 voc
 - vocs
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
+- voc_recommendation_decisions
 - voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
 - voc_public_updates
+- public_update_review_candidates
 - voc_reporter_replies
 - voc_internal_comments
 - voc_attachments
 - reporter_facing_status_transitions
+- voc_permission_decisions_seed_fixture (seed-only fixture, not a production permission cache)
 
 voc_cluster
 - voc_clusters
@@ -119,7 +124,10 @@ task_request
 
 survey
 - surveys
+- survey_questions
 - survey_responses
+- survey_response_answers
+- survey_response_excerpt_approvals
 - survey_results (computed read projection; not a table)
 - outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
 
@@ -248,13 +256,15 @@ rewrite any SQL/journal/snapshot file. (`db:generate` first bundles
 resolve the NodeNext `.js` specifiers the schema's cross-file imports require.)
 
 `drizzle-kit generate` diffs against the newest snapshot under `migrations/meta`
-(only the newest one matters). Migrations 0027-0047 were hand-written without
-snapshots, so #422 added `meta/0047_snapshot.json`, generated from the TS
-schema and checked against a database built by applying all 48 migrations
-(tables, columns and nullability match; `voc.workspace_display_counters`,
+(only the newest one matters). Hand-written migrations may land without
+snapshots, so #422 added the first TS-derived baseline snapshot, generated from
+the TS schema and checked against a database built by applying all migrations
+then present (tables, columns and nullability match; `voc.workspace_display_counters`,
 created by raw SQL in 0017, is intentionally not modeled in the TS schema).
-When a hand-written migration lands, the newest snapshot must be refreshed, but
-only after the migration and the TS schema agree: apply all migrations to a
+The gate does not require a snapshot for every migration: it fails only when
+`db:generate` would add or rewrite files. When it fails and the newest journal
+entry has no snapshot, refresh the newest snapshot, but only after the
+migration and the TS schema agree: apply all migrations to a
 scratch database and compare it with the TS-derived snapshot (tables, columns,
 nullability, defaults, indexes, FKs) *before* adopting a newly generated snapshot
 as the baseline — otherwise a TS change the migration never applied is silently
@@ -373,15 +383,17 @@ is idempotent because it targets only currently `internal_only` rows.
 
 ## Seed Data
 
-MVP seed data should include:
+The seed is a separate, idempotent command (`pnpm --filter @fops/backend db:seed`,
+`apps/backend/src/seed/index.ts`), not part of a migration. It seeds:
 
 ```text
-- one workspace
-- admin, developer, user actors
-- managed systems such as Tableau, Power BI, and Looker
-- analytics area catalog under each managed system
-- sample VOCs
-- sample Finding with Evidence Highlight
-- sample Task Request
-- dashboard recovery examples
+- one workspace (WORKSPACE_ID)
+- actors: mock-admin-1 (admin), mock-user-1 (user), system (admin, system actor)
+- managed systems: Tableau and Power BI, default owner mock-admin-1
+- 5 analytics areas: Permission Management, Usage Analytics, and Dashboard Catalog under Tableau; Permission Management and Usage Analytics under Power BI
+- one fixture team, "[seed] VOC owner team", inserted through the fops_migrate URL because fops_app cannot insert core.teams (ADR-0019)
+- 12 deterministic VOC fixtures (display_id VOC-SEED-*) with three conversation rows each, and two permission-decision fixtures (apps/backend/src/seed/voc-fixtures.ts)
+- SEED_MODE=personas only: mock-admin-2, mock-user-2, mock-developer-1, mock-developer-2, and permission grants for the two developers
 ```
+
+It does not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.

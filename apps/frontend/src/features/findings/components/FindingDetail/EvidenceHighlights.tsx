@@ -4,7 +4,7 @@ import {
   EVIDENCE_SOURCE_TYPE_LABELS,
 } from '@/lib/copy/enum-labels';
 import type { EvidenceHighlightDto } from '@fops/shared';
-import { EmptyState, Skeleton } from '@fops/ui';
+import { EmptyState, SkeletonBlocks } from '@fops/ui';
 import type * as React from 'react';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import { FitBadge } from './detail-primitives';
@@ -76,8 +76,12 @@ export function EvidenceHighlightsSection({
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2" aria-label="Evidence 불러오는 중">
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
+        <SkeletonBlocks
+          blocks={[
+            { kind: 'body', size: 'compact', width: 'full' },
+            { kind: 'body', size: 'compact', width: 'full' },
+          ]}
+        />
       </div>
     );
   }
@@ -93,9 +97,13 @@ export function EvidenceHighlightsSection({
       <div data-testid="evidence-empty-state">
         <EmptyState
           size="sm"
+          padding="wide"
           title="Evidence 하이라이트가 없습니다."
           body="Evidence 추가 버튼으로 Evidence를 추가하세요."
-          className="rounded-md border border-dashed border-border-subtle bg-surface-card px-6"
+          className={
+            // oxlint-disable-next-line shadcn/no-restyle -- the evidence empty state uses a dashed card edge to mark the add-evidence area
+            'rounded-md border border-dashed border-border-subtle bg-surface-card'
+          }
         />
       </div>
     );

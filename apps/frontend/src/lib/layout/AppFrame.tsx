@@ -190,16 +190,13 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
         <aside
           className={cn(
             'border-l border-border-subtle bg-surface-detail overflow-y-auto transition-[width] duration-150',
-            slotOpen ? '' : 'w-0',
+            slotOpen
+              ? 'w-(--detail-panel-width) min-w-90 max-w-130'
+              : 'w-0',
           )}
           aria-label="상세 패널"
           data-testid="app-detail-slot"
           data-open={slotOpen ? 'true' : 'false'}
-          style={
-            slotOpen
-              ? { width: 'var(--detail-panel-width)', minWidth: 360, maxWidth: 520 }
-              : undefined
-          }
         >
           {slotOpen && slotNode}
         </aside>

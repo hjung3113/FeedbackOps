@@ -8,6 +8,7 @@ import type { IdempotencyService } from '../../core/idempotency/idempotency-serv
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import type { CheckService } from '../../permissions/check-service.js';
+import { type DenyReason, isRequestableDenial } from '../../permissions/index.js';
 import type { ConversationActor } from '../conversation-service.js';
 import { selectVocForUpdate } from '../repo.js';
 
@@ -71,11 +72,11 @@ export async function checkTriageCapability(
  * Mirrors the pattern in service.ts updateVoc.
  */
 export function mapTriageDenyToHttpError(
-  reason: string,
+  reason: DenyReason,
   roleLevel: RoleLevel,
   managedSystemId: string,
 ): HttpError {
-  if (reason === 'no_grant' && roleLevel === 'developer') {
+  if (isRequestableDenial(reason) && roleLevel === 'developer') {
     return new HttpError(
       'permission.scope_required',
       'voc.triage capability required; developer needs MS-scoped grant',

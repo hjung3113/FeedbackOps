@@ -40,6 +40,7 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | Warning Red | `#d92d3a` | `--color-warning-red` | Observed in icon fill, body borderColor, other fill. Extracted usage does not support a distinct primary control color. |
 | Deep Violet | `#3157d5` | `--color-deep-violet` | Background accents in specific content blocks, indicating a distinct informational category. |
 | Amethyst | `#6a8dff` | `--color-amethyst` | Another variant of violet for backgrounds, used interchangeably with Deep Violet for visual diversity. |
+| Amber | `#a56300` | `--color-amber` | Warning accent: backs `--text-warning`, `--severity-medium`, `--status-reporter-prep`, the `accent-warn` theme utility, and the Task Request, Cluster, and Milestone `DetailPanelHeader` kind accents. |
 
 ### Semantic Text Label Tokens (#750)
 
@@ -84,9 +85,9 @@ Info has no current badge usage.
 - **CSS stack:** `'Inter Variable', 'Inter', 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
 - **Loading:** `@fontsource-variable/inter` (family `Inter Variable`), imported in `apps/frontend/src/styles.css`. Inter has no Hangul, so Korean glyphs fall through per glyph to `Pretendard Variable` (owner choice, 2026-10-02), then to the system faces.
 - **Weights:** 300, 400, 510, 590
-- **Sizes:** 8px, 10px, 11px, 12px, 13px, 14px, 15px, 17px, 20px, 24px, 32px, 48px
+- **Sizes:** 8px, 9px, 10px, 11px, 12px, 13px, 14px, 15px, 17px, 20px, 24px, 32px, 48px
 - **Line height:** 1.20, 1.40, 1.60
-- **Letter spacing:** -0.22px, -0.13px, 0.04em
+- **Letter spacing:** -0.22px, -0.13px, 0.01em, 0.04em
 - **Role:** Primary UI typeface for all content including headings, body text, and interactive elements.
 
 ### JetBrains Mono — Monospaced font for code snippets, technical details, and certain data displays, ensuring consistent character alignment and technical clarity. · `--font-mono`
@@ -106,8 +107,16 @@ Info has no current badge usage.
 
 | Role | Size | Line Height | Letter Spacing | Token |
 |------|------|-------------|----------------|-------|
+| system-mark | 8px | — | — | `--text-system-mark` |
+| micro | 9px | — | — | `--text-micro` |
 | caption | 10px | 1.4 | -0.13px | `--text-caption` |
+| tiny | 11px | — | — | `--text-tiny` |
+| xs | 12px | — | — | `--text-xs` |
+| sm | 13px | — | — | `--text-sm` |
 | body | 14px | 1.4 | -0.13px | `--text-body` |
+| md | 15px | — | — | `--text-md` |
+| lg | 17px | — | — | `--text-lg` |
+| xl | 20px | — | — | `--text-xl` |
 | heading | 24px | 1.2 | -0.22px | `--text-heading` |
 | heading-lg | 32px | 1.2 | -0.22px | `--text-heading-lg` |
 | display | 48px | 1.2 | -0.22px | `--text-display` |
@@ -126,12 +135,24 @@ Since issue #743 (ADR-0058) the theme is Tailwind v4 CSS-first:
 variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
 mapping above is unchanged.
 
+Since issue #782, `text-caption`, `text-tiny`, and `text-micro` expose their
+matching size tokens as size-only utilities. Issue #797 also exposes `text-md`
+as a size-only 15px utility. `leading-relaxed-ui` aliases `--leading-relaxed`
+(1.6), while the v3 compatibility utility `leading-relaxed` remains 1.625.
+`leading-note` exposes `--leading-note` (1.55), the compact note leading shared by `Callout` and the
+milestone source summary.
+`leading-body` aliases
+`--leading-normal` (1.4), `tracking-kicker` aliases `--tracking-wide` (0.04em),
+and `tracking-kind-label` exposes `--tracking-kind-label` (0.01em). The v3
+compatibility utilities `leading-normal` (1.5) and `tracking-wide` (0.025em)
+keep their existing meanings.
+
 ### Panel Title Block Scale (PR #59)
 
 `PanelTitleBlock` ships two title-scale variants via the `size` prop:
 
-- **Compact (`size='lg'`, default):** `text-lg font-semibold tracking-tight` — 17px / weight 600. Used on all surfaces except the VOC detail/triage hero blocks. Preserves the V1b "document" axis density.
-- **Hero (`size='xl'`, opt-in):** `text-xl font-bold tracking-tight` — 20px / weight 700. Used by `IdentitySection` (VOC Inbox Detail) and `TriagePanel` (Triage overview), per `.review/title-reference.png` reference image. Opt in explicitly; default does not change for existing consumers.
+- **Compact (`size='lg'`, default):** `text-lg font-semibold tracking-tight` — 17px / weight 600. Used on every surface, including the VOC detail (`IdentitySection`) and triage (`TriagePanel`) blocks. Preserves the V1b "document" axis density.
+- **Hero (`size='xl'`, opt-in):** `text-xl font-bold tracking-tight` — 20px / weight 700. Retained for legacy/opt-in use; no current consumer.
 
 ## Tokens — Spacing & Shapes
 
@@ -168,7 +189,8 @@ mapping above is unchanged.
 | buttons | 6px |
 | default | 6px |
 
-Token names: `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, and `--radius-pill`.
+Token names: `--radius-sm` (2px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-xl` (12px), and `--radius-pill` (9999px).
+Icon chips use `--radius-icon-chip` (5px), exposed as `rounded-icon-chip`.
 
 ### Shadows
 
@@ -186,6 +208,9 @@ Token names: `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, and `--
 - **Section gap:** 24px
 - **Card padding:** 12px
 - **Element gap:** 8px
+- **Row accent stripe:** 3px (`--row-accent-width`, exposed as `w-row-accent`)
+- **Layout tokens:** see `Layout tokens` in `packages/ui/src/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
+- **Row minimum utilities:** `min-h-row-default` and `min-h-row-expanded` expose the 60px and 96px row-height tokens.
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 
 ## Survey
@@ -292,14 +317,6 @@ Badge with a 'Gunmetal' background (#94a3b8), 'Storm Cloud' text (#667083), 4px 
 - **Card Border/Input Focus:** `rgba(20, 40, 160, 0.10) 0px 0px 0px 1px`
 - **Keyboard Focus Ring:** `--shadow-focus` (`0 0 0 2px #ffffff, 0 0 0 4px var(--color-neon-lime)`).
 
-## Imagery
-
-The site's visual language is dominated by UI elements and product screenshots, emphasizing functionality over decorative imagery. Where images appear, they are often contained within realistic product mockups or embedded application frames. Abstract graphics are minimal, primarily serving as subtle background textures or data visualizations. Icons are filled, minimalist, and mono-color, often adopting the 'Porcelain' (#101828) or 'Storm Cloud' (#667083) neutral palette, enhancing the dashboard aesthetic. The overall density of imagery is low; it serves an explanatory or product showcase role rather than a decorative one.
-
-## Layout
-
-The page primarily uses a full-bleed structure for background content, with main content sections constrained by a centered maximum width (not explicitly defined but visually present). The hero section features a full-bleed 'Pitch Black' background with a centered, prominent headline. Subsequent sections alternate between light backgrounds for narrative content and embedded UI examples, often featuring split layouts (text on one side, product UI on the other). Content is generally arranged in vertical stacks or multi-column grids for feature display. Navigation consists of a sticky top bar and frequently observed left-hand sidebar for application-like structures. Spacing is compact yet deliberate, creating a dense but organized information flow.
-
 ## Agent Prompt Guide
 
 Quick Color Reference:
@@ -314,13 +331,6 @@ Quick Color Reference:
 - Create a default card with content: 'Graphite' background (#fbfdff), 6px border-radius, rgba(16, 24, 40, 0.06) 0px 2px 4px 0px shadow. Inside, use Inter font weight 400 at 14px with 'Porcelain' text (#101828), and a subsection headline at 17px weight 510 with 'Porcelain' text (#101828). Apply 8px padding internally.
 - Create a sidebar navigation item: Ghost button with transparent background, 'Storm Cloud' text (#667083), Inter font weight 400 at 14px, 2px border-radius, no padding.
 - Create an input field: transparent background with a 'Gunmetal' fill (#94a3b8), 'Light Steel' text (#374151) using Inter font weight 400 at 14px, 6px border-radius. Inset with a 1px 'Charcoal Grey' border (#cbd6e6). Padding 12px vertical and 14px horizontal.
-
-## Similar Brands
-
-- **Samsung One UI** — Light enterprise UI with strong Samsung-blue accents, calm porcelain canvas, and Korean enterprise typography rhythm.
-- **Linear (light variant)** — Layered light surfaces creating depth, clear typography, and a subdued palette for a productivity application.
-- **Notion (light mode)** — Layered light surfaces creating depth, clear typography, and a subdued palette for a productivity application.
-- **Raycast (light theme)** — High-contrast light mode, minimalist design, and an emphasis on technical tools with clear interaction points.
 
 ## Quick Start
 

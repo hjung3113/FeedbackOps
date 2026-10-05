@@ -95,7 +95,7 @@ export function ComposerReplyPreview({
       <div className="flex flex-col gap-2.5 rounded-lg bg-surface-canvas border border-border-subtle p-3.5">
         {/* Reporter's original message bubble */}
         <div className="flex items-start gap-2">
-          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-[10px] text-text-muted font-medium">
+          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-caption text-text-muted font-medium">
             {reporter.display_name.slice(0, 1)}
           </div>
           <div className="flex-1 min-w-0 bg-surface-card rounded-md p-2.5 text-sm">
@@ -110,7 +110,7 @@ export function ComposerReplyPreview({
 
         {/* Owner's reply bubble — bg-accent-primary/10 per §1 notes */}
         <div className="flex items-start gap-2">
-          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-[10px] text-text-muted font-medium">
+          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-caption text-text-muted font-medium">
             {owner.display_name.slice(0, 1)}
           </div>
           <div className="flex-1 min-w-0 bg-accent-primary/10 rounded-md p-2.5 text-sm">
@@ -118,7 +118,7 @@ export function ComposerReplyPreview({
             {empty || draftDoc == null ? (
               <span className="text-text-muted italic">(메시지 본문이 비어있습니다)</span>
             ) : (
-              <RichContentRenderer doc={draftDoc} mode="reporter_visible" className="text-sm" />
+              <RichContentRenderer doc={draftDoc} mode="reporter_visible" size="sm" />
             )}
           </div>
         </div>

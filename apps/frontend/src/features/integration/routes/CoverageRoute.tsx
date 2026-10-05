@@ -12,12 +12,13 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  ProgressMeter,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Skeleton,
+  SkeletonRows,
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
@@ -97,11 +98,11 @@ function queueCellText(count: number | undefined): string {
 // No client-side thresholds (plan-513: direction C is out).
 const COVERAGE_STATUS_TONE: Record<
   DashboardSummary['coverage'][number]['status'],
-  { text: string; bar: string }
+  { text: string; meter: 'success' | 'warning' | 'danger' }
 > = {
-  good: { text: 'text-accent-success', bar: 'bg-accent-success' },
-  warn: { text: 'text-accent-warn', bar: 'bg-accent-warn' },
-  bad: { text: 'text-accent-danger', bar: 'bg-accent-danger' },
+  good: { text: 'text-accent-success', meter: 'success' },
+  warn: { text: 'text-accent-warn', meter: 'warning' },
+  bad: { text: 'text-accent-danger', meter: 'danger' },
 };
 
 const SEVERITY_TONE: Record<
@@ -246,10 +247,7 @@ export function CoverageRoute(): React.ReactElement {
 
         {summary.isPending ? (
           <div className="space-y-2 p-4" data-testid="coverage-pending">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            <SkeletonRows count={4} size="compact" />
           </div>
         ) : summary.data === undefined ? null : isEmptySummary ? (
           <div
@@ -277,8 +275,12 @@ export function CoverageRoute(): React.ReactElement {
                     key={item.id}
                     {...(href !== undefined ? { href } : {})}
                     data-testid={`coverage-row-${item.id}`}
-                    className={`grid items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
-                    style={{ gridTemplateColumns: 'minmax(0,1fr) 110px minmax(0,1fr) 56px' }}
+                    className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
+                    style={
+                      {
+                        '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 56px',
+                      } as React.CSSProperties
+                    }
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-text-primary">
@@ -288,13 +290,13 @@ export function CoverageRoute(): React.ReactElement {
                     <div className="text-right text-xs tabular-nums text-text-muted">
                       {item.value} / {item.total}
                     </div>
-                    <div className="h-1.5 rounded-full bg-surface-row-selected">
-                      <div
-                        data-testid={`coverage-bar-fill-${item.id}`}
-                        className={`h-1.5 rounded-full ${tone.bar}`}
-                        style={{ width: `${item.percent}%` }}
-                      />
-                    </div>
+                    <ProgressMeter
+                      data-testid={`coverage-bar-fill-${item.id}`}
+                      value={item.percent}
+                      tone={tone.meter}
+                      className="w-full"
+                      trackTone="row-selected"
+                    />
                     <div
                       data-testid={`coverage-percent-${item.id}`}
                       className={`text-right text-sm font-semibold tabular-nums ${tone.text}`}
@@ -355,7 +357,7 @@ export function CoverageRoute(): React.ReactElement {
                 data-testid="coverage-table"
               >
                 <thead>
-                  <tr className="border-b border-border-subtle text-[10px] uppercase tracking-wide text-text-muted">
+                  <tr className="border-b border-border-subtle text-caption uppercase tracking-wide text-text-muted">
                     <th scope="col" className="px-4 py-2 font-medium">
                       Managed System
                     </th>

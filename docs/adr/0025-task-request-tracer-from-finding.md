@@ -60,4 +60,4 @@ are intentionally deferred.
 Issue #133 implemented the review decisions deferred here; ADR-0026 records
 them. Issue #134 implemented the conversion and link-existing-Task paths
 deferred here; ADR-0027 records them. ADR-0043 later amends ADR-0027's
-Finding-source conversion consequences.
+Finding-source conversion consequences. ADR-0028 later enabled the VOC and VOC Cluster sources.

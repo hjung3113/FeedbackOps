@@ -61,6 +61,7 @@
 //     </div>
 //   </div>
 
+import type * as React from 'react';
 import {
   isForbiddenTransition,
   useReporterStatusTransitions,
@@ -84,7 +85,6 @@ import {
   UserAvatar,
 } from '@fops/ui';
 import { Check, Megaphone, ShieldCheck, User } from 'lucide-react';
-import * as React from 'react';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -142,12 +142,7 @@ export function ReporterStatusChangeBlock({
 
   return (
     <div
-      className="mt-2.5 rounded-md"
-      style={{
-        padding: '12px',
-        background: 'rgb(var(--color-neon-lime) / 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgb(var(--color-neon-lime) / 0.18)',
-      }}
+      className="mt-2.5 rounded-md p-3 bg-accent-primary/4 ring-1 ring-inset ring-accent-primary/18"
       data-testid="reporter-status-change-block"
     >
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -158,7 +153,7 @@ export function ReporterStatusChangeBlock({
           className="shrink-0 text-accent-primary"
         />
         <span
-          className="text-xs font-semibold uppercase tracking-[0.04em] text-accent-primary"
+          className="text-xs font-semibold uppercase tracking-kicker text-accent-primary"
         >
           공개 상태 변경
         </span>
@@ -179,7 +174,11 @@ export function ReporterStatusChangeBlock({
         >
           <SelectTrigger
             value={nextStatus}
-            className="h-8 w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-hidden focus:ring-1 focus:ring-focus-ring"
+            density="compact"
+            className={
+              // oxlint-disable-next-line shadcn/no-restyle -- the reporter status picker needs a compact width, strong border, and canvas surface in the update preview
+              'w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas text-sm text-text-primary'
+            }
             aria-label="다음 공개 상태 선택"
           >
             <SelectValue />
@@ -203,8 +202,7 @@ export function ReporterStatusChangeBlock({
         {/* 변경 예정 chip — shown when staged and no gate blocking */}
         {isStaged && !isGateBlocked && !isForbiddenSelected && (
           <span
-            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium text-accent-primary"
-            style={{ background: 'rgb(var(--color-neon-lime) / 0.16)' }}
+            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary bg-accent-primary/16"
           >
             <Check size={9} aria-hidden="true" />
             변경 예정
@@ -255,7 +253,6 @@ export function ReporterStatusChangeBlock({
 
         <div
           className="rounded-md p-3 bg-surface-canvas"
-          style={{ boxShadow: 'inset 0 0 0 1px var(--border-subtle)' }}
         >
           {/* VOC id + next status badge + 업데이트 chip */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -265,8 +262,7 @@ export function ReporterStatusChangeBlock({
             <ReporterStatusBadge status={nextStatus} />
             {isStaged && (
               <span
-                className="inline-flex items-center h-5 px-1.5 rounded-sm text-[10px] font-medium text-accent-primary"
-                style={{ background: 'rgb(var(--color-neon-lime) / 0.18)' }}
+                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary bg-accent-primary/18"
               >
                 업데이트
               </span>
@@ -309,10 +305,7 @@ export function ReporterStatusChangeBlock({
           </div>
 
           {/* Public-safe footer reminder */}
-          <div
-            className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2"
-            style={{ borderTop: '1px solid var(--border-subtle)' }}
-          >
+          <div className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2">
             <ShieldCheck size={10} aria-hidden="true" />
             첨부·외부 링크·@멘션은 공개 본문에 포함되지 않습니다. 내부 식별자(VOC id, Task id 등)는 자동으로 가려집니다.
           </div>

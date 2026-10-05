@@ -1,7 +1,7 @@
 import type { NotificationDto } from '@fops/shared';
 import {
   Button,
-  Skeleton,
+  SkeletonRows,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -29,13 +29,6 @@ import { formatRelativeTime } from '@/lib/format/datetime';
 
 type InboxFilter = 'unread' | 'all';
 
-const selectedFilterItemClassName = [
-  'data-[state=on]:border-border-selected',
-  'data-[state=on]:bg-surface-row-selected',
-  'data-[state=on]:text-text-primary',
-  'data-[state=on]:font-semibold',
-].join(' ');
-
 function vocTarget(notification: NotificationDto): string | null {
   const vocId = notification.detail['voc_id'];
   if (typeof vocId !== 'string') return null;
@@ -59,6 +52,7 @@ export function notificationTarget(notification: NotificationDto): string | null
     case 'permission_request.submitted':
       return `/admin/permissions/requests?tab=all&selected=${subjectId}`;
     case 'permission_request.decided':
+    case 'permission_grant.revoked':
       return null;
   }
 }
@@ -123,22 +117,21 @@ export function InboxPanel(): React.ReactElement {
         }}
         variant="outline"
         size="sm"
-        className="w-fit rounded-md border border-border-subtle bg-surface-card p-0.5"
+        appearance="filter"
+        className="w-fit"
         aria-label={HOME_INBOX_COPY.filterLabel}
       >
-        <ToggleGroupItem value="unread" className={selectedFilterItemClassName}>
+        <ToggleGroupItem value="unread" appearance="selected-filter">
           {HOME_INBOX_COPY.unread}
         </ToggleGroupItem>
-        <ToggleGroupItem value="all" className={selectedFilterItemClassName}>
+        <ToggleGroupItem value="all" appearance="selected-filter">
           {HOME_INBOX_COPY.all}
         </ToggleGroupItem>
       </ToggleGroup>
 
       {list.isPending ? (
         <div className="space-y-2" aria-busy="true" data-testid="home-inbox-loading">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <SkeletonRows count={3} size="compact" />
         </div>
       ) : null}
 
@@ -227,7 +220,7 @@ function NotificationRow({
       {notification.read_at === null && <span className="sr-only">{HOME_INBOX_COPY.unread}</span>}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-medium tracking-wide text-text-muted">
+          <span className="shrink-0 text-caption font-medium tracking-wide text-text-muted">
             {HOME_INBOX_COPY.categories[notification.subject_type]}
           </span>
           <span className="truncate text-sm text-text-primary">{notification.summary}</span>
@@ -277,8 +270,7 @@ function NotificationRow({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      className="h-8 w-8 p-0"
+      size="icon-sm"
       aria-label={HOME_INBOX_COPY.archive}
       disabled={actionsDisabled}
       onClick={onArchive}
@@ -305,8 +297,7 @@ function NotificationRow({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
+            size="icon-sm"
             aria-label={HOME_INBOX_COPY.markAsRead}
             disabled={actionsDisabled}
             onClick={onMarkRead}

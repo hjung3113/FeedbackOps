@@ -50,37 +50,32 @@ const TONE_STYLES: Record<
 
 export function Callout({ tone, icon, title, children, action, className }: CalloutProps) {
   const toneStyle = TONE_STYLES[tone];
-  const toneColor = `rgb(var(${toneStyle.colorVar}))`;
+  const style = {
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    '--callout-color': `rgb(var(${toneStyle.colorVar}))`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    '--callout-background': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.backgroundAlpha})`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    '--callout-ring': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.ringAlpha}) 0 0 0 1px inset`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    '--callout-title-color': `rgb(var(${toneStyle.titleVar}))`,
+  } as React.CSSProperties;
 
   // The approved prototype uses a tint and inset ring instead of the issue's initial left border.
   return (
     <div
       data-tone={tone}
-      className={cn('rounded-md text-xs text-text-secondary', className)}
-      style={{
-        padding: 12,
-        borderRadius: 6,
-        background: `rgb(var(${toneStyle.colorVar}) / ${toneStyle.backgroundAlpha})`,
-        boxShadow: `rgb(var(${toneStyle.colorVar}) / ${toneStyle.ringAlpha}) 0 0 0 1px inset`,
-        color: 'rgb(var(--text-secondary))',
-        fontSize: 'var(--text-xs)',
-        lineHeight: 1.55,
-      }}
+      className={cn(
+        'rounded-md p-3 text-xs leading-note text-text-secondary bg-(--callout-background) shadow-(--callout-ring)',
+        className,
+      )}
+      style={style}
     >
       {title !== undefined ? (
         <>
           <div className="mb-1.5 flex items-center gap-2">
-            {icon !== undefined && (
-              <span style={{ color: toneColor }} className="shrink-0">
-                {icon}
-              </span>
-            )}
-            <strong
-              className="text-sm font-semibold"
-              style={{ color: `rgb(var(${toneStyle.titleVar}))` }}
-            >
-              {title}
-            </strong>
+            {icon !== undefined && <span className="shrink-0 text-(--callout-color)">{icon}</span>}
+            <strong className="text-sm font-semibold text-(--callout-title-color)">{title}</strong>
           </div>
           <div>{children}</div>
           {action !== undefined && <div className="mt-2">{action}</div>}
@@ -88,9 +83,7 @@ export function Callout({ tone, icon, title, children, action, className }: Call
       ) : (
         <div className="flex items-start gap-2">
           {icon !== undefined && (
-            <span style={{ color: toneColor }} className="mt-0.5 shrink-0">
-              {icon}
-            </span>
+            <span className="mt-0.5 shrink-0 text-(--callout-color)">{icon}</span>
           )}
           <span className="flex-1">{children}</span>
           {action !== undefined && <div className="ml-auto">{action}</div>}

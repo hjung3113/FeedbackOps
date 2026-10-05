@@ -1,4 +1,4 @@
-import * as React from 'react';
+import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export type EntityIconType =
@@ -41,19 +41,25 @@ export const ENTITY_ICON_MAP: Record<
 export function EntityIconBadge({ type, size = 22, className }: EntityIconBadgeProps) {
   const entry = ENTITY_ICON_MAP[type] ?? { letter: '?', bg: 'var(--color-charcoal-grey)', color: 'white' };
   const radius = size <= 18 ? 4 : 6;
+  const fontSize = Math.max(8, Math.round(size * 0.45));
 
   return (
     <span
-      className={cn('inline-flex items-center justify-center font-semibold leading-none select-none', className)}
-      style={{
-        width:        size,
-        height:       size,
-        fontSize:     Math.max(8, Math.round(size * 0.45)),
-        background:   entry.bg,
-        color:        entry.color,
-        borderRadius: radius,
-        flexShrink:   0,
-      }}
+      className={cn(
+        'inline-flex h-(--entity-icon-size) w-(--entity-icon-size) shrink-0 items-center justify-center rounded-(--entity-icon-radius) bg-(--entity-icon-bg) text-(--entity-icon-color) text-(length:--entity-icon-font-size) font-semibold leading-none select-none',
+        className,
+      )}
+      style={
+        {
+          '--entity-icon-size': `${size}px`,
+          '--entity-icon-font-size': `${fontSize}px`,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- prototype entity-icon hex palette has no semantic token yet (follow-up)
+          '--entity-icon-bg': entry.bg,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- prototype entity-icon hex palette has no semantic token yet (follow-up)
+          '--entity-icon-color': entry.color,
+          '--entity-icon-radius': `${radius}px`,
+        } as React.CSSProperties
+      }
       data-entity-type={type}
       data-bg={entry.bg}
       data-color={entry.color}

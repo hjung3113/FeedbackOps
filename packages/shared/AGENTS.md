@@ -7,11 +7,11 @@
 - Enum constants and discriminated unions.
 - DTO helpers that do not orchestrate workflows.
 - Pure utilities with no app, database, or UI dependency.
-- Managed System, Product Area, Role Level, status, source context, severity, permission, attachment, rich-content, and relation-type vocabulary when shared by backend and frontend contracts.
+- Managed System, Analytics Area, Role Level, status, source context, severity, permission, attachment, rich-content, and relation-type vocabulary when shared by backend and frontend contracts.
 
 ## Forbidden Content
 
-- Imports from `apps/backend` or `apps/frontend`.
+- Imports from `apps/backend`, `apps/frontend`, or `@fops/ui` (enforced by `pnpm check:boundaries`).
 - Database access.
 - HTTP clients.
 - React components or hooks.

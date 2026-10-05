@@ -14,7 +14,7 @@ import {
   type SurveyResponseSubmission,
   surveyResponseSubmissionSchema,
 } from '@fops/shared';
-import { Button, EmptyState, PageShell, Skeleton } from '@fops/ui';
+import { Button, EmptyState, PageShell, Skeleton, SkeletonRows } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import * as React from 'react';
 import {
@@ -277,8 +277,7 @@ function ParticipationListLoading({ testId }: { testId: string }) {
       className="space-y-2"
       data-testid={testId}
     >
-      <Skeleton className="h-14 w-full" />
-      <Skeleton className="h-14 w-full" />
+      <SkeletonRows count={2} size="regular" />
     </section>
   );
 }

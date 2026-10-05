@@ -25,13 +25,14 @@ Owner: Core Platform
 core.managed_systems
 - id: uuid, required
 - workspace_id: uuid, required
+- slug: text, required; immutable after create; unique per workspace among non-archived rows
 - name: text, required
-- description: text, nullable
-- default_voc_owner_user_id: uuid, nullable
-- default_voc_owner_team_id: uuid, nullable
-- default_task_reviewer_user_id: uuid, nullable
+- external_key: text, nullable
+- default_owner_actor_id: uuid, nullable
+- default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
 - default_survey_operator_actor_id: uuid, nullable
-- status: enum(active, archived), required
+- archived_at: timestamp, nullable
+- archived_by_actor_id: uuid, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -44,6 +45,8 @@ Rules:
 - Defaults prefill responsibility but can be overridden by authorized users.
 - Default owner or team may prefill actual owner fields but does not mean the record is triaged.
 - Project language in older contracts is superseded by Managed System for MVP scope.
+- Active versus archived is archived_at; there is no status column (ADR-0017). Archiving a Managed System archives its non-archived Analytics Areas in the same transaction.
+- external_key is optional reference metadata and does not imply forced sync.
 ```
 
 ## Survey
@@ -104,7 +107,6 @@ Rules:
 - A draft Survey has neither lifecycle timestamp; open has opened_at only; closed has both.
 - Question branches are limited to depth 0 or 1; a branch parent must be depth 0.
 - Response identity protection is stored on the response and inherited by its answers.
-- Response/answer write commands are deferred to #185.
 ```
 
 ## Analytics Area
@@ -116,14 +118,11 @@ core.analytics_areas
 - id: uuid, required
 - workspace_id: uuid, required
 - managed_system_id: uuid, required
-- parent_id: uuid, nullable
+- slug: text, required; unique per Managed System among non-archived rows
 - name: text, required
-- description: text, nullable
 - owner_team_id: uuid, nullable
-- status: enum(active, archived), required
-- sort_order: integer, required
-- external_key: text, nullable
-- url_pattern: text, nullable
+- archived_at: timestamp, nullable
+- archived_by_actor_id: uuid, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -131,12 +130,10 @@ core.analytics_areas
 Rules:
 
 ```text
-- parent_id must reference an Analytics Area in the same workspace.
-- MVP UI treats parent_id as optional grouping metadata, not a required deep tree editor.
+- Analytics Area is flat under its Managed System; there is no parent column. Visual grouping is by naming convention (ADR-0017).
 - Analytics Area belongs to exactly one Managed System.
 - archived Analytics Areas remain visible on historical records.
 - FeedbackOps analytics_areas is the MVP source of truth.
-- external_key and url_pattern are optional reference metadata and do not imply forced sync.
 - owner_team_id is a routing/defaulting hint only and does not grant authorization.
 - Analytics Area is not an MVP permission boundary.
 - VOC Analytics Area must belong to the VOC Primary Managed System.
@@ -150,6 +147,7 @@ Owner: VOC
 vocs
 - id: uuid, required
 - workspace_id: uuid, required
+- display_id: text, required; unique per workspace (VOC- prefix, ADR-0029)
 - primary_managed_system_id: uuid, required
 - reporter_id: uuid, required
 - title: text, required
@@ -161,6 +159,9 @@ vocs
 - analytics_area_id: uuid, nullable
 - owner_user_id: uuid, nullable
 - owner_team_id: uuid, nullable
+- triage_state_review_postponed_at: timestamp, nullable
+- archived_at: timestamp, nullable
+- archived_by_actor_id: uuid, nullable
 - created_by: uuid, required
 - created_at: timestamp, required
 - updated_at: timestamp, required
@@ -188,6 +189,7 @@ Owner: Finding / Insight
 findings
 - id: uuid, required
 - workspace_id: uuid, required
+- display_id: text, required; unique per workspace (FIN- prefix, ADR-0029)
 - primary_managed_system_id: uuid, required
 - title: text, required
 - summary: text, required
@@ -213,7 +215,7 @@ Rules:
 - primary_managed_system_id is the MVP scope context and must not create a separate app partition.
 - analytics_area_id must belong to primary_managed_system_id when present.
 - Absence of analytics_area_id is valid in MVP.
-- User-directed status changes use `PATCH /findings/:id`; Slice 6 allows only draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
+- User-directed status changes use `PATCH /findings/:id` and allow only draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
 ```
 
 ## Evidence Highlight
@@ -251,7 +253,7 @@ Rules:
 
 ## VOC Cluster
 
-Owner: Finding / Insight
+Owner: VOC
 
 ```text
 voc_clusters
@@ -319,8 +321,9 @@ Rules:
   absent rather than masked or represented by placeholders.
 - `candidate_basis` deliberately names the temporary same-Managed-System active-
   VOC heuristic. Candidate peers are membership-picker options, not semantic
-  matches or cluster recommendations; real embedding similarity belongs to
-  epic #168. The DTO must not add a similarity score, confidence, or rationale.
+  matches or cluster recommendations; real embedding similarity is the
+  separate recommendation resource (ADR-0034). The DTO must not add a
+  similarity score, confidence, or rationale.
 - Candidate peers exclude existing members/source VOCs, archived VOCs, and
   cross-Managed-System VOCs. Candidate item visibility is Admin, `voc.read` on
   the candidate Managed System, or reporter ownership. Triage-only/effective
@@ -375,6 +378,7 @@ Owner: Task
 tasks
 - id: uuid, required
 - workspace_id: uuid, required
+- display_id: text, required; unique per workspace (TASK- prefix, ADR-0029)
 - primary_managed_system_id: uuid, required
 - title: text, required
 - status: enum(backlog, todo, doing, review, done, released, reopened), required
@@ -421,7 +425,7 @@ Rules:
 ```text
 - source is null for standalone Tasks.
 - source.task_request is derived from source_task_request_id.
-- source.finding is derived from the active (finding, task_request, requested_task) link.
+- source.finding is derived from the active (finding, task_request, requested_task) link (for a Finding-sourced request, its own source Finding first, #773).
 ```
 
 ## Milestone
@@ -463,25 +467,30 @@ Owner: Permission / Access
 permission_requests
 - id: uuid, required
 - workspace_id: uuid, required
-- requester_id: uuid, required
-- requested_permission: text, required
-- requested_scope: json, nullable
-- reason: text, required for sensitive permissions
-- approver_id: uuid, nullable
-- status: enum(pending, approved, rejected, expired, revoked), required
-- expires_at: timestamp, nullable
+- requester_actor_id: uuid, required
+- requested_capability: text, required
+- requested_managed_system_id: uuid, nullable
+- requested_object_type: text, nullable
+- requested_object_id: uuid, nullable
+- reason: text, required
+- requested_expiration: timestamp, nullable
+- source_object_type: text, nullable
+- source_object_id: uuid, nullable
+- source_action_id: text, nullable
+- return_route_intent: text, nullable
+- status: enum(pending, needs_more_info, approved, rejected, expired, revoked), required
 - created_at: timestamp, required
-- decided_at: timestamp, nullable
+- updated_at: timestamp, required
 ```
 
 Rules:
 
 ```text
 - Sensitive permissions require reason.
-- requested_scope uses managed_system_id for scoped Developer grants in MVP.
+- requested_managed_system_id carries the scope for scoped Developer grants in MVP; requested_object_type and requested_object_id scope a single-object request.
 - analytics_area_id is not an MVP permission boundary.
 - Expiry and revocation must be enforceable.
-- Decisions are audited.
+- Decisions are audited. The deciding Admin, decision time, reason, and an Admin's more-info note are recorded on the audit event, not on this table; approval inserts a permission_grants row and deny inserts a permission_denies row.
 ```
 
 ## Entity Link
@@ -496,16 +505,25 @@ core.entity_links
 - source_id: uuid, required
 - target_type: text, required
 - target_id: uuid, required
-- relation_type: enum from 11-entity-linking.md, required
+- relation_type: enum from docs/implementation/06-entity-linking-contract.md (runtime registry in packages/shared/src/entity-links.ts), required
 - visibility: enum(internal_only, summary_visible, visible_to_reporter, admin_only), required
+- status: enum(active, stale, detached, revoked), required, default active
+- managed_system_id: uuid, required
 - created_by: uuid, required
 - created_at: timestamp, required
+- updated_at: timestamp, nullable
+- detached_by: uuid, nullable
+- detach_reason: text, nullable
+- detached_at: timestamp, nullable
 ```
 
 Rules:
 
 ```text
 - relation_type=generated_voc is forbidden.
+- source_type and target_type are each one of voc, survey_response, finding, voc_cluster, task_request, task; only the registered (source_type, target_type, relation_type) pairs are valid.
+- At most one active link exists per (workspace_id, source_type, source_id, target_type, target_id, relation_type).
+- Detach sets status=detached with detached_by, detach_reason, and detached_at; stale and revoked are reserved and not written.
 - source and target must belong to the same workspace for MVP.
 - visibility is enforced on every read path.
 - Production Task tuples added by ADR-0027:
@@ -515,7 +533,7 @@ Rules:
 - VOC/cluster Task Request source tuples added by ADR-0028:
   - (voc, task_request, requested_task)
   - (voc_cluster, task_request, requested_task)
-- Survey response provenance tuples added by #187:
+- Survey response provenance tuples (written only by Finding-domain commands):
   - (survey_response, finding, generated_finding)
   - (survey_response, finding, evidence_of)
 ```

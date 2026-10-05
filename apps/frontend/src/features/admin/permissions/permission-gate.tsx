@@ -96,12 +96,12 @@ const STATE_COPY: Record<
     description: '이 권한 요청은 이전에 거절되었습니다.',
   },
   expired: {
-    panelState: 'denied',
+    panelState: 'request_access',
     title: '권한이 만료되었습니다.',
     description: '이전에 받은 권한이 만료되었습니다.',
   },
   revoked: {
-    panelState: 'denied',
+    panelState: 'request_access',
     title: '권한이 취소되었습니다.',
     description: '이전에 받은 권한이 취소되었습니다.',
   },
@@ -125,7 +125,7 @@ function renderBlockedState(
     state === 'blocked_non_requestable'
       ? `담당 관리자에게 문의하세요.${adminNames && adminNames.length > 0 ? ` ${adminNames.join(', ')}` : ''}`
       : undefined;
-  if (state === 'request_access') {
+  if (state === 'request_access' || state === 'revoked' || state === 'expired') {
     return (
       <RequestAccessButton
         capability={props.capability}

@@ -9,6 +9,7 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { loginAs } from '../../../test-support/auth.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { revokeCapabilityGrant } from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupVocClusterFixtures,
   grantCapability,
@@ -478,6 +479,43 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
       expect((await linkState(linkId)).rows[0]?.status).toBe('active');
       expect(await auditCount(linkId)).toBe(0);
     }
+  });
+
+  it('treats a revoked cluster-side finding.manage grant as requestable (#775)', async () => {
+    const linkId = await seedLink();
+    const externalId = `unlink-revoked-manage-${randomUUID()}`;
+    const actor = await insertActorRow(ops, {
+      workspaceId: WORKSPACE_ID,
+      externalId,
+      roleLevel: 'developer',
+    });
+    actorIds.push(actor.id);
+    let revokedGrantId = '';
+    for (const ms of [clusterMsId, targetMsId]) {
+      for (const capability of ['finding.read', 'finding.manage'] as const) {
+        const grant = await grantCapability(ops, {
+          workspaceId: WORKSPACE_ID,
+          actorId: actor.id,
+          capability,
+          managedSystemId: ms,
+          grantedByActorId: adminId,
+        });
+        grantIds.push(grant.id);
+        if (ms === clusterMsId && capability === 'finding.manage') revokedGrantId = grant.id;
+      }
+    }
+    await revokeCapabilityGrant(ops, revokedGrantId, adminId);
+    const cookie = await loginAs(app, externalId);
+
+    const denied = await unlink(cookie);
+
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json<{ code: string; detail: { requiredScope: string[] } }>()).toMatchObject({
+      code: 'permission.scope_required',
+      detail: { requiredScope: [clusterMsId] },
+    });
+    expect((await linkState(linkId)).rows[0]?.status).toBe('active');
+    expect(await auditCount(linkId)).toBe(0);
   });
 
   it('returns validation envelopes and rejects a session bound to another workspace', async () => {

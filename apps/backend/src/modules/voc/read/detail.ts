@@ -2,6 +2,7 @@
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
+import { isRequestableDenial } from '../../permissions/index.js';
 import { actorEffectiveScope, actorReadScope, actorTriageScope } from '../authorization.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
@@ -111,7 +112,7 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       );
 
       let selfDecision: Record<string, unknown>;
-      if (!decision.allow && decision.reason === 'no_grant') {
+      if (!decision.allow && isRequestableDenial(decision.reason)) {
         selfDecision = {
           state: 'request_access',
           requestable_permission: {

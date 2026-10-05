@@ -11,7 +11,7 @@ Accepted.
 ADR-0034 D5 pins the recommendation threshold at 0.75, but its committed
 fixture checks query arithmetic rather than the quality of the cut against real
 provider vectors. The research in
-`docs/superpowers/specs/2026-09-26-voc-cluster-autogen-design.md` recommends
+`docs/superpowers/specs/2026-09-26-voc-cluster-autogen-design.md` (removed after implementation on 2026-10-05; read it from git history) recommends
 measuring pairwise output before any proposal or writer is considered. Its §6
 choice (a) is the approved scope for Issue #512.
 

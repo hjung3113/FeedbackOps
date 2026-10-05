@@ -368,7 +368,8 @@ export function createDashboardService(deps: DashboardDeps) {
       kpis.coverage_percent = vocTaskPercent;
     }
 
-    // milestone-outcome has no MVP Milestone table or backing filter. Omit it.
+    // milestone-outcome is a reserved coverage id that is never emitted: no
+    // Milestone-outcome coverage definition exists yet. Omit it.
     // high-followup has the same absence rule as the high-severity queue.
     if (highUnlinked !== undefined && openVoc !== undefined && totalHigh !== undefined) {
       const followed = totalHigh - highUnlinked;

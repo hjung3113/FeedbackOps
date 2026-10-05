@@ -11,8 +11,8 @@ Detailed behavior lives in system documents. This file is the index for scope, d
 ```text
 MVP: build in the first implementation target
 SHOULD: include if cheap and directly supports MVP flow
-LATER: Phase 1 or Phase 2
 OUT: explicitly excluded
+Scope labels state scope, not delivery status; delivery status is the GitHub milestones.
 ```
 
 ## Requirement Index
@@ -23,6 +23,9 @@ OUT: explicitly excluded
 | FOP-CORE-002 | Managed System Registry And Defaults | MVP | Core | FOP-CORE-001 | `03-core-platform.md`, `09-permission-access.md` |
 | FOP-CORE-003 | Analytics Area Catalog | MVP | Core | FOP-CORE-001 | `01-domain-model.md`, `03-core-platform.md`, `15-data-contracts.md` |
 | FOP-CORE-004 | Audit Log Baseline | MVP | Core | FOP-CORE-001 | `03-core-platform.md`, `09-permission-access.md` |
+| FOP-CORE-005 | Notifications | MVP | Core | FOP-CORE-001, FOP-CORE-004 | `03-core-platform.md`, `docs/implementation/api/notifications.md` |
+| FOP-CORE-006 | Saved Views | SHOULD | Core | FOP-CORE-001 | `docs/implementation/api/saved-views.md` |
+| FOP-CORE-007 | Command Palette And Display ID Resolve | SHOULD | Core | FOP-CORE-001 | `12-ui-ux-principles.md`, `docs/implementation/api/navigation.md` |
 | FOP-VOC-001 | Create VOC | MVP | VOC | FOP-CORE-001 | `04-voc-system.md` |
 | FOP-VOC-002 | Manage VOC Triage | MVP | VOC | FOP-VOC-001, FOP-CORE-002 | `04-voc-system.md`, `12-ui-ux-principles.md` |
 | FOP-VOC-003 | VOC Cluster | MVP | VOC | FOP-VOC-001 | `04-voc-system.md`, `10-cross-system-workflows.md` |
@@ -31,6 +34,8 @@ OUT: explicitly excluded
 | FOP-FIND-001 | Create Finding | MVP | Finding | FOP-LINK-001 | `05-finding-insight-system.md` |
 | FOP-FIND-002 | Manage Evidence Highlights | MVP | Finding | FOP-FIND-001 | `01-domain-model.md`, `05-finding-insight-system.md`, `15-data-contracts.md` |
 | FOP-FIND-003 | Convert Finding To Execution Candidate | SHOULD | Finding | FOP-FIND-001, FOP-TASK-001 | `05-finding-insight-system.md`, `06-task-project-system.md` |
+| FOP-FIND-004 | Manage Finding Status | MVP | Finding | FOP-FIND-001 | `05-finding-insight-system.md`, `15-data-contracts.md` |
+| FOP-FIND-005 | Finding Progress Notes | MVP | Finding | FOP-FIND-001 | `05-finding-insight-system.md`, `09-permission-access.md` |
 | FOP-TASK-001 | Create Task Request | MVP | Task | FOP-CORE-001 | `06-task-project-system.md` |
 | FOP-TASK-002 | Approve Task Request | MVP | Task | FOP-TASK-001, FOP-PERM-001 | `06-task-project-system.md`, `09-permission-access.md` |
 | FOP-TASK-003 | Manage Task | MVP | Task | FOP-TASK-002 | `06-task-project-system.md` |
@@ -47,11 +52,12 @@ OUT: explicitly excluded
 | FOP-PERM-002 | Decide Permission Request | MVP | Permission / Access | FOP-PERM-001, FOP-CORE-004 | `09-permission-access.md` |
 | FOP-PERM-003 | Enforce Explicit Deny | MVP | Permission / Access | FOP-PERM-002 | `09-permission-access.md`, `11-entity-linking.md` |
 | FOP-X-001 | Preserve Source Context | MVP | Cross-System | FOP-LINK-001 | `10-cross-system-workflows.md` |
-| FOP-X-002 | Prevent Invalid Conversions | MVP | Cross-System | FOP-SURVEY-003 | `10-cross-system-workflows.md`, `archive/14-api-draft.md` |
+| FOP-X-002 | Prevent Invalid Conversions | MVP | Cross-System | FOP-SURVEY-003 | `10-cross-system-workflows.md`, `docs/implementation/api/surveys.md` |
 | FOP-X-003 | Next Action Continuity | MVP | Cross-System | FOP-X-001 | `10-cross-system-workflows.md`, `12-ui-ux-principles.md` |
 | FOP-LINK-001 | Create Entity Link | MVP | Entity Linking | FOP-CORE-001 | `11-entity-linking.md` |
 | FOP-LINK-002 | Enforce Visibility | MVP | Entity Linking | FOP-PERM-003 | `11-entity-linking.md` |
 | FOP-LINK-003 | Support Dashboard Missing-Link Queries | MVP | Entity Linking | FOP-LINK-001 | `11-entity-linking.md`, `08-dashboard-system.md` |
+| FOP-LINK-004 | Detach Entity Link | SHOULD | Entity Linking | FOP-LINK-001 | `11-entity-linking.md` |
 
 ## Forbidden Requirements
 
@@ -79,7 +85,7 @@ OUT: explicitly excluded
 ```text
 ### FOP-AREA-000: Title
 
-Scope: MVP / SHOULD / LATER / OUT
+Scope: MVP / SHOULD / OUT
 Owner system:
 Depends on:
 API refs:

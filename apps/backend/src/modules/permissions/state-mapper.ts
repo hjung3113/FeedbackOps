@@ -3,11 +3,11 @@
 // names that `<PermissionStateView>` renders.
 //
 // Mapping table is locked by the grill session Q6 and reproduced verbatim in
-// the issue #4 spec. Slice 1 actively produces only:
-//   approved, blocked_non_requestable, request_access, pending_request
-// The remaining branches (hidden_existence, rejected, expired, revoked,
-// summary_visible) are dead in Slice 1 but pinned by unit tests so S1.2/S1.4
-// don't accidentally drift the contract.
+// the issue #4 spec. The backend actively produces approved,
+// blocked_non_requestable, request_access, pending_request, revoked, and
+// expired. The remaining branches (hidden_existence, rejected,
+// summary_visible) are pinned by unit tests so later slices don't accidentally
+// drift the contract.
 
 import type { Decision } from './check-service.js';
 
@@ -40,8 +40,14 @@ export function toFrontendState(
     case 'explicit_deny':
       return 'blocked_non_requestable';
     case 'grant_expired':
+      if (openRequest?.status === 'pending' || openRequest?.status === 'needs_more_info') {
+        return 'pending_request';
+      }
       return 'expired';
     case 'grant_revoked':
+      if (openRequest?.status === 'pending' || openRequest?.status === 'needs_more_info') {
+        return 'pending_request';
+      }
       return 'revoked';
     case 'sensitive_reason_missing':
       // Slice 1 has no sensitive caps, so this branch is unreachable from

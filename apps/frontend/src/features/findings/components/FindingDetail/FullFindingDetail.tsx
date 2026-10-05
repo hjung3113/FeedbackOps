@@ -84,23 +84,23 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           {/* Metadata grid — Source Type / Severity / Confidence / Status */}
           <div data-anchor="metadata" className="flex flex-col gap-2">
             <PanelSectionTitle>소스 / 심각도 / 신뢰도</PanelSectionTitle>
-            <FieldRow label="소스 유형" className="px-0">
+            <FieldRow label="소스 유형" inset="none">
               <FitBadge>{FINDING_SOURCE_TYPE_LABELS[finding.source_type]}</FitBadge>
             </FieldRow>
-            <FieldRow label="심각도" className="px-0">
+            <FieldRow label="심각도" inset="none">
               <SeverityBadge severity={finding.severity as SeverityEnum} />
             </FieldRow>
-            <FieldRow label="신뢰도" className="px-0">
+            <FieldRow label="신뢰도" inset="none">
               {finding.confidence !== null ? (
                 FINDING_CONFIDENCE_LABELS[finding.confidence]
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="상태" className="px-0">
+            <FieldRow label="상태" inset="none">
               <FitBadge>{FINDING_STATUS_LABELS[finding.status]}</FitBadge>
             </FieldRow>
-            <FieldRow label="생성자" className="px-0">
+            <FieldRow label="생성자" inset="none">
               <UserChip
                 user={{
                   display_name: actorsById.get(finding.created_by) ?? GLOSSARY.unknownUser,
@@ -128,7 +128,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           {/* Primary Managed System */}
           <div data-anchor="managed-system" className="flex flex-col gap-2">
             <PanelSectionTitle>주요 Managed System</PanelSectionTitle>
-            <FieldRow label="Managed System" className="px-0">
+            <FieldRow label="Managed System" inset="none">
               <ManagedSystemPill
                 name={managedSystemsById.get(finding.primary_managed_system_id) ?? 'Managed System'}
               />
@@ -138,7 +138,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           {/* Affected Analytics Area */}
           <div data-anchor="analytics-area" className="flex flex-col gap-2">
             <PanelSectionTitle>영향 Analytics Area</PanelSectionTitle>
-            <FieldRow label="Analytics Area" className="px-0">
+            <FieldRow label="Analytics Area" inset="none">
               {finding.analytics_area_id !== null ? (
                 <FitBadge>
                   {analyticsAreasById.get(finding.analytics_area_id) ?? 'Analytics Area'}
@@ -154,7 +154,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
           {/* Linked VOC — why this Finding exists */}
           <div data-anchor="links" className="flex flex-col gap-2">
             <PanelSectionTitle>연결된 VOC / Task</PanelSectionTitle>
-            <FieldRow label={GLOSSARY.linkedVoc} className="px-0">
+            <FieldRow label={GLOSSARY.linkedVoc} inset="none">
               {finding.source_type === 'voc' && finding.source_id !== null ? (
                 <Link
                   to="/vocs"
@@ -170,7 +170,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label={GLOSSARY.linkedTask} className="px-0">
+            <FieldRow label={GLOSSARY.linkedTask} inset="none">
               {finding.linked_task_id !== null ? (
                 <Link
                   to="/tasks"

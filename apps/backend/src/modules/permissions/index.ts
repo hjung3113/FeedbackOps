@@ -11,6 +11,7 @@ export {
   type RequestableScope,
   type ActorContext,
   type CheckScope,
+  isRequestableDenial,
 } from './check-service.js';
 export {
   toFrontendState,
@@ -31,3 +32,9 @@ export {
   type DecisionServiceDeps,
   type DecisionOptions,
 } from './decision-service.js';
+export {
+  createGrantAdminService,
+  type GrantAdminService,
+  type GrantAdminServiceDeps,
+  type GrantAdminServiceOptions,
+} from './grant-admin-service.js';

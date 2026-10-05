@@ -11,8 +11,8 @@ only for an Admin). Each key is independently omitted when its backing read is
 unavailable or returns `permission.denied` / `permission.scope_required`. A
 permitted, empty backing result is present with zero; absence means the actor
 cannot receive that projection, not that its count is zero. The route writes no
-audit row or source record. `milestone-outcome` is absent until the MVP has a
-Milestone backing table and filter.
+audit row or source record. `milestone-outcome` is a reserved coverage id that
+is never emitted (no Milestone-outcome coverage definition exists yet).
 
 The response also requires `by_managed_system`, a sibling array containing the
 same projections for each Managed System in the union of the caller's VOC,

@@ -30,7 +30,12 @@ export function MilestoneSourceSection({
             <Button
               variant="subtle"
               size="sm"
-              className="h-6 gap-1.5 px-2 text-[12px]"
+              spacing="compact"
+              padding="compact"
+              className={
+                // oxlint-disable-next-line shadcn/no-restyle -- the source Finding action is a 24px secondary link aligned to the section title
+                'h-6 text-xs'
+              }
               onClick={() => {
                 // R4 — an unsaved title draft confirms before the panel
                 // is left; a clean panel navigates immediately.
@@ -52,7 +57,7 @@ export function MilestoneSourceSection({
         {sourceFinding ? (
           <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
             <span className="text-xs text-text-muted">{GLOSSARY.fromFinding}</span>
-            <div className="text-[13px] font-medium text-text-primary">
+            <div className="text-sm font-medium text-text-primary">
               <span className="mr-1.5 font-mono text-xs text-text-muted">
                 {sourceFinding.display_id}
               </span>
@@ -60,7 +65,7 @@ export function MilestoneSourceSection({
             </div>
             {/* Prototype renders the finding summary at 12px (text-xs) with
                 1.55 line height (screen-milestones.jsx Source block). */}
-            <p className="text-xs leading-[1.55] text-text-muted">{sourceFinding.summary}</p>
+            <p className="text-xs leading-note text-text-muted">{sourceFinding.summary}</p>
             <div className="flex flex-wrap gap-2">
               <MilestoneOutlineBadge>
                 Evidence · {sourceFinding.evidence_count}

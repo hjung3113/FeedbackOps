@@ -12,7 +12,7 @@ import {
   type PanelSection,
   PanelSectionTitle,
   SeverityBadge,
-  Skeleton,
+  SkeletonBlocks,
   UnassignedBadge,
 } from '@fops/ui';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -116,10 +116,14 @@ export function VocClusterDetailPanel({
         aria-label="Cluster 상세 불러오는 중"
         data-testid="cluster-detail-skeleton"
       >
-        <Skeleton className="h-7 w-1/2" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-32 w-full" />
+        <SkeletonBlocks
+          blocks={[
+            { kind: 'title', size: 'large', width: 'half' },
+            { kind: 'line', width: 'full' },
+            { kind: 'line', width: 'three-quarters' },
+            { kind: 'body', size: 'large', width: 'full' },
+          ]}
+        />
       </div>
     );
   }
@@ -391,7 +395,7 @@ export function VocClusterDetailPanel({
 
           <section className="flex flex-col gap-2" data-anchor="properties">
             <PanelSectionTitle>속성</PanelSectionTitle>
-            <FieldRow label="Managed System" className="px-0">
+            <FieldRow label="Managed System" inset="none">
               <span data-testid="cluster-detail-managed-system">
                 <ManagedSystemPill
                   name={managedSystem?.name ?? 'Managed System'}
@@ -400,17 +404,17 @@ export function VocClusterDetailPanel({
                 />
               </span>
             </FieldRow>
-            <FieldRow label="심각도" className="px-0">
+            <FieldRow label="심각도" inset="none">
               <span data-testid="cluster-detail-severity">
                 {data.severity ? FINDING_SEVERITY_LABELS[data.severity] : '미지정'}
               </span>
             </FieldRow>
-            <FieldRow label="신뢰도" className="px-0">
+            <FieldRow label="신뢰도" inset="none">
               <span data-testid="cluster-detail-confidence">
                 {data.confidence ? FINDING_CONFIDENCE_LABELS[data.confidence] : '미지정'}
               </span>
             </FieldRow>
-            <FieldRow label="담당자" className="px-0">
+            <FieldRow label="담당자" inset="none">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
                 <span>
                   {data.owner_user_id ? (ownerName ?? GLOSSARY.unknownUser) : <UnassignedBadge />}
@@ -422,7 +426,7 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="확정자" className="px-0">
+            <FieldRow label="확정자" inset="none">
               <span className="flex flex-col gap-0.5" data-testid="cluster-detail-confirmed-by">
                 <span>
                   {data.confirmed_by ? (confirmerName ?? GLOSSARY.unknownUser) : '대기 중'}
@@ -434,7 +438,7 @@ export function VocClusterDetailPanel({
                 )}
               </span>
             </FieldRow>
-            <FieldRow label="확정일" className="px-0">
+            <FieldRow label="확정일" inset="none">
               <span data-testid="cluster-detail-confirmed-at">
                 {data.confirmed_at ? formatShortDate(data.confirmed_at) : '대기 중'}
               </span>
