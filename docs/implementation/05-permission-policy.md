@@ -316,10 +316,9 @@ using the same workspace scope as `no_grant`. The state mapper returns
 otherwise returns `revoked` or `expired`, respectively. A revoke notification
 goes to the grant's Actor; deny lift sends no notification. There is no migration
 or grant change for these commands.
-Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage,
-conversation, and VOC Cluster conversion) are unchanged; paths keyed on
-`requestable !== null` (Survey results and follow-up) now include
-`requestable_permission` for a revoked or expired grant.
+Domain responses treat `grant_revoked` and `grant_expired` like `no_grant`
+(`isRequestableDenial`, #775); paths keyed on `requestable !== null` (Survey
+results and follow-up) include `requestable_permission` for them.
 
 ## Summary-Visible Contract
 

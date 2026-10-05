@@ -22,6 +22,7 @@ import {
 } from '../findings/authorization.js';
 import { createFindingFromVocCluster, lockFindingForUpdate } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import { isRequestableDenial } from '../permissions/index.js';
 import { lockVocClusterById } from './repo.js';
 import type { VocClustersActor, VocClustersServiceDeps } from './service.js';
 
@@ -277,7 +278,7 @@ export function createVocClusterConversion(
           ]);
           if (!clusterManageDecision.allow || !findingManageDecision.allow) {
             const missingScope = [clusterManageDecision, findingManageDecision].some(
-              (decision) => !decision.allow && decision.reason === 'no_grant',
+              (decision) => !decision.allow && isRequestableDenial(decision.reason),
             );
             if (args.actor.role_level === 'developer' && missingScope) {
               throw new HttpError(
@@ -431,7 +432,7 @@ export function createVocClusterConversion(
             ]);
             if (!clusterManageDecision.allow || !findingManageDecision.allow) {
               const missingScope = [clusterManageDecision, findingManageDecision].some(
-                (decision) => !decision.allow && decision.reason === 'no_grant',
+                (decision) => !decision.allow && isRequestableDenial(decision.reason),
               );
               if (args.actor.role_level === 'developer' && missingScope) {
                 throw new HttpError(

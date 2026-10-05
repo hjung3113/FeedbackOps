@@ -11,6 +11,7 @@ export {
   type RequestableScope,
   type ActorContext,
   type CheckScope,
+  isRequestableDenial,
 } from './check-service.js';
 export {
   toFrontendState,

@@ -169,9 +169,10 @@ function mapToPanelState(
       return 'request_access';
     case 'summary_visible':
       return 'summary_visible';
-    case 'rejected':
     case 'expired':
     case 'revoked':
+      return 'request_access';
+    case 'rejected':
       return 'denied';
     // 'approved' should never reach this mapper (handled above) — fall through.
     default:

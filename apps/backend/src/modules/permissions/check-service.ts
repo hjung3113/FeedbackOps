@@ -48,6 +48,10 @@ export type DenyReason =
   | 'grant_revoked'
   | 'sensitive_reason_missing';
 
+export function isRequestableDenial(reason: DenyReason): boolean {
+  return reason === 'no_grant' || reason === 'grant_revoked' || reason === 'grant_expired';
+}
+
 export interface RequestableScope {
   workspace_id: string;
   managed_system_id?: string;

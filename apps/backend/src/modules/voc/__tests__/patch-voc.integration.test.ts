@@ -17,6 +17,11 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import {
+  denyCapability,
+  expireCapabilityGrant,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -166,20 +171,6 @@ async function grantVocTriage(
   return id;
 }
 
-// Revokes a permission grant by setting revoked_at now().
-async function revokeGrant(
-  dbHandle: DbHandle,
-  grantId: string,
-  revokedByActorId: string,
-): Promise<void> {
-  await dbHandle.pool.query(
-    `update permission.permission_grants
-        set revoked_at = now(), revoked_by_actor_id = $2, revoked_reason = 'test'
-      where id = $1`,
-    [grantId, revokedByActorId],
-  );
-}
-
 // Archives a VOC row directly via SQL (simulates the archived state for
 // tests that need to bypass normal archive flows).
 async function archiveVoc(dbHandle: DbHandle, vocId: string): Promise<void> {
@@ -230,6 +221,15 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     // Remove permission grants for test actors before removing the actors.
     await dbHandle.pool.query(
       `delete from permission.permission_grants
+        where workspace_id = $1
+          and actor_id in (
+            select id from core.actors where external_id like 'mock-dev-%' and workspace_id = $1
+          )`,
+      [WORKSPACE_ID],
+    );
+    // Explicit denies reference the test Managed Systems (FK); clear them first.
+    await dbHandle.pool.query(
+      `delete from permission.permission_denies
         where workspace_id = $1
           and actor_id in (
             select id from core.actors where external_id like 'mock-dev-%' and workspace_id = $1
@@ -1182,19 +1182,78 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(body.requestable_permission.managed_system_id).toBe(msId);
   });
 
-  // ── 16. Permission revocation race: grant revoked mid-session → 403 ────
+  // ── 16. Permission change race: revoked/expired grant remains requestable ──
   // WHY tx-binding is proven: the grant-revoke commits before the second
   // handler opens its tx. `checkCapability` is called with `{ tx }`, so the
   // read runs inside the same snapshot as the VOC SELECT FOR UPDATE. A
   // pool-bound read would also see the committed revoke, but the test still
   // proves the recheck fires (ADR-0019 §D), because a service that skipped
-  // the permission recheck entirely would return 200 here. The revoked-grant
-  // path returns `permission.denied` (reason: grant_revoked), not
-  // `permission.scope_required` (which is reserved for the no_grant case
-  // where the developer may request access).
-  it('revoked grant → second PATCH returns 403 permission.denied (reason: grant_revoked)', async () => {
+  // the permission recheck entirely would return 200 here.
+  it.each([{ grantState: 'revoked' }, { grantState: 'expired' }] as const)(
+    '$grantState grant → second PATCH returns 403 permission.scope_required',
+    async ({ grantState }) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, `it-patch-dev-${grantState}`, `Dev ${grantState} MS`);
+      const reporter = await loginAs(app, 'mock-user-1');
+      const voc = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'v',
+          description_rich_content: paragraphDoc('x'),
+        },
+        randomUUID(),
+      );
+
+      const { id: devId, externalId } = await insertDevActor(
+        dbHandle,
+        WORKSPACE_ID,
+        `14-${grantState}-${randomUUID().slice(0, 8)}`,
+      );
+      const grantId = await grantVocTriage(dbHandle, WORKSPACE_ID, devId, msId, adminActorId);
+      const devCookie = await loginAs(app, externalId);
+
+      // First PATCH: grant is active → 200.
+      const res1 = await patchVoc(
+        app,
+        devCookie,
+        voc.id,
+        { severity: 'low' },
+        { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+      );
+      expect(res1.statusCode).toBe(200);
+      const afterPatch1 = (res1.json() as { updated_at: string }).updated_at;
+
+      // Change the grant state — the next tx must classify it as requestable.
+      if (grantState === 'revoked') {
+        await revokeCapabilityGrant(dbHandle, grantId, adminActorId);
+      } else {
+        await expireCapabilityGrant(dbHandle, grantId);
+      }
+
+      // Second PATCH: the inactive grant no longer authorizes triage.
+      const res2 = await patchVoc(
+        app,
+        devCookie,
+        voc.id,
+        { severity: 'medium' },
+        { idempotencyKey: randomUUID(), ifMatch: afterPatch1 },
+      );
+      expect(res2.statusCode).toBe(403);
+      const body = res2.json();
+      expect(body.code).toBe('permission.scope_required');
+      expect(body.detail.requiredScope).toEqual([msId]);
+      expect(body.requestable_permission).toMatchObject({
+        permission: 'voc.triage',
+        managed_system_id: msId,
+      });
+    },
+  );
+
+  it('explicit deny alongside a revoked voc.triage grant stays permission.denied', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
-    const msId = await createMs(app, admin, 'it-patch-dev-revoke', 'Dev Revoke MS');
+    const msId = await createMs(app, admin, 'it-patch-dev-revoked-deny', 'Revoked Deny MS');
     const reporter = await loginAs(app, 'mock-user-1');
     const voc = await postVoc(
       app,
@@ -1202,42 +1261,28 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
       randomUUID(),
     );
-
     const { id: devId, externalId } = await insertDevActor(
       dbHandle,
       WORKSPACE_ID,
-      `14-revoke-${randomUUID().slice(0, 8)}`,
+      `revoked-deny-${randomUUID().slice(0, 8)}`,
     );
     const grantId = await grantVocTriage(dbHandle, WORKSPACE_ID, devId, msId, adminActorId);
+    await revokeCapabilityGrant(dbHandle, grantId, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
-    // First PATCH: grant is active → 200.
-    const res1 = await patchVoc(
+    const res = await patchVoc(
       app,
       devCookie,
       voc.id,
       { severity: 'low' },
       { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
     );
-    expect(res1.statusCode).toBe(200);
-    const afterPatch1 = (res1.json() as { updated_at: string }).updated_at;
 
-    // Revoke the grant — next tx will see it revoked.
-    await revokeGrant(dbHandle, grantId, adminActorId);
-
-    // Second PATCH: grant is revoked → 403 permission.denied.
-    // F1: revoked grant → permission.denied (not scope_required, which
-    // would imply the actor can request the capability back).
-    const res2 = await patchVoc(
-      app,
-      devCookie,
-      voc.id,
-      { severity: 'medium' },
-      { idempotencyKey: randomUUID(), ifMatch: afterPatch1 },
-    );
-    expect(res2.statusCode).toBe(403);
-    expect(res2.json().code).toBe('permission.denied');
-    expect(res2.json().detail.reason).toBe('grant_revoked');
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('permission.denied');
+    expect(res.json().detail.reason).toBe('explicit_deny');
+    expect(res.json().requestable_permission).toBeUndefined();
   });
 
   // ── 17. Empty diff: body {} → 200, no audit rows written ────────────────
