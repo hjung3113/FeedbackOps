@@ -25,13 +25,14 @@ Usage:
   visual.sh run [playwright filter...]
   visual.sh update <filter...>
   visual.sh stable <filter...> [--runs N]
-  visual.sh capture <name> --route <url> [--from <visual-spec>] [--state <label>]...
+  visual.sh capture <name> --route <url> [--from <visual-spec>] [--mock '<installMockApi options object>'] [--state <label>]...
   visual.sh capture --clean <name>
 
 Run from the checkout under test; VISUAL_ROOT may override that checkout.
 PW_PORT may select a port; otherwise an available local port is chosen.
 Capture reuses a matching existing spec's installMockApi setup. Pass --from when
-route inference is ambiguous; routes that call APIs need a matching spec setup.
+route inference is ambiguous. Use --mock to override the copied installMockApi
+options object; custom request handlers need a temporary spec with page.route.
 --state values are screenshot labels only. Captures use the committed visual
 helpers and write screenshots under .review/<name>-shots/.
 EOF
@@ -224,10 +225,9 @@ capture_clean() {
 }
 
 generate_capture_spec() {
-  local name=$1 route=$2 shots_dir=$3 spec=$4 from_spec=$5
-  shift 4
-  shift
-  python3 - "$TEMPLATE" "$spec" "$name" "$route" "$shots_dir" "$FRONTEND/tests/visual" "$from_spec" "$@" <<'PY'
+  local name=$1 route=$2 shots_dir=$3 spec=$4 from_spec=$5 mock_options=$6
+  shift 6
+  python3 - "$TEMPLATE" "$spec" "$name" "$route" "$shots_dir" "$FRONTEND/tests/visual" "$from_spec" "$mock_options" "$@" <<'PY'
 import fnmatch
 import json
 import pathlib
@@ -235,7 +235,7 @@ import re
 import sys
 from urllib.parse import urlsplit
 
-template_path, output_path, name, route, shots_dir, visual_dir, from_spec, *states = sys.argv[1:]
+template_path, output_path, name, route, shots_dir, visual_dir, from_spec, mock_override, *states = sys.argv[1:]
 if not states:
     states = ["default"]
 
@@ -384,6 +384,95 @@ def split_arguments(text):
     pieces.append(text[start:].strip())
     return pieces
 
+def referenced_identifiers(text):
+    tokens = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if char.isspace():
+            index += 1
+        elif char == "/" and following == "/":
+            end = text.find("\n", index + 2)
+            index = len(text) if end < 0 else end + 1
+        elif char == "/" and following == "*":
+            end = text.find("*/", index + 2)
+            index = len(text) if end < 0 else end + 2
+        elif char == "`":
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                elif text.startswith("${", index):
+                    closing = matching_close(text, index + 1)
+                    if closing is None:
+                        index = len(text)
+                        break
+                    tokens.extend(referenced_identifiers(text[index + 2:closing]))
+                    index = closing + 1
+                elif text[index] == "`":
+                    index += 1
+                    break
+                else:
+                    index += 1
+        elif char in "'\"":
+            quote = char
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                elif text[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+        elif char.isalpha() or char in "_$":
+            end = index + 1
+            while end < len(text) and (text[end].isalnum() or text[end] in "_$"):
+                end += 1
+            tokens.append(text[index:end])
+            index = end
+        elif text.startswith("?.", index):
+            tokens.append("?.")
+            index += 2
+        elif text.startswith("...", index):
+            tokens.append("...")
+            index += 3
+        else:
+            tokens.append(char)
+            index += 1
+
+    ignored = {
+        "as", "async", "await", "false", "Infinity", "NaN", "new", "null",
+        "satisfies", "this", "true", "undefined", "void", "typeof", "instanceof",
+        "in", "of", "const", "let", "var", "return",
+    }
+    references = set()
+    for position, token in enumerate(tokens):
+        if not token or not (token[0].isalpha() or token[0] in "_$") or token in ignored:
+            continue
+        previous = tokens[position - 1] if position else ""
+        following = tokens[position + 1] if position + 1 < len(tokens) else ""
+        if previous in {".", "?."}:
+            continue
+        if following == ":" and previous in {"{", ","}:
+            continue
+        references.add(token)
+    return references
+
+def copied_import_names(source):
+    names = set()
+    for match in re.finditer(r"(?m)^import\b[\s\S]*?;\s*", source):
+        statement = match.group(0)
+        module_match = re.search(r"from\s+(['\"])([^'\"]+)\1", statement)
+        if module_match and module_match.group(2) in {
+            "@playwright/test", "./support/visual-test", "./support/mock-api", "./support/screenshot"
+        }:
+            continue
+        if module_match:
+            names.update(referenced_identifiers(statement[:module_match.start()]) - {"import", "type", "as"})
+    return names
+
 calls = []
 for match in re.finditer(r"installMockApi\s*\(\s*page\b", source_text):
     opening = source_text.find("(", match.start())
@@ -416,15 +505,67 @@ for goto_start, path, _ in matching_gotos:
 if selected_call is None and from_spec and not list(goto_routes(source_text)) and calls:
     selected_call = calls[0]
 
-if selected_call is not None:
+if mock_override:
+    override = mock_override.strip()
+    if not override.startswith("{") or matching_close(override, 0) != len(override) - 1:
+        print("ERROR: --mock must be one installMockApi options object.", file=sys.stderr)
+        raise SystemExit(2)
+    options = override
+elif selected_call is not None:
     options = selected_call[2][1] if len(selected_call[2]) > 1 else None
+else:
+    options = None
+
+if selected_call is not None or mock_override:
     setup_prefixes = []
-    if options:
-        loop_pattern = re.compile(r"for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)")
+    bound_loop_names = set()
+    unbound_loop_names = set()
+    if options and not mock_override:
+        loop_pattern = re.compile(r"for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([\s\S]*?)\s*\)")
+        loop_bindings = {}
+        option_references = referenced_identifiers(options)
         for loop in loop_pattern.finditer(source_text):
-            variable = loop.group(1)
-            if loop.start() < selected_call[0] and re.search(rf"\b{re.escape(variable)}\b", options):
-                setup_prefixes.append(f"const {variable} = {loop.group(2)}[0];")
+            body_match = re.match(r"\s*\{", source_text[loop.end():])
+            if loop.start() >= selected_call[0] or not body_match:
+                continue
+            body_open = loop.end() + body_match.end() - 1
+            body_close = matching_close(source_text, body_open)
+            if body_close is None or not (body_open < selected_call[0] < body_close):
+                continue
+            variable, iterable = loop.group(1), loop.group(2).strip()
+            if variable not in option_references:
+                continue
+            identifier_iterable = re.fullmatch(r"[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*", iterable)
+            array_iterable = re.fullmatch(r"(\[[^\]]*\])(\s+as\s+const)?", iterable)
+            if identifier_iterable:
+                loop_bindings[variable] = f"{iterable}[0]"
+                bound_loop_names.add(variable)
+            elif array_iterable:
+                loop_bindings[variable] = f"({array_iterable.group(1)}{array_iterable.group(2) or ''})[0]"
+                bound_loop_names.add(variable)
+            else:
+                unbound_loop_names.add(variable)
+        for variable, value in loop_bindings.items():
+            setup_prefixes.append(f"const {variable} = {value};")
+
+    if options:
+        available_names = copied_import_names(source_text) | bound_loop_names | {
+            "Array", "BigInt", "Boolean", "Date", "Error", "Function", "Infinity", "Intl", "JSON",
+            "Map", "Math", "Number", "Object", "Promise", "Reflect", "RegExp", "Set", "String",
+            "Symbol", "URL", "WeakMap", "WeakSet", "console", "decodeURI", "decodeURIComponent",
+            "encodeURI", "encodeURIComponent", "globalThis", "isFinite", "isNaN", "page", "parseFloat",
+            "parseInt", "process",
+        }
+        unbound = sorted((referenced_identifiers(options) - available_names) | unbound_loop_names)
+        if unbound:
+            print(
+                "ERROR: copied installMockApi options reference unbound identifier(s): "
+                + ", ".join(unbound)
+                + ". Bind them in an import or pass a literal --mock options object.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+
     setup_prefix = "\n".join(setup_prefixes)
     setup_call = "await installMockApi(page" + (f", {options}" if options else "") + ");"
     selected_setup = (setup_prefix + "\n" if setup_prefix else "") + setup_call
@@ -580,11 +721,11 @@ main() {
         (( $# == 2 )) || fail 'usage: capture --clean <name>' 2
         capture_clean "$2"
       fi
-      (( $# >= 1 )) || fail 'usage: capture <name> --route <url> [--from <visual-spec>] [--state <label>]...' 2
+      (( $# >= 1 )) || fail "usage: capture <name> --route <url> [--from <visual-spec>] [--mock '<installMockApi options object>'] [--state <label>]..." 2
       local name=$1
       shift
       safe_name "$name" || fail 'capture name must use letters, digits, underscore, or hyphen' 2
-      local route= from_spec= states=() spec shots_dir
+      local route= from_spec= mock_options= mock_provided=0 states=() spec shots_dir
       while (( $# )); do
         case "$1" in
           --route)
@@ -604,6 +745,14 @@ main() {
             from_spec=$2
             shift 2
             ;;
+          --mock)
+            (( $# >= 2 )) || fail '--mock needs one installMockApi options object' 2
+            (( mock_provided == 0 )) || fail 'capture accepts one --mock' 2
+            mock_options=$2
+            [[ -n "$mock_options" ]] || fail '--mock needs one installMockApi options object' 2
+            mock_provided=1
+            shift 2
+            ;;
           *) fail "unknown capture option: $1" 2 ;;
         esac
       done
@@ -613,7 +762,7 @@ main() {
       [[ ! -e "$spec" ]] || fail "temporary spec already exists: $spec" 2
       [[ -f "$TEMPLATE" ]] || fail "capture template is missing: $TEMPLATE" 2
       mkdir -p "$shots_dir" || fail "could not create screenshot directory: $shots_dir" 2
-      if ! generate_capture_spec "$name" "$route" "$shots_dir" "$spec" "$from_spec" "${states[@]+"${states[@]}"}"; then
+      if ! generate_capture_spec "$name" "$route" "$shots_dir" "$spec" "$from_spec" "$mock_options" "${states[@]+"${states[@]}"}"; then
         fail 'could not generate capture spec; see the listed source specs and --from guidance' 2
       fi
       local capture_filter=zz-$name.visual.spec.ts run_status=0

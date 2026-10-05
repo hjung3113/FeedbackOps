@@ -81,12 +81,13 @@ main() {
   [[ -x "$SCRIPT_DIR/verify-db.sh" && -x "$SCRIPT_DIR/verify-be.sh" && -x "$SCRIPT_DIR/verify-fe.sh" && -x "$SCRIPT_DIR/visual.sh" ]] || fail 'release gate helper scripts are missing or not executable' 2
 
   git -C "$checkout" fetch origin develop main || fail 'could not refresh origin/develop and origin/main' 1
-  TESTED_SHA=$(git -C "$checkout" rev-parse HEAD 2>/dev/null) || fail 'could not read checkout HEAD' 1
-  local develop_sha dirty
+  local head_sha develop_sha dirty
+  head_sha=$(git -C "$checkout" rev-parse HEAD 2>/dev/null) || fail 'could not read checkout HEAD' 1
   develop_sha=$(git -C "$checkout" rev-parse origin/develop 2>/dev/null) || fail 'could not read origin/develop' 1
-  [[ "$TESTED_SHA" == "$develop_sha" ]] || fail "checkout HEAD $TESTED_SHA is not the current origin/develop tip $develop_sha" 1
+  [[ "$head_sha" == "$develop_sha" ]] || fail "checkout HEAD $head_sha is not the current origin/develop tip $develop_sha" 1
   dirty=$(git -C "$checkout" status --porcelain --untracked-files=no 2>/dev/null) || fail 'could not inspect checkout status' 1
   [[ -z "$dirty" ]] || fail 'release checkout has tracked worktree changes' 1
+  TESTED_SHA=$head_sha
 
   prepare_node22 || fail 'release gate requires Node 22' 2
   mkdir -p "$WAVE_STATE/release-gate" || fail "cannot create release log directory under $WAVE_STATE" 2

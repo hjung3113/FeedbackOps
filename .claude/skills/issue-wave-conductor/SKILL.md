@@ -31,9 +31,11 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   Pass `--state-dir "$WAVE_STATE"` on each launch and wait; use distinct names and reports for every round.
 - `WAVE_BRIEFS` — brief dir, e.g. `.review/wave/` (gitignored). `FOPS_MAIN` — the main checkout.
 - Throwaway Postgres for BE integration (never the dev DB on 5434): a `pgvector/pgvector:pg16` container on **5439**
-  with `scripts/db/init.sql`. `verify-db.sh up` runs `db:migrate` on the template; Drizzle skips migrations
-  already in its ledger. Each issue DB clones the template and then runs that checkout's migrations with its
-  `env.verify.<n>` exported. Drop the DB and env file after the issue merges; `docker rm -f` at wave end.
+  with `scripts/db/init.sql`. `verify-db.sh up` runs `db:migrate` on the template. Drizzle applies only migrations
+  newer than the latest ledger timestamp; after each issue migration, `create` checks the checkout journal's SQL
+  hashes against the cloned DB ledger and fails on any missing or extra entry. Each issue DB clones the template and
+  then runs that checkout's migrations with its `env.verify.<n>` exported. Drop the DB and env file after the issue
+  merges; `docker rm -f` at wave end.
 
 ## Loop per issue
 
@@ -75,10 +77,12 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `worker-launch.sh --role fix --cwd <worktree> --task <absolute-fix-task> --report <absolute-fix-report>
    --sentinel '<sentinel from the fix task>' --name W-<n>-FIX<k> --state-dir "$WAVE_STATE"`.
    Name the implementation rules in the brief; wait on the resulting state JSON as in step 3 before verifying.
-6. **Browser evidence for UI**: use `scripts/visual.sh capture <n> --route <url> [--from <visual-spec>] [--state <label>]...`.
+6. **Browser evidence for UI**: use `scripts/visual.sh capture <n> --route <url> [--from <visual-spec>] [--mock '<installMockApi options object>'] [--state <label>]...`.
    The tool infers a unique matching spec when possible; pass `--from` when inference is ambiguous or the route is
    dynamic. Pages that call APIs need a matching spec's `installMockApi` setup because unmatched requests fail closed.
-   State values name screenshot files; they do not change the route or UI state. Save screenshots into `.review/<n>-shots/`
+   Pass `--mock` to replace the copied `installMockApi` options object. For custom mock overrides that need request
+   handlers, use a temporary spec with `page.route`. State values name screenshot files; they do not change the route or UI
+   state. Save screenshots into `.review/<n>-shots/`
    and remove generated specs with `scripts/visual.sh capture --clean <n>`. Real-browser checks caught what unit tests
    could not (a blank page on cold `/me` 429, a 404 that spun forever).
 7. **One final review per issue** (user, 2026-10-02; reviewer rules: `templates/review-rules.md`, copied to

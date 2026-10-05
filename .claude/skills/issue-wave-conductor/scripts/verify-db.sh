@@ -96,7 +96,7 @@ PY
 }
 
 run_migration() {
-  local migration_root=$1 env_file=$2 description=$3 log
+  local migration_root=$1 env_file=$2 description=$3 cleanup_hint=${4:-} log failure_message
   log=$(mktemp) || fail 'could not create migration log' 2
   (
     cd "$migration_root" || exit 2
@@ -108,7 +108,86 @@ run_migration() {
   local code=$?
   cat "$log"
   rm -f "$log"
-  [[ "$code" == 0 ]] || fail "$description failed (exit $code)" "$code"
+  if [[ "$code" != 0 ]]; then
+    failure_message="$description failed (exit $code)"
+    [[ -z "$cleanup_hint" ]] || failure_message+="; clean up with: $cleanup_hint"
+    fail "$failure_message" "$code"
+  fi
+}
+
+migration_journal_hashes() {
+  python3 - "$1" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+journal_path = root / "apps/backend/migrations/meta/_journal.json"
+try:
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    entries = journal["entries"]
+except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+    print(f"cannot read migration journal {journal_path}: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+migrations = root / "apps/backend/migrations"
+for entry in entries:
+    tag = entry.get("tag") if isinstance(entry, dict) else None
+    if not isinstance(tag, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", tag):
+        print(f"invalid migration tag in {journal_path}: {tag!r}", file=sys.stderr)
+        raise SystemExit(1)
+    path = migrations / f"{tag}.sql"
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        print(f"cannot hash migration {path}: {error}", file=sys.stderr)
+        raise SystemExit(1)
+    print(digest)
+PY
+}
+
+verify_migration_ledger() {
+  local migration_root=$1 env_file=$2 suffix=$3 expected actual code cleanup_hint
+  cleanup_hint="\"$SCRIPT_DIR/verify-db.sh\" drop \"$suffix\""
+  expected=$(migration_journal_hashes "$migration_root")
+  code=$?
+  [[ "$code" == 0 ]] || fail "could not hash migration journal from $migration_root; clean up with: $cleanup_hint" "$code"
+  actual=$(
+    (
+      set -a
+      . "$env_file"
+      set +a
+      psql -X "$DATABASE_URL_MIGRATE" -v ON_ERROR_STOP=1 -tA \
+        -c 'SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id'
+    )
+  )
+  code=$?
+  [[ "$code" == 0 ]] || fail "could not read migration ledger from $DB_NAME; clean up with: $cleanup_hint" "$code"
+  if ! python3 - "$expected" "$actual" <<'PY'
+import collections
+import sys
+
+expected = sys.argv[1].splitlines()
+actual = sys.argv[2].splitlines()
+missing = collections.Counter(expected) - collections.Counter(actual)
+extra = collections.Counter(actual) - collections.Counter(expected)
+if expected == actual:
+    raise SystemExit(0)
+if not missing and not extra:
+    print("migration hashes are present but ordered differently", file=sys.stderr)
+else:
+    print(
+        "missing hashes: " + ", ".join(sorted(missing))
+        + "; extra hashes: " + ", ".join(sorted(extra)),
+        file=sys.stderr,
+    )
+raise SystemExit(1)
+PY
+  then
+    fail "template ahead of this checkout; run verify-db.sh down && up from a checkout at or behind this one; clean up with: $cleanup_hint" 1
+  fi
 }
 
 up() {
@@ -175,7 +254,9 @@ create_db() {
   PGPASSWORD=postgres psql -X "$ADMIN_URL" -v ON_ERROR_STOP=1 \
     -c "CREATE DATABASE \"$DB_NAME\" TEMPLATE feedbackops OWNER fops_migrate" || fail "could not create $DB_NAME from template" 1
   write_env_file "$suffix" "$DB_NAME"
-  run_migration "$migration_root" "$WAVE_STATE/env.verify.$suffix" "migration for $DB_NAME"
+  local env_file=$WAVE_STATE/env.verify.$suffix
+  run_migration "$migration_root" "$env_file" "migration for $DB_NAME" "\"$SCRIPT_DIR/verify-db.sh\" drop \"$suffix\""
+  verify_migration_ledger "$migration_root" "$env_file" "$suffix"
   printf 'Created %s on port %s.\n' "$DB_NAME" "$DB_PORT"
   finish true 0
 }
