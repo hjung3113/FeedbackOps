@@ -19,7 +19,7 @@ export function FieldLabel({ required, tip, children, className, ...props }: Fie
     <Label className={className} {...props}>
       {children}
       {required === true && (
-        <span className="ml-1 text-red-500" aria-hidden="true">
+        <span className="ml-1 text-text-danger-label" aria-hidden="true">
           *
         </span>
       )}

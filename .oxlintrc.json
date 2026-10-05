@@ -24,19 +24,13 @@
         ]
       }
     ],
-    "shadcn/no-raw-colors": ["warn", { "scanAllStrings": true }],
+    "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }],
     "shadcn/no-arbitrary-values": ["warn", { "scanAllStrings": true }],
     "shadcn/no-inline-styles": "warn",
     "shadcn/no-unknown-classes": ["error", { "allow": ["rich-editor"] }],
     "shadcn/require-static-classes": "warn"
   },
   "overrides": [
-    {
-      "files": ["apps/frontend/src/**"],
-      "rules": {
-        "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }]
-      }
-    },
     {
       "files": ["packages/ui/src/**"],
       "rules": {
