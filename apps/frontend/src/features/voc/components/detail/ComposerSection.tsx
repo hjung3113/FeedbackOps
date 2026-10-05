@@ -213,7 +213,7 @@ export function ComposerSection({
         {visibility.showPublic && (
           <div
             data-composer-surface="public"
-            className={effectiveActiveTab === 'public' ? undefined : 'hidden'}
+            hidden={effectiveActiveTab !== 'public'}
           >
             <PublicUpdateComposer
               voc={voc}
@@ -226,7 +226,7 @@ export function ComposerSection({
         {visibility.showReply && (
           <div
             data-composer-surface="reply"
-            className={effectiveActiveTab === 'reply' ? undefined : 'hidden'}
+            hidden={effectiveActiveTab !== 'reply'}
           >
             <ReporterReplyComposer
               voc={voc}
@@ -239,7 +239,7 @@ export function ComposerSection({
         {visibility.showInternal && (
           <div
             data-composer-surface="internal"
-            className={effectiveActiveTab === 'internal' ? undefined : 'hidden'}
+            hidden={effectiveActiveTab !== 'internal'}
           >
             <InternalCommentComposer
               voc={voc}

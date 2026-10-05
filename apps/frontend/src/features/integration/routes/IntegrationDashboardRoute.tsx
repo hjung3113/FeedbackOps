@@ -317,6 +317,7 @@ function ManagedSystemOverview({
                   ) : (
                     <span className="inline-flex items-center justify-end gap-2">
                       <ProgressMeter
+                        clip
                         element="span"
                         value={coveragePercent}
                         semantics={{ role: 'meter', label: GLOSSARY.coverage }}

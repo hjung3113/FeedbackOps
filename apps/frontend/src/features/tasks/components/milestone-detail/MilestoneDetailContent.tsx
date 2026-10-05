@@ -95,6 +95,7 @@ export function MilestoneDetailContent({
             </div>
             {/* Decorative bar — the strip's text already carries the numbers. */}
             <ProgressMeter
+              clip
               value={milestone.progress.percent}
               size="thin"
               tone="primary"

@@ -43,7 +43,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Skeleton | row, panel, card; `shape=rounded` | loading | reduced motion safe |
 | `SkeletonRows` | `size=compact` (`h-12`), `regular` (`h-14`); caller-owned count | loading | decorative placeholders |
 | `SkeletonBlocks` | `line`, `title`, `body`, `badge` detail presets | loading | decorative placeholders |
-| `ProgressMeter` | `size=thin` (4px), `normal` (6px); primary, success, warning, danger tones; unannotated by default, decorative, or labeled meter/progressbar semantics | current value | caller preserves its prior accessibility mode; decorative parts are hidden |
+| `ProgressMeter` | `size=thin` (4px), `normal` (6px); `clip` (clip the fill to the rounded track; off by default); primary, success, warning, danger tones; unannotated by default, decorative, or labeled meter/progressbar semantics | current value | caller preserves its prior accessibility mode; decorative parts are hidden |
 | `StatusBadgeFrame` | reporter, task, severity, compact, compact-identity, compact-outline, link geometry; shared semantic tones | caller-owned state-to-tone map | text label required; indicator optional |
 | `ManagedSystemMark` | 16, 18, 22, 28px square marks | known and fallback color | decorative; adjacent system name supplies identity |
 | `KeyboardShortcut` | compact keyboard hint | platform-specific label | hint text remains readable |

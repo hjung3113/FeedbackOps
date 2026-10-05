@@ -9,6 +9,8 @@ export interface ProgressMeterProps {
   tone?: 'primary' | 'success' | 'warning' | 'danger';
   trackTone?: 'row-hover' | 'row-selected' | 'subtle';
   fillShape?: 'rounded' | 'square';
+  /** Clip the fill to the track's rounded shape. Off by default: an unclipped fill keeps its own rounded caps. */
+  clip?: boolean;
   className?: string;
   'data-testid'?: string;
   semantics?: 'plain' | 'decorative' | { role: 'meter' | 'progressbar'; label: string };
@@ -36,6 +38,7 @@ export function ProgressMeter({
   tone = 'primary',
   trackTone,
   fillShape = 'rounded',
+  clip = false,
   className,
   'data-testid': testId,
   semantics = 'plain',
@@ -60,7 +63,8 @@ export function ProgressMeter({
     <Track
       {...accessibilityProps}
       className={cn(
-        'overflow-hidden rounded-full',
+        'rounded-full',
+        clip && 'overflow-hidden',
         size === 'thin' ? 'h-1' : 'h-1.5',
         trackTone !== undefined ? TRACK_TONE_CLASS[trackTone] : undefined,
         className,
