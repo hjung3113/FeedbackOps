@@ -4,6 +4,8 @@ import {
   needMoreInfoPermissionRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
+  revokePermissionBodySchema,
+  revokePermissionResultSchema,
 } from '@fops/shared';
 import { permissionDecisionResultTemplates } from '../../fixtures/permissions';
 import { json } from './shared';
@@ -47,6 +49,52 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
           route,
           200,
           permissionDecisionResultSchema.parse({ ...template, id: requestId }),
+        );
+      },
+    },
+  ];
+}
+
+export function createPermissionGrantHandlers(): MockApiHandler[] {
+  return [
+    {
+      method: 'GET',
+      path: '/permissions/grants',
+      handle: (route, context) => json(route, 200, { items: context.permissionGrants.grants }),
+    },
+    {
+      method: 'GET',
+      path: '/permissions/denies',
+      handle: (route, context) => json(route, 200, { items: context.permissionGrants.denies }),
+    },
+    {
+      method: 'POST',
+      path: /^\/permissions\/(grants|denies)\/([^/]+)\/revoke$/,
+      handle: async (route, context, url, pathMatch: MockApiPathMatch) => {
+        if (pathMatch === true) throw new Error('Permission revoke path must include captures');
+        const [, rawKind, id] = pathMatch;
+        if (!id || (rawKind !== 'grants' && rawKind !== 'denies')) {
+          throw new Error(
+            `Missing permission revoke target for ${route.request().method()} ${url}`,
+          );
+        }
+        const kind = rawKind;
+        const body = revokePermissionBodySchema.parse(route.request().postDataJSON());
+        context.postedBodies.push(body);
+        context.postedRequests.push({
+          body,
+          idempotencyKey: await route.request().headerValue('Idempotency-Key'),
+          pathname: url.pathname,
+        });
+        const items =
+          kind === 'grants' ? context.permissionGrants.grants : context.permissionGrants.denies;
+        const index = items.findIndex((item) => item.id === id);
+        if (index < 0) throw new Error(`No active permission fixture for ${kind} ${id}`);
+        items.splice(index, 1);
+        await json(
+          route,
+          200,
+          revokePermissionResultSchema.parse({ id, revoked_at: '2026-07-18T00:00:00.000Z' }),
         );
       },
     },

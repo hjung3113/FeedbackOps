@@ -2,6 +2,10 @@ import type { AdminSettingsVisualScenario } from '../../fixtures/admin-settings'
 import type { HomeVisualScenario } from '../../fixtures/home';
 import type { populatedInboxNotifications } from '../../fixtures/notifications';
 import type {
+  PermissionGrantsScenarioName,
+  createPermissionGrantsScenario,
+} from '../../fixtures/permission-grants';
+import type {
   PermissionScenarioName,
   createPermissionRequestsScenario,
 } from '../../fixtures/permissions';
@@ -19,6 +23,7 @@ export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
   permissionScenario?: PermissionScenarioName;
+  permissionGrantsScenario?: PermissionGrantsScenarioName;
   role?: RoleLevel;
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
@@ -88,6 +93,7 @@ export interface MockApiContext {
   postedBodies: unknown[];
   postedRequests: PostedRequest[];
   permissionRequests: ReturnType<typeof createPermissionRequestsScenario>;
+  permissionGrants: ReturnType<typeof createPermissionGrantsScenario>;
   savedViews: SavedView[];
   notificationItems: Array<(typeof populatedInboxNotifications.items)[number]>;
   role: RoleLevel;

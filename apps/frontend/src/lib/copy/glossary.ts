@@ -44,6 +44,7 @@ export const GLOSSARY = {
   board: '보드',
   triageQueue: 'Triage 대기열',
   console: '콘솔',
+  managedSystem: 'Managed System',
   unknownUser: '알 수 없는 사용자',
   evidenceHighlight: 'Evidence 하이라이트',
   addEvidence: 'Evidence 추가',

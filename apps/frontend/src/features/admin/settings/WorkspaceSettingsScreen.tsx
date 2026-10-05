@@ -1,3 +1,4 @@
+import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { GLOSSARY } from '@/lib/copy/glossary';
 
 import {
@@ -153,6 +154,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           '과거의 직접 승인 기록은 감사 로그에 SELF_APPROVAL 라벨로 영구 보존되며 회수되지 않습니다.',
           '활성 직접 승인 권한은 만료일까지 유지되며 갱신 시 새 정책 기준으로 평가됩니다.',
           '대기 중인 직접 승인 요청은 저장 시점부터 검토자가 배정되어야 하며 요청자에게 알림이 발송됩니다.',
+          ADMIN_PERMISSIONS_COPY.selfDenyLiftForbidden,
         ]
       : [
           '활성 권한 부여는 유지됩니다. 새 직접 승인은 권한 없이도 허용되며 감사 라벨은 동일합니다.',

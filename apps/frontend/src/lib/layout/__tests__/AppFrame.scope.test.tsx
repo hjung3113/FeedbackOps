@@ -354,14 +354,26 @@ describe('AppFrame capability navigation', () => {
         if (actor.canUseWorkspaceAdmin) {
           expect(screen.getByRole('link', { name: '관리자' })).toBeInTheDocument();
           expect(screen.getByTestId('sidebar-section-admin')).toBeInTheDocument();
-          for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
+          for (const id of [
+            'admin-ms',
+            'admin-aa',
+            'admin-permissions',
+            'admin-permission-grants',
+            'admin-settings',
+          ]) {
             expect(screen.getByTestId(`sidebar-nav-${id}`)).toBeInTheDocument();
           }
           expect(screen.getByTestId('sidebar-footer-workspace-settings')).toBeInTheDocument();
         } else {
           expect(screen.queryByRole('link', { name: '관리자' })).not.toBeInTheDocument();
           expect(screen.queryByTestId('sidebar-section-admin')).not.toBeInTheDocument();
-          for (const id of ['admin-ms', 'admin-aa', 'admin-permissions', 'admin-settings']) {
+          for (const id of [
+            'admin-ms',
+            'admin-aa',
+            'admin-permissions',
+            'admin-permission-grants',
+            'admin-settings',
+          ]) {
             expect(screen.queryByTestId(`sidebar-nav-${id}`)).not.toBeInTheDocument();
           }
           expect(screen.queryByTestId('sidebar-footer-workspace-settings')).not.toBeInTheDocument();

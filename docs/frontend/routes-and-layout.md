@@ -38,7 +38,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /admin/managed-systems
 /admin/analytics-areas?managedSystem=:managedSystemId&includeArchived=true&selected=:analyticsAreaId
 /admin/permissions/requests?tab=:tab&selected=:requestId
-/admin/permissions/grants?tab=grants|denies&selected=:permissionId (planned, round 2 of #762)
+/admin/permissions/grants?tab=grants|denies&selected=:permissionId
 /admin/settings
 ```
 
@@ -56,7 +56,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/integration/links` | `managedSystem`, `status`, `type` | `managedSystem` for the caller's effective scope union; `status` and `type` when unfiltered |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
 | `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
-| `/admin/permissions/grants` (planned, round 2 of #762) | `tab`, `selected` | `tab` for grants; `selected` when none is selected |
+| `/admin/permissions/grants` | `tab`, `selected` | `tab` for grants; `selected` when none is selected |
 
 Route naming rules:
 
@@ -65,8 +65,8 @@ Route naming rules:
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
 - The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
-- Analytics Areas and Permission Requests are Admin routes, not top-level work
-  routes; `/admin/permissions/grants` is planned for round 2 of #762.
+- Analytics Areas, Permission Requests, and active grants/denies are Admin routes,
+  not top-level work routes.
 - Managed Systems are MVP scope, filters, defaults, and dashboard grouping; they do not create per-Managed-System route trees.
 - Analytics Area is secondary classification under Managed System; it may appear as filter, column, detail metadata, Admin catalog item, or nested dashboard breakdown, but not as top-level navigation.
 - `managedSystem=all` means the actor's effective Managed System scope union. It is workspace-wide only for Admin.

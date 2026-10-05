@@ -2,7 +2,7 @@
 
 ## Ownership
 
-Admin owns frontend route composition for Managed System Registry, Analytics Areas, Permission Requests, workspace settings, and administrative review queues.
+Admin owns frontend route composition for Managed System Registry, Analytics Areas, Permission Requests, active permission grants and denies, workspace settings, and administrative review queues.
 
 It does not own source-system lifecycles, Entity Link relation semantics, or application-service permission decisions.
 
@@ -10,8 +10,8 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 
 ## Route Boundary
 
-- Owns `/admin/managed-systems`, `/admin/analytics-areas`, `/admin/permissions/requests`, and `/admin/settings` (implemented — `WorkspaceSettingsScreen`, see `apps/frontend/src/features/admin/settings/`).
-- Analytics Areas, Permission Requests, Managed System Registry, and workspace settings are Admin routes, not top-level work routes.
+- Owns `/admin/managed-systems`, `/admin/analytics-areas`, `/admin/permissions/requests`, `/admin/permissions/grants`, and `/admin/settings` (implemented — `WorkspaceSettingsScreen`, see `apps/frontend/src/features/admin/settings/`).
+- Analytics Areas, Permission Requests, active permission grants and denies, Managed System Registry, and workspace settings are Admin routes, not top-level work routes.
 
 ## Invariants
 
@@ -38,6 +38,7 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreasList.tsx` — Analytics Area tree list.
 - `apps/frontend/src/features/admin/analytics-areas/AnalyticsAreaDetail.tsx` — selected Analytics Area detail.
 - `apps/frontend/src/features/admin/permissions/permission-requests-screen.tsx` — request tabs, list, and status badges.
+- `apps/frontend/src/features/admin/permissions/permission-grants-screen.tsx` — active grants and denies with revoke/lift detail actions.
 - `apps/frontend/src/features/admin/permissions/permission-request-detail.tsx` — request detail and decision actions.
 - `apps/frontend/src/features/admin/permissions/permission-requests-search.ts` — request URL tabs and status labels.
 - `apps/frontend/src/features/admin/settings/WorkspaceSettingsScreen.tsx` — editable workspace settings.
