@@ -12,6 +12,8 @@ GET /attachments/:id/download
 `POST /attachments` requires an authenticated Actor in the workspace, an
 `Idempotency-Key`, and a `multipart/form-data` file part. Uploads are limited to
 25 MiB.
+A malformed multipart body (no boundary or a truncated part) returns 422
+`validation.malformed_request`.
 
 `GET /attachments/:id/download` requires an authenticated Actor in the
 workspace and streams the authorized attachment with its MIME type, size, and

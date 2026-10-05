@@ -26,6 +26,7 @@ import { MAX_ATTACHMENT_BYTES } from '../routes.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const truncatedBoundary = 'truncated-attachment-boundary';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -145,6 +146,45 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3a validation',
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
+  });
+
+  it.each([
+    {
+      name: 'no boundary',
+      contentType: 'multipart/form-data',
+      payload: Buffer.from('malformed multipart input'),
+    },
+    {
+      name: 'truncated body',
+      contentType: `multipart/form-data; boundary=${truncatedBoundary}`,
+      payload: Buffer.from(
+        `--${truncatedBoundary}\r\nContent-Disposition: form-data; name="file"; filename="photo.png"\r\nContent-Type: image/png\r\n\r\ntruncated`,
+      ),
+    },
+  ])('422 validation.malformed_request for $name', async ({ contentType, payload }) => {
+    const cookie = await loginAs(app, 'mock-user-1');
+    const beforeRows = await dbHandle.pool.query(
+      'select count(*)::int as n from voc.voc_attachments',
+    );
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments',
+      headers: {
+        'content-type': contentType,
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'idempotency-key': randomUUID(),
+      },
+      payload,
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toEqual({
+      code: 'validation.malformed_request',
+      message: 'malformed request',
+    });
+    const afterRows = await dbHandle.pool.query(
+      'select count(*)::int as n from voc.voc_attachments',
+    );
+    expect(afterRows.rows[0].n).toBe(beforeRows.rows[0].n);
   });
 
   it('422 validation.malformed_idempotency_key when not a UUIDv4', async () => {
