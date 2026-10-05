@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Zustand and GitHub Actions were chosen but are not in use (notes below).
+Accepted. Zustand and GitHub Actions were chosen but are not in use (notes below). Amended by ADR-0062 (`@shadcn/lint` design-system rules run on Oxlint; Biome stays the formatter and general linter).
 
 FeedbackOps MVP uses one decision per layer rather than per-team or per-feature variation:
 

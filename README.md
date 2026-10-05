@@ -107,6 +107,7 @@ Two rules explain most of the structure:
 | Typecheck (whole monorepo) | `pnpm typecheck` |
 | Frontend typecheck gate | `pnpm gate:fe-typecheck` |
 | Lint gate (changed files) | `pnpm gate:fe-lint --base origin/develop` |
+| Design-system lint (warning cap) | `pnpm lint:design` |
 | Module boundaries | `pnpm check:boundaries` |
 | Migration drift | `pnpm gate:db-migration-drift` |
 

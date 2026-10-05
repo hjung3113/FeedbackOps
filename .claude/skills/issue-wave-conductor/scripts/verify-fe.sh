@@ -1,6 +1,6 @@
 #!/bin/bash
 # verify-fe.sh <worktree> — FE host checks (Node 22): full vitest (+packages/ui if touched), FE typecheck gate, root typecheck,
-# boundaries + fixture test, backend tsc. Logs in $WAVE_STATE/verify-<basename>/. Prints a summary.
+# boundaries + fixture test, design-system lint cap, backend tsc. Logs in $WAVE_STATE/verify-<basename>/. Prints a summary.
 : "${WAVE_STATE:?set WAVE_STATE}"; wt=$1; log=$WAVE_STATE/verify-$(basename "$wt"); mkdir -p "$log"
 export PATH=/opt/homebrew/opt/node@22/bin:$PATH; cd "$wt" || exit 2
 first_failure=0
@@ -28,6 +28,7 @@ run_check fe-typecheck "$log/fe-typecheck.log" pnpm gate:fe-typecheck
 # Root typecheck also builds packages/ui with its tests (gate:fe-typecheck covers only the frontend; #661).
 run_check root-typecheck "$log/root-typecheck.log" pnpm -s typecheck
 run_check boundaries "$log/boundaries.log" node scripts/check-boundaries.mjs
+run_check design-lint "$log/design-lint.log" pnpm -s lint:design
 run_check boundaries-test "$log/boundaries-test.log" node scripts/check-boundaries.test.mjs
 run_check be-tsc "$log/be-tsc.log" pnpm --filter @fops/backend exec tsc --noEmit
 print_summary > "$log/summary.txt"

@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["@shadcn/lint"],
+  "ignorePatterns": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/routeTree.gen.ts"],
+  "settings": {
+    "shadcn": {
+      "ui": "@fops/ui",
+      "note": "New tokens go in packages/ui/src/styles/theme.css + tokens.css (ADR-0058)."
+    }
+  },
+  "rules": {
+    "shadcn/no-restyle": [
+      "warn",
+      {
+        "allow": ["layout"],
+        "contracts": [
+          {
+            "pattern": "^(DetailPanelHeader|ShellHeader|ListToolbar)$",
+            "allow": ["layout"],
+            "deny": ["h-*", "min-h-*", "max-h-*", "size-*"]
+          }
+        ]
+      }
+    ],
+    "shadcn/no-raw-colors": ["warn", { "scanAllStrings": true }],
+    "shadcn/no-arbitrary-values": ["warn", { "scanAllStrings": true }],
+    "shadcn/no-inline-styles": "warn",
+    "shadcn/no-unknown-classes": "warn",
+    "shadcn/require-static-classes": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["apps/frontend/src/**"],
+      "rules": {
+        "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }],
+        "shadcn/no-unknown-classes": "error"
+      }
+    },
+    {
+      "files": ["packages/ui/src/**"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": ["warn", { "allow": ["layout"], "scanAllStrings": true }],
+        "shadcn/require-static-classes": "off"
+      }
+    }
+  ]
+}
