@@ -35,6 +35,7 @@ export function PreviewPane({
           미리보기
         </Button>
       </DialogTrigger>
+      {/* oxlint-disable-next-line shadcn/no-restyle -- survey preview dialog draws a phone-width canvas */}
       <DialogContent className="max-h-[90vh] max-w-[480px] overflow-hidden bg-surface-canvas p-0">
         <PreviewSheet survey={survey} />
       </DialogContent>
@@ -50,6 +51,7 @@ function PreviewSheet({ survey }: { survey: Survey }) {
 
   return (
     <section className="max-h-[90vh] overflow-y-auto bg-surface-canvas p-6">
+      {/* oxlint-disable-next-line shadcn/no-restyle -- compact preview label above the survey title */}
       <DialogTitle className="text-sm font-medium">
         {SURVEY_PARTICIPATION_COPY.previewTitle}
       </DialogTitle>

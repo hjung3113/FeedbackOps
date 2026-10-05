@@ -45,18 +45,22 @@ const APPEARANCE_CLASS: Record<StatusBadgeAppearance, string> = {
 const TONE_CLASS: Record<StatusBadgeTone, { text: string; tint: string }> = {
   success: {
     text: 'text-text-success-label',
+    // oxlint-disable-next-line shadcn/no-arbitrary-values -- status tint keeps the exact rgb alpha its #750 12% contrast ratios were measured on
     tint: 'bg-[rgb(var(--text-success)/0.12)]',
   },
   warning: {
     text: 'text-text-warning-label',
+    // oxlint-disable-next-line shadcn/no-arbitrary-values -- status tint keeps the exact rgb alpha its #750 12% contrast ratios were measured on
     tint: 'bg-[rgb(var(--text-warning)/0.12)]',
   },
   muted: {
     text: 'text-text-muted',
+    // oxlint-disable-next-line shadcn/no-arbitrary-values -- status tint keeps the exact rgb alpha its #750 12% contrast ratios were measured on
     tint: 'bg-[rgb(var(--text-muted)/0.12)]',
   },
   danger: {
     text: 'text-text-danger-label',
+    // oxlint-disable-next-line shadcn/no-arbitrary-values -- status tint keeps the exact rgb alpha its #750 12% contrast ratios were measured on
     tint: 'bg-[rgb(var(--text-danger)/0.12)]',
   },
   'internal-todo': {

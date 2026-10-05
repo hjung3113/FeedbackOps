@@ -28,7 +28,7 @@ export function ManagedSystemMark({
 }: ManagedSystemMarkProps) {
   const style = {
     '--managed-system-mark-color': color,
-    ...(fontSize !== undefined ? { '--managed-system-mark-font-size': fontSize } : {}),
+    '--managed-system-mark-font-size': fontSize,
   } as React.CSSProperties;
 
   return (

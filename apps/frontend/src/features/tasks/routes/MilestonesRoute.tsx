@@ -352,7 +352,10 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Milestone 검색…"
-                      className="w-full truncate pl-8"
+                      className={
+                        // oxlint-disable-next-line shadcn/no-restyle -- 32px left padding reserves the overlaid search icon and truncates long queries
+                        'w-full truncate pl-8'
+                      }
                     />
                   </div>
                   {/* Filter intentionally opens no menu in this slice. */}
@@ -389,7 +392,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               evidence field (approved B2c plan). Slice C owns the per-row mini
               timeline, so only the prototype's schedule-risk label renders. */}
             <div
-              className="flex items-stretch gap-[18px] border-b border-border-subtle bg-surface-canvas px-5 py-3"
+              className="flex items-stretch gap-4.5 border-b border-border-subtle bg-surface-canvas px-5 py-3"
               data-testid="milestones-summary"
             >
               <SummaryCell

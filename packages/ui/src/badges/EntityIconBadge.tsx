@@ -53,7 +53,9 @@ export function EntityIconBadge({ type, size = 22, className }: EntityIconBadgeP
         {
           '--entity-icon-size': `${size}px`,
           '--entity-icon-font-size': `${fontSize}px`,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- prototype entity-icon hex palette has no semantic token yet (follow-up)
           '--entity-icon-bg': entry.bg,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- prototype entity-icon hex palette has no semantic token yet (follow-up)
           '--entity-icon-color': entry.color,
           '--entity-icon-radius': `${radius}px`,
         } as React.CSSProperties

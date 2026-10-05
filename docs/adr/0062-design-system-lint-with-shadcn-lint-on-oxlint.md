@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted 2026-10-05. The owner asked for `@shadcn/lint`; the Oxlint host and the warn-plus-cap rollout follow
+Accepted 2026-10-05; amended 2026-10-06 (#797, rollout complete). The owner asked for `@shadcn/lint`; the Oxlint host and the warn-plus-cap rollout follow
 the tool's own setup and adoption guides. Amends ADR-0007 ("Lint and format: Biome") by adding a second lint
 host scoped to design-system rules.
 
@@ -46,3 +46,20 @@ for ESLint or Oxlint only; Biome cannot load it. Its setup guide picks Oxlint wh
   `fade-*`, `zoom-*`, `slide-*`) generate no CSS because no animation plugin is installed, and `FieldLabel` uses the
   raw palette color `text-red-500`.
 - Oxlint's JS plugin API is alpha, and both packages are pinned exactly.
+
+## Amended 2026-10-06
+
+The rollout is complete (#797). Every `shadcn/*` rule is `error` and `pnpm lint:design` runs with `--max-warnings 0`;
+no warning budget remains. Inside `packages/ui`, `no-restyle` and `require-static-classes` stay off as before:
+components style themselves.
+
+The boundary gained two allowances, both from the tool's own guidance:
+- `no-restyle` has a container contract: layout and spacing are allowed on `Card`, `EmptyState`, `PanelTitleBlock`,
+  `ListToolbar`, and content/header/footer/group/panel/list/section-title parts, because the padding and gap around a
+  container's content belong to the screen. The header-height contract stays last and also allows spacing.
+- Screens may use arbitrary layout values (grid templates, widths, viewport heights) in `no-arbitrary-values`;
+  typography, spacing, shape, and color still need theme tokens or scales.
+
+What is left after fixes and shared tokens/variants is an intentional single-use treatment, marked in place with
+`oxlint-disable-next-line shadcn/<rule> -- <reason>`. A reason names the concrete design need; review checks it.
+

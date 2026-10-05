@@ -61,6 +61,7 @@
 //     </div>
 //   </div>
 
+import type * as React from 'react';
 import {
   isForbiddenTransition,
   useReporterStatusTransitions,
@@ -84,7 +85,6 @@ import {
   UserAvatar,
 } from '@fops/ui';
 import { Check, Megaphone, ShieldCheck, User } from 'lucide-react';
-import * as React from 'react';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -142,13 +142,7 @@ export function ReporterStatusChangeBlock({
 
   return (
     <div
-      className="mt-2.5 rounded-md p-3 bg-(--status-change-background) shadow-(--status-change-ring)"
-      style={
-        {
-          '--status-change-background': 'rgb(var(--color-neon-lime) / 0.04)',
-          '--status-change-ring': 'inset 0 0 0 1px rgb(var(--color-neon-lime) / 0.18)',
-        } as React.CSSProperties
-      }
+      className="mt-2.5 rounded-md p-3 bg-accent-primary/4 ring-1 ring-inset ring-accent-primary/18"
       data-testid="reporter-status-change-block"
     >
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -181,7 +175,10 @@ export function ReporterStatusChangeBlock({
           <SelectTrigger
             value={nextStatus}
             density="compact"
-            className="w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas text-sm text-text-primary outline-hidden focus:ring-1 focus:ring-focus-ring"
+            className={
+              // oxlint-disable-next-line shadcn/no-restyle -- the reporter status picker needs a compact width, strong border, and canvas surface in the update preview
+              'w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas text-sm text-text-primary'
+            }
             aria-label="다음 공개 상태 선택"
           >
             <SelectValue />
@@ -205,12 +202,7 @@ export function ReporterStatusChangeBlock({
         {/* 변경 예정 chip — shown when staged and no gate blocking */}
         {isStaged && !isGateBlocked && !isForbiddenSelected && (
           <span
-            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary bg-(--status-change-chip-background)"
-            style={
-              {
-                '--status-change-chip-background': 'rgb(var(--color-neon-lime) / 0.16)',
-              } as React.CSSProperties
-            }
+            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary bg-accent-primary/16"
           >
             <Check size={9} aria-hidden="true" />
             변경 예정
@@ -260,12 +252,7 @@ export function ReporterStatusChangeBlock({
         </span>
 
         <div
-          className="rounded-md p-3 bg-surface-canvas shadow-(--status-change-preview-ring)"
-          style={
-            {
-              '--status-change-preview-ring': 'inset 0 0 0 1px var(--border-subtle)',
-            } as React.CSSProperties
-          }
+          className="rounded-md p-3 bg-surface-canvas"
         >
           {/* VOC id + next status badge + 업데이트 chip */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -275,12 +262,7 @@ export function ReporterStatusChangeBlock({
             <ReporterStatusBadge status={nextStatus} />
             {isStaged && (
               <span
-                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary bg-(--status-change-update-background)"
-                style={
-                  {
-                    '--status-change-update-background': 'rgb(var(--color-neon-lime) / 0.18)',
-                  } as React.CSSProperties
-                }
+                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary bg-accent-primary/18"
               >
                 업데이트
               </span>

@@ -26,7 +26,7 @@ describe('TriageRow', () => {
   it('mirrors prototype expanded row padding and min height', () => {
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={vi.fn()} />);
     const row = screen.getByRole('button');
-    expect(row.className).toContain('min-h-[96px]');
+    expect(row.className).toContain('min-h-row-expanded');
     expect(row.className).toContain('py-3.5');
     expect(row.className).toContain('px-5');
   });

@@ -7,7 +7,7 @@
  * Missing owners use the shared danger badge; the missing-area label stays neutral.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.8):
- *   .object-row.expanded → min-h-[96px] py-3.5 px-5
+ *   .object-row.expanded → min-h-row-expanded py-3.5 px-5
  *   .object-row.selected::before → before:absolute before:left-0 before:inset-y-0 before:w-0.5 before:bg-accent-primary
  *   .row-body → flex flex-col min-w-0 gap-0.5
  *   .row-title → text-sm font-medium text-text-primary truncate
@@ -71,7 +71,7 @@ export function TriageRow({
       onKeyDown={handleKeyDown}
       className={cn(
         // Base layout — .object-row.expanded (§3.8)
-        'relative flex w-full items-center gap-3 min-h-[96px] py-3.5 px-5 text-left',
+        'relative flex w-full items-center gap-3 min-h-row-expanded py-3.5 px-5 text-left',
         // Bottom border
         'border-b border-border-subtle',
         // Hover

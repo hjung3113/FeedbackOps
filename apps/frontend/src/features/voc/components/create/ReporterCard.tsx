@@ -22,6 +22,7 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
           제출자
         </div>
         <CardContent padding="none" className="flex items-center gap-3">
+          {/* oxlint-disable-next-line shadcn/no-restyle -- the reporter loading placeholder reserves the circular 32px avatar shape */}
           <Skeleton className="h-8 w-8 rounded-full" />
           <div className="flex flex-col gap-1.5">
             <Skeleton className="h-4 w-28" />

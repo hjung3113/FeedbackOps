@@ -43,6 +43,7 @@ export function SeverityBadge({ severity, label, className }: SeverityBadgeProps
       tintClassName="bg-(--status-badge-tint)"
       {...(className !== undefined ? { className } : {})}
       token={token}
+      // oxlint-disable-next-line shadcn/no-inline-styles -- tint is picked from the closed severity map and keeps the exact rgb alpha measured for #525 contrast
       style={{ '--status-badge-tint': `rgb(var(${token}) / 0.12)` } as React.CSSProperties}
       indicator={<SeverityIndicator severity={severity} />}
     >

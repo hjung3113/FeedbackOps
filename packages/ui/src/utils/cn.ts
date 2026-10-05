@@ -8,11 +8,11 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ['caption', 'tiny', 'micro'],
-      leading: ['body'],
+      text: ['caption', 'tiny', 'micro', 'md'],
+      leading: ['body', 'relaxed-ui', 'note'],
       tracking: ['kicker', 'kind-label'],
       radius: ['icon-chip'],
-      spacing: ['row-accent'],
+      spacing: ['row-accent', 'row-compact', 'row-default', 'row-expanded'],
     },
   },
 });

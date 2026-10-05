@@ -221,6 +221,9 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--leading-tight', raw: '1.2' },
   { tokenName: '--leading-normal', raw: '1.4' },
   { tokenName: '--leading-relaxed', raw: '1.6' },
+  // #797 (2026-10-06): compact note leading shared by Callout and the milestone source summary; not in the
+  // frozen prototype token block (the prototype Callout used it inline).
+  { tokenName: '--leading-note', raw: '1.55' },
 
   // --- Typography: tracking ---
   { tokenName: '--tracking-tight', raw: '-0.22px' },
