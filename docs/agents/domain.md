@@ -42,7 +42,7 @@ Root `CONTEXT.md` holds the domain glossary plus stable domain invariants. It do
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in root `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
 
-If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/grill-with-docs`).
+If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (record the gap for a domain-documentation decision; the vendored `grill-with-docs` skill is not linked into `.claude/skills/`).
 
 ## Flag ADR conflicts
 

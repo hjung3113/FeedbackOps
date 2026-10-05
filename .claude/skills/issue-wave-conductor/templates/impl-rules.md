@@ -28,3 +28,5 @@ in your report.
 7. **Report:** write `.review/W-<issue>-REPORT.md` — files changed (one line why each), tests added (which
    acceptance criterion each covers), existing tests you changed and why, anything not done, open questions.
    Its **last line** is the sentinel from your task. Write the sentinel only when all edits are finished.
+8. **Never call `orca` from the sandbox.** It returns `runtime_access_denied`/EPERM (933 times last week).
+   If a needed command is blocked, finish with the report and state the command and blocker; do not retry IPC.
