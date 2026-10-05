@@ -170,7 +170,7 @@ export function AppSidebar({
         {!collapsed && (
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-text-primary" data-testid="sidebar-system-label">{systemLabel}</div>
-            <div className="truncate text-[10px] text-text-muted" data-testid="sidebar-system-subtitle">{systemSubtitle}</div>
+            <div className="truncate text-caption text-text-muted" data-testid="sidebar-system-subtitle">{systemSubtitle}</div>
           </div>
         )}
         <button type="button" onClick={toggle} className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary" aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} data-testid="sidebar-collapse-toggle">
@@ -206,7 +206,7 @@ export function AppSidebar({
                 )}
               </span>
               {scopeControlEnabled && isUnion && grantedSystems.length > 0 && (
-                <span className="block truncate text-[10px] text-text-muted">
+                <span className="block truncate text-caption text-text-muted">
                   {SCOPE_SELECTOR_COPY.assignedPrefix}{' '}
                   {grantedSystems.map((system) => system.name).join(' · ')}
                 </span>
@@ -220,7 +220,7 @@ export function AppSidebar({
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{SCOPE_SELECTOR_COPY.allLabel}</span>
-                  <span className="block text-[10px] text-text-muted">
+                  <span className="block text-caption text-text-muted">
                     {isAdmin
                       ? SCOPE_SELECTOR_COPY.workspaceAll
                       : `${SCOPE_SELECTOR_COPY.assignedCountPrefix} ${grantedSystems.length} / ${managedSystems.length}`}
@@ -236,7 +236,7 @@ export function AppSidebar({
               ))}
               {/* #282: sits outside the option buttons on purpose — inside one,
                   the sentence would become part of that option's accessible name. */}
-              {!isAdmin && <p className="px-2 py-1.5 text-[10px] text-text-muted" data-testid="scope-name-visibility-note">이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.</p>}
+              {!isAdmin && <p className="px-2 py-1.5 text-caption text-text-muted" data-testid="scope-name-visibility-note">이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.</p>}
             </div>
           )}
         </div>
@@ -247,7 +247,7 @@ export function AppSidebar({
             const showSection = !collapsed && entry.section !== undefined && entry.section !== entries[index - 1]?.section;
             const count = 'onSelect' in entry ? undefined : (entry.count ?? (entry.countKey === undefined ? undefined : counts[entry.countKey]));
             return <React.Fragment key={entry.id}>
-              {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
+              {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-caption font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
               {'onSelect' in entry ? (
                 <button type="button" onClick={entry.onSelect} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined} aria-haspopup="dialog">
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
@@ -310,7 +310,7 @@ function SavedViewsSection({
   const [name, setName] = React.useState('');
   return (
     <section className="mt-3.5" aria-label="저장된 보기" data-testid="saved-views-section">
-      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
+      <div className="mx-2 mb-1 text-caption font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
       {views.map((view) => (
         <div key={view.id} className="group flex items-center gap-1">
           <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
@@ -330,11 +330,11 @@ function SavedViewsSection({
 }
 
 function NavCountBadge({ entryId, count, urgent }: { entryId: string; count: number; urgent?: boolean }) {
-  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
+  return <span className={cn('rounded-full bg-surface-row-selected px-1.5 py-0.5 text-caption font-semibold tabular-nums text-text-secondary', urgent && count > 0 && 'bg-accent-danger/15 text-accent-danger')} data-testid={`sidebar-count-${entryId}`}>{count}</span>;
 }
 
 function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: string; urgent?: boolean }) {
-  return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-[9px] font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
+  return <span className={cn('inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent-primary/10 px-1 py-0.5 text-micro font-medium text-accent-primary', urgent && 'bg-accent-danger/15 text-accent-danger')} data-testid={testId}>{label}</span>;
 }
 
 function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {

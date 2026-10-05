@@ -40,7 +40,7 @@ export function homeSidebarEntries(
             section: 'FEEDBACKOPS',
             icon: <CommandIcon className="h-4 w-4" />,
             trailing: (
-              <span className="rounded-[2px] border border-border-subtle bg-surface-row-hover px-[5px] py-px font-mono text-[10px] leading-[1.4] text-text-muted">
+              <span className="rounded-sm border border-border-subtle bg-surface-row-hover px-1.25 py-px font-mono text-caption leading-body text-text-muted">
                 {shortcutLabel()}
               </span>
             ),

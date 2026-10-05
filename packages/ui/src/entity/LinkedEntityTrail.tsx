@@ -84,7 +84,7 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
                   {label}
                 </span>
                 {node.meta && (
-                  <span className="max-w-48 truncate text-[11px] text-text-muted">
+                  <span className="max-w-48 truncate text-tiny text-text-muted">
                     {node.meta}
                   </span>
                 )}

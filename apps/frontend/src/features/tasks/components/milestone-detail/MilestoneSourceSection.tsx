@@ -30,7 +30,7 @@ export function MilestoneSourceSection({
             <Button
               variant="subtle"
               size="sm"
-              className="h-6 gap-1.5 px-2 text-[12px]"
+              className="h-6 gap-1.5 px-2 text-xs"
               onClick={() => {
                 // R4 — an unsaved title draft confirms before the panel
                 // is left; a clean panel navigates immediately.
@@ -52,7 +52,7 @@ export function MilestoneSourceSection({
         {sourceFinding ? (
           <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
             <span className="text-xs text-text-muted">{GLOSSARY.fromFinding}</span>
-            <div className="text-[13px] font-medium text-text-primary">
+            <div className="text-sm font-medium text-text-primary">
               <span className="mr-1.5 font-mono text-xs text-text-muted">
                 {sourceFinding.display_id}
               </span>

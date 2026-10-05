@@ -315,7 +315,7 @@ function SettingRow({
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium text-text-primary">{label}</p>
           {dirty && (
-            <span className="rounded-sm bg-accent-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-primary">
+            <span className="rounded-sm bg-accent-primary/15 px-1.5 py-0.5 text-caption font-medium text-accent-primary">
               변경됨
             </span>
           )}

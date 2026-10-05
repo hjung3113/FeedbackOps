@@ -65,7 +65,7 @@ describe('DetailPanelHeader — milestone kind badge', () => {
     const chip = screen.getByText(KIND_LABELS[kind]);
 
     expect(chip).toHaveClass('rounded');
-    expect(chip).toHaveClass('text-[11px]');
+    expect(chip).toHaveClass('text-tiny');
     expect(chip).not.toHaveClass('uppercase');
     expect(chip.querySelector('[aria-hidden="true"]')).not.toBeNull();
     expect((chip as HTMLElement).style.color).toBe(KIND_ACCENT[kind]);
@@ -89,7 +89,7 @@ describe('DetailPanelHeader — milestone kind badge', () => {
     const badge = screen.getByText('Milestone');
 
     expect(badge).toHaveClass('rounded');
-    expect(badge).toHaveClass('text-[11px]');
+    expect(badge).toHaveClass('text-tiny');
     expect(badge).not.toHaveClass('uppercase');
     expect((badge as HTMLElement).querySelector('[aria-hidden="true"]')).not.toBeNull();
     expect(header?.querySelector(':scope > div[aria-hidden="true"]')).toBeNull();
@@ -123,7 +123,7 @@ describe('DetailPanelHeader — display', () => {
   it('matches prototype panel-header and panel-id typography', () => {
     const { container } = render(<DetailPanelHeader kind="voc" id="V-1" onClose={() => {}} />);
     const header = container.querySelector('[data-kind="voc"]');
-    expect(header).toHaveClass('h-[50px]');
+    expect(header).toHaveClass('h-toolbar');
     const content = screen.getByTestId('detail-panel-header-content');
     expect(content).toHaveClass('pl-4');
     expect(content).toHaveClass('pr-3');

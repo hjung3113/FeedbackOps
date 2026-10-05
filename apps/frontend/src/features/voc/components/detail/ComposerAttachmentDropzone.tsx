@@ -94,7 +94,7 @@ export function ComposerAttachmentDropzone({
         <Paperclip className="h-3 w-3 shrink-0 text-text-muted" aria-hidden />
         <span className="text-xs text-text-primary">{COPY.dropHint}</span>
         <span className="flex-1" />
-        <span className="text-[11px] text-text-muted">{COPY.footer}</span>
+        <span className="text-tiny text-text-muted">{COPY.footer}</span>
         <input
           id={inputId}
           type="file"
@@ -146,7 +146,7 @@ function AttachmentRow({ row, onRemove }: AttachmentRowProps): React.ReactElemen
     >
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-xs font-medium">{row.file.name}</span>
-        <span className="text-[11px]">
+        <span className="text-tiny">
           <span className="text-text-muted">{sizeText}</span>
           {statusText}
         </span>

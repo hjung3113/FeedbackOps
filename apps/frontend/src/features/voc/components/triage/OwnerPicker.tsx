@@ -6,7 +6,7 @@
  *   .entity-node rows → bg-surface-canvas shadow-subtle rounded-md
  *   active entity-node → bg-accent-primary/6 ring-1 ring-inset ring-accent-primary/40
  *   .entity-node-title → text-xs font-medium text-text-primary
- *   .entity-node-meta → text-[10px] text-text-muted
+ *   .entity-node-meta → text-caption text-text-muted
  *
  * Decision D-2.1 (PLAN-21): threshold is exactly 5.
  *   candidates.length <= 5 → RadioGroup-style entity rows
@@ -161,7 +161,7 @@ function OwnerRow({
       ) : (
         // Placeholder (e.g. "(미지정)") — dashed circle
         <span
-          className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-text-muted"
+          className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-text-muted"
           aria-hidden="true"
         />
       )}
@@ -174,7 +174,7 @@ function OwnerRow({
         </span>
         {/* .entity-node-meta */}
         {meta !== undefined && (
-          <span className="text-[10px] text-text-muted leading-none mt-0.5 truncate">
+          <span className="text-caption text-text-muted leading-none mt-0.5 truncate">
             {meta}
           </span>
         )}

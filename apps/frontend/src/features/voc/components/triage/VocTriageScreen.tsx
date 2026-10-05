@@ -96,20 +96,20 @@ export function VocTriageScreen({
         {/* Kicker: "Console · Triage" — absorbs route identity previously held by ShellHeader toolbar prop. */}
         <div
           data-testid="triage-kicker"
-          className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-[22px] border-r border-border-subtle shrink-0"
+          className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-5.5 border-r border-border-subtle shrink-0"
         >
           <span
             data-testid="triage-kicker-console"
-            className="text-xs font-medium uppercase tracking-[0.04em] text-text-muted"
+            className="text-xs font-medium uppercase tracking-kicker text-text-muted"
           >
             {GLOSSARY.console}
           </span>
-          <span className="text-[10px] text-text-muted" aria-hidden="true">
+          <span className="text-caption text-text-muted" aria-hidden="true">
             ·
           </span>
           <span
             data-testid="triage-kicker-name"
-            className="text-[13px] font-semibold text-text-secondary"
+            className="text-sm font-semibold text-text-secondary"
           >
             Triage
           </span>
@@ -120,7 +120,7 @@ export function VocTriageScreen({
         <output
           data-testid="triage-queue-total"
           aria-label={queueTotalAccessibleLabel}
-          className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium bg-surface-canvas text-text-muted border border-border-subtle"
+          className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium bg-surface-canvas text-text-muted border border-border-subtle"
         >
           {queueTotal === undefined ? '— VOC' : `${queueTotal} VOC`}
         </output>
@@ -166,7 +166,7 @@ export function VocTriageScreen({
         {/* Deep link target this queue cannot show (#383) — never silently
             swap in another VOC's commit form. */}
         {deepLinkTargetMissing && (
-          <div className="w-[440px] shrink-0 border-l border-border-subtle p-6">
+          <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"
               className="text-sm font-medium text-text-primary"
@@ -182,7 +182,7 @@ export function VocTriageScreen({
 
         {/* Right: detail panel (always rendered when queue non-empty) */}
         {selectedVoc !== null && (
-          <div className="w-[440px] shrink-0">
+          <div className="w-detail-panel shrink-0">
             <TriagePanel
               voc={selectedVoc}
               onAct={handleAct}

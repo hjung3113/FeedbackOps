@@ -65,7 +65,7 @@ export function DetailPanelHeader({
       data-kind={kind}
       className={cn(
         'sticky top-0 z-10 bg-surface-card border-b border-border-subtle',
-        'flex items-stretch h-[50px]',
+        'flex items-stretch h-toolbar',
         className,
       )}
     >
@@ -81,7 +81,7 @@ export function DetailPanelHeader({
         {/* Kind chip + id (id only when the caller has it) */}
         <div className={cn('flex gap-2 min-w-0', isMilestone ? 'items-center' : 'items-baseline')}>
           <span
-            className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em]"
+            className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-tiny font-medium leading-none tracking-kind-label"
             style={{ color: accentColor, backgroundColor: accentTint }}
           >
             <span

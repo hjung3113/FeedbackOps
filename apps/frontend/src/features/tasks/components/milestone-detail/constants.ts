@@ -26,4 +26,4 @@ export const selectClassName =
   'px-2 py-1.5 text-sm text-text-primary';
 
 export const milestonePropertyFieldClassName =
-  'grid grid-cols-[120px_1fr] items-start gap-3 px-0 text-[13px] [&>div]:text-left';
+  'grid grid-cols-[120px_1fr] items-start gap-3 px-0 text-sm [&>div]:text-left';

@@ -279,7 +279,7 @@ function RegistryRow({
       style={{ gridTemplateColumns: '40px 1.6fr 1.1fr 1.4fr 110px' }}
     >
       <div
-        className="flex items-center justify-center rounded-md text-[11px] font-semibold text-white"
+        className="flex items-center justify-center rounded-md text-tiny font-semibold text-white"
         style={{ width: 28, height: 28, background: mark.color }}
         aria-hidden="true"
       >

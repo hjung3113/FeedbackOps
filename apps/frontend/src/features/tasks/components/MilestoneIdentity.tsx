@@ -28,7 +28,7 @@ function managedSystemToken(label: string): string {
 
 // Prototype .badge geometry shared by the pill and the outline badge.
 const COMPACT_BADGE_CLASS =
-  'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em] shadow-subtle';
+  'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-tiny font-medium leading-none tracking-kind-label shadow-subtle';
 
 // Prototype ManagedSystemPill (badges.jsx): compact badge, secondary text,
 // 6px round dot in the system's semantic identity color.
@@ -60,7 +60,7 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
     <span
-      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-(--radius-pill) text-[9px] font-semibold leading-none text-white"
+      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) text-micro font-semibold leading-none text-white"
       style={{ backgroundColor: 'rgb(var(--color-aether-blue) / 1)' }}
     >
       {name.charAt(0).toUpperCase()}
@@ -74,7 +74,7 @@ export function MilestoneOwnerChip({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <MilestoneOwnerAvatar name={name} />
-      <span className="text-[13px] leading-[1.4] text-text-primary">{name}</span>
+      <span className="text-sm leading-body text-text-primary">{name}</span>
     </span>
   );
 }
@@ -91,7 +91,7 @@ export function MilestonePanelSectionTitle({
 }) {
   return (
     <PanelSectionTitle
-      className={className !== undefined ? `mb-2.5 text-[11px] ${className}` : 'mb-2.5 text-[11px]'}
+      className={className !== undefined ? `mb-2.5 text-tiny ${className}` : 'mb-2.5 text-tiny'}
     >
       {children}
     </PanelSectionTitle>

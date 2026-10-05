@@ -226,7 +226,7 @@ function ManagedSystemOverview({
         data-testid="integration-managed-system-table"
       >
         <thead>
-          <tr className="border-b border-border-subtle text-[10px] uppercase tracking-wide text-text-muted">
+          <tr className="border-b border-border-subtle text-caption uppercase tracking-wide text-text-muted">
             <th scope="col" className="px-4 py-2 font-medium">
               Managed System
             </th>

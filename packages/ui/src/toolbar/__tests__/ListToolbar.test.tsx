@@ -132,7 +132,7 @@ describe('ListToolbar — tabs mode', () => {
       'h-7',
       'px-2.5',
       'gap-1.5',
-      'text-[13px]',
+      'text-sm',
       'hover:bg-surface-card',
       'hover:text-text-primary',
       'data-[state=active]:bg-surface-card-elevated',
@@ -159,7 +159,7 @@ describe('ListToolbar — tabs mode', () => {
     render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
     const tab = screen.getByRole('tab', { name: '미배정 5' });
     expect(tab).toBeInTheDocument();
-    expect(screen.getByText('5')).toHaveClass('text-[11px]', 'text-text-muted', 'tabular-nums');
+    expect(screen.getByText('5')).toHaveClass('text-tiny', 'text-text-muted', 'tabular-nums');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
@@ -173,7 +173,7 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.getByRole('tab', { name: '탭A 0' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: '탭B' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByText('0')).toHaveClass(
-      'text-[11px]',
+      'text-tiny',
       'text-text-muted',
       'tabular-nums',
       'group-data-[state=active]:text-text-secondary',

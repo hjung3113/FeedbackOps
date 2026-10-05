@@ -112,7 +112,7 @@ export function ComposerPublicPreview({
           <span className="text-xs font-mono text-text-muted">{voc.display_id}</span>
           <ReporterStatusBadge status={nextStatus} />
           {isStatusChanging && (
-            <span className="inline-flex items-center h-5 px-1.5 rounded-sm text-[10px] font-medium bg-accent-primary/15 text-accent-primary">
+            <span className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium bg-accent-primary/15 text-accent-primary">
               업데이트
             </span>
           )}
@@ -124,7 +124,7 @@ export function ComposerPublicPreview({
         {/* Owner + body area */}
         <div className="flex items-start gap-2.5">
           {/* Avatar placeholder — prototype uses Avatar component */}
-          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-[10px] text-text-muted font-medium">
+          <div className="w-6 h-6 rounded-full bg-surface-card-elevated flex items-center justify-center shrink-0 text-caption text-text-muted font-medium">
             {owner.display_name.slice(0, 1)}
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-0">

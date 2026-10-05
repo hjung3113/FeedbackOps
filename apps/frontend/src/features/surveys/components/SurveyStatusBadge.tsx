@@ -14,7 +14,7 @@ export function surveyStatusLabel(status: SurveyStatus): string {
 export function SurveyStatusBadge({ status }: { status: SurveyStatus }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${TONE_CLASSES[status]}`}
+      className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-tiny font-medium ${TONE_CLASSES[status]}`}
       data-testid={`survey-status-${status}`}
     >
       {SURVEY_STATUS_LABELS[status]}

@@ -148,7 +148,7 @@ export function VocRow({
       <div
         data-testid="voc-row-left-bar"
         aria-hidden="true"
-        className={cn('absolute left-0 top-0 bottom-0 w-[3px] rounded-r-sm', severityBarClass)}
+        className={cn('absolute left-0 top-0 bottom-0 w-row-accent rounded-r-sm', severityBarClass)}
       />
 
       {/* LEAD: checkbox (bulk select) + severity indicator. Click here must not

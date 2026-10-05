@@ -84,7 +84,7 @@ export function IntegrationDashboardQueueCard({
           <p className="mt-1 text-xs leading-5 text-text-muted">{copy.detail(queue.count)}</p>
         </div>
         <span
-          className={`shrink-0 rounded px-1.5 py-1 text-[10px] font-medium uppercase ${tone.badge}`}
+          className={`shrink-0 rounded px-1.5 py-1 text-caption font-medium uppercase ${tone.badge}`}
         >
           {tone.label}
         </span>

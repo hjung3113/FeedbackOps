@@ -33,7 +33,7 @@ export function SimilarVocPanel({ managedSystemId }: SimilarVocPanelProps): Reac
               className="flex w-full flex-col gap-0.5 rounded px-2.5 py-2 text-left transition-colors hover:bg-surface-row-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-border-selected"
             >
               <span className="truncate text-xs font-medium text-text-primary">{item.title}</span>
-              <span className="font-mono text-[11px] text-text-muted">
+              <span className="font-mono text-tiny text-text-muted">
                 {item.display_id} · {formatRelativeTime(item.created_at)}
               </span>
             </Link>

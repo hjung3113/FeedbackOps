@@ -162,7 +162,7 @@ export function AppRail({
         <span className="relative inline-flex">
           <Bell className="h-4 w-4" />
           {unreadBadge !== undefined && (
-            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-[9px] font-semibold leading-none text-white">
+            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-micro font-semibold leading-none text-white">
               {unreadBadge}
             </span>
           )}
