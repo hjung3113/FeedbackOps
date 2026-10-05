@@ -1,6 +1,6 @@
-// Mapping-table tests for `toFrontendState`. Pin every branch including the
-// branches (hidden_existence, rejected, expired, revoked, summary_visible) so
-// S1.2/S1.4 don't drift the contract.
+// Mapping-table tests for `toFrontendState`. Pin every branch, including the
+// rarely produced ones (hidden_existence, rejected, summary_visible), so later
+// slices don't drift the contract.
 
 import { describe, expect, it } from 'vitest';
 

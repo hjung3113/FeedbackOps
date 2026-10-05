@@ -3,9 +3,9 @@
 // names that `<PermissionStateView>` renders.
 //
 // Mapping table is locked by the grill session Q6 and reproduced verbatim in
-// the issue #4 spec. Slice 1 actively produces approved,
-// blocked_non_requestable, request_access, pending_request, and revoked.
-// The remaining branches (hidden_existence, rejected, expired,
+// the issue #4 spec. The backend actively produces approved,
+// blocked_non_requestable, request_access, pending_request, revoked, and
+// expired. The remaining branches (hidden_existence, rejected,
 // summary_visible) are pinned by unit tests so later slices don't accidentally
 // drift the contract.
 

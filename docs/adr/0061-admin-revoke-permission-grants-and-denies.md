@@ -95,7 +95,7 @@ Two existing behaviours shape the design:
 - An Admin can take back any grant, including grants that no request created, and lift any deny, except a deny on
   themself while `permission_self_approval` is `forbidden`. Both actions leave an audit row with a reason.
 - A revoked Actor can request the capability again. A deny is still the way to make a capability unrequestable.
-- Expiry keeps the old lock-out until its follow-up lands.
+- An expired grant is requestable again on the same terms (#767).
 - Docs to update with the implementation: `docs/implementation/api/permissions.md`, `05-permission-policy.md`
   (events and lifecycle), `docs/design/09-permission-access.md` FR-PERM-002 status, `docs/design/13-mvp-roadmap.md`
   Phase 1, `docs/frontend/routes-and-layout.md`, and the notification catalogue doc, if one lists events.
