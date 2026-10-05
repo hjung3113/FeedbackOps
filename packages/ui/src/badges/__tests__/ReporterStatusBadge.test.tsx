@@ -33,6 +33,7 @@ describe('ReporterStatusBadge', () => {
       const badge = container.querySelector(
         `[data-token="--status-reporter-${status}"]`,
       ) as HTMLElement;
+      expect(badge).toHaveClass(`text-status-reporter-${status}-label`);
       expect(badge.style.getPropertyValue('--status-badge-tint')).toBe(
         `rgb(var(--status-reporter-${status}) / 0.14)`,
       );

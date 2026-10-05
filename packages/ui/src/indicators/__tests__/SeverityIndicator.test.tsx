@@ -32,6 +32,24 @@ describe('SeverityIndicator', () => {
         });
       });
 
+      it('uses the severity color utility class on every bar', () => {
+        const { container } = render(<SeverityIndicator severity={severity} />);
+        const bars = Array.from(container.querySelectorAll('[data-token]'));
+        for (const bar of bars) {
+          expect(bar).toHaveClass(`bg-severity-${severity}`);
+        }
+      });
+
+      it('uses full opacity for filled bars and 30% opacity for dimmed bars', () => {
+        const { container } = render(<SeverityIndicator severity={severity} />);
+        const bars = Array.from(container.querySelectorAll('[data-filled]'));
+        for (const bar of bars) {
+          expect(bar).toHaveClass(
+            bar.getAttribute('data-filled') === 'true' ? 'opacity-100' : 'opacity-30',
+          );
+        }
+      });
+
     });
   });
 });

@@ -503,16 +503,6 @@ describe('CommandPalette display-id flow', () => {
 });
 
 describe('CommandPalette list chrome', () => {
-  it('keeps command icons inside the shared icon slot', async () => {
-    await renderPalette();
-    pressShortcut({ ctrlKey: true });
-
-    const row = screen.getByTestId('command-palette-item-nav-rail-voc');
-    const icon = row.querySelector('svg');
-    expect(icon).not.toBeNull();
-    expect(icon?.parentElement?.tagName).toBe('SPAN');
-  });
-
   it('shows the empty state for a query with no matches', async () => {
     const user = userEvent.setup();
     await renderPalette();

@@ -191,20 +191,12 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
           className={cn(
             'border-l border-border-subtle bg-surface-detail overflow-y-auto transition-[width] duration-150',
             slotOpen
-              ? 'w-(--detail-panel-width) min-w-(--detail-panel-min-width) max-w-(--detail-panel-max-width)'
+              ? 'w-(--detail-panel-width) min-w-90 max-w-130'
               : 'w-0',
           )}
           aria-label="상세 패널"
           data-testid="app-detail-slot"
           data-open={slotOpen ? 'true' : 'false'}
-          {...(slotOpen
-            ? {
-                style: {
-                  '--detail-panel-min-width': '360px',
-                  '--detail-panel-max-width': '520px',
-                } as React.CSSProperties,
-              }
-            : {})}
         >
           {slotOpen && slotNode}
         </aside>

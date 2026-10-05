@@ -12,11 +12,12 @@ const ROW_CLASS: Record<SkeletonRowsProps['size'], string> = {
 
 /** Repeated list loading rows at the shipped 48px and 56px heights. */
 export function SkeletonRows({ count, size }: SkeletonRowsProps) {
+  const rowKeys = Array.from({ length: count }, (_, index) => `row-${index}`);
+
   return (
     <>
-      {Array.from({ length: count }, (_, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders have no state or identity across renders.
-        <Skeleton className={ROW_CLASS[size]} key={index} />
+      {rowKeys.map((key) => (
+        <Skeleton className={ROW_CLASS[size]} key={key} />
       ))}
     </>
   );

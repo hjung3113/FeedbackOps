@@ -86,15 +86,23 @@ export function StatusBadgeFrame({
   token,
 }: StatusBadgeFrameProps) {
   const toneClasses = tone !== undefined ? TONE_CLASS[tone] : undefined;
+  const usesTokenTint = tone !== undefined && token !== undefined;
+  const tintStyle = usesTokenTint
+    ? {
+        ...(style ?? {}),
+        '--status-badge-tint': `rgb(var(${token}) / 0.12)`,
+      } as React.CSSProperties
+    : style;
+
   return (
     <span
       className={cn(
         APPEARANCE_CLASS[appearance],
         textClassName ?? toneClasses?.text,
-        tintClassName ?? toneClasses?.tint,
+        usesTokenTint ? 'bg-(--status-badge-tint)' : (tintClassName ?? toneClasses?.tint),
         className,
       )}
-      {...(style !== undefined ? { style } : {})}
+      {...(tintStyle !== undefined ? { style: tintStyle } : {})}
       {...(token !== undefined ? { 'data-token': token } : {})}
     >
       {indicator}

@@ -43,6 +43,8 @@ describe('ManagedSystemPill', () => {
     const mark = container.querySelector('[data-mark]');
     expect(screen.getByText('Tableau')).toBeInTheDocument();
     expect(mark).toHaveAttribute('data-mark', 'rgb(var(--managed-system-tableau) / 1)');
+    expect(mark).toHaveClass('size-1.5', 'rounded-pill');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
     expect(mark?.parentElement).toHaveTextContent('Tableau');
   });
 
@@ -60,6 +62,8 @@ describe('ManagedSystemPill', () => {
     expect(mark).not.toBeNull();
     expect(pill).not.toBeNull();
     expect(mark?.parentElement).toBe(pill);
+    expect(mark).toHaveClass('rounded-pill');
+    expect(pill).toHaveClass('opacity-60');
   });
 
   it('sets data-archived="false" when archived=false', () => {
@@ -71,7 +75,11 @@ describe('ManagedSystemPill', () => {
 
   it('renders muted when no mark is provided (unknown ms pattern)', () => {
     const { container } = render(<ManagedSystemPill name="Unknown MS" />);
-    expect(container.querySelector('[data-archived="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-archived="false"]')).toHaveClass(
+      'border-border-subtle',
+      'text-text-muted',
+      'opacity-60',
+    );
     expect(container.querySelector('[data-mark]')).toBeNull();
   });
 });

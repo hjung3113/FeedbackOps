@@ -323,7 +323,7 @@ export function ReporterStatusChangeBlock({
           </div>
 
           {/* Public-safe footer reminder */}
-          <div className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2 border-t border-border-subtle">
+          <div className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2">
             <ShieldCheck size={10} aria-hidden="true" />
             첨부·외부 링크·@멘션은 공개 본문에 포함되지 않습니다. 내부 식별자(VOC id, Task id 등)는 자동으로 가려집니다.
           </div>

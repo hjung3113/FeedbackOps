@@ -64,12 +64,7 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
     <span
-      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) text-micro font-semibold leading-none text-white bg-(--milestone-owner-avatar-background)"
-      style={
-        {
-          '--milestone-owner-avatar-background': 'rgb(var(--color-aether-blue) / 1)',
-        } as React.CSSProperties
-      }
+      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) bg-accent-primary text-micro font-semibold leading-none text-white"
     >
       {name.charAt(0).toUpperCase()}
     </span>

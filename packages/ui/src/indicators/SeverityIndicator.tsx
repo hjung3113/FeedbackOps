@@ -33,7 +33,7 @@ export function SeverityIndicator({ severity, className }: SeverityIndicatorProp
   const filled = FILL_COUNT[severity];
   return (
     <span
-      className={cn('inline-flex items-end gap-[2px]', className)}
+      className={cn('inline-flex items-end gap-0.5', className)}
       aria-label={severity}
       data-severity={severity}
     >
