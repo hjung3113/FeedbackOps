@@ -126,8 +126,6 @@ Status vocabulary: `registered` — route file exists and renders the screen · 
 | `admin-settings` | `screen-admin-settings.jsx` | `/admin/settings` | `routes/_authed/admin/settings.tsx` | `WorkspaceSettingsScreen` in `PageShell`, behind `PermissionGate` `workspace.admin` | `registered` | `api/core.md` |
 | (no prototype screen) | — | `/login` — behavior is the login paragraph in routes doc lines 101–103 | `routes/login.tsx` | `LoginPage` | `registered`. No prototype screen; do not invent a `screen-login.jsx` | — |
 
-`/dev-rich-editor` is a dev harness — excluded from this table.
-
 Do not build in this issue (gaps stay open): `my-work`, `view=milestones`, `tasks` roadmap, `/integration/evidence`, `/integration/coverage`, and an Integration action-dashboard page.
 
 Search-key disagreements to keep in mind on the tasks and links rows: tasks zod allows `param` where the contract says `selected`; links has no `selected` at all. Sidebar (`NAV_TREE`): rails are home, voc, findings, tasks, integration, surveys, admin. Integration entries are Action dashboard (`/integration`, which redirects), Findings (`/findings`), Entity links — no evidence, coverage, milestones, roadmap, backlog, or task-inbox items. The routes doc paragraph at line 99 (VOC section includes Findings; a MANAGED SYSTEMS group) does not match `NAV_TREE` — recorded; the routes doc is not fixed in this issue.
