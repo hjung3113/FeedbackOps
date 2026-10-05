@@ -19,6 +19,14 @@ Frontend and migration gates. The full gate list is in root `AGENTS.md` → Veri
 - Update `frontend-typecheck-baseline.txt`, or add a line to `frontend-biome-allowlist.txt`, only when the existing diagnostic is intentionally accepted and documented in review. An allowlist line is `<repo-relative-path> <biome-category> -- <reason>`. Each path carries its own lines; a split file needs a new line for each category.
 - Biome is not part of `pnpm typecheck` or any other gate, and a whole-repo `biome check` count is not a usable oracle. When fixing only import order in an existing file, use `biome check --write --formatter-enabled=false --linter-enabled=false <file>` so nothing else is reformatted.
 
+## Design-system lint (`pnpm lint:design`)
+
+- `@shadcn/lint` on Oxlint (ADR-0062), configured in the root `.oxlintrc.json`. Oxlint runs only the `shadcn/*` rules; Biome still owns formatting and general lint. It lints `apps/frontend/src` and `packages/ui/src`, ignoring tests and `routeTree.gen.ts`.
+- Every rule is `warn`, and `--max-warnings` in the root `package.json` caps the whole-repo count, so one new finding anywhere fails it. When a change fixes findings, lower the cap to the new count in the same PR; never raise it.
+- To see findings for a few files only: `pnpm exec oxlint <paths>`. The messages name the `@fops/ui` variant, scale value, or token to use instead.
+- `packages/ui/components.json` exists only to point the linter at `apps/frontend/src/styles.css`; without it, theme utilities such as `h-toolbar` read as unknown classes in `packages/ui`. It is not a shadcn CLI config.
+- An intentional exception is an `// oxlint-disable-next-line shadcn/<rule> -- <reason>` comment, accepted only when documented in review, like a Biome allowlist line.
+
 ## Migration drift gate (`pnpm gate:db-migration-drift`)
 
 - `db-migration-drift-gate.mjs` needs no database: it forces `DATABASE_URL_MIGRATE` to an unreachable URL, even when your shell exports a real one.

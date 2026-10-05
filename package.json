@@ -13,6 +13,7 @@
     "gen:routes": "node scripts/generate-routes.mjs",
     "test": "turbo run test",
     "lint": "biome check .",
+    "lint:design": "oxlint --max-warnings 592 apps/frontend/src packages/ui/src",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "check:boundaries": "node scripts/check-boundaries.mjs",
@@ -22,6 +23,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@shadcn/lint": "0.2.0",
+    "oxlint": "1.86.0",
     "turbo": "2.3.3",
     "typescript": "5.7.2"
   }

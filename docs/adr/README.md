@@ -2,7 +2,7 @@
 
 ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1, currently `0061`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1, currently `0062`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -12,7 +12,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 
 ## Architecture, platform and operations
 
-- [0007](0007-core-technology-stack.md) Core technology stack — Node 22, Fastify, Postgres 16, Drizzle, Zod, TanStack, Vitest, Biome, pnpm + Turborepo. *Accepted*
+- [0007](0007-core-technology-stack.md) Core technology stack — Node 22, Fastify, Postgres 16, Drizzle, Zod, TanStack, Vitest, Biome, pnpm + Turborepo. *Accepted, amended by 0062*
 - [0008](0008-audit-log-storage-and-immutability.md) Audit log storage and immutability — one `core.audit_log` table committed with the mutation, append-only by DB role grants. *Accepted*
 - [0009](0009-background-jobs-with-pg-boss.md) Background jobs with pg-boss — jobs run in the backend process, idempotent, locked retry defaults. *Accepted*
 - [0012](0012-error-code-contract.md) API error code contract — one envelope, stable dotted codes, field-path validation detail, conditional `requestable_permission`. *Accepted*
@@ -51,6 +51,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0052](0052-list-empty-filtered-error-state-contract.md) List empty / filtered / error states — shared `ListStateMessage` with reset and retry actions. *Accepted*
 - [0058](0058-tailwind-v4-css-first-theme.md) Tailwind v4 CSS-first theme — `@theme inline` in `@fops/ui` replaces the JS preset; no visual change. *Accepted*
 - [0060](0060-shipped-ui-replaces-prototype-as-ui-authority.md) Shipped UI replaces the prototype as UI authority — existing screens, `lib/copy` and visual baselines decide; the prototype is a reference for unbuilt surfaces. *Accepted*
+- [0062](0062-design-system-lint-with-shadcn-lint-on-oxlint.md) Design-system lint — `@shadcn/lint` rules run on Oxlint beside Biome, at `warn` under a count cap. *Accepted*
 
 ## VOC intake and triage
 
