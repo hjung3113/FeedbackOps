@@ -11,8 +11,8 @@ export interface SeverityDisclaimerCardProps {
 
 export function SeverityDisclaimerCard({ className }: SeverityDisclaimerCardProps): React.ReactElement {
   return (
-    <Card className={cn('bg-accent-primary/5 p-3.5', className)}>
-      <CardContent className="p-0">
+    <Card padding="compact" className={cn('bg-accent-primary/5', className)}>
+      <CardContent padding="none">
         <span className="sr-only">심각도 안내</span>
         <p className="text-xs leading-relaxed text-text-secondary">
           <Shield className="mr-1 inline h-3 w-3 align-text-bottom text-accent-primary" aria-hidden />

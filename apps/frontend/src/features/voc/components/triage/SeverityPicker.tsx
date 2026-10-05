@@ -133,7 +133,7 @@ export function SeverityPicker({
                     <HelpCircle size={10} strokeWidth={1.8} aria-hidden="true" />
                   </span>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
+                <TooltipContent side="bottom" size="sm">
                   {tip}
                 </TooltipContent>
               </Tooltip>

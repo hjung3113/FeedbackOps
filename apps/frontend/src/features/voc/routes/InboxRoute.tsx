@@ -327,7 +327,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               onChange={handleSortChange}
             />
             {/* Prototype: primary Button (not a text link). #679 Korean-first label. */}
-            <Button asChild variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
+            <Button
+              asChild
+              variant="primary"
+              size="sm"
+              spacing="compact"
+              className="whitespace-nowrap"
+            >
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {createLabel('VOC')}
@@ -380,7 +386,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               asChild
               variant="subtle"
               size="sm"
-              className="gap-1.5"
+              spacing="compact"
               data-testid="voc-inbox-denied-my-vocs"
             >
               <Link to="/vocs" search={{ view: 'my' }}>

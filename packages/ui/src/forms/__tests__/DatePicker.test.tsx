@@ -4,6 +4,27 @@ import { vi } from 'vitest';
 import { DatePicker } from '../../index.js';
 
 describe('DatePicker', () => {
+  it.each([['detail surface', 'bg-surface-detail']])(
+    'preserves legacy classes for %s',
+    (_name, oldClassName) => {
+      const before = render(
+        <DatePicker aria-label="날짜" value="" onChange={vi.fn()} className={oldClassName} />,
+      );
+      const oldClasses = [
+        ...(before.container.firstElementChild?.firstElementChild?.classList ?? []),
+      ].sort();
+      before.unmount();
+
+      const after = render(
+        <DatePicker aria-label="날짜" value="" onChange={vi.fn()} appearance="detail" />,
+      );
+      const variantClasses = [
+        ...(after.container.firstElementChild?.firstElementChild?.classList ?? []),
+      ].sort();
+      expect(variantClasses).toEqual(oldClasses);
+    },
+  );
+
   it('emits a typed YYYY-MM-DD value unchanged', () => {
     const onChange = vi.fn();
     render(<DatePicker aria-label="만료일" value="" onChange={onChange} />);

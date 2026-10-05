@@ -20,23 +20,28 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 
 | Component | Variants | Required States | Accessibility Contract |
 | --- | --- | --- | --- |
-| Button | primary, secondary, subtle, destructive | hover, pressed, focus-visible, disabled, loading | label required |
+| Button | primary, secondary, subtle, destructive; `size=toolbar`, `icon-sm`, `icon-xs`; `spacing=compact`; `padding=compact`; `wrapText` | hover, pressed, focus-visible, disabled, loading | label required |
+| FieldLabel | `appearance=section`, `tone=secondary` | default, required, help tip | associated control; required marker is announced through label text |
+| FieldRow | `inset=none`, `layout=property` | default, detail property | label and value remain readable |
+| Card / CardContent | `Card padding=compact`; `CardContent padding=none` | default, content-free | semantic grouping |
+| EmptyState | `density=compact`, `padding=wide` | title, optional body, icon, action | useful text; action is keyboard reachable |
 | IconButton | subtle, selected, destructive | hover, pressed, focus-visible, disabled | aria-label and tooltip required |
 | Badge | status, signal, visibility, permission | default, muted, urgent, blocked | text label required |
 | TextInput | default, search, invalid | focus, disabled, invalid, loading | associated label and error |
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
-| RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
-| Select | single, multi | focus, disabled, invalid, loading | keyboard navigable |
-| DatePicker | typed date, calendar | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
+| RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment; `RichContentRenderer size=sm` | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
+| Select | single, multi; `SelectTrigger appearance=canvas|field`, `density=compact` | focus, disabled, invalid, loading | keyboard navigable |
+| DatePicker | typed date, calendar; `appearance=detail` | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented | focus, selected, disabled | group label required |
-| Tooltip | text, shortcut | open, closed | not sole source of critical info |
+| Tooltip | text, shortcut; `TooltipContent size=sm` | open, closed | not sole source of critical info |
 | Popover | menu, info, picker | open, focus-trapped when interactive | escape closes |
-| Dialog | confirmation, destructive | open, loading, error | focus trap |
+| Dialog | confirmation, destructive; `DialogFooter spacing=compact` | open, loading, error | focus trap |
 | Drawer | create, detail, multi-step | open, dirty, loading, error | focus management |
 | Toast | success, error, warning, info | visible, dismissed | non-blocking |
-| Skeleton | row, panel, card | loading | reduced motion safe |
+| Skeleton | row, panel, card; `shape=rounded` | loading | reduced motion safe |
+| ToggleGroupItem | `appearance=selected-filter` | selected, unselected, disabled | keyboard navigable |
 | Avatar | user, team | default, missing image | text fallback |
 | Table | data, comparison | loading, empty, selected | keyboard row navigation |
 | ListRow | object, action-queue | hover, selected, active, permission-limited | row action is keyboard reachable |
@@ -89,7 +94,7 @@ Names in the primitive table and the composed list above are design-time names. 
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
 | LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
-| DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock`, `FieldRow`, `PanelSectionTitle`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
+| DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
 | StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
 | SignalBadge | `SeverityBadge`, `SeverityIndicator`, `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
 | RichContentEditor | `RichEditor` + `RichContentRenderer` | `packages/ui/src/rich-content/` |

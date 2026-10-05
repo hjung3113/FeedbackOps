@@ -69,7 +69,7 @@ function FindingNotFound(): React.ReactElement {
           Findings 목록으로
         </Button>
       }
-      className="px-6"
+      padding="wide"
     />
   );
 }

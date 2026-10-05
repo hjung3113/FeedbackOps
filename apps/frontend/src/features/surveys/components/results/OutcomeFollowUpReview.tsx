@@ -108,7 +108,7 @@ function DecisionReasonDialog({
             value={reason}
           />
         </label>
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button onClick={onClose} type="button" variant="secondary">
             취소
           </Button>

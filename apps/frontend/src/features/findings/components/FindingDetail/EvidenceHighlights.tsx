@@ -93,9 +93,10 @@ export function EvidenceHighlightsSection({
       <div data-testid="evidence-empty-state">
         <EmptyState
           size="sm"
+          padding="wide"
           title="Evidence 하이라이트가 없습니다."
           body="Evidence 추가 버튼으로 Evidence를 추가하세요."
-          className="rounded-md border border-dashed border-border-subtle bg-surface-card px-6"
+          className="rounded-md border border-dashed border-border-subtle bg-surface-card"
         />
       </div>
     );

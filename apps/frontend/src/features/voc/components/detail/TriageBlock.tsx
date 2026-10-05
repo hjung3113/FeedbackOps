@@ -45,7 +45,7 @@ export function TriageBlock({
       </div>
 
       {/* 심각도 */}
-      <FieldRow label="심각도" className="px-0">
+      <FieldRow label="심각도" inset="none">
         {voc.severity !== null ? (
           <SeverityBadge severity={voc.severity} />
         ) : (
@@ -54,7 +54,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* 담당자 */}
-      <FieldRow label="담당자" className="px-0">
+      <FieldRow label="담당자" inset="none">
         {voc.owner_user_id !== null ? (
           <UserChip user={{ display_name: ownerDisplayName ?? GLOSSARY.owner }} size="sm" />
         ) : (
@@ -63,7 +63,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* Analytics Area */}
-      <FieldRow label="Analytics Area" className="px-0">
+      <FieldRow label="Analytics Area" inset="none">
         {voc.analytics_area_id !== null ? (
           <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics Area'}</span>
         ) : (
@@ -72,7 +72,7 @@ export function TriageBlock({
       </FieldRow>
 
       {/* Triage 상태 */}
-      <FieldRow label="Triage 상태" className="px-0">
+      <FieldRow label="Triage 상태" inset="none">
         <span className="text-sm text-text-primary">{TRIAGE_STATE_LABELS[voc.triage_state]}</span>
       </FieldRow>
     </div>

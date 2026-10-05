@@ -226,7 +226,7 @@ function RailButton({
           <Icon className="h-4 w-4" />
         </a>
       </TooltipTrigger>
-      <TooltipContent side="right" className="text-xs">
+      <TooltipContent side="right" size="sm">
         {item.label}
       </TooltipContent>
     </Tooltip>

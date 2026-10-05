@@ -61,19 +61,19 @@ export function PermissionGrantDetail({
                 ? ADMIN_PERMISSIONS_COPY.grantInfo
                 : ADMIN_PERMISSIONS_COPY.denyInfo}
             </PanelSectionTitle>
-            <FieldRow label={ADMIN_PERMISSIONS_COPY.target} className="px-0">
+            <FieldRow label={ADMIN_PERMISSIONS_COPY.target} inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>{actorName}</span>
                 <span className="font-mono text-xs text-text-muted">{shortId(item.actor_id)}</span>
               </span>
             </FieldRow>
-            <FieldRow label={ADMIN_PERMISSIONS_COPY.permission} className="px-0">
+            <FieldRow label={ADMIN_PERMISSIONS_COPY.permission} inset="none">
               <span className="flex flex-col gap-0.5">
                 <span>{getCapabilityDisplayLabel(item.capability)}</span>
                 <span className="font-mono text-xs text-text-muted">{item.capability}</span>
               </span>
             </FieldRow>
-            <FieldRow label={ADMIN_PERMISSIONS_COPY.scope} className="px-0">
+            <FieldRow label={ADMIN_PERMISSIONS_COPY.scope} inset="none">
               <PermissionScope
                 id={item.managed_system_id}
                 name={
@@ -86,7 +86,7 @@ export function PermissionGrantDetail({
             ) : (
               <DenyFields item={item} actorNames={actorNames} />
             )}
-            <FieldRow label={ADMIN_PERMISSIONS_COPY.id} className="px-0">
+            <FieldRow label={ADMIN_PERMISSIONS_COPY.id} inset="none">
               <span className="font-mono text-xs text-text-muted">{shortId(item.id)}</span>
             </FieldRow>
           </section>
@@ -122,13 +122,13 @@ function GrantFields({
 }) {
   return (
     <>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.grantor} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.grantor} inset="none">
         <ActorValue id={item.granted_by_actor_id} actorNames={actorNames} />
       </FieldRow>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.grantedAt} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.grantedAt} inset="none">
         <span>{formatDateTime(item.granted_at)}</span>
       </FieldRow>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.expiration} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.expiration} inset="none">
         <span>
           {item.expires_at
             ? formatDateOnly(item.expires_at.slice(0, 10))
@@ -148,13 +148,13 @@ function DenyFields({
 }) {
   return (
     <>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.denier} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.denier} inset="none">
         <ActorValue id={item.created_by_actor_id} actorNames={actorNames} />
       </FieldRow>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.deniedAt} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.deniedAt} inset="none">
         <span>{formatDateTime(item.created_at)}</span>
       </FieldRow>
-      <FieldRow label={ADMIN_PERMISSIONS_COPY.denyReason} className="px-0">
+      <FieldRow label={ADMIN_PERMISSIONS_COPY.denyReason} inset="none">
         <span className="whitespace-pre-wrap">{item.reason}</span>
       </FieldRow>
     </>

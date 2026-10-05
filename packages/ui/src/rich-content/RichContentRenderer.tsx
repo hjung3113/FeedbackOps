@@ -59,6 +59,7 @@ export interface RichContentRendererProps {
    * `reporter-reply`; internal-comment threads use `internal-comment`).
    */
   surface?: ClientSanitizeSurface;
+  size?: 'default' | 'sm';
   className?: string;
 }
 
@@ -74,7 +75,13 @@ function stripMentions(doc: TipTapDoc): TipTapDoc {
   return walk(doc) as TipTapDoc;
 }
 
-export function RichContentRenderer({ doc, mode, surface, className }: RichContentRendererProps) {
+export function RichContentRenderer({
+  doc,
+  mode,
+  surface,
+  size = 'default',
+  className,
+}: RichContentRendererProps) {
   const html = React.useMemo(() => {
     // PLAN-22 C9: defence-in-depth client sanitize before TipTap render.
     // Mode is the public/internal split (drives mention stripping); `surface`
@@ -101,7 +108,7 @@ export function RichContentRenderer({ doc, mode, surface, className }: RichConte
 
   return (
     <div
-      className={cn('max-w-none', className)}
+      className={cn('max-w-none', size === 'sm' && 'text-sm', className)}
       data-mode={mode}
       // biome-ignore lint/security/noDangerouslySetInnerHtml: BE sanitizer is authoritative per ADR-0011
       dangerouslySetInnerHTML={{ __html: html }}

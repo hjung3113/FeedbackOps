@@ -1,12 +1,17 @@
 import * as React from 'react';
 import { cn } from '../../utils/cn.js';
 
-export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  padding?: 'default' | 'compact';
+}
+
+export const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, padding = 'default', ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
         'rounded-lg border border-border-subtle bg-surface-card text-text-primary shadow-sm',
+        padding === 'compact' && 'p-3.5',
         className,
       )}
       {...props}
@@ -42,9 +47,13 @@ export const CardDescription = React.forwardRef<
 ));
 CardDescription.displayName = 'CardDescription';
 
-export const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  padding?: 'default' | 'none';
+}
+
+export const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
+  ({ className, padding = 'default', ...props }, ref) => (
+    <div ref={ref} className={cn('p-6 pt-0', padding === 'none' && 'p-0', className)} {...props} />
   ),
 );
 CardContent.displayName = 'CardContent';

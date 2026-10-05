@@ -30,7 +30,9 @@ export function MilestoneSourceSection({
             <Button
               variant="subtle"
               size="sm"
-              className="h-6 gap-1.5 px-2 text-xs"
+              spacing="compact"
+              padding="compact"
+              className="h-6 text-xs"
               onClick={() => {
                 // R4 — an unsaved title draft confirms before the panel
                 // is left; a clean panel navigates immediately.

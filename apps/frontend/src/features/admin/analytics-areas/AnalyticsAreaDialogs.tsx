@@ -122,7 +122,7 @@ function RegisterForm({
           }
           aria-required="true"
         >
-          <FieldLabel id="aa-create-managed-system-label" className="text-text-secondary">
+          <FieldLabel id="aa-create-managed-system-label" tone="secondary">
             Managed System <span className="text-accent-danger">· 필수</span>
           </FieldLabel>
           <ManagedSystemPicker
@@ -138,7 +138,7 @@ function RegisterForm({
           )}
         </fieldset>
         <div className="space-y-1">
-          <FieldLabel htmlFor="aa-create-slug" className="text-text-secondary">
+          <FieldLabel htmlFor="aa-create-slug" tone="secondary">
             슬러그 <span className="text-accent-danger">· 필수</span>
           </FieldLabel>
           <Input
@@ -158,7 +158,7 @@ function RegisterForm({
           )}
         </div>
         <div className="space-y-1">
-          <FieldLabel htmlFor="aa-create-name" className="text-text-secondary">
+          <FieldLabel htmlFor="aa-create-name" tone="secondary">
             이름 <span className="text-accent-danger">· 필수</span>
           </FieldLabel>
           <Input
@@ -258,7 +258,7 @@ function EditForm({
         }}
       >
         <div className="space-y-1">
-          <FieldLabel htmlFor={`aa-edit-name-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`aa-edit-name-${target.slug}`} tone="secondary">
             이름
           </FieldLabel>
           <Input

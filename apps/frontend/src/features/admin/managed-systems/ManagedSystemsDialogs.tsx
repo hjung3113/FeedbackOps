@@ -69,7 +69,7 @@ function OwnerSelect({
 
   return (
     <div className="space-y-1">
-      <FieldLabel htmlFor={testId} className="text-text-secondary">
+      <FieldLabel htmlFor={testId} tone="secondary">
         기본 담당자 (선택)
       </FieldLabel>
       <Select
@@ -164,7 +164,7 @@ function RegisterDialog({
           }}
         >
           <div className="space-y-1">
-            <FieldLabel htmlFor="ms-create-slug" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-slug" tone="secondary">
               슬러그 <span className="text-accent-danger">· 필수</span>
             </FieldLabel>
             <Input
@@ -184,7 +184,7 @@ function RegisterDialog({
             )}
           </div>
           <div className="space-y-1">
-            <FieldLabel htmlFor="ms-create-name" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-name" tone="secondary">
               이름 <span className="text-accent-danger">· 필수</span>
             </FieldLabel>
             <Input
@@ -204,7 +204,7 @@ function RegisterDialog({
             )}
           </div>
           <div className="space-y-1">
-            <FieldLabel htmlFor="ms-create-external-key" className="text-text-secondary">
+            <FieldLabel htmlFor="ms-create-external-key" tone="secondary">
               외부 키 (선택)
             </FieldLabel>
             <Input
@@ -322,7 +322,7 @@ function EditForm({
         }}
       >
         <div className="space-y-1">
-          <FieldLabel htmlFor={`ms-edit-name-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`ms-edit-name-${target.slug}`} tone="secondary">
             이름
           </FieldLabel>
           <Input
@@ -340,7 +340,7 @@ function EditForm({
           testId={`edit-default-owner-${target.slug}`}
         />
         <div className="space-y-1">
-          <FieldLabel htmlFor={`ms-edit-key-${target.slug}`} className="text-text-secondary">
+          <FieldLabel htmlFor={`ms-edit-key-${target.slug}`} tone="secondary">
             외부 키
           </FieldLabel>
           <Input

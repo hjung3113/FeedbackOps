@@ -106,7 +106,7 @@ export function AnalyticsAreaSlideOver({
 
           <div data-anchor="definition" className="px-4 py-3">
             <PanelSectionTitle>정의</PanelSectionTitle>
-            <FieldRow label="Managed System" className="px-0">
+            <FieldRow label="Managed System" inset="none">
               <span className="flex items-center gap-1.5">
                 {mark && (
                   <span
@@ -120,20 +120,20 @@ export function AnalyticsAreaSlideOver({
                 <span>{ms?.name ?? area.managed_system_id}</span>
               </span>
             </FieldRow>
-            <FieldRow label="슬러그" className="px-0">
+            <FieldRow label="슬러그" inset="none">
               <span className="font-mono text-xs">{area.slug}</span>
             </FieldRow>
-            <FieldRow label="리드" className="px-0">
+            <FieldRow label="리드" inset="none">
               {lead ? (
                 <UserChip user={{ display_name: lead }} size="sm" />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="생성일" className="px-0">
+            <FieldRow label="생성일" inset="none">
               {created}
             </FieldRow>
-            <FieldRow label="기본 공개 범위" className="px-0">
+            <FieldRow label="기본 공개 범위" inset="none">
               <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-xs text-text-secondary">
                 <Shield className="h-2.5 w-2.5" />
                 내부 · Managed System 범위

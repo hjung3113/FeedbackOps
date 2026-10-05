@@ -179,7 +179,8 @@ export function ReporterStatusChangeBlock({
         >
           <SelectTrigger
             value={nextStatus}
-            className="h-8 w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-hidden focus:ring-1 focus:ring-focus-ring"
+            density="compact"
+            className="w-auto min-w-36 max-w-40 rounded-md border-border-strong bg-surface-canvas text-sm text-text-primary outline-hidden focus:ring-1 focus:ring-focus-ring"
             aria-label="다음 공개 상태 선택"
           >
             <SelectValue />

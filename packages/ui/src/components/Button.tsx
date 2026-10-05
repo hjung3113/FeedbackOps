@@ -31,6 +31,9 @@ const buttonVariants = cva(
         sm: 'h-8 px-3',
         md: 'h-10 px-4',
         lg: 'h-12 px-6',
+        toolbar: 'h-8 shrink-0 gap-1.5 px-2',
+        'icon-sm': 'h-8 w-8 p-0',
+        'icon-xs': 'h-7 w-7 p-0',
       },
     },
     defaultVariants: { variant: 'default', size: 'md' },
@@ -57,6 +60,9 @@ export interface ButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  spacing?: 'default' | 'compact';
+  padding?: 'default' | 'compact';
+  wrapText?: boolean;
   loading?: boolean;
   asChild?: boolean;
   children?: React.ReactNode;
@@ -64,7 +70,19 @@ export interface ButtonProps
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { className, variant, size, loading, asChild = false, disabled, children, ...props },
+    {
+      className,
+      variant,
+      size,
+      spacing = 'default',
+      padding = 'default',
+      wrapText = false,
+      loading,
+      asChild = false,
+      disabled,
+      children,
+      ...props
+    },
     ref,
   ) => {
     if (asChild && loading) {
@@ -82,6 +100,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           ref={ref as never}
           className={cn(
             buttonVariants({ variant: resolveVariant(variant), size }),
+            spacing === 'compact' && 'gap-1.5',
+            padding === 'compact' && 'px-2',
+            wrapText && 'h-auto min-h-8 py-1 whitespace-normal',
             className,
           )}
           {...props}
@@ -95,7 +116,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         ref={ref as never}
-        className={cn(buttonVariants({ variant: resolveVariant(variant), size }), className)}
+        className={cn(
+          buttonVariants({ variant: resolveVariant(variant), size }),
+          spacing === 'compact' && 'gap-1.5',
+          padding === 'compact' && 'px-2',
+          wrapText && 'h-auto min-h-8 py-1 whitespace-normal',
+          className,
+        )}
         aria-busy={loading ? 'true' : undefined}
         disabled={disabled || loading}
         {...props}

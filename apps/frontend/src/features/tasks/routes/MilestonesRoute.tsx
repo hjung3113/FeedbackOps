@@ -356,7 +356,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                     />
                   </div>
                   {/* Filter intentionally opens no menu in this slice. */}
-                  <Button variant="subtle" size="sm" className="shrink-0 gap-1.5 px-2">
+                  <Button variant="subtle" size="toolbar">
                     <Filter className="h-3.5 w-3.5" aria-hidden="true" />
                     {GLOSSARY.filter}
                   </Button>
@@ -364,8 +364,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                     detail slot; no separate create screen. */}
                   <Button
                     variant="primary"
-                    size="sm"
-                    className="shrink-0 gap-1.5 px-2"
+                    size="toolbar"
                     onClick={() => {
                       // R3 — an edited unsaved title confirms before the
                       // create block replaces the detail panel.

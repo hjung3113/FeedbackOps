@@ -7,10 +7,23 @@ export const Select = SelectPrimitive.Root;
 export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 
+type SelectAppearance = 'default' | 'canvas' | 'field';
+interface SelectTriggerProps
+  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  appearance?: SelectAppearance;
+  density?: 'default' | 'compact';
+}
+
+const SELECT_APPEARANCE_CLASSES: Record<Exclude<SelectAppearance, 'default'>, string> = {
+  canvas: 'rounded border-border-subtle bg-surface-canvas p-2',
+  field:
+    'h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary',
+};
+
 export const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  SelectTriggerProps
+>(({ className, children, appearance = 'default', density = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
@@ -18,6 +31,8 @@ export const SelectTrigger = React.forwardRef<
       'focus:outline-hidden focus:ring-2 focus:ring-focus-ring focus:ring-offset-2',
       'disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:line-clamp-1',
+      appearance !== 'default' && SELECT_APPEARANCE_CLASSES[appearance],
+      density === 'compact' && 'h-8 px-2 py-1',
       className,
     )}
     {...props}

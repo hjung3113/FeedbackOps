@@ -55,7 +55,7 @@ export function IdentitySection({
   //   - horizontal inset now provided by the scroll container (pt-7 px-6 in VocDetailPanel).
   return (
     <div className="mb-4 pt-2">
-      <PanelTitleBlock title={voc.title} className="px-0! py-0! mb-1" />
+      <PanelTitleBlock title={voc.title} inset="none" className="mb-1" />
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <ReporterStatusBadge status={voc.reporter_facing_status} />
         <span aria-hidden="true">·</span>

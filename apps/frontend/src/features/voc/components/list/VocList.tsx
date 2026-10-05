@@ -288,19 +288,19 @@ function BulkActionBar({ count, onClear }: BulkActionBarProps) {
     >
       <span className="text-sm text-text-primary">{count}개 선택됨</span>
       <span className="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
-      <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
+      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
         <User className="h-3.5 w-3.5" aria-hidden="true" />
         담당자 지정
       </Button>
-      <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
+      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
         <Flag className="h-3.5 w-3.5" aria-hidden="true" />
         심각도 설정
       </Button>
-      <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
+      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
         <Layers className="h-3.5 w-3.5" aria-hidden="true" />
         Cluster에 추가
       </Button>
-      <Button variant="subtle" size="sm" className="gap-1.5" disabled title={BULK_DEFERRED_TITLE}>
+      <Button variant="subtle" size="sm" spacing="compact" disabled title={BULK_DEFERRED_TITLE}>
         <FileText className="h-3.5 w-3.5" aria-hidden="true" />
         Finding 생성
       </Button>

@@ -118,7 +118,7 @@ export function ComposerReplyPreview({
             {empty || draftDoc == null ? (
               <span className="text-text-muted italic">(메시지 본문이 비어있습니다)</span>
             ) : (
-              <RichContentRenderer doc={draftDoc} mode="reporter_visible" className="text-sm" />
+              <RichContentRenderer doc={draftDoc} mode="reporter_visible" size="sm" />
             )}
           </div>
         </div>
