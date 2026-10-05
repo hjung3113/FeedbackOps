@@ -140,7 +140,10 @@ export function ListTabs({
             data-list-toolbar-tabs
             data-fade-left={overflowState.canScrollLeft ? 'true' : 'false'}
             data-fade-right={overflowState.canScrollRight ? 'true' : 'false'}
-            style={viewportStyle}
+            style={
+              // oxlint-disable-next-line shadcn/no-inline-styles -- the scroll-fade mask tracks the live overflow edges
+              viewportStyle
+            }
           >
             <Tabs
               className={cn(align === 'end' && 'ml-auto')}

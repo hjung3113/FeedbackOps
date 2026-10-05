@@ -47,7 +47,10 @@ export function MilestonePropertiesPresenter({
               aria-label="상태"
               value={milestone.status}
               density="compact"
-              className="w-48 rounded bg-surface-detail"
+              className={
+                // oxlint-disable-next-line shadcn/no-restyle -- the milestone status picker uses a 192px detail-column width and a canvas surface
+                'w-48 rounded bg-surface-detail'
+              }
             >
               <SelectValue />
             </SelectTrigger>

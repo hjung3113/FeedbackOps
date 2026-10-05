@@ -50,19 +50,11 @@ export function SourceContextSegmented({
       }}
       data-testid={testId}
     >
-      <TabsList
-        data-testid="source-context-list"
-        className="inline-flex h-auto w-auto justify-start gap-0.5 rounded-md bg-surface-canvas p-0.5 text-text-muted shadow-subtle"
-      >
+      <TabsList data-testid="source-context-list" appearance="segmented">
         {SOURCE_CONTEXTS.map((ctx) => {
           const Icon = ICONS[ctx];
           return (
-            <TabsTrigger
-              key={ctx}
-              value={ctx}
-              disabled={disabled}
-              className="flex-none gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium data-[state=active]:bg-surface-card-elevated data-[state=active]:text-text-primary data-[state=active]:shadow-subtle"
-            >
+            <TabsTrigger key={ctx} value={ctx} disabled={disabled} appearance="segmented">
               <Icon
                 size={12}
                 className="shrink-0"

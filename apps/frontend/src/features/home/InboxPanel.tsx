@@ -117,7 +117,8 @@ export function InboxPanel(): React.ReactElement {
         }}
         variant="outline"
         size="sm"
-        className="w-fit rounded-md border border-border-subtle bg-surface-card p-0.5"
+        appearance="filter"
+        className="w-fit"
         aria-label={HOME_INBOX_COPY.filterLabel}
       >
         <ToggleGroupItem value="unread" appearance="selected-filter">

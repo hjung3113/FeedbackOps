@@ -1,4 +1,3 @@
-import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export type SeverityEnum = 'low' | 'medium' | 'high' | 'critical';
@@ -43,11 +42,12 @@ export function SeverityIndicator({ severity, className }: SeverityIndicatorProp
           <span
             key={i}
             className={cn(
-              'inline-block h-4 w-1 rounded-(--severity-indicator-radius)',
+              'inline-block h-4 w-1',
+              // oxlint-disable-next-line shadcn/no-arbitrary-values -- the three-bar severity indicator uses a one-pixel corner radius
+              'rounded-[1px]',
               SEVERITY_BAR_CLASS[severity],
               isFilled ? 'opacity-100' : 'opacity-30',
             )}
-            style={{ '--severity-indicator-radius': '1px' } as React.CSSProperties}
             data-filled={isFilled ? 'true' : 'false'}
             data-token={`--severity-${severity}`}
           />

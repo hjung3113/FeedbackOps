@@ -135,6 +135,7 @@ export function HomeScreen({
           </header>
           <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
+            {/* oxlint-disable-next-line shadcn/no-restyle -- the Inbox tab keeps an 8px gap before its unread-count badge */}
             <TabsTrigger value="inbox" className="gap-2">
               {HOME_INBOX_COPY.tabs.inbox}
               {unreadBadge !== undefined && (

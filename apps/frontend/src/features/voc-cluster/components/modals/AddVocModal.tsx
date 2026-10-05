@@ -97,6 +97,7 @@ export function AddVocModal({
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-1.5">
+            {/* oxlint-disable-next-line shadcn/no-restyle -- the field label is secondary to the Add VOC dialog title */}
             <Label className="text-text-secondary">
               추가할 VOC <span aria-hidden>*</span>
             </Label>

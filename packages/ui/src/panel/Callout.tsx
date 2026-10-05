@@ -51,11 +51,14 @@ const TONE_STYLES: Record<
 export function Callout({ tone, icon, title, children, action, className }: CalloutProps) {
   const toneStyle = TONE_STYLES[tone];
   const style = {
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone color comes from the closed TONE_STYLES map
     '--callout-color': `rgb(var(${toneStyle.colorVar}))`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone tint uses the per-tone alpha from TONE_STYLES
     '--callout-background': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.backgroundAlpha})`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone ring uses the per-tone alpha from TONE_STYLES
     '--callout-ring': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.ringAlpha}) 0 0 0 1px inset`,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- title color comes from the closed TONE_STYLES map (#750 label tokens)
     '--callout-title-color': `rgb(var(${toneStyle.titleVar}))`,
-    '--callout-line-height': 1.55,
   } as React.CSSProperties;
 
   // The approved prototype uses a tint and inset ring instead of the issue's initial left border.
@@ -63,7 +66,7 @@ export function Callout({ tone, icon, title, children, action, className }: Call
     <div
       data-tone={tone}
       className={cn(
-        'rounded-md p-3 text-xs leading-(--callout-line-height) text-text-secondary bg-(--callout-background) shadow-(--callout-ring)',
+        'rounded-md p-3 text-xs leading-note text-text-secondary bg-(--callout-background) shadow-(--callout-ring)',
         className,
       )}
       style={style}

@@ -219,7 +219,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(why).toHaveClass('bg-surface-canvas');
     expect(why).toHaveClass('p-3');
     expect(why).toHaveClass('text-sm');
-    expect(why).toHaveClass('leading-[1.6]');
+    expect(why).toHaveClass('leading-relaxed-ui');
   });
 
   // B2d fixup finding 2 — the shared header chrome and close action stay

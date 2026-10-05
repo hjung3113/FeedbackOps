@@ -27,7 +27,8 @@ export function PanelTitleBlock({
   const titleClass =
     size === 'xl'
       ? 'text-xl font-bold tracking-tight text-text-primary'
-      : 'text-lg font-semibold tracking-tight leading-[1.35] text-text-primary';
+      : // oxlint-disable-next-line shadcn/no-arbitrary-values -- panel titles preserve the prototype's 1.35 line-height for the compact heading wrap
+        'text-lg font-semibold tracking-tight leading-[1.35] text-text-primary';
 
   return (
     <div

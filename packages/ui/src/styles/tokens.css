@@ -203,6 +203,7 @@
   --leading-tight: 1.2;
   --leading-normal: 1.4;
   --leading-relaxed: 1.6;
+  --leading-note: 1.55;
 
   /* --- Typography: tracking --- */
   --tracking-tight: -0.22px;

@@ -116,6 +116,7 @@ export function SeverityPicker({
                     {SEVERITY_LABELS[level]}
                   </span>
                   {/* .severity-pick-meta */}
+                  {/* oxlint-disable-next-line shadcn/no-arbitrary-values -- the severity picker hint preserves its compact 1.45 line height */}
                   <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>
                 </span>
 

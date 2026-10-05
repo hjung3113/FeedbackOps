@@ -81,7 +81,14 @@ export function TaskRequestDraftCard({
   return (
     <section
       aria-label="Task Request 초안"
-      className="mt-3 flex flex-col gap-3 rounded-md border border-[color-mix(in_oklch,rgb(var(--border-selected))_52%,rgb(var(--border-subtle)))] bg-[linear-gradient(180deg,color-mix(in_oklch,rgb(var(--border-selected))_8%,rgb(var(--surface-card))),rgb(var(--surface-card)))] p-3"
+      className={[
+        'mt-3 flex flex-col gap-3 rounded-md',
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the queued-request edge blends selected and subtle borders at the approved 52% mix
+        'border border-[color-mix(in_oklch,rgb(var(--border-selected))_52%,rgb(var(--border-subtle)))]',
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the draft card keeps an 8% selected-color gradient across its surface
+        'bg-[linear-gradient(180deg,color-mix(in_oklch,rgb(var(--border-selected))_8%,rgb(var(--surface-card))),rgb(var(--surface-card)))]',
+        'p-3',
+      ].join(' ')}
       data-testid="request-task-draft"
       onKeyDown={handleKeyDown}
     >

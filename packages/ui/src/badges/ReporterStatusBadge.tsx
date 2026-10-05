@@ -66,6 +66,7 @@ export function ReporterStatusBadge({ status, className }: ReporterStatusBadgePr
       textClassName={statusClass.text}
       tintClassName="bg-(--status-badge-tint)"
       {...(className !== undefined ? { className } : {})}
+      // oxlint-disable-next-line shadcn/no-inline-styles -- tint is picked from the closed status map and keeps the exact rgb alpha measured for #525 contrast
       style={{ '--status-badge-tint': `rgb(var(${token}) / 0.14)` } as React.CSSProperties}
       token={token}
       indicator={

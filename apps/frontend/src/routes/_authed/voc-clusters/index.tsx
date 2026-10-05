@@ -294,7 +294,6 @@ function CreateClusterModal({
                   : {})}
                 data-testid="cluster-managed-system-select"
                 appearance="field"
-                className="focus:ring-accent-primary"
               >
                 <SelectValue />
               </SelectTrigger>

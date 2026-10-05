@@ -29,6 +29,16 @@ const ToggleGroupContext = React.createContext<ToggleGroupContext>({
   variant: 'default',
 });
 
+type ToggleGroupAppearance = 'default' | 'filter';
+type ToggleGroupProps = React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
+  VariantProps<typeof toggleGroupItemVariants> & {
+    appearance?: ToggleGroupAppearance;
+  };
+
+const TOGGLE_GROUP_APPEARANCE_CLASSES: Record<Exclude<ToggleGroupAppearance, 'default'>, string> = {
+  filter: 'rounded-md border border-border-subtle bg-surface-card p-0.5',
+};
+
 type ToggleGroupItemAppearance = 'default' | 'selected-filter';
 interface ToggleGroupItemProps
   extends React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> {
@@ -45,12 +55,15 @@ const TOGGLE_GROUP_ITEM_APPEARANCE_CLASSES: Record<
 
 export const ToggleGroup = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
-    VariantProps<typeof toggleGroupItemVariants>
->(({ className, variant, size, children, ...props }, ref) => (
+  ToggleGroupProps
+>(({ className, variant, size, appearance = 'default', children, ...props }, ref) => (
   <ToggleGroupPrimitive.Root
     ref={ref}
-    className={cn('flex items-center justify-center gap-1', className)}
+    className={cn(
+      'flex items-center justify-center gap-1',
+      appearance !== 'default' && TOGGLE_GROUP_APPEARANCE_CLASSES[appearance],
+      className,
+    )}
     {...props}
   >
     <ToggleGroupContext.Provider value={{ variant, size }}>

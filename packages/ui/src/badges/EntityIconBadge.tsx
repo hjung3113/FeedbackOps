@@ -53,7 +53,9 @@ export function EntityIconBadge({ type, size = 22, className }: EntityIconBadgeP
         {
           '--entity-icon-size': `${size}px`,
           '--entity-icon-font-size': `${fontSize}px`,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- background comes from the closed per-entity-type palette map above
           '--entity-icon-bg': entry.bg,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- foreground comes from the closed per-entity-type palette map above
           '--entity-icon-color': entry.color,
           '--entity-icon-radius': `${radius}px`,
         } as React.CSSProperties

@@ -34,6 +34,7 @@ export function MilestoneManagedSystemPill({ name }: { name: string }) {
       appearance="compact-identity"
       style={
         {
+          // oxlint-disable-next-line shadcn/no-inline-styles -- the Managed System color is resolved at runtime from managedSystemToken(name)
           '--milestone-managed-system-color': `rgb(var(${managedSystemToken(name)}) / 1)`,
         } as React.CSSProperties
       }

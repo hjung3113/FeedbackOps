@@ -28,6 +28,7 @@ export function ManagedSystemMark({
 }: ManagedSystemMarkProps) {
   const style = {
     '--managed-system-mark-color': color,
+    // oxlint-disable-next-line shadcn/no-inline-styles -- ManagedSystemMark receives the Managed System identity color from stored data
     ...(fontSize !== undefined ? { '--managed-system-mark-font-size': fontSize } : {}),
   } as React.CSSProperties;
 

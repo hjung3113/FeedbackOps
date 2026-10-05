@@ -136,7 +136,12 @@ variables) replaces the former JS preset (`tailwind.preset.ts`, removed). The
 mapping above is unchanged.
 
 Since issue #782, `text-caption`, `text-tiny`, and `text-micro` expose their
-matching size tokens as size-only utilities. `leading-body` aliases
+matching size tokens as size-only utilities. Issue #797 also exposes `text-md`
+as a size-only 15px utility. `leading-relaxed-ui` aliases `--leading-relaxed`
+(1.6), while the v3 compatibility utility `leading-relaxed` remains 1.625.
+`leading-note` exposes `--leading-note` (1.55), the compact note leading shared by `Callout` and the
+milestone source summary.
+`leading-body` aliases
 `--leading-normal` (1.4), `tracking-kicker` aliases `--tracking-wide` (0.04em),
 and `tracking-kind-label` exposes `--tracking-kind-label` (0.01em). The v3
 compatibility utilities `leading-normal` (1.5) and `tracking-wide` (0.025em)
@@ -205,6 +210,7 @@ Icon chips use `--radius-icon-chip` (5px), exposed as `rounded-icon-chip`.
 - **Element gap:** 8px
 - **Row accent stripe:** 3px (`--row-accent-width`, exposed as `w-row-accent`)
 - **Layout tokens:** see `Layout tokens` in `packages/ui/src/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
+- **Row minimum utilities:** `min-h-row-default` and `min-h-row-expanded` expose the 60px and 96px row-height tokens.
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 
 ## Survey
