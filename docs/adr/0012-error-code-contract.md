@@ -204,8 +204,8 @@ Two table rows differ from the runtime mapping:
 `attachment_ids: string[]`. The code's bullet in "Slice 3 #13 adds five codes"
 and its paired inner `detail.fields[].code` `unsupported` are historical.
 
-**Malformed JSON (#759).** Framework errors with a 4xx `statusCode`, no ADR-0012
-error code, and no Zod `validation` array map to `422 validation.malformed_request`
+**Malformed JSON (#759).** Errors with a 4xx `statusCode` (Fastify and its plugins),
+no ADR-0012 error code, and no Zod `validation` array map to `422 validation.malformed_request`
 with the fixed message `malformed request`; the handler logs only the Fastify
 error `code` and `statusCode` at info level. This covers malformed or empty JSON,
 unsupported media types, oversized bodies, and invalid Content-Length.
