@@ -211,6 +211,32 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     });
   }
 
+  function approveTaskRequest(cookie: string, taskRequestId: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/task-requests/${taskRequestId}/approve`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { reason: 'Approve source Finding request' },
+    });
+  }
+
+  function convertTaskRequest(cookie: string, taskRequestId: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/task-requests/${taskRequestId}/convert`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { title: 'Converted source Finding task' },
+    });
+  }
+
   function linkFindingTask(cookie: string, findingId: string, taskId: string, key = randomUUID()) {
     return app.inject({
       method: 'POST',
@@ -250,6 +276,77 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       },
     });
     expect(taskDetail.source?.finding?.display_id).toBe(seed.findingDisplayId);
+  });
+
+  it("GET /tasks/:id prefers a Finding-sourced request's own source Finding", async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Detail MS');
+    const sourceFinding = await seedFinding(msId, 'Request source Finding S');
+    const genericFinding = await seedFinding(msId, 'Later generic Finding F');
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'finding',
+      sourceId: sourceFinding.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: adminActorId,
+    });
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        )
+       values ($1, 'finding', $2, 'task_request', $3, 'requested_task',
+               'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, sourceFinding.id, request.id, msId, adminActorId],
+    );
+
+    try {
+      const approved = await approveTaskRequest(adminCookie, request.id);
+      expect(approved.statusCode, JSON.stringify(approved.json())).toBe(200);
+      const converted = await convertTaskRequest(adminCookie, request.id);
+      expect(converted.statusCode, JSON.stringify(converted.json())).toBe(201);
+      const taskId = converted.json<{ id: string }>().id;
+
+      const genericLink = await migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by, created_at
+          )
+         select $1, 'finding', $2, 'task_request', $3, 'requested_task',
+                'internal_only', 'active', $4, $5, own_link.created_at + interval '1 second'
+           from core.entity_links own_link
+          where own_link.workspace_id = $1
+            and own_link.source_type = 'finding'
+            and own_link.source_id = $6
+            and own_link.target_type = 'task_request'
+            and own_link.target_id = $3
+            and own_link.relation_type = 'requested_task'
+            and own_link.status = 'active'
+         returning id`,
+        [WORKSPACE_ID, genericFinding.id, request.id, msId, adminActorId, sourceFinding.id],
+      );
+      expect(genericLink.rowCount).toBe(1);
+
+      const res = await getTask(adminCookie, taskId);
+
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200);
+      const taskDetail = taskDetailDtoSchema.parse(res.json());
+      expect(taskDetail.source?.finding?.id).toBe(sourceFinding.id);
+    } finally {
+      await migrateHandle.pool.query(
+        `delete from core.audit_log
+          where workspace_id = $1
+            and (
+              (event_type = 'task_request_approved' and subject_id = $2)
+              or (
+                event_type = 'task_created_from_request'
+                and subject_id in (
+                  select id from task.tasks where source_task_request_id = $2
+                )
+              )
+            )`,
+        [WORKSPACE_ID, request.id],
+      );
+    }
   });
 
   it('GET /tasks/:id task-detail returns null source for a standalone task', async () => {

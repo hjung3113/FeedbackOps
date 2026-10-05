@@ -180,7 +180,8 @@ source resolution:
   - source = null when source_task_request_id is null
   - source.task_request = { id, display_id, status } when source_task_request_id resolves
   - source.finding = { id, display_id, title, summary, evidence_count } via active
-    (finding, task_request, requested_task) when present
+    (finding, task_request, requested_task) when present; for a Finding-sourced
+    request, prefer its own source Finding (#773)
   - source.voc is the backend's VOC visibility verdict (#378), never synthesized
     by the FE: allowed = { visibility_state, id, display_id, title };
     summary_visible and denied = { visibility_state } only; hidden = the key is

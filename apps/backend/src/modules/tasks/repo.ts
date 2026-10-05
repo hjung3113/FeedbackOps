@@ -433,7 +433,9 @@ export async function resolveTaskSource(
      AND f.id = el.source_id
     WHERE tr.workspace_id = ${input.workspaceId}
       AND tr.id = ${input.sourceTaskRequestId}
-    ORDER BY el.created_at DESC NULLS LAST, el.id DESC NULLS LAST
+    ORDER BY (tr.source_type = 'finding' AND el.source_id = tr.source_id) DESC NULLS LAST,
+             el.created_at DESC NULLS LAST,
+             el.id DESC NULLS LAST
     LIMIT 1
   `);
   const row = result.rows[0];
