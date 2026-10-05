@@ -187,6 +187,26 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3a validation',
     expect(afterRows.rows[0].n).toBe(beforeRows.rows[0].n);
   });
 
+  it('drains a truncated rejected part and still answers 422 attachment.unsupported_type', async () => {
+    // The unsupported-type path drains the part before responding; a truncated
+    // stream closes without end/error, so a listener-based drain would hang.
+    const cookie = await loginAs(app, 'mock-user-1');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${truncatedBoundary}`,
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'idempotency-key': randomUUID(),
+      },
+      payload: Buffer.from(
+        `--${truncatedBoundary}\r\nContent-Disposition: form-data; name="file"; filename="bundle.zip"\r\nContent-Type: application/zip\r\n\r\ntruncated`,
+      ),
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('attachment.unsupported_type');
+  });
+
   it('422 validation.malformed_idempotency_key when not a UUIDv4', async () => {
     const cookie = await loginAs(app, 'mock-user-1');
     const res = await postAttachment(app, {
