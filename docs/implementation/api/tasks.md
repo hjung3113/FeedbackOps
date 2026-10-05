@@ -125,8 +125,9 @@ validation errors:
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
-  - preserve (finding, task, requested_task)
-  - preserve (voc, task, evidence_of) when derived from existing Finding evidence
+  - preserve (finding, task, requested_task) from the request's own source Finding only
+    (Finding-sourced requests; other Finding links on the request are record-only, #768)
+  - preserve (voc, task, evidence_of) when derived from that Finding's evidence
   - update Task Request status to converted
 audit events:
   - task_created_from_request

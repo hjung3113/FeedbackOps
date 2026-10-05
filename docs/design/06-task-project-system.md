@@ -189,8 +189,8 @@ Side effects are atomic:
 - insert task.tasks with status backlog
 - preserve entity_links:
   - (task_request, task, converted_to)
-  - (finding, task, requested_task)
-  - (voc, task, evidence_of) when existing Finding evidence links make this cheap
+  - (finding, task, requested_task), from the request's own source Finding only (#768)
+  - (voc, task, evidence_of) when that Finding's existing evidence links make this cheap
 - update task_request.task_requests.status to converted
 - audit task_created_from_request
 ```

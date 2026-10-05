@@ -186,6 +186,10 @@ absent link. Generic endpoint and workspace listings continue to include their
 rows. Only `POST /vocs/:id/request-task` and
 `POST /voc-clusters/:id/request-task` create them.
 
+Task Request conversion propagates a `(finding, task_request, requested_task)` link
+only when its Finding ID matches the request's own source (#768). Other Finding
+links on the request stay record-only.
+
 `(voc_cluster, finding, evidence_of)` is registered for DB validation and is
 created only by `POST /voc-clusters/:id/link-finding`. Generic
 `POST /entity-links`, generic link listings, and generic `PATCH /entity-links/:id`
