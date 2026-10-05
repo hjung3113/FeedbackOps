@@ -36,6 +36,9 @@ Two existing behaviours shape the design:
    - Both take a body of `{ reason }`. The reason is required, trimmed, 1–2000 characters, and the body is strict.
    - Both mirror the Permission Request decision routes: optional UUIDv4 `Idempotency-Key`, the `sensitive`
      rate-limit tier, and `workspace.admin` checked inside the transaction before any idempotency replay.
+   - Self-lifting a deny that targets the Admin follows `permission_self_approval`;
+     forbidden rejects without writes, while allowed records `self_lift: true` in
+     the audit detail; grant self-revocation remains allowed.
    - Permission Request status is not changed. A request records what was asked and decided. The grant row and the
      audit log record its later revocation.
 2. **Only active rows can be revoked.**
@@ -52,8 +55,9 @@ Two existing behaviours shape the design:
 4. **Audit.** Each command writes one row in the same transaction.
    - `permission_revoked`: subject `permission_grant` / grant id. Detail is `{ grant_id, capability,
      managed_system_id, grantee_actor_id, reason }`.
-   - `permission_deny_revoked`: subject `permission_deny` / deny id. Detail is `{ deny_id, capability,
-     managed_system_id, denied_actor_id, reason }`.
+   - `permission_deny_revoked`: subject `permission_deny` / deny id. Detail is
+     `{ deny_id, capability, managed_system_id, denied_actor_id, reason,
+     self_lift?: true }` for an allowed self-lift.
    - Both detail schemas are strict and registered in `packages/shared/src/audit/permission.ts`.
 5. **Effect is immediate.**
    - `checkCapability` reads grants and denies on every call, and no capability cache exists, so the next request
@@ -66,6 +70,7 @@ Two existing behaviours shape the design:
      request for that capability. Otherwise it maps to `revoked`.
    - The frontend `revoked` state keeps its "취소되었습니다" copy and adds the existing request-access action.
    - `grant_expired` is unchanged. The same lock-out exists for expiry and is tracked separately.
+   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked grant.
 7. **Notification.** Revoking a grant notifies the grantee through a new catalogue event `permission_grant.revoked`.
    - Subject type is `permission_grant`. It is in-app and email, like `permission_request.decided`.
    - The summary reuses the shipped wording "권한이 취소되었습니다.".

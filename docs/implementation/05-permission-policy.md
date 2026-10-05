@@ -264,6 +264,12 @@ Admin. If the workspace setting is `forbidden`, self-approval returns
 `permission.denied` without changing the pending request; another Admin may
 approve the same request normally.
 
+An Admin lifting an active deny on themself follows the same setting:
+`forbidden` returns `permission.denied` without changing the deny or writing an
+audit row, while `allowed` permits the lift and records `self_lift: true` in the
+audit detail. An Admin may revoke their own grant because that action only
+lowers privilege.
+
 The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) are aggregated in `packages/shared/src/enums/audit-events.ts`. The event literals and detail schemas are owned per domain in `packages/shared/src/audit/*.ts`.
 
 Audit events (the permission and task-request subset; the full vocabulary is in code):
@@ -309,6 +315,10 @@ workspace scope as `no_grant`. The state mapper returns `pending_request` when
 the Actor has an open request for that capability and otherwise returns
 `revoked`. A revoke notification goes to the grant's Actor; deny lift sends no
 notification. There is no migration or grant change for these commands.
+Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage,
+conversation, and VOC Cluster conversion) are unchanged; paths keyed on
+`requestable !== null` (Survey results and follow-up) now include
+`requestable_permission` for a revoked grant.
 
 ## Summary-Visible Contract
 

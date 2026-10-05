@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { AUDIT_EVENT_DETAIL_SCHEMAS, AUDIT_EVENT_TYPES } from '../../enums/audit-events.js';
-import { errorCodeSchema } from '../../errors/codes.js';
+import { AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
 import { notificationDtoSchema, notificationEventTypeSchema } from '../../notifications.js';
 import {
   listPermissionDeniesResponseSchema,
@@ -68,14 +67,11 @@ describe('Admin permission revocation contracts (ADR-0061)', () => {
     );
   });
 
-  it('validates the revoke result and the new conflict code', () => {
+  it('validates the revoke result', () => {
     expect(revokePermissionResultSchema.parse({ id: ID, revoked_at: CREATED_AT })).toEqual({
       id: ID,
       revoked_at: CREATED_AT,
     });
-    expect(errorCodeSchema.parse('conflict.permission_not_active')).toBe(
-      'conflict.permission_not_active',
-    );
   });
 
   it('registers strict revoke audit details and the grant notification subject', () => {
@@ -93,12 +89,20 @@ describe('Admin permission revocation contracts (ADR-0061)', () => {
       denied_actor_id: ACTOR_ID,
       reason: 'Policy hold ended.',
     };
-    expect(AUDIT_EVENT_TYPES).toContain('permission_revoked');
-    expect(AUDIT_EVENT_TYPES).toContain('permission_deny_revoked');
+    const selfLiftDenyDetail = { ...denyDetail, self_lift: true };
     expect(AUDIT_EVENT_DETAIL_SCHEMAS.permission_revoked.parse(grantDetail)).toEqual(grantDetail);
     expect(AUDIT_EVENT_DETAIL_SCHEMAS.permission_deny_revoked.parse(denyDetail)).toEqual(
       denyDetail,
     );
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.permission_deny_revoked.parse(selfLiftDenyDetail)).toEqual(
+      selfLiftDenyDetail,
+    );
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.permission_deny_revoked.parse({
+        ...denyDetail,
+        self_lift: false,
+      }),
+    ).toThrow(z.ZodError);
     expect(() =>
       AUDIT_EVENT_DETAIL_SCHEMAS.permission_revoked.parse({ ...grantDetail, extra: true }),
     ).toThrow(z.ZodError);

@@ -145,13 +145,6 @@ the transaction fails before commit, retry may deliver the email again.
 Part 1 provided only the Pino-backed `MockEmailChannel`; SMTP was deferred to
 part 3 (see the part 3 amendment below).
 
-## Amendment 2026-10-05 (ADR-0061 / #762)
-
-`permission_grant.revoked` notifies the grantee in-app and by email with the
-summary `권한이 취소되었습니다.`. Its subject reference is available to the
-grantee and workspace Admins; other Actors receive an unavailable reference.
-Lifting a deny does not notify.
-
 Issue #509 part 2b wires the Task Request decision, Task conversion assignment,
 and Permission Request submission and decision producers described in the
 notifications API contract. `notify()` filters recipients to Actors in the
@@ -185,3 +178,10 @@ implemented in `apps/backend/src/modules/notifications/catalogue.ts`; the
 earlier sentence "This notification catalogue itself is not implemented"
 records the pre-implementation state. Dispatch rules remain code-driven, as
 decided above; there is no DB-configured rule UI.
+
+## Amendment 2026-10-05 (ADR-0061 / #762)
+
+`permission_grant.revoked` notifies the grantee in-app and by email with the
+summary `권한이 취소되었습니다.`. Its subject reference is available to the
+grantee and workspace Admins; other Actors receive an unavailable reference.
+Lifting a deny does not notify.

@@ -303,6 +303,8 @@ body returns `409 conflict.idempotency_key_reuse`.
 Each command locks its target row in the current workspace. A missing row or a
 row from another workspace returns `404 not_found.record`. An already-revoked
 row, or an expired grant, returns `409 conflict.permission_not_active`.
+The `:id` path parameter must be a UUID; otherwise the route returns
+`422 validation.failed`.
 
 Grant revoke sets `revoked_at`, `revoked_by_actor_id`, and `revoked_reason`,
 then writes one `permission_revoked` audit row with subject type
@@ -313,9 +315,14 @@ the grantee and workspace Admins and unavailable to other Actors.
 
 Deny lift sets `revoked_at` and `revoked_by_actor_id`, then writes one
 `permission_deny_revoked` audit row with subject type `permission_deny` and
-detail `{ deny_id, capability, managed_system_id, denied_actor_id, reason }`.
+detail `{ deny_id, capability, managed_system_id, denied_actor_id, reason,
+self_lift?: true }`; `self_lift` is present only when the deny targets the
+Admin lifting it.
 The reason is retained in the audit row; the deny table has no reason-for-lift
-column. Lifting a deny sends no notification.
+column. A self-lift follows `permission_self_approval`: `forbidden` returns
+`403 permission.denied` without changing the row or writing an audit event, and
+`allowed` permits the lift. An Admin may revoke their own grant because it only
+lowers privilege. Lifting a deny sends no notification.
 
 Both return `200 { id, revoked_at }`. Permission Request status is unchanged.
 The next permission check observes the revocation immediately; a revoked grant

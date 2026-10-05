@@ -15,6 +15,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { seedSecondWorkspace } from '../../../test-support/seed-second-workspace.js';
 import { createRecordingNotificationDispatcher } from '../../notifications/port.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -116,16 +117,19 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       OTHER_USER_AGENT,
     ]);
     if (actorId) {
+      const subjectIds = [...auditSubjectIds];
       await db.pool.query(
-        'delete from permission.permission_requests where requester_actor_id = $1',
-        [actorId],
+        'delete from permission.permission_requests where requester_actor_id = $1 or id = any($2::uuid[])',
+        [actorId, subjectIds],
       );
-      await db.pool.query('delete from permission.permission_denies where actor_id = $1', [
-        actorId,
-      ]);
-      await db.pool.query('delete from permission.permission_grants where actor_id = $1', [
-        actorId,
-      ]);
+      await db.pool.query(
+        'delete from permission.permission_denies where actor_id = $1 or id = any($2::uuid[])',
+        [actorId, subjectIds],
+      );
+      await db.pool.query(
+        'delete from permission.permission_grants where actor_id = $1 or id = any($2::uuid[])',
+        [actorId, subjectIds],
+      );
       await db.pool.query('delete from core.sessions where actor_id = $1', [actorId]);
       await migrateDb.pool.query(
         'delete from core.audit_log where subject_id = any($1::uuid[]) or actor_id = $2',
@@ -153,6 +157,9 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       capability?: string;
       revoked?: boolean;
       expiresAt?: Date | null;
+      workspaceId?: string;
+      actorId?: string;
+      grantedByActorId?: string;
     } = {},
   ): Promise<string> {
     const revokedAt = input.revoked ? new Date() : null;
@@ -163,10 +170,10 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
        values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning id`,
       [
-        WORKSPACE_ID,
-        actorId,
+        input.workspaceId ?? WORKSPACE_ID,
+        input.actorId ?? actorId,
         input.capability ?? 'finding.read',
-        adminId,
+        input.grantedByActorId ?? adminId,
         input.expiresAt ?? null,
         revokedAt,
         revokedAt ? adminId : null,
@@ -179,7 +186,15 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
     return id;
   }
 
-  async function seedDeny(input: { capability?: string; revoked?: boolean } = {}): Promise<string> {
+  async function seedDeny(
+    input: {
+      capability?: string;
+      revoked?: boolean;
+      workspaceId?: string;
+      actorId?: string;
+      createdByActorId?: string;
+    } = {},
+  ): Promise<string> {
     const revokedAt = input.revoked ? new Date() : null;
     const inserted = await db.pool.query<{ id: string }>(
       `insert into permission.permission_denies
@@ -188,10 +203,10 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
        values ($1, $2, $3, 'Test deny.', $4, $5, $6)
        returning id`,
       [
-        WORKSPACE_ID,
-        actorId,
+        input.workspaceId ?? WORKSPACE_ID,
+        input.actorId ?? actorId,
         input.capability ?? 'finding.read',
-        adminId,
+        input.createdByActorId ?? adminId,
         revokedAt,
         revokedAt ? adminId : null,
       ],
@@ -216,6 +231,18 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
         cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
         'content-type': 'application/json',
         ...(idempotencyKey !== undefined ? { 'idempotency-key': idempotencyKey } : {}),
+      },
+      payload,
+    });
+  }
+
+  function patchWorkspaceSettings(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: '/workspace/settings',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
       },
       payload,
     });
@@ -401,7 +428,99 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
     });
     expect(check.json()).toMatchObject({ state: 'request_access' });
-    expect(check.json().state).not.toBe('blocked_non_requestable');
+  });
+
+  it.each(['forbidden', 'allowed'] as const)(
+    'self deny lift is %s under the workspace self-approval policy',
+    async (policy) => {
+      const id = await seedDeny({ capability: 'voc.triage', actorId: adminId });
+      const settingsRow = await db.pool.query<{
+        permission_self_approval: 'allowed' | 'forbidden';
+      }>('select permission_self_approval from core.workspace_settings where workspace_id = $1', [
+        WORKSPACE_ID,
+      ]);
+      const hadSettingsRow = settingsRow.rows.length > 0;
+      const originalPolicy = settingsRow.rows[0]?.permission_self_approval ?? 'allowed';
+      const settingAudits = await db.pool.query<{ id: string }>(
+        `select id from core.audit_log
+          where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
+            and event_type = 'workspace_settings_updated'`,
+        [WORKSPACE_ID],
+      );
+      const originalAuditIds = new Set(settingAudits.rows.map((row) => row.id));
+
+      try {
+        expect(
+          (await patchWorkspaceSettings({ permission_self_approval: policy })).statusCode,
+        ).toBe(200);
+
+        const response = await revoke(COMMANDS[1], id);
+        if (policy === 'forbidden') {
+          expect(response.statusCode).toBe(403);
+          expect(response.json().code).toBe('permission.denied');
+          const row = await db.pool.query<{
+            revoked_at: Date | null;
+            revoked_by_actor_id: string | null;
+          }>(
+            'select revoked_at, revoked_by_actor_id from permission.permission_denies where id = $1',
+            [id],
+          );
+          expect(row.rows[0]).toEqual({ revoked_at: null, revoked_by_actor_id: null });
+          await expectNoAudit(COMMANDS[1], id);
+        } else {
+          expect(response.statusCode).toBe(200);
+          await assertAudit(COMMANDS[1], id, {
+            deny_id: id,
+            capability: 'voc.triage',
+            managed_system_id: null,
+            denied_actor_id: adminId,
+            reason: 'Administrative access review completed.',
+            self_lift: true,
+          });
+        }
+      } finally {
+        expect(
+          (await patchWorkspaceSettings({ permission_self_approval: originalPolicy })).statusCode,
+        ).toBe(200);
+        const updatedAudits = await db.pool.query<{ id: string }>(
+          `select id from core.audit_log
+            where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
+              and event_type = 'workspace_settings_updated'`,
+          [WORKSPACE_ID],
+        );
+        const testAuditIds = updatedAudits.rows
+          .map((row) => row.id)
+          .filter((id) => !originalAuditIds.has(id));
+        if (testAuditIds.length > 0) {
+          await migrateDb.pool.query('delete from core.audit_log where id = any($1::uuid[])', [
+            testAuditIds,
+          ]);
+        }
+        if (!hadSettingsRow) {
+          await migrateDb.pool.query(
+            'delete from core.workspace_settings where workspace_id = $1',
+            [WORKSPACE_ID],
+          );
+        }
+      }
+    },
+  );
+
+  it('an active deny still blocks a capability after its grant is revoked', async () => {
+    const grantId = await seedGrant({ capability: 'workspace.admin' });
+    await seedDeny({ capability: 'workspace.admin' });
+    expect((await revoke(COMMANDS[0], grantId)).statusCode).toBe(200);
+
+    const check = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=workspace.admin',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
+    });
+    expect(check.statusCode).toBe(200);
+    expect(check.json()).toMatchObject({
+      state: 'blocked_non_requestable',
+      decision: { allow: false, reason: 'explicit_deny', requestable: null },
+    });
   });
 
   it.each(COMMANDS)(
@@ -451,8 +570,47 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
     },
   );
 
-  it.each(COMMANDS)('$name returns 404 for an unknown row', async (command) => {
-    const id = randomUUID();
+  it.each(
+    COMMANDS.flatMap((command) => [
+      {
+        command,
+        label: 'unknown',
+        id: randomUUID(),
+        expectedStatus: 404,
+        expectedCode: 'not_found.record',
+      },
+      {
+        command,
+        label: 'malformed',
+        id: 'not-a-uuid',
+        expectedStatus: 422,
+        expectedCode: 'validation.failed',
+      },
+    ]),
+  )(
+    '$command.name returns $expectedStatus for a $label id',
+    async ({ command, id, expectedStatus, expectedCode }) => {
+      const response = await revoke(command, id);
+      expect(response.statusCode).toBe(expectedStatus);
+      expect(response.json().code).toBe(expectedCode);
+      if (expectedStatus === 404) await expectNoAudit(command, id);
+    },
+  );
+
+  it.each(COMMANDS)('$name returns 404 for a row in another workspace', async (command) => {
+    const second = await seedSecondWorkspace(db);
+    const id =
+      command.kind === 'grant'
+        ? await seedGrant({
+            workspaceId: second.workspaceId,
+            actorId: second.userActorId,
+            grantedByActorId: second.adminActorId,
+          })
+        : await seedDeny({
+            workspaceId: second.workspaceId,
+            actorId: second.userActorId,
+            createdByActorId: second.adminActorId,
+          });
     const response = await revoke(command, id);
     expect(response.statusCode).toBe(404);
     expect(response.json().code).toBe('not_found.record');
@@ -509,6 +667,49 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       );
       expect(audits.rows).toHaveLength(1);
       expect(notifications.jobs).toHaveLength(command.kind === 'grant' ? 1 : 0);
+    },
+  );
+
+  it.each(COMMANDS)(
+    '$name rejects idempotency-key reuse with a different reason',
+    async (command) => {
+      const id = command.kind === 'grant' ? await seedGrant() : await seedDeny();
+      const key = randomUUID();
+      idempotencyKeys.push(key);
+      const first = await revoke(
+        command,
+        id,
+        { reason: 'Administrative access review completed.' },
+        adminCookie,
+        key,
+      );
+      const reused = await revoke(
+        command,
+        id,
+        { reason: 'A different administrative reason.' },
+        adminCookie,
+        key,
+      );
+
+      expect(first.statusCode).toBe(200);
+      expect(reused.statusCode).toBe(409);
+      expect(reused.json().code).toBe('conflict.idempotency_key_reuse');
+      await assertAudit(command, id, {
+        ...(command.kind === 'grant'
+          ? {
+              grant_id: id,
+              capability: 'finding.read',
+              managed_system_id: null,
+              grantee_actor_id: actorId,
+            }
+          : {
+              deny_id: id,
+              capability: 'finding.read',
+              managed_system_id: null,
+              denied_actor_id: actorId,
+            }),
+        reason: 'Administrative access review completed.',
+      });
     },
   );
 

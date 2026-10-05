@@ -18,6 +18,7 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
+import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
 
 export interface GrantAdminServiceDeps {
@@ -230,6 +231,19 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
         if (deny.revokedAt !== null) {
           throw new HttpError('conflict.permission_not_active', 'permission deny is not active');
         }
+        const isSelfLift = deny.actorId === actor.actor_id;
+        if (isSelfLift) {
+          const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(
+            tx,
+            actor.workspace_id,
+          );
+          if (workspaceSettings.permission_self_approval === 'forbidden') {
+            throw new HttpError(
+              'permission.denied',
+              'self deny lift forbidden by workspace policy',
+            );
+          }
+        }
 
         const updated = await tx
           .update(permissionDenies)
@@ -260,6 +274,7 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
             managed_system_id: deny.managedSystemId,
             denied_actor_id: deny.actorId,
             reason,
+            ...(isSelfLift ? { self_lift: true as const } : {}),
           },
         });
 

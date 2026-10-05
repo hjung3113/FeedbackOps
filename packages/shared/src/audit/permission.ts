@@ -128,6 +128,7 @@ export const permissionDenyRevokedDetailSchema = z
     managed_system_id: z.string().uuid().nullable(),
     denied_actor_id: z.string().uuid(),
     reason: z.string().min(1),
+    self_lift: z.literal(true).optional(),
   })
   .strict();
 export type PermissionDenyRevokedDetail = z.infer<typeof permissionDenyRevokedDetailSchema>;

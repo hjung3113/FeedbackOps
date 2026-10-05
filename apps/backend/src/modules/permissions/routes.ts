@@ -429,6 +429,12 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
             'Idempotency-Key must be a UUIDv4',
           );
         }
+        const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
+        if (!parsedParams.success) {
+          return sendError(reply, 'validation.failed', 'invalid permission id', {
+            fields: fieldsFromZodIssues(parsedParams.error.issues),
+          });
+        }
         const parsed = revokePermissionBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) {
           return sendError(reply, 'validation.failed', 'invalid request body', {
@@ -440,8 +446,12 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
           workspace_id: sess.workspace_id,
           role_level: sess.role_level,
         };
-        const { id } = req.params as { id: string };
-        const result = await route.invoke(actor, id, parsed.data, idempotencyKey || undefined);
+        const result = await route.invoke(
+          actor,
+          parsedParams.data.id,
+          parsed.data,
+          idempotencyKey || undefined,
+        );
         return reply.code(result.status).send(result.body);
       },
     });
