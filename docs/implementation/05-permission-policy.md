@@ -251,7 +251,7 @@ POST /permissions/requests/:id/deny            { reason: string }
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
 
-### Permission Request self-approval policy
+### Self-approval policy (Permission Requests and self deny lifts)
 
 An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that

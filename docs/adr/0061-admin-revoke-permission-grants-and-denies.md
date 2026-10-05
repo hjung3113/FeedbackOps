@@ -6,7 +6,8 @@ Date: 2026-10-05
 
 Accepted 2026-10-05 by the owner (issue #762). Amends ADR-0006 only by naming the write path that its "permission
 revocations take effect immediately" rule relies on. Adds one code to the ADR-0012 closed enum and one event to the
-ADR-0014 notification catalogue.
+ADR-0014 notification catalogue. Extends the `permission_self_approval` setting (ADR-0041) to an Admin lifting a
+deny on themself.
 
 ## Context
 
@@ -91,8 +92,8 @@ Two existing behaviours shape the design:
 
 ## Consequences
 
-- An Admin can take back any grant, including grants that no request created, and lift any deny. Both actions leave
-  an audit row with a reason.
+- An Admin can take back any grant, including grants that no request created, and lift any deny, except a deny on
+  themself while `permission_self_approval` is `forbidden`. Both actions leave an audit row with a reason.
 - A revoked Actor can request the capability again. A deny is still the way to make a capability unrequestable.
 - Expiry keeps the old lock-out until its follow-up lands.
 - Docs to update with the implementation: `docs/implementation/api/permissions.md`, `05-permission-policy.md`
