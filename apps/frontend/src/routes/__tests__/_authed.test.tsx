@@ -133,6 +133,12 @@ describe('_authed sidebar navigation tree', () => {
     expect(entries).toEqual(
       expect.arrayContaining([
         { id: 'findings', label: '전체 Finding', href: '/findings', section: 'Finding' },
+        {
+          id: 'admin-permission-grants',
+          label: '활성 권한',
+          href: '/admin/permissions/grants',
+          section: '관리자',
+        },
       ]),
     );
   });

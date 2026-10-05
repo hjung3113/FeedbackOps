@@ -54,7 +54,7 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'conflict.capability_already_granted':   { tone: 'info',  message: '이미 권한이 부여되어 있습니다.' },
   'conflict.capability_already_denied':    { tone: 'info',  message: '이미 권한이 거부되어 있습니다.' },
   'conflict.permission_request_duplicate': { tone: 'info',  message: '동일한 권한 요청이 이미 진행 중입니다.' },
-  'conflict.permission_not_active':        { tone: 'info',  message: '이미 취소되었거나 만료된 권한입니다.' },
+  'conflict.permission_not_active':        { tone: 'info',  message: '이미 처리되었거나 만료되어 더 이상 활성 상태가 아닙니다.' },
   'conflict.duplicate_slug':               { tone: 'error', message: '이미 사용 중인 식별자입니다.' },
   'conflict.parent_archived':              { tone: 'error', message: '상위 항목이 보관되어 더 이상 변경할 수 없습니다.' },
   'conflict.record_archived':              { tone: 'error', message: '이 항목은 보관되어 더 이상 변경할 수 없습니다.' },

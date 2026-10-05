@@ -203,8 +203,8 @@ Acceptance Criteria:
 - Approved permissions are scoped when scope is provided.
 ```
 
-Status (ADR-0061, 2026-10-05): backend grant revocation and deny lifting ship
-in #762 round 1. The Admin console screen is delivered in round 2.
+Status (ADR-0061, 2026-10-05): grant revocation and deny lifting ship with the
+Admin "활성 권한" screen in #762.
 
 ### FR-PERM-003: Enforce Explicit Deny
 

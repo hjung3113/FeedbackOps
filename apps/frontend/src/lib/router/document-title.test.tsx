@@ -40,6 +40,7 @@ describe('document screen titles', () => {
     ['/admin/managed-systems', {}, DOCUMENT_TITLE_COPY.admin.managedSystems],
     ['/admin/analytics-areas', {}, DOCUMENT_TITLE_COPY.admin.analyticsAreas],
     ['/admin/permissions/requests', {}, DOCUMENT_TITLE_COPY.admin.permissionRequests],
+    ['/admin/permissions/grants', {}, DOCUMENT_TITLE_COPY.admin.permissionGrants],
     ['/admin/settings', {}, DOCUMENT_TITLE_COPY.admin.settings],
     ['/login', {}, DOCUMENT_TITLE_COPY.login],
     ['/unmatched', {}, DOCUMENT_TITLE_COPY.notFound],

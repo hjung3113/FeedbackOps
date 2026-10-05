@@ -1,3 +1,4 @@
+import { ADMIN_PERMISSIONS_COPY } from './admin-permissions';
 import { GLOSSARY } from './glossary';
 import { ROUTER_FALLBACK_COPY } from './router';
 
@@ -35,6 +36,7 @@ export const DOCUMENT_TITLE_COPY = {
     managedSystems: 'Managed System',
     analyticsAreas: 'Analytics Area',
     permissionRequests: '권한 요청 검토',
+    permissionGrants: ADMIN_PERMISSIONS_COPY.activeTitle,
     settings: '워크스페이스 설정',
   },
   login: '로그인',
@@ -78,6 +80,7 @@ export function getDocumentScreenTitle(pathname: string, search: RouteSearch): s
   if (pathname === '/admin/permissions/requests') {
     return DOCUMENT_TITLE_COPY.admin.permissionRequests;
   }
+  if (pathname === '/admin/permissions/grants') return DOCUMENT_TITLE_COPY.admin.permissionGrants;
   if (pathname === '/admin/settings') return DOCUMENT_TITLE_COPY.admin.settings;
   if (pathname === '/login') return DOCUMENT_TITLE_COPY.login;
   return DOCUMENT_TITLE_COPY.notFound;

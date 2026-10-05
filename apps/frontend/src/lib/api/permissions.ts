@@ -3,10 +3,17 @@
 // The frontend never enforces backend permissions as truth (AGENTS.md:69) —
 // these types only describe what the server returned so the UI can pick a state.
 
-import type { ApprovePermissionRequest, PermissionDecisionResult } from '@fops/shared';
+import {
+  type ApprovePermissionRequest,
+  type PermissionDecisionResult,
+  listPermissionDeniesResponseSchema,
+  listPermissionGrantsResponseSchema,
+  revokePermissionBodySchema,
+  revokePermissionResultSchema,
+} from '@fops/shared';
 
 import { UnauthenticatedError } from './auth';
-import { apiClient } from './client';
+import { apiClient, apiRequest } from './client';
 import { ApiError, type ApiErrorEnvelope } from './types';
 
 export type FrontendPermissionState =
@@ -151,6 +158,42 @@ export interface AdminPermissionRequestRow {
 }
 
 export type PermissionRequestReviewStatus = AdminPermissionRequestRow['status'] | 'all';
+
+export async function fetchPermissionGrants(signal?: AbortSignal) {
+  const response = await apiRequest(
+    'GET',
+    '/permissions/grants',
+    listPermissionGrantsResponseSchema,
+    signal ? { signal } : {},
+  );
+  return response.data.items;
+}
+
+export async function fetchPermissionDenies(signal?: AbortSignal) {
+  const response = await apiRequest(
+    'GET',
+    '/permissions/denies',
+    listPermissionDeniesResponseSchema,
+    signal ? { signal } : {},
+  );
+  return response.data.items;
+}
+
+export async function revokePermission(
+  kind: 'grants' | 'denies',
+  id: string,
+  reason: string,
+  idempotencyKey: string,
+) {
+  const body = revokePermissionBodySchema.parse({ reason });
+  const response = await apiRequest(
+    'POST',
+    `/permissions/${kind}/${id}/revoke`,
+    revokePermissionResultSchema,
+    { body, idempotencyKey },
+  );
+  return response.data;
+}
 
 export async function fetchPermissionRequestsAll(
   options?: { status?: PermissionRequestReviewStatus; signal?: AbortSignal } | AbortSignal,
