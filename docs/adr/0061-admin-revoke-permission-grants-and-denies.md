@@ -70,8 +70,8 @@ Two existing behaviours shape the design:
    - The state mapper maps `grant_revoked` to `pending_request` while the Actor has a pending or needs_more_info
      request for that capability. Otherwise it maps to `revoked`.
    - The frontend `revoked` state keeps its "취소되었습니다" copy and adds the existing request-access action.
-   - `grant_expired` is unchanged. The same lock-out exists for expiry and is tracked separately.
-   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked grant.
+   - `grant_expired` follows the same rule (#767).
+   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked or expired grant.
 7. **Notification.** Revoking a grant notifies the grantee through a new catalogue event `permission_grant.revoked`.
    - Subject type is `permission_grant`. It is in-app and email, like `permission_request.decided`.
    - The summary reuses the shipped wording "권한이 취소되었습니다.".
@@ -95,7 +95,7 @@ Two existing behaviours shape the design:
 - An Admin can take back any grant, including grants that no request created, and lift any deny, except a deny on
   themself while `permission_self_approval` is `forbidden`. Both actions leave an audit row with a reason.
 - A revoked Actor can request the capability again. A deny is still the way to make a capability unrequestable.
-- Expiry keeps the old lock-out until its follow-up lands.
+- An expired grant is requestable again on the same terms (#767).
 - Docs to update with the implementation: `docs/implementation/api/permissions.md`, `05-permission-policy.md`
   (events and lifecycle), `docs/design/09-permission-access.md` FR-PERM-002 status, `docs/design/13-mvp-roadmap.md`
   Phase 1, `docs/frontend/routes-and-layout.md`, and the notification catalogue doc, if one lists events.

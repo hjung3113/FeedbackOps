@@ -326,4 +326,5 @@ lowers privilege. Lifting a deny sends no notification.
 
 Both return `200 { id, revoked_at }`. Permission Request status is unchanged.
 The next permission check observes the revocation immediately; a revoked grant
-is requestable again, while an explicit active deny remains non-requestable.
+is requestable again, and so is an expired grant (#767), while an explicit active
+deny remains non-requestable.
