@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { cn } from '../utils/cn.js';
+import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 
 export type InternalTaskStatusEnum =
   | 'backlog'
@@ -33,6 +32,16 @@ const LABELS: Record<InternalTaskStatusEnum, string> = {
   reopened: 'Reopened',
 };
 
+const STATUS_CLASS: Record<InternalTaskStatusEnum, { text: string; tint: string }> = {
+  backlog: { text: 'text-status-internal-backlog', tint: 'bg-status-internal-backlog/12' },
+  todo: { text: 'text-status-internal-todo', tint: 'bg-status-internal-todo/12' },
+  doing: { text: 'text-status-internal-doing', tint: 'bg-status-internal-doing/12' },
+  review: { text: 'text-status-internal-review', tint: 'bg-status-internal-review/12' },
+  done: { text: 'text-status-internal-done', tint: 'bg-status-internal-done/12' },
+  released: { text: 'text-status-internal-released', tint: 'bg-status-internal-released/12' },
+  reopened: { text: 'text-status-internal-reopened', tint: 'bg-status-internal-reopened/12' },
+};
+
 /**
  * Squared badge (`rounded-sm`) for internal task status.
  * Background uses `--status-internal-<status>` at 12 % opacity;
@@ -40,17 +49,17 @@ const LABELS: Record<InternalTaskStatusEnum, string> = {
  */
 export function InternalTaskBadge({ status, className }: InternalTaskBadgeProps) {
   const token = `--status-internal-${status}`;
+  const statusClass = STATUS_CLASS[status];
 
   return (
-    <span
-      className={cn('inline-flex items-center gap-1 rounded-sm px-2.5 py-0.5 text-xs font-semibold', className)}
-      style={{
-        color:           `var(${token})`,
-        backgroundColor: `color-mix(in srgb, var(${token}) 12%, transparent)`,
-      }}
-      data-token={token}
+    <StatusBadgeFrame
+      appearance="task"
+      textClassName={statusClass.text}
+      tintClassName={statusClass.tint}
+      {...(className !== undefined ? { className } : {})}
+      token={token}
     >
       {LABELS[status]}
-    </span>
+    </StatusBadgeFrame>
   );
 }

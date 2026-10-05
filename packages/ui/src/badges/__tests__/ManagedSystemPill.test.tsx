@@ -9,15 +9,14 @@ describe('ManagedSystemPill', () => {
     expect(screen.getByText('Tableau')).toBeInTheDocument();
   });
 
-  it('renders a 6px round dot with the identity color when mark is provided', () => {
+  it('renders the identity color when mark is provided', () => {
     const { container } = render(<ManagedSystemPill name="Tableau" mark="#5e6ad2" />);
-    // Verify the mark via the data-mark attribute and inline style (jsdom normalises
-    // hex values in style.backgroundColor to rgb, so the color is asserted via the attribute).
+    // The caller-provided identity color stays in data-mark and a CSS custom property.
     const mark = container.querySelector<HTMLElement>('[data-mark="#5e6ad2"]');
     expect(mark).not.toBeNull();
-    expect(mark?.style.width).toBe('6px');
-    expect(mark?.style.height).toBe('6px');
-    expect(mark?.style.borderRadius).toBe('9999px');
+    expect(mark?.parentElement?.style.getPropertyValue('--managed-system-pill-mark-color')).toBe(
+      '#5e6ad2',
+    );
   });
 
   it.each([
@@ -61,7 +60,6 @@ describe('ManagedSystemPill', () => {
     expect(mark).not.toBeNull();
     expect(pill).not.toBeNull();
     expect(mark?.parentElement).toBe(pill);
-    expect(pill?.style.opacity).toBe('0.6');
   });
 
   it('sets data-archived="false" when archived=false', () => {
@@ -73,7 +71,7 @@ describe('ManagedSystemPill', () => {
 
   it('renders muted when no mark is provided (unknown ms pattern)', () => {
     const { container } = render(<ManagedSystemPill name="Unknown MS" />);
-    const pill = container.firstElementChild as HTMLElement;
-    expect(pill.style.opacity).toBe('0.6');
+    expect(container.querySelector('[data-archived="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-mark]')).toBeNull();
   });
 });

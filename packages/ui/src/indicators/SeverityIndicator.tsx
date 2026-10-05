@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export type SeverityEnum = 'low' | 'medium' | 'high' | 'critical';
@@ -15,6 +16,13 @@ const FILL_COUNT: Record<SeverityEnum, number> = {
   critical: 3,
 };
 
+const SEVERITY_BAR_CLASS: Record<SeverityEnum, string> = {
+  low: 'bg-severity-low',
+  medium: 'bg-severity-medium',
+  high: 'bg-severity-high',
+  critical: 'bg-severity-critical',
+};
+
 /**
  * 3-bar vertical indicator. Each bar is 4 px wide × 16 px tall.
  * Filled bars use `--severity-<level>`. Dimmed bars use the same color
@@ -23,11 +31,6 @@ const FILL_COUNT: Record<SeverityEnum, number> = {
  */
 export function SeverityIndicator({ severity, className }: SeverityIndicatorProps) {
   const filled = FILL_COUNT[severity];
-  // #525: the token is a raw RGB triplet (e.g. `165 99 0`) — `var(...)` used
-  // directly as a `background-color` is not a valid CSS color and silently
-  // no-ops. Must wrap in `rgb(...)`.
-  const tokenVar = `rgb(var(--severity-${severity}))`;
-
   return (
     <span
       className={cn('inline-flex items-end gap-[2px]', className)}
@@ -39,14 +42,12 @@ export function SeverityIndicator({ severity, className }: SeverityIndicatorProp
         return (
           <span
             key={i}
-            style={{
-              display: 'inline-block',
-              width: 4,
-              height: 16,
-              borderRadius: 1,
-              backgroundColor: tokenVar,
-              opacity: isFilled ? 1 : 0.3,
-            }}
+            className={cn(
+              'inline-block h-4 w-1 rounded-(--severity-indicator-radius)',
+              SEVERITY_BAR_CLASS[severity],
+              isFilled ? 'opacity-100' : 'opacity-30',
+            )}
+            style={{ '--severity-indicator-radius': '1px' } as React.CSSProperties}
             data-filled={isFilled ? 'true' : 'false'}
             data-token={`--severity-${severity}`}
           />

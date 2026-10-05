@@ -15,9 +15,10 @@
  * Decision D-2.3: "(미지정)" maps to { ownerUserId: null, ownerTeamId: null }.
  */
 
-import * as React from 'react';
+import { Combobox, UserAvatar, cn } from '@fops/ui';
 import { Check } from 'lucide-react';
-import { cn, Combobox, UserAvatar } from '@fops/ui';
+import type * as React from 'react';
+import { PickerOptionGrid } from './PickerOptionGrid';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -139,53 +140,53 @@ function OwnerRow({
   disabled,
 }: OwnerRowProps): React.ReactElement {
   return (
-    <button
-      type="button"
-      data-owner-id={id}
-      data-active={isActive ? 'true' : 'false'}
-      aria-pressed={isActive}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        // .entity-node: grid [18px 1fr auto], gap-2.5, padding, rounded, bg
-        'grid items-center gap-2.5 px-3 py-2.5 rounded-md bg-surface-canvas shadow-subtle text-left w-full',
-        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
-        'disabled:opacity-40 disabled:pointer-events-none',
-        isActive && 'bg-accent-primary/5 ring-1 ring-inset ring-accent-primary/40',
-      )}
-      style={{ gridTemplateColumns: '18px 1fr auto' }}
-    >
-      {/* Avatar or placeholder circle */}
-      {user !== undefined ? (
-        <UserAvatar user={user} size="sm" />
-      ) : (
-        // Placeholder (e.g. "(미지정)") — dashed circle
-        <span
-          className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-text-muted"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Label column */}
-      <span className="flex flex-col min-w-0">
-        {/* .entity-node-title */}
-        <span className="text-xs font-medium text-text-primary leading-none truncate">
-          {displayName}
-        </span>
-        {/* .entity-node-meta */}
-        {meta !== undefined && (
-          <span className="text-caption text-text-muted leading-none mt-0.5 truncate">
-            {meta}
-          </span>
+    <PickerOptionGrid columns="owner">
+      <button
+        type="button"
+        data-owner-id={id}
+        data-active={isActive ? 'true' : 'false'}
+        aria-pressed={isActive}
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          'grid items-center gap-2.5 px-3 py-2.5 rounded-md bg-surface-canvas shadow-subtle text-left w-full',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
+          'disabled:opacity-40 disabled:pointer-events-none',
+          isActive && 'bg-accent-primary/5 ring-1 ring-inset ring-accent-primary/40',
         )}
-      </span>
+      >
+        {/* Avatar or placeholder circle */}
+        {user !== undefined ? (
+          <UserAvatar user={user} size="sm" />
+        ) : (
+          // Placeholder (e.g. "(미지정)") — dashed circle
+          <span
+            className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-text-muted"
+            aria-hidden="true"
+          />
+        )}
 
-      {/* Check mark when active */}
-      {isActive ? (
-        <Check size={12} className="text-accent-primary shrink-0" aria-hidden="true" />
-      ) : (
-        <span className="w-3 h-3 shrink-0" aria-hidden="true" />
-      )}
-    </button>
+        {/* Label column */}
+        <span className="flex flex-col min-w-0">
+          {/* .entity-node-title */}
+          <span className="text-xs font-medium text-text-primary leading-none truncate">
+            {displayName}
+          </span>
+          {/* .entity-node-meta */}
+          {meta !== undefined && (
+            <span className="text-caption text-text-muted leading-none mt-0.5 truncate">
+              {meta}
+            </span>
+          )}
+        </span>
+
+        {/* Check mark when active */}
+        {isActive ? (
+          <Check size={12} className="text-accent-primary shrink-0" aria-hidden="true" />
+        ) : (
+          <span className="w-3 h-3 shrink-0" aria-hidden="true" />
+        )}
+      </button>
+    </PickerOptionGrid>
   );
 }

@@ -1,4 +1,4 @@
-import { PanelSectionTitle } from '@fops/ui';
+import { PanelSectionTitle, StatusBadgeFrame } from '@fops/ui';
 import type * as React from 'react';
 
 // Milestone-local presentation wrappers for the #514 final fidelity pass
@@ -26,22 +26,26 @@ function managedSystemToken(label: string): string {
   return '--managed-system-default';
 }
 
-// Prototype .badge geometry shared by the pill and the outline badge.
-const COMPACT_BADGE_CLASS =
-  'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-tiny font-medium leading-none tracking-kind-label shadow-subtle';
-
 // Prototype ManagedSystemPill (badges.jsx): compact badge, secondary text,
 // 6px round dot in the system's semantic identity color.
 export function MilestoneManagedSystemPill({ name }: { name: string }) {
   return (
-    <span className={`${COMPACT_BADGE_CLASS} text-text-secondary`}>
-      <span
-        aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)"
-        style={{ backgroundColor: `rgb(var(${managedSystemToken(name)}) / 1)` }}
-      />
+    <StatusBadgeFrame
+      appearance="compact-identity"
+      style={
+        {
+          '--milestone-managed-system-color': `rgb(var(${managedSystemToken(name)}) / 1)`,
+        } as React.CSSProperties
+      }
+      indicator={
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill) bg-(--milestone-managed-system-color)"
+        />
+      }
+    >
       {name}
-    </span>
+    </StatusBadgeFrame>
   );
 }
 
@@ -49,7 +53,7 @@ export function MilestoneManagedSystemPill({ name }: { name: string }) {
 // the .badge muted text stays (the shared badge's primary/semibold look was
 // the fidelity deviation).
 export function MilestoneOutlineBadge({ children }: { children: React.ReactNode }) {
-  return <span className={`${COMPACT_BADGE_CLASS} text-text-muted`}>{children}</span>;
+  return <StatusBadgeFrame appearance="compact-outline">{children}</StatusBadgeFrame>;
 }
 
 // Prototype owner avatar geometry (styles.css .avatar-sm): 18px circle,
@@ -60,8 +64,12 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
     <span
-      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) text-micro font-semibold leading-none text-white"
-      style={{ backgroundColor: 'rgb(var(--color-aether-blue) / 1)' }}
+      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) text-micro font-semibold leading-none text-white bg-(--milestone-owner-avatar-background)"
+      style={
+        {
+          '--milestone-owner-avatar-background': 'rgb(var(--color-aether-blue) / 1)',
+        } as React.CSSProperties
+      }
     >
       {name.charAt(0).toUpperCase()}
     </span>

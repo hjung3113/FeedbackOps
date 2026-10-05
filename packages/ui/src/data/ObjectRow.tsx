@@ -29,6 +29,13 @@ const densityClassName: Record<ObjectRowDensity, string> = {
   expanded: 'min-h-row-expanded px-5 py-3.5',
 };
 
+const severityClassName: Record<ObjectRowSeverity, string> = {
+  low: 'bg-severity-low',
+  medium: 'bg-severity-medium',
+  high: 'bg-severity-high',
+  critical: 'bg-severity-critical',
+};
+
 export const ObjectRow = React.forwardRef<HTMLDivElement, ObjectRowProps>(
   (
     {
@@ -88,8 +95,7 @@ export const ObjectRow = React.forwardRef<HTMLDivElement, ObjectRowProps>(
           {severity && (
             <span
               aria-hidden="true"
-              className="h-4 w-row-accent shrink-0 rounded-pill"
-              style={{ backgroundColor: `rgb(var(--severity-${severity}) / 1)` }}
+              className={cn('h-4 w-row-accent shrink-0 rounded-pill', severityClassName[severity])}
               data-token={`--severity-${severity}`}
             />
           )}

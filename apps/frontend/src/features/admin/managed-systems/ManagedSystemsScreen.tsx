@@ -15,6 +15,7 @@
 import {
   Button,
   Checkbox,
+  ManagedSystemMark,
   OutlineBadge,
   PageShell,
   Popover,
@@ -24,6 +25,7 @@ import {
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
+import type * as React from 'react';
 import { useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
@@ -275,16 +277,12 @@ function RegistryRow({
   return (
     <div
       data-testid={`managed-system-row-${row.slug}`}
-      className={`grid items-center gap-3 px-4 py-3${last ? '' : ' border-b border-border-subtle'}`}
-      style={{ gridTemplateColumns: '40px 1.6fr 1.1fr 1.4fr 110px' }}
+      className={`grid grid-cols-(--managed-system-row-columns) items-center gap-3 px-4 py-3${last ? '' : ' border-b border-border-subtle'}`}
+      style={
+        { '--managed-system-row-columns': '40px 1.6fr 1.1fr 1.4fr 110px' } as React.CSSProperties
+      }
     >
-      <div
-        className="flex items-center justify-center rounded-md text-tiny font-semibold text-white"
-        style={{ width: 28, height: 28, background: mark.color }}
-        aria-hidden="true"
-      >
-        {mark.label}
-      </div>
+      <ManagedSystemMark label={mark.label} color={mark.color} size={28} />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>

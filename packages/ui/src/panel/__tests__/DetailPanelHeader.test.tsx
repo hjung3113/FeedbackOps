@@ -54,7 +54,9 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       expect(header).not.toBeNull();
       const stripe = header?.querySelector('[aria-hidden="true"]') as HTMLElement | null;
       expect(stripe).not.toBeNull();
-      expect(stripe?.style.backgroundColor).toBe(KIND_ACCENT[kind]);
+      expect((header as HTMLElement).style.getPropertyValue('--detail-panel-kind-accent')).toBe(
+        KIND_ACCENT[kind].replace(/\)$/, ' / 1)'),
+      );
     });
   }
 });
@@ -68,9 +70,9 @@ describe('DetailPanelHeader — milestone kind badge', () => {
     expect(chip).toHaveClass('text-tiny');
     expect(chip).not.toHaveClass('uppercase');
     expect(chip.querySelector('[aria-hidden="true"]')).not.toBeNull();
-    expect((chip as HTMLElement).style.color).toBe(KIND_ACCENT[kind]);
-    expect((chip as HTMLElement).style.backgroundColor).toBe(
-      KIND_ACCENT[kind].replace(/\)$/, ' / 12%)'),
+    const header = container.querySelector(`[data-kind="${kind}"]`) as HTMLElement;
+    expect(header.style.getPropertyValue('--detail-panel-kind-tint')).toBe(
+      KIND_ACCENT[kind].replace(/\)$/, ' / 0.12)'),
     );
     expect(container.querySelector(`[data-kind="${kind}"]`)).toBeInTheDocument();
   });

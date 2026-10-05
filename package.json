@@ -13,7 +13,7 @@
     "gen:routes": "node scripts/generate-routes.mjs",
     "test": "turbo run test",
     "lint": "biome check .",
-    "lint:design": "oxlint --max-warnings 212 apps/frontend/src packages/ui/src",
+    "lint:design": "oxlint --max-warnings 139 apps/frontend/src packages/ui/src",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "check:boundaries": "node scripts/check-boundaries.mjs",

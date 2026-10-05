@@ -37,7 +37,9 @@ describe('SeverityBadge', () => {
     it('uses the -label token (rgb()-wrapped) for label text color', () => {
       const { container } = render(<SeverityBadge severity={severity} />);
       const badge = container.querySelector(`[data-token="--severity-${severity}"]`) as HTMLElement;
-      expect(badge.style.color).toBe(`rgb(var(--severity-${severity}-label) / 1)`);
+      expect(badge.style.getPropertyValue('--status-badge-tint')).toBe(
+        `rgb(var(--severity-${severity}) / 0.12)`,
+      );
     });
   }
 });

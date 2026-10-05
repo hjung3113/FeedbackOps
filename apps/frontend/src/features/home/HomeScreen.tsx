@@ -4,7 +4,15 @@ import {
   type TaskDto,
   type TaskRequestDto,
 } from '@fops/shared';
-import { Button, PageShell, Tabs, TabsContent, TabsList, TabsTrigger } from '@fops/ui';
+import {
+  Button,
+  PageShell,
+  ProgressMeter,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import type * as React from 'react';
@@ -418,18 +426,13 @@ function CoverageMetricRow({
           {item.value} / {item.total} · {item.percent}%
         </span>
       </div>
-      <div className="mt-2 h-1 rounded-full bg-surface-row-selected">
-        <div
-          className={
-            item.status === 'bad'
-              ? 'h-1 rounded-full bg-accent-danger'
-              : item.status === 'warn'
-                ? 'h-1 rounded-full bg-accent-warn'
-                : 'h-1 rounded-full bg-accent-success'
-          }
-          style={{ width: `${item.percent}%` }}
-        />
-      </div>
+      <ProgressMeter
+        value={item.percent}
+        size="thin"
+        tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
+        className="mt-2 w-full"
+        trackTone="row-selected"
+      />
     </>
   );
   return href === undefined ? (

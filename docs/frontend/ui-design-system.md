@@ -165,6 +165,15 @@ These opt-in props encode repeated caller treatments. Their default values prese
 | Skeleton | `shape=rounded` | Smaller-radius placeholder (`rounded`, 4px instead of the default `rounded-md` 6px) |
 | TooltipContent | `size=sm` | Small tooltip text |
 | ToggleGroupItem | `appearance=selected-filter` | Selected filter uses the selected border, row background, text, and weight |
+| `ProgressMeter` | `size=thin`, `normal`; primary, success, warning, danger tones; unannotated by default, decorative, or labeled `meter` / `progressbar` semantics | Value is expressed as fill width; decorative mode hides the track and fill from assistive technology |
+| `StatusBadgeFrame` | `reporter`, `task`, `severity`, `compact`, `compact-identity`, `compact-outline`, `link`; shared success, warning, muted, danger, and internal status tones | Shared geometry and token classes; each domain retains its own label and status-to-tone map |
+| `ManagedSystemMark` | 16, 18, 22, 28px | Decorative square initial mark with caller-provided label and identity color |
+| `SkeletonRows` | `size=compact`, `regular`; caller-owned count | Repeated list placeholders without owning caller spacing |
+| `SkeletonBlocks` | `line`, `title`, `body`, `badge` | Named detail-panel placeholder shapes |
+| `KeyboardShortcut` | compact shortcut hint | Shared keyboard-hint geometry; caller supplies platform label |
+| `ToolbarKicker` | label, divider, route name | Inline route identity for dense workbench toolbars |
+
+Picker option grids are feature-local in VOC triage: `PickerOptionGrid` applies the shared owner and severity column templates to the existing button, preserving its interaction and accessibility semantics.
 
 ### ObjectList
 

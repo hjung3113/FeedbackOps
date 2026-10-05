@@ -5,6 +5,7 @@ import {
   Callout,
   DetailPanelSectionNav,
   FieldRow,
+  ManagedSystemMark,
   ManagedSystemPill,
   OutlineBadge,
   type PanelSection,
@@ -108,15 +109,7 @@ export function AnalyticsAreaSlideOver({
             <PanelSectionTitle>정의</PanelSectionTitle>
             <FieldRow label="Managed System" inset="none">
               <span className="flex items-center gap-1.5">
-                {mark && (
-                  <span
-                    className="flex items-center justify-center rounded text-caption font-semibold text-white"
-                    style={{ width: 18, height: 18, background: mark.color }}
-                    aria-hidden="true"
-                  >
-                    {mark.label}
-                  </span>
-                )}
+                {mark && <ManagedSystemMark label={mark.label} color={mark.color} size={18} />}
                 <span>{ms?.name ?? area.managed_system_id}</span>
               </span>
             </FieldRow>

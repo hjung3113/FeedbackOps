@@ -14,7 +14,7 @@ import {
   type ListToolbarTab,
   ObjectRow,
   PermissionBlockedPanel,
-  Skeleton,
+  SkeletonRows,
 } from '@fops/ui';
 import * as React from 'react';
 import { useState } from 'react';
@@ -185,9 +185,7 @@ function ClusterListBody({
       >
         {isPending ? (
           <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            <SkeletonRows count={3} size="compact" />
           </div>
         ) : isError && isPermissionDenied(error) ? (
           <PermissionBlockedPanel

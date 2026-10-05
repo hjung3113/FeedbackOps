@@ -123,9 +123,9 @@ export function AppRail({
     <nav
       className={cn(
         'flex flex-col items-center gap-2 py-3 bg-surface-sidebar border-r border-border-subtle',
+        'w-(--rail-width)',
         className,
       )}
-      style={{ width: 'var(--rail-width)' }}
       aria-label="시스템 선택"
       data-testid="app-rail"
     >

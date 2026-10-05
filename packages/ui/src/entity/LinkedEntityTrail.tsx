@@ -55,8 +55,7 @@ export function LinkedEntityTrail({ nodes, className }: LinkedEntityTrailProps) 
     return (
       <div className={cn('flex items-center gap-2', className)}>
         <span
-          className="inline-flex items-center justify-center border border-dashed border-border-subtle rounded-full shrink-0"
-          style={{ width: 22, height: 22 }}
+          className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full border border-dashed border-border-subtle"
           aria-hidden="true"
         />
         <span className="text-xs text-text-muted">연결된 엔티티 없음</span>
