@@ -597,6 +597,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         relation_type: tuple.relation_type,
       });
 
+      const inventoryResponse = await getEntityLinks(
+        adminCookie,
+        `?scope=workspace&managed_system_id=${msA}`,
+      );
+      expect(inventoryResponse.statusCode).toBe(200);
+      const inventoried = inventoryResponse
+        .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+        .items.find((item) => item.id === linkId);
+      expect(inventoried).toMatchObject({ id: linkId, visibility_state: 'allowed' });
+
       const absent = await patchEntityLink(adminCookie, randomUUID(), {
         reason: 'Probe absent Task Request link',
       });
