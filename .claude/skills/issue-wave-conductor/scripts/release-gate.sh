@@ -1,29 +1,33 @@
 #!/usr/bin/env bash
-# release-gate.sh <main-checkout> — run the develop-to-main release checks, without creating a PR.
+# release-gate.sh <develop-checkout> — verify the develop tip for release, without creating a PR.
 set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 MODE=release-gate
 CHECK_NAMES=()
 CHECK_CODES=()
+CHECK_COUNT=0
+TESTED_SHA=
 
 usage() {
   cat <<'EOF'
-Usage: release-gate.sh <main-checkout>
+Usage: release-gate.sh <develop-checkout>
 
-Requires WAVE_STATE. Creates feedbackops_release through verify-db.sh, then
-runs the release checks against <main-checkout> in order. On success it prints
-the gh command the user can run; it never creates or merges the release PR.
+Requires WAVE_STATE and a clean checkout at the current origin/develop tip.
+Fetches develop and main, starts the verify database, refreshes feedbackops_release,
+then runs the release checks. On success it prints the complete gh command with
+the tested SHA; it never creates or merges the release PR.
 EOF
 }
 
 finish() {
   local ok=$1 code=$2 i
+  if [[ -n "$TESTED_SHA" ]]; then printf 'Tested develop tip: %s\n' "$TESTED_SHA"; fi
   printf '\n%-28s %s\n' 'Check' 'Exit'
-  for ((i = 0; i < ${#CHECK_NAMES[@]}; i++)); do
+  for ((i = 0; i < CHECK_COUNT; i++)); do
     printf '%-28s %s\n' "${CHECK_NAMES[$i]}" "${CHECK_CODES[$i]}"
   done
-  printf '{"ok":%s,"command":"%s","checks":%d}\n' "$ok" "$MODE" "${#CHECK_NAMES[@]}"
+  printf '{"ok":%s,"command":"%s","checks":%d,"tested_sha":"%s"}\n' "$ok" "$MODE" "$CHECK_COUNT" "$TESTED_SHA"
   exit "$code"
 }
 
@@ -39,6 +43,7 @@ run_check() {
   code=$?
   CHECK_NAMES+=("$name")
   CHECK_CODES+=("$code")
+  CHECK_COUNT=$((CHECK_COUNT + 1))
   if [[ "$code" != 0 ]]; then
     printf 'FAILED: %s (exit %s)\n' "$name" "$code" >&2
     tail -n 40 "$log" >&2
@@ -68,12 +73,20 @@ main() {
     usage
     finish true 0
   fi
-  (( $# == 1 )) || fail 'usage: release-gate.sh <main-checkout>' 2
+  (( $# == 1 )) || fail 'usage: release-gate.sh <develop-checkout>' 2
   [[ -n "${WAVE_STATE:-}" ]] || fail 'set WAVE_STATE to the wave scratch directory' 2
   local checkout
   checkout=$(cd -- "$1" 2>/dev/null && pwd) || fail "checkout does not exist: $1" 2
   [[ -d "$checkout/apps/frontend" && -d "$checkout/packages/shared" && -d "$checkout/packages/ui" ]] || fail "not a FeedbackOps checkout: $checkout" 2
   [[ -x "$SCRIPT_DIR/verify-db.sh" && -x "$SCRIPT_DIR/verify-be.sh" && -x "$SCRIPT_DIR/verify-fe.sh" && -x "$SCRIPT_DIR/visual.sh" ]] || fail 'release gate helper scripts are missing or not executable' 2
+
+  git -C "$checkout" fetch origin develop main || fail 'could not refresh origin/develop and origin/main' 1
+  TESTED_SHA=$(git -C "$checkout" rev-parse HEAD 2>/dev/null) || fail 'could not read checkout HEAD' 1
+  local develop_sha dirty
+  develop_sha=$(git -C "$checkout" rev-parse origin/develop 2>/dev/null) || fail 'could not read origin/develop' 1
+  [[ "$TESTED_SHA" == "$develop_sha" ]] || fail "checkout HEAD $TESTED_SHA is not the current origin/develop tip $develop_sha" 1
+  dirty=$(git -C "$checkout" status --porcelain --untracked-files=no 2>/dev/null) || fail 'could not inspect checkout status' 1
+  [[ -z "$dirty" ]] || fail 'release checkout has tracked worktree changes' 1
 
   prepare_node22 || fail 'release gate requires Node 22' 2
   mkdir -p "$WAVE_STATE/release-gate" || fail "cannot create release log directory under $WAVE_STATE" 2
@@ -81,7 +94,9 @@ main() {
   export WAVE_STATE
   local logdir=$WAVE_STATE/release-gate
 
-  run_check 'verify-db create release' "$logdir/db-create.log" env VERIFY_DB_ROOT="$checkout" "$SCRIPT_DIR/verify-db.sh" create release
+  run_check 'verify-db up' "$logdir/db-up.log" env VERIFY_DB_ROOT="$checkout" "$SCRIPT_DIR/verify-db.sh" up
+  run_check 'verify-db drop release' "$logdir/db-drop.log" env VERIFY_DB_ROOT="$checkout" "$SCRIPT_DIR/verify-db.sh" drop release
+  run_check 'verify-db create release' "$logdir/db-create.log" env VERIFY_DB_ROOT="$checkout" "$SCRIPT_DIR/verify-db.sh" create release --migrate-from "$checkout"
   run_check 'verify-be release' "$logdir/verify-be.log" "$SCRIPT_DIR/verify-be.sh" "$checkout" release
   run_check 'packages/shared vitest' "$logdir/shared-vitest.log" bash -c 'cd "$1" && pnpm --filter @fops/shared exec vitest run' bash "$checkout"
   run_check 'verify-fe' "$logdir/verify-fe.log" "$SCRIPT_DIR/verify-fe.sh" "$checkout"
@@ -89,7 +104,7 @@ main() {
   run_check 'gate:fe-lint --base origin/main' "$logdir/fe-lint.log" bash -c 'cd "$1" && pnpm -s gate:fe-lint --base origin/main' bash "$checkout"
   run_check 'visual harness' "$logdir/visual.log" env VISUAL_ROOT="$checkout" "$SCRIPT_DIR/visual.sh" run
 
-  printf 'Next command: gh pr create --base main --head develop\n'
+  printf "Next command: gh pr create --base main --head develop --title 'Release: develop -> main' --body 'Verified develop tip: %s'\n" "$TESTED_SHA"
   finish true 0
 }
 

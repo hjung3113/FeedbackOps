@@ -31,9 +31,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   Pass `--state-dir "$WAVE_STATE"` on each launch and wait; use distinct names and reports for every round.
 - `WAVE_BRIEFS` — brief dir, e.g. `.review/wave/` (gitignored). `FOPS_MAIN` — the main checkout.
 - Throwaway Postgres for BE integration (never the dev DB on 5434): a `pgvector/pgvector:pg16` container on **5439**
-  with `scripts/db/init.sql`, migrated once (`db:migrate` with the env exported), then one DB per issue:
-  `CREATE DATABASE feedbackops_<n> TEMPLATE feedbackops OWNER <owner>`, env file = the root `.env` with the URL
-  pointed at it (`fops_app` / `fops_migrate` roles). Drop the DB when the issue merges; `docker rm -f` at wave end.
+  with `scripts/db/init.sql`. `verify-db.sh up` runs `db:migrate` on the template; Drizzle skips migrations
+  already in its ledger. Each issue DB clones the template and then runs that checkout's migrations with its
+  `env.verify.<n>` exported. Drop the DB and env file after the issue merges; `docker rm -f` at wave end.
 
 ## Loop per issue
 
@@ -56,11 +56,12 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `12` timeout → inspect progress, do not treat it as completion or launch a duplicate; `2` usage → correct
    the arguments. Do not consume a stale report or a sentinel written before the worker stops.
 4. **Verify on the host** (workers already ran their touched tests + typecheck per `templates/impl-rules.md`):
-   - FE: `scripts/verify-fe.sh <worktree>`; run the visual harness with `scripts/visual.sh run [filter...]`.
+   - FE: `scripts/verify-fe.sh <worktree>`; set the working directory to the worktree root before invoking
+     `visual.sh` (for the main-checkout copy: `cd <worktree> && "$FOPS_MAIN/.claude/skills/issue-wave-conductor/scripts/visual.sh" run [filter...]`).
      It puts Node 22 on `PATH` and chooses a free `PW_PORT`; use `stable <filter...> --runs 3` for the final
      no-update baseline check.
    - BE: start the shared throwaway database once with `scripts/verify-db.sh up`, then
-     `scripts/verify-db.sh create <n>` before `scripts/verify-be.sh <worktree> <n> [module filters]` — full
+     `scripts/verify-db.sh create <n> --migrate-from <worktree>` before `scripts/verify-be.sh <worktree> <n> [module filters]` — full
      integration once per BE issue, touched modules after small fix rounds. Use `reset-rate-limits <n>` only
      when needed; drop the issue database after merge and run `down` at wave end.
    - Lint gate after committing: `pnpm gate:fe-lint --base origin/develop`; classify each NEW with
@@ -74,8 +75,10 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `worker-launch.sh --role fix --cwd <worktree> --task <absolute-fix-task> --report <absolute-fix-report>
    --sentinel '<sentinel from the fix task>' --name W-<n>-FIX<k> --state-dir "$WAVE_STATE"`.
    Name the implementation rules in the brief; wait on the resulting state JSON as in step 3 before verifying.
-6. **Browser evidence for UI**: use `scripts/visual.sh capture <n> --route <url> [--state <label>]...` for standard
-   captures; use a temporary spec with `page.route` for custom mock overrides. Save screenshots into `.review/<n>-shots/`
+6. **Browser evidence for UI**: use `scripts/visual.sh capture <n> --route <url> [--from <visual-spec>] [--state <label>]...`.
+   The tool infers a unique matching spec when possible; pass `--from` when inference is ambiguous or the route is
+   dynamic. Pages that call APIs need a matching spec's `installMockApi` setup because unmatched requests fail closed.
+   State values name screenshot files; they do not change the route or UI state. Save screenshots into `.review/<n>-shots/`
    and remove generated specs with `scripts/visual.sh capture --clean <n>`. Real-browser checks caught what unit tests
    could not (a blank page on cold `/me` 429, a 404 that spun forever).
 7. **One final review per issue** (user, 2026-10-02; reviewer rules: `templates/review-rules.md`, copied to
@@ -94,8 +97,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 8. **Visual baselines**: sub-threshold changes pass against stale baselines — regenerate deliberately with
    `scripts/visual.sh update <filter...>`. This runs `baseline-keep.py` in read-only report mode and writes
    before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNG list and crops before acting.
-   To restore only selected files use `baseline-keep.py --revert '<regex>'`; to keep only selected tracked PNGs
-   and restore the other changed tracked PNGs, use `baseline-keep.py --keep '<regex>'`. Existing `--region`
+   To restore only selected files use `baseline-keep.py --root <worktree> --revert '<regex>'`; to keep only selected tracked PNGs
+   and restore the other changed tracked PNGs, use `baseline-keep.py --root <worktree> --keep '<regex>'`. Existing `--region`
    (sidebar-only, e.g. `0,0,300,960`) and `--name` qualifiers apply to `--keep`. Pixel count alone never decides
    whether a change is retained. Finish with `scripts/visual.sh stable <filter...> --runs 3`. On a PNG rebase
    conflict take develop's file and regenerate on the branch.
@@ -117,12 +120,13 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 
 ## Tools
 
-- `scripts/visual.sh`: `run`, `update`, `stable`, and `capture`; `capture --clean <name>` moves its temporary spec
-  to Trash when available.
-- `scripts/verify-db.sh`: `up`, `create <n>`, `drop <n>`, `reset-rate-limits <n>`, and `down` for throwaway Postgres
-  on port 5439.
-- `scripts/release-gate.sh <main-checkout>`: fail-fast develop-to-main checks; it prints the PR command on success
-  and never creates or merges the PR.
+- `scripts/visual.sh`: `run`, `update`, `stable`, and `capture`; it selects the current checkout from the working
+  directory (or `VISUAL_ROOT`). `capture --clean <name>` moves its temporary spec to Trash when available.
+- `scripts/verify-db.sh`: `up`, `create <n> [--migrate-from <checkout>]`, `drop <n>`, `reset-rate-limits <n>`,
+  and `down` for throwaway Postgres on port 5439. `drop` removes the matching env file after a successful drop.
+- `scripts/release-gate.sh <develop-checkout>`: fetches develop/main and requires a clean checkout at
+  `origin/develop`; it refreshes the release DB and prints a complete PR command on success without creating or
+  merging the PR.
 
 ## Traps (measured)
 

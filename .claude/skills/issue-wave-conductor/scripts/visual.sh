@@ -3,9 +3,8 @@
 set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-SCRIPT_ROOT=$(cd -- "$SCRIPT_DIR/../../../.." && pwd)
-ROOT=${VISUAL_ROOT:-$SCRIPT_ROOT}
-FRONTEND=$ROOT/apps/frontend
+ROOT=${VISUAL_ROOT:-}
+FRONTEND=
 TEMPLATE=$SCRIPT_DIR/../templates/capture.visual.spec.ts.tmpl
 PLAY_PASSED=0
 PLAY_FAILED=0
@@ -26,21 +25,38 @@ Usage:
   visual.sh run [playwright filter...]
   visual.sh update <filter...>
   visual.sh stable <filter...> [--runs N]
-  visual.sh capture <name> --route <url> [--state <label>]...
+  visual.sh capture <name> --route <url> [--from <visual-spec>] [--state <label>]...
   visual.sh capture --clean <name>
 
+Run from the checkout under test; VISUAL_ROOT may override that checkout.
 PW_PORT may select a port; otherwise an available local port is chosen.
-Captures use labels for screenshot names. A temporary spec uses the committed
-visual helpers and writes screenshots under .review/<name>-shots/.
+Capture reuses a matching existing spec's installMockApi setup. Pass --from when
+route inference is ambiguous; routes that call APIs need a matching spec setup.
+--state values are screenshot labels only. Captures use the committed visual
+helpers and write screenshots under .review/<name>-shots/.
 EOF
 }
 
 result() {
   local ok=$1 code=$2 extra=${3:-}
-  printf '{"ok":%s,"command":"%s","passed_specs":%d,"failed_specs":%d,"skipped_specs":%d,"runs":%d' \
-    "$ok" "$MODE" "$TOTAL_PASSED" "$TOTAL_FAILED" "$TOTAL_SKIPPED" "$TOTAL_RUNS"
-  if [[ -n "$extra" ]]; then printf ',"%s":true' "$extra"; fi
-  printf '}\n'
+  python3 - "$ok" "$MODE" "$TOTAL_PASSED" "$TOTAL_FAILED" "$TOTAL_SKIPPED" "$TOTAL_RUNS" "$ROOT" "$extra" <<'PY'
+import json
+import sys
+
+ok, command, passed, failed, skipped, runs, root, extra = sys.argv[1:]
+result = {
+    "ok": ok == "true",
+    "command": command,
+    "passed_specs": int(passed),
+    "failed_specs": int(failed),
+    "skipped_specs": int(skipped),
+    "runs": int(runs),
+    "root": root,
+}
+if extra:
+    result[extra] = True
+print(json.dumps(result, separators=(",", ":")))
+PY
   exit "$code"
 }
 
@@ -168,8 +184,8 @@ run_playwright() {
 }
 
 print_playwright_summary() {
-  printf '%s port=%s passed_specs=%s failed_specs=%s skipped_specs=%s exit=%s\n' \
-    "$1" "$PLAY_PORT" "$PLAY_PASSED" "$PLAY_FAILED" "$PLAY_SKIPPED" "$PLAY_EXIT"
+  printf '%s root=%s port=%s passed_specs=%s failed_specs=%s skipped_specs=%s exit=%s\n' \
+    "$1" "$ROOT" "$PLAY_PORT" "$PLAY_PASSED" "$PLAY_FAILED" "$PLAY_SKIPPED" "$PLAY_EXIT"
   TOTAL_PASSED=$((TOTAL_PASSED + PLAY_PASSED))
   TOTAL_FAILED=$((TOTAL_FAILED + PLAY_FAILED))
   TOTAL_SKIPPED=$((TOTAL_SKIPPED + PLAY_SKIPPED))
@@ -208,22 +224,238 @@ capture_clean() {
 }
 
 generate_capture_spec() {
-  local name=$1 route=$2 shots_dir=$3 spec=$4
+  local name=$1 route=$2 shots_dir=$3 spec=$4 from_spec=$5
   shift 4
-  python3 - "$TEMPLATE" "$spec" "$name" "$route" "$shots_dir" "$@" <<'PY'
+  shift
+  python3 - "$TEMPLATE" "$spec" "$name" "$route" "$shots_dir" "$FRONTEND/tests/visual" "$from_spec" "$@" <<'PY'
+import fnmatch
 import json
 import pathlib
+import re
 import sys
+from urllib.parse import urlsplit
 
-template_path, output_path, name, route, shots_dir, *states = sys.argv[1:]
+template_path, output_path, name, route, shots_dir, visual_dir, from_spec, *states = sys.argv[1:]
 if not states:
     states = ["default"]
+
+visual_root = pathlib.Path(visual_dir).resolve()
+candidates = sorted(
+    path for path in visual_root.glob("*.visual.spec.ts")
+    if not path.name.startswith("zz-")
+)
+
+def route_path(value):
+    value = re.sub(r"\$\{[^}]+\}", "*", value)
+    return urlsplit(value).path or "/"
+
+requested_path = route_path(route)
+requested_query = urlsplit(route).query
+
+def goto_routes(source):
+    pattern = re.compile(r"page\.goto\s*\(\s*(['\"`])((?:\\.|.)*?)\1", re.DOTALL)
+    for match in pattern.finditer(source):
+        target = match.group(2).replace("\\/", "/")
+        yield match.start(), route_path(target), urlsplit(target).query
+
+def matching_specs():
+    matched = []
+    for candidate in candidates:
+        text = candidate.read_text(encoding="utf-8")
+        if any(
+            path == requested_path or fnmatch.fnmatchcase(requested_path, path)
+            for _, path, _ in goto_routes(text)
+        ):
+            matched.append(candidate)
+    return matched
+
+route_matches = matching_specs()
+source_path = None
+if from_spec:
+    requested_source = pathlib.Path(from_spec)
+    if not requested_source.is_absolute():
+        requested_source = visual_root / requested_source
+    try:
+        source_path = requested_source.resolve(strict=True)
+        source_path.relative_to(visual_root)
+    except (OSError, ValueError):
+        source_path = None
+    if source_path not in candidates:
+        print(f"ERROR: --from must name an existing visual spec under {visual_root}: {from_spec}", file=sys.stderr)
+        print("Candidate specs:", file=sys.stderr)
+        for candidate in candidates:
+            print(f"  --from {candidate.name}", file=sys.stderr)
+        raise SystemExit(2)
+    source_text = source_path.read_text(encoding="utf-8") if source_path else ""
+    source_routes = list(goto_routes(source_text))
+    if source_path not in route_matches and source_routes:
+        print(f"ERROR: {source_path.name} has no page.goto route matching {route!r}.", file=sys.stderr)
+        print("Candidate specs:", file=sys.stderr)
+        for candidate in route_matches or candidates:
+            print(f"  --from {candidate.name}", file=sys.stderr)
+        raise SystemExit(2)
+else:
+    if not route_matches:
+        print(f"ERROR: no existing visual spec matches route {route!r}; routes that call APIs require --from <visual-spec>.", file=sys.stderr)
+        print("Candidate specs:", file=sys.stderr)
+        for candidate in candidates:
+            print(f"  --from {candidate.name}", file=sys.stderr)
+        raise SystemExit(2)
+    route_name = requested_path.rstrip("/").rsplit("/", 1)[-1]
+    preferred = [candidate for candidate in route_matches if candidate.name == f"{route_name}.visual.spec.ts"]
+    if len(preferred) == 1:
+        source_path = preferred[0]
+    elif len(route_matches) == 1:
+        source_path = route_matches[0]
+    else:
+        print(f"ERROR: route {route!r} matches multiple specs; pass --from <visual-spec>.", file=sys.stderr)
+        print("Candidate specs:", file=sys.stderr)
+        for candidate in route_matches:
+            print(f"  --from {candidate.name}", file=sys.stderr)
+        raise SystemExit(2)
+
+source_text = source_path.read_text(encoding="utf-8")
+
+def matching_close(text, opening):
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    stack = []
+    quote = None
+    line_comment = block_comment = False
+    index = opening
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+        elif block_comment:
+            if char == "*" and following == "/":
+                block_comment = False
+                index += 1
+        elif quote:
+            if char == "\\":
+                index += 1
+            elif char == quote:
+                quote = None
+        elif char == "/" and following == "/":
+            line_comment = True
+            index += 1
+        elif char == "/" and following == "*":
+            block_comment = True
+            index += 1
+        elif char in "'\"`":
+            quote = char
+        elif char in pairs:
+            stack.append(pairs[char])
+        elif stack and char == stack[-1]:
+            stack.pop()
+            if not stack:
+                return index
+        index += 1
+    return None
+
+def split_arguments(text):
+    pieces = []
+    start = 0
+    stack = []
+    quote = None
+    line_comment = block_comment = False
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    index = 0
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if line_comment:
+            if char == "\n": line_comment = False
+        elif block_comment:
+            if char == "*" and following == "/": block_comment = False; index += 1
+        elif quote:
+            if char == "\\": index += 1
+            elif char == quote: quote = None
+        elif char == "/" and following == "/": line_comment = True; index += 1
+        elif char == "/" and following == "*": block_comment = True; index += 1
+        elif char in "'\"`": quote = char
+        elif char in pairs: stack.append(pairs[char])
+        elif stack and char == stack[-1]: stack.pop()
+        elif char == "," and not stack:
+            pieces.append(text[start:index].strip())
+            start = index + 1
+        index += 1
+    pieces.append(text[start:].strip())
+    return pieces
+
+calls = []
+for match in re.finditer(r"installMockApi\s*\(\s*page\b", source_text):
+    opening = source_text.find("(", match.start())
+    closing = matching_close(source_text, opening)
+    if closing is None:
+        continue
+    args = split_arguments(source_text[opening + 1:closing])
+    calls.append((match.start(), closing + 1, args))
+
+selected_setup = None
+selected_call = None
+matching_gotos = [
+    entry for entry in goto_routes(source_text)
+    if entry[1] == requested_path or fnmatch.fnmatchcase(requested_path, entry[1])
+]
+preferred_query = [entry for entry in matching_gotos if entry[2] == requested_query]
+preferred_base = [entry for entry in matching_gotos if not entry[2]]
+if preferred_query:
+    matching_gotos = preferred_query
+elif not requested_query and preferred_base:
+    matching_gotos = preferred_base
+
+for goto_start, path, _ in matching_gotos:
+    preceding = [call for call in calls if call[1] <= goto_start]
+    if not preceding:
+        continue
+    selected_call = max(preceding, key=lambda item: item[1])
+    break
+
+if selected_call is None and from_spec and not list(goto_routes(source_text)) and calls:
+    selected_call = calls[0]
+
+if selected_call is not None:
+    options = selected_call[2][1] if len(selected_call[2]) > 1 else None
+    setup_prefixes = []
+    if options:
+        loop_pattern = re.compile(r"for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)")
+        for loop in loop_pattern.finditer(source_text):
+            variable = loop.group(1)
+            if loop.start() < selected_call[0] and re.search(rf"\b{re.escape(variable)}\b", options):
+                setup_prefixes.append(f"const {variable} = {loop.group(2)}[0];")
+    setup_prefix = "\n".join(setup_prefixes)
+    setup_call = "await installMockApi(page" + (f", {options}" if options else "") + ");"
+    selected_setup = (setup_prefix + "\n" if setup_prefix else "") + setup_call
+
+if selected_setup is None:
+    print(f"ERROR: {source_path.name} has no installMockApi setup before a matching page.goto for {route!r}.", file=sys.stderr)
+    print("Candidate specs with reusable API setup:", file=sys.stderr)
+    for candidate in route_matches or candidates:
+        candidate_text = candidate.read_text(encoding="utf-8")
+        if "installMockApi" in candidate_text:
+            print(f"  --from {candidate.name}", file=sys.stderr)
+    raise SystemExit(2)
+
+imports = []
+for match in re.finditer(r"(?m)^import\b[\s\S]*?;\s*", source_text):
+    statement = match.group(0)
+    module_match = re.search(r"from\s+(['\"])([^'\"]+)\1", statement)
+    if module_match and module_match.group(2) in {
+        "@playwright/test", "./support/visual-test", "./support/mock-api", "./support/screenshot"
+    }:
+        continue
+    imports.append(statement.rstrip())
+
 template = pathlib.Path(template_path).read_text(encoding="utf-8")
 values = {
     "__CAPTURE_NAME__": json.dumps(name, ensure_ascii=False),
     "__ROUTE__": json.dumps(route, ensure_ascii=False),
     "__STATES__": json.dumps(states, ensure_ascii=False),
     "__SHOTS_DIR__": json.dumps(shots_dir, ensure_ascii=False),
+    "__FIXTURE_IMPORTS__": "\n".join(imports),
+    "__MOCK_SETUP__": selected_setup,
 }
 for marker, value in values.items():
     template = template.replace(marker, value)
@@ -257,6 +489,12 @@ main() {
   fi
   MODE=$1
   shift
+  if [[ -n "${VISUAL_ROOT:-}" ]]; then
+    ROOT=$(cd -- "$VISUAL_ROOT" 2>/dev/null && pwd) || fail "visual root does not exist: $VISUAL_ROOT" 2
+  else
+    ROOT=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null) || fail 'run visual.sh from inside the repository or set VISUAL_ROOT' 2
+  fi
+  FRONTEND=$ROOT/apps/frontend
   [[ -d "$ROOT" ]] || fail "visual root does not exist: $ROOT" 2
   case "$MODE" in
     run)
@@ -280,13 +518,15 @@ main() {
           *) filters+=("$1"); shift ;;
         esac
       done
-      (( ${#filters[@]} > 0 )) || fail 'update requires at least one Playwright filter' 2
+      local filter_count=0
+      for filter in "${filters[@]+"${filters[@]}"}"; do filter_count=$((filter_count + 1)); done
+      (( filter_count > 0 )) || fail 'update requires at least one Playwright filter' 2
       local run_status=0
-      run_playwright 1 "${filters[@]}" || run_status=$?
+      run_playwright 1 "${filters[@]+"${filters[@]}"}" || run_status=$?
       print_playwright_summary update
       local baseline_log
       baseline_log=$(mktemp) || fail 'could not create baseline report log' 2
-      if python3 "$SCRIPT_DIR/baseline-keep.py" --report --output-dir "$ROOT/.review/baseline-keep-crops" >"$baseline_log" 2>&1; then
+      if python3 "$SCRIPT_DIR/baseline-keep.py" --report --root "$ROOT" --output-dir "$ROOT/.review/baseline-keep-crops" >"$baseline_log" 2>&1; then
         cat "$baseline_log"
       else
         cat "$baseline_log" >&2
@@ -317,11 +557,13 @@ main() {
       [[ "$runs" =~ ^[0-9]+$ ]] || fail '--runs needs a positive integer' 2
       runs=$((10#$runs))
       (( runs > 0 )) || fail '--runs needs a positive integer' 2
-      (( ${#filters[@]} > 0 )) || fail 'stable requires at least one Playwright filter' 2
+      local filter_count=0
+      for filter in "${filters[@]+"${filters[@]}"}"; do filter_count=$((filter_count + 1)); done
+      (( filter_count > 0 )) || fail 'stable requires at least one Playwright filter' 2
       local run_number status=0
       for ((run_number = 1; run_number <= runs; run_number++)); do
         local this_status=0
-        run_playwright 0 "${filters[@]}" || this_status=$?
+        run_playwright 0 "${filters[@]+"${filters[@]}"}" || this_status=$?
         print_playwright_summary "run $run_number/$runs"
         if (( this_status != 0 )); then
           status=1
@@ -338,11 +580,11 @@ main() {
         (( $# == 2 )) || fail 'usage: capture --clean <name>' 2
         capture_clean "$2"
       fi
-      (( $# >= 1 )) || fail 'usage: capture <name> --route <url> [--state <label>]...' 2
+      (( $# >= 1 )) || fail 'usage: capture <name> --route <url> [--from <visual-spec>] [--state <label>]...' 2
       local name=$1
       shift
       safe_name "$name" || fail 'capture name must use letters, digits, underscore, or hyphen' 2
-      local route= states=() spec shots_dir
+      local route= from_spec= states=() spec shots_dir
       while (( $# )); do
         case "$1" in
           --route)
@@ -356,6 +598,12 @@ main() {
             states+=("$2")
             shift 2
             ;;
+          --from)
+            (( $# >= 2 )) || fail '--from needs an existing visual spec' 2
+            [[ -z "$from_spec" ]] || fail 'capture accepts one --from' 2
+            from_spec=$2
+            shift 2
+            ;;
           *) fail "unknown capture option: $1" 2 ;;
         esac
       done
@@ -365,11 +613,13 @@ main() {
       [[ ! -e "$spec" ]] || fail "temporary spec already exists: $spec" 2
       [[ -f "$TEMPLATE" ]] || fail "capture template is missing: $TEMPLATE" 2
       mkdir -p "$shots_dir" || fail "could not create screenshot directory: $shots_dir" 2
-      generate_capture_spec "$name" "$route" "$shots_dir" "$spec" "${states[@]}" || fail 'could not generate capture spec' 1
+      if ! generate_capture_spec "$name" "$route" "$shots_dir" "$spec" "$from_spec" "${states[@]+"${states[@]}"}"; then
+        fail 'could not generate capture spec; see the listed source specs and --from guidance' 2
+      fi
       local capture_filter=zz-$name.visual.spec.ts run_status=0
       run_playwright 0 "$capture_filter" || run_status=$?
       print_playwright_summary capture
-      print_capture_paths "$name" "$shots_dir" "${states[@]}"
+      print_capture_paths "$name" "$shots_dir" "${states[@]+"${states[@]}"}"
       if (( run_status != 0 )); then show_failure_log; fi
       clean_playwright_temps
       if (( run_status == 0 )); then result true 0; else result false 1; fi

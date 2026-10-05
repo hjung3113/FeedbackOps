@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 // visual-test supplies the pinned FIXED_CLOCK fixture and reduced-motion page setup.
 import { expect, test } from './support/visual-test';
 import { installMockApi } from './support/mock-api';
+__FIXTURE_IMPORTS__
 
 const captureName = __CAPTURE_NAME__;
 const route = __ROUTE__;
@@ -11,13 +12,13 @@ const stateLabels: string[] = __STATES__;
 const shotsDirectory = __SHOTS_DIR__;
 
 function safeLabel(label: string): string {
-  return label.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'state';
+  return label.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'state';
 }
 
 test(`temporary visual capture: ${captureName}`, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await mkdir(shotsDirectory, { recursive: true });
-  await installMockApi(page);
+  __MOCK_SETUP__
 
   const savedPaths: string[] = [];
   for (const [index, stateLabel] of stateLabels.entries()) {

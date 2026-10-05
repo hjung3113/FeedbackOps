@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path.cwd()
 
 
 def git_bytes(*args: str) -> bytes:
@@ -86,22 +86,26 @@ def make_crop_paths(root: Path, rel: str):
     return base.with_name(base.name + ".before.png"), base.with_name(base.name + ".after.png"), base.with_name(base.name + ".diff.png")
 
 
-def region_matches(max_channel: Image.Image | None, region: tuple[int, int, int, int] | None) -> bool:
+def region_matches(
+    max_channel: Image.Image | None,
+    region: tuple[int, int, int, int] | None,
+    threshold: int,
+) -> bool:
     if region is None:
         return True
     if max_channel is None:
         return False
-    # Preserve the historical region test: there must be a changed pixel in
-    # the target box, and no >40-channel noise may occur outside it. Counting
-    # any pixel inside avoids dropping an intended small visual change.
+    # Preserve the historical region test: a pixel above the selected
+    # threshold must be in the target box, and no >40-channel noise may occur outside it.
     high_mask = max_channel.point(lambda value: 255 if value > 40 else 0)
-    inside_any = max_channel.crop(region).point(lambda value: 255 if value > 0 else 0).histogram()[255]
+    inside_changed = max_channel.crop(region).point(lambda value: 255 if value > threshold else 0).histogram()[255]
     full_high = high_mask.histogram()[255]
     inside_high = high_mask.crop(region).histogram()[255]
-    return inside_any > 0 and full_high == inside_high
+    return inside_changed > 0 and full_high == inside_high
 
 
 def main() -> int:
+    global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--keep", metavar="REGEX", help="keep matching baselines and restore other changed tracked PNGs")
@@ -111,10 +115,13 @@ def main() -> int:
     parser.add_argument("--name", help="legacy keep qualifier: match the PNG basename; takes precedence over --region")
     parser.add_argument("--threshold", type=int, default=10, help="per-channel threshold for the reported pixel count (default: 10)")
     parser.add_argument("--output-dir", default=".review/baseline-keep-crops", help="crop output directory (default: %(default)s)")
+    parser.add_argument("--root", help="repository checkout to inspect (default: current directory's Git toplevel)")
     args = parser.parse_args()
 
     if args.report and (args.keep or args.revert):
         parser.error("--report cannot be combined with --keep or --revert")
+    if (args.name or args.region) and not args.keep:
+        parser.error("--name and --region require --keep (for example: --keep . --name '<pattern>')")
     if args.threshold < 0 or args.threshold > 255:
         parser.error("--threshold must be between 0 and 255")
     try:
@@ -131,6 +138,15 @@ def main() -> int:
             parser.error("--region must be x0,y0,x1,y1")
         if len(region) != 4 or region[0] < 0 or region[1] < 0 or region[2] <= region[0] or region[3] <= region[1]:
             parser.error("--region must be a non-empty x0,y0,x1,y1 box")
+
+    root_hint = Path(args.root).expanduser() if args.root else Path.cwd()
+    try:
+        root_text = subprocess.check_output(
+            ["git", "-C", str(root_hint), "rev-parse", "--show-toplevel"], text=True
+        ).strip()
+        ROOT = Path(root_text).resolve()
+    except (OSError, subprocess.CalledProcessError) as error:
+        parser.error(f"cannot resolve repository root from {root_hint}: {error}")
 
     try:
         candidates = changed_pngs()
@@ -207,7 +223,7 @@ def main() -> int:
             combined.paste(gutter, (before_crop.width, 0))
             combined.paste(after_crop, (before_crop.width + gutter.width, 0))
             combined.save(diff_path)
-            row.update(pixels=pixels, bbox=bbox, raw_bbox=raw_bbox, region_ok=region_matches(max_channel, region), before=str(before_path), after=str(after_path), diff=str(diff_path))
+            row.update(pixels=pixels, bbox=bbox, raw_bbox=raw_bbox, region_ok=region_matches(max_channel, region, args.threshold), before=str(before_path), after=str(after_path), diff=str(diff_path))
             print(f"CHANGE {rel} pixels>{args.threshold}:{pixels} bbox={bbox or 'none'} before={before_path} after={after_path} diff={diff_path}")
         rows.append(row)
 

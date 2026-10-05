@@ -15,13 +15,15 @@ usage() {
   cat <<'EOF'
 Usage:
   verify-db.sh up
-  verify-db.sh create <name>
+  verify-db.sh create <name> [--migrate-from <checkout>]
   verify-db.sh drop <name>
   verify-db.sh down
   verify-db.sh reset-rate-limits <name>
 
-up provisions fops-verify on localhost:5439 and migrates the feedbackops template.
-create/drop/reset-rate-limits use feedbackops_<name> and $WAVE_STATE/env.verify.<name>.
+up provisions fops-verify on localhost:5439 and runs db:migrate on the feedbackops template.
+create clones feedbackops, writes $WAVE_STATE/env.verify.<name>, and runs db:migrate
+from <checkout> (default: this script's checkout). drop removes the env file after the DB drops.
+drop/reset-rate-limits use feedbackops_<name>.
 The development database on port 5434 is never used.
 EOF
 }
@@ -40,6 +42,7 @@ fail() {
 require_state() {
   [[ -n "${WAVE_STATE:-}" ]] || fail 'set WAVE_STATE to the wave scratch directory' 2
   mkdir -p "$WAVE_STATE" || fail "cannot create WAVE_STATE: $WAVE_STATE" 2
+  WAVE_STATE=$(cd -- "$WAVE_STATE" 2>/dev/null && pwd) || fail "cannot resolve WAVE_STATE: $WAVE_STATE" 2
 }
 
 check_port() {
@@ -93,10 +96,10 @@ PY
 }
 
 run_migration() {
-  local env_file=$1 log
+  local migration_root=$1 env_file=$2 description=$3 log
   log=$(mktemp) || fail 'could not create migration log' 2
   (
-    cd "$ROOT" || exit 2
+    cd "$migration_root" || exit 2
     set -a
     . "$env_file"
     set +a
@@ -105,13 +108,13 @@ run_migration() {
   local code=$?
   cat "$log"
   rm -f "$log"
-  [[ "$code" == 0 ]] || fail "template migration failed (exit $code)" "$code"
+  [[ "$code" == 0 ]] || fail "$description failed (exit $code)" "$code"
 }
 
 up() {
   check_port
   require_state
-  local running owner env_file ledger
+  local running owner env_file
   if docker inspect "$CONTAINER" >/dev/null 2>&1; then
     assert_container_port
     running=$(docker inspect --format '{{.State.Running}}' "$CONTAINER" 2>/dev/null) || fail "could not inspect $CONTAINER" 1
@@ -145,37 +148,54 @@ up() {
 
   env_file=$WAVE_STATE/env.verify.template
   write_env_file template feedbackops
-  ledger=$(PGPASSWORD=fops_migrate psql -X -h "$DB_HOST" -p "$DB_PORT" -U fops_migrate -d feedbackops -v ON_ERROR_STOP=1 -tA \
-    -c "SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL" 2>/dev/null) || fail 'could not inspect template migration ledger' 1
-  if [[ "$ledger" != t ]]; then
-    run_migration "$env_file"
-    printf 'Migrated template database feedbackops once.\n'
-  else
-    printf 'Template database feedbackops is already migrated.\n'
-  fi
+  run_migration "$ROOT" "$env_file" 'template migration'
+  printf 'Ran migrations for template database feedbackops.\n'
   finish true 0
 }
 
 create_db() {
+  local suffix=${1:-} migration_root=$ROOT
+  shift || true
+  while (( $# )); do
+    case "$1" in
+      --migrate-from)
+        (( $# >= 2 )) || fail 'create --migrate-from needs a checkout path' 2
+        migration_root=$(cd -- "$2" 2>/dev/null && pwd) || fail "migration checkout does not exist: $2" 2
+        shift 2
+        ;;
+      *) fail 'usage: verify-db.sh create <name> [--migrate-from <checkout>]' 2 ;;
+    esac
+  done
   check_port
   require_state
-  database_for "$1"
+  database_for "$suffix"
   local owner
   owner=$(db_owner "$DB_NAME") || fail "could not inspect database $DB_NAME" 1
   [[ -z "$owner" ]] || fail "database already exists: $DB_NAME" 1
   PGPASSWORD=postgres psql -X "$ADMIN_URL" -v ON_ERROR_STOP=1 \
     -c "CREATE DATABASE \"$DB_NAME\" TEMPLATE feedbackops OWNER fops_migrate" || fail "could not create $DB_NAME from template" 1
-  write_env_file "$1" "$DB_NAME"
+  write_env_file "$suffix" "$DB_NAME"
+  run_migration "$migration_root" "$WAVE_STATE/env.verify.$suffix" "migration for $DB_NAME"
   printf 'Created %s on port %s.\n' "$DB_NAME" "$DB_PORT"
   finish true 0
 }
 
 drop_db() {
+  local suffix=$1 env_file
   check_port
-  database_for "$1"
+  require_state
+  database_for "$suffix"
   PGPASSWORD=postgres psql -X "$ADMIN_URL" -v ON_ERROR_STOP=1 \
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB_NAME' AND pid <> pg_backend_pid()" \
     -c "DROP DATABASE IF EXISTS \"$DB_NAME\"" || fail "could not drop $DB_NAME" 1
+  env_file=$WAVE_STATE/env.verify.$suffix
+  if [[ -f "$env_file" ]]; then
+    if command -v trash >/dev/null 2>&1; then
+      trash "$env_file" || fail "could not move verification env file to Trash: $env_file" 1
+    else
+      rm -f "$env_file" || fail "could not remove verification env file: $env_file" 1
+    fi
+  fi
   printf 'Dropped %s if it existed.\n' "$DB_NAME"
   finish true 0
 }
@@ -214,10 +234,13 @@ main() {
       (( $# == 0 )) || fail 'usage: verify-db.sh up' 2
       up
       ;;
-    create|drop|reset-rate-limits)
+    create)
+      (( $# >= 1 )) || fail 'usage: verify-db.sh create <name> [--migrate-from <checkout>]' 2
+      create_db "$@"
+      ;;
+    drop|reset-rate-limits)
       (( $# == 1 )) || fail "usage: verify-db.sh $MODE <name>" 2
       case "$MODE" in
-        create) create_db "$1" ;;
         drop) drop_db "$1" ;;
         reset-rate-limits) reset_rate_limits "$1" ;;
       esac
