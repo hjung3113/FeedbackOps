@@ -49,7 +49,6 @@ describe('SeverityIndicator', () => {
           );
         }
       });
-
     });
   });
 });

@@ -88,10 +88,10 @@ export function StatusBadgeFrame({
   const toneClasses = tone !== undefined ? TONE_CLASS[tone] : undefined;
   const usesTokenTint = tone !== undefined && token !== undefined;
   const tintStyle = usesTokenTint
-    ? {
+    ? ({
         ...(style ?? {}),
         '--status-badge-tint': `rgb(var(${token}) / 0.12)`,
-      } as React.CSSProperties
+      } as React.CSSProperties)
     : style;
 
   return (

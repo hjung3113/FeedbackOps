@@ -63,9 +63,7 @@ export function MilestoneOutlineBadge({ children }: { children: React.ReactNode 
 // milestone avatar uses the single semantic fallback fill --color-aether-blue.
 export function MilestoneOwnerAvatar({ name }: { name: string }) {
   return (
-    <span
-      className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) bg-accent-primary text-micro font-semibold leading-none text-white"
-    >
+    <span className="grid size-4.5 shrink-0 place-items-center rounded-(--radius-pill) bg-accent-primary text-micro font-semibold leading-none text-white">
       {name.charAt(0).toUpperCase()}
     </span>
   );
