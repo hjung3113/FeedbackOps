@@ -18,6 +18,13 @@ Generic PATCH treats that tuple exactly as an absent link, returning the same
 non-disclosing `404 not_found.record` envelope rather than a distinguishable
 `422` response.
 
+The `(voc, task_request, requested_task)` and `(voc_cluster, task_request,
+requested_task)` tuples are command-only for generic writes. Generic POST
+rejects them, and generic PATCH/detach returns the same non-disclosing `404
+not_found.record` envelope as an absent link. Generic endpoint and workspace
+lists continue to include their rows. Only `POST /vocs/:id/request-task` and
+`POST /voc-clusters/:id/request-task` create them.
+
 The `(survey_response, finding, generated_finding)` and `(survey_response,
 finding, evidence_of)` tuples are also command-only. Generic POST rejects them,
 generic endpoint and workspace lists omit their rows, and generic PATCH/detach
