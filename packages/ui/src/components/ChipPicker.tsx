@@ -1,3 +1,4 @@
+import { ManagedSystemMark } from '../badges/ManagedSystemMark.js';
 import { managedSystemMarkColor, managedSystemMarkToken } from '../badges/managed-system-mark.js';
 import { cn } from '../utils/cn.js';
 import { ToggleGroup, ToggleGroupItem } from './shadcn/toggle-group.js';
@@ -62,31 +63,21 @@ export function ChipPicker({
               ? 'gap-2 rounded-md border border-border-subtle bg-surface-canvas px-2.5 text-text-secondary shadow-subtle hover:bg-surface-row-hover data-[state=on]:border-border-selected data-[state=on]:bg-surface-row-selected data-[state=on]:text-text-primary'
               : 'rounded-pill border border-border-subtle px-3 data-[state=on]:bg-accent-primary data-[state=on]:text-text-inverse data-[state=on]:border-accent-primary'}
           >
-            {isManagedSystem && <ManagedSystemMark label={option.label} slug={option.slug ?? ''} />}
+            {isManagedSystem && (
+              <ManagedSystemMark
+                label={managedSystemMark(option.label)}
+                color={managedSystemMarkColor(option.slug)}
+                size={16}
+                fontSize="var(--text-system-mark)"
+                token={managedSystemMarkToken(option.slug)}
+                className="font-bold leading-none text-text-on-accent"
+              />
+            )}
             {label}
           </ToggleGroupItem>
         );
       })}
     </ToggleGroup>
-  );
-}
-
-function ManagedSystemMark({ label, slug }: { label: string; slug: string }) {
-  const mark = managedSystemMark(label);
-  const colorToken = managedSystemMarkToken(slug);
-
-  return (
-    <span
-      aria-hidden="true"
-      className="grid h-4 w-4 shrink-0 place-items-center rounded-sm font-bold leading-none text-text-on-accent"
-      data-token={colorToken}
-      style={{
-        backgroundColor: managedSystemMarkColor(slug),
-        fontSize: 'var(--text-system-mark)',
-      }}
-    >
-      {mark}
-    </span>
   );
 }
 

@@ -2,7 +2,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
-import { Skeleton } from '@fops/ui';
+import { SkeletonBlocks } from '@fops/ui';
 import * as React from 'react';
 
 import { DetailPanelNotFound } from './DetailPanelNotFound';
@@ -35,13 +35,17 @@ function isSummaryEnvelope(
 function DetailPanelSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-4 p-4" aria-label="VOC 상세 불러오는 중">
-      <Skeleton className="h-6 w-1/3" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-20 w-full" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-32 w-full" />
+      <SkeletonBlocks
+        blocks={[
+          { kind: 'title', size: 'small', width: 'third' },
+          { kind: 'line', width: 'full' },
+          { kind: 'line', width: 'two-thirds' },
+          { kind: 'body', size: 'compact', width: 'full' },
+          { kind: 'line', width: 'full' },
+          { kind: 'line', width: 'three-quarters' },
+          { kind: 'body', size: 'large', width: 'full' },
+        ]}
+      />
     </div>
   );
 }
@@ -79,7 +83,7 @@ export function VocDetailPanel({
     return (
       <div className="flex flex-col h-full overflow-y-auto">
         <div className="h-toolbar shrink-0 border-b border-border-subtle flex items-center px-4">
-          <Skeleton className="h-4 w-24" />
+          <SkeletonBlocks blocks={[{ kind: 'line', width: 'w24' }]} />
         </div>
         <DetailPanelSkeleton />
       </div>

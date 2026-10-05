@@ -160,13 +160,16 @@ export function AppSidebar({
 
   return (
     <aside
-      className={cn('flex flex-col border-r border-border-subtle bg-surface-sidebar transition-[width] duration-150', className)}
-      style={{ width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }}
+      className={cn(
+        'flex flex-col border-r border-border-subtle bg-surface-sidebar transition-[width] duration-150',
+        collapsed ? 'w-(--sidebar-width-collapsed)' : 'w-(--sidebar-width)',
+        className,
+      )}
       aria-label="주요 탐색"
       data-testid="app-sidebar"
       data-collapsed={collapsed ? 'true' : 'false'}
     >
-      <div className="flex items-center justify-between border-b border-border-subtle px-3" style={{ height: 'var(--topbar-height)' }}>
+      <div className="flex h-(--topbar-height) items-center justify-between border-b border-border-subtle px-3">
         {!collapsed && (
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-text-primary" data-testid="sidebar-system-label">{systemLabel}</div>

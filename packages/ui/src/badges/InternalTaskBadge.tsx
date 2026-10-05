@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { cn } from '../utils/cn.js';
+import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 
 export type InternalTaskStatusEnum =
   | 'backlog'
@@ -34,23 +33,20 @@ const LABELS: Record<InternalTaskStatusEnum, string> = {
 };
 
 /**
- * Squared badge (`rounded-sm`) for internal task status.
- * Background uses `--status-internal-<status>` at 12 % opacity;
- * text uses the same token directly.
+ * Squared badge (`rounded-sm`) for internal task status. Keep its neutral
+ * rendering until internal statuses have contrast-safe label tokens: the
+ * original raw RGB token use rendered no text color or tint.
  */
 export function InternalTaskBadge({ status, className }: InternalTaskBadgeProps) {
   const token = `--status-internal-${status}`;
 
   return (
-    <span
-      className={cn('inline-flex items-center gap-1 rounded-sm px-2.5 py-0.5 text-xs font-semibold', className)}
-      style={{
-        color:           `var(${token})`,
-        backgroundColor: `color-mix(in srgb, var(${token}) 12%, transparent)`,
-      }}
-      data-token={token}
+    <StatusBadgeFrame
+      appearance="task"
+      {...(className !== undefined ? { className } : {})}
+      token={token}
     >
       {LABELS[status]}
-    </span>
+    </StatusBadgeFrame>
   );
 }

@@ -41,6 +41,13 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Drawer | create, detail, multi-step | open, dirty, loading, error | focus management |
 | Toast | success, error, warning, info | visible, dismissed | non-blocking |
 | Skeleton | row, panel, card; `shape=rounded` | loading | reduced motion safe |
+| `SkeletonRows` | `size=compact` (`h-12`), `regular` (`h-14`); caller-owned count | loading | decorative placeholders |
+| `SkeletonBlocks` | `line`, `title`, `body`, `badge` detail presets | loading | decorative placeholders |
+| `ProgressMeter` | `size=thin` (4px), `normal` (6px); `clip` (clip the fill to the rounded track; off by default); primary, success, warning, danger tones; unannotated by default, decorative, or labeled meter/progressbar semantics | current value | caller preserves its prior accessibility mode; decorative parts are hidden |
+| `StatusBadgeFrame` | reporter, task, severity, compact, compact-identity, compact-outline, link geometry; shared semantic tones | caller-owned state-to-tone map | text label required; indicator optional |
+| `ManagedSystemMark` | 16, 18, 22, 28px square marks | known and fallback color | decorative; adjacent system name supplies identity |
+| `KeyboardShortcut` | compact keyboard hint | platform-specific label | hint text remains readable |
+| `ToolbarKicker` | label, divider, route name | workbench toolbar identity | route name and label remain text |
 | ToggleGroupItem | `appearance=selected-filter` | selected, unselected, disabled | keyboard navigable |
 | Avatar | user, team | default, missing image | text fallback |
 | Table | data, comparison | loading, empty, selected | keyboard row navigation |
@@ -102,12 +109,19 @@ Names in the primitive table and the composed list above are design-time names. 
 | ConversationComposer | feature-local `ComposerSection` + `ComposerTabs` hosting `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` | `apps/frontend/src/features/voc/components/detail/` |
 | EvidenceHighlight | feature-local `EvidenceHighlights` | `apps/frontend/src/features/findings/components/FindingDetail/` |
 | ActionQueueRow | feature-local `ActionQueueRow` (Home); `IntegrationDashboardCards` (Integration) | `apps/frontend/src/features/home/HomeScreen.tsx`, `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
-| CommandMenu | `CommandPalette` | `apps/frontend/src/lib/layout/command-palette/` |
+| CommandMenu | `CommandPalette` with local `CommandPaletteItemIcon` | `apps/frontend/src/lib/layout/command-palette/` |
 | UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |
 | Drawer | `Sheet` | `packages/ui/src/components/shadcn/sheet.tsx` |
 | Toast | `sonner` `Toaster` mounted in the root route; `UndoToast` | `apps/frontend/src/routes/__root.tsx`, `packages/ui/src/feedback/UndoToast.tsx` |
 | Avatar | `Avatar`, `UserAvatar`, `UserChip` | `packages/ui/src/components/shadcn/avatar.tsx`, `packages/ui/src/identity/` |
 | TextInput | `Input` | `packages/ui/src/components/shadcn/input.tsx` |
+| Progress indicator | `ProgressMeter` | `packages/ui/src/indicators/ProgressMeter.tsx` |
+| Status badge frame | `StatusBadgeFrame` | `packages/ui/src/badges/StatusBadgeFrame.tsx` |
+| Managed System square mark | `ManagedSystemMark` | `packages/ui/src/badges/ManagedSystemMark.tsx` |
+| Loading rows and panel blocks | `SkeletonRows`, `SkeletonBlocks` | `packages/ui/src/components/` |
+| Keyboard shortcut hint | `KeyboardShortcut` | `packages/ui/src/components/KeyboardShortcut.tsx` |
+| Workbench toolbar kicker | `ToolbarKicker` | `packages/ui/src/layout/ToolbarKicker.tsx` |
+| Picker option grid | `PickerOptionGrid` (VOC triage) | `apps/frontend/src/features/voc/components/triage/PickerOptionGrid.tsx` |
 
 Built under the same name: `LinkedEntityTrail`, `PermissionBlockedPanel`, `ManagedSystemPicker`, `AnalyticsAreaPicker`.
 

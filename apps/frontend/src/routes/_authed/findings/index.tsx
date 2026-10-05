@@ -21,7 +21,7 @@ import {
   ObjectRow,
   OutlineBadge,
   PermissionBlockedPanel,
-  Skeleton,
+  SkeletonRows,
   UserAvatar,
 } from '@fops/ui';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
@@ -277,9 +277,7 @@ function FindingsListBody({
 
       {isPending ? (
         <div className="space-y-2 p-4" data-testid="finding-list-skeleton">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <SkeletonRows count={3} size="compact" />
         </div>
       ) : isError && isPermissionDenied(error) ? (
         <PermissionBlockedPanel

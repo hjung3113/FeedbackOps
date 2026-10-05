@@ -13,7 +13,7 @@ const cases: Array<{ status: ReporterFacingStatusEnum; label: string }> = [
 ];
 
 describe('ReporterStatusBadge', () => {
-  cases.forEach(({ status, label }) => {
+  for (const { status, label } of cases) {
     it(`renders Korean label "${label}" for status="${status}"`, () => {
       render(<ReporterStatusBadge status={status} />);
       expect(screen.getByText(label)).toBeInTheDocument();
@@ -33,7 +33,10 @@ describe('ReporterStatusBadge', () => {
       const badge = container.querySelector(
         `[data-token="--status-reporter-${status}"]`,
       ) as HTMLElement;
-      expect(badge.style.color).toBe(`rgb(var(--status-reporter-${status}-label) / 1)`);
+      expect(badge).toHaveClass(`text-status-reporter-${status}-label`);
+      expect(badge.style.getPropertyValue('--status-badge-tint')).toBe(
+        `rgb(var(--status-reporter-${status}) / 0.14)`,
+      );
     });
-  });
+  }
 });

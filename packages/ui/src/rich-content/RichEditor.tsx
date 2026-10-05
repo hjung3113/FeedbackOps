@@ -202,10 +202,16 @@ export function RichEditor({
       */}
       <EditorContent
         editor={editor}
-        className="flex max-w-none flex-col focus:outline-hidden [&_.ProseMirror]:flex-1 [&_.ProseMirror]:px-3 [&_.ProseMirror]:py-2"
+        className={cn(
+          'flex max-w-none flex-col focus:outline-hidden [&_.ProseMirror]:flex-1 [&_.ProseMirror]:px-3 [&_.ProseMirror]:py-2',
+          minHeight ? 'min-h-(--rich-editor-min-height)' : undefined,
+        )}
         style={
           minHeight
-            ? { minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight }
+            ? ({
+                '--rich-editor-min-height':
+                  typeof minHeight === 'number' ? `${minHeight}px` : minHeight,
+              } as React.CSSProperties)
             : undefined
         }
       />

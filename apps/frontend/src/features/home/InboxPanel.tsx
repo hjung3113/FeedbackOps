@@ -1,7 +1,7 @@
 import type { NotificationDto } from '@fops/shared';
 import {
   Button,
-  Skeleton,
+  SkeletonRows,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -130,9 +130,7 @@ export function InboxPanel(): React.ReactElement {
 
       {list.isPending ? (
         <div className="space-y-2" aria-busy="true" data-testid="home-inbox-loading">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <SkeletonRows count={3} size="compact" />
         </div>
       ) : null}
 

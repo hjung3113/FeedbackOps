@@ -1,4 +1,5 @@
-import { cn } from '../utils/cn.js';
+import type * as React from 'react';
+import { StatusBadgeFrame } from './StatusBadgeFrame.js';
 
 /**
  * Reporter-facing VOC status enum — mirrors `reporterFacingStatusEnumSchema`
@@ -34,6 +35,17 @@ const LABELS: Record<ReporterFacingStatusEnum, string> = {
   closed: '종료됨',
 };
 
+const STATUS_CLASS: Record<ReporterFacingStatusEnum, { text: string; dot: string }> = {
+  received: { text: 'text-status-reporter-received-label', dot: 'bg-status-reporter-received' },
+  reviewing: { text: 'text-status-reporter-reviewing-label', dot: 'bg-status-reporter-reviewing' },
+  assigned: { text: 'text-status-reporter-assigned-label', dot: 'bg-status-reporter-assigned' },
+  progress: { text: 'text-status-reporter-progress-label', dot: 'bg-status-reporter-progress' },
+  prep: { text: 'text-status-reporter-prep-label', dot: 'bg-status-reporter-prep' },
+  resolved: { text: 'text-status-reporter-resolved-label', dot: 'bg-status-reporter-resolved' },
+  reopened: { text: 'text-status-reporter-reopened-label', dot: 'bg-status-reporter-reopened' },
+  closed: { text: 'text-status-reporter-closed-label', dot: 'bg-status-reporter-closed' },
+};
+
 /**
  * Pill badge (`rounded-full`) for reporter-facing VOC status.
  *
@@ -46,42 +58,24 @@ const LABELS: Record<ReporterFacingStatusEnum, string> = {
  */
 export function ReporterStatusBadge({ status, className }: ReporterStatusBadgeProps) {
   const token = `--status-reporter-${status}`;
+  const statusClass = STATUS_CLASS[status];
 
   return (
-    <span
-      className={cn(
-        // Pill proportions per `.review/title-reference.png`:
-        //   - px-2.5 py-1  — slightly taller pill than the 0.5 y-pad so the dot
-        //     and the label both sit centred with breathing room.
-        //   - gap-1.5      — 6 px between dot and label.
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
-        className,
-      )}
-      style={{
-        // Tokens in `packages/ui/src/styles/tokens.css` are raw RGB triplets
-        // (e.g. `0 169 224`), so we MUST wrap them in `rgb(... / <alpha>)`
-        // to produce a valid CSS color. Using `var(--token)` directly silently
-        // resolves to an invalid value and the pill renders un-tinted (#000
-        // text on transparent background) — visible as "뱃지 없음" in
-        // `.review/title-reference.png` review.
-        //
-        // #525: the label text uses the `-label` token, not `token` — the raw
-        // status hue is legible as a small dot/14%-tint but fails WCAG AA
-        // 4.5:1 as running text at that same value (measured 2.25:1–3.91:1).
-        // `-label` is the identical hue darkened until it clears 4.5:1;
-        // `reviewing`/`assigned` already passed, so their `-label` is
-        // unchanged. The dot below intentionally keeps the vivid `token`.
-        color: `rgb(var(${token}-label) / 1)`,
-        backgroundColor: `rgb(var(${token}) / 0.14)`,
-      }}
-      data-token={token}
+    <StatusBadgeFrame
+      appearance="reporter"
+      textClassName={statusClass.text}
+      tintClassName="bg-(--status-badge-tint)"
+      {...(className !== undefined ? { className } : {})}
+      style={{ '--status-badge-tint': `rgb(var(${token}) / 0.14)` } as React.CSSProperties}
+      token={token}
+      indicator={
+        <span
+          aria-hidden="true"
+          className={`inline-block h-1.5 w-1.5 rounded-full ${statusClass.dot}`}
+        />
+      }
     >
-      <span
-        aria-hidden="true"
-        className="inline-block h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: `rgb(var(${token}) / 1)` }}
-      />
       {LABELS[status]}
-    </span>
+    </StatusBadgeFrame>
   );
 }

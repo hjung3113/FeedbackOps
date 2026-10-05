@@ -4,7 +4,14 @@ import type { FrontendPermissionState } from '@/lib/api';
 import { CAPABILITY_LABELS } from '@/lib/copy/capabilities';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
-import { Button, Input, ListToolbar, type ListToolbarTab, Skeleton, UserAvatar } from '@fops/ui';
+import {
+  Button,
+  Input,
+  ListToolbar,
+  type ListToolbarTab,
+  SkeletonRows,
+  UserAvatar,
+} from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
@@ -56,8 +63,7 @@ export function SurveyList({
   if (isLoading)
     return (
       <div className="space-y-2 p-4" data-testid="survey-list-skeleton">
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-14 w-full" />
+        <SkeletonRows count={2} size="regular" />
       </div>
     );
   if (error)

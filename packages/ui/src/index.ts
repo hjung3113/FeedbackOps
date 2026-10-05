@@ -61,6 +61,7 @@ export { PageShell, type PageShellProps } from './layout/PageShell';
 export { ListShell, type ListShellProps } from './layout/ListShell';
 export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
 export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
+export { ToolbarKicker, type ToolbarKickerProps } from './layout/ToolbarKicker';
 export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
 
 // Form primitives (Slice 3 #19)
@@ -74,16 +75,36 @@ export { UndoToast, type UndoToastProps } from './feedback/UndoToast';
 export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
 
 // Indicators + badges (Slice 3 #20)
-export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';
+export {
+  SeverityIndicator,
+  type SeverityIndicatorProps,
+  type SeverityEnum,
+} from './indicators/SeverityIndicator';
+export { ProgressMeter, type ProgressMeterProps } from './indicators/ProgressMeter';
 export {
   SeverityBadge,
   SEVERITY_LABELS,
   type SeverityBadgeProps,
 } from './badges/SeverityBadge';
-export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
-export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
+export {
+  ReporterStatusBadge,
+  type ReporterStatusBadgeProps,
+  type ReporterFacingStatusEnum,
+} from './badges/ReporterStatusBadge';
+export {
+  InternalTaskBadge,
+  type InternalTaskBadgeProps,
+  type InternalTaskStatusEnum,
+} from './badges/InternalTaskBadge';
+export {
+  StatusBadgeFrame,
+  type StatusBadgeFrameProps,
+  type StatusBadgeAppearance,
+  type StatusBadgeTone,
+} from './badges/StatusBadgeFrame';
 export { UnassignedBadge, type UnassignedBadgeProps } from './badges/UnassignedBadge';
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
+export { ManagedSystemMark, type ManagedSystemMarkProps } from './badges/ManagedSystemMark';
 export {
   managedSystemMarkColor,
   managedSystemMarkToken,
@@ -99,8 +120,23 @@ export { UserChip, type UserChipProps } from './identity/UserChip';
 // Toolbar primitives (Slice 3 #20)
 export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
 export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
-export { ListFilterButton, type ListFilterButtonProps, type FilterCategory } from './toolbar/ListFilterButton';
-export { ListSortButton, type ListSortButtonProps, type SortOption } from './toolbar/ListSortButton';
+export {
+  ListFilterButton,
+  type ListFilterButtonProps,
+  type FilterCategory,
+} from './toolbar/ListFilterButton';
+export {
+  ListSortButton,
+  type ListSortButtonProps,
+  type SortOption,
+} from './toolbar/ListSortButton';
+export { KeyboardShortcut, type KeyboardShortcutProps } from './components/KeyboardShortcut';
+export { SkeletonRows, type SkeletonRowsProps } from './components/SkeletonRows';
+export {
+  SkeletonBlocks,
+  type SkeletonBlocksProps,
+  type SkeletonBlock,
+} from './components/SkeletonBlocks';
 // Forms (Slice 3 #20)
 export { SearchInput, type SearchInputProps } from './forms/SearchInput';
 // Feedback (Slice 3 #20)

@@ -3,7 +3,7 @@ import { useAnswerableSurveys } from '@/features/surveys/hooks/useSurveys';
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_PARTICIPATION_COPY } from '@/lib/copy/survey-participation';
 import { formatDate } from '@/lib/format/datetime';
-import { Button, Skeleton } from '@fops/ui';
+import { Button, SkeletonRows } from '@fops/ui';
 import { Link, useRouter } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -30,8 +30,7 @@ export function AnswerableSurveysPanel() {
           aria-live="polite"
           aria-busy="true"
         >
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <SkeletonRows count={2} size="compact" />
         </section>
       ) : query.isError && surveys.length === 0 ? (
         <div className="rounded-md border border-border-subtle bg-surface-card px-4 py-3">

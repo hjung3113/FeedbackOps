@@ -142,12 +142,13 @@ export function ReporterStatusChangeBlock({
 
   return (
     <div
-      className="mt-2.5 rounded-md"
-      style={{
-        padding: '12px',
-        background: 'rgb(var(--color-neon-lime) / 0.04)',
-        boxShadow: 'inset 0 0 0 1px rgb(var(--color-neon-lime) / 0.18)',
-      }}
+      className="mt-2.5 rounded-md p-3 bg-(--status-change-background) shadow-(--status-change-ring)"
+      style={
+        {
+          '--status-change-background': 'rgb(var(--color-neon-lime) / 0.04)',
+          '--status-change-ring': 'inset 0 0 0 1px rgb(var(--color-neon-lime) / 0.18)',
+        } as React.CSSProperties
+      }
       data-testid="reporter-status-change-block"
     >
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -204,8 +205,12 @@ export function ReporterStatusChangeBlock({
         {/* 변경 예정 chip — shown when staged and no gate blocking */}
         {isStaged && !isGateBlocked && !isForbiddenSelected && (
           <span
-            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary"
-            style={{ background: 'rgb(var(--color-neon-lime) / 0.16)' }}
+            className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-tiny font-medium text-accent-primary bg-(--status-change-chip-background)"
+            style={
+              {
+                '--status-change-chip-background': 'rgb(var(--color-neon-lime) / 0.16)',
+              } as React.CSSProperties
+            }
           >
             <Check size={9} aria-hidden="true" />
             변경 예정
@@ -255,8 +260,12 @@ export function ReporterStatusChangeBlock({
         </span>
 
         <div
-          className="rounded-md p-3 bg-surface-canvas"
-          style={{ boxShadow: 'inset 0 0 0 1px var(--border-subtle)' }}
+          className="rounded-md p-3 bg-surface-canvas shadow-(--status-change-preview-ring)"
+          style={
+            {
+              '--status-change-preview-ring': 'inset 0 0 0 1px var(--border-subtle)',
+            } as React.CSSProperties
+          }
         >
           {/* VOC id + next status badge + 업데이트 chip */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -266,8 +275,12 @@ export function ReporterStatusChangeBlock({
             <ReporterStatusBadge status={nextStatus} />
             {isStaged && (
               <span
-                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary"
-                style={{ background: 'rgb(var(--color-neon-lime) / 0.18)' }}
+                className="inline-flex items-center h-5 px-1.5 rounded-sm text-caption font-medium text-accent-primary bg-(--status-change-update-background)"
+                style={
+                  {
+                    '--status-change-update-background': 'rgb(var(--color-neon-lime) / 0.18)',
+                  } as React.CSSProperties
+                }
               >
                 업데이트
               </span>
@@ -310,10 +323,7 @@ export function ReporterStatusChangeBlock({
           </div>
 
           {/* Public-safe footer reminder */}
-          <div
-            className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2"
-            style={{ borderTop: '1px solid var(--border-subtle)' }}
-          >
+          <div className="text-xs text-text-muted flex items-center gap-1.5 mt-2 pt-2">
             <ShieldCheck size={10} aria-hidden="true" />
             첨부·외부 링크·@멘션은 공개 본문에 포함되지 않습니다. 내부 식별자(VOC id, Task id 등)는 자동으로 가려집니다.
           </div>

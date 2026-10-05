@@ -13,7 +13,7 @@ import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { VOC_TRIAGE_QUEUE_TOTAL_LABELS, VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 import type { VocListItem } from '@fops/shared';
-import { ListTabs, type ListToolbarTab } from '@fops/ui';
+import { ListTabs, type ListToolbarTab, ToolbarKicker } from '@fops/ui';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
 import { TriagePanel } from './TriagePanel';
@@ -94,26 +94,13 @@ export function VocTriageScreen({
         data-toolbar-height="50"
       >
         {/* Kicker: "Console · Triage" — absorbs route identity previously held by ShellHeader toolbar prop. */}
-        <div
-          data-testid="triage-kicker"
-          className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-5.5 border-r border-border-subtle shrink-0"
-        >
-          <span
-            data-testid="triage-kicker-console"
-            className="text-xs font-medium uppercase tracking-kicker text-text-muted"
-          >
-            {GLOSSARY.console}
-          </span>
-          <span className="text-caption text-text-muted" aria-hidden="true">
-            ·
-          </span>
-          <span
-            data-testid="triage-kicker-name"
-            className="text-sm font-semibold text-text-secondary"
-          >
-            Triage
-          </span>
-        </div>
+        <ToolbarKicker
+          label={GLOSSARY.console}
+          name="Triage"
+          testId="triage-kicker"
+          labelTestId="triage-kicker-console"
+          nameTestId="triage-kicker-name"
+        />
         <Flag size={14} className="text-text-warning shrink-0" aria-hidden="true" />
         <span className="text-sm font-semibold text-text-primary">{GLOSSARY.triageQueue}</span>
         {/* #680 separates the whole-queue total from the selected tab's count. */}

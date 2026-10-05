@@ -1,6 +1,6 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
 import type { MilestoneDetailDto } from '@fops/shared';
-import { DetailPanelSectionNav, EmptyState, NestedTextBlock } from '@fops/ui';
+import { DetailPanelSectionNav, EmptyState, NestedTextBlock, ProgressMeter } from '@fops/ui';
 import type * as React from 'react';
 
 import { MilestonePanelSectionTitle } from '../MilestoneIdentity';
@@ -94,12 +94,15 @@ export function MilestoneDetailContent({
               </span>
             </div>
             {/* Decorative bar — the strip's text already carries the numbers. */}
-            <div className="h-1 overflow-hidden rounded-full bg-border-subtle" aria-hidden="true">
-              <div
-                className="h-full bg-accent-primary"
-                style={{ width: `${milestone.progress.percent}%` }}
-              />
-            </div>
+            <ProgressMeter
+              clip
+              value={milestone.progress.percent}
+              size="thin"
+              tone="primary"
+              trackTone="subtle"
+              fillShape="square"
+              semantics="decorative"
+            />
             <div className="flex items-center gap-2.5 text-xs text-text-muted">
               <span>
                 <span className="font-semibold tabular-nums text-text-secondary">

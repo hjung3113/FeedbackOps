@@ -211,10 +211,7 @@ export function ComposerSection({
           REV-2 #6: no onClick dirty handler — dirty is derived from draft state above. */}
       <div className="p-4">
         {visibility.showPublic && (
-          <div
-            data-composer-surface="public"
-            style={{ display: effectiveActiveTab === 'public' ? undefined : 'none' }}
-          >
+          <div data-composer-surface="public" hidden={effectiveActiveTab !== 'public'}>
             <PublicUpdateComposer
               voc={voc}
               me={me}
@@ -224,10 +221,7 @@ export function ComposerSection({
           </div>
         )}
         {visibility.showReply && (
-          <div
-            data-composer-surface="reply"
-            style={{ display: effectiveActiveTab === 'reply' ? undefined : 'none' }}
-          >
+          <div data-composer-surface="reply" hidden={effectiveActiveTab !== 'reply'}>
             <ReporterReplyComposer
               voc={voc}
               me={me}
@@ -237,10 +231,7 @@ export function ComposerSection({
           </div>
         )}
         {visibility.showInternal && (
-          <div
-            data-composer-surface="internal"
-            style={{ display: effectiveActiveTab === 'internal' ? undefined : 'none' }}
-          >
+          <div data-composer-surface="internal" hidden={effectiveActiveTab !== 'internal'}>
             <InternalCommentComposer
               voc={voc}
               me={me}

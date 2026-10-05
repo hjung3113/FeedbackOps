@@ -4,6 +4,7 @@ import {
   Callout,
   Checkbox,
   Label,
+  ManagedSystemMark,
   OutlineBadge,
   PanelSectionTitle,
   Popover,
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { Filter, Layers, Plus, Shield } from 'lucide-react';
+import type * as React from 'react';
 
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
@@ -195,13 +197,7 @@ function GroupCard({
       className="overflow-hidden rounded-md border border-border-subtle bg-surface-card"
     >
       <div className="flex items-center gap-2.5 border-b border-border-subtle px-4 py-2.5">
-        <div
-          className="flex items-center justify-center rounded-md text-caption font-semibold text-white"
-          style={{ width: 22, height: 22, background: mark.color }}
-          aria-hidden="true"
-        >
-          {mark.label}
-        </div>
+        <ManagedSystemMark label={mark.label} color={mark.color} size={22} />
         <span className="text-sm font-semibold text-text-primary">{ms.name}</span>
         {ms.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
         <span className="text-xs text-text-muted">· Analytics Area {areas.length}개</span>
@@ -235,10 +231,12 @@ function GroupCard({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') onRowClick(a);
               }}
-              className={`grid w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-surface-canvas${
+              className={`grid grid-cols-(--analytics-area-row-columns) w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-surface-canvas${
                 i < areas.length - 1 ? ' border-b border-border-subtle' : ''
               }`}
-              style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 100px' }}
+              style={
+                { '--analytics-area-row-columns': '1fr 1.2fr 0.8fr 100px' } as React.CSSProperties
+              }
             >
               <span className="flex min-w-0 items-center gap-2">
                 <Layers className="h-3 w-3 shrink-0 text-text-muted" />

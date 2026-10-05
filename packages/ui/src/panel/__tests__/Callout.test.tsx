@@ -47,12 +47,15 @@ describe('Callout — tone CSS variable mapping', () => {
     const el = container.firstElementChild as HTMLElement;
 
     expect(el).toHaveAttribute('data-tone', tone);
-    expect(el.style.background).toBe(`rgb(var(${TONE_VAR[tone]}) / ${BACKGROUND_ALPHA[tone]})`);
-    expect(el.style.boxShadow).toBe(
+    expect(el.style.getPropertyValue('--callout-background')).toBe(
+      `rgb(var(${TONE_VAR[tone]}) / ${BACKGROUND_ALPHA[tone]})`,
+    );
+    expect(el.style.getPropertyValue('--callout-ring')).toBe(
       `rgb(var(${TONE_VAR[tone]}) / ${RING_ALPHA[tone]}) 0 0 0 1px inset`,
     );
     expect(el.style.borderLeft).toBe('');
-    expect(screen.getByText('제목').style.color).toBe(`rgb(var(${TITLE_VAR[tone]}))`);
+    expect(el.style.getPropertyValue('--callout-color')).toBe(`rgb(var(${TONE_VAR[tone]}))`);
+    expect(el.style.getPropertyValue('--callout-title-color')).toBe(`rgb(var(${TITLE_VAR[tone]}))`);
   });
 });
 

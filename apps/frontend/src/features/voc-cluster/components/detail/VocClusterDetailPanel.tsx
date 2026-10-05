@@ -12,7 +12,7 @@ import {
   type PanelSection,
   PanelSectionTitle,
   SeverityBadge,
-  Skeleton,
+  SkeletonBlocks,
   UnassignedBadge,
 } from '@fops/ui';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -116,10 +116,14 @@ export function VocClusterDetailPanel({
         aria-label="Cluster 상세 불러오는 중"
         data-testid="cluster-detail-skeleton"
       >
-        <Skeleton className="h-7 w-1/2" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-32 w-full" />
+        <SkeletonBlocks
+          blocks={[
+            { kind: 'title', size: 'large', width: 'half' },
+            { kind: 'line', width: 'full' },
+            { kind: 'line', width: 'three-quarters' },
+            { kind: 'body', size: 'large', width: 'full' },
+          ]}
+        />
       </div>
     );
   }
