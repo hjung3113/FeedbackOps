@@ -176,6 +176,24 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
     });
   }
 
+  it('maps invalid JSON on the Task mutation route to validation.malformed_request', async () => {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/tasks/${randomUUID()}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload: '{bad',
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      code: 'validation.malformed_request',
+      message: 'malformed request',
+    });
+  });
+
   it('changes status, returns Task Detail, and writes task_status_changed audit detail', async () => {
     const task = await seedTask();
     const res = await patchTask(

@@ -52,6 +52,22 @@ export function registerHttpErrorHandler(app: FastifyInstance): void {
         detail: { fields: fieldsFromZodIssues(issues) },
       });
     }
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    if (
+      typeof statusCode === 'number' &&
+      Number.isInteger(statusCode) &&
+      statusCode >= 400 &&
+      statusCode <= 499
+    ) {
+      req.log.info(
+        { ...(typeof rawCode === 'string' ? { code: rawCode } : {}), statusCode },
+        'malformed request',
+      );
+      return reply.code(statusForCode('validation.malformed_request')).send({
+        code: 'validation.malformed_request',
+        message: 'malformed request',
+      });
+    }
     req.log.error({ err }, 'unhandled error');
     return reply.code(500).send({ code: 'internal.unexpected', message: 'internal server error' });
   });

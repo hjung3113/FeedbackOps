@@ -204,12 +204,8 @@ Two table rows differ from the runtime mapping:
 `attachment_ids: string[]`. The code's bullet in "Slice 3 #13 adds five codes"
 and its paired inner `detail.fields[].code` `unsupported` are historical.
 
-**Malformed JSON.** The sentence "A non-error 4xx with no domain meaning (e.g.
-malformed JSON before the handler runs) maps to `validation.malformed_request`"
-does not describe the current behavior. `validation.malformed_request` is in
-`ERROR_CODES` but nothing in `apps/backend/src` emits it. No custom content-type
-parser is registered, so a Fastify JSON parse error reaches
-`registerHttpErrorHandler` (`apps/backend/src/lib/http-error-handler.ts`). Its
-`code` is not an ADR-0012 code and it carries no Zod `validation` array, so it
-falls through to `500 internal.unexpected`. This is read from code and is not
-runtime-verified.
+**Malformed JSON (#759).** Framework errors with a 4xx `statusCode`, no ADR-0012
+error code, and no Zod `validation` array map to `422 validation.malformed_request`
+with the fixed message `malformed request`; the handler logs only the Fastify
+error `code` and `statusCode` at info level. This covers malformed or empty JSON,
+unsupported media types, oversized bodies, and invalid Content-Length.
