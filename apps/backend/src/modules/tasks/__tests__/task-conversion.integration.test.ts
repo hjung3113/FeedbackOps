@@ -761,6 +761,127 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(findingLinks.rows[0]?.n).toBe(0);
   });
 
+  it.each([
+    ['VOC-sourced request', 'voc'],
+    ['Finding-sourced request with unrelated link ordered first', 'finding'],
+  ] as const)(
+    'AC-C7g: conversion propagates only its own Finding link (%s)',
+    async (_scenario, requestSourceType) => {
+      const msId = await insertMsDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        uid(SLUG_PREFIX),
+        'W768 conversion source MS',
+      );
+      const actor = await seedConversionActor(`768-${requestSourceType}`);
+      await grantCapability(dbHandle, WORKSPACE_ID, actor.id, 'finding.manage', msId, adminActorId);
+
+      const unrelatedFindingId = await seedFinding(msId, 'W768 unrelated Finding');
+      const evidenceVoc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        msId,
+        userActorId,
+        'W768 unrelated Finding evidence',
+      );
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by
+          ) values ($1, 'voc', $2, 'finding', $3, 'evidence_of',
+                    'internal_only', 'active', $4, $5)`,
+        [WORKSPACE_ID, evidenceVoc.id, unrelatedFindingId, msId, adminActorId],
+      );
+
+      let taskRequestId: string;
+      let requestFindingId: string | null = null;
+      if (requestSourceType === 'voc') {
+        const requestVoc = await insertVocDirectly(
+          migrateHandle,
+          WORKSPACE_ID,
+          msId,
+          userActorId,
+          'W768 request source VOC',
+        );
+        const request = await insertTaskRequestRow(migrateHandle, {
+          workspaceId: WORKSPACE_ID,
+          sourceType: 'voc',
+          sourceId: requestVoc.id,
+          primaryManagedSystemId: msId,
+          requestedOutcome: 'W768 VOC conversion outcome',
+          requesterActorId: userActorId,
+          status: 'approved',
+          reviewerActorId: adminActorId,
+          decisionReason: 'W768 approved',
+          decided: true,
+        });
+        taskRequestId = request.id;
+        await migrateHandle.pool.query(
+          `insert into core.entity_links (
+              workspace_id, source_type, source_id, target_type, target_id,
+              relation_type, visibility, status, managed_system_id, created_by
+            ) values ($1, 'voc', $2, 'task_request', $3, 'requested_task',
+                      'internal_only', 'active', $4, $5)`,
+          [WORKSPACE_ID, requestVoc.id, taskRequestId, msId, adminActorId],
+        );
+      } else {
+        const request = await seedApprovedTaskRequest({
+          msId,
+          findingTitle: 'W768 request source Finding',
+        });
+        taskRequestId = request.id;
+        requestFindingId = request.findingId;
+      }
+
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by, created_at
+          ) values ($1, 'finding', $2, 'task_request', $3, 'requested_task',
+                    'internal_only', 'active', $4, $5, now() + interval '1 second')`,
+        [WORKSPACE_ID, unrelatedFindingId, taskRequestId, msId, adminActorId],
+      );
+
+      if (requestFindingId) {
+        const firstSourceLink = await dbHandle.pool.query<{ source_id: string }>(
+          `select source_id from core.entity_links
+            where workspace_id = $1 and target_type = 'task_request' and target_id = $2
+              and source_type = 'finding' and relation_type = 'requested_task' and status = 'active'
+            order by created_at desc, id desc limit 1`,
+          [WORKSPACE_ID, taskRequestId],
+        );
+        expect(firstSourceLink.rows[0]?.source_id).toBe(unrelatedFindingId);
+      }
+
+      const converted = await convert(actor.cookie, taskRequestId, {
+        title: `W768 conversion task from ${requestSourceType}`,
+        priority: 'medium',
+      });
+      expect(converted.statusCode).toBe(201);
+      const taskId = converted.json<{ id: string }>().id;
+
+      const findingTaskLinks = await dbHandle.pool.query<{ source_id: string }>(
+        `select source_id from core.entity_links
+          where workspace_id = $1 and target_type = 'task' and target_id = $2
+            and source_type = 'finding' and relation_type = 'requested_task' and status = 'active'`,
+        [WORKSPACE_ID, taskId],
+      );
+      expect(findingTaskLinks.rows.map((row) => row.source_id)).not.toContain(unrelatedFindingId);
+      if (requestFindingId) {
+        expect(findingTaskLinks.rows.map((row) => row.source_id)).toContain(requestFindingId);
+      }
+
+      const copiedEvidenceLinks = await dbHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n from core.entity_links
+          where workspace_id = $1 and source_type = 'voc' and source_id = $2
+            and target_type = 'task' and target_id = $3
+            and relation_type = 'evidence_of' and status = 'active'`,
+        [WORKSPACE_ID, evidenceVoc.id, taskId],
+      );
+      expect(copiedEvidenceLinks.rows[0]?.n).toBe(0);
+    },
+  );
+
   it('AC-C7d: GET Finding projects the task id written by conversion', async () => {
     const request = await seedApprovedTaskRequest({ findingTitle: 'C7d GET Finding projection' });
     const actor = await seedConversionActor('d');
