@@ -146,8 +146,10 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   (#661 fixed three test-only TS errors that passed vitest). `verify-fe.sh` runs both.
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
-- Orca can hang at `runtimeState: starting`; use the shared launcher's session-selected codex routing for
-  `review-check` instead. It supplies `< /dev/null` so the worker cannot wait on stdin forever.
+- Workers run as codex in an Orca terminal (runtime `codex-orca`, 2026-10-06), so the user can watch them; the
+  state JSON records the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
+  If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
+  with stdin from `/dev/null`), which needs no Orca terminal.
 - A FE test that stubs `fetch` for any URL hides a 4xx contract error (#653's query was a 422): parse the sent
   query/body with the shared Zod schema in the test.
 - The worktree's own `.review/` is gitignored — copy briefs/rules in; `orca worktree create` may fail to return a
