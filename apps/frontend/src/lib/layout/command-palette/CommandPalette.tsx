@@ -27,7 +27,7 @@ export interface CommandPaletteProps {
 }
 
 const ITEM_CLASS =
-  // oxlint-disable-next-line shadcn/no-arbitrary-values -- command palette labels keep their measured 13.5px size between theme scales
+  // oxlint-disable-next-line shadcn/no-arbitrary-values -- command palette labels keep the 13.5px size of the prototype .cmdk-item-label (styles.css:950)
   'group grid w-full cursor-pointer grid-cols-[22px_56px_1fr_auto] items-center gap-2.5 rounded-md px-2.5 py-1.75 text-left text-[13.5px] text-text-primary outline-hidden aria-disabled:cursor-default aria-disabled:opacity-50 data-[selected=true]:bg-surface-row-selected data-[selected=true]:ring-inset data-[selected=true]:ring-1 data-[selected=true]:ring-accent-primary/28';
 
 export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPaletteProps) {
@@ -141,7 +141,7 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       overlayClassName="fixed inset-0 z-60 bg-accent-primary/16 backdrop-blur-xs"
       contentClassName={
-        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps its measured 10px corner radius
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps the 10px radius of the prototype .cmdk-panel (styles.css:865)
         'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl'
       }
       data-testid="command-palette-dialog"

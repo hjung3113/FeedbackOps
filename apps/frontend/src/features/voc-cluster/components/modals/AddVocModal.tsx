@@ -9,7 +9,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Label,
+  FieldLabel,
   OutlineBadge,
   Skeleton,
 } from '@fops/ui';
@@ -97,10 +97,9 @@ export function AddVocModal({
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-1.5">
-            {/* oxlint-disable-next-line shadcn/no-restyle -- the field label is secondary to the Add VOC dialog title */}
-            <Label className="text-text-secondary">
+            <FieldLabel tone="secondary">
               추가할 VOC <span aria-hidden>*</span>
-            </Label>
+            </FieldLabel>
             {candidatePeers.isLoading ? (
               <Skeleton className="h-9 w-full" data-testid="candidate-peers-loading" />
             ) : candidatePeers.isError ? (

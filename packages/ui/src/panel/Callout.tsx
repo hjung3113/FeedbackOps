@@ -51,13 +51,13 @@ const TONE_STYLES: Record<
 export function Callout({ tone, icon, title, children, action, className }: CalloutProps) {
   const toneStyle = TONE_STYLES[tone];
   const style = {
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone color comes from the closed TONE_STYLES map
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
     '--callout-color': `rgb(var(${toneStyle.colorVar}))`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone tint uses the per-tone alpha from TONE_STYLES
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
     '--callout-background': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.backgroundAlpha})`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone ring uses the per-tone alpha from TONE_STYLES
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
     '--callout-ring': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.ringAlpha}) 0 0 0 1px inset`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- title color comes from the closed TONE_STYLES map (#750 label tokens)
+    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
     '--callout-title-color': `rgb(var(${toneStyle.titleVar}))`,
   } as React.CSSProperties;
 

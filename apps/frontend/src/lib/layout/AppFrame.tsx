@@ -189,7 +189,6 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
         </main>
         <aside
           className={cn(
-            // oxlint-disable-next-line shadcn/no-arbitrary-values -- the detail slot animates only its width as selection opens or closes the panel
             'border-l border-border-subtle bg-surface-detail overflow-y-auto transition-[width] duration-150',
             slotOpen
               ? 'w-(--detail-panel-width) min-w-90 max-w-130'

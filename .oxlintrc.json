@@ -29,7 +29,10 @@
       }
     ],
     "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }],
-    "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"], "scanAllStrings": true }],
+    "shadcn/no-arbitrary-values": [
+      "error",
+      { "allow": ["layout", "transition-[width]"], "scanAllStrings": true }
+    ],
     "shadcn/no-inline-styles": "error",
     "shadcn/no-unknown-classes": ["error", { "allow": ["rich-editor"] }],
     "shadcn/require-static-classes": "error"

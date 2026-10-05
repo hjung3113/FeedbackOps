@@ -150,10 +150,7 @@ export function CreateFindingDraftPanel({
       )}
       <FieldLabel
         tone="secondary"
-        className={
-          // oxlint-disable-next-line shadcn/no-restyle -- the severity field label uses the same 14px size as its select control
-          'block text-sm'
-        }
+        className="block"
         htmlFor="survey-finding-severity"
         id="survey-finding-severity-label"
       >

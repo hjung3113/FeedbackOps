@@ -61,7 +61,7 @@ export function DetailPanelHeader({
       data-kind={kind}
       style={
         {
-          // oxlint-disable-next-line shadcn/no-inline-styles -- kind accent comes from the closed kind map
+          // oxlint-disable-next-line shadcn/no-inline-styles -- kind accent from the closed kind map; DetailPanelHeader.test pins the style value (class conversion is a follow-up)
           '--detail-panel-kind-accent': `rgb(var(${accentToken}) / 1)`,
           // oxlint-disable-next-line shadcn/no-inline-styles -- kind tint keeps the exact rgb alpha the milestones visual spec asserts
           '--detail-panel-kind-tint': `rgb(var(${accentToken}) / 0.12)`,

@@ -83,9 +83,9 @@ export function TaskRequestDraftCard({
       aria-label="Task Request 초안"
       className={[
         'mt-3 flex flex-col gap-3 rounded-md',
-        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the queued-request edge blends selected and subtle borders at the approved 52% mix
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the queued-request edge blends selected and subtle borders at the 52% mix drawn in docs/design-prototype/flow-drafts.jsx:101
         'border border-[color-mix(in_oklch,rgb(var(--border-selected))_52%,rgb(var(--border-subtle)))]',
-        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the draft card keeps an 8% selected-color gradient across its surface
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the draft card keeps the 8% gradient drawn in docs/design-prototype/flow-drafts.jsx:102
         'bg-[linear-gradient(180deg,color-mix(in_oklch,rgb(var(--border-selected))_8%,rgb(var(--surface-card))),rgb(var(--surface-card)))]',
         'p-3',
       ].join(' ')}

@@ -252,7 +252,7 @@ export function ReporterStatusChangeBlock({
         </span>
 
         <div
-          className="rounded-md p-3 bg-surface-canvas ring-1 ring-inset ring-border-subtle"
+          className="rounded-md p-3 bg-surface-canvas"
         >
           {/* VOC id + next status badge + 업데이트 chip */}
           <div className="flex items-center gap-2 flex-wrap mb-2">

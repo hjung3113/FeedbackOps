@@ -12,7 +12,7 @@ const twMerge = extendTailwindMerge({
       leading: ['body', 'relaxed-ui', 'note'],
       tracking: ['kicker', 'kind-label'],
       radius: ['icon-chip'],
-      spacing: ['row-accent', 'row-default', 'row-expanded'],
+      spacing: ['row-accent', 'row-compact', 'row-default', 'row-expanded'],
     },
   },
 });

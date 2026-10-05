@@ -48,7 +48,7 @@ export function MilestonePropertiesPresenter({
               value={milestone.status}
               density="compact"
               className={
-                // oxlint-disable-next-line shadcn/no-restyle -- the milestone status picker uses a 192px detail-column width and a canvas surface
+                // oxlint-disable-next-line shadcn/no-restyle -- the milestone status picker uses the detail surface and a 4px radius in the property column
                 'w-48 rounded bg-surface-detail'
               }
             >

@@ -51,7 +51,7 @@ function PreviewSheet({ survey }: { survey: Survey }) {
 
   return (
     <section className="max-h-[90vh] overflow-y-auto bg-surface-canvas p-6">
-      {/* oxlint-disable-next-line shadcn/no-restyle -- the compact preview heading matches the phone-width survey header */}
+      {/* oxlint-disable-next-line shadcn/no-restyle -- compact preview label above the survey title */}
       <DialogTitle className="text-sm font-medium">
         {SURVEY_PARTICIPATION_COPY.previewTitle}
       </DialogTitle>

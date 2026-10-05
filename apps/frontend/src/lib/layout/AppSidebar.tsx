@@ -161,7 +161,6 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the sidebar animates only its width when collapsed or expanded
         'flex flex-col border-r border-border-subtle bg-surface-sidebar transition-[width] duration-150',
         collapsed ? 'w-(--sidebar-width-collapsed)' : 'w-(--sidebar-width)',
         className,
