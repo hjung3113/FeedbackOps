@@ -232,7 +232,7 @@ export function TaskDetailPanel({
       <DetailPanelSectionNav sections={TASK_DETAIL_SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
-          <PanelSectionTitle className="px-4">요약</PanelSectionTitle>
+          <PanelSectionTitle inset="panel">요약</PanelSectionTitle>
           <PanelTitleBlock
             title={task.title}
             badges={
@@ -248,7 +248,7 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="properties" className="border-t border-border-subtle py-2">
-          <PanelSectionTitle className="px-4">속성</PanelSectionTitle>
+          <PanelSectionTitle inset="panel">속성</PanelSectionTitle>
           <FieldRow label="상태">
             <InternalTaskBadge status={task.status} />
           </FieldRow>

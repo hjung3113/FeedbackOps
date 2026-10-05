@@ -45,4 +45,17 @@ describe('PanelSectionTitle', () => {
     );
     expect(container.querySelector('h3')).toHaveClass('custom-title');
   });
+
+  it.each([
+    ['panel inset', 'px-4', { inset: 'panel' }],
+    ['tiny typography', 'text-tiny', { size: 'tiny' }],
+  ] as const)('preserves legacy classes for %s', (_name, oldClassName, variantProps) => {
+    const before = render(<PanelSectionTitle className={oldClassName}>제목</PanelSectionTitle>);
+    const oldClasses = [...(before.container.querySelector('h3')?.classList ?? [])].sort();
+    before.unmount();
+
+    const after = render(<PanelSectionTitle {...variantProps}>제목</PanelSectionTitle>);
+    const variantClasses = [...(after.container.querySelector('h3')?.classList ?? [])].sort();
+    expect(variantClasses).toEqual(oldClasses);
+  });
 });

@@ -67,4 +67,17 @@ describe('PanelTitleBlock', () => {
     expect(h2).toHaveClass('text-lg');
     expect(h2).toHaveClass('font-semibold');
   });
+
+  it.each([['zero inset', 'px-0! py-0!']])(
+    'preserves legacy classes for %s',
+    (_name, oldClassName) => {
+      const before = render(<PanelTitleBlock title="제목" className={oldClassName} />);
+      const oldClasses = [...(before.container.firstElementChild?.classList ?? [])].sort();
+      before.unmount();
+
+      const after = render(<PanelTitleBlock title="제목" inset="none" />);
+      const variantClasses = [...(after.container.firstElementChild?.classList ?? [])].sort();
+      expect(variantClasses).toEqual(oldClasses);
+    },
+  );
 });

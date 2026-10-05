@@ -107,7 +107,7 @@ export function LinkEvidenceModal({
           <p className="text-xs text-text-muted">현재 VOC 소스만 연결할 수 있습니다.</p>
         </form>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button type="button" variant="secondary" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>

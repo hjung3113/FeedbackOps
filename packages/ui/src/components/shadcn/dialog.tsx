@@ -61,11 +61,16 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 }
 DialogHeader.displayName = 'DialogHeader';
 
-export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {
+  spacing?: 'default' | 'compact';
+}
+
+export function DialogFooter({ className, spacing = 'default', ...props }: DialogFooterProps) {
   return (
     <div
       className={cn(
         'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2',
+        spacing === 'compact' && 'gap-2 sm:gap-2',
         className,
       )}
       {...props}

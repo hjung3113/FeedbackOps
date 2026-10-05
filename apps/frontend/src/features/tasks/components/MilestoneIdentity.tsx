@@ -7,8 +7,8 @@ import type * as React from 'react';
 // semibold/primary text, muted mark); the milestone surfaces need the
 // prototype's compact .badge geometry (docs/design-prototype/styles.css:
 // 20px height, 6px padding, 4px radius, --text-tiny 11px, weight 500,
-// transparent + --shadow-subtle) without redesigning shared UI. Feature-local
-// only; no shared component changes.
+// transparent + --shadow-subtle). Badge and avatar geometry remains local to
+// milestones; the repeated title scale uses PanelSectionTitle's named variant.
 
 // Label → identity token mapping follows the established pattern in
 // packages/ui/src/components/ChipPicker.tsx (managedSystemColorToken); that
@@ -91,7 +91,8 @@ export function MilestonePanelSectionTitle({
 }) {
   return (
     <PanelSectionTitle
-      className={className !== undefined ? `mb-2.5 text-tiny ${className}` : 'mb-2.5 text-tiny'}
+      size="tiny"
+      className={className !== undefined ? `mb-2.5 ${className}` : 'mb-2.5'}
     >
       {children}
     </PanelSectionTitle>

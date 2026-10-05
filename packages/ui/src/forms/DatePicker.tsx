@@ -35,6 +35,7 @@ export interface DatePickerProps
   emptyValue?: '' | null;
   showValidation?: boolean;
   onValidityChange?: (valid: boolean) => void;
+  appearance?: 'default' | 'detail';
 }
 
 export function DatePicker({
@@ -45,6 +46,7 @@ export function DatePicker({
   emptyValue = '',
   showValidation = false,
   onValidityChange,
+  appearance = 'default',
   className,
   disabled = false,
   'aria-invalid': ariaInvalid,
@@ -194,6 +196,7 @@ export function DatePicker({
             'focus-within:outline-hidden focus-within:ring-2 focus-within:ring-focus-ring focus-within:ring-offset-2',
             disabled && 'cursor-not-allowed opacity-50',
             showDanger && 'border-accent-danger',
+            appearance === 'detail' && 'bg-surface-detail',
             className,
           )}
           data-invalid={isInvalid ? 'true' : undefined}

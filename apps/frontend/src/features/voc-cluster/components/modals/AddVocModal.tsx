@@ -114,10 +114,11 @@ export function AddVocModal({
                     type="button"
                     variant={vocId === candidate.voc_id ? 'secondary' : 'outline'}
                     size="sm"
+                    wrapText
                     disabled={candidate.included}
                     onClick={() => setVocId(candidate.voc_id)}
                     data-testid={`add-voc-candidate-${candidate.voc_id}`}
-                    className="h-auto min-h-8 justify-start py-1 whitespace-normal"
+                    className="justify-start"
                   >
                     <span className="flex flex-col items-start">
                       <span>
@@ -146,7 +147,7 @@ export function AddVocModal({
             </p>
           )}
         </form>
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button
             type="button"
             variant="secondary"

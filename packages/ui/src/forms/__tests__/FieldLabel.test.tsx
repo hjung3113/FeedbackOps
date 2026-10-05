@@ -83,4 +83,23 @@ describe('FieldLabel', () => {
     expect(label).toHaveAttribute('for', 'input-id');
     expect(label?.className).toContain('custom-class');
   });
+
+  it.each([
+    ['secondary tone', 'text-text-secondary', { tone: 'secondary' }],
+    [
+      'section appearance',
+      'text-xs font-semibold uppercase tracking-wide text-text-muted',
+      { appearance: 'section' },
+    ],
+  ] as const)('preserves legacy classes for %s', (_name, oldClassName, variantProps) => {
+    const before = render(<FieldLabel className={oldClassName}>레이블</FieldLabel>);
+    const oldClasses = [...(screen.getByText('레이블').closest('label')?.classList ?? [])].sort();
+    before.unmount();
+
+    render(<FieldLabel {...variantProps}>레이블</FieldLabel>);
+    const variantClasses = [
+      ...(screen.getByText('레이블').closest('label')?.classList ?? []),
+    ].sort();
+    expect(variantClasses).toEqual(oldClasses);
+  });
 });

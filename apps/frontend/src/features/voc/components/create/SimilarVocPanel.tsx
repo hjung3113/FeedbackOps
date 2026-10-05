@@ -16,8 +16,8 @@ export function SimilarVocPanel({ managedSystemId }: SimilarVocPanelProps): Reac
   if (!managedSystemId || isError || !data) return null;
 
   return (
-    <Card className="p-3.5" data-testid="similar-voc-panel">
-      <CardContent className="p-0">
+    <Card padding="compact" data-testid="similar-voc-panel">
+      <CardContent padding="none">
         {/* ADR-0031: this capped pre-submit projection exposes no peer count or total. */}
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-normal text-text-muted">

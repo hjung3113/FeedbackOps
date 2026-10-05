@@ -57,7 +57,7 @@ export function SurveyStatusConfirmationDialog({
             {messageFor(error, target)}
           </p>
         )}
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button
             type="button"
             variant="secondary"

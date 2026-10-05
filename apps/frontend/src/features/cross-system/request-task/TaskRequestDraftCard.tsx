@@ -98,9 +98,10 @@ export function TaskRequestDraftCard({
         </div>
         <Button
           aria-label="초안 닫기"
-          className="shrink-0 px-2"
+          className="shrink-0"
           disabled={isSubmitting}
           onClick={onClose}
+          padding="compact"
           size="sm"
           title="초안 닫기"
           type="button"

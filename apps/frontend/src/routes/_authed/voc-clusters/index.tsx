@@ -240,7 +240,7 @@ function CreateClusterModal({
         >
           {/* Title */}
           <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="cluster-title" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-title" tone="secondary">
               제목 <span aria-hidden>*</span>
             </FieldLabel>
             <Input
@@ -255,7 +255,7 @@ function CreateClusterModal({
 
           {/* Summary */}
           <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="cluster-summary" className="text-text-secondary">
+            <FieldLabel htmlFor="cluster-summary" tone="secondary">
               요약 (선택)
             </FieldLabel>
             <Textarea
@@ -272,7 +272,7 @@ function CreateClusterModal({
           <div className="flex flex-col gap-1.5">
             <FieldLabel
               htmlFor="cluster-managed-system"
-              className="text-text-secondary"
+              tone="secondary"
             >
               Managed System <span aria-hidden>*</span>
             </FieldLabel>
@@ -293,7 +293,8 @@ function CreateClusterModal({
                   ? { 'aria-describedby': 'cluster-managed-system-error' }
                   : {})}
                 data-testid="cluster-managed-system-select"
-                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                appearance="field"
+                className="focus:ring-accent-primary"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -327,7 +328,7 @@ function CreateClusterModal({
           )}
         </form>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button
             type="button"
             variant="secondary"

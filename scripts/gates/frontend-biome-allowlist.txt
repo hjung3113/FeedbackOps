@@ -435,3 +435,20 @@ packages/ui/src/components/shadcn/tooltip.tsx organizeImports -- pre-existing on
 packages/ui/src/components/shadcn/alert-dialog.tsx format -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
 packages/ui/src/components/shadcn/alert-dialog.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
 packages/ui/src/rich-content/RichContentRenderer.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #785 only removes dead animation/prose classes in this file
+packages/ui/src/panel/__tests__/PanelSectionTitle.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/PanelSectionTitle.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/__tests__/FieldRow.test.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/PanelSectionTitle.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/panel/FieldRow.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/create/SeverityDisclaimerCard.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/a11y/useFocusableInteractive -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/a11y/useSemanticElements -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+apps/frontend/src/features/voc/components/list/VocRowSkeleton.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/card.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/toggle-group.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
+packages/ui/src/components/shadcn/toggle-group.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file

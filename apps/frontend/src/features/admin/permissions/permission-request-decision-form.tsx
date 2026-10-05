@@ -249,7 +249,6 @@ export function PermissionRequestDecisionForm({
               setExpirationFieldTouched(false);
               mutation.reset();
             }}
-            className="gap-2"
           >
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <RadioGroupItem id="permission-approval-expiration-keep" value="keep" />

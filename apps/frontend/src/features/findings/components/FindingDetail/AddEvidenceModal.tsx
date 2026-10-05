@@ -253,7 +253,7 @@ export function AddEvidenceModal({
           </div>
         </form>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spacing="compact">
           <Button type="button" variant="secondary" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>

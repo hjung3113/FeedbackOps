@@ -149,7 +149,8 @@ export function CreateFindingDraftPanel({
         )
       )}
       <FieldLabel
-        className="block text-sm text-text-secondary"
+        tone="secondary"
+        className="block text-sm"
         htmlFor="survey-finding-severity"
         id="survey-finding-severity-label"
       >

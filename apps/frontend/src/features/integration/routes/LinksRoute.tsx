@@ -296,7 +296,7 @@ export function LinksRoute() {
             <Button
               variant="subtle"
               size="sm"
-              className="gap-1.5"
+              spacing="compact"
               onClick={() => {
                 void inventory.refetch();
               }}

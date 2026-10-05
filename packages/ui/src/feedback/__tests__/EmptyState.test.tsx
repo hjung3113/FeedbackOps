@@ -69,6 +69,19 @@ describe('EmptyState — size variants', () => {
     expect(root?.className).toContain('text-sm');
   });
 
+  it.each([
+    ['compact small state', 'py-3 gap-0 text-xs', { size: 'sm' }, { size: 'sm', density: 'compact' }],
+    ['wide horizontal padding', 'px-6', {}, { padding: 'wide' }],
+  ] as const)('preserves legacy classes for %s', (_name, oldClassName, oldProps, variantProps) => {
+    const before = render(<EmptyState title="Empty" {...oldProps} className={oldClassName} />);
+    const oldClasses = [...(before.container.firstElementChild?.classList ?? [])].sort();
+    before.unmount();
+
+    const after = render(<EmptyState title="Empty" {...variantProps} />);
+    const variantClasses = [...(after.container.firstElementChild?.classList ?? [])].sort();
+    expect(variantClasses).toEqual(oldClasses);
+  });
+
   it('sm: renders the title as regular muted text', () => {
     const { container } = render(<EmptyState title="Empty" size="sm" />);
     const title = container.querySelector('p');

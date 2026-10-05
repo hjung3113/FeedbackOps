@@ -143,7 +143,7 @@ export function FindingExecutionRequestRow({
   } = controller;
 
   return (
-    <FieldRow label="Task Request" className="px-0">
+    <FieldRow label="Task Request" inset="none">
       <div ref={taskRequestRegionRef} tabIndex={-1} className="min-w-0">
         {requestedTaskRequestsState === 'loading' && !retryInProgress ? (
           <span className="text-text-muted" aria-live="polite">

@@ -7,6 +7,8 @@ export interface EmptyStateProps {
   body?: string;
   action?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  density?: 'default' | 'compact';
+  padding?: 'default' | 'wide';
   className?: string;
 }
 
@@ -22,6 +24,8 @@ export function EmptyState({
   body,
   action,
   size = 'md',
+  density = 'default',
+  padding = 'default',
   className,
 }: EmptyStateProps) {
   return (
@@ -29,6 +33,8 @@ export function EmptyState({
       className={cn(
         'flex flex-col items-center justify-center text-center',
         SIZE_CLASSES[size],
+        density === 'compact' && 'py-3 gap-0 text-xs',
+        padding === 'wide' && 'px-6',
         className,
       )}
     >

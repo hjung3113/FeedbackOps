@@ -120,7 +120,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               data-testid="integration-dashboard-queues-loading"
             >
               {INTEGRATION_DASHBOARD_QUEUE_ORDER.map((id) => (
-                <Skeleton key={id} className="h-52 rounded-md" />
+                <Skeleton key={id} className="h-52" />
               ))}
             </div>
           ) : summary.isError ? (
@@ -183,7 +183,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
           <div data-testid="integration-managed-system-overview">
             <PanelSectionTitle>Managed System 개요</PanelSectionTitle>
             {summary.isPending || systems.isPending ? (
-              <Skeleton className="h-48 rounded-md" />
+              <Skeleton className="h-48" />
             ) : summary.data === undefined || summary.data.by_managed_system.length === 0 ? (
               <ListStateMessage
                 variant="empty"
