@@ -70,7 +70,6 @@ Route naming rules:
 - Work Initiatives may group execution work after triage, but they are not VOC scope owners.
 - Work Initiative routes are future routes and are not part of the MVP route contract.
 - `/my-work` is not an MVP route (ADR-0038, ADR-0040). No route is registered. `apps/frontend/src/features/my-work/` is the future implementation location only.
-- `/dev-rich-editor` is a dev-only demo route (`apps/frontend/src/routes/dev-rich-editor.tsx`), not a product surface and not part of this contract.
 ```
 
 ## Document Titles
