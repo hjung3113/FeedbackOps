@@ -310,15 +310,16 @@ an active deny is lifted by setting its revoke metadata. Permission Request
 status does not change. Revoke does not terminate sessions or change
 role-derived capabilities.
 
-The permission check treats a revoked grant as requestable using the same
-workspace scope as `no_grant`. The state mapper returns `pending_request` when
-the Actor has an open request for that capability and otherwise returns
-`revoked`. A revoke notification goes to the grant's Actor; deny lift sends no
-notification. There is no migration or grant change for these commands.
+The permission check treats a revoked grant or an expired grant as requestable
+using the same workspace scope as `no_grant`. The state mapper returns
+`pending_request` when the Actor has an open request for that capability and
+otherwise returns `revoked` or `expired`, respectively. A revoke notification
+goes to the grant's Actor; deny lift sends no notification. There is no migration
+or grant change for these commands.
 Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage,
 conversation, and VOC Cluster conversion) are unchanged; paths keyed on
 `requestable !== null` (Survey results and follow-up) now include
-`requestable_permission` for a revoked grant.
+`requestable_permission` for a revoked or expired grant.
 
 ## Summary-Visible Contract
 

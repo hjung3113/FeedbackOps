@@ -393,6 +393,75 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
     auditSubjectIds.push(requestId);
   });
 
+  it('an expired grant is requestable and its new request becomes pending', async () => {
+    await seedGrant({
+      capability: 'workspace.admin',
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const expiredCheck = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=workspace.admin',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
+    });
+    expect(expiredCheck.statusCode).toBe(200);
+    expect(expiredCheck.json()).toMatchObject({
+      state: 'expired',
+      decision: {
+        allow: false,
+        reason: 'grant_expired',
+        requestable: [{ workspace_id: WORKSPACE_ID }],
+      },
+    });
+
+    const request = await app.inject({
+      method: 'POST',
+      url: '/permission-requests',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${actorCookie}`,
+        'content-type': 'application/json',
+      },
+      payload: { requested_capability: 'workspace.admin', reason: 'I need access again.' },
+    });
+    expect(request.statusCode).toBe(201);
+    const requestId = request.json<{ id: string }>().id;
+    auditSubjectIds.push(requestId);
+
+    const pendingCheck = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=workspace.admin',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
+    });
+    expect(pendingCheck.statusCode).toBe(200);
+    expect(pendingCheck.json()).toMatchObject({
+      state: 'pending_request',
+      decision: {
+        allow: false,
+        reason: 'grant_expired',
+        requestable: [{ workspace_id: WORKSPACE_ID }],
+      },
+    });
+  });
+
+  it('an active explicit deny blocks an expired grant from being requestable', async () => {
+    await seedGrant({
+      capability: 'workspace.admin',
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+    await seedDeny({ capability: 'workspace.admin' });
+
+    const check = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=workspace.admin',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${actorCookie}` },
+    });
+    expect(check.statusCode).toBe(200);
+    expect(check.json()).toMatchObject({
+      state: 'blocked_non_requestable',
+      decision: { allow: false, reason: 'explicit_deny', requestable: null },
+    });
+  });
+
   it('an Admin lifts a deny without notification and the check becomes requestable', async () => {
     const id = await seedDeny({ capability: 'workspace.admin' });
     const blocked = await app.inject({

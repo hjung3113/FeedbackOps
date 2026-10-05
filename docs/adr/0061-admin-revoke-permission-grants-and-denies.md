@@ -70,8 +70,8 @@ Two existing behaviours shape the design:
    - The state mapper maps `grant_revoked` to `pending_request` while the Actor has a pending or needs_more_info
      request for that capability. Otherwise it maps to `revoked`.
    - The frontend `revoked` state keeps its "취소되었습니다" copy and adds the existing request-access action.
-   - `grant_expired` is unchanged. The same lock-out exists for expiry and is tracked separately.
-   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked grant.
+   - `grant_expired` follows the same rule (#767).
+   - Domain responses keyed on `reason === 'no_grant'` (VOC detail, triage, conversation, and VOC Cluster conversion) are unchanged; paths keyed on `requestable !== null` (Survey results and follow-up) now include `requestable_permission` for a revoked or expired grant.
 7. **Notification.** Revoking a grant notifies the grantee through a new catalogue event `permission_grant.revoked`.
    - Subject type is `permission_grant`. It is in-app and email, like `permission_request.decided`.
    - The summary reuses the shipped wording "권한이 취소되었습니다.".

@@ -201,7 +201,11 @@ export function createCheckService(deps: CheckServiceDeps) {
       };
     }
     if (sawExpired) {
-      return { allow: false, reason: 'grant_expired', requestable: null };
+      return {
+        allow: false,
+        reason: 'grant_expired',
+        requestable: [{ workspace_id: actor.workspace_id }],
+      };
     }
 
     // (6) requestable computation (Slice 1): no explicit deny here, so the

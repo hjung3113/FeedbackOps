@@ -24,13 +24,14 @@ function mockPermissionState(
   globalThis.fetch = vi.fn(async (input) => {
     const url = new URL(String(input), 'http://localhost');
     if (url.pathname === '/me/permissions/check') {
-      const requestable = ['request_access', 'revoked'].includes(state)
+      const requestable = ['request_access', 'expired', 'revoked'].includes(state)
         ? [{ workspace_id: 'ws' }]
         : null;
+      const reason = state === 'expired' ? 'grant_expired' : 'no_grant';
       return new Response(
         JSON.stringify({
           state,
-          decision: { allow: false, reason: 'no_grant', requestable },
+          decision: { allow: false, reason, requestable },
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       );
@@ -60,7 +61,7 @@ const BLOCKED_STATES = [
   },
   {
     state: 'expired',
-    panelState: 'denied',
+    panelState: 'request_access',
     title: '권한이 만료되었습니다.',
     description: '이전에 받은 권한이 만료되었습니다.',
   },
@@ -229,7 +230,7 @@ describe('<PermissionGate>', () => {
       expect(panelTitle.closest('[data-state]')).toHaveAttribute('data-state', panelState);
       expect(screen.getByText(description)).toBeInTheDocument();
       expect(document.querySelector('[data-permission-state]')).toBeNull();
-      if (state === 'revoked') {
+      if (state === 'revoked' || state === 'expired') {
         fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
         expect(await screen.findByTestId('permission-request-dialog')).toBeInTheDocument();
       } else {

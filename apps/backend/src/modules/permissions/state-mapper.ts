@@ -40,6 +40,9 @@ export function toFrontendState(
     case 'explicit_deny':
       return 'blocked_non_requestable';
     case 'grant_expired':
+      if (openRequest?.status === 'pending' || openRequest?.status === 'needs_more_info') {
+        return 'pending_request';
+      }
       return 'expired';
     case 'grant_revoked':
       if (openRequest?.status === 'pending' || openRequest?.status === 'needs_more_info') {
