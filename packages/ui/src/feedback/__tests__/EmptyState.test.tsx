@@ -70,10 +70,10 @@ describe('EmptyState — size variants', () => {
   });
 
   it.each([
-    ['compact small state', 'py-3 gap-0 text-xs', { size: 'sm', density: 'compact' }],
-    ['wide horizontal padding', 'px-6', { padding: 'wide' }],
-  ] as const)('preserves legacy classes for %s', (_name, oldClassName, variantProps) => {
-    const before = render(<EmptyState title="Empty" {...variantProps} className={oldClassName} />);
+    ['compact small state', 'py-3 gap-0 text-xs', { size: 'sm' }, { size: 'sm', density: 'compact' }],
+    ['wide horizontal padding', 'px-6', {}, { padding: 'wide' }],
+  ] as const)('preserves legacy classes for %s', (_name, oldClassName, oldProps, variantProps) => {
+    const before = render(<EmptyState title="Empty" {...oldProps} className={oldClassName} />);
     const oldClasses = [...(before.container.firstElementChild?.classList ?? [])].sort();
     before.unmount();
 

@@ -151,7 +151,7 @@ These opt-in props encode repeated caller treatments. Their default values prese
 
 | Component | Opt-in props | Appearance contract |
 | --- | --- | --- |
-| Button | `size=toolbar`, `icon-sm`, `icon-xs`; `spacing=compact`; `padding=compact`; `wrapText` | Toolbar and icon dimensions, compact icon spacing/padding, or multiline labels |
+| Button | `size=toolbar`, `icon-sm`, `icon-xs`; `spacing=compact`; `padding=compact`; `wrapText` (size `sm` only: it sets a 32px minimum height) | Toolbar and icon dimensions, compact icon spacing/padding, or multiline labels |
 | FieldRow | `inset=none`; `layout=property` | Remove horizontal inset or use the two-column milestone property layout |
 | FieldLabel | `appearance=section`; `tone=secondary` | Muted uppercase section heading or secondary label color |
 | EmptyState | `density=compact`; `padding=wide` | Compact empty state or 24px horizontal padding |
@@ -162,7 +162,7 @@ These opt-in props encode repeated caller treatments. Their default values prese
 | PanelTitleBlock | `inset=none` | Remove title-block inset |
 | PanelSectionTitle | `inset=panel`; `size=tiny` | Align section heading with panel content or render milestone-sized typography |
 | RichContentRenderer | `size=sm` | Small rich-text rendering |
-| Skeleton | `shape=rounded` | Fully rounded placeholder |
+| Skeleton | `shape=rounded` | Smaller-radius placeholder (`rounded`, 4px instead of the default `rounded-md` 6px) |
 | TooltipContent | `size=sm` | Small tooltip text |
 | ToggleGroupItem | `appearance=selected-filter` | Selected filter uses the selected border, row background, text, and weight |
 

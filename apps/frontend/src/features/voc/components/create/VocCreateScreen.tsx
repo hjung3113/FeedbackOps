@@ -25,7 +25,6 @@ import { vocDescriptionToolbar } from './VocDescriptionToolbar';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import { useVocCreateController } from './useVocCreateController';
 
-
 export interface VocCreateScreenProps {
   initialManagedSystemId?: string;
   onCancel: () => void;

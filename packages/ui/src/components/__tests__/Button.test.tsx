@@ -40,12 +40,6 @@ describe('Button component variants', () => {
       oldSize: 'sm' as const,
       variantProps: { size: 'sm' as const, wrapText: true },
     },
-    {
-      name: 'wrapped text at default size',
-      oldClassName: 'h-auto min-h-8 py-1 whitespace-normal',
-      oldSize: undefined,
-      variantProps: { wrapText: true },
-    },
   ])('preserves legacy classes for $name', ({ oldClassName, oldSize, variantProps }) => {
     const before = render(
       <Button {...(oldSize === undefined ? {} : { size: oldSize })} className={oldClassName}>

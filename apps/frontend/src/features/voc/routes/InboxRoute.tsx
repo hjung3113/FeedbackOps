@@ -332,7 +332,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               variant="primary"
               size="sm"
               spacing="compact"
-              className="whitespace-nowrap"
             >
               <Link to="/vocs" search={{ action: 'create' }}>
                 <Plus className="h-4 w-4" aria-hidden="true" />

@@ -20,17 +20,17 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 
 | Component | Variants | Required States | Accessibility Contract |
 | --- | --- | --- | --- |
-| Button | primary, secondary, subtle, destructive; `size=toolbar`, `icon-sm`, `icon-xs`; `spacing=compact`; `padding=compact`; `wrapText` | hover, pressed, focus-visible, disabled, loading | label required |
-| FieldLabel | `appearance=section`, `tone=secondary` | default, required, help tip | associated control; required marker is announced through label text |
+| Button | primary, secondary, subtle, destructive; `size=toolbar`, `icon-sm`, `icon-xs`; `spacing=compact`; `padding=compact`; `wrapText` (size `sm` only) | hover, pressed, focus-visible, disabled, loading | label required |
+| FieldLabel | `appearance=section`, `tone=secondary` | default, required, help tip | associated control; the required `*` is `aria-hidden`; the help tip trigger has an accessible name |
 | FieldRow | `inset=none`, `layout=property` | default, detail property | label and value remain readable |
-| Card / CardContent | `Card padding=compact`; `CardContent padding=none` | default, content-free | semantic grouping |
+| Card / CardContent | `Card padding=compact`; `CardContent padding=none` | default | presentational container |
 | EmptyState | `density=compact`, `padding=wide` | title, optional body, icon, action | useful text; action is keyboard reachable |
 | IconButton | subtle, selected, destructive | hover, pressed, focus-visible, disabled | aria-label and tooltip required |
 | Badge | status, signal, visibility, permission | default, muted, urgent, blocked | text label required |
 | TextInput | default, search, invalid | focus, disabled, invalid, loading | associated label and error |
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
 | RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment; `RichContentRenderer size=sm` | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
-| Select | single, multi; `SelectTrigger appearance=canvas|field`, `density=compact` | focus, disabled, invalid, loading | keyboard navigable |
+| Select | single, multi; `SelectTrigger appearance=canvas`, `appearance=field`, `density=compact` | focus, disabled, invalid, loading | keyboard navigable |
 | DatePicker | typed date, calendar; `appearance=detail` | focus, disabled, invalid, min/max, clear, keyboard navigation | associated label; live validity for submit gating; error appears after blur or submit; calendar is keyboard accessible |
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
