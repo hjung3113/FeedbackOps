@@ -56,9 +56,13 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `12` timeout → inspect progress, do not treat it as completion or launch a duplicate; `2` usage → correct
    the arguments. Do not consume a stale report or a sentinel written before the worker stops.
 4. **Verify on the host** (workers already ran their touched tests + typecheck per `templates/impl-rules.md`):
-   - FE: `scripts/verify-fe.sh <worktree>`; visual harness `cd apps/frontend && PW_PORT=<unique> env -u NODE_OPTIONS npx playwright test -c playwright.config.ts`.
-   - BE: `scripts/verify-be.sh <worktree> <n> [module filters]` — full integration once per BE issue, touched modules
-     after small fix rounds.
+   - FE: `scripts/verify-fe.sh <worktree>`; run the visual harness with `scripts/visual.sh run [filter...]`.
+     It puts Node 22 on `PATH` and chooses a free `PW_PORT`; use `stable <filter...> --runs 3` for the final
+     no-update baseline check.
+   - BE: start the shared throwaway database once with `scripts/verify-db.sh up`, then
+     `scripts/verify-db.sh create <n>` before `scripts/verify-be.sh <worktree> <n> [module filters]` — full
+     integration once per BE issue, touched modules after small fix rounds. Use `reset-rate-limits <n>` only
+     when needed; drop the issue database after merge and run `down` at wave end.
    - Lint gate after committing: `pnpm gate:fe-lint --base origin/develop`; classify each NEW with
      `scripts/biome-cmp.sh` (introduced → fix with `biome check --write --formatter-enabled=false --linter-enabled=false`
      or `biome format --write`; pre-existing → allowlist).
@@ -70,9 +74,10 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `worker-launch.sh --role fix --cwd <worktree> --task <absolute-fix-task> --report <absolute-fix-report>
    --sentinel '<sentinel from the fix task>' --name W-<n>-FIX<k> --state-dir "$WAVE_STATE"`.
    Name the implementation rules in the brief; wait on the resulting state JSON as in step 3 before verifying.
-6. **Browser evidence for UI**: a temporary `tests/visual/zz-<n>-capture.visual.spec.ts` (mock overrides via
-   `page.route`), screenshots into `.review/<n>-shots/`, then `trash` the spec. Real-browser checks caught what unit
-   tests could not (a blank page on cold `/me` 429, a 404 that spun forever).
+6. **Browser evidence for UI**: use `scripts/visual.sh capture <n> --route <url> [--state <label>]...` for standard
+   captures; use a temporary spec with `page.route` for custom mock overrides. Save screenshots into `.review/<n>-shots/`
+   and remove generated specs with `scripts/visual.sh capture --clean <n>`. Real-browser checks caught what unit tests
+   could not (a blank page on cold `/me` 429, a 404 that spun forever).
 7. **One final review per issue** (user, 2026-10-02; reviewer rules: `templates/review-rules.md`, copied to
    `.review/00-REVIEW-RULES.md`). Run the host verification and the visual capture **first** (the conductor's harness run
    found the #719 nested-route BLOCKER before any reviewer), then one final review covering correctness,
@@ -87,9 +92,13 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    hardened invariant (e.g. the #678 Survey denial barrier), tell the reviewer the history and to trace every branch
    against `origin/develop`. Permission-sensitive reads: "no restricted text may leak" goes first in the brief.
 8. **Visual baselines**: sub-threshold changes pass against stale baselines — regenerate deliberately with
-   `--update-snapshots=all`, then `python3 <skill>/scripts/baseline-keep.py --region 0,0,300,960` (sidebar-only
-   changes) or `--name '<regex>'`, and view before/after PNGs before committing. On a PNG rebase conflict take
-   develop's file and regenerate on the branch.
+   `scripts/visual.sh update <filter...>`. This runs `baseline-keep.py` in read-only report mode and writes
+   before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNG list and crops before acting.
+   To restore only selected files use `baseline-keep.py --revert '<regex>'`; to keep only selected tracked PNGs
+   and restore the other changed tracked PNGs, use `baseline-keep.py --keep '<regex>'`. Existing `--region`
+   (sidebar-only, e.g. `0,0,300,960`) and `--name` qualifiers apply to `--keep`. Pixel count alone never decides
+   whether a change is retained. Finish with `scripts/visual.sh stable <filter...> --runs 3`. On a PNG rebase
+   conflict take develop's file and regenerate on the branch.
 9. **Ship**: rerun touched suites + typecheck after rebasing (full FE suite + visual once before merge).
    Use shared `ship-pr.sh --branch feature/<n>-<slug> --base develop --title '<title>' --body-file <body-file>
    --ci --ci-timeout 3600` (body: change, review verdict and applied/deferred findings, verification numbers).
@@ -105,6 +114,15 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 10. Keep the session handoff current every few merges: one local-only file at the repo root, `HANDOFF.md`, updated
     in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
     milestone.
+
+## Tools
+
+- `scripts/visual.sh`: `run`, `update`, `stable`, and `capture`; `capture --clean <name>` moves its temporary spec
+  to Trash when available.
+- `scripts/verify-db.sh`: `up`, `create <n>`, `drop <n>`, `reset-rate-limits <n>`, and `down` for throwaway Postgres
+  on port 5439.
+- `scripts/release-gate.sh <main-checkout>`: fail-fast develop-to-main checks; it prints the PR command on success
+  and never creates or merges the PR.
 
 ## Traps (measured)
 
