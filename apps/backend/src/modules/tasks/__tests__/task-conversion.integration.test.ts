@@ -866,10 +866,9 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
             and source_type = 'finding' and relation_type = 'requested_task' and status = 'active'`,
         [WORKSPACE_ID, taskId],
       );
-      expect(findingTaskLinks.rows.map((row) => row.source_id)).not.toContain(unrelatedFindingId);
-      if (requestFindingId) {
-        expect(findingTaskLinks.rows.map((row) => row.source_id)).toContain(requestFindingId);
-      }
+      expect(findingTaskLinks.rows.map((row) => row.source_id)).toEqual(
+        requestFindingId ? [requestFindingId] : [],
+      );
 
       const copiedEvidenceLinks = await dbHandle.pool.query<{ n: number }>(
         `select count(*)::int as n from core.entity_links
