@@ -173,12 +173,18 @@ set. As of #134, direct creation is allowed for these tuples:
 ```
 
 As of #136, the registered/DB allowlist also includes source-conversion tuples
-created by routes, not by direct `POST /entity-links`:
+created by routes:
 
 ```text
 (voc, task_request, requested_task)
 (voc_cluster, task_request, requested_task)
 ```
+
+Generic `POST /entity-links` rejects these tuples, and generic `PATCH
+/entity-links/:id` detach returns the same non-disclosing 404 envelope as an
+absent link. Generic endpoint and workspace listings continue to include their
+rows. Only `POST /vocs/:id/request-task` and
+`POST /voc-clusters/:id/request-task` create them.
 
 `(voc_cluster, finding, evidence_of)` is registered for DB validation and is
 created only by `POST /voc-clusters/:id/link-finding`. Generic

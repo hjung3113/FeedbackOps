@@ -526,6 +526,89 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
+  const taskRequestSourceTuples = [
+    { source_type: 'voc', target_type: 'task_request', relation_type: 'requested_task' },
+    { source_type: 'voc_cluster', target_type: 'task_request', relation_type: 'requested_task' },
+  ] as const;
+
+  it.each(taskRequestSourceTuples)(
+    'generic writes keep $source_type → Task Request command-only while listings retain the tuple',
+    async (tuple) => {
+      const { msA, endpoints } = await seedRegisteredTupleEndpoints();
+      const source = endpoints[tuple.source_type];
+      const target = endpoints.task_request;
+      const unsupportedTuple = {
+        code: 'validation.failed',
+        message: 'unsupported entity link tuple',
+        detail: { fields: [{ path: [], code: 'unsupported_tuple' }] },
+      };
+
+      const create = await postEntityLink(adminCookie, source.id, target.id, {
+        source: { type: tuple.source_type, id: source.id },
+        target: { type: tuple.target_type, id: target.id },
+        relation_type: tuple.relation_type,
+      });
+      expect(create.statusCode).toBe(422);
+      expect(create.json()).toEqual(unsupportedTuple);
+
+      const insertedRows = await dbHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n from core.entity_links
+          where workspace_id = $1 and source_type = $2 and source_id = $3
+            and target_type = $4 and target_id = $5 and relation_type = $6`,
+        [
+          WORKSPACE_ID,
+          tuple.source_type,
+          source.id,
+          tuple.target_type,
+          target.id,
+          tuple.relation_type,
+        ],
+      );
+      expect(insertedRows.rows[0]?.n).toBe(0);
+
+      const linkId = await seedEntityLinkDirectly({
+        sourceType: tuple.source_type,
+        sourceId: source.id,
+        targetType: tuple.target_type,
+        targetId: target.id,
+        relationType: tuple.relation_type,
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      });
+      const listedResponse = await getEntityLinks(
+        adminCookie,
+        `?source_type=${tuple.source_type}&source_id=${source.id}`,
+      );
+      expect(listedResponse.statusCode).toBe(200);
+      const listed = listedResponse
+        .json<{
+          items: Array<{
+            id: string;
+            visibility_state: string;
+            target_type: string;
+            relation_type: string;
+          }>;
+        }>()
+        .items.find((item) => item.id === linkId);
+      expect(listed).toMatchObject({
+        id: linkId,
+        visibility_state: 'allowed',
+        target_type: tuple.target_type,
+        relation_type: tuple.relation_type,
+      });
+
+      const absent = await patchEntityLink(adminCookie, randomUUID(), {
+        reason: 'Probe absent Task Request link',
+      });
+      const commandOnly = await patchEntityLink(adminCookie, linkId, {
+        reason: 'Probe command-only Task Request link',
+      });
+      expect(absent.statusCode).toBe(404);
+      expect(commandOnly.statusCode).toBe(404);
+      expect(commandOnly.body).toBe(absent.body);
+    },
+  );
+
   it('AC-388-2 POST honors generic tuples while leaving command-only tuples to their domain route', async () => {
     const { endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
@@ -542,6 +625,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         (tuple.source_type === 'voc_cluster' &&
           tuple.target_type === 'finding' &&
           tuple.relation_type === 'evidence_of') ||
+        ((tuple.source_type === 'voc' || tuple.source_type === 'voc_cluster') &&
+          tuple.target_type === 'task_request' &&
+          tuple.relation_type === 'requested_task') ||
         tuple.source_type === 'survey_response'
       ) {
         expect(created.statusCode, JSON.stringify(tuple)).toBe(422);
