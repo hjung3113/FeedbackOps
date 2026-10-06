@@ -5,6 +5,7 @@ import {
   EVIDENCE_SOURCE_TYPE_LABELS,
 } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { VOC_SOURCE_PICKER_COPY } from '@/lib/copy/voc';
 import { koreanZodErrorMap, zodIssueMessage } from '@/lib/forms/zodIssueMessage';
 import {
   type AddEvidenceHighlightRequest,
@@ -34,11 +35,13 @@ import type * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { useAddEvidenceHighlightMutation } from '../../hooks/useEvidenceMutations';
+import { VocSourcePicker } from './VocSourcePicker';
 
 // ── Add Evidence modal ────────────────────────────────────────────────────────
 
 interface AddEvidenceModalProps {
   findingId: string;
+  managedSystemId: string;
   open: boolean;
   onClose: () => void;
 }
@@ -71,6 +74,7 @@ const IMPORTANCE_OPTIONS: {
 
 export function AddEvidenceModal({
   findingId,
+  managedSystemId,
   open,
   onClose,
 }: AddEvidenceModalProps): React.ReactElement {
@@ -168,18 +172,46 @@ export function AddEvidenceModal({
           {/* Source ID — required unless source_type === 'note' */}
           {watchedSourceType !== 'note' && (
             <div className="flex flex-col gap-1.5">
-              <FieldLabel required htmlFor="evidence-source-id">
-                소스 ID (UUID)
-              </FieldLabel>
-              <Input
-                id="evidence-source-id"
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                {...form.register('source_id')}
-                aria-invalid={Boolean(form.formState.errors.source_id)}
-                data-testid="evidence-source-id-input"
-              />
+              {watchedSourceType === 'voc' ? (
+                <>
+                  <FieldLabel required htmlFor="evidence-source-voc">
+                    {VOC_SOURCE_PICKER_COPY.label}
+                  </FieldLabel>
+                  <VocSourcePicker
+                    id="evidence-source-voc"
+                    managedSystemId={managedSystemId}
+                    value={form.watch('source_id') || null}
+                    onChange={(vocId) =>
+                      form.setValue('source_id', vocId, {
+                        shouldValidate: true,
+                      })
+                    }
+                    invalid={Boolean(form.formState.errors.source_id)}
+                    {...(form.formState.errors.source_id
+                      ? { describedBy: 'evidence-source-voc-error' }
+                      : {})}
+                  />
+                </>
+              ) : (
+                <>
+                  <FieldLabel required htmlFor="evidence-source-id">
+                    소스 ID (UUID)
+                  </FieldLabel>
+                  <Input
+                    id="evidence-source-id"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    {...form.register('source_id')}
+                    aria-invalid={Boolean(form.formState.errors.source_id)}
+                    data-testid="evidence-source-id-input"
+                  />
+                </>
+              )}
               {sourceIdErrorMessage && (
-                <p className="text-xs text-text-danger" role="alert">
+                <p
+                  id={watchedSourceType === 'voc' ? 'evidence-source-voc-error' : undefined}
+                  className="text-xs text-text-danger"
+                  role="alert"
+                >
                   {sourceIdErrorMessage}
                 </p>
               )}

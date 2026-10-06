@@ -272,11 +272,13 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
       {/* Modals */}
       <AddEvidenceModal
         findingId={finding.id}
+        managedSystemId={finding.primary_managed_system_id}
         open={addEvidenceOpen}
         onClose={() => setAddEvidenceOpen(false)}
       />
       <LinkEvidenceModal
         findingId={finding.id}
+        managedSystemId={finding.primary_managed_system_id}
         open={linkEvidenceOpen}
         onClose={() => setLinkEvidenceOpen(false)}
       />

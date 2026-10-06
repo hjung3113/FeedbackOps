@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const evidenceMutation = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -19,12 +19,31 @@ describe('AddEvidenceModal source kind options', () => {
   beforeEach(() => {
     evidenceMutation.mutate.mockClear();
     evidenceMutation.reset.mockClear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ items: [], page: { has_more: false } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('labels every evidence source kind from the shared copy map', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <AddEvidenceModal findingId="10000000-0000-0000-0000-000000000001" open onClose={vi.fn()} />
+        <AddEvidenceModal
+          findingId="10000000-0000-0000-0000-000000000001"
+          managedSystemId="30000000-0000-0000-0000-000000000003"
+          open
+          onClose={vi.fn()}
+        />
       </QueryClientProvider>,
     );
 
@@ -44,6 +63,7 @@ describe('AddEvidenceModal source kind options', () => {
         <QueryClientProvider client={new QueryClient()}>
           <AddEvidenceModal
             findingId="10000000-0000-0000-0000-000000000001"
+            managedSystemId="30000000-0000-0000-0000-000000000003"
             open
             onClose={vi.fn()}
           />
@@ -66,4 +86,36 @@ describe('AddEvidenceModal source kind options', () => {
       expect(evidenceMutation.mutate).not.toHaveBeenCalled();
     },
   );
+
+  it('uses the VOC picker for VOC and keeps the UUID input for Survey responses', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AddEvidenceModal
+          findingId="10000000-0000-0000-0000-000000000001"
+          managedSystemId="30000000-0000-0000-0000-000000000003"
+          open
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('evidence-source-type-select'));
+    fireEvent.click(await screen.findByRole('option', { name: 'VOC' }));
+
+    expect(await screen.findByRole('combobox', { name: 'VOC 선택' })).toBeInTheDocument();
+    expect(screen.queryByText('소스 ID (UUID)')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('evidence-source-id-input')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('evidence-source-type-select'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Survey' }));
+
+    expect(screen.getByText('소스 ID (UUID)')).toBeInTheDocument();
+    expect(screen.getByTestId('evidence-source-id-input')).toHaveAttribute(
+      'placeholder',
+      'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    );
+  });
 });

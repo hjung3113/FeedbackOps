@@ -40,6 +40,10 @@ export interface ComboboxProps {
   listboxLabel?: string;
   emptyText?: string;
   className?: string;
+  id?: string;
+  'aria-invalid'?: boolean;
+  'aria-describedby'?: string;
+  onSearchChange?: (search: string) => void;
   /** When true, the trigger is disabled and the popover cannot be opened. */
   disabled?: boolean;
 }
@@ -53,6 +57,10 @@ export function Combobox({
   listboxLabel = '옵션',
   emptyText = '결과 없음',
   className,
+  id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  onSearchChange,
   disabled,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
@@ -86,6 +94,7 @@ export function Combobox({
     onChange(option.value);
     setOpen(false);
     setSearch('');
+    onSearchChange?.('');
     setActiveIndex(-1);
   }
 
@@ -155,10 +164,13 @@ export function Combobox({
           type="button"
           // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires button+role="combobox"; native <select> does not support this popover-with-search pattern
           role="combobox"
+          id={id}
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-controls={open ? listboxId : undefined}
           aria-disabled={disabled}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
           className={cn(
@@ -179,7 +191,10 @@ export function Combobox({
             // biome-ignore lint/a11y/noAutofocus: WAI-ARIA APG §combobox requires search input to auto-focus when popup opens so keyboard users can immediately type to filter
             autoFocus
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              onSearchChange?.(e.target.value);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={searchPlaceholder}
             aria-autocomplete="list"

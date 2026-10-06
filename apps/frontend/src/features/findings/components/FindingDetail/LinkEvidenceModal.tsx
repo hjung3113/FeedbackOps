@@ -1,4 +1,5 @@
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { VOC_SOURCE_PICKER_COPY } from '@/lib/copy/voc';
 import { koreanZodErrorMap } from '@/lib/forms/zodIssueMessage';
 import { type LinkEvidenceRequest, linkEvidenceRequestSchema } from '@fops/shared';
 import {
@@ -9,24 +10,26 @@ import {
   DialogHeader,
   DialogTitle,
   FieldLabel,
-  Input,
 } from '@fops/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { useLinkEvidenceMutation } from '../../hooks/useEvidenceMutations';
+import { VocSourcePicker } from './VocSourcePicker';
 
 // ── Link Existing Evidence modal ──────────────────────────────────────────────
 
 interface LinkEvidenceModalProps {
   findingId: string;
+  managedSystemId: string;
   open: boolean;
   onClose: () => void;
 }
 
 export function LinkEvidenceModal({
   findingId,
+  managedSystemId,
   open,
   onClose,
 }: LinkEvidenceModalProps): React.ReactElement {
@@ -85,20 +88,25 @@ export function LinkEvidenceModal({
           noValidate
           className="flex flex-col gap-4"
         >
-          {/* Source ID */}
+          {/* VOC source */}
           <div className="flex flex-col gap-1.5">
-            <FieldLabel required htmlFor="link-source-id">
-              VOC ID (UUID)
+            <FieldLabel required htmlFor="link-source-voc">
+              {VOC_SOURCE_PICKER_COPY.label}
             </FieldLabel>
-            <Input
-              id="link-source-id"
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              {...form.register('source_id')}
-              aria-invalid={Boolean(form.formState.errors.source_id)}
-              data-testid="link-evidence-source-id-input"
+            <VocSourcePicker
+              id="link-source-voc"
+              managedSystemId={managedSystemId}
+              value={form.watch('source_id') || null}
+              onChange={(vocId) =>
+                form.setValue('source_id', vocId, {
+                  shouldValidate: true,
+                })
+              }
+              invalid={Boolean(form.formState.errors.source_id)}
+              {...(form.formState.errors.source_id ? { describedBy: 'link-source-voc-error' } : {})}
             />
             {form.formState.errors.source_id?.message && (
-              <p className="text-xs text-text-danger" role="alert">
+              <p id="link-source-voc-error" className="text-xs text-text-danger" role="alert">
                 {form.formState.errors.source_id.message}
               </p>
             )}
