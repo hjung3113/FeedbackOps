@@ -4,7 +4,7 @@ Date: 2026-07-14
 
 ## Status
 
-Accepted
+Accepted. Amended by ADR-0049 (optional status-change `reason`).
 
 ## Context
 
@@ -36,6 +36,11 @@ the Task update. Its strict detail is:
 { from: TaskStatus, to: TaskStatus }
 ```
 
+> Amended by ADR-0049: the body also accepts an optional `reason` (trimmed, 1–1000
+> characters). It becomes the body of the `status_change` progress note and is
+> recorded as an optional `reason` in the `task_status_changed` detail. The
+> canonical contract is `docs/implementation/api/tasks.md`.
+
 The endpoint requires `If-Match` optimistic concurrency and an
 `Idempotency-Key`, following the audit-sensitive mutation rule in
 `03-api-contracts.md`. Its idempotency hash includes the supplied `If-Match`.
@@ -43,6 +48,8 @@ The endpoint requires `If-Match` optimistic concurrency and an
 The Task-to-`released` Public-Update review-candidate job described by
 ADR-0005 and ADR-0009 is deferred to a follow-up issue. The status write does
 not enqueue that job or create a candidate yet.
+
+> Implemented by Issue #165; see the implementation note below.
 
 For the Issue #138 board UI, drag and drop uses `@dnd-kit/core`, resolving the
 deferral in ADR-0016. Its keyboard and touch support meet the board's
