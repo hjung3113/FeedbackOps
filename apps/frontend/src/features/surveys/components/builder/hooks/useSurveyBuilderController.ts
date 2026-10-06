@@ -2,6 +2,7 @@ import type { ApiError } from '@/lib/api';
 import * as React from 'react';
 import { useOpenSurvey, useSurveyQuestionMutations } from '../../../hooks/useSurveys';
 import type { QuestionKind, Survey, SurveyQuestion } from '../../../types';
+import { hasInvalidChoiceOptions } from '../lib/optionValidation';
 import { applyServerQuestionId, denseQuestions, newQuestion } from '../lib/questionDraft';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
 
@@ -30,6 +31,7 @@ export function useSurveyBuilderController(args: {
   launchPending: boolean;
   launchError: ApiError | null;
   launchSaveFailed: boolean;
+  launchOptionValidationFailed: boolean;
   confirmLaunch: () => void;
   patch: (next: SurveyQuestion) => void;
   add: (kind?: QuestionKind) => void;
@@ -52,6 +54,7 @@ export function useSurveyBuilderController(args: {
   const [preview, setPreview] = React.useState(false);
   const [launchOpen, setLaunchOpenState] = React.useState(false);
   const [launchSaveFailed, setLaunchSaveFailed] = React.useState(false);
+  const [launchOptionValidationFailed, setLaunchOptionValidationFailed] = React.useState(false);
   const mutations = useSurveyQuestionMutations(survey.id);
   const openSurvey = useOpenSurvey(survey.id);
   const editable = canManage && survey.status === 'draft' && !gateState;
@@ -62,7 +65,10 @@ export function useSurveyBuilderController(args: {
   };
   const setLaunchOpen = (open: boolean) => {
     setLaunchOpenState(open);
-    if (open) setLaunchSaveFailed(false);
+    if (open) {
+      setLaunchSaveFailed(false);
+      setLaunchOptionValidationFailed(false);
+    }
   };
   const updateQuestions = (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => {
     const next = update(questionsRef.current);
@@ -71,7 +77,32 @@ export function useSurveyBuilderController(args: {
   };
 
   const patch = (next: SurveyQuestion) => {
-    updateQuestions((all) => all.map((question) => (question.id === next.id ? next : question)));
+    updateQuestions((all) => {
+      const current = all.find((question) => question.id === next.id);
+      if (!current) return all;
+      const nextKeys = new Set(next.options?.map((option) => option.key) ?? []);
+      const removedKeys = new Set(
+        (current.options ?? []).map((option) => option.key).filter((key) => !nextKeys.has(key)),
+      );
+      const firstRemainingKey = next.options?.[0]?.key ?? null;
+      return all.map((question) => {
+        if (question.id === next.id) return next;
+        if (
+          question.branch_parent_question_id !== next.id ||
+          !question.branch_trigger_option_key ||
+          !removedKeys.has(question.branch_trigger_option_key)
+        )
+          return question;
+        return firstRemainingKey
+          ? { ...question, branch_trigger_option_key: firstRemainingKey }
+          : {
+              ...question,
+              branch_depth: 0,
+              branch_parent_question_id: null,
+              branch_trigger_option_key: null,
+            };
+      });
+    });
     updateDirty(true);
     setSaveFailed(false);
   };
@@ -121,7 +152,14 @@ export function useSurveyBuilderController(args: {
 
   const confirmLaunch = () => {
     setLaunchSaveFailed(false);
+    setLaunchOptionValidationFailed(false);
     void (async () => {
+      const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+      if (invalidQuestion) {
+        setSelectedId(invalidQuestion.id);
+        setLaunchOptionValidationFailed(true);
+        return;
+      }
       if (dirty && !(await save())) {
         setLaunchSaveFailed(true);
         return;
@@ -136,6 +174,12 @@ export function useSurveyBuilderController(args: {
   };
 
   const save = async (): Promise<boolean> => {
+    const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+    if (invalidQuestion) {
+      setSelectedId(invalidQuestion.id);
+      setSaveFailed(false);
+      return false;
+    }
     setIsSaving(true);
     setSaveFailed(false);
     try {
@@ -185,6 +229,7 @@ export function useSurveyBuilderController(args: {
     launchPending: openSurvey.isPending || isSaving,
     launchError: openSurvey.error,
     launchSaveFailed,
+    launchOptionValidationFailed,
     confirmLaunch,
     patch,
     add,
