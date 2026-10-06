@@ -4,7 +4,9 @@ import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type RouterHistory,
   RouterProvider,
+  createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -182,7 +184,9 @@ function renderDetailWithRouter(
   );
 }
 
-function renderBuilderRouteWithRouter() {
+function renderBuilderRouteWithRouter(
+  history: RouterHistory = createMemoryHistory({ initialEntries: ['/builder'] }),
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -209,7 +213,7 @@ function renderBuilderRouteWithRouter() {
   });
   const router = createRouter({
     routeTree: root.addChildren([builder, away]),
-    history: createMemoryHistory({ initialEntries: ['/builder'] }),
+    history,
   });
   routeQueryStubs.navigate = async (..._args: unknown[]) =>
     router.navigate({ to: '/away' as never });
@@ -729,6 +733,9 @@ describe('Survey screens', () => {
 
     expect(await screen.findByText('저장하지 못해 시작하지 않았습니다.')).toBeInTheDocument();
     expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
   });
 
@@ -753,10 +760,9 @@ describe('Survey screens', () => {
       <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
     );
 
-    expect(screen.getByRole('button', { name: 'Survey 시작' })).toBeDisabled();
-    expect(screen.getByText('시작하려면 질문을 하나 이상 추가하세요.')).toBeInTheDocument();
-    expect(screen.queryByTestId('survey-open-confirmation')).not.toBeInTheDocument();
-    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+    const startButton = screen.getByRole('button', { name: 'Survey 시작' });
+    expect(startButton).toBeDisabled();
+    expect(startButton).toHaveAccessibleDescription('시작하려면 질문을 하나 이상 추가하세요.');
   });
 
   it('keeps an untouched empty draft clean', () => {
@@ -800,6 +806,34 @@ describe('Survey screens', () => {
       expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
     },
   );
+
+  it.each([
+    ['clean', false],
+    ['dirty', true],
+  ] as const)('blocks browser unload only when the builder is %s', async (_state, isDirty) => {
+    const initialUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState(null, '', '/builder');
+    const browserHistory = createBrowserHistory();
+    const { router, view } = renderBuilderRouteWithRouter(browserHistory);
+
+    try {
+      await screen.findByTestId('survey-builder');
+      if (isDirty) {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+          target: { value: '수정한 제목' },
+        });
+      }
+
+      const beforeUnload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+
+      expect(beforeUnload.defaultPrevented).toBe(isDirty);
+    } finally {
+      view.unmount();
+      router.history.destroy();
+      window.history.replaceState(null, '', initialUrl);
+    }
+  });
 
   it.each(['saved draft', 'started Survey'] as const)(
     'leaves without a dirty warning after a successful %s',

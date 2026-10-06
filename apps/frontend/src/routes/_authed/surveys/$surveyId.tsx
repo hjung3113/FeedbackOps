@@ -45,15 +45,14 @@ function SurveyBuilderWithDirtyConfirmation({
   onBack: () => void;
 }) {
   const builderDirtyRef = useRef(false);
-  const [, setBuilderDirty] = useState(false);
   const [dirtyDialogOpen, setDirtyDialogOpen] = useState(false);
   const handleBuilderDirtyChange = useCallback((dirty: boolean) => {
     builderDirtyRef.current = dirty;
-    setBuilderDirty(dirty);
   }, []);
   const blocker = useBlocker({
     shouldBlockFn: () => builderDirtyRef.current,
     withResolver: true,
+    enableBeforeUnload: () => builderDirtyRef.current,
   });
   useEffect(() => {
     if (blocker.status === 'blocked') setDirtyDialogOpen(true);
