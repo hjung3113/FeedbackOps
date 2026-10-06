@@ -54,6 +54,18 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--color-amethyst', hex: '#6a8dff', rgb: '106 141 255' },
   { tokenName: '--color-amber', hex: '#a56300', rgb: '165 99 0' },
 
+  // --- Entity icon tokens (#801) ---
+  { tokenName: '--entity-icon-voc', hex: '#5e6ad2', rgb: '94 106 210' },
+  { tokenName: '--entity-icon-evidence', hex: '#02b8cc', rgb: '2 184 204' },
+  { tokenName: '--entity-icon-finding', hex: '#e4f222', rgb: '228 242 34' },
+  { tokenName: '--entity-icon-request', hex: '#f2c46d', rgb: '242 196 109' },
+  { tokenName: '--entity-icon-task', hex: '#27a644', rgb: '39 166 68' },
+  { tokenName: '--entity-icon-survey', hex: '#8b5cf6', rgb: '139 92 246' },
+  { tokenName: '--entity-icon-foreground-light', hex: '#ffffff', rgb: '255 255 255' },
+  { tokenName: '--entity-icon-foreground-dark', hex: '#08090a', rgb: '8 9 10' },
+  { tokenName: '--accent-voc', raw: 'var(--color-aether-blue)' },
+  { tokenName: '--accent-task', raw: 'var(--color-amethyst)' },
+
   // --- Semantic text tokens ---
   { tokenName: '--text-primary', raw: 'var(--color-porcelain)' },
   { tokenName: '--text-secondary', raw: 'var(--color-light-steel)' },

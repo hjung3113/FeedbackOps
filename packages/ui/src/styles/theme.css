@@ -71,6 +71,18 @@
   --color-accent-warn: rgb(var(--color-amber));
   --color-accent-danger: rgb(var(--color-warning-red));
   --color-accent-success: rgb(var(--color-emerald));
+  --color-accent-voc: rgb(var(--accent-voc));
+  --color-accent-task: rgb(var(--accent-task));
+
+  /* --- Entity icon tokens (#801) --- */
+  --color-entity-icon-voc: rgb(var(--entity-icon-voc));
+  --color-entity-icon-evidence: rgb(var(--entity-icon-evidence));
+  --color-entity-icon-finding: rgb(var(--entity-icon-finding));
+  --color-entity-icon-request: rgb(var(--entity-icon-request));
+  --color-entity-icon-task: rgb(var(--entity-icon-task));
+  --color-entity-icon-survey: rgb(var(--entity-icon-survey));
+  --color-entity-icon-foreground-light: rgb(var(--entity-icon-foreground-light));
+  --color-entity-icon-foreground-dark: rgb(var(--entity-icon-foreground-dark));
 
   /* --- Status tokens: Reporter-facing --- */
   --color-status-reporter-received: rgb(var(--color-cyan-spark));

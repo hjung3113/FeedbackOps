@@ -102,6 +102,37 @@ tint to the 8-bit color a browser paints; every label still clears 4.5:1 there.
 | Metabase Scope | `#27a644` | `--managed-system-metabase` | Metabase identity mark background; show its name beside the mark. |
 | Default Scope | `#667083` | `--managed-system-default` | Neutral fallback for unknown Managed System slugs. |
 
+### Entity Icon Tokens (#801)
+
+Entity Icon marks use their own tokens, even when a hue matches a Managed
+System identity mark. These tokens describe object types and do not alias
+Managed System identity tokens.
+
+| Entity Type | Background | Token | Foreground Token |
+|-------------|------------|-------|------------------|
+| VOC | `#5e6ad2` | `--entity-icon-voc` | `--entity-icon-foreground-light` |
+| Evidence | `#02b8cc` | `--entity-icon-evidence` | `--entity-icon-foreground-light` |
+| Finding | `#e4f222` | `--entity-icon-finding` | `--entity-icon-foreground-dark` |
+| Task Request | `#f2c46d` | `--entity-icon-request` | `--entity-icon-foreground-dark` |
+| Task | `#27a644` | `--entity-icon-task` | `--entity-icon-foreground-light` |
+| Survey / Outcome | `#8b5cf6` | `--entity-icon-survey` | `--entity-icon-foreground-light` |
+
+The light foreground is `#ffffff`; the dark foreground is `#08090a`. Both are
+RGB-triplet tokens exposed as `text-entity-icon-foreground-light` and
+`text-entity-icon-foreground-dark`. The background tokens are exposed as
+`bg-entity-icon-*` utilities.
+
+### Detail Panel Kind Accent Tokens (#801)
+
+The VOC and Task kind accents have role tokens so their full-opacity color
+classes stay semantic. Other kinds use the existing `accent-success`,
+`accent-warn`, and `accent-info` theme keys where those meanings match.
+
+| Role | Value | Token | Theme Utility |
+|------|-------|-------|---------------|
+| VOC detail kind | `#1428a0` | `--accent-voc` | `accent-voc` |
+| Task detail kind | `#6a8dff` | `--accent-task` | `accent-task` |
+
 ## Tokens — Typography
 
 ### Inter — Primary UI typeface for all content including headings, body text, and interactive elements. · `--font-sans`

@@ -14,51 +14,58 @@ export interface CalloutProps {
 
 const TONE_STYLES: Record<
   CalloutTone,
-  { colorVar: string; backgroundAlpha: string; ringAlpha: string; titleVar: string }
+  {
+    colorVar: string;
+    backgroundAlpha: string;
+    ringAlpha: string;
+    colorClass: string;
+    titleClass: string;
+  }
 > = {
   amber: {
     colorVar: '--color-amber',
     backgroundAlpha: '0.08',
     ringAlpha: '0.3',
-    titleVar: '--text-warning-label', // #750: AA label color departs from the prototype mapping.
+    colorClass: 'text-accent-warn',
+    titleClass: 'text-text-warning-label', // #750: AA label color departs from the prototype mapping.
   },
   red: {
     colorVar: '--color-warning-red',
     backgroundAlpha: '0.06',
     ringAlpha: '0.2',
-    titleVar: '--text-danger-label', // #750: AA label color departs from the prototype mapping.
+    colorClass: 'text-accent-danger',
+    titleClass: 'text-text-danger-label', // #750: AA label color departs from the prototype mapping.
   },
   blue: {
     colorVar: '--color-aether-blue',
     backgroundAlpha: '0.04',
     ringAlpha: '0.2',
-    titleVar: '--text-secondary',
+    colorClass: 'text-accent-primary',
+    titleClass: 'text-text-secondary',
   },
   cyan: {
     colorVar: '--color-cyan-spark',
     backgroundAlpha: '0.06',
     ringAlpha: '0.2',
-    titleVar: '--text-secondary',
+    colorClass: 'text-accent-info',
+    titleClass: 'text-text-secondary',
   },
   emerald: {
     colorVar: '--color-emerald',
     backgroundAlpha: '0.06',
     ringAlpha: '0.2',
-    titleVar: '--text-secondary',
+    colorClass: 'text-accent-success',
+    titleClass: 'text-text-secondary',
   },
 };
 
 export function Callout({ tone, icon, title, children, action, className }: CalloutProps) {
   const toneStyle = TONE_STYLES[tone];
   const style = {
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
-    '--callout-color': `rgb(var(${toneStyle.colorVar}))`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    // oxlint-disable-next-line shadcn/no-inline-styles -- exact-alpha tone tint stays a custom property per #784
     '--callout-background': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.backgroundAlpha})`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
+    // oxlint-disable-next-line shadcn/no-inline-styles -- exact-alpha inset ring stays a custom property per #784
     '--callout-ring': `rgb(var(${toneStyle.colorVar}) / ${toneStyle.ringAlpha}) 0 0 0 1px inset`,
-    // oxlint-disable-next-line shadcn/no-inline-styles -- tone values from TONE_STYLES; Callout.test pins these style values (class conversion is a follow-up)
-    '--callout-title-color': `rgb(var(${toneStyle.titleVar}))`,
   } as React.CSSProperties;
 
   // The approved prototype uses a tint and inset ring instead of the issue's initial left border.
@@ -74,8 +81,10 @@ export function Callout({ tone, icon, title, children, action, className }: Call
       {title !== undefined ? (
         <>
           <div className="mb-1.5 flex items-center gap-2">
-            {icon !== undefined && <span className="shrink-0 text-(--callout-color)">{icon}</span>}
-            <strong className="text-sm font-semibold text-(--callout-title-color)">{title}</strong>
+            {icon !== undefined && (
+              <span className={cn('shrink-0', toneStyle.colorClass)}>{icon}</span>
+            )}
+            <strong className={cn('text-sm font-semibold', toneStyle.titleClass)}>{title}</strong>
           </div>
           <div>{children}</div>
           {action !== undefined && <div className="mt-2">{action}</div>}
@@ -83,7 +92,7 @@ export function Callout({ tone, icon, title, children, action, className }: Call
       ) : (
         <div className="flex items-start gap-2">
           {icon !== undefined && (
-            <span className="mt-0.5 shrink-0 text-(--callout-color)">{icon}</span>
+            <span className={cn('mt-0.5 shrink-0', toneStyle.colorClass)}>{icon}</span>
           )}
           <span className="flex-1">{children}</span>
           {action !== undefined && <div className="ml-auto">{action}</div>}

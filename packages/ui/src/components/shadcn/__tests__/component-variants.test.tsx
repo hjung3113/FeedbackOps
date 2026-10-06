@@ -2,6 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { Card, CardContent } from '../card.js';
 import { DialogFooter } from '../dialog.js';
+import { Popover, PopoverContent } from '../popover.js';
 import { RadioGroup, RadioGroupItem } from '../radio-group.js';
 import { Select, SelectTrigger, SelectValue } from '../select.js';
 import { Skeleton } from '../skeleton.js';
@@ -132,6 +133,27 @@ describe('shadcn component variants', () => {
         .split(' ')
         .sort(),
     );
+  });
+
+  it('applies compact spacing to a RadioGroup', () => {
+    render(
+      <RadioGroup value="direct" spacing="compact">
+        <RadioGroupItem value="direct" />
+      </RadioGroup>,
+    );
+    expect(screen.getByRole('radiogroup')).toHaveClass('gap-1');
+  });
+
+  it.each([
+    ['compact padding', 'compact', 'p-1'],
+    ['zero padding', 'none', 'p-0'],
+  ] as const)('applies PopoverContent %s variant', (_name, padding, expectedClass) => {
+    render(
+      <Popover open>
+        <PopoverContent padding={padding}>Options</PopoverContent>
+      </Popover>,
+    );
+    expect(screen.getByRole('dialog')).toHaveClass(expectedClass);
   });
 
   it('preserves the Home filter track classes for ToggleGroup appearance=filter', () => {

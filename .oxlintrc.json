@@ -21,6 +21,10 @@
             "allow": ["layout", "spacing"]
           },
           {
+            "pattern": "^(TabsList|ToggleGroup|RadioGroup|DialogFooter|TooltipContent|SelectContent|DropdownMenuContent|PopoverContent|CommandList|CommandGroup)$",
+            "allow": ["layout"]
+          },
+          {
             "pattern": "^(DetailPanelHeader|ShellHeader|ListToolbar)$",
             "allow": ["layout", "spacing"],
             "deny": ["h-*", "min-h-*", "max-h-*", "size-*"]

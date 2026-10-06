@@ -63,3 +63,6 @@ The boundary gained two allowances, both from the tool's own guidance:
 What is left after fixes and shared tokens/variants is an intentional single-use treatment, marked in place with
 `oxlint-disable-next-line shadcn/<rule> -- <reason>`. A reason names the concrete design need; review checks it.
 
+- #801 adds a later contract allowing layout only on variant-owning controls (`TabsList`, `ToggleGroup`,
+  `RadioGroup`, `DialogFooter`, `TooltipContent`, `SelectContent`, `DropdownMenuContent`, `PopoverContent`,
+  `CommandList`, and `CommandGroup`); true containers retain layout and spacing.

@@ -71,6 +71,10 @@
   --focus-ring: var(--color-neon-lime);
   --focus-ring-danger: var(--color-warning-red);
 
+  /* #801 semantic DetailPanelHeader accents: roles stay distinct from the raw palette. */
+  --accent-voc: var(--color-aether-blue);
+  --accent-task: var(--color-amethyst);
+
   /* --- Status tokens (Reporter-facing VOC status) --- */
   /* Use the base token for the dot/tint (vivid, scannable); use the paired
    * `-label` token for text foreground. #525: the base hues measured
@@ -135,6 +139,16 @@
   --confidence-low: var(--color-storm-cloud);
   --confidence-medium: var(--color-cyan-spark);
   --confidence-high: var(--color-emerald);
+
+  /* --- Entity icon tokens (#801; independent of Managed System identity) --- */
+  --entity-icon-voc: 94 106 210; /* #5e6ad2 */
+  --entity-icon-evidence: 2 184 204; /* #02b8cc */
+  --entity-icon-finding: 228 242 34; /* #e4f222 */
+  --entity-icon-request: 242 196 109; /* #f2c46d */
+  --entity-icon-task: 39 166 68; /* #27a644 */
+  --entity-icon-survey: 139 92 246; /* #8b5cf6 */
+  --entity-icon-foreground-light: 255 255 255; /* #ffffff */
+  --entity-icon-foreground-dark: 8 9 10; /* #08090a */
 
   /* --- Managed System identity tokens (prototype data.js scope marks) --- */
   --managed-system-tableau: 94 106 210;  /* #5e6ad2 */

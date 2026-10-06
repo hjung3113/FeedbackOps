@@ -1,31 +1,25 @@
 /// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { EntityIconBadge, ENTITY_ICON_MAP, type EntityIconType } from '../EntityIconBadge.js';
+import { render } from '@testing-library/react';
+import { ENTITY_ICON_MAP, EntityIconBadge, type EntityIconType } from '../EntityIconBadge.js';
 
 const entityTypes = Object.keys(ENTITY_ICON_MAP) as EntityIconType[];
 
 describe('EntityIconBadge', () => {
-  entityTypes.forEach((type) => {
-    const { letter, bg, color } = ENTITY_ICON_MAP[type];
+  it.each(entityTypes)('renders the token class pair for type="%s"', (type) => {
+    const { letter, className } = ENTITY_ICON_MAP[type];
+    const { container } = render(<EntityIconBadge type={type} />);
+    const el = container.querySelector(`[data-entity-type="${type}"]`);
 
-    it(`renders letter "${letter}" for type="${type}"`, () => {
-      render(<EntityIconBadge type={type} />);
-      expect(screen.getByText(letter)).toBeInTheDocument();
-    });
+    expect(el).not.toBeNull();
+    expect(el).toHaveClass(...className.split(' '));
+    expect(el).toHaveAttribute('aria-label', type);
+    expect(el).toHaveTextContent(letter);
+  });
 
-    it(`sets data-bg="${bg}" for type="${type}"`, () => {
-      const { container } = render(<EntityIconBadge type={type} />);
-      const el = container.querySelector(`[data-entity-type="${type}"]`);
-      expect(el).not.toBeNull();
-      expect(el?.getAttribute('data-bg')).toBe(bg);
-    });
-
-    it(`sets data-color="${color}" for type="${type}"`, () => {
-      const { container } = render(<EntityIconBadge type={type} />);
-      const el = container.querySelector(`[data-entity-type="${type}"]`);
-      expect(el?.getAttribute('data-color')).toBe(color);
-    });
+  it('keeps the data entity type attribute', () => {
+    const { container } = render(<EntityIconBadge type="voc" />);
+    const el = container.querySelector('[data-entity-type="voc"]');
+    expect(el).toHaveAttribute('data-entity-type', 'voc');
   });
 
   it('defaults to size=22', () => {
