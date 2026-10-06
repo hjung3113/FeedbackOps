@@ -57,6 +57,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   }),
   useMatchRoute: () => () => false,
   useNavigate: () => vi.fn(),
+  // #812: the builder route guards unsaved changes with useBlocker, which needs a router.
+  useBlocker: () => ({ status: 'idle' }),
 }));
 
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
