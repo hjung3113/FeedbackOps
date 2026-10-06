@@ -33,6 +33,11 @@ export function QuestionEditor({
       candidate.kind === 'single_choice' &&
       !candidate.branch_parent_question_id,
   );
+  const branchTriggerOptionKeys = questions.flatMap((candidate) => {
+    if (candidate.branch_parent_question_id !== question.id || !candidate.branch_trigger_option_key)
+      return [];
+    return [candidate.branch_trigger_option_key];
+  });
   return (
     <div className="space-y-4">
       <label className="block text-sm" htmlFor="question-kind">
@@ -67,9 +72,7 @@ export function QuestionEditor({
         <OptionsEditor
           question={question}
           editable={editable}
-          hasBranchedChildren={questions.some(
-            (candidate) => candidate.branch_parent_question_id === question.id,
-          )}
+          branchTriggerOptionKeys={branchTriggerOptionKeys}
           onChange={set}
         />
       )}

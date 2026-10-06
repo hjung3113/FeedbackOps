@@ -154,7 +154,9 @@ export function useSurveyBuilderController(args: {
     setLaunchSaveFailed(false);
     setLaunchOptionValidationFailed(false);
     void (async () => {
-      if (questionsRef.current.some(hasInvalidChoiceOptions)) {
+      const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+      if (invalidQuestion) {
+        setSelectedId(invalidQuestion.id);
         setLaunchOptionValidationFailed(true);
         return;
       }
@@ -172,7 +174,9 @@ export function useSurveyBuilderController(args: {
   };
 
   const save = async (): Promise<boolean> => {
-    if (questionsRef.current.some(hasInvalidChoiceOptions)) {
+    const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+    if (invalidQuestion) {
+      setSelectedId(invalidQuestion.id);
       setSaveFailed(false);
       return false;
     }

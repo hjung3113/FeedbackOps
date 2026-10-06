@@ -1,7 +1,7 @@
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/index';
-import { surveyQuestionInputSchema, surveyQuestionKindSchema } from '@fops/shared';
+import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   type RouterHistory,
@@ -16,6 +16,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { SurveyStatusBadge } from '../../components/SurveyStatusBadge';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
@@ -102,6 +103,137 @@ function question(id: string, prompt: string, sortOrder: number): SurveyQuestion
 
 function calls(method: string, path: string) {
   return apiClient.mock.calls.filter((call) => call[0] === method && call[1] === path);
+}
+
+// Test oracle copied from surveys/routes.ts question parsing and
+// surveys/authoring.ts validateQuestions. Keep this independent of frontend schemas.
+const backendQuestionInputOracle = z
+  .object({
+    kind: surveyQuestionKindSchema,
+    prompt: z.string().min(1),
+    is_required: z.boolean().optional(),
+    options: z
+      .array(z.object({ key: z.string().min(1), label: z.string().min(1) }).strict())
+      .min(2)
+      .max(50)
+      .optional(),
+    rating_min: z.number().int().optional(),
+    rating_max: z.number().int().optional(),
+    rating_low_label: z.string().nullable().optional(),
+    rating_high_label: z.string().nullable().optional(),
+    sort_order: z.number().int().nonnegative().optional(),
+    branch_parent_question_id: z.string().uuid().nullable().optional(),
+    branch_trigger_option_key: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+const SERVER_CREATED_QUESTION_ID = '33333333-3333-4333-8333-333333333333';
+
+function parseBackendQuestionInput(input: unknown) {
+  const parsed = backendQuestionInputOracle.parse(input);
+  const isChoice = parsed.kind === 'single_choice' || parsed.kind === 'multiple_choice';
+  if (
+    isChoice &&
+    (!parsed.options ||
+      new Set(parsed.options.map((option) => option.key)).size !== parsed.options.length ||
+      parsed.options.some((option) => !option.key || !option.label))
+  )
+    throw new Error('422: choice questions require 2-50 unique options');
+  return parsed;
+}
+
+function installQuestionServerOracle(initialQuestions: SurveyQuestion[]) {
+  const saved = new Map(initialQuestions.map((question) => [question.id, { ...question }]));
+  const surveyId = initialQuestions[0]?.survey_id ?? 'survey-1';
+
+  const validateBranches = (questions: SurveyQuestion[]) => {
+    for (const child of questions) {
+      if (child.branch_depth !== 1) continue;
+      const parent = questions.find(
+        (candidate) => candidate.id === child.branch_parent_question_id,
+      );
+      if (
+        !parent ||
+        parent.kind !== 'single_choice' ||
+        parent.branch_depth !== 0 ||
+        !parent.options?.some((option) => option.key === child.branch_trigger_option_key)
+      )
+        throw new Error('422: invalid question branch');
+    }
+  };
+
+  const fromInput = (id: string, input: ReturnType<typeof parseBackendQuestionInput>) =>
+    ({
+      id,
+      survey_id: surveyId,
+      kind: input.kind,
+      prompt: input.prompt,
+      is_required: input.is_required ?? false,
+      options: input.options ?? null,
+      rating_min: input.rating_min ?? null,
+      rating_max: input.rating_max ?? null,
+      rating_low_label: input.rating_low_label ?? null,
+      rating_high_label: input.rating_high_label ?? null,
+      sort_order: input.sort_order ?? 0,
+      branch_depth: input.branch_parent_question_id ? 1 : 0,
+      branch_parent_question_id: input.branch_parent_question_id ?? null,
+      branch_trigger_option_key: input.branch_trigger_option_key ?? null,
+    }) satisfies SurveyQuestion;
+
+  apiClient.mockImplementation(
+    async (method: string, path: string, request?: { body?: unknown }) => {
+      if (method === 'POST' && path === `/surveys/${surveyId}/questions`) {
+        const input = parseBackendQuestionInput(request?.body);
+        const created = fromInput(SERVER_CREATED_QUESTION_ID, input);
+        validateBranches([...saved.values(), created]);
+        saved.set(SERVER_CREATED_QUESTION_ID, created);
+        return { data: { id: SERVER_CREATED_QUESTION_ID } };
+      }
+
+      const questionId = path.match(/^\/surveys\/[^/]+\/questions\/([^/]+)$/)?.[1];
+      if (method === 'PATCH' && questionId && questionId !== 'reorder') {
+        const existing = saved.get(questionId);
+        if (!existing) throw new Error('404: question not found');
+        const input = parseBackendQuestionInput(request?.body);
+        let updated: SurveyQuestion = {
+          ...existing,
+          kind: input.kind,
+          prompt: input.prompt,
+          is_required: input.is_required ?? existing.is_required,
+          options: input.options ?? existing.options,
+          rating_min: input.rating_min ?? existing.rating_min,
+          rating_max: input.rating_max ?? existing.rating_max,
+          rating_low_label: input.rating_low_label ?? existing.rating_low_label,
+          rating_high_label: input.rating_high_label ?? existing.rating_high_label,
+          sort_order: input.sort_order ?? existing.sort_order,
+        };
+        if (input.kind !== 'single_choice' && input.kind !== 'multiple_choice')
+          updated = { ...updated, options: null };
+        if (input.branch_parent_question_id === null) {
+          updated = {
+            ...updated,
+            branch_depth: 0,
+            branch_parent_question_id: null,
+            branch_trigger_option_key: null,
+          };
+        } else if (input.branch_parent_question_id) {
+          updated = {
+            ...updated,
+            branch_depth: 1,
+            branch_parent_question_id: input.branch_parent_question_id,
+            branch_trigger_option_key:
+              input.branch_trigger_option_key ?? existing.branch_trigger_option_key,
+          };
+        }
+        validateBranches(
+          [...saved.values()].map((question) => (question.id === questionId ? updated : question)),
+        );
+        saved.set(questionId, updated);
+        return { data: { id: questionId } };
+      }
+
+      return { data: { id: 'question-1' } };
+    },
+  );
 }
 
 const survey: Survey = {
@@ -1076,7 +1208,7 @@ describe('Survey screens', () => {
       expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
     );
     const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
-    const parsed = surveyQuestionInputSchema.parse(sentBody);
+    const parsed = parseBackendQuestionInput(sentBody);
     const options = parsed.options ?? [];
 
     expect(options).toHaveLength(3);
@@ -1116,7 +1248,7 @@ describe('Survey screens', () => {
         expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
       );
       const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
-      const parsed = surveyQuestionInputSchema.parse(sentBody);
+      const parsed = parseBackendQuestionInput(sentBody);
       expect(parsed.options).toHaveLength(3);
     } finally {
       unmount?.();
@@ -1147,7 +1279,7 @@ describe('Survey screens', () => {
       expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
     );
     const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
-    const parsed = surveyQuestionInputSchema.parse(sentBody);
+    const parsed = parseBackendQuestionInput(sentBody);
     expect(parsed.options?.map((option) => option.key)).toEqual(
       initialOptions.slice(0, 2).map((option) => option.key),
     );
@@ -1176,54 +1308,157 @@ describe('Survey screens', () => {
     expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
   });
 
-  it('moves a child branch to the first remaining option when its trigger is removed', async () => {
-    const parent = survey.questions?.[0] as SurveyQuestion;
+  it.each(['draft-save', 'launch'] as const)(
+    'selects the first question with a blank option on %s',
+    async (action) => {
+      const parent = survey.questions?.[0] as SurveyQuestion;
+      const second: SurveyQuestion = {
+        ...parent,
+        id: 'question-2',
+        prompt: '다음 질문',
+        sort_order: 1,
+      };
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: [parent, second] }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('옵션 1'), { target: { value: '   ' } });
+      fireEvent.click(screen.getByText('Q2'));
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      await waitFor(() => expect(screen.getByLabelText('질문 제목')).toHaveValue(parent.prompt));
+      expect(await screen.findByText('옵션을 입력하세요.')).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['creates a new child branching on a newly added option', 'new-child'],
+    ['moves a saved child to a newly added option', 'saved-child'],
+    ['clears every child branch before changing its parent to text', 'clear-branch'],
+  ] as const)('saves valid branch states when it %s', async (_label, flow) => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const baseParent = {
+      ...(survey.questions?.[0] as SurveyQuestion),
+      id: parentId,
+    };
     const child: SurveyQuestion = {
-      ...parent,
-      id: 'question-2',
+      ...baseParent,
+      id: childId,
       prompt: '추가 질문',
       branch_depth: 1,
-      branch_parent_question_id: 'question-1',
+      branch_parent_question_id: parentId,
       branch_trigger_option_key: 'no',
       sort_order: 1,
     };
+    const initialQuestions = flow === 'new-child' ? [baseParent] : [baseParent, child];
+    installQuestionServerOracle(initialQuestions);
     renderWithQuery(
       <SurveyBuilder
-        survey={{
-          ...survey,
-          questions: [
-            {
-              ...parent,
-              options: [...(parent.options ?? []), { key: 'maybe', label: '모르겠어요' }],
-            },
-            child,
-          ],
-        }}
+        survey={{ ...survey, questions: initialQuestions }}
         canManage
         onBack={vi.fn()}
       />,
     );
 
-    expect(
-      screen.getByText('분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.'),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
-    fireEvent.click(screen.getByText('Q2'));
-    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    if (flow === 'new-child') {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: baseParent.prompt }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+    } else if (flow === 'saved-child') {
+      const branchNotice = screen.getByText(
+        '분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.',
+      );
+      expect(branchNotice).toHaveAttribute('id');
+      expect(screen.getByRole('button', { name: '옵션 2 삭제' })).toHaveAttribute(
+        'aria-describedby',
+        branchNotice.getAttribute('id'),
+      );
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+      fireEvent.click(screen.getByText('Q2'));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+    } else {
+      fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+      fireEvent.click(
+        await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.text }),
+      );
+      expect(
+        screen.queryByText(
+          '분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.',
+        ),
+      ).not.toBeInTheDocument();
+    }
 
-    await waitFor(() =>
-      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
-    );
-    expect(calls('PATCH', '/surveys/survey-1/questions/question-2')[0]?.[2].body).toMatchObject({
-      branch_trigger_option_key: 'yes',
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    const childPath = `/surveys/${survey.id}/questions/${flow === 'new-child' ? SERVER_CREATED_QUESTION_ID : childId}`;
+    await waitFor(() => {
+      const saveComplete =
+        screen.getByRole('button', { name: '초안 저장' }).hasAttribute('disabled') ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
     });
-    const childPatchIndex = apiClient.mock.calls.findIndex(
-      (call) => call[0] === 'PATCH' && call[1] === '/surveys/survey-1/questions/question-2',
-    );
-    const parentPatchIndex = apiClient.mock.calls.findIndex(
-      (call) => call[0] === 'PATCH' && call[1] === '/surveys/survey-1/questions/question-1',
-    );
-    expect(childPatchIndex).toBeLessThan(parentPatchIndex);
+
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childPatches = calls('PATCH', childPath);
+    expect(childPatches.length).toBeGreaterThan(0);
+    const finalChildBody = childPatches.at(-1)?.[2].body;
+
+    if (flow === 'new-child') {
+      const createBody = calls('POST', `/surveys/${survey.id}/questions`)[0]?.[2].body;
+      expect(createBody).not.toHaveProperty('branch_parent_question_id');
+      expect(createBody).not.toHaveProperty('branch_trigger_option_key');
+    }
+
+    if (flow === 'clear-branch') {
+      expect(childPatches).toHaveLength(1);
+      expect(finalChildBody).toMatchObject({ branch_parent_question_id: null });
+    } else {
+      const parentBody = calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`).at(-1)?.[2]
+        .body;
+      const addedKey = (parentBody as { options: Array<{ key: string }> }).options.at(-1)?.key;
+      expect(finalChildBody).toMatchObject({
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: addedKey,
+      });
+    }
+
+    const callIndex = (method: string, path: string, last = false) => {
+      const matches = apiClient.mock.calls
+        .map((call, index) => ({ call, index }))
+        .filter(({ call }) => call[0] === method && call[1] === path);
+      return matches[last ? matches.length - 1 : 0]?.index ?? -1;
+    };
+    const firstChildPatchIndex = callIndex('PATCH', childPath);
+    const finalChildPatchIndex = callIndex('PATCH', childPath, true);
+    const parentPatchIndex = callIndex('PATCH', `/surveys/${survey.id}/questions/${parentId}`);
+    if (flow === 'saved-child') {
+      expect(childPatches[0]?.[2].body).toMatchObject({ branch_parent_question_id: null });
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+      expect(finalChildPatchIndex).toBeGreaterThan(parentPatchIndex);
+    } else if (flow === 'clear-branch') {
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+    } else {
+      expect(firstChildPatchIndex).toBeGreaterThanOrEqual(0);
+      expect(firstChildPatchIndex).toBeGreaterThan(parentPatchIndex);
+    }
   });
 
   it('enforces the 50 option limit', () => {
