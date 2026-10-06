@@ -1,7 +1,7 @@
 import type { FindingDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { listTasks, linkTaskToFinding } = vi.hoisted(() => ({
   listTasks: vi.fn(),
@@ -52,11 +52,25 @@ const FINDING: FindingDto = {
 const dialogs = [
   {
     name: 'AddEvidenceModal',
-    render: () => <AddEvidenceModal findingId={FINDING.id} open onClose={vi.fn()} />,
+    render: () => (
+      <AddEvidenceModal
+        findingId={FINDING.id}
+        managedSystemId={FINDING.primary_managed_system_id}
+        open
+        onClose={vi.fn()}
+      />
+    ),
   },
   {
     name: 'LinkEvidenceModal',
-    render: () => <LinkEvidenceModal findingId={FINDING.id} open onClose={vi.fn()} />,
+    render: () => (
+      <LinkEvidenceModal
+        findingId={FINDING.id}
+        managedSystemId={FINDING.primary_managed_system_id}
+        open
+        onClose={vi.fn()}
+      />
+    ),
   },
   {
     name: 'LinkTaskModal',
@@ -68,6 +82,20 @@ describe('Finding dialog cancel variants', () => {
   beforeEach(() => {
     listTasks.mockReset().mockResolvedValue({ items: [] });
     linkTaskToFinding.mockReset();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ items: [], page: { has_more: false } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it.each(dialogs)('$name cancel action uses secondary styling', ({ render: renderDialog }) => {
