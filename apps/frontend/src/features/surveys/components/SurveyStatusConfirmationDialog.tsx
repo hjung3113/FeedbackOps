@@ -30,6 +30,7 @@ export function SurveyStatusConfirmationDialog({
   target,
   isPending,
   error,
+  saveError,
   onClose,
   onConfirm,
 }: {
@@ -37,10 +38,12 @@ export function SurveyStatusConfirmationDialog({
   target: 'open' | 'close';
   isPending: boolean;
   error: ApiError | null;
+  saveError?: string;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   const launch = target === 'open';
+  const errorMessage = saveError ?? (error ? messageFor(error, target) : null);
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && !isPending && onClose()}>
       <DialogContent data-testid={`survey-${target}-confirmation`}>
@@ -52,9 +55,9 @@ export function SurveyStatusConfirmationDialog({
             ? 'Survey 시작 시 응답 수집이 시작됩니다.'
             : 'Survey 종료 후에는 응답을 받을 수 없으며 다시 열 수 없습니다.'}
         </p>
-        {error && (
+        {errorMessage && (
           <p className="text-sm text-text-danger" role="alert">
-            {messageFor(error, target)}
+            {errorMessage}
           </p>
         )}
         <DialogFooter spacing="compact">

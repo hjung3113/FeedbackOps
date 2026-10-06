@@ -4,7 +4,9 @@ import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type RouterHistory,
   RouterProvider,
+  createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -40,6 +42,9 @@ const {
   routeQueryStubs: {
     surveys: undefined as (() => unknown) | undefined,
     survey: undefined as (() => unknown) | undefined,
+    search: {} as { builder?: boolean },
+    manageGate: undefined as (() => unknown) | undefined,
+    navigate: undefined as ((...args: unknown[]) => Promise<unknown>) | undefined,
   },
 }));
 vi.mock('@/lib/api', async (importOriginal) => ({
@@ -61,7 +66,8 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => {
   };
 });
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
-  useSurveyManageGate: () => ({ canManage: false, gateState: 'absent' as const }),
+  useSurveyManageGate: () =>
+    routeQueryStubs.manageGate?.() ?? { canManage: false, gateState: 'absent' as const },
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({
   useManagedSystemNamesResult: () => ({ namesById: new Map<string, string>(), isSuccess: true }),
@@ -76,11 +82,11 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   createFileRoute: () => () => ({
     useParams: () => ({ surveyId: 'survey-1' }),
-    useSearch: () => ({}),
+    useSearch: () => routeQueryStubs.search,
   }),
-  useSearch: () => ({}),
+  useSearch: () => routeQueryStubs.search,
   useMatchRoute: () => () => false,
-  useNavigate: () => () => Promise.resolve(),
+  useNavigate: () => routeQueryStubs.navigate ?? (() => Promise.resolve()),
 }));
 
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
@@ -178,7 +184,58 @@ function renderDetailWithRouter(
   );
 }
 
+function renderBuilderRouteWithRouter(
+  history: RouterHistory = createMemoryHistory({ initialEntries: ['/builder'] }),
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  routeQueryStubs.search = { builder: true };
+  routeQueryStubs.manageGate = () => ({ canManage: true });
+  routeQueryStubs.surveys = () => ({ data: [], isPending: false });
+  routeQueryStubs.survey = () => ({
+    data: survey,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    isFetching: false,
+  });
+  const root = createRootRoute();
+  const builder = createRoute({
+    getParentRoute: () => root,
+    path: '/builder',
+    component: SurveyDetailRoute,
+  });
+  const away = createRoute({
+    getParentRoute: () => root,
+    path: '/away',
+    component: () => <div data-testid="survey-builder-away">away</div>,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([builder, away]),
+    history,
+  });
+  routeQueryStubs.navigate = async (..._args: unknown[]) =>
+    router.navigate({ to: '/away' as never });
+  return {
+    router,
+    view: render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
 describe('Survey screens', () => {
+  afterEach(() => {
+    routeQueryStubs.surveys = undefined;
+    routeQueryStubs.survey = undefined;
+    routeQueryStubs.search = {};
+    routeQueryStubs.manageGate = undefined;
+    routeQueryStubs.navigate = undefined;
+  });
+
   beforeEach(() => {
     apiClient.mockReset();
     apiRequest.mockReset();
@@ -613,6 +670,75 @@ describe('Survey screens', () => {
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
   });
 
+  it('saves a newly added question before starting the Survey', async () => {
+    const serverQuestionIds: string[] = [];
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/surveys/survey-1/questions') {
+        const id = `server-question-${serverQuestionIds.length + 1}`;
+        serverQuestionIds.push(id);
+        return { data: { id } };
+      }
+      if (method === 'POST' && path === '/surveys/survey-1/open') {
+        if (serverQuestionIds.length === 0)
+          throw {
+            status: 422,
+            envelope: {
+              code: 'validation.failed',
+              message: 'survey requires a question',
+              detail: { fields: [{ path: ['questions'], code: 'required' }] },
+            },
+          };
+        return { data: { ...survey, status: 'open' } };
+      }
+      return { data: {} };
+    });
+    const onBack = vi.fn();
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
+    );
+
+    fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+    expect(serverQuestionIds).toEqual(['server-question-1']);
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1);
+    expect(
+      screen.queryByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the start confirmation open when saving the draft fails', async () => {
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/surveys/survey-1/questions')
+        throw new Error('question save failed');
+      return { data: {} };
+    });
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    expect(await screen.findByText('저장하지 못해 시작하지 않았습니다.')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+  });
+
   it('hides Launch when the builder survey is open', async () => {
     renderWithQuery(
       <SurveyBuilder survey={{ ...survey, status: 'open' }} canManage onBack={vi.fn()} />,
@@ -629,33 +755,120 @@ describe('Survey screens', () => {
     expect(screen.queryByRole('button', { name: 'Survey 시작' })).not.toBeInTheDocument();
   });
 
-  it('keeps the Launch confirmation open when a survey has no questions', async () => {
-    const onBack = vi.fn();
-    apiClient.mockRejectedValue({
-      status: 422,
-      envelope: {
-        code: 'validation.failed',
-        message: 'survey requires a question',
-        detail: { fields: [{ path: ['questions'], code: 'required' }] },
-      },
-    });
+  it('disables Survey start and explains how to proceed when there are no questions', () => {
     renderWithQuery(
-      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
-    fireEvent.click(
-      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
-        'survey-status-confirm',
-      ),
-    );
-
-    expect(
-      await screen.findByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
-    expect(onBack).not.toHaveBeenCalled();
+    const startButton = screen.getByRole('button', { name: 'Survey 시작' });
+    expect(startButton).toBeDisabled();
+    expect(startButton).toHaveAccessibleDescription('시작하려면 질문을 하나 이상 추가하세요.');
   });
+
+  it('keeps an untouched empty draft clean', () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+
+    expect(screen.queryByText('저장되지 않은 변경 사항')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
+  });
+
+  it.each(['back button', 'router navigation'] as const)(
+    'asks before leaving a dirty Survey builder through %s',
+    async (departure) => {
+      const { router } = renderBuilderRouteWithRouter();
+      await screen.findByTestId('survey-builder');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+        target: { value: '수정한 제목' },
+      });
+
+      const navigateAway = async () => {
+        if (departure === 'back button') {
+          fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+        } else {
+          await act(async () => {
+            void router.navigate({ to: '/away' as never });
+            await Promise.resolve();
+          });
+        }
+      };
+      await navigateAway();
+
+      expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+      await waitFor(() => expect(screen.queryByText('변경사항이 저장되지 않았습니다')).toBeNull());
+      expect(screen.getByTestId('survey-builder')).toBeInTheDocument();
+
+      await navigateAway();
+      expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '이동' }));
+      expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['clean', false],
+    ['dirty', true],
+  ] as const)('blocks browser unload only when the builder is %s', async (_state, isDirty) => {
+    const initialUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState(null, '', '/builder');
+    const browserHistory = createBrowserHistory();
+    const { router, view } = renderBuilderRouteWithRouter(browserHistory);
+
+    try {
+      await screen.findByTestId('survey-builder');
+      if (isDirty) {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+          target: { value: '수정한 제목' },
+        });
+      }
+
+      const beforeUnload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+
+      expect(beforeUnload.defaultPrevented).toBe(isDirty);
+    } finally {
+      view.unmount();
+      router.history.destroy();
+      window.history.replaceState(null, '', initialUrl);
+    }
+  });
+
+  it.each(['saved draft', 'started Survey'] as const)(
+    'leaves without a dirty warning after a successful %s',
+    async (action) => {
+      const { router } = renderBuilderRouteWithRouter();
+      await screen.findByTestId('survey-builder');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+        target: { value: '저장할 제목' },
+      });
+
+      if (action === 'saved draft') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled(),
+        );
+        await act(async () => {
+          void router.navigate({ to: '/away' as never });
+          await Promise.resolve();
+        });
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+      expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+      expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1);
+      if (action === 'started Survey')
+        expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1);
+    },
+  );
 
   it('shows a distinct Launch message for an invalid survey transition', async () => {
     apiClient.mockRejectedValue({

@@ -111,11 +111,13 @@ export function AppRail({
       // actor's screen is exactly the boundary a logout is meant to draw.
       // Wrapped rather than chained directly: navigate's return value is not
       // part of the contract we rely on here.
-      void Promise.resolve(navigate({ to: '/login', replace: true })).catch(() => {
-        // Only on failure: the success path unmounts this rail. Without this the
-        // menu item stays disabled forever and the user cannot retry.
-        setIsLoggingOut(false);
-      });
+      void Promise.resolve(navigate({ to: '/login', replace: true, ignoreBlocker: true })).catch(
+        () => {
+          // Only on failure: the success path unmounts this rail. Without this the
+          // menu item stays disabled forever and the user cannot retry.
+          setIsLoggingOut(false);
+        },
+      );
     }
   }
 

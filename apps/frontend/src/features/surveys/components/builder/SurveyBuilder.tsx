@@ -1,4 +1,5 @@
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { formatTime } from '@/lib/format/datetime';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { Button, Input, WorkbenchShell } from '@fops/ui';
@@ -58,12 +59,14 @@ export function SurveyBuilder({
   gateState,
   managedSystemNamesById,
   onBack,
+  onDirtyChange,
 }: {
   survey: Survey;
   canManage: boolean;
   gateState?: 'loading' | 'error' | 'absent';
   managedSystemNamesById?: ReadonlyMap<string, string> | undefined;
   onBack: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const {
     title,
@@ -83,13 +86,20 @@ export function SurveyBuilder({
     setLaunchOpen,
     launchPending,
     launchError,
+    launchSaveFailed,
     confirmLaunch,
     patch,
     add,
     remove,
     reorder,
     save,
-  } = useSurveyBuilderController({ survey, canManage, gateState, onBack });
+  } = useSurveyBuilderController({
+    survey,
+    canManage,
+    gateState,
+    onBack,
+    ...(onDirtyChange ? { onDirtyChange } : {}),
+  });
 
   const builderPage = (
     <main className="flex h-full flex-col bg-surface-canvas" data-testid="survey-builder">
@@ -147,10 +157,23 @@ export function SurveyBuilder({
         )}
         <PreviewPane survey={{ ...survey, questions }} open={preview} onOpenChange={setPreview} />
         {editable && (
-          <Button variant="default" size="sm" onClick={() => setLaunchOpen(true)}>
-            <Megaphone className="h-4 w-4" />
-            Survey 시작
-          </Button>
+          <>
+            {questions.length === 0 && (
+              <span id="survey-start-hint" className="text-xs text-text-muted">
+                {SURVEY_BUILDER_COPY.addQuestionBeforeLaunch}
+              </span>
+            )}
+            <Button
+              variant="default"
+              size="sm"
+              disabled={questions.length === 0}
+              {...(questions.length === 0 ? { 'aria-describedby': 'survey-start-hint' } : {})}
+              onClick={() => setLaunchOpen(true)}
+            >
+              <Megaphone className="h-4 w-4" />
+              Survey 시작
+            </Button>
+          </>
         )}
       </header>
       {!editable && (
@@ -208,6 +231,7 @@ export function SurveyBuilder({
         target="open"
         isPending={launchPending}
         error={launchError}
+        {...(launchSaveFailed ? { saveError: SURVEY_BUILDER_COPY.launchSaveFailed } : {})}
         onClose={() => setLaunchOpen(false)}
         onConfirm={confirmLaunch}
       />

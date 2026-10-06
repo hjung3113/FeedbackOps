@@ -176,7 +176,13 @@ describe('AppRail account menu', () => {
     openAccountMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/login',
+        replace: true,
+        ignoreBlocker: true,
+      }),
+    );
     expect(logout).toHaveBeenCalledOnce();
     expect(queryClient.clear).toHaveBeenCalledOnce();
     expect(calls).toEqual(['logout', 'clear', 'navigate']);
@@ -190,7 +196,11 @@ describe('AppRail account menu', () => {
     openAccountMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(
+        expect.objectContaining({ to: '/login', replace: true }),
+      ),
+    );
     expect(queryClient.getQueryData(['me'])).toBeUndefined();
   });
 
@@ -202,7 +212,11 @@ describe('AppRail account menu', () => {
     openAccountMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(
+        expect.objectContaining({ to: '/login', replace: true }),
+      ),
+    );
     expect(clear).toHaveBeenCalledOnce();
   });
 
