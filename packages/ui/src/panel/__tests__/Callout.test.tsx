@@ -67,6 +67,15 @@ describe('Callout — tone CSS variable mapping', () => {
     expect(screen.getByTestId('callout-icon').parentElement).toHaveClass(COLOR_CLASS[tone]);
     expect(screen.getByText('제목')).toHaveClass(TITLE_CLASS[tone]);
   });
+
+  it.each(tones)('tone="%s" colors the icon without a title', (tone) => {
+    render(
+      <Callout tone={tone} icon={<span data-testid="callout-icon" />}>
+        내용
+      </Callout>,
+    );
+    expect(screen.getByTestId('callout-icon').parentElement).toHaveClass(COLOR_CLASS[tone]);
+  });
 });
 
 describe('Callout — content rendering', () => {

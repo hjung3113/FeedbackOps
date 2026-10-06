@@ -141,7 +141,9 @@ describe('shadcn component variants', () => {
         <RadioGroupItem value="direct" />
       </RadioGroup>,
     );
-    expect(screen.getByRole('radiogroup')).toHaveClass('gap-1');
+    const group = screen.getByRole('radiogroup');
+    expect(group).toHaveClass('gap-1');
+    expect(group).not.toHaveClass('gap-2');
   });
 
   it.each([
@@ -154,6 +156,17 @@ describe('shadcn component variants', () => {
       </Popover>,
     );
     expect(screen.getByRole('dialog')).toHaveClass(expectedClass);
+  });
+
+  it('lets a caller padding class replace the PopoverContent default p-4', () => {
+    render(
+      <Popover open>
+        <PopoverContent className="p-3">Options</PopoverContent>
+      </Popover>,
+    );
+    const content = screen.getByRole('dialog');
+    expect(content).toHaveClass('p-3');
+    expect(content).not.toHaveClass('p-4');
   });
 
   it('preserves the Home filter track classes for ToggleGroup appearance=filter', () => {

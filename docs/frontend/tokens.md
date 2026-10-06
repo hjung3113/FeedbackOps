@@ -7,7 +7,10 @@ frontend component behavior — use `docs/frontend/README.md` and
 
 Values are Pack 17 light per ADR-0021. If a dark value is found, replace it
 with the ADR-0021 hex (`#f3f7fe` canvas, `#1428a0` accent, `#101828` text) and
-keep the token name. None are in this file today.
+keep the token name. None are in this file today. The Entity Icon table's
+`#e4f222` (Finding) and `#08090a` (dark foreground) are shipped Entity Icon
+colors (ADR-0060), not dark-theme leftovers; this replacement rule does not
+apply to them.
 
 Reference inspiration: Samsung One UI.
 
@@ -125,8 +128,8 @@ RGB-triplet tokens exposed as `text-entity-icon-foreground-light` and
 ### Detail Panel Kind Accent Tokens (#801)
 
 The VOC and Task kind accents have role tokens so their full-opacity color
-classes stay semantic. Other kinds use the existing `accent-success`,
-`accent-warn`, and `accent-info` theme keys where those meanings match.
+classes stay semantic. Other kinds reuse the existing accent key that resolves
+to the same palette color (`accent-success`, `accent-warn`, `accent-info`).
 
 | Role | Value | Token | Theme Utility |
 |------|-------|-------|---------------|

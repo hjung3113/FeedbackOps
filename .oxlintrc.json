@@ -21,7 +21,7 @@
             "allow": ["layout", "spacing"]
           },
           {
-            "pattern": "^(TabsList|ToggleGroup|RadioGroup|DialogFooter|TooltipContent|SelectContent|DropdownMenuContent|PopoverContent|CommandList|CommandGroup)$",
+            "pattern": "^(TabsList|ToggleGroup|RadioGroup|DialogFooter|AlertDialogFooter|TooltipContent|SelectContent|DropdownMenuContent|DropdownMenuSubContent|PopoverContent|HoverCardContent)$",
             "allow": ["layout"]
           },
           {
