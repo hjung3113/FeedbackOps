@@ -266,11 +266,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(actionHit, 'New milestone center does not hit the button').toBe(true);
   });
 
-  // Finding 2 — the badge consumed RGB-channel tokens with
-  // color:var(--status…) / color-mix(var(…)), both invalid CSS colors, so
-  // list and title badges rendered as plain black text on a transparent
-  // background. The expected values are derived from the token the page
-  // actually resolves, so only real CSS can pass.
+  // The badge text uses the AA-safe -label token while its tint and dot retain
+  // the base status token. Values come from the tokens the page actually
+  // resolves, so only real CSS can pass.
   test('cp-pixel: renders tinted status badges from real CSS tokens in list and detail', async ({
     page,
   }) => {
@@ -532,6 +530,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
       const dotCss = dotEl === null ? null : getComputedStyle(dotEl);
       return {
         tokenRgb: cs.getPropertyValue(tokenName).trim(),
+        labelRgb: cs.getPropertyValue(`${tokenName}-label`).trim(),
         color: cs.color,
         background: cs.backgroundColor,
         dot:
@@ -546,8 +545,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
       };
     }, token);
     const [r, g, b] = parseTriplet(css.tokenRgb);
-    // Text in the token color (alpha 1) — never inherited black.
-    expect(css.color).toBe(`rgb(${r}, ${g}, ${b})`);
+    const [labelR, labelG, labelB] = parseTriplet(css.labelRgb);
+    // Text in the AA-safe label token — never inherited black.
+    expect(css.color).toBe(`rgb(${labelR}, ${labelG}, ${labelB})`);
     // Compact prototype badge tint: token at 12% — never fully transparent.
     expect(css.background).toBe(`rgba(${r}, ${g}, ${b}, 0.12)`);
     // Prototype .badge-dot: 6×6 pill in the token color.
