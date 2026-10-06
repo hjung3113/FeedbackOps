@@ -64,7 +64,14 @@ export function QuestionEditor({
         />
       </label>
       {(question.kind === 'single_choice' || question.kind === 'multiple_choice') && (
-        <OptionsEditor question={question} editable={editable} onChange={set} />
+        <OptionsEditor
+          question={question}
+          editable={editable}
+          hasBranchedChildren={questions.some(
+            (candidate) => candidate.branch_parent_question_id === question.id,
+          )}
+          onChange={set}
+        />
       )}
       {question.kind === 'rating' && (
         <div className="grid grid-cols-2 gap-2">

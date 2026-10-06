@@ -87,6 +87,7 @@ export function SurveyBuilder({
     launchPending,
     launchError,
     launchSaveFailed,
+    launchOptionValidationFailed,
     confirmLaunch,
     patch,
     add,
@@ -231,7 +232,11 @@ export function SurveyBuilder({
         target="open"
         isPending={launchPending}
         error={launchError}
-        {...(launchSaveFailed ? { saveError: SURVEY_BUILDER_COPY.launchSaveFailed } : {})}
+        {...(launchOptionValidationFailed
+          ? { saveError: SURVEY_BUILDER_COPY.launchOptionValidationFailed }
+          : launchSaveFailed
+            ? { saveError: SURVEY_BUILDER_COPY.launchSaveFailed }
+            : {})}
         onClose={() => setLaunchOpen(false)}
         onConfirm={confirmLaunch}
       />

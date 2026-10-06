@@ -55,7 +55,33 @@ export async function saveSurveyDraft(deps: {
     }
   }
 
-  for (const persistedQuestion of persisted) {
+  const childBranchesFirst = new Set<string>();
+  for (const persistedParent of persisted) {
+    const currentParent = questionsRef.current.find(
+      (question) => question.id === persistedParent.id,
+    );
+    if (!currentParent) continue;
+    const remainingKeys = new Set(currentParent.options?.map((option) => option.key) ?? []);
+    const removedKeys = new Set(
+      (persistedParent.options ?? [])
+        .map((option) => option.key)
+        .filter((key) => !remainingKeys.has(key)),
+    );
+    if (removedKeys.size === 0) continue;
+    for (const persistedChild of persisted) {
+      if (
+        persistedChild.branch_parent_question_id === persistedParent.id &&
+        persistedChild.branch_trigger_option_key &&
+        removedKeys.has(persistedChild.branch_trigger_option_key)
+      )
+        childBranchesFirst.add(persistedChild.id);
+    }
+  }
+  const persistedUpdateOrder = [
+    ...persisted.filter((question) => childBranchesFirst.has(question.id)),
+    ...persisted.filter((question) => !childBranchesFirst.has(question.id)),
+  ];
+  for (const persistedQuestion of persistedUpdateOrder) {
     let current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
     if (!current || questionSignature(current) === questionSignature(persistedQuestion)) continue;
     let sentSignature = questionSignature(current);

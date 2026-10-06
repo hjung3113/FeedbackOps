@@ -1,7 +1,7 @@
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/index';
-import { surveyQuestionKindSchema } from '@fops/shared';
+import { surveyQuestionInputSchema, surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   type RouterHistory,
@@ -1062,6 +1062,179 @@ describe('Survey screens', () => {
     });
     await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
+  });
+
+  it('adds a choice option with a unique key and saves a valid question input', async () => {
+    const initialOptions = survey.questions?.[0]?.options ?? [];
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+    expect(screen.getByLabelText('옵션 3')).toHaveValue('옵션 3');
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+    const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+    const parsed = surveyQuestionInputSchema.parse(sentBody);
+    const options = parsed.options ?? [];
+
+    expect(options).toHaveLength(3);
+    expect(options.slice(0, 2).map((option) => option.key)).toEqual(
+      initialOptions.map((option) => option.key),
+    );
+    expect(options[2]?.label).toBe('옵션 3');
+    expect(new Set(options.map((option) => option.key)).size).toBe(3);
+  });
+
+  it.each([
+    [
+      'getRandomValues only',
+      {
+        getRandomValues: (values: Uint32Array) => {
+          values.set([1, 2, 3, 4]);
+          return values;
+        },
+      },
+    ],
+    ['crypto unavailable', undefined],
+  ] as const)('adds an option when %s', async (_label, cryptoValue) => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    let unmount: (() => void) | undefined;
+    try {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: cryptoValue,
+      });
+      unmount = renderWithQuery(
+        <SurveyBuilder survey={survey} canManage onBack={vi.fn()} />,
+      ).unmount;
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+      await waitFor(() =>
+        expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+      );
+      const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+      const parsed = surveyQuestionInputSchema.parse(sentBody);
+      expect(parsed.options).toHaveLength(3);
+    } finally {
+      unmount?.();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      else Reflect.deleteProperty(globalThis, 'crypto');
+    }
+  });
+
+  it('removes options down to two while preserving the remaining keys', async () => {
+    const parent = survey.questions?.[0] as SurveyQuestion;
+    const initialOptions = [...(parent.options ?? []), { key: 'maybe', label: '잘 모르겠어요' }];
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [{ ...parent, options: initialOptions }] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '옵션 3 삭제' }));
+    expect(screen.getByLabelText('옵션 1')).toHaveValue('예');
+    expect(screen.getByLabelText('옵션 2')).toHaveValue('아니오');
+    expect(screen.getByRole('button', { name: '옵션 1 삭제' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '옵션 2 삭제' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+    const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+    const parsed = surveyQuestionInputSchema.parse(sentBody);
+    expect(parsed.options?.map((option) => option.key)).toEqual(
+      initialOptions.slice(0, 2).map((option) => option.key),
+    );
+  });
+
+  it('shows empty option errors and blocks saving or launching invalid questions', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('옵션 1'), { target: { value: '   ' } });
+    expect(await screen.findByText('옵션을 입력하세요.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+    expect(await screen.findByText('빈 옵션을 채운 후 다시 시작하세요.')).toBeInTheDocument();
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+  });
+
+  it('moves a child branch to the first remaining option when its trigger is removed', async () => {
+    const parent = survey.questions?.[0] as SurveyQuestion;
+    const child: SurveyQuestion = {
+      ...parent,
+      id: 'question-2',
+      prompt: '추가 질문',
+      branch_depth: 1,
+      branch_parent_question_id: 'question-1',
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{
+          ...survey,
+          questions: [
+            {
+              ...parent,
+              options: [...(parent.options ?? []), { key: 'maybe', label: '모르겠어요' }],
+            },
+            child,
+          ],
+        }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-2')[0]?.[2].body).toMatchObject({
+      branch_trigger_option_key: 'yes',
+    });
+    const childPatchIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'PATCH' && call[1] === '/surveys/survey-1/questions/question-2',
+    );
+    const parentPatchIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'PATCH' && call[1] === '/surveys/survey-1/questions/question-1',
+    );
+    expect(childPatchIndex).toBeLessThan(parentPatchIndex);
+  });
+
+  it('enforces the 50 option limit', () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    for (let index = 0; index < 48; index += 1) {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+    }
+
+    expect(screen.getAllByLabelText(/^옵션 \d+$/)).toHaveLength(50);
+    expect(screen.getByRole('button', { name: '옵션 추가' })).toBeDisabled();
   });
 
   it('AC-3 saves the distinct survey title with one scalar PATCH', async () => {
