@@ -4,9 +4,11 @@ import * as React from 'react';
 import { cn } from '../../utils/cn.js';
 
 type RadioGroupAppearance = 'default' | 'segmented';
+type RadioGroupSpacing = 'default' | 'compact';
 
 interface RadioGroupProps extends React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> {
   appearance?: RadioGroupAppearance;
+  spacing?: RadioGroupSpacing;
 }
 
 interface RadioGroupItemProps
@@ -17,6 +19,10 @@ interface RadioGroupItemProps
 const RADIO_GROUP_APPEARANCE_CLASSES: Record<Exclude<RadioGroupAppearance, 'default'>, string> = {
   segmented:
     'inline-flex h-auto w-auto items-center justify-start gap-0.5 rounded-md bg-surface-canvas p-0.5 text-text-muted shadow-subtle',
+};
+
+const RADIO_GROUP_SPACING_CLASSES: Record<Exclude<RadioGroupSpacing, 'default'>, string> = {
+  compact: 'gap-1',
 };
 
 const RADIO_GROUP_ITEM_APPEARANCE_CLASSES: Record<
@@ -30,12 +36,13 @@ const RADIO_GROUP_ITEM_APPEARANCE_CLASSES: Record<
 export const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
   RadioGroupProps
->(({ className, appearance = 'default', ...props }, ref) => {
+>(({ className, appearance = 'default', spacing = 'default', ...props }, ref) => {
   return (
     <RadioGroupPrimitive.Root
       className={cn(
         'grid gap-2',
         appearance !== 'default' && RADIO_GROUP_APPEARANCE_CLASSES[appearance],
+        spacing !== 'default' && RADIO_GROUP_SPACING_CLASSES[spacing],
         className,
       )}
       {...props}

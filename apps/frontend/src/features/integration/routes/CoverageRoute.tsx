@@ -215,24 +215,26 @@ export function CoverageRoute(): React.ReactElement {
                   {GLOSSARY.filter}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="space-y-1.5">
-                <Label htmlFor="coverage-filter-managed-system">Managed System</Label>
-                <Select value={managedSystem ?? 'all'} onValueChange={handleFilterChange}>
-                  <SelectTrigger
-                    id="coverage-filter-managed-system"
-                    data-testid="coverage-filter-managed-system"
-                  >
-                    <SelectValue placeholder="전체 Managed System" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체 Managed System</SelectItem>
-                    {(systemsQuery.data?.items ?? []).map((system) => (
-                      <SelectItem key={system.id} value={system.id}>
-                        {system.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <PopoverContent align="end">
+                <div className="space-y-1.5">
+                  <Label htmlFor="coverage-filter-managed-system">Managed System</Label>
+                  <Select value={managedSystem ?? 'all'} onValueChange={handleFilterChange}>
+                    <SelectTrigger
+                      id="coverage-filter-managed-system"
+                      data-testid="coverage-filter-managed-system"
+                    >
+                      <SelectValue placeholder="전체 Managed System" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 Managed System</SelectItem>
+                      {(systemsQuery.data?.items ?? []).map((system) => (
+                        <SelectItem key={system.id} value={system.id}>
+                          {system.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </PopoverContent>
             </Popover>
             <Button variant="subtle" size="sm" onClick={refresh} data-testid="coverage-refresh">

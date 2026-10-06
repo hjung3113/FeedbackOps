@@ -7,7 +7,10 @@ frontend component behavior — use `docs/frontend/README.md` and
 
 Values are Pack 17 light per ADR-0021. If a dark value is found, replace it
 with the ADR-0021 hex (`#f3f7fe` canvas, `#1428a0` accent, `#101828` text) and
-keep the token name. None are in this file today.
+keep the token name. None are in this file today. The Entity Icon table's
+`#e4f222` (Finding) and `#08090a` (dark foreground) are shipped Entity Icon
+colors (ADR-0060), not dark-theme leftovers; this replacement rule does not
+apply to them.
 
 Reference inspiration: Samsung One UI.
 
@@ -101,6 +104,37 @@ tint to the 8-bit color a browser paints; every label still clears 4.5:1 there.
 | Looker Scope | `#02b8cc` | `--managed-system-looker` | Looker identity mark background; show its name beside the mark. |
 | Metabase Scope | `#27a644` | `--managed-system-metabase` | Metabase identity mark background; show its name beside the mark. |
 | Default Scope | `#667083` | `--managed-system-default` | Neutral fallback for unknown Managed System slugs. |
+
+### Entity Icon Tokens (#801)
+
+Entity Icon marks use their own tokens, even when a hue matches a Managed
+System identity mark. These tokens describe object types and do not alias
+Managed System identity tokens.
+
+| Entity Type | Background | Token | Foreground Token |
+|-------------|------------|-------|------------------|
+| VOC | `#5e6ad2` | `--entity-icon-voc` | `--entity-icon-foreground-light` |
+| Evidence | `#02b8cc` | `--entity-icon-evidence` | `--entity-icon-foreground-light` |
+| Finding | `#e4f222` | `--entity-icon-finding` | `--entity-icon-foreground-dark` |
+| Task Request | `#f2c46d` | `--entity-icon-request` | `--entity-icon-foreground-dark` |
+| Task | `#27a644` | `--entity-icon-task` | `--entity-icon-foreground-light` |
+| Survey / Outcome | `#8b5cf6` | `--entity-icon-survey` | `--entity-icon-foreground-light` |
+
+The light foreground is `#ffffff`; the dark foreground is `#08090a`. Both are
+RGB-triplet tokens exposed as `text-entity-icon-foreground-light` and
+`text-entity-icon-foreground-dark`. The background tokens are exposed as
+`bg-entity-icon-*` utilities.
+
+### Detail Panel Kind Accent Tokens (#801)
+
+The VOC and Task kind accents have role tokens so their full-opacity color
+classes stay semantic. Other kinds reuse the existing accent key that resolves
+to the same palette color (`accent-success`, `accent-warn`, `accent-info`).
+
+| Role | Value | Token | Theme Utility |
+|------|-------|-------|---------------|
+| VOC detail kind | `#1428a0` | `--accent-voc` | `accent-voc` |
+| Task detail kind | `#6a8dff` | `--accent-task` | `accent-task` |
 
 ## Tokens — Typography
 

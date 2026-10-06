@@ -4,22 +4,36 @@ import userEvent from '@testing-library/user-event';
 import { DetailPanelHeader } from '../DetailPanelHeader.js';
 import type { DetailPanelKind } from '../DetailPanelHeader.js';
 
-// #525: the tokens are raw RGB triplets — a bare `var(--color-X)` is not a
-// valid CSS color, so the component wraps it in `rgb(...)`. This map's exact
-// string values ARE the regression guard: if the component reverts to the
-// bare form, this test fails even though jsdom's CSSOM echoes either form
-// back from `.style.backgroundColor` without validating it (var() references
-// are unresolved at parse time, so jsdom can't tell the bare form is
-// invalid on its own — matching the literal fixed string is what catches it).
-const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc: 'rgb(var(--color-aether-blue))',
-  finding: 'rgb(var(--color-emerald))',
-  task: 'rgb(var(--color-amethyst))',
-  task_request: 'rgb(var(--color-amber))',
-  survey: 'rgb(var(--color-cyan-spark))',
-  cluster: 'rgb(var(--color-amber))',
-  milestone: 'rgb(var(--color-amber))',
-};
+// #525: the tokens are raw RGB triplets, so tint CSS needs an `rgb(...)`
+// wrapper. The exact tint assertion below catches a bare `var(--color-X)`,
+// which jsdom's CSSOM does not validate when reading the style back.
+type KindAccent = { token: string; bgClass: string; textClass: string };
+
+const KIND_ACCENT = {
+  voc: { token: '--color-aether-blue', bgClass: 'bg-accent-voc', textClass: 'text-accent-voc' },
+  finding: {
+    token: '--color-emerald',
+    bgClass: 'bg-accent-success',
+    textClass: 'text-accent-success',
+  },
+  task: { token: '--color-amethyst', bgClass: 'bg-accent-task', textClass: 'text-accent-task' },
+  task_request: {
+    token: '--color-amber',
+    bgClass: 'bg-accent-warn',
+    textClass: 'text-accent-warn',
+  },
+  survey: {
+    token: '--color-cyan-spark',
+    bgClass: 'bg-accent-info',
+    textClass: 'text-accent-info',
+  },
+  cluster: { token: '--color-amber', bgClass: 'bg-accent-warn', textClass: 'text-accent-warn' },
+  milestone: {
+    token: '--color-amber',
+    bgClass: 'bg-accent-warn',
+    textClass: 'text-accent-warn',
+  },
+} satisfies Record<DetailPanelKind, KindAccent>;
 
 const KIND_LABELS: Record<DetailPanelKind, string> = {
   voc: 'VOC',
@@ -45,7 +59,7 @@ describe('DetailPanelHeader — kind accent stripe', () => {
   }
 
   for (const kind of kinds.filter((kind) => kind !== 'milestone')) {
-    it(`kind="${kind}" accent stripe has correct CSS variable background`, () => {
+    it(`kind="${kind}" accent stripe uses the kind token class`, () => {
       const { container } = render(
         <DetailPanelHeader kind={kind} id="V-1024" onClose={() => {}} />,
       );
@@ -54,9 +68,7 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       expect(header).not.toBeNull();
       const stripe = header?.querySelector('[aria-hidden="true"]') as HTMLElement | null;
       expect(stripe).not.toBeNull();
-      expect((header as HTMLElement).style.getPropertyValue('--detail-panel-kind-accent')).toBe(
-        KIND_ACCENT[kind].replace(/\)$/, ' / 1)'),
-      );
+      expect(stripe).toHaveClass(KIND_ACCENT[kind].bgClass);
     });
   }
 });
@@ -68,11 +80,14 @@ describe('DetailPanelHeader — milestone kind badge', () => {
 
     expect(chip).toHaveClass('rounded');
     expect(chip).toHaveClass('text-tiny');
+    expect(chip).toHaveClass(KIND_ACCENT[kind].textClass);
     expect(chip).not.toHaveClass('uppercase');
-    expect(chip.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    const dot = chip.querySelector('[aria-hidden="true"]');
+    expect(dot).not.toBeNull();
+    expect(dot).toHaveClass(KIND_ACCENT[kind].bgClass);
     const header = container.querySelector(`[data-kind="${kind}"]`) as HTMLElement;
     expect(header.style.getPropertyValue('--detail-panel-kind-tint')).toBe(
-      KIND_ACCENT[kind].replace(/\)$/, ' / 0.12)'),
+      `rgb(var(${KIND_ACCENT[kind].token}) / 0.12)`,
     );
     expect(container.querySelector(`[data-kind="${kind}"]`)).toBeInTheDocument();
   });

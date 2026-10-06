@@ -34,11 +34,11 @@ export function TaskBoardGroupByButton({
           그룹화
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="그룹화 옵션" className="w-52 p-1">
+      <PopoverContent align="end" aria-label="그룹화 옵션" padding="compact" className="w-52">
         <RadioGroup
           value={value}
           aria-label="그룹화"
-          className="gap-1"
+          spacing="compact"
           onValueChange={(next) => {
             onChange(next as TaskBoardGroupBy);
             setOpen(false);

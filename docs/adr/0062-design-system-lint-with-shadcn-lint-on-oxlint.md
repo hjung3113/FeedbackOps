@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted 2026-10-05; amended 2026-10-06 (#797, rollout complete). The owner asked for `@shadcn/lint`; the Oxlint host and the warn-plus-cap rollout follow
+Accepted 2026-10-05; amended 2026-10-06 (#797, rollout complete; #801, control contract). The owner asked for `@shadcn/lint`; the Oxlint host and the warn-plus-cap rollout follow
 the tool's own setup and adoption guides. Amends ADR-0007 ("Lint and format: Biome") by adding a second lint
 host scoped to design-system rules.
 
@@ -63,3 +63,7 @@ The boundary gained two allowances, both from the tool's own guidance:
 What is left after fixes and shared tokens/variants is an intentional single-use treatment, marked in place with
 `oxlint-disable-next-line shadcn/<rule> -- <reason>`. A reason names the concrete design need; review checks it.
 
+- #801 (2026-10-06): a later contract allows layout only on controls that own their internal spacing
+  (`TabsList`, `ToggleGroup`, `RadioGroup`, `DialogFooter`, `AlertDialogFooter`, `TooltipContent`,
+  `SelectContent`, `DropdownMenuContent`, `DropdownMenuSubContent`, `PopoverContent`, and `HoverCardContent`);
+  true containers retain layout and spacing.

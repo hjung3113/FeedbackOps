@@ -86,7 +86,7 @@ export function MentionPickerButton({
           <span>멘션</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <PopoverContent padding="none" className="w-56" onOpenAutoFocus={(e) => e.preventDefault()}>
         {/* Search input */}
         <div className="border-b border-border-subtle px-3 py-2">
           <input

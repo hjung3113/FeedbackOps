@@ -27,12 +27,20 @@ const RING_ALPHA: Record<CalloutTone, string> = {
   emerald: '0.2',
 };
 
-const TITLE_VAR: Record<CalloutTone, string> = {
-  amber: '--text-warning-label',
-  red: '--text-danger-label',
-  blue: '--text-secondary',
-  cyan: '--text-secondary',
-  emerald: '--text-secondary',
+const COLOR_CLASS: Record<CalloutTone, string> = {
+  amber: 'text-accent-warn',
+  red: 'text-accent-danger',
+  blue: 'text-accent-primary',
+  cyan: 'text-accent-info',
+  emerald: 'text-accent-success',
+};
+
+const TITLE_CLASS: Record<CalloutTone, string> = {
+  amber: 'text-text-warning-label',
+  red: 'text-text-danger-label',
+  blue: 'text-text-secondary',
+  cyan: 'text-text-secondary',
+  emerald: 'text-text-secondary',
 };
 
 const tones = Object.keys(TONE_VAR) as CalloutTone[];
@@ -40,7 +48,7 @@ const tones = Object.keys(TONE_VAR) as CalloutTone[];
 describe('Callout — tone CSS variable mapping', () => {
   it.each(tones)('tone="%s" uses valid token colors for background, ring, and title', (tone) => {
     const { container } = render(
-      <Callout tone={tone} title="제목">
+      <Callout tone={tone} title="제목" icon={<span data-testid="callout-icon" />}>
         내용
       </Callout>,
     );
@@ -54,8 +62,19 @@ describe('Callout — tone CSS variable mapping', () => {
       `rgb(var(${TONE_VAR[tone]}) / ${RING_ALPHA[tone]}) 0 0 0 1px inset`,
     );
     expect(el.style.borderLeft).toBe('');
-    expect(el.style.getPropertyValue('--callout-color')).toBe(`rgb(var(${TONE_VAR[tone]}))`);
-    expect(el.style.getPropertyValue('--callout-title-color')).toBe(`rgb(var(${TITLE_VAR[tone]}))`);
+    expect(el.style.getPropertyValue('--callout-color')).toBe('');
+    expect(el.style.getPropertyValue('--callout-title-color')).toBe('');
+    expect(screen.getByTestId('callout-icon').parentElement).toHaveClass(COLOR_CLASS[tone]);
+    expect(screen.getByText('제목')).toHaveClass(TITLE_CLASS[tone]);
+  });
+
+  it.each(tones)('tone="%s" colors the icon without a title', (tone) => {
+    render(
+      <Callout tone={tone} icon={<span data-testid="callout-icon" />}>
+        내용
+      </Callout>,
+    );
+    expect(screen.getByTestId('callout-icon').parentElement).toHaveClass(COLOR_CLASS[tone]);
   });
 });
 
