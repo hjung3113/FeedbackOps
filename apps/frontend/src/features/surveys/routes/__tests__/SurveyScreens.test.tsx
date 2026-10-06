@@ -141,9 +141,13 @@ function parseBackendQuestionInput(input: unknown) {
   return parsed;
 }
 
-function installQuestionServerOracle(initialQuestions: SurveyQuestion[]) {
+function installQuestionServerOracle(
+  initialQuestions: SurveyQuestion[],
+  options: { rejectFirstPatchFor?: string } = {},
+) {
   const saved = new Map(initialQuestions.map((question) => [question.id, { ...question }]));
   const surveyId = initialQuestions[0]?.survey_id ?? 'survey-1';
+  let rejectedFirstPatch = false;
 
   const validateBranches = (questions: SurveyQuestion[]) => {
     for (const child of questions) {
@@ -191,6 +195,10 @@ function installQuestionServerOracle(initialQuestions: SurveyQuestion[]) {
 
       const questionId = path.match(/^\/surveys\/[^/]+\/questions\/([^/]+)$/)?.[1];
       if (method === 'PATCH' && questionId && questionId !== 'reorder') {
+        if (questionId === options.rejectFirstPatchFor && !rejectedFirstPatch) {
+          rejectedFirstPatch = true;
+          throw new Error('422: rejected once');
+        }
         const existing = saved.get(questionId);
         if (!existing) throw new Error('404: question not found');
         const input = parseBackendQuestionInput(request?.body);
@@ -1347,6 +1355,7 @@ describe('Survey screens', () => {
   it.each([
     ['creates a new child branching on a newly added option', 'new-child'],
     ['moves a saved child to a newly added option', 'saved-child'],
+    ['re-points a saved child after removing its trigger option', 'saved-trigger'],
     ['clears every child branch before changing its parent to text', 'clear-branch'],
   ] as const)('saves valid branch states when it %s', async (_label, flow) => {
     const parentId = '11111111-1111-4111-8111-111111111111';
@@ -1395,6 +1404,9 @@ describe('Survey screens', () => {
       fireEvent.click(screen.getByText('Q2'));
       fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
       fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+    } else if (flow === 'saved-trigger') {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
     } else {
       fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
       fireEvent.click(
@@ -1430,6 +1442,9 @@ describe('Survey screens', () => {
     if (flow === 'clear-branch') {
       expect(childPatches).toHaveLength(1);
       expect(finalChildBody).toMatchObject({ branch_parent_question_id: null });
+    } else if (flow === 'saved-trigger') {
+      expect(childPatches).toHaveLength(1);
+      expect(finalChildBody).toMatchObject({ branch_trigger_option_key: 'yes' });
     } else {
       const parentBody = calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`).at(-1)?.[2]
         .body;
@@ -1455,11 +1470,54 @@ describe('Survey screens', () => {
       expect(finalChildPatchIndex).toBeGreaterThan(parentPatchIndex);
     } else if (flow === 'clear-branch') {
       expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+    } else if (flow === 'saved-trigger') {
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
     } else {
       expect(firstChildPatchIndex).toBeGreaterThanOrEqual(0);
       expect(firstChildPatchIndex).toBeGreaterThan(parentPatchIndex);
     }
   });
+
+  it.each(['one rejected parent PATCH'] as const)(
+    'keeps a newly created child branch through a retry after %s',
+    async () => {
+      const parentId = '11111111-1111-4111-8111-111111111111';
+      const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+      installQuestionServerOracle([parent], { rejectFirstPatchFor: parentId });
+      renderWithQuery(
+        <SurveyBuilder survey={{ ...survey, questions: [parent] }} canManage onBack={vi.fn()} />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      expect(await screen.findByText('저장하지 못했습니다.')).toBeInTheDocument();
+      expect(calls('POST', `/surveys/${survey.id}/questions`)).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      const childPatches = calls(
+        'PATCH',
+        `/surveys/${survey.id}/questions/${SERVER_CREATED_QUESTION_ID}`,
+      );
+      expect(childPatches).toHaveLength(1);
+      const parentPatches = calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`);
+      const addedKey = (
+        parentPatches.at(-1)?.[2].body as { options: Array<{ key: string }> }
+      ).options.at(-1)?.key;
+      expect(childPatches.at(-1)?.[2].body).toMatchObject({
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: addedKey,
+      });
+    },
+  );
 
   it('enforces the 50 option limit', () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);

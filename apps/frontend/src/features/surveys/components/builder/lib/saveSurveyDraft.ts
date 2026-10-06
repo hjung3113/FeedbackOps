@@ -50,6 +50,16 @@ export async function saveSurveyDraft(deps: {
   const deferredBranchIds = new Set<string>();
   const deferredBranchSignatures = new Map<string, string>();
   const preUpdatedChildIds = new Set<string>();
+  const rememberSavedQuestion = (question: SurveyQuestion) => {
+    const index = savedQuestionsRef.current.findIndex((saved) => saved.id === question.id);
+    if (index < 0) {
+      savedQuestionsRef.current = [...savedQuestionsRef.current, question];
+      return;
+    }
+    savedQuestionsRef.current = savedQuestionsRef.current.map((saved, savedIndex) =>
+      savedIndex === index ? question : saved,
+    );
+  };
   const rememberSavedOptions = (question: SurveyQuestion) => {
     savedOptionKeys.set(question.id, new Set(question.options?.map((option) => option.key) ?? []));
   };
@@ -76,6 +86,7 @@ export async function saveSurveyDraft(deps: {
     const createQuestion = deferBranch ? clearBranch(current) : current;
     let sentSignature = questionSignature(createQuestion);
     const created = await mutations.create(toInput(createQuestion));
+    rememberSavedQuestion({ ...createQuestion, id: created.id });
     replaceLocalId(local.id, created.id);
     rememberSavedOptions({ ...createQuestion, id: created.id });
     if (deferBranch) deferredBranchIds.add(created.id);
@@ -86,6 +97,7 @@ export async function saveSurveyDraft(deps: {
       if (nextSignature === sentSignature) break;
       sentSignature = nextSignature;
       await mutations.update({ id: created.id, body: toInput(updateQuestion) });
+      rememberSavedQuestion(updateQuestion);
       rememberSavedOptions(updateQuestion);
       latest = questionsRef.current.find((question) => question.id === created.id);
     }
@@ -133,6 +145,7 @@ export async function saveSurveyDraft(deps: {
     let detached = clearBranch(current);
     let sentSignature = questionSignature(detached);
     await mutations.update({ id: childId, body: toUpdateInput(detached, persistedChild) });
+    rememberSavedQuestion(detached);
     rememberSavedOptions(detached);
     preUpdatedChildIds.add(childId);
     current = questionsRef.current.find((question) => question.id === childId);
@@ -142,6 +155,7 @@ export async function saveSurveyDraft(deps: {
       if (nextSignature === sentSignature) break;
       sentSignature = nextSignature;
       await mutations.update({ id: childId, body: toUpdateInput(detached, persistedChild) });
+      rememberSavedQuestion(detached);
       rememberSavedOptions(detached);
       current = questionsRef.current.find((question) => question.id === childId);
     }
@@ -179,6 +193,7 @@ export async function saveSurveyDraft(deps: {
         id: updateQuestion.id,
         body: toUpdateInput(updateQuestion, persistedQuestion),
       });
+      rememberSavedQuestion(updateQuestion);
       rememberSavedOptions(updateQuestion);
       current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
     }
@@ -202,6 +217,7 @@ export async function saveSurveyDraft(deps: {
       if (nextSignature === sentSignature) break;
       sentSignature = nextSignature;
       await mutations.update({ id: childId, body: toInput(current) });
+      rememberSavedQuestion(current);
       rememberSavedOptions(current);
       current = questionsRef.current.find((question) => question.id === childId);
     }
