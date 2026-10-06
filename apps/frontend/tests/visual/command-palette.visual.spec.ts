@@ -19,6 +19,18 @@ test.describe('/home command palette', () => {
     const dialog = page.getByRole('dialog', { name: '명령 메뉴' });
     await expect(dialog).toBeVisible();
 
+    // #799: `color: var(--text-muted)` on a raw RGB triplet was invalid CSS, so the
+    // group heading inherited the panel text color. The screenshot threshold is too
+    // loose to catch that, so pin the computed color to the muted token.
+    const { color, mutedRgb } = await dialog
+      .locator('[cmdk-group-heading]')
+      .first()
+      .evaluate((el) => ({
+        color: getComputedStyle(el).color,
+        mutedRgb: getComputedStyle(el).getPropertyValue('--text-muted').trim(),
+      }));
+    expect(color).toBe(`rgb(${mutedRgb.split(/\s+/).join(', ')})`);
+
     await expectVisual(page, dialog, 'command-palette-open.png');
   });
 

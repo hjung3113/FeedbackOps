@@ -79,7 +79,8 @@ color as label text.
 
 Ratios below are text contrast on the status's 12% base tint over these
 surfaces, in order: canvas, card, card-elevated, row-hover, row-selected, and
-detail. Detail resolves to the same color as card.
+detail. Detail resolves to the same color as card. The contrast test rounds the
+tint to the 8-bit color a browser paints; every label still clears 4.5:1 there.
 
 | Token | R G B | Hex | Ratios |
 |-------|-------|-----|--------|
@@ -87,7 +88,7 @@ detail. Detail resolves to the same color as card.
 | `--status-internal-todo-label` | `86 94 111` | `#565e6f` | `5.24 / 5.50 / 5.05 / 4.89 / 4.54 / 5.50` |
 | `--status-internal-doing-label` | `20 40 160` | `#1428a0` | `8.52 / 8.95 / 8.22 / 7.94 / 7.36 / 8.95` |
 | `--status-internal-review-label` | `15 71 255` | `#0f47ff` | `5.20 / 5.45 / 5.02 / 4.86 / 4.51 / 5.45` |
-| `--status-internal-done-label` | `16 110 70` | `#106e46` | `5.19 / 5.44 / 5.01 / 4.85 / 4.51 / 5.44` |
+| `--status-internal-done-label` | `16 108 69` | `#106c45` | `5.33 / 5.59 / 5.15 / 4.98 / 4.63 / 5.59` |
 | `--status-internal-released-label` | `0 104 139` | `#00688b` | `5.20 / 5.45 / 5.02 / 4.86 / 4.52 / 5.45` |
 | `--status-internal-reopened-label` | `178 32 43` | `#b2202b` | `5.23 / 5.49 / 5.04 / 4.87 / 4.51 / 5.49` |
 

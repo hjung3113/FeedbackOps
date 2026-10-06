@@ -153,7 +153,13 @@ describe('#799 internal Task status label contrast (WCAG AA)', () => {
       const baseHue = resolveRgb(props, `--status-internal-${status}`);
       const labelColor = resolveRgb(props, `--status-internal-${status}-label`);
       const surfaceColor = resolveRgb(props, surfaceToken);
-      const tintBackground = blend(baseHue, surfaceColor, 0.12);
+      // Browsers paint the tint as 8-bit sRGB: measure the rounded pixel, not the
+      // float blend (done-label once passed at 4.506 in float and painted 4.49).
+      const tintBackground = blend(baseHue, surfaceColor, 0.12).map(Math.round) as [
+        number,
+        number,
+        number,
+      ];
 
       expect(contrastRatio(labelColor, tintBackground)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
     },

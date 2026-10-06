@@ -450,7 +450,6 @@ packages/ui/src/components/shadcn/card.tsx format -- pre-existing on develop (me
 packages/ui/src/components/shadcn/toggle-group.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
 packages/ui/src/components/shadcn/toggle-group.tsx format -- pre-existing on develop (measured 2026-10-06); #783 only migrates component-variant props in this file
 packages/ui/src/badges/EntityIconBadge.tsx format -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
-packages/ui/src/badges/InternalTaskBadge.tsx format -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file

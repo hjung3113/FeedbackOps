@@ -120,7 +120,7 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--status-internal-todo-label', hex: '#565e6f', rgb: '86 94 111' },
   { tokenName: '--status-internal-doing-label', raw: 'var(--color-aether-blue)' },
   { tokenName: '--status-internal-review-label', hex: '#0f47ff', rgb: '15 71 255' },
-  { tokenName: '--status-internal-done-label', hex: '#106e46', rgb: '16 110 70' },
+  { tokenName: '--status-internal-done-label', hex: '#106c45', rgb: '16 108 69' },
   { tokenName: '--status-internal-released-label', hex: '#00688b', rgb: '0 104 139' },
   { tokenName: '--status-internal-reopened-label', hex: '#b2202b', rgb: '178 32 43' },
 
