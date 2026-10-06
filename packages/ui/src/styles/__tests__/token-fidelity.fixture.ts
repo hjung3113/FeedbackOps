@@ -20,6 +20,8 @@
  * same hue/saturation and the lightest HLS value that clears 4.5:1 on the
  * supported light surfaces, its 14% tint, and actual tinted badge row states.
  * The semantic base tokens remain.
+ * #799 (2026-10-06): internal Task status labels gained matching `-label`
+ * tokens measured on each status tint over every Task badge surface.
  */
 
 export interface TokenEntry {
@@ -114,6 +116,13 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--status-internal-done', raw: 'var(--color-emerald)' },
   { tokenName: '--status-internal-released', raw: 'var(--color-cyan-spark)' },
   { tokenName: '--status-internal-reopened', raw: 'var(--color-warning-red)' },
+  { tokenName: '--status-internal-backlog-label', hex: '#576276', rgb: '87 98 118' },
+  { tokenName: '--status-internal-todo-label', hex: '#565e6f', rgb: '86 94 111' },
+  { tokenName: '--status-internal-doing-label', raw: 'var(--color-aether-blue)' },
+  { tokenName: '--status-internal-review-label', hex: '#0f47ff', rgb: '15 71 255' },
+  { tokenName: '--status-internal-done-label', hex: '#106c45', rgb: '16 108 69' },
+  { tokenName: '--status-internal-released-label', hex: '#00688b', rgb: '0 104 139' },
+  { tokenName: '--status-internal-reopened-label', hex: '#b2202b', rgb: '178 32 43' },
 
   // --- Severity / signal tokens ---
   { tokenName: '--severity-low', raw: 'var(--color-storm-cloud)' },

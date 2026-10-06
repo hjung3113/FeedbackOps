@@ -155,7 +155,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<ReporterStatusBadge status>` | `<ReporterStatusBadge>` in `packages/ui/src/badges/` | shadcn `<Badge>` (pill variant — `rounded-full`) | `status: ReporterFacingStatus` (8 enum values) | 8 colors via `--status-reporter-*`; **always pill-shaped** — never collapses into squared |
-| `<InternalTaskBadge status>` | `<InternalTaskBadge>` in `packages/ui/src/badges/` | shadcn `<Badge>` (squared variant — `rounded-sm`) | `status: InternalTaskStatus` (7 enum values) | 7 colors via `--status-internal-*`; **always squared** — never inherits reporter pill tokens |
+| `<InternalTaskBadge status>` | `<InternalTaskBadge>` in `packages/ui/src/badges/` | shadcn `<Badge>` (squared variant — `rounded-sm`) | `status: InternalTaskStatus` (7 enum values) | 7 base tints via `--status-internal-*` with AA-safe label text via `--status-internal-*-label`; **always squared** — never inherits reporter pill tokens |
 | `<SeverityBadge severity>` | `<SeverityBadge>` in `packages/ui/src/badges/` | shadcn `<Badge>` (compact chip + `<SeverityIndicator>` bar prefix) | `severity: Severity` (4 enum) | 4 colors via `--severity-*` |
 | `<ManagedSystemPill id>` | `<ManagedSystemPill>` in `packages/ui/src/badges/` | shadcn `<Badge>` (variant outline + 6px round color dot) | `id: string` (resolves to `{ name, color, mark }` via `useManagedSystem(id)`) | 4 MSs in MVP fixtures; unknown id renders muted "Unknown MS" |
 | `<OutlineBadge>` | `<OutlineBadge>` in `packages/ui/src/badges/` | shadcn `<Badge variant="outline">` | `children`, `color?` | default |

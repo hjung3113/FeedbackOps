@@ -100,6 +100,14 @@
   --color-status-internal-done: rgb(var(--color-emerald));
   --color-status-internal-released: rgb(var(--color-cyan-spark));
   --color-status-internal-reopened: rgb(var(--color-warning-red));
+  /* #799: label TEXT uses the same hue, darkened for AA contrast; base keys stay the tint. */
+  --color-status-internal-backlog-label: rgb(var(--status-internal-backlog-label));
+  --color-status-internal-todo-label: rgb(var(--status-internal-todo-label));
+  --color-status-internal-doing-label: rgb(var(--status-internal-doing-label));
+  --color-status-internal-review-label: rgb(var(--status-internal-review-label));
+  --color-status-internal-done-label: rgb(var(--status-internal-done-label));
+  --color-status-internal-released-label: rgb(var(--status-internal-released-label));
+  --color-status-internal-reopened-label: rgb(var(--status-internal-reopened-label));
 
   /* --- Severity tokens --- */
   --color-severity-low: rgb(var(--color-storm-cloud));
