@@ -35,7 +35,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented | focus, selected, disabled | group label required |
-| TabsList / TabsTrigger | `appearance=segmented` | focus, selected, disabled | keyboard navigable; Tabs semantics preserved |
+| TabsList / TabsTrigger | default | focus, selected, disabled | keyboard navigable; Tabs semantics preserved |
 | ToggleGroup | `appearance=filter` | selected, unselected, disabled | group semantics preserved |
 | Tooltip | text, shortcut; `TooltipContent size=sm` | open, closed | not sole source of critical info |
 | Popover | menu, info, picker | open, focus-trapped when interactive | escape closes |

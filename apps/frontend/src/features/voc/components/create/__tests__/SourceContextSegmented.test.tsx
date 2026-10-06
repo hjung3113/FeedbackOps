@@ -1,82 +1,99 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-// Radix TabsTrigger activates on mousedown, not click.
+import type { SourceContext } from '@fops/shared';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { SourceContextSegmented } from '../SourceContextSegmented';
 
+const SOURCE_OPTIONS = [
+  ['direct_use', '직접 사용'],
+  ['proxy_report', '타인 대신 보고'],
+  ['operational_discovery', '운영 중 발견'],
+  ['stakeholder_request', '이해관계자 요청'],
+] as const satisfies readonly (readonly [SourceContext, string])[];
+
+interface RenderSourceContextOptions {
+  value: SourceContext;
+  onChange?: (next: SourceContext) => void;
+  disabled?: boolean;
+  testId?: string;
+}
+
+function renderSourceContext({
+  value,
+  onChange = () => {},
+  disabled,
+  testId,
+}: RenderSourceContextOptions) {
+  return render(
+    <>
+      <span id="source-context-label">출처</span>
+      <SourceContextSegmented
+        value={value}
+        onChange={onChange}
+        labelId="source-context-label"
+        {...(disabled === undefined ? {} : { disabled })}
+        {...(testId === undefined ? {} : { testId })}
+      />
+    </>,
+  );
+}
+
 describe('<SourceContextSegmented>', () => {
-  it('renders all 4 options', () => {
-    render(
-      <SourceContextSegmented
-        value="direct_use"
-        onChange={() => {}}
-      />,
+  it('renders four named radios in a group named 출처 with the current value checked', () => {
+    renderSourceContext({ value: 'direct_use' });
+
+    const group = screen.getByRole('radiogroup', { name: '출처' });
+    const radios = within(group).getAllByRole('radio');
+    expect(radios).toHaveLength(4);
+
+    for (const [, label] of SOURCE_OPTIONS) {
+      expect(within(group).getByRole('radio', { name: label })).toBeInTheDocument();
+    }
+    expect(within(group).getByRole('radio', { name: '직접 사용' })).toHaveAttribute(
+      'aria-checked',
+      'true',
     );
-    expect(screen.getByText('직접 사용')).toBeInTheDocument();
-    expect(screen.getByText('타인 대신 보고')).toBeInTheDocument();
-    expect(screen.getByText('운영 중 발견')).toBeInTheDocument();
-    expect(screen.getByText('이해관계자 요청')).toBeInTheDocument();
   });
 
-  it('renders as a compact icon segmented control instead of full-width tabs', () => {
-    render(
-      <SourceContextSegmented
-        value="direct_use"
-        onChange={() => {}}
-        testId="source-context-segmented"
-      />,
-    );
+  it('keeps the compact segmented control and icon test ids', () => {
+    renderSourceContext({ value: 'direct_use', testId: 'source-context-segmented' });
 
-    const control = screen.getByTestId('source-context-segmented');
-    expect(control.querySelector('[data-testid="source-context-list"]')).toHaveClass('inline-flex');
-    expect(control.querySelector('[data-testid="source-context-icon-direct_use"]')).toBeInTheDocument();
-    expect(control.querySelector('[data-testid="source-context-icon-proxy_report"]')).toBeInTheDocument();
+    const wrapper = screen.getByTestId('source-context-segmented');
+    const group = screen.getByTestId('source-context-list');
+    expect(wrapper).toContainElement(group);
+    expect(group).toHaveClass('inline-flex');
+    expect(screen.getByTestId('source-context-icon-direct_use')).toBeInTheDocument();
+    expect(screen.getByTestId('source-context-icon-proxy_report')).toBeInTheDocument();
   });
 
-  it('fires onChange with "proxy_report" when that tab is clicked', () => {
+  it.each(SOURCE_OPTIONS)('fires onChange with %s when selected', (value, label) => {
     const onChange = vi.fn();
-    render(
-      <SourceContextSegmented
-        value="direct_use"
-        onChange={onChange}
-      />,
-    );
-    fireEvent.mouseDown(screen.getByText('타인 대신 보고'));
-    expect(onChange).toHaveBeenCalledWith('proxy_report');
+    renderSourceContext({
+      value: value === 'direct_use' ? 'proxy_report' : 'direct_use',
+      onChange,
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: label }));
+    expect(onChange).toHaveBeenCalledWith(value);
   });
 
-  it('fires onChange with "operational_discovery" when that tab is clicked', () => {
+  it('selects the next value with ArrowRight from the checked radio', async () => {
     const onChange = vi.fn();
-    render(
-      <SourceContextSegmented
-        value="direct_use"
-        onChange={onChange}
-      />,
-    );
-    fireEvent.mouseDown(screen.getByText('운영 중 발견'));
-    expect(onChange).toHaveBeenCalledWith('operational_discovery');
+    renderSourceContext({ value: 'direct_use', onChange });
+
+    const user = userEvent.setup();
+    const checkedRadio = screen.getByRole('radio', { name: '직접 사용' });
+    await user.tab();
+    await waitFor(() => expect(document.activeElement).toBe(checkedRadio));
+    fireEvent.keyDown(checkedRadio, { key: 'ArrowRight', code: 'ArrowRight' });
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('proxy_report'));
   });
 
-  it('fires onChange with "stakeholder_request" when that tab is clicked', () => {
-    const onChange = vi.fn();
-    render(
-      <SourceContextSegmented
-        value="direct_use"
-        onChange={onChange}
-      />,
-    );
-    fireEvent.mouseDown(screen.getByText('이해관계자 요청'));
-    expect(onChange).toHaveBeenCalledWith('stakeholder_request');
-  });
+  it('disables all four radios when disabled', () => {
+    renderSourceContext({ value: 'direct_use', disabled: true });
 
-  it('fires onChange with "direct_use" when that tab is clicked', () => {
-    const onChange = vi.fn();
-    render(
-      <SourceContextSegmented
-        value="proxy_report"
-        onChange={onChange}
-      />,
-    );
-    fireEvent.mouseDown(screen.getByText('직접 사용'));
-    expect(onChange).toHaveBeenCalledWith('direct_use');
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(4);
+    for (const radio of radios) expect(radio).toBeDisabled();
   });
 });

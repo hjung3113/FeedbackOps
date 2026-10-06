@@ -164,7 +164,7 @@ These opt-in props encode repeated caller treatments. Their default values prese
 | RichContentRenderer | `size=sm` | Small rich-text rendering |
 | Skeleton | `shape=rounded` | Smaller-radius placeholder (`rounded`, 4px instead of the default `rounded-md` 6px) |
 | TooltipContent | `size=sm` | Small tooltip text |
-| TabsList / TabsTrigger | `appearance=segmented` | Source-context segmented track and triggers, with Tabs semantics preserved |
+| RadioGroup / RadioGroupItem | `appearance=segmented` | Source-context segmented track and triggers, with radio semantics preserved |
 | ToggleGroup | `appearance=filter` | Compact card-surface track for filter choices |
 | ToggleGroupItem | `appearance=selected-filter` | Selected filter uses the selected border, row background, text, and weight |
 | `ProgressMeter` | `size=thin`, `normal`; `clip` (clip the fill to the rounded track; off by default); primary, success, warning, danger tones; unannotated by default, decorative, or labeled `meter` / `progressbar` semantics | Value is expressed as fill width; decorative mode hides the track and fill from assistive technology |
