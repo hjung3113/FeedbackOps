@@ -47,7 +47,6 @@ export function SourceContextSegmented({
           }
         }}
         appearance="segmented"
-        orientation="horizontal"
         aria-labelledby={labelId}
         data-testid="source-context-list"
       >

@@ -77,17 +77,20 @@ describe('<SourceContextSegmented>', () => {
     expect(onChange).toHaveBeenCalledWith(value);
   });
 
-  it('selects the next value with ArrowRight from the checked radio', async () => {
-    const onChange = vi.fn();
-    renderSourceContext({ value: 'direct_use', onChange });
+  it.each(['ArrowRight', 'ArrowDown'])(
+    'selects the next value with %s from the checked radio',
+    async (key) => {
+      const onChange = vi.fn();
+      renderSourceContext({ value: 'direct_use', onChange });
 
-    const user = userEvent.setup();
-    const checkedRadio = screen.getByRole('radio', { name: '직접 사용' });
-    await user.tab();
-    await waitFor(() => expect(document.activeElement).toBe(checkedRadio));
-    fireEvent.keyDown(checkedRadio, { key: 'ArrowRight', code: 'ArrowRight' });
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith('proxy_report'));
-  });
+      const user = userEvent.setup();
+      const checkedRadio = screen.getByRole('radio', { name: '직접 사용' });
+      await user.tab();
+      await waitFor(() => expect(document.activeElement).toBe(checkedRadio));
+      fireEvent.keyDown(checkedRadio, { key, code: key });
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith('proxy_report'));
+    },
+  );
 
   it('disables all four radios when disabled', () => {
     renderSourceContext({ value: 'direct_use', disabled: true });

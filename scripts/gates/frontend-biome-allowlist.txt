@@ -422,10 +422,7 @@ packages/ui/src/components/shadcn/dropdown-menu.tsx format -- pre-existing on de
 packages/ui/src/components/shadcn/dropdown-menu.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/components/shadcn/hover-card.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/components/shadcn/popover.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
-packages/ui/src/components/shadcn/radio-group.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
-packages/ui/src/components/shadcn/radio-group.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/components/shadcn/select.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
-packages/ui/src/components/shadcn/tabs.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/entity/LinkedEntityTrail.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/entity/LinkedEntityTrail.tsx organizeImports -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
 packages/ui/src/panel/Callout.tsx format -- pre-existing on develop (measured 2026-10-03); #743 only renames Tailwind utilities in this file
@@ -457,9 +454,6 @@ packages/ui/src/badges/InternalTaskBadge.tsx format -- pre-existing on develop (
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
 packages/ui/src/badges/__tests__/EntityIconBadge.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #784 only extracts shared badge/structure components in this file
-apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx format -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
-apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx lint/style/useImportType -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
-apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx organizeImports -- pre-existing on develop (measured 2026-10-06); #797 only swaps this file's classes for the shared segmented appearance
 apps/backend/src/modules/attachments/routes.ts format -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
 apps/backend/src/modules/attachments/routes.ts lint/style/noNonNullAssertion -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
 apps/backend/src/modules/attachments/routes.ts organizeImports -- pre-existing on main (measured 2026-10-06 for the develop→main release gate); #770 only changed the multipart error handling in this file
