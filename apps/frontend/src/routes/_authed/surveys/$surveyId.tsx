@@ -3,14 +3,21 @@ import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail'
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
 import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import type { Survey } from '@/features/surveys/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
-import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
-import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { DirtyConfirmation, EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
+import {
+  Outlet,
+  createFileRoute,
+  useBlocker,
+  useMatchRoute,
+  useNavigate,
+} from '@tanstack/react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
 const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
@@ -23,6 +30,62 @@ export const Route = createFileRoute('/_authed/surveys/$surveyId')({
   validateSearch: validateSurveyDetailSearch,
   component: SurveyDetailRoute,
 });
+
+function SurveyBuilderWithDirtyConfirmation({
+  survey,
+  canManage,
+  gateState,
+  managedSystemNamesById,
+  onBack,
+}: {
+  survey: Survey;
+  canManage: boolean;
+  gateState?: 'loading' | 'error' | 'absent';
+  managedSystemNamesById: ReadonlyMap<string, string> | undefined;
+  onBack: () => void;
+}) {
+  const builderDirtyRef = useRef(false);
+  const [, setBuilderDirty] = useState(false);
+  const [dirtyDialogOpen, setDirtyDialogOpen] = useState(false);
+  const handleBuilderDirtyChange = useCallback((dirty: boolean) => {
+    builderDirtyRef.current = dirty;
+    setBuilderDirty(dirty);
+  }, []);
+  const blocker = useBlocker({
+    shouldBlockFn: () => builderDirtyRef.current,
+    withResolver: true,
+  });
+  useEffect(() => {
+    if (blocker.status === 'blocked') setDirtyDialogOpen(true);
+  }, [blocker.status]);
+  const confirmLeaveBuilder = () => {
+    setDirtyDialogOpen(false);
+    handleBuilderDirtyChange(false);
+    if (blocker.status === 'blocked' && blocker.proceed) blocker.proceed();
+  };
+  const cancelLeaveBuilder = () => {
+    setDirtyDialogOpen(false);
+    if (blocker.status === 'blocked' && blocker.reset) blocker.reset();
+  };
+
+  return (
+    <>
+      <SurveyBuilder
+        survey={survey}
+        canManage={canManage}
+        {...(gateState ? { gateState } : {})}
+        managedSystemNamesById={managedSystemNamesById}
+        onBack={onBack}
+        onDirtyChange={handleBuilderDirtyChange}
+      />
+      <DirtyConfirmation
+        open={dirtyDialogOpen}
+        onConfirm={confirmLeaveBuilder}
+        onCancel={cancelLeaveBuilder}
+      />
+    </>
+  );
+}
 
 export function SurveyDetailRoute() {
   const { surveyId } = Route.useParams();
@@ -85,7 +148,7 @@ export function SurveyDetailRoute() {
         </div>
       );
     return (
-      <SurveyBuilder
+      <SurveyBuilderWithDirtyConfirmation
         survey={query.data}
         canManage
         managedSystemNamesById={managedSystemNamesById}
