@@ -107,6 +107,19 @@
   --status-internal-released: var(--color-cyan-spark);
   --status-internal-reopened: var(--color-warning-red);
 
+  /* #799 Task status label text: preserve each status hue and tint the badge
+   * with its base token at 12%. Labels keep the same hue/saturation and lower
+   * HLS lightness only until they clear 4.5:1 on that tint over canvas, card,
+   * elevated card, hovered row, selected row, and detail. `doing` already
+   * clears on all six surfaces and keeps its base token as the label. */
+  --status-internal-backlog-label: 87 98 118; /* #576276 — 4.54:1 */
+  --status-internal-todo-label: 86 94 111; /* #565e6f — 4.54:1 */
+  --status-internal-doing-label: var(--color-aether-blue); /* #1428a0 — 7.36:1 */
+  --status-internal-review-label: 15 71 255; /* #0f47ff — 4.51:1 */
+  --status-internal-done-label: 16 110 70; /* #106e46 — 4.51:1 */
+  --status-internal-released-label: 0 104 139; /* #00688b — 4.52:1 */
+  --status-internal-reopened-label: 178 32 43; /* #b2202b — 4.51:1 */
+
   /* --- Severity / signal tokens --- */
   /* `-label` pairs follow the same #525 rationale as the reporter-status
    * tokens above: same hue, darkened only, until >=4.5:1 on a 12% tint. */

@@ -69,6 +69,28 @@ success `4.85 / 5.09 / 4.53 / 4.73`; warning `4.87 / 5.11 / 4.54 / 4.75`;
 danger `5.23 / 5.49 / 4.87 / 5.09`. Danger on the 12% tint over a selected row: `4.51`.
 Info has no current badge usage.
 
+### Task Status Label Tokens (#799)
+
+`InternalTaskBadge` uses each `--status-internal-*` base hue for its 12% tint
+and the paired `-label` token for text. Each label keeps the base hue and
+saturation and lowers HLS lightness only until it clears WCAG AA 4.5:1 on that
+tint over every Task badge surface. `doing` already clears and reuses its base
+color as label text.
+
+Ratios below are text contrast on the status's 12% base tint over these
+surfaces, in order: canvas, card, card-elevated, row-hover, row-selected, and
+detail. Detail resolves to the same color as card.
+
+| Token | R G B | Hex | Ratios |
+|-------|-------|-----|--------|
+| `--status-internal-backlog-label` | `87 98 118` | `#576276` | `5.23 / 5.48 / 5.05 / 4.89 / 4.54 / 5.48` |
+| `--status-internal-todo-label` | `86 94 111` | `#565e6f` | `5.24 / 5.50 / 5.05 / 4.89 / 4.54 / 5.50` |
+| `--status-internal-doing-label` | `20 40 160` | `#1428a0` | `8.52 / 8.95 / 8.22 / 7.94 / 7.36 / 8.95` |
+| `--status-internal-review-label` | `15 71 255` | `#0f47ff` | `5.20 / 5.45 / 5.02 / 4.86 / 4.51 / 5.45` |
+| `--status-internal-done-label` | `16 110 70` | `#106e46` | `5.19 / 5.44 / 5.01 / 4.85 / 4.51 / 5.44` |
+| `--status-internal-released-label` | `0 104 139` | `#00688b` | `5.20 / 5.45 / 5.02 / 4.86 / 4.52 / 5.45` |
+| `--status-internal-reopened-label` | `178 32 43` | `#b2202b` | `5.23 / 5.49 / 5.04 / 4.87 / 4.51 / 5.49` |
+
 ### Managed System Identity Tokens
 
 | Name | Value | Token | Role |

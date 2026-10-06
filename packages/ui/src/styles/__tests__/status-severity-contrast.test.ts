@@ -121,6 +121,45 @@ describe('#525 status/severity label contrast (WCAG AA)', () => {
   }
 });
 
+const internalTaskStatuses = [
+  'backlog',
+  'todo',
+  'doing',
+  'review',
+  'done',
+  'released',
+  'reopened',
+] as const;
+
+const internalTaskBadgeSurfaces = [
+  '--surface-canvas',
+  '--surface-card',
+  '--surface-card-elevated',
+  '--surface-row-hover',
+  '--surface-row-selected',
+  '--surface-detail',
+] as const;
+
+describe('#799 internal Task status label contrast (WCAG AA)', () => {
+  const props = parseCustomProps(TOKENS_CSS_PATH);
+
+  it.each(
+    internalTaskStatuses.flatMap((status) =>
+      internalTaskBadgeSurfaces.map((surfaceToken) => ({ status, surfaceToken })),
+    ),
+  )(
+    '--status-internal-$status-label clears 4.5:1 on its 12% tint over $surfaceToken',
+    ({ status, surfaceToken }) => {
+      const baseHue = resolveRgb(props, `--status-internal-${status}`);
+      const labelColor = resolveRgb(props, `--status-internal-${status}-label`);
+      const surfaceColor = resolveRgb(props, surfaceToken);
+      const tintBackground = blend(baseHue, surfaceColor, 0.12);
+
+      expect(contrastRatio(labelColor, tintBackground)).toBeGreaterThanOrEqual(WCAG_AA_TEXT);
+    },
+  );
+});
+
 const semanticTextLabelPairs = [
   ['success', '--text-success', '--text-success-label', [24, 168, 107]],
   ['info', '--text-info', '--text-info-label', [0, 169, 224]],

@@ -65,7 +65,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: rgb(var(--text-muted));
 }
 [cmdk-group] + [cmdk-group] {
   margin-top: 4px;
