@@ -14,6 +14,11 @@ import { Check, ChevronsUpDown } from 'lucide-react';
  *   searchPlaceholder — search input placeholder (optional, default "검색…")
  *   listboxLabel — accessible name for the options list (optional, default "옵션")
  *   emptyText — text shown when no options match (optional, default "결과 없음")
+ *   id — forwarded to the trigger button
+ *   aria-invalid — forwarded to the trigger button
+ *   aria-describedby — forwarded to the trigger button
+ *   onSearchChange — called when the search text changes
+ *   footerText — optional muted text shown below the listbox
  *   className — forwarded to the trigger button
  *
  * a11y:
@@ -39,6 +44,7 @@ export interface ComboboxProps {
   searchPlaceholder?: string;
   listboxLabel?: string;
   emptyText?: string;
+  footerText?: string;
   className?: string;
   id?: string;
   'aria-invalid'?: boolean;
@@ -56,6 +62,7 @@ export function Combobox({
   searchPlaceholder = '검색…',
   listboxLabel = '옵션',
   emptyText = '결과 없음',
+  footerText,
   className,
   id,
   'aria-invalid': ariaInvalid,
@@ -247,6 +254,11 @@ export function Combobox({
             ))
           )}
         </ul>
+        {footerText && (
+          <p className="border-t border-border-subtle px-3 py-2 text-xs text-text-muted">
+            {footerText}
+          </p>
+        )}
       </PopoverContent>
     </Popover>
   );

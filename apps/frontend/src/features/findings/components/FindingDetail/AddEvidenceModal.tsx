@@ -123,6 +123,16 @@ export function AddEvidenceModal({
     });
   }
 
+  function handleInvalidSubmit(): void {
+    const sourceId = form.getValues('source_id');
+    if (form.getValues('source_type') === 'voc' && (sourceId == null || sourceId === '')) {
+      form.setError('source_id', {
+        type: 'required',
+        message: VOC_SOURCE_PICKER_COPY.required,
+      });
+    }
+  }
+
   const isSubmitting = mutation.isPending;
 
   return (
@@ -139,7 +149,7 @@ export function AddEvidenceModal({
 
         <form
           id="add-evidence-form"
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
           noValidate
           className="flex flex-col gap-4"
         >
@@ -150,11 +160,13 @@ export function AddEvidenceModal({
             </FieldLabel>
             <Select
               defaultValue="note"
-              onValueChange={(val) =>
+              onValueChange={(val) => {
                 form.setValue('source_type', val as EvidenceHighlightSourceType, {
                   shouldValidate: true,
-                })
-              }
+                });
+                form.setValue('source_id', null);
+                form.clearErrors('source_id');
+              }}
             >
               <SelectTrigger id="evidence-source-type" data-testid="evidence-source-type-select">
                 <SelectValue placeholder="소스 유형 선택" />

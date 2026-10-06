@@ -68,6 +68,15 @@ export function LinkEvidenceModal({
     });
   }
 
+  function handleInvalidSubmit(): void {
+    if (form.getValues('source_id') === '') {
+      form.setError('source_id', {
+        type: 'required',
+        message: VOC_SOURCE_PICKER_COPY.required,
+      });
+    }
+  }
+
   const isSubmitting = mutation.isPending;
 
   return (
@@ -84,7 +93,7 @@ export function LinkEvidenceModal({
 
         <form
           id="link-evidence-form"
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
           noValidate
           className="flex flex-col gap-4"
         >

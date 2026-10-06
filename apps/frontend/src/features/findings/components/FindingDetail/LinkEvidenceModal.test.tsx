@@ -41,6 +41,32 @@ afterEach(() => {
 });
 
 describe('LinkEvidenceModal', () => {
+  it('shows VOC-specific required copy when nothing is selected', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [], page: { has_more: false } })),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <LinkEvidenceModal
+          findingId={FINDING_ID}
+          managedSystemId={MANAGED_SYSTEM_ID}
+          open
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByTestId('link-evidence-submit'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('VOC를 선택하세요.');
+  });
+
   it('uses a searchable VOC picker and submits the selected VOC id', async () => {
     const user = userEvent.setup();
     let submittedBody: string | null = null;

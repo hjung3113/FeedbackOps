@@ -10,6 +10,8 @@ export const VOC_SOURCE_PICKER_COPY = {
   listboxLabel: 'VOC 목록',
   emptyText: '검색 결과가 없습니다.',
   empty: '선택할 수 있는 VOC가 없습니다.',
+  required: 'VOC를 선택하세요.',
+  limitHint: '최근 100건만 표시됩니다. 이전 VOC는 VOC ID로 검색하세요.',
   loading: 'VOC 목록을 불러오는 중입니다.',
   error: 'VOC 목록을 불러오지 못했습니다.',
   resolving: 'VOC를 확인하고 있습니다.',
