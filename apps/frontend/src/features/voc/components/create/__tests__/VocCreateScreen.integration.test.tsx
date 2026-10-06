@@ -13,7 +13,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // ── Mock modules ──────────────────────────────────────────────────────────────
@@ -333,8 +333,11 @@ describe('VocCreateScreen integration', () => {
     expect(screen.getByText('Analytics Area는 VOC를 분석할 때 함께 볼 주제에 맞춰 선택하세요.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
-    // Radix TabsTrigger activates on mousedown, not click.
-    fireEvent.mouseDown(screen.getByRole('tab', { name: '타인 대신 보고' }));
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: '출처' })).getByRole('radio', {
+        name: '타인 대신 보고',
+      }),
+    );
     await waitFor(() => expect(screen.getByTestId('aa-picker')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('radio', { name: AA_ITEM.name }));
     fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), { target: { value: '분류와 출처가 독립적인 VOC' } });

@@ -2,9 +2,9 @@
 import { render, screen } from '@testing-library/react';
 import { Card, CardContent } from '../card.js';
 import { DialogFooter } from '../dialog.js';
+import { RadioGroup, RadioGroupItem } from '../radio-group.js';
 import { Select, SelectTrigger, SelectValue } from '../select.js';
 import { Skeleton } from '../skeleton.js';
-import { Tabs, TabsList, TabsTrigger } from '../tabs.js';
 import { ToggleGroup, ToggleGroupItem } from '../toggle-group.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../tooltip.js';
 
@@ -114,44 +114,24 @@ describe('shadcn component variants', () => {
     expect(variantClasses).toEqual(oldClasses);
   });
 
-  it('preserves SourceContextSegmented classes for segmented Tabs', () => {
-    const before = render(
-      <Tabs value="direct">
-        <TabsList className="inline-flex h-auto w-auto justify-start gap-0.5 rounded-md bg-surface-canvas p-0.5 text-text-muted shadow-subtle">
-          <TabsTrigger
-            value="direct"
-            className="flex-none gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium data-[state=active]:bg-surface-card-elevated data-[state=active]:text-text-primary data-[state=active]:shadow-subtle"
-          >
-            Direct
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>,
+  it('preserves SourceContextSegmented classes for segmented RadioGroup', () => {
+    render(
+      <RadioGroup value="direct" appearance="segmented">
+        <RadioGroupItem value="direct" appearance="segmented">
+          Direct
+        </RadioGroupItem>
+      </RadioGroup>,
     );
-    const oldListClasses = [
-      ...(before.container.querySelector('[role="tablist"]')?.classList ?? []),
-    ].sort();
-    const oldTriggerClasses = [
-      ...(before.container.querySelector('[role="tab"]')?.classList ?? []),
-    ].sort();
-    before.unmount();
-
-    const after = render(
-      <Tabs value="direct">
-        <TabsList appearance="segmented">
-          <TabsTrigger value="direct" appearance="segmented">
-            Direct
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>,
+    expect([...screen.getByRole('radiogroup').classList].sort()).toEqual(
+      'inline-flex h-auto w-auto items-center justify-start gap-0.5 rounded-md bg-surface-canvas p-0.5 text-text-muted shadow-subtle'
+        .split(' ')
+        .sort(),
     );
-    const variantListClasses = [
-      ...(after.container.querySelector('[role="tablist"]')?.classList ?? []),
-    ].sort();
-    const variantTriggerClasses = [
-      ...(after.container.querySelector('[role="tab"]')?.classList ?? []),
-    ].sort();
-    expect(variantListClasses).toEqual(oldListClasses);
-    expect(variantTriggerClasses).toEqual(oldTriggerClasses);
+    expect([...screen.getByRole('radio').classList].sort()).toEqual(
+      'inline-flex items-center justify-center whitespace-nowrap ring-offset-surface-canvas transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:shadow-sm flex-none gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium data-[state=checked]:bg-surface-card-elevated data-[state=checked]:text-text-primary data-[state=checked]:shadow-subtle'
+        .split(' ')
+        .sort(),
+    );
   });
 
   it('preserves the Home filter track classes for ToggleGroup appearance=filter', () => {
