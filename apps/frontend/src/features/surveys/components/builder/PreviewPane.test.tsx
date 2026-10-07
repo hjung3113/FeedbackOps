@@ -82,6 +82,19 @@ describe('survey respondent preview modal', () => {
     expect(screen.queryByRole('button', { name: '닫기' })).toBeInTheDocument();
   });
 
+  it('shows a muted placeholder for a question with no prompt', async () => {
+    const draft = structuredClone(survey);
+    const firstQuestion = draft.questions?.[0];
+    if (!firstQuestion) throw new Error('Fixture needs a question');
+    firstQuestion.prompt = '';
+    renderPreview(draft);
+
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
+
+    const unnamedQuestion = await screen.findByText('제목 없는 질문');
+    expect(unnamedQuestion).toHaveClass('text-text-muted');
+  });
+
   it.each([
     ['Escape', () => fireEvent.keyDown(document.body, { key: 'Escape' })],
     [

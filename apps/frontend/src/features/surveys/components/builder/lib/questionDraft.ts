@@ -11,12 +11,12 @@ export function newQuestion(
     id: createClientId('local-'),
     survey_id: surveyId,
     kind,
-    prompt: '새 질문',
+    prompt: '',
     is_required: false,
     options: choice
       ? [
-          { key: 'option-1', label: '옵션 1' },
-          { key: 'option-2', label: '옵션 2' },
+          { key: 'option-1', label: '' },
+          { key: 'option-2', label: '' },
         ]
       : null,
     rating_min: kind === 'rating' ? 1 : null,
@@ -79,8 +79,8 @@ export function questionForKind(
     kind,
     options: choice
       ? (question.options ?? [
-          { key: 'option-1', label: '옵션 1' },
-          { key: 'option-2', label: '옵션 2' },
+          { key: 'option-1', label: '' },
+          { key: 'option-2', label: '' },
         ])
       : null,
     rating_min: kind === 'rating' ? 1 : null,
