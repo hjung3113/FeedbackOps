@@ -99,15 +99,22 @@ export async function saveSurveyDraft(deps: {
     const triggerKey = question.branch_trigger_option_key;
     return Boolean(parentId && triggerKey && savedOptionKeys.get(parentId)?.has(triggerKey));
   };
+  const hasSavedTopLevelParent = (question: SurveyQuestion): boolean => {
+    const parentId = question.branch_parent_question_id;
+    const savedParent = savedQuestionsRef.current.find((saved) => saved.id === parentId);
+    return Boolean(savedParent && !savedParent.branch_parent_question_id);
+  };
+  const shouldDeferBranch = (question: SurveyQuestion): boolean =>
+    Boolean(
+      question.branch_parent_question_id &&
+        question.branch_trigger_option_key &&
+        (!hasSavedTrigger(question) || !hasSavedTopLevelParent(question)),
+    );
 
   for (const local of questionsRef.current.filter((question) => isLocalQuestionId(question.id))) {
     const current = questionsRef.current.find((question) => question.id === local.id);
     if (!current) continue;
-    const parentId = current.branch_parent_question_id;
-    const triggerKey = current.branch_trigger_option_key;
-    const deferBranch = Boolean(
-      parentId && triggerKey && !savedOptionKeys.get(parentId)?.has(triggerKey),
-    );
+    const deferBranch = shouldDeferBranch(current);
     const createQuestion = deferBranch ? clearBranch(current) : current;
     let sentSignature = questionSignature(createQuestion);
     const created = await mutations.create(toInput(createQuestion));
@@ -216,11 +223,7 @@ export async function saveSurveyDraft(deps: {
     let sentSignature = questionSignature(persistedQuestion);
     let deferBranch = false;
     while (current) {
-      if (
-        current.branch_parent_question_id &&
-        current.branch_trigger_option_key &&
-        !hasSavedTrigger(current)
-      ) {
+      if (shouldDeferBranch(current)) {
         deferBranch = true;
         deferredBranchIds.add(current.id);
       }
@@ -250,7 +253,9 @@ export async function saveSurveyDraft(deps: {
     while (current) {
       const parentId = current.branch_parent_question_id;
       const triggerKey = current.branch_trigger_option_key;
-      if (parentId && triggerKey && !savedOptionKeys.get(parentId)?.has(triggerKey))
+      if (parentId && triggerKey && !hasSavedTopLevelParent(current))
+        throw new Error('Branch parent is not saved as a top-level question');
+      if (parentId && triggerKey && !hasSavedTrigger(current))
         throw new Error('Branch trigger option is not saved on its parent');
       const nextSignature = questionSignature(current);
       if (nextSignature === sentSignature) break;
