@@ -1723,6 +1723,40 @@ describe('Survey screens', () => {
       question_ids: ['question-3', 'question-1', 'question-2'],
     });
     expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', '2');
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+  });
+
+  it('does not repeat a successful question delete when reorder fails and save is retried', async () => {
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+      question('question-3', '셋째 질문', 2),
+    ];
+    let rejectFirstReorder = true;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (
+        method === 'PATCH' &&
+        path === '/surveys/survey-1/questions/reorder' &&
+        rejectFirstReorder
+      ) {
+        rejectFirstReorder = false;
+        throw new Error('reorder failed');
+      }
+      return { data: { id: 'question-1' } };
+    });
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(
+      within(screen.getByTestId('survey-question-row-question-2')).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText('저장하지 못했습니다.')).toBeInTheDocument());
+    expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    expect(calls('DELETE', '/surveys/survey-1/questions/question-2')).toHaveLength(1);
   });
 
   it('AC-5 saves a keyboard-only one-step move', async () => {
@@ -1886,6 +1920,7 @@ describe('Survey screens', () => {
         '/surveys/survey-1/questions/question-created',
       ),
     );
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
   });
 
   it('patches the current question state after an edit during its pending create', async () => {
