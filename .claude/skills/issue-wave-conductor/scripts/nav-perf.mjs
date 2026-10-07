@@ -7,7 +7,11 @@
 //   out      absolute path of the JSON result file                                       required
 //   runs     measured passes per base (default 3), after one unrecorded warm-up pass
 //   start    first path of every pass (default /home)
-//   persona  mock-login external_id (default mock-admin-1)
+//   personas mock-login external_id per base, same order as bases (default mock-admin-1, mock-admin-2, …)
+//
+// The API rate limit is keyed by actor and stored in Postgres, so two previews on one throwaway DB share the bucket.
+// Each base therefore logs in as its own equivalent persona. A sample that saw a 429 is kept in `rows` but left out
+// of the medians (`rateLimited`). Run `verify-db.sh reset-rate-limits <n>` right before measuring.
 //
 // Every pass logs in through POST /auth/mock-login and checks /me. Bases alternate pass by pass, so drift (a cold
 // vite transform, polling, CPU contention) lands on both builds. Each click is timed from the page's own
@@ -22,7 +26,8 @@ const TARGETS = cfg.targets ?? [];
 const OUT = cfg.out;
 const RUNS = cfg.runs ?? 3;
 const START = cfg.start ?? '/home';
-const PERSONA = cfg.persona ?? 'mock-admin-1';
+const DEFAULT_PERSONAS = ['mock-admin-1', 'mock-admin-2'];
+const PERSONAS = BASES.map((_, i) => (cfg.personas ?? [])[i] ?? DEFAULT_PERSONAS[i] ?? DEFAULT_PERSONAS[0]);
 if (BASES.length === 0 || TARGETS.length === 0 || !OUT) {
   console.log(JSON.stringify({ ok: false, error: 'NAV_CONFIG needs bases, targets and out (use nav-perf.sh)' }));
   process.exit(2);
@@ -34,7 +39,7 @@ const page = task.page('p1');
 const rows = [];
 const errors = [];
 
-async function login(base) {
+async function login(base, persona) {
   await page.goto(base + '/login');
   await page.waitForLoadState();
   const who = await page.evaluate(async (externalId) => {
@@ -47,8 +52,8 @@ async function login(base) {
     const me = await fetch('/me', { headers: { accept: 'application/json' } });
     const body = await me.json().catch(() => null);
     return body?.actor?.external_id ?? `me ${me.status}`;
-  }, PERSONA);
-  if (who !== PERSONA) throw new Error(`login as ${PERSONA} on ${base} gave ${who}`);
+  }, persona);
+  if (who !== persona) throw new Error(`login as ${persona} on ${base} gave ${who}`);
 }
 
 async function pass(base, label, run) {
@@ -63,11 +68,12 @@ async function pass(base, label, run) {
         window.__navSameDoc = true;
         window.__navPerf.apis = 0;
         window.__navPerf.reqs = [];
+        window.__navPerf.limited = 0;
       });
       // A full-document reload (the regression this tool exists to catch) can land before the shell renders, or
       // on /login when the session dropped: wait for the link, and log in again if needed.
       if ((await page.url()).includes('/login')) {
-        await login(base.url);
+        await login(base.url, base.persona);
         await page.goto(base.url + START);
         await page.waitForLoadState();
       }
@@ -95,6 +101,7 @@ async function pass(base, label, run) {
             ? resources.filter((e) => /\.(m?js|tsx?|jsx|css)(\?|$)/.test(new URL(e.name).pathname)).length
             : 0,
           apiCalls: window.__navPerf.apis,
+          rateLimited: window.__navPerf.limited > 0,
           slowest: [...window.__navPerf.reqs].sort((a, b) => b.ms - a.ms).slice(0, 3),
         };
       }, LOADING);
@@ -110,12 +117,12 @@ try {
   await page.cdp('Page.addScriptToEvaluateOnNewDocument', {
     source: `
       performance.setResourceTimingBufferSize(20000);
-      window.__navPerf = { inflight: 0, apis: 0, reqs: [] };
+      window.__navPerf = { inflight: 0, apis: 0, reqs: [], limited: 0 };
       const nativeFetch = window.fetch.bind(window);
       window.fetch = async (input, init) => {
         const started = performance.now();
         window.__navPerf.inflight++; window.__navPerf.apis++;
-        try { return await nativeFetch(input, init); }
+        try { const res = await nativeFetch(input, init); if (res.status === 429) window.__navPerf.limited++; return res; }
         finally {
           window.__navPerf.inflight--;
           const url = String(typeof input === 'string' ? input : input.url).replace(location.origin, '');
@@ -130,7 +137,8 @@ try {
       }, true);
     `,
   });
-  for (const base of BASES) await login(base.url);
+  BASES.forEach((base, i) => { base.persona = PERSONAS[i]; });
+  for (const base of BASES) await login(base.url, base.persona);
   for (const base of BASES) await pass(base, null, 0); // warm-up, not recorded
   for (let run = 1; run <= RUNS; run++) {
     for (const base of BASES) await pass(base, base.label, run);
@@ -151,9 +159,11 @@ const perBase = {};
 for (const base of BASES) {
   perBase[base.label] = {};
   for (const href of TARGETS) {
-    const hits = rows.filter((r) => r.base === base.label && r.href === href);
+    const all = rows.filter((r) => r.base === base.label && r.href === href);
+    const hits = all.filter((r) => !r.rateLimited);
     perBase[base.label][href] = {
       samples: hits.length,
+      rateLimitedSamples: all.length - hits.length,
       readyMs: median(hits.map((r) => r.readyMs)),
       apiCalls: median(hits.map((r) => r.apiCalls)),
       reloaded: hits.some((r) => r.reloaded),
@@ -176,6 +186,6 @@ const comparison = second
       };
     })
   : [];
-const result = { config: { bases: BASES, targets: TARGETS, runs: RUNS, persona: PERSONA }, perBase, comparison, rows, errors };
+const result = { config: { bases: BASES, targets: TARGETS, runs: RUNS }, perBase, comparison, rows, errors };
 await fs.writeFile(OUT, JSON.stringify(result, null, 2) + '\n');
 console.log(JSON.stringify({ ok: errors.length === 0, out: OUT, samples: rows.length, errors: errors.length, comparison }));

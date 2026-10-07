@@ -156,8 +156,11 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
      share the conductor's Claude quota. With 2–3 screen issues in flight, UX reviews queue.
 
    **d. Measure, then UX.** The perf flag comes first:
+   - Run `verify-db.sh reset-rate-limits <n>` first. The API rate limit is per actor and stored in the shared
+     throwaway DB.
    - `scripts/nav-perf.sh --base develop=<url> --base branch=<url> --targets <rail and touched hrefs> --out
-     <worktree>/.review/<n>-perf/nav-perf.json`.
+     <worktree>/.review/<n>-perf/nav-perf.json`. Each base logs in as its own admin (`mock-admin-1`, `mock-admin-2`),
+     and samples that saw a 429 are kept out of the medians.
    - **Breach:** for any target, the median `branch.readyMs > develop × 1.2 + 50`, a new `reloaded`, `apiCalls` +2,
      or `timedOut`. A new list query with no bound or index decision also counts.
    - On a breach, launch `review-perf`. Otherwise paste the comparison table into the code reviewer's task, or into
@@ -204,8 +207,19 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    - For a fixed UX or perf `blocker`/`major`:
      - re-run that scenario and its neighbouring flow, or `nav-perf.sh`, on fresh previews, and record the result;
      - run the full visual harness when the fix touched `packages/ui`.
-     - **Pending owner call:** when a blocker fix spreads past the files the reviewer saw, should a `review-check`
-       (medium) look at just that diff?
+     - When a `blocker` fix spreads past the files the reviewer saw, `review-check` (medium) reviews just that fix
+       diff before the ship (owner decision 2026-10-08). It is the one exception to "no second review".
+
+   **Mock wave (2026-10-08).** #838 and #821 were replayed at their pre-review commits.
+   - **Code reviewer (Sol xhigh, background):** 3.7–5 min per issue. It caught 6 of the 8 planted code-level
+     defects.
+   - **UX reviewer (Opus high):** 6–10 min, 50–66 turns and $1.9–2.6 per issue.
+     - It caught 1 of the 3 planted UI defects. It missed the #838 null-close because the seed has no
+       Task/Finding/Survey records (#853), and missed #821's tab-scoped search because it was brief-consistent
+       (now an expectation check in the agent).
+     - It found 4 real issues no code review had (#849–#852).
+     - Tripwires were clean, and no preview or orphan was left.
+   - Until #853 lands, name the drawers or records the seed lacks in the UX task, and treat them as unverified.
 
    **g. Rules that still hold:**
    - No review at all after copy-only or mechanical changes; the plan reports no roles for them.
@@ -270,8 +284,11 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   mock-admin-1]`: step 7d.
   - It times in-app navigation in the ego-browser runtime from the page's own click event to quiet: no fetch in
     flight and nothing loading for 300 ms, capped at 30 s.
-  - Each pass logs in through the mock-login API. There is one warm-up pass, then the bases alternate for `--runs`
-    passes, and per-target medians are compared.
+  - Each pass logs in through the mock-login API, with one equivalent persona per base (`--personas`, default
+    `mock-admin-1,mock-admin-2`). The rate limit is per actor and stored in Postgres, so a shared persona drained
+    one bucket in the 2026-10-08 mock wave.
+  - There is one warm-up pass, then the bases alternate for `--runs` passes, and per-target medians are compared.
+  - Samples that saw a 429 are excluded (`rateLimitedSamples`).
   - Failures are recorded per target, and the JSON (with `fs`) is always written.
   - Validated 2026-10-08:
     - noise floor, develop vs develop: ≤4 ms;
@@ -292,6 +309,10 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
     - the dev-DB env was refused.
 
 ## Traps (measured)
+
+- `orca terminal create` accepts only Orca-managed worktrees. A plain `git worktree add` checkout (a step-7c
+  baseline, a mock-wave replay) cannot host a `codex-orca` reviewer. Run previews there, or launch codex in the
+  background (`--role impl-fallback --model gpt-6.1-sol --effort xhigh`) for a replay.
 
 - Workers placed new helpers on a barrel (`@/lib/api`) — partial `vi.mock` of the barrel drops them (48 failures).
   Import new helpers from the defining module.

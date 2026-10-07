@@ -13,8 +13,9 @@ them.
   - `scripts/nav-perf.sh` wrote it against two `app-preview.py` dev-server previews: `develop` (the branch's
     merge-base) and `branch`. Both run on the issue's throwaway DB with the same persona and targets.
   - Each base gets one warm-up pass. The bases then alternate for three measured passes.
-  - `perBase` holds per-target medians: `readyMs`, `apiCalls`, `reloaded`, `timedOut`. `rows` holds the samples and
-    `errors` any target that failed.
+  - `perBase` holds per-target medians: `readyMs`, `apiCalls`, `reloaded`, `timedOut`. 429-tainted samples are
+    excluded and counted in `rateLimitedSamples`. `rows` holds every sample and `errors` any target that failed.
+  - Each base logs in as its own equivalent admin.
   - Compare branch against develop, not against absolute budgets.
   - The noise floor measured 2026-10-08 (develop vs develop) was at most 4 ms on `readyMs`, with identical
     `apiCalls`.
