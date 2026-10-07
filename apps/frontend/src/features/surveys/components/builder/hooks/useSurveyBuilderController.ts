@@ -9,10 +9,15 @@ import {
   newQuestion,
   questionSignature,
 } from '../lib/questionDraft';
+import { hasInvalidRatingRange } from '../lib/questionValidation';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
 
 function hasInvalidQuestion(question: SurveyQuestion): boolean {
-  return question.prompt.trim().length === 0 || hasInvalidChoiceOptions(question);
+  return (
+    question.prompt.trim().length === 0 ||
+    hasInvalidChoiceOptions(question) ||
+    hasInvalidRatingRange(question)
+  );
 }
 
 export function useSurveyBuilderController(args: {
@@ -45,6 +50,9 @@ export function useSurveyBuilderController(args: {
   patch: (next: SurveyQuestion) => void;
   add: (kind?: QuestionKind) => void;
   remove: (id: string) => void;
+  pendingRemoval: { id: string; childCount: number } | null;
+  confirmRemoval: () => void;
+  cancelRemoval: () => void;
   reorder: (fromIndex: number, toIndex: number) => void;
   save: () => Promise<boolean>;
 } {
@@ -62,6 +70,10 @@ export function useSurveyBuilderController(args: {
   const [saveFailed, setSaveFailed] = React.useState(false);
   const [preview, setPreview] = React.useState(false);
   const [launchOpen, setLaunchOpenState] = React.useState(false);
+  const [pendingRemoval, setPendingRemoval] = React.useState<{
+    id: string;
+    childCount: number;
+  } | null>(null);
   const [launchSaveFailed, setLaunchSaveFailed] = React.useState(false);
   const [launchOptionValidationFailed, setLaunchOptionValidationFailed] = React.useState(false);
   const mutations = useSurveyQuestionMutations(survey.id);
@@ -124,15 +136,46 @@ export function useSurveyBuilderController(args: {
     setSaveFailed(false);
   };
 
-  const remove = (id: string) => {
+  const removeQuestion = (id: string) => {
     updateQuestions((all) => {
-      const next = all.filter((question) => question.id !== id);
+      const next = all
+        .filter((question) => question.id !== id)
+        .map((question) =>
+          question.branch_parent_question_id === id
+            ? {
+                ...question,
+                branch_depth: 0,
+                branch_parent_question_id: null,
+                branch_trigger_option_key: null,
+              }
+            : question,
+        );
       if (selectedId === id) setSelectedId(next[0]?.id ?? null);
       return denseQuestions(next);
     });
     updateDirty(true);
     setSaveFailed(false);
   };
+
+  const remove = (id: string) => {
+    const childCount = questionsRef.current.filter(
+      (question) => question.branch_parent_question_id === id,
+    ).length;
+    if (childCount > 0) {
+      setPendingRemoval({ id, childCount });
+      return;
+    }
+    removeQuestion(id);
+  };
+
+  const confirmRemoval = () => {
+    if (!pendingRemoval) return;
+    const { id } = pendingRemoval;
+    setPendingRemoval(null);
+    removeQuestion(id);
+  };
+
+  const cancelRemoval = () => setPendingRemoval(null);
 
   const reorder = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
@@ -163,10 +206,15 @@ export function useSurveyBuilderController(args: {
     setLaunchSaveFailed(false);
     setLaunchOptionValidationFailed(false);
     void (async () => {
+      if (!titleRef.current.trim()) {
+        setLaunchOpen(false);
+        return;
+      }
       const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
       if (invalidQuestion) {
         setSelectedId(invalidQuestion.id);
-        if (invalidQuestion.prompt.trim().length === 0) setLaunchOpen(false);
+        if (invalidQuestion.prompt.trim().length === 0 || hasInvalidRatingRange(invalidQuestion))
+          setLaunchOpen(false);
         else setLaunchOptionValidationFailed(true);
         return;
       }
@@ -184,6 +232,10 @@ export function useSurveyBuilderController(args: {
   };
 
   const save = async (): Promise<boolean> => {
+    if (!titleRef.current.trim()) {
+      setSaveFailed(false);
+      return false;
+    }
     const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
     if (invalidQuestion) {
       setSelectedId(invalidQuestion.id);
@@ -255,6 +307,9 @@ export function useSurveyBuilderController(args: {
     patch,
     add,
     remove,
+    pendingRemoval,
+    confirmRemoval,
+    cancelRemoval,
     reorder,
     save,
   };

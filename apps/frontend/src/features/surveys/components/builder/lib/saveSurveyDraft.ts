@@ -39,14 +39,9 @@ export async function saveSurveyDraft(deps: {
   }
 
   const persisted = savedQuestionsRef.current;
-  for (const question of persisted) {
-    if (!questionsRef.current.some((candidate) => candidate.id === question.id)) {
-      await mutations.remove(question.id);
-      savedQuestionsRef.current = savedQuestionsRef.current.filter(
-        (saved) => saved.id !== question.id,
-      );
-    }
-  }
+  const removedPersisted = persisted.filter(
+    (question) => !questionsRef.current.some((candidate) => candidate.id === question.id),
+  );
 
   const savedOptionKeys = new Map(
     persisted.map(
@@ -117,7 +112,21 @@ export async function saveSurveyDraft(deps: {
     const currentParent = questionsRef.current.find(
       (question) => question.id === persistedParent.id,
     );
-    if (!currentParent) continue;
+    if (!currentParent) {
+      for (const persistedChild of persisted) {
+        if (persistedChild.branch_parent_question_id !== persistedParent.id) continue;
+        const currentChild = questionsRef.current.find(
+          (question) => question.id === persistedChild.id,
+        );
+        if (
+          currentChild &&
+          (!currentChild.branch_parent_question_id ||
+            currentChild.branch_parent_question_id === persistedParent.id)
+        )
+          detachChildrenFirst.add(persistedChild.id);
+      }
+      continue;
+    }
     const remainingKeys = new Set(currentParent.options?.map((option) => option.key) ?? []);
     const removedKeys = new Set(
       (persistedParent.options ?? [])
@@ -228,6 +237,13 @@ export async function saveSurveyDraft(deps: {
       rememberSavedOptions(current);
       current = questionsRef.current.find((question) => question.id === childId);
     }
+  }
+
+  for (const question of [...removedPersisted].sort((a, b) => b.branch_depth - a.branch_depth)) {
+    await mutations.remove(question.id);
+    savedQuestionsRef.current = savedQuestionsRef.current.filter(
+      (saved) => saved.id !== question.id,
+    );
   }
 
   const nextQuestions = denseQuestions(questionsRef.current);
