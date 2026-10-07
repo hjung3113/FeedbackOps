@@ -2223,6 +2223,100 @@ describe('Survey screens', () => {
     },
   );
 
+  it.each([
+    ['clears Y', 'clear'],
+    ['moves Y to W', 'move'],
+  ] as const)('W-832 saves when X becomes a child after it %s', async (_label, childChange) => {
+    const parentXId = '11111111-1111-4111-8111-111111111111';
+    const childYId = '22222222-2222-4222-8222-222222222222';
+    const parentWId = '44444444-4444-4444-8444-444444444444';
+    const parentZId = '55555555-5555-4555-8555-555555555555';
+    const questionX: SurveyQuestion = {
+      ...(survey.questions?.[0] as SurveyQuestion),
+      id: parentXId,
+      prompt: '기존 부모 질문 X',
+      sort_order: 0,
+    };
+    const questionY: SurveyQuestion = {
+      ...questionX,
+      id: childYId,
+      prompt: '기존 하위 질문 Y',
+      branch_depth: 1,
+      branch_parent_question_id: parentXId,
+      branch_trigger_option_key: 'yes',
+      sort_order: 1,
+    };
+    const questionW: SurveyQuestion = {
+      ...questionX,
+      id: parentWId,
+      prompt: '다른 부모 질문 W',
+      sort_order: 2,
+    };
+    const questionZ: SurveyQuestion = {
+      ...questionX,
+      id: parentZId,
+      prompt: '새 부모 질문 Z',
+      sort_order: 3,
+    };
+    const initialQuestions = [questionX, questionY, questionW, questionZ];
+    installQuestionServerOracle(initialQuestions);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: initialQuestions }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(questionY.prompt));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: childChange === 'clear' ? '분기 없음' : questionW.prompt,
+      }),
+    );
+
+    fireEvent.click(screen.getByText(questionX.prompt));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: questionZ.prompt }));
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/^저장 시각 /) || screen.queryByText('저장하지 못했습니다.'),
+      ).toBeTruthy();
+    });
+    await screen.findByText(/^저장 시각 /);
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+
+    const childYPath = `/surveys/${survey.id}/questions/${childYId}`;
+    const parentXPath = `/surveys/${survey.id}/questions/${parentXId}`;
+    const childYPatches = calls('PATCH', childYPath);
+    expect(childYPatches.length).toBeGreaterThan(0);
+    expect(parseBackendQuestionInput(childYPatches.at(-1)?.[2].body)).toMatchObject({
+      branch_parent_question_id: childChange === 'clear' ? null : parentWId,
+    });
+
+    const indexedCalls = apiClient.mock.calls.map((call, index) => ({ call, index }));
+    const childYUpdateIndex = indexedCalls.find(
+      ({ call }) => call[0] === 'PATCH' && call[1] === childYPath,
+    )?.index;
+    const parentXAttachIndex = indexedCalls.find(
+      ({ call }) =>
+        call[0] === 'PATCH' &&
+        call[1] === parentXPath &&
+        (call[2].body as { branch_parent_question_id?: string | null })
+          .branch_parent_question_id === parentZId,
+    )?.index;
+    if (childYUpdateIndex === undefined || parentXAttachIndex === undefined)
+      throw new Error('Expected the child update and parent attach to be sent');
+    expect(childYUpdateIndex).toBeLessThan(parentXAttachIndex);
+    expect(parseBackendQuestionInput(calls('PATCH', parentXPath).at(-1)?.[2].body)).toMatchObject({
+      branch_parent_question_id: parentZId,
+      branch_trigger_option_key: 'yes',
+    });
+  });
+
   it.each(['one rejected parent PATCH'] as const)(
     'keeps a newly created child branch through a retry after %s',
     async () => {
