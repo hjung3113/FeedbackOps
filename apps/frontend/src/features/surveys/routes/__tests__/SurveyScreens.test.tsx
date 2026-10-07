@@ -1,4 +1,5 @@
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/index';
 import { surveyQuestionKindSchema } from '@fops/shared';
@@ -138,6 +139,15 @@ function parseBackendQuestionInput(input: unknown) {
       parsed.options.some((option) => !option.key || !option.label))
   )
     throw new Error('422: choice questions require 2-50 unique options');
+  if (
+    parsed.kind === 'rating' &&
+    (parsed.rating_min === undefined ||
+      parsed.rating_max === undefined ||
+      parsed.rating_min >= parsed.rating_max ||
+      parsed.rating_min < 0 ||
+      parsed.rating_max > 10)
+  )
+    throw new Error('422: rating range invalid');
   return parsed;
 }
 
@@ -236,6 +246,16 @@ function installQuestionServerOracle(
           [...saved.values()].map((question) => (question.id === questionId ? updated : question)),
         );
         saved.set(questionId, updated);
+        return { data: { id: questionId } };
+      }
+
+      if (method === 'DELETE' && questionId) {
+        if (
+          [...saved.values()].some((question) => question.branch_parent_question_id === questionId)
+        )
+          throw new Error('422: question has branches');
+        if (!saved.has(questionId)) throw new Error('404: question not found');
+        saved.delete(questionId);
         return { data: { id: questionId } };
       }
 
@@ -1646,6 +1666,324 @@ describe('Survey screens', () => {
     const childPatch = calls('PATCH', `/surveys/${survey.id}/questions/${childId}`)[0]?.[2].body;
     expect(parseBackendQuestionInput(childPatch).prompt).toBe('수정한 추가 질문');
     expect(calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`)).toHaveLength(0);
+  });
+
+  it('W-827 excludes in-session children from parent choices while allowing multiple children', async () => {
+    const parent = survey.questions?.[0] as SurveyQuestion;
+    const child: SurveyQuestion = {
+      ...parent,
+      id: 'question-2',
+      prompt: '첫 번째 조건부 질문',
+      sort_order: 1,
+    };
+    const candidate = question('question-3', '추가 질문', 2);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [parent, child, candidate] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    const currentParent = await screen.findByRole('option', { name: parent.prompt });
+    expect(currentParent).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getAllByRole('option', { name: parent.prompt })).toHaveLength(1);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByText('Q3'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+
+    expect(screen.getByRole('option', { name: parent.prompt })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: child.prompt })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(screen.getByText('Q1'));
+    expect(screen.queryByRole('combobox', { name: '분기 부모 질문' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['changes its parent to text', 'change-kind'],
+    ['removes its trigger option', 'remove-trigger'],
+  ] as const)('W-827 deletes a removed branch child before it %s', async (_label, change) => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    const child: SurveyQuestion = {
+      ...parent,
+      id: childId,
+      prompt: '조건부 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    installQuestionServerOracle([parent, child]);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [parent, child] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      within(screen.getByTestId(`survey-question-row-${childId}`)).getByLabelText('질문 삭제'),
+    );
+    if (change === 'change-kind') {
+      fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+      fireEvent.click(
+        await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.text }),
+      );
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => {
+      const saveComplete =
+        screen.queryByText(/^저장 시각 /) !== null ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
+    });
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const deleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === `/surveys/${survey.id}/questions/${childId}`,
+    );
+    const parentPatchIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'PATCH' && call[1] === `/surveys/${survey.id}/questions/${parentId}`,
+    );
+    expect(deleteIndex).toBeGreaterThanOrEqual(0);
+    expect(parentPatchIndex).toBeGreaterThan(deleteIndex);
+  });
+
+  it('W-827 deletes a newly saved child before deleting its parent', async () => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    installQuestionServerOracle([parent]);
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [parent] }} canManage onBack={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    const childPath = `/surveys/${survey.id}/questions/${SERVER_CREATED_QUESTION_ID}`;
+    fireEvent.click(
+      within(
+        screen.getByTestId(`survey-question-row-${SERVER_CREATED_QUESTION_ID}`),
+      ).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(
+      within(screen.getByTestId(`survey-question-row-${parentId}`)).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => {
+      const saveComplete =
+        calls('PATCH', `/surveys/${survey.id}/questions/reorder`).length === 2 ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
+    });
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childDeleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === childPath,
+    );
+    const parentDeleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === `/surveys/${survey.id}/questions/${parentId}`,
+    );
+    expect(childDeleteIndex).toBeGreaterThanOrEqual(0);
+    expect(parentDeleteIndex).toBeGreaterThan(childDeleteIndex);
+  });
+
+  it('W-827 confirms and detaches children before deleting their parent', async () => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    const child: SurveyQuestion = {
+      ...parent,
+      id: childId,
+      prompt: '조건부 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    installQuestionServerOracle([parent, child]);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [parent, child] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    const parentRow = screen.getByTestId(`survey-question-row-${parentId}`);
+    fireEvent.click(within(parentRow).getByLabelText('질문 삭제'));
+    const confirmation = await screen.findByRole('dialog');
+    expect(confirmation).toHaveTextContent('1개 질문의 분기 조건이 해제됩니다.');
+    fireEvent.click(within(confirmation).getByRole('button', { name: '취소' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(calls('PATCH', `/surveys/${survey.id}/questions/${childId}`)).toHaveLength(0);
+    expect(calls('DELETE', `/surveys/${survey.id}/questions/${parentId}`)).toHaveLength(0);
+    fireEvent.click(screen.getByText('Q2'));
+    expect(screen.getByRole('combobox', { name: '분기 부모 질문' })).toHaveTextContent(
+      parent.prompt,
+    );
+
+    fireEvent.click(within(parentRow).getByLabelText('질문 삭제'));
+    const secondConfirmation = await screen.findByRole('dialog');
+    fireEvent.click(within(secondConfirmation).getByRole('button', { name: '삭제' }));
+    expect(screen.queryByTestId(`survey-question-row-${parentId}`)).not.toBeInTheDocument();
+    expect(screen.getByTestId(`survey-question-row-${childId}`)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '분기 부모 질문' })).toHaveTextContent('분기 없음');
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childPatches = calls('PATCH', `/surveys/${survey.id}/questions/${childId}`);
+    expect(childPatches).toHaveLength(1);
+    expect(childPatches[0]?.[2].body).toMatchObject({ branch_parent_question_id: null });
+    const childPatchIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'PATCH' && call[1] === `/surveys/${survey.id}/questions/${childId}`,
+    );
+    const parentDeleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === `/surveys/${survey.id}/questions/${parentId}`,
+    );
+    expect(childPatchIndex).toBeGreaterThanOrEqual(0);
+    expect(parentDeleteIndex).toBeGreaterThan(childPatchIndex);
+  });
+
+  it.each(['draft-save', 'launch'] as const)(
+    'W-827 blocks a whitespace-only Survey title before %s',
+    async (action) => {
+      renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+      const titleInput = screen.getByRole('textbox', { name: 'Survey 제목' });
+      fireEvent.change(titleInput, { target: { value: '   ' } });
+
+      expect(titleInput).toHaveAttribute('aria-invalid', 'true');
+      expect(titleInput).toHaveAccessibleDescription('Survey 제목을 입력하세요.');
+
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+        await waitFor(() => expect(screen.queryByTestId('survey-open-confirmation')).toBeNull());
+      }
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Survey 제목을 입력하세요.')).toBeInTheDocument();
+      expect(calls('PATCH', `/surveys/${survey.id}`)).toHaveLength(0);
+      expect(calls('PATCH', `/surveys/${survey.id}/questions/question-1`)).toHaveLength(0);
+      expect(calls('POST', `/surveys/${survey.id}/open`)).toHaveLength(0);
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['empty minimum', '최소 점수', '', 'draft-save'],
+    ['decimal minimum', '최소 점수', '1.5', 'draft-save'],
+    ['minimum not below maximum', '최소 점수', '6', 'draft-save'],
+    ['minimum below zero', '최소 점수', '-1', 'draft-save'],
+    ['maximum above ten', '최대 점수', '11', 'draft-save'],
+    ['empty minimum', '최소 점수', '', 'launch'],
+    ['decimal minimum', '최소 점수', '1.5', 'launch'],
+    ['minimum not below maximum', '최소 점수', '6', 'launch'],
+    ['minimum below zero', '최소 점수', '-1', 'launch'],
+    ['maximum above ten', '최대 점수', '11', 'launch'],
+  ] as const)(
+    'W-827 blocks an invalid rating range (%s) and selects that question',
+    async (_label, fieldLabel, value, action) => {
+      const first = survey.questions?.[0] as SurveyQuestion;
+      const rating: SurveyQuestion = {
+        ...first,
+        id: 'question-2',
+        prompt: '만족도',
+        kind: 'rating',
+        options: null,
+        rating_min: 1,
+        rating_max: 5,
+        sort_order: 1,
+      };
+      const third = question('question-3', '추가 질문', 2);
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: [first, rating, third] }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Q2'));
+      fireEvent.change(screen.getByLabelText(fieldLabel), { target: { value } });
+      fireEvent.click(screen.getByText('Q3'));
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+        await waitFor(() => expect(screen.queryByTestId('survey-open-confirmation')).toBeNull());
+      }
+
+      expect(await screen.findByText(SURVEY_BUILDER_COPY.ratingRange)).toBeInTheDocument();
+      expect(screen.getByTestId('survey-question-row-question-2')).toHaveClass('bg-surface-card');
+      expect(screen.getByLabelText('최소 점수')).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByLabelText('최대 점수')).toHaveAttribute('aria-invalid', 'true');
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(apiClient).not.toHaveBeenCalled();
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    },
+  );
+
+  it('W-827 saves a valid rating range and marks the builder clean', async () => {
+    const ratingId = '11111111-1111-4111-8111-111111111111';
+    const rating: SurveyQuestion = {
+      ...(survey.questions?.[0] as SurveyQuestion),
+      id: ratingId,
+      prompt: '만족도',
+      kind: 'rating',
+      options: null,
+      rating_min: 1,
+      rating_max: 5,
+    };
+    installQuestionServerOracle([rating]);
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [rating] }} canManage onBack={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('최소 점수'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('최대 점수'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+    expect(calls('PATCH', `/surveys/${survey.id}/questions/${ratingId}`)).toHaveLength(1);
+    expect(
+      parseBackendQuestionInput(
+        calls('PATCH', `/surveys/${survey.id}/questions/${ratingId}`)[0]?.[2].body,
+      ),
+    ).toMatchObject({ rating_min: 0, rating_max: 10 });
   });
 
   it.each([

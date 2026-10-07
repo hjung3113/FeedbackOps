@@ -15,6 +15,7 @@ import type { QuestionKind, SurveyQuestion } from '../../types';
 import { BranchEditor } from './BranchEditor';
 import { OptionsEditor } from './OptionsEditor';
 import { questionForKind } from './lib/questionDraft';
+import { hasInvalidRatingRange } from './lib/questionValidation';
 
 export function QuestionEditor({
   question,
@@ -39,6 +40,8 @@ export function QuestionEditor({
   const branchKindErrorId = `survey-branch-kind-error-${question.id}`;
   const promptIsBlank = editable && question.prompt.trim().length === 0;
   const promptErrorId = `survey-prompt-error-${question.id}`;
+  const ratingRangeInvalid = editable && hasInvalidRatingRange(question);
+  const ratingRangeErrorId = `survey-rating-range-error-${question.id}`;
   const parents = questions.filter(
     (candidate) =>
       candidate.id !== question.id &&
@@ -120,18 +123,45 @@ export function QuestionEditor({
         <div className="grid grid-cols-2 gap-2">
           <Input
             aria-label="최소 점수"
+            aria-invalid={ratingRangeInvalid}
+            {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
             type="number"
-            value={question.rating_min ?? 1}
+            min={0}
+            max={10}
+            step={1}
+            value={Number.isNaN(question.rating_min) ? '' : (question.rating_min ?? 1)}
             disabled={!editable}
-            onChange={(event) => set({ rating_min: Number(event.target.value) })}
+            onChange={(event) =>
+              set({
+                rating_min: event.target.value === '' ? Number.NaN : Number(event.target.value),
+              })
+            }
           />
           <Input
             aria-label="최대 점수"
+            aria-invalid={ratingRangeInvalid}
+            {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
             type="number"
-            value={question.rating_max ?? 5}
+            min={0}
+            max={10}
+            step={1}
+            value={Number.isNaN(question.rating_max) ? '' : (question.rating_max ?? 5)}
             disabled={!editable}
-            onChange={(event) => set({ rating_max: Number(event.target.value) })}
+            onChange={(event) =>
+              set({
+                rating_max: event.target.value === '' ? Number.NaN : Number(event.target.value),
+              })
+            }
           />
+          {ratingRangeInvalid && (
+            <p
+              id={ratingRangeErrorId}
+              role="alert"
+              className="col-span-2 text-xs text-text-danger-label"
+            >
+              {SURVEY_BUILDER_COPY.ratingRange}
+            </p>
+          )}
         </div>
       )}
       <label className="flex gap-2 text-sm">
@@ -143,7 +173,7 @@ export function QuestionEditor({
         />
         필수 질문
       </label>
-      {editable && (
+      {editable && !hasBranchChildren && (
         <BranchEditor
           question={question}
           parents={parents}

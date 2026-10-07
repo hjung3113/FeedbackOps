@@ -41,6 +41,11 @@ export function BranchEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NO_BRANCH}>분기 없음</SelectItem>
+            {parent && !parents.some((candidate) => candidate.id === parent.id) && (
+              <SelectItem value={parent.id} disabled>
+                {parent.prompt || `Q${parent.sort_order + 1}`}
+              </SelectItem>
+            )}
             {parents.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
                 {candidate.prompt || `Q${candidate.sort_order + 1}`}

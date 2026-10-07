@@ -2,7 +2,7 @@ import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { formatTime } from '@/lib/format/datetime';
 import { surveyQuestionKindSchema } from '@fops/shared';
-import { Button, Input, WorkbenchShell } from '@fops/ui';
+import { Button, DirtyConfirmation, Input, WorkbenchShell } from '@fops/ui';
 import { Check, Megaphone } from 'lucide-react';
 import type { QuestionKind, Survey } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
@@ -92,6 +92,9 @@ export function SurveyBuilder({
     patch,
     add,
     remove,
+    pendingRemoval,
+    confirmRemoval,
+    cancelRemoval,
     reorder,
     save,
   } = useSurveyBuilderController({
@@ -101,6 +104,8 @@ export function SurveyBuilder({
     onBack,
     ...(onDirtyChange ? { onDirtyChange } : {}),
   });
+  const titleIsBlank = editable && title.trim().length === 0;
+  const titleErrorId = 'survey-title-error';
 
   const builderPage = (
     <main className="flex h-full flex-col bg-surface-canvas" data-testid="survey-builder">
@@ -115,15 +120,28 @@ export function SurveyBuilder({
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {editable ? (
-            <Input
-              aria-label="Survey 제목"
-              className={
-                // oxlint-disable-next-line shadcn/no-restyle -- the editable survey title is styled as heading text inside the builder toolbar
-                'w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold'
-              }
-              value={title}
-              onChange={(event) => onTitleChange(event.target.value)}
-            />
+            <>
+              <Input
+                aria-label="Survey 제목"
+                aria-invalid={titleIsBlank}
+                {...(titleIsBlank ? { 'aria-describedby': titleErrorId } : {})}
+                className={
+                  // oxlint-disable-next-line shadcn/no-restyle -- the editable survey title is styled as heading text inside the builder toolbar
+                  'w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold'
+                }
+                value={title}
+                onChange={(event) => onTitleChange(event.target.value)}
+              />
+              {titleIsBlank && (
+                <span
+                  id={titleErrorId}
+                  role="alert"
+                  className="whitespace-nowrap text-xs text-text-danger-label"
+                >
+                  {SURVEY_BUILDER_COPY.titleRequired}
+                </span>
+              )}
+            </>
           ) : (
             <h1 className="min-w-0 truncate font-semibold">{title}</h1>
           )}
@@ -240,6 +258,17 @@ export function SurveyBuilder({
         onClose={() => setLaunchOpen(false)}
         onConfirm={confirmLaunch}
       />
+      {pendingRemoval && (
+        <DirtyConfirmation
+          open={true}
+          title={SURVEY_BUILDER_COPY.deleteParentTitle}
+          message={SURVEY_BUILDER_COPY.deleteParentWithBranches(pendingRemoval.childCount)}
+          confirmLabel={SURVEY_BUILDER_COPY.deleteQuestion}
+          cancelLabel={SURVEY_BUILDER_COPY.cancelDeleteQuestion}
+          onConfirm={confirmRemoval}
+          onCancel={cancelRemoval}
+        />
+      )}
     </main>
   );
 
