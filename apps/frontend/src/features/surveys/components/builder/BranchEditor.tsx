@@ -1,3 +1,4 @@
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@fops/ui';
 import type { SurveyQuestion } from '../../types';
 
@@ -43,12 +44,12 @@ export function BranchEditor({
             <SelectItem value={NO_BRANCH}>분기 없음</SelectItem>
             {parent && !parents.some((candidate) => candidate.id === parent.id) && (
               <SelectItem value={parent.id} disabled>
-                {parent.prompt || `Q${parent.sort_order + 1}`}
+                {SURVEY_BUILDER_COPY.branchParentLabel(parent.sort_order + 1, parent.prompt)}
               </SelectItem>
             )}
             {parents.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
-                {candidate.prompt || `Q${candidate.sort_order + 1}`}
+                {SURVEY_BUILDER_COPY.branchParentLabel(candidate.sort_order + 1, candidate.prompt)}
               </SelectItem>
             ))}
           </SelectContent>

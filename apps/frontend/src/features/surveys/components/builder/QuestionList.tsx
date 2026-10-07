@@ -1,3 +1,4 @@
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { Button } from '@fops/ui';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
@@ -70,7 +71,13 @@ export function QuestionList({
             >
               {editable && <GripVertical className="h-3.5 w-3.5" aria-label="질문 드래그 핸들" />}
               <span>Q{index + 1}</span>
-              <span className="min-w-0 flex-1 truncate">{question.prompt || '제목 없음'}</span>
+              <span
+                className={`min-w-0 flex-1 truncate ${question.prompt.trim().length === 0 ? 'text-text-muted' : ''}`}
+              >
+                {question.prompt.trim().length === 0
+                  ? SURVEY_BUILDER_COPY.questionTitleMissing
+                  : question.prompt}
+              </span>
             </button>
             {editable && (
               <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
@@ -90,7 +97,11 @@ export function QuestionList({
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" onClick={() => onRemove(question.id)} aria-label="질문 삭제">
+                <button
+                  type="button"
+                  onClick={() => onRemove(question.id)}
+                  aria-label={SURVEY_BUILDER_COPY.deleteQuestionLabel(index + 1)}
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </span>

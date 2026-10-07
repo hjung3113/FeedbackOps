@@ -8,11 +8,13 @@ import { MAX, MIN } from './lib/optionValidation';
 export function OptionsEditor({
   question,
   editable,
+  showValidationErrors,
   branchTriggerOptionKeys,
   onChange,
 }: {
   question: SurveyQuestion;
   editable: boolean;
+  showValidationErrors: boolean;
   branchTriggerOptionKeys: string[];
   onChange: (patch: Partial<SurveyQuestion>) => void;
 }) {
@@ -22,14 +24,8 @@ export function OptionsEditor({
 
   const addOption = () => {
     if (!editable || options.length >= MAX) return;
-    const lastNumber = options.reduce((maximum, option) => {
-      const match = /^옵션 (\d+)$/.exec(option.label.trim());
-      return Math.max(maximum, match ? Number(match[1]) : 0);
-    }, options.length);
     const key = createClientId('option-');
-    onChange({
-      options: [...options, { key, label: SURVEY_BUILDER_COPY.optionLabel(lastNumber + 1) }],
-    });
+    onChange({ options: [...options, { key, label: '' }] });
   };
 
   const removeOption = (optionKey: string) => {
@@ -46,7 +42,7 @@ export function OptionsEditor({
         </p>
       )}
       {options.map((option, index) => {
-        const hasEmptyLabel = option.label.trim().length === 0;
+        const hasEmptyLabel = showValidationErrors && option.label.trim().length === 0;
         const errorId = `survey-option-error-${question.id}-${index}`;
         const isBranchTrigger = branchTriggerKeys.has(option.key);
         return (
@@ -56,6 +52,7 @@ export function OptionsEditor({
                 aria-label={SURVEY_BUILDER_COPY.optionLabel(index + 1)}
                 aria-invalid={hasEmptyLabel}
                 {...(hasEmptyLabel ? { 'aria-describedby': errorId } : {})}
+                placeholder={SURVEY_BUILDER_COPY.optionLabel(index + 1)}
                 value={option.label}
                 disabled={!editable}
                 onChange={(event) =>

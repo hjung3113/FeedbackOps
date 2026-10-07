@@ -21,11 +21,13 @@ export function QuestionEditor({
   question,
   questions,
   editable,
+  showValidationErrors,
   onChange,
 }: {
   question: SurveyQuestion;
   questions: SurveyQuestion[];
   editable: boolean;
+  showValidationErrors: boolean;
   onChange: (question: SurveyQuestion) => void;
 }) {
   const [blockedBranchKindChangeId, setBlockedBranchKindChangeId] = React.useState<string | null>(
@@ -38,10 +40,12 @@ export function QuestionEditor({
   );
   const blockedBranchKindChange = blockedBranchKindChangeId === question.id && hasBranchChildren;
   const branchKindErrorId = `survey-branch-kind-error-${question.id}`;
-  const promptIsBlank = editable && question.prompt.trim().length === 0;
+  const promptIsBlank = editable && showValidationErrors && question.prompt.trim().length === 0;
   const promptErrorId = `survey-prompt-error-${question.id}`;
   const ratingRangeInvalid = editable && hasInvalidRatingRange(question);
   const ratingRangeErrorId = `survey-rating-range-error-${question.id}`;
+  const ratingMinId = `survey-rating-min-${question.id}`;
+  const ratingMaxId = `survey-rating-max-${question.id}`;
   const parents = questions.filter(
     (candidate) =>
       candidate.id !== question.id &&
@@ -100,6 +104,7 @@ export function QuestionEditor({
         <Textarea
           id="question-title"
           value={question.prompt}
+          placeholder={SURVEY_BUILDER_COPY.promptPlaceholder}
           aria-invalid={promptIsBlank}
           {...(promptIsBlank ? { 'aria-describedby': promptErrorId } : {})}
           disabled={!editable}
@@ -115,44 +120,55 @@ export function QuestionEditor({
         <OptionsEditor
           question={question}
           editable={editable}
+          showValidationErrors={showValidationErrors}
           branchTriggerOptionKeys={branchTriggerOptionKeys}
           onChange={set}
         />
       )}
       {question.kind === 'rating' && (
         <div className="grid grid-cols-2 gap-2">
-          <Input
-            aria-label="최소 점수"
-            aria-invalid={ratingRangeInvalid}
-            {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
-            type="number"
-            min={0}
-            max={10}
-            step={1}
-            value={Number.isNaN(question.rating_min) ? '' : (question.rating_min ?? 1)}
-            disabled={!editable}
-            onChange={(event) =>
-              set({
-                rating_min: event.target.value === '' ? Number.NaN : Number(event.target.value),
-              })
-            }
-          />
-          <Input
-            aria-label="최대 점수"
-            aria-invalid={ratingRangeInvalid}
-            {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
-            type="number"
-            min={0}
-            max={10}
-            step={1}
-            value={Number.isNaN(question.rating_max) ? '' : (question.rating_max ?? 5)}
-            disabled={!editable}
-            onChange={(event) =>
-              set({
-                rating_max: event.target.value === '' ? Number.NaN : Number(event.target.value),
-              })
-            }
-          />
+          <div>
+            <label htmlFor={ratingMinId} className="mb-1 block text-sm">
+              {SURVEY_BUILDER_COPY.ratingMin}
+            </label>
+            <Input
+              id={ratingMinId}
+              aria-invalid={ratingRangeInvalid}
+              {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
+              type="number"
+              min={0}
+              max={10}
+              step={1}
+              value={Number.isNaN(question.rating_min) ? '' : (question.rating_min ?? 1)}
+              disabled={!editable}
+              onChange={(event) =>
+                set({
+                  rating_min: event.target.value === '' ? Number.NaN : Number(event.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <label htmlFor={ratingMaxId} className="mb-1 block text-sm">
+              {SURVEY_BUILDER_COPY.ratingMax}
+            </label>
+            <Input
+              id={ratingMaxId}
+              aria-invalid={ratingRangeInvalid}
+              {...(ratingRangeInvalid ? { 'aria-describedby': ratingRangeErrorId } : {})}
+              type="number"
+              min={0}
+              max={10}
+              step={1}
+              value={Number.isNaN(question.rating_max) ? '' : (question.rating_max ?? 5)}
+              disabled={!editable}
+              onChange={(event) =>
+                set({
+                  rating_max: event.target.value === '' ? Number.NaN : Number(event.target.value),
+                })
+              }
+            />
+          </div>
           {ratingRangeInvalid && (
             <p
               id={ratingRangeErrorId}

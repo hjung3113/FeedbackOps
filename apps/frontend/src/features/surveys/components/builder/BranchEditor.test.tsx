@@ -38,7 +38,7 @@ describe('BranchEditor', () => {
     );
 
     fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Q1: 서비스 만족도' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Q1 · Q1: 서비스 만족도' }));
 
     expect(onChange).toHaveBeenCalledWith({
       branch_parent_question_id: parentQuestion.id,
@@ -87,5 +87,40 @@ describe('BranchEditor', () => {
 
     expect(await screen.findByRole('option', { name: 'Q2' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: unnamedParent.id })).not.toBeInTheDocument();
+  });
+
+  it('distinguishes duplicate prompts and numbers a disabled current parent', async () => {
+    const firstParent = { ...parentQuestion, prompt: '공통 질문', sort_order: 0 };
+    const secondParent = {
+      ...parentQuestion,
+      id: '10000000-0000-4000-8000-000000000003',
+      prompt: '공통 질문',
+      sort_order: 1,
+    };
+    const currentParent = {
+      ...parentQuestion,
+      id: '10000000-0000-4000-8000-000000000004',
+      kind: 'multiple_choice' as const,
+      prompt: '공통 질문',
+      sort_order: 2,
+    };
+
+    render(
+      <BranchEditor
+        question={{ ...childQuestion, branch_parent_question_id: currentParent.id }}
+        parent={currentParent}
+        parents={[firstParent, secondParent]}
+        onChange={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+
+    expect(await screen.findByRole('option', { name: 'Q1 · 공통 질문' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Q2 · 공통 질문' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Q3 · 공통 질문' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });
