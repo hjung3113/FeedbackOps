@@ -29,6 +29,7 @@ import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from 
 import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
+import { InternalLink } from '@/lib/router/InternalLink';
 
 type ByManagedSystemRow = DashboardSummary['by_managed_system'][number];
 type ManagedSystemCoverageArea = NonNullable<ByManagedSystemRow['analytics_areas']>[number];
@@ -272,8 +273,9 @@ export function CoverageRoute(): React.ReactElement {
               {(summary.data?.coverage ?? []).map((item) => {
                 const href = hopHref(hopRoute(item.id), item.id, managedSystem);
                 const tone = COVERAGE_STATUS_TONE[item.status];
+                const CoverageRowLink: React.ElementType = href === undefined ? 'a' : InternalLink;
                 return (
-                  <a
+                  <CoverageRowLink
                     key={item.id}
                     {...(href !== undefined ? { href } : {})}
                     data-testid={`coverage-row-${item.id}`}
@@ -305,7 +307,7 @@ export function CoverageRoute(): React.ReactElement {
                     >
                       {item.percent}%
                     </div>
-                  </a>
+                  </CoverageRowLink>
                 );
               })}
             </div>
@@ -318,8 +320,10 @@ export function CoverageRoute(): React.ReactElement {
               {(summary.data?.action_queues ?? []).map((queue) => {
                 const tone = SEVERITY_TONE[queue.severity];
                 const href = hopHref(hopRoute(queue.id), queue.id, managedSystem);
+                const CoverageQueueLink: React.ElementType =
+                  href === undefined ? 'a' : InternalLink;
                 return (
-                  <a
+                  <CoverageQueueLink
                     key={queue.id}
                     {...(href !== undefined ? { href } : {})}
                     data-testid={`coverage-queue-row-${queue.id}`}
@@ -344,7 +348,7 @@ export function CoverageRoute(): React.ReactElement {
                       </div>
                       <div className="text-xs text-text-muted">건</div>
                     </div>
-                  </a>
+                  </CoverageQueueLink>
                 );
               })}
             </div>

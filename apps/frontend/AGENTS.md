@@ -12,6 +12,7 @@
 
 ## Design Consistency Rules
 
+- In-app navigation uses TanStack `<Link>` or `InternalLink`; a plain `<a href>` to an app path reloads the whole app (#840).
 - Consume semantic tokens such as `--text-primary`, `--surface-detail`, and `--border-selected`; do not hard-code hex colors in screens.
 - `pnpm lint:design` (`@shadcn/lint`, ADR-0062) checks restyled `@fops/ui` components, raw colors, arbitrary values, and inline styles. Do not add findings; its messages suggest a variant or token, which you verify before applying. When the same override or hard-coded value repeats, add a shared token, variant, or component instead of repeating it. Mechanics: `scripts/gates/AGENTS.md`.
 - Keep the visual model light, compact, and list-first. Avoid decorative cards, broad gradients, oversized hero sections, and empty whitespace.

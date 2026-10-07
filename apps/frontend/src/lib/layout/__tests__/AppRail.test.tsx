@@ -1,4 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +55,39 @@ function renderRail(props: ComponentProps<typeof AppRail> = {}) {
   return queryClient;
 }
 
+function renderRailWithRouter(props: ComponentProps<typeof AppRail> = {}) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const rootRoute = createRootRoute({
+    component: () => (
+      <>
+        <AppRail {...props} />
+        <Outlet />
+      </>
+    ),
+  });
+  const homeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/home',
+    component: () => <div>Home</div>,
+  });
+  const vocsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/vocs',
+    component: () => <div>VOC</div>,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([homeRoute, vocsRoute]),
+    history: createMemoryHistory({ initialEntries: ['/home'] }),
+  });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return router;
+}
+
 // The menu is opened with the keyboard on purpose. Radix's trigger opens on
 // `pointerdown`, which jsdom cannot synthesise convincingly — measured here:
 // fireEvent.pointerDown leaves aria-expanded="false", while Enter flips it to
@@ -66,6 +107,17 @@ beforeEach(() => {
 });
 
 describe('AppRail', () => {
+  it('navigates a rail destination in the router without reloading the document', async () => {
+    const router = renderRailWithRouter({ activeDomain: 'home' });
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+
+    fireEvent(await screen.findByTestId('rail-voc'), clickEvent);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/vocs'));
+    expect(router.state.location.search).toEqual({ view: 'inbox' });
+    expect(clickEvent.defaultPrevented).toBe(true);
+  });
+
   it('sends the Surveys rail destination to participation', () => {
     expect(RAIL_ITEMS.find((item) => item.key === 'surveys')?.href).toBe('/surveys/participate');
   });
