@@ -77,9 +77,9 @@ export function BranchEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(parent.options ?? []).map((option) => (
+              {(parent.options ?? []).map((option, index) => (
                 <SelectItem key={option.key} value={option.key}>
-                  {option.label}
+                  {option.label.trim() || SURVEY_BUILDER_COPY.optionLabel(index + 1)}
                 </SelectItem>
               ))}
             </SelectContent>

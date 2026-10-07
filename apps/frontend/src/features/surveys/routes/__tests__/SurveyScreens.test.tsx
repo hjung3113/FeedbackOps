@@ -1645,6 +1645,26 @@ describe('Survey screens', () => {
     expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
   });
 
+  it('resets question validation errors after a successful draft save', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('질문 제목'), {
+      target: { value: '업데이트된 질문' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    expect(screen.queryByText('질문을 입력하세요.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('질문 제목')).toHaveAttribute('aria-invalid', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    expect(await screen.findByText('질문을 입력하세요.')).toBeInTheDocument();
+    expect(calls('POST', '/surveys/survey-1/questions')).toHaveLength(0);
+  });
+
   it.each(['draft-save', 'launch'] as const)(
     'selects the first question with a blank option on %s',
     async (action) => {
@@ -2936,6 +2956,9 @@ describe('Survey screens', () => {
     expect(within(preview).queryByText('추가 질문')).not.toBeInTheDocument();
     fireEvent.click(within(preview).getByLabelText('예'));
     expect(within(preview).getByRole('group', { name: '추가 질문' })).toBeInTheDocument();
+    expect(
+      within(preview).getByText('추가 질문', { selector: 'span' }).closest('p'),
+    ).toHaveTextContent('Q2. 추가 질문');
   });
 
   it('does not expose a Create VOC affordance in detail or builder surfaces', () => {

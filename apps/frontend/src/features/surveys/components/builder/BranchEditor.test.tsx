@@ -123,4 +123,31 @@ describe('BranchEditor', () => {
       'true',
     );
   });
+
+  it('labels blank parent options by their position', async () => {
+    const parentWithBlankOptions: SurveyQuestion = {
+      ...parentQuestion,
+      options: [
+        { key: 'first', label: ' ' },
+        { key: 'second', label: '' },
+      ],
+    };
+    render(
+      <BranchEditor
+        question={{
+          ...childQuestion,
+          branch_parent_question_id: parentWithBlankOptions.id,
+          branch_trigger_option_key: 'first',
+        }}
+        parent={parentWithBlankOptions}
+        parents={[parentWithBlankOptions]}
+        onChange={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+
+    expect(await screen.findByRole('option', { name: '옵션 1' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '옵션 2' })).toBeInTheDocument();
+  });
 });

@@ -171,7 +171,9 @@ export function SurveyBuilder({
               disabled={!dirty || isSaving}
               onClick={() => {
                 setShowValidationErrors(true);
-                void save();
+                void save().then((saved) => {
+                  if (saved) setShowValidationErrors(false);
+                });
               }}
             >
               <Check className="h-4 w-4" />
