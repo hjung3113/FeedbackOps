@@ -35,7 +35,7 @@ export function QuestionEditor({
   const hasBranchChildren = questions.some(
     (candidate) => candidate.branch_parent_question_id === question.id,
   );
-  const blockedBranchKindChange = blockedBranchKindChangeId === question.id;
+  const blockedBranchKindChange = blockedBranchKindChangeId === question.id && hasBranchChildren;
   const branchKindErrorId = `survey-branch-kind-error-${question.id}`;
   const promptIsBlank = editable && question.prompt.trim().length === 0;
   const promptErrorId = `survey-prompt-error-${question.id}`;
@@ -52,8 +52,8 @@ export function QuestionEditor({
   });
   return (
     <div className="space-y-4">
-      <label className="block text-sm" htmlFor="question-kind">
-        질문 유형
+      <div className="block text-sm">
+        <label htmlFor="question-kind">질문 유형</label>
         <Select
           value={question.kind}
           disabled={!editable}
@@ -91,7 +91,7 @@ export function QuestionEditor({
             {SURVEY_BUILDER_COPY.branchParentKindChange}
           </p>
         )}
-      </label>
+      </div>
       <div className="block text-sm">
         <label htmlFor="question-title">질문 제목</label>
         <Textarea

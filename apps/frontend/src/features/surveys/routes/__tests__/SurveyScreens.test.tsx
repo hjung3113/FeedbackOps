@@ -1582,6 +1582,10 @@ describe('Survey screens', () => {
       expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(0);
       expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
       expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      if (action === 'launch') {
+        expect(screen.queryByTestId('survey-open-confirmation')).not.toBeInTheDocument();
+        expect(screen.queryByText('빈 옵션을 채운 후 다시 시작하세요.')).not.toBeInTheDocument();
+      }
     },
   );
 
@@ -1618,6 +1622,19 @@ describe('Survey screens', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '질문 유형' })).toHaveTextContent(
       SURVEY_QUESTION_KIND_LABELS.single_choice,
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
+    fireEvent.click(screen.getByText('Q1'));
+
+    expect(
+      screen.queryByText('분기 질문이 있으면 복수 선택으로 바꿀 수 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '질문 유형' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
     );
 
     fireEvent.click(screen.getByText('Q2'));
