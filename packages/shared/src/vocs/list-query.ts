@@ -52,6 +52,18 @@ export const listVocsQuerySchema = z.object({
   // only inside the caller's existing triage scope; out-of-scope or unknown
   // ids are dropped silently (never 403/404 — that would be an existence probe).
   pin_voc_id: z.string().uuid().optional(),
+  // Text search (#821). view=inbox and view=my only — the service rejects it
+  // for view=triage with 422 `invalid_for_view`, same shape as pin_voc_id.
+  // Trimmed; a blank value is normalised to undefined (no filter, no error);
+  // more than 100 characters fails at path `q`. Matching is case-insensitive
+  // display_id prefix OR title contains, applied inside the list predicate
+  // after the read-scope clause (never on count paths).
+  q: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? undefined : v)),
   // Dot-key filter fields — Fastify query params are flat strings.
   'filter.severity': commaListOf(severityEnumSchema).optional(),
   'filter.reporter_facing_status': commaListOf(reporterFacingStatusEnumSchema).optional(),

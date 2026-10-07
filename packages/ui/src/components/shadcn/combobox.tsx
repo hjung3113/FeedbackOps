@@ -18,6 +18,9 @@ import { Check, ChevronsUpDown } from 'lucide-react';
  *   aria-invalid — forwarded to the trigger button
  *   aria-describedby — forwarded to the trigger button
  *   onSearchChange — called when the search text changes
+ *   filterOptions — when false, options are listed exactly as given (for
+ *     consumers whose server already searched); default true client-filters
+ *     option labels by the typed search
  *   footerText — optional muted text shown below the listbox
  *   className — forwarded to the trigger button
  *
@@ -50,6 +53,13 @@ export interface ComboboxProps {
   'aria-invalid'?: boolean;
   'aria-describedby'?: string;
   onSearchChange?: (search: string) => void;
+  /**
+   * When false, `options` are rendered as given — for consumers that already
+   * search server-side (the typed text goes to the server as `q`, so trimming
+   * or case would otherwise hide exact matches). Default `true` keeps the
+   * local label filter for existing consumers.
+   */
+  filterOptions?: boolean;
   /** When true, the trigger is disabled and the popover cannot be opened. */
   disabled?: boolean;
 }
@@ -68,6 +78,7 @@ export function Combobox({
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
   onSearchChange,
+  filterOptions = true,
   disabled,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
@@ -79,10 +90,10 @@ export function Combobox({
   const optionIdPrefix = React.useId();
 
   const filtered = React.useMemo(() => {
-    if (!search) return options;
+    if (!filterOptions || !search) return options;
     const lower = search.toLowerCase();
     return options.filter((o) => o.label.toLowerCase().includes(lower));
-  }, [options, search]);
+  }, [options, search, filterOptions]);
 
   const selected = options.find((o) => o.value === value);
 

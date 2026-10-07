@@ -6,6 +6,11 @@ export interface UseVocListParams {
   view: 'inbox' | 'my' | 'triage';
   managedSystemId?: string;
   tab?: string;
+  /**
+   * #821 server-side text search. Inbox/my views only; the backend rejects it
+   * for view=triage. Goes into the query key and, when present, the query string.
+   */
+  q?: string;
   filters?: Record<string, string[]>;
   sort?: string;
   cursor?: string;
@@ -35,18 +40,20 @@ export interface VocListPage {
 }
 
 export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage> {
-  const { view, managedSystemId, tab, filters, sort, cursor, limit, pinVocId, enabled } = params;
+  const { view, managedSystemId, tab, q, filters, sort, cursor, limit, pinVocId, enabled } = params;
 
   return useQuery({
     // pinVocId belongs in the key: two deep links differing only by target must
-    // not share a cached queue (#383).
-    queryKey: ['vocs', view, managedSystemId, tab, filters, sort, cursor, pinVocId] as const,
+    // not share a cached queue (#383). q likewise (#821) — a search must not
+    // read another search's cached page.
+    queryKey: ['vocs', view, managedSystemId, tab, q, filters, sort, cursor, pinVocId] as const,
     enabled: enabled !== false,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams();
       qs.set('view', view);
       if (managedSystemId) qs.set('managed_system_id', managedSystemId);
       if (tab) qs.set('tab', tab);
+      if (q) qs.set('q', q);
       if (filters) {
         for (const [filterKey, values] of Object.entries(filters)) {
           if (values.length > 0) {

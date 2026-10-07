@@ -34,6 +34,12 @@ export interface ListVocsRepoArgs {
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
   filterAnalyticsAreaUnset?: boolean;
+  /**
+   * #821 text search: case-insensitive display_id prefix OR title contains.
+   * List path only — count paths never set it, so navigation counts cannot
+   * drift from a search and out_of_scope_summary cannot probe titles.
+   */
+  q?: string;
   sort:
     | 'created_at:desc'
     | 'created_at:asc'
@@ -46,6 +52,14 @@ export interface ListVocsRepoArgs {
 }
 
 type VocListPredicateArgs = Omit<ListVocsRepoArgs, 'sort' | 'cursor' | 'limit'>;
+
+/**
+ * #821: escape the LIKE wildcards so `%` and `_` in the user text match
+ * literally. The escape character itself (`\`) is escaped first.
+ */
+function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
 
 /**
  * The canonical list/count predicate.  Keep navigation counts on this path so
@@ -63,6 +77,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     filterOwner,
     filterAnalyticsAreaUnset,
     analyticsAreaId,
+    q,
   } = args;
   if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
   if (tab === 'similar') return null;
@@ -134,6 +149,16 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
   }
   if (analyticsAreaId !== undefined) {
     wheres.push(sql`analytics_area_id = ${analyticsAreaId}::uuid`);
+  }
+  // #821 text search, applied after the read-scope clause: a VOC outside the
+  // caller's scope can never appear because its title matched. Case-insensitive
+  // display_id prefix OR title contains, with `\`, `%`, `_` escaped and
+  // `ESCAPE '\'` so `%`/`_` match literally. Bound parameters only.
+  if (q !== undefined && q !== '') {
+    const pattern = escapeLikePattern(q);
+    wheres.push(
+      sql`(display_id ILIKE ${`${pattern}%`} ESCAPE '\\' OR title ILIKE ${`%${pattern}%`} ESCAPE '\\')`,
+    );
   }
   return wheres;
 }
