@@ -445,9 +445,8 @@ describe('useInboxRoute', () => {
     // through a navigation. The other five each have to route.
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
 
-    // Radix TabsTrigger activates on mousedown, not click (same note as
-    // SourceContextSegmented.test.tsx:2). fireEvent.click left navigateMock at
-    // 0, so the assertion below had nothing to beat.
+    // Radix TabsTrigger activates on mousedown, not click. fireEvent.click left
+    // navigateMock at 0, so the assertion below had nothing to beat.
     for (const tab of tabs.slice(1)) fireEvent.mouseDown(tab);
     expect(navigateMock).toHaveBeenCalledTimes(5);
     expect(

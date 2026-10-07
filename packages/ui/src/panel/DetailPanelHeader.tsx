@@ -36,15 +36,33 @@ const KIND_LABELS: Record<DetailPanelKind, string> = {
   milestone: 'Milestone',
 };
 
-const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc: '--color-aether-blue',
-  finding: '--color-emerald',
-  task_request: '--color-amber',
-  task: '--color-amethyst',
-  survey: '--color-cyan-spark',
-  cluster: '--color-amber',
-  milestone: '--color-amber',
-};
+type KindAccent = { token: string; bgClass: string; textClass: string };
+
+const KIND_ACCENT = {
+  voc: { token: '--color-aether-blue', bgClass: 'bg-accent-voc', textClass: 'text-accent-voc' },
+  finding: {
+    token: '--color-emerald',
+    bgClass: 'bg-accent-success',
+    textClass: 'text-accent-success',
+  },
+  task_request: {
+    token: '--color-amber',
+    bgClass: 'bg-accent-warn',
+    textClass: 'text-accent-warn',
+  },
+  task: { token: '--color-amethyst', bgClass: 'bg-accent-task', textClass: 'text-accent-task' },
+  survey: {
+    token: '--color-cyan-spark',
+    bgClass: 'bg-accent-info',
+    textClass: 'text-accent-info',
+  },
+  cluster: { token: '--color-amber', bgClass: 'bg-accent-warn', textClass: 'text-accent-warn' },
+  milestone: {
+    token: '--color-amber',
+    bgClass: 'bg-accent-warn',
+    textClass: 'text-accent-warn',
+  },
+} satisfies Record<DetailPanelKind, KindAccent>;
 
 export function DetailPanelHeader({
   kind,
@@ -54,17 +72,15 @@ export function DetailPanelHeader({
   className,
 }: DetailPanelHeaderProps) {
   const isMilestone = kind === 'milestone';
-  const accentToken = KIND_ACCENT[kind];
+  const accent = KIND_ACCENT[kind];
 
   return (
     <div
       data-kind={kind}
       style={
         {
-          // oxlint-disable-next-line shadcn/no-inline-styles -- kind accent from the closed kind map; DetailPanelHeader.test pins the style value (class conversion is a follow-up)
-          '--detail-panel-kind-accent': `rgb(var(${accentToken}) / 1)`,
-          // oxlint-disable-next-line shadcn/no-inline-styles -- kind tint keeps the exact rgb alpha the milestones visual spec asserts
-          '--detail-panel-kind-tint': `rgb(var(${accentToken}) / 0.12)`,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- exact 0.12 kind tint is asserted by the milestones visual spec
+          '--detail-panel-kind-tint': `rgb(var(${accent.token}) / 0.12)`,
         } as React.CSSProperties
       }
       className={cn(
@@ -73,9 +89,7 @@ export function DetailPanelHeader({
         className,
       )}
     >
-      {!isMilestone && (
-        <div aria-hidden="true" className="w-1 shrink-0 bg-(--detail-panel-kind-accent)" />
-      )}
+      {!isMilestone && <div aria-hidden="true" className={cn('w-1 shrink-0', accent.bgClass)} />}
 
       {/* Content row */}
       <div
@@ -86,13 +100,13 @@ export function DetailPanelHeader({
         <div className={cn('flex gap-2 min-w-0', isMilestone ? 'items-center' : 'items-baseline')}>
           <StatusBadgeFrame
             appearance="compact"
-            textClassName="text-(--detail-panel-kind-accent)"
+            textClassName={accent.textClass}
             tintClassName="bg-(--detail-panel-kind-tint)"
             className="leading-none tracking-kind-label"
             indicator={
               <span
                 aria-hidden="true"
-                className="h-1.5 w-1.5 shrink-0 rounded-(--radius-pill) bg-(--detail-panel-kind-accent)"
+                className={cn('h-1.5 w-1.5 shrink-0 rounded-(--radius-pill)', accent.bgClass)}
               />
             }
           >

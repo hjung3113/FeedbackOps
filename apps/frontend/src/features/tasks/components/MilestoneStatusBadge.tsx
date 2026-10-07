@@ -10,11 +10,10 @@ export interface MilestoneStatusBadgeProps {
 }
 
 // Labels verbatim from MILESTONE_STATUS_META in screen-milestones.jsx.
-// Pack 17 semantic tokens instead of the prototype's dark-theme rgba values:
-// in_progress/do → --status-internal-doing (aether-blue) and --status-internal-done
-// (emerald) match the prototype colors; planning uses the muted internal token.
-// Blocked has no internal-status token yet, so it consumes --text-danger
-// (the same warning-red value).
+// Pack 17 tokens preserve the base hue for the 12% tint and dot; StatusBadgeFrame
+// uses the paired AA-safe -label tokens for text (doing already passes and keeps
+// its base hue). Blocked has no internal-status token, so danger supplies its
+// label text while --text-danger remains the tint and the dot uses accent-danger.
 type MilestoneStatus = 'planning' | 'in_progress' | 'blocked' | 'released';
 
 const STATUS_META: Record<

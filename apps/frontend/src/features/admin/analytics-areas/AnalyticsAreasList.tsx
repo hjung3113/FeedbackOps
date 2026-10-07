@@ -47,38 +47,42 @@ export function AnalyticsAreasFilter({
           {GLOSSARY.filter}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="aa-filter-managed-system">Managed System</Label>
-          <Select
-            value={managedSystemId ?? 'all'}
-            onValueChange={(value) => onManagedSystemIdChange(value === 'all' ? undefined : value)}
+      <PopoverContent align="end">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="aa-filter-managed-system">Managed System</Label>
+            <Select
+              value={managedSystemId ?? 'all'}
+              onValueChange={(value) =>
+                onManagedSystemIdChange(value === 'all' ? undefined : value)
+              }
+            >
+              <SelectTrigger id="aa-filter-managed-system" data-testid="aa-filter-managed-system">
+                <SelectValue placeholder="전체" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                {systems.map((system) => (
+                  <SelectItem key={system.id} value={system.id}>
+                    {system.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <label
+            className="flex items-center gap-2 text-sm text-text-primary"
+            htmlFor="aa-filter-include-archived"
           >
-            <SelectTrigger id="aa-filter-managed-system" data-testid="aa-filter-managed-system">
-              <SelectValue placeholder="전체" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              {systems.map((system) => (
-                <SelectItem key={system.id} value={system.id}>
-                  {system.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Checkbox
+              id="aa-filter-include-archived"
+              checked={includeArchived}
+              onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
+              data-testid="aa-filter-include-archived"
+            />
+            보관됨 포함
+          </label>
         </div>
-        <label
-          className="flex items-center gap-2 text-sm text-text-primary"
-          htmlFor="aa-filter-include-archived"
-        >
-          <Checkbox
-            id="aa-filter-include-archived"
-            checked={includeArchived}
-            onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
-            data-testid="aa-filter-include-archived"
-          />
-          보관됨 포함
-        </label>
       </PopoverContent>
     </Popover>
   );

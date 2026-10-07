@@ -4,7 +4,9 @@ import { CreateSurveyDialog, SurveysIndexRoute } from '@/routes/_authed/surveys/
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type RouterHistory,
   RouterProvider,
+  createBrowserHistory,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -14,6 +16,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { SurveyStatusBadge } from '../../components/SurveyStatusBadge';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
@@ -40,6 +43,9 @@ const {
   routeQueryStubs: {
     surveys: undefined as (() => unknown) | undefined,
     survey: undefined as (() => unknown) | undefined,
+    search: {} as { builder?: boolean },
+    manageGate: undefined as (() => unknown) | undefined,
+    navigate: undefined as ((...args: unknown[]) => Promise<unknown>) | undefined,
   },
 }));
 vi.mock('@/lib/api', async (importOriginal) => ({
@@ -61,7 +67,8 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => {
   };
 });
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
-  useSurveyManageGate: () => ({ canManage: false, gateState: 'absent' as const }),
+  useSurveyManageGate: () =>
+    routeQueryStubs.manageGate?.() ?? { canManage: false, gateState: 'absent' as const },
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({
   useManagedSystemNamesResult: () => ({ namesById: new Map<string, string>(), isSuccess: true }),
@@ -76,11 +83,11 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   createFileRoute: () => () => ({
     useParams: () => ({ surveyId: 'survey-1' }),
-    useSearch: () => ({}),
+    useSearch: () => routeQueryStubs.search,
   }),
-  useSearch: () => ({}),
+  useSearch: () => routeQueryStubs.search,
   useMatchRoute: () => () => false,
-  useNavigate: () => () => Promise.resolve(),
+  useNavigate: () => routeQueryStubs.navigate ?? (() => Promise.resolve()),
 }));
 
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
@@ -96,6 +103,145 @@ function question(id: string, prompt: string, sortOrder: number): SurveyQuestion
 
 function calls(method: string, path: string) {
   return apiClient.mock.calls.filter((call) => call[0] === method && call[1] === path);
+}
+
+// Test oracle copied from surveys/routes.ts question parsing and
+// surveys/authoring.ts validateQuestions. Keep this independent of frontend schemas.
+const backendQuestionInputOracle = z
+  .object({
+    kind: surveyQuestionKindSchema,
+    prompt: z.string().min(1),
+    is_required: z.boolean().optional(),
+    options: z
+      .array(z.object({ key: z.string().min(1), label: z.string().min(1) }).strict())
+      .min(2)
+      .max(50)
+      .optional(),
+    rating_min: z.number().int().optional(),
+    rating_max: z.number().int().optional(),
+    rating_low_label: z.string().nullable().optional(),
+    rating_high_label: z.string().nullable().optional(),
+    sort_order: z.number().int().nonnegative().optional(),
+    branch_parent_question_id: z.string().uuid().nullable().optional(),
+    branch_trigger_option_key: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+const SERVER_CREATED_QUESTION_ID = '33333333-3333-4333-8333-333333333333';
+
+function parseBackendQuestionInput(input: unknown) {
+  const parsed = backendQuestionInputOracle.parse(input);
+  const isChoice = parsed.kind === 'single_choice' || parsed.kind === 'multiple_choice';
+  if (
+    isChoice &&
+    (!parsed.options ||
+      new Set(parsed.options.map((option) => option.key)).size !== parsed.options.length ||
+      parsed.options.some((option) => !option.key || !option.label))
+  )
+    throw new Error('422: choice questions require 2-50 unique options');
+  return parsed;
+}
+
+function installQuestionServerOracle(
+  initialQuestions: SurveyQuestion[],
+  options: { rejectFirstPatchFor?: string } = {},
+) {
+  const saved = new Map(initialQuestions.map((question) => [question.id, { ...question }]));
+  const surveyId = initialQuestions[0]?.survey_id ?? 'survey-1';
+  let rejectedFirstPatch = false;
+
+  const validateBranches = (questions: SurveyQuestion[]) => {
+    for (const child of questions) {
+      if (child.branch_depth !== 1) continue;
+      const parent = questions.find(
+        (candidate) => candidate.id === child.branch_parent_question_id,
+      );
+      if (
+        !parent ||
+        parent.kind !== 'single_choice' ||
+        parent.branch_depth !== 0 ||
+        !parent.options?.some((option) => option.key === child.branch_trigger_option_key)
+      )
+        throw new Error('422: invalid question branch');
+    }
+  };
+
+  const fromInput = (id: string, input: ReturnType<typeof parseBackendQuestionInput>) =>
+    ({
+      id,
+      survey_id: surveyId,
+      kind: input.kind,
+      prompt: input.prompt,
+      is_required: input.is_required ?? false,
+      options: input.options ?? null,
+      rating_min: input.rating_min ?? null,
+      rating_max: input.rating_max ?? null,
+      rating_low_label: input.rating_low_label ?? null,
+      rating_high_label: input.rating_high_label ?? null,
+      sort_order: input.sort_order ?? 0,
+      branch_depth: input.branch_parent_question_id ? 1 : 0,
+      branch_parent_question_id: input.branch_parent_question_id ?? null,
+      branch_trigger_option_key: input.branch_trigger_option_key ?? null,
+    }) satisfies SurveyQuestion;
+
+  apiClient.mockImplementation(
+    async (method: string, path: string, request?: { body?: unknown }) => {
+      if (method === 'POST' && path === `/surveys/${surveyId}/questions`) {
+        const input = parseBackendQuestionInput(request?.body);
+        const created = fromInput(SERVER_CREATED_QUESTION_ID, input);
+        validateBranches([...saved.values(), created]);
+        saved.set(SERVER_CREATED_QUESTION_ID, created);
+        return { data: { id: SERVER_CREATED_QUESTION_ID } };
+      }
+
+      const questionId = path.match(/^\/surveys\/[^/]+\/questions\/([^/]+)$/)?.[1];
+      if (method === 'PATCH' && questionId && questionId !== 'reorder') {
+        if (questionId === options.rejectFirstPatchFor && !rejectedFirstPatch) {
+          rejectedFirstPatch = true;
+          throw new Error('422: rejected once');
+        }
+        const existing = saved.get(questionId);
+        if (!existing) throw new Error('404: question not found');
+        const input = parseBackendQuestionInput(request?.body);
+        let updated: SurveyQuestion = {
+          ...existing,
+          kind: input.kind,
+          prompt: input.prompt,
+          is_required: input.is_required ?? existing.is_required,
+          options: input.options ?? existing.options,
+          rating_min: input.rating_min ?? existing.rating_min,
+          rating_max: input.rating_max ?? existing.rating_max,
+          rating_low_label: input.rating_low_label ?? existing.rating_low_label,
+          rating_high_label: input.rating_high_label ?? existing.rating_high_label,
+          sort_order: input.sort_order ?? existing.sort_order,
+        };
+        if (input.kind !== 'single_choice' && input.kind !== 'multiple_choice')
+          updated = { ...updated, options: null };
+        if (input.branch_parent_question_id === null) {
+          updated = {
+            ...updated,
+            branch_depth: 0,
+            branch_parent_question_id: null,
+            branch_trigger_option_key: null,
+          };
+        } else if (input.branch_parent_question_id) {
+          updated = {
+            ...updated,
+            branch_depth: 1,
+            branch_parent_question_id: input.branch_parent_question_id,
+            branch_trigger_option_key:
+              input.branch_trigger_option_key ?? existing.branch_trigger_option_key,
+          };
+        }
+        validateBranches(
+          [...saved.values()].map((question) => (question.id === questionId ? updated : question)),
+        );
+        saved.set(questionId, updated);
+        return { data: { id: questionId } };
+      }
+
+      return { data: { id: 'question-1' } };
+    },
+  );
 }
 
 const survey: Survey = {
@@ -178,7 +324,58 @@ function renderDetailWithRouter(
   );
 }
 
+function renderBuilderRouteWithRouter(
+  history: RouterHistory = createMemoryHistory({ initialEntries: ['/builder'] }),
+) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  routeQueryStubs.search = { builder: true };
+  routeQueryStubs.manageGate = () => ({ canManage: true });
+  routeQueryStubs.surveys = () => ({ data: [], isPending: false });
+  routeQueryStubs.survey = () => ({
+    data: survey,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    isFetching: false,
+  });
+  const root = createRootRoute();
+  const builder = createRoute({
+    getParentRoute: () => root,
+    path: '/builder',
+    component: SurveyDetailRoute,
+  });
+  const away = createRoute({
+    getParentRoute: () => root,
+    path: '/away',
+    component: () => <div data-testid="survey-builder-away">away</div>,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([builder, away]),
+    history,
+  });
+  routeQueryStubs.navigate = async (..._args: unknown[]) =>
+    router.navigate({ to: '/away' as never });
+  return {
+    router,
+    view: render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
 describe('Survey screens', () => {
+  afterEach(() => {
+    routeQueryStubs.surveys = undefined;
+    routeQueryStubs.survey = undefined;
+    routeQueryStubs.search = {};
+    routeQueryStubs.manageGate = undefined;
+    routeQueryStubs.navigate = undefined;
+  });
+
   beforeEach(() => {
     apiClient.mockReset();
     apiRequest.mockReset();
@@ -613,6 +810,75 @@ describe('Survey screens', () => {
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
   });
 
+  it('saves a newly added question before starting the Survey', async () => {
+    const serverQuestionIds: string[] = [];
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/surveys/survey-1/questions') {
+        const id = `server-question-${serverQuestionIds.length + 1}`;
+        serverQuestionIds.push(id);
+        return { data: { id } };
+      }
+      if (method === 'POST' && path === '/surveys/survey-1/open') {
+        if (serverQuestionIds.length === 0)
+          throw {
+            status: 422,
+            envelope: {
+              code: 'validation.failed',
+              message: 'survey requires a question',
+              detail: { fields: [{ path: ['questions'], code: 'required' }] },
+            },
+          };
+        return { data: { ...survey, status: 'open' } };
+      }
+      return { data: {} };
+    });
+    const onBack = vi.fn();
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
+    );
+
+    fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+    expect(serverQuestionIds).toEqual(['server-question-1']);
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1);
+    expect(
+      screen.queryByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the start confirmation open when saving the draft fails', async () => {
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'POST' && path === '/surveys/survey-1/questions')
+        throw new Error('question save failed');
+      return { data: {} };
+    });
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    expect(await screen.findByText('저장하지 못해 시작하지 않았습니다.')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+  });
+
   it('hides Launch when the builder survey is open', async () => {
     renderWithQuery(
       <SurveyBuilder survey={{ ...survey, status: 'open' }} canManage onBack={vi.fn()} />,
@@ -629,33 +895,120 @@ describe('Survey screens', () => {
     expect(screen.queryByRole('button', { name: 'Survey 시작' })).not.toBeInTheDocument();
   });
 
-  it('keeps the Launch confirmation open when a survey has no questions', async () => {
-    const onBack = vi.fn();
-    apiClient.mockRejectedValue({
-      status: 422,
-      envelope: {
-        code: 'validation.failed',
-        message: 'survey requires a question',
-        detail: { fields: [{ path: ['questions'], code: 'required' }] },
-      },
-    });
+  it('disables Survey start and explains how to proceed when there are no questions', () => {
     renderWithQuery(
-      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
-    fireEvent.click(
-      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
-        'survey-status-confirm',
-      ),
-    );
-
-    expect(
-      await screen.findByText('Survey 시작 전에 질문을 하나 이상 추가해야 합니다.'),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
-    expect(onBack).not.toHaveBeenCalled();
+    const startButton = screen.getByRole('button', { name: 'Survey 시작' });
+    expect(startButton).toBeDisabled();
+    expect(startButton).toHaveAccessibleDescription('시작하려면 질문을 하나 이상 추가하세요.');
   });
+
+  it('keeps an untouched empty draft clean', () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+
+    expect(screen.queryByText('저장되지 않은 변경 사항')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
+  });
+
+  it.each(['back button', 'router navigation'] as const)(
+    'asks before leaving a dirty Survey builder through %s',
+    async (departure) => {
+      const { router } = renderBuilderRouteWithRouter();
+      await screen.findByTestId('survey-builder');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+        target: { value: '수정한 제목' },
+      });
+
+      const navigateAway = async () => {
+        if (departure === 'back button') {
+          fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+        } else {
+          await act(async () => {
+            void router.navigate({ to: '/away' as never });
+            await Promise.resolve();
+          });
+        }
+      };
+      await navigateAway();
+
+      expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+      await waitFor(() => expect(screen.queryByText('변경사항이 저장되지 않았습니다')).toBeNull());
+      expect(screen.getByTestId('survey-builder')).toBeInTheDocument();
+
+      await navigateAway();
+      expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '이동' }));
+      expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['clean', false],
+    ['dirty', true],
+  ] as const)('blocks browser unload only when the builder is %s', async (_state, isDirty) => {
+    const initialUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState(null, '', '/builder');
+    const browserHistory = createBrowserHistory();
+    const { router, view } = renderBuilderRouteWithRouter(browserHistory);
+
+    try {
+      await screen.findByTestId('survey-builder');
+      if (isDirty) {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+          target: { value: '수정한 제목' },
+        });
+      }
+
+      const beforeUnload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+
+      expect(beforeUnload.defaultPrevented).toBe(isDirty);
+    } finally {
+      view.unmount();
+      router.history.destroy();
+      window.history.replaceState(null, '', initialUrl);
+    }
+  });
+
+  it.each(['saved draft', 'started Survey'] as const)(
+    'leaves without a dirty warning after a successful %s',
+    async (action) => {
+      const { router } = renderBuilderRouteWithRouter();
+      await screen.findByTestId('survey-builder');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+        target: { value: '저장할 제목' },
+      });
+
+      if (action === 'saved draft') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled(),
+        );
+        await act(async () => {
+          void router.navigate({ to: '/away' as never });
+          await Promise.resolve();
+        });
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+      expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+      expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1);
+      if (action === 'started Survey')
+        expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1);
+    },
+  );
 
   it('shows a distinct Launch message for an invalid survey transition', async () => {
     apiClient.mockRejectedValue({
@@ -851,6 +1204,628 @@ describe('Survey screens', () => {
     expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
   });
 
+  it('keeps a title edit made during save dirty and sends it on the next save', async () => {
+    let resolveFirstPatch!: (value: { data: Survey }) => void;
+    const firstPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveFirstPatch = resolve;
+    });
+    let surveyPatchCount = 0;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1') {
+        surveyPatchCount += 1;
+        if (surveyPatchCount === 1) return firstPatch;
+      }
+      return { data: survey };
+    });
+    const { router } = renderBuilderRouteWithRouter();
+    await screen.findByTestId('survey-builder');
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '첫 번째 저장 제목' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
+    expect(calls('PATCH', '/surveys/survey-1')[0]?.[2].body).toEqual({
+      title: '첫 번째 저장 제목',
+    });
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '저장 중 바꾼 제목' },
+    });
+    await act(async () => resolveFirstPatch({ data: survey }));
+
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    await act(async () => {
+      void router.navigate({ to: '/away' as never });
+      await Promise.resolve();
+    });
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    await waitFor(() => expect(screen.queryByText('변경사항이 저장되지 않았습니다')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(2));
+    expect(calls('PATCH', '/surveys/survey-1')[1]?.[2].body).toEqual({
+      title: '저장 중 바꾼 제목',
+    });
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    await act(async () => {
+      void router.navigate({ to: '/away' as never });
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+  });
+
+  it('re-saves a title edit left dirty by an earlier save before launching', async () => {
+    let resolveFirstPatch!: (value: { data: Survey }) => void;
+    const firstPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveFirstPatch = resolve;
+    });
+    let resolveSecondPatch!: (value: { data: Survey }) => void;
+    const secondPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveSecondPatch = resolve;
+    });
+    let surveyPatchCount = 0;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1') {
+        surveyPatchCount += 1;
+        if (surveyPatchCount === 1) return firstPatch;
+        if (surveyPatchCount === 2) return secondPatch;
+      }
+      if (method === 'POST' && path === '/surveys/survey-1/open')
+        return { data: { ...survey, status: 'open' } };
+      return { data: survey };
+    });
+    const onBack = vi.fn();
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={onBack} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '시작 전 저장 제목' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '저장 중 수정한 제목' },
+    });
+    await act(async () => resolveFirstPatch({ data: survey }));
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(2));
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+    expect(calls('PATCH', '/surveys/survey-1')[1]?.[2].body).toEqual({
+      title: '저장 중 수정한 제목',
+    });
+    await act(async () => resolveSecondPatch({ data: survey }));
+    await waitFor(() => expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an edit made after its question loop finishes dirty until the next save', async () => {
+    let resolveSecondQuestionPatch!: (value: { data: { id: string } }) => void;
+    const secondQuestionPatch = new Promise<{ data: { id: string } }>((resolve) => {
+      resolveSecondQuestionPatch = resolve;
+    });
+    const secondQuestion = question('question-2', '다음 질문', 1);
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1/questions/question-2')
+        return secondQuestionPatch;
+      return { data: { id: path.endsWith('question-1') ? 'question-1' : 'question-2' } };
+    });
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [...(survey.questions ?? []), secondQuestion] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '첫 질문 저장 값' },
+    });
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.change(screen.getByDisplayValue('다음 질문'), {
+      target: { value: '두 번째 질문 저장 값' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
+    );
+
+    fireEvent.click(screen.getByText('Q1'));
+    fireEvent.change(screen.getByDisplayValue('첫 질문 저장 값'), {
+      target: { value: '첫 질문 저장 중 수정 값' },
+    });
+    await act(async () => resolveSecondQuestionPatch({ data: { id: 'question-2' } }));
+
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(2),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')[1]?.[2].body).toMatchObject({
+      prompt: '첫 질문 저장 중 수정 값',
+    });
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+  });
+
+  it('adds a choice option with a unique key and saves a valid question input', async () => {
+    const initialOptions = survey.questions?.[0]?.options ?? [];
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+    expect(screen.getByLabelText('옵션 3')).toHaveValue('옵션 3');
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+    const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+    const parsed = parseBackendQuestionInput(sentBody);
+    const options = parsed.options ?? [];
+
+    expect(options).toHaveLength(3);
+    expect(options.slice(0, 2).map((option) => option.key)).toEqual(
+      initialOptions.map((option) => option.key),
+    );
+    expect(options[2]?.label).toBe('옵션 3');
+    expect(new Set(options.map((option) => option.key)).size).toBe(3);
+  });
+
+  it.each([
+    [
+      'getRandomValues only',
+      {
+        getRandomValues: (values: Uint32Array) => {
+          values.set([1, 2, 3, 4]);
+          return values;
+        },
+      },
+    ],
+    ['crypto unavailable', undefined],
+  ] as const)('adds an option when %s', async (_label, cryptoValue) => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    let unmount: (() => void) | undefined;
+    try {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: cryptoValue,
+      });
+      unmount = renderWithQuery(
+        <SurveyBuilder survey={survey} canManage onBack={vi.fn()} />,
+      ).unmount;
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+      await waitFor(() =>
+        expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+      );
+      const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+      const parsed = parseBackendQuestionInput(sentBody);
+      expect(parsed.options).toHaveLength(3);
+    } finally {
+      unmount?.();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      else Reflect.deleteProperty(globalThis, 'crypto');
+    }
+  });
+
+  it.each([
+    [
+      'getRandomValues only',
+      {
+        getRandomValues: (values: Uint32Array) => {
+          values.set([1, 2, 3, 4]);
+          return values;
+        },
+      },
+    ],
+    ['crypto unavailable', undefined],
+  ] as const)('W-823 adds questions with unique ids when %s', (_label, cryptoValue) => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    let unmount: (() => void) | undefined;
+    try {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: cryptoValue,
+      });
+      unmount = renderWithQuery(
+        <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+      ).unmount;
+
+      fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+
+      const ids = screen
+        .getAllByTestId(/^survey-question-row-/)
+        .map((row) => row.getAttribute('data-testid')?.replace('survey-question-row-', ''));
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+    } finally {
+      unmount?.();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      else Reflect.deleteProperty(globalThis, 'crypto');
+    }
+  });
+
+  it('removes options down to two while preserving the remaining keys', async () => {
+    const parent = survey.questions?.[0] as SurveyQuestion;
+    const initialOptions = [...(parent.options ?? []), { key: 'maybe', label: '잘 모르겠어요' }];
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [{ ...parent, options: initialOptions }] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '옵션 3 삭제' }));
+    expect(screen.getByLabelText('옵션 1')).toHaveValue('예');
+    expect(screen.getByLabelText('옵션 2')).toHaveValue('아니오');
+    expect(screen.getByRole('button', { name: '옵션 1 삭제' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '옵션 2 삭제' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+    const sentBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+    const parsed = parseBackendQuestionInput(sentBody);
+    expect(parsed.options?.map((option) => option.key)).toEqual(
+      initialOptions.slice(0, 2).map((option) => option.key),
+    );
+  });
+
+  it('shows empty option errors and blocks saving or launching invalid questions', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('옵션 1'), { target: { value: '   ' } });
+    expect(await screen.findByText('옵션을 입력하세요.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+    expect(await screen.findByText('빈 옵션을 채운 후 다시 시작하세요.')).toBeInTheDocument();
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+  });
+
+  it.each(['draft-save', 'launch'] as const)(
+    'selects the first question with a blank option on %s',
+    async (action) => {
+      const parent = survey.questions?.[0] as SurveyQuestion;
+      const second: SurveyQuestion = {
+        ...parent,
+        id: 'question-2',
+        prompt: '다음 질문',
+        sort_order: 1,
+      };
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: [parent, second] }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('옵션 1'), { target: { value: '   ' } });
+      fireEvent.click(screen.getByText('Q2'));
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      await waitFor(() => expect(screen.getByLabelText('질문 제목')).toHaveValue(parent.prompt));
+      expect(await screen.findByText('옵션을 입력하세요.')).toBeInTheDocument();
+    },
+  );
+
+  it.each(['draft-save', 'launch'] as const)(
+    'W-823 rejects whitespace-only prompts before %s and selects the first invalid question',
+    async (action) => {
+      const first = survey.questions?.[0] as SurveyQuestion;
+      const second = { ...question('question-2', '다음 질문', 1) };
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: [first, second] }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('질문 제목'), { target: { value: '   ' } });
+      fireEvent.click(screen.getByText('Q2'));
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+        await act(async () => {
+          await Promise.resolve();
+        });
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      const firstRow = screen.getByTestId('survey-question-row-question-1');
+      const secondRow = screen.getByTestId('survey-question-row-question-2');
+      expect(firstRow).toHaveClass('bg-surface-card');
+      expect(secondRow).not.toHaveClass('bg-surface-card');
+      expect(screen.getByLabelText('질문 제목')).toHaveValue('   ');
+      expect(screen.getByLabelText('질문 제목')).toHaveAttribute('aria-invalid', 'true');
+      expect(await screen.findByText('질문을 입력하세요.')).toBeInTheDocument();
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(0);
+      expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      if (action === 'launch') {
+        expect(screen.queryByTestId('survey-open-confirmation')).not.toBeInTheDocument();
+        expect(screen.queryByText('빈 옵션을 채운 후 다시 시작하세요.')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('W-823 blocks changing a branch parent to multiple choice and saves only backend-valid bodies', async () => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    const child: SurveyQuestion = {
+      ...parent,
+      id: childId,
+      prompt: '추가 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    const initialQuestions = [parent, child];
+    installQuestionServerOracle(initialQuestions);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: initialQuestions }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+    fireEvent.click(
+      await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.multiple_choice }),
+    );
+
+    expect(
+      await screen.findByText('분기 질문이 있으면 복수 선택으로 바꿀 수 없습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '질문 유형' })).toHaveTextContent(
+      SURVEY_QUESTION_KIND_LABELS.single_choice,
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
+    fireEvent.click(screen.getByText('Q1'));
+
+    expect(
+      screen.queryByText('분기 질문이 있으면 복수 선택으로 바꿀 수 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '질문 유형' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.change(screen.getByLabelText('질문 제목'), { target: { value: '수정한 추가 질문' } });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled());
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childPatch = calls('PATCH', `/surveys/${survey.id}/questions/${childId}`)[0]?.[2].body;
+    expect(parseBackendQuestionInput(childPatch).prompt).toBe('수정한 추가 질문');
+    expect(calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`)).toHaveLength(0);
+  });
+
+  it.each([
+    ['creates a new child branching on a newly added option', 'new-child'],
+    ['moves a saved child to a newly added option', 'saved-child'],
+    ['re-points a saved child after removing its trigger option', 'saved-trigger'],
+    ['clears every child branch before changing its parent to text', 'clear-branch'],
+  ] as const)('saves valid branch states when it %s', async (_label, flow) => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const baseParent = {
+      ...(survey.questions?.[0] as SurveyQuestion),
+      id: parentId,
+    };
+    const child: SurveyQuestion = {
+      ...baseParent,
+      id: childId,
+      prompt: '추가 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    const initialQuestions = flow === 'new-child' ? [baseParent] : [baseParent, child];
+    installQuestionServerOracle(initialQuestions);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: initialQuestions }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    if (flow === 'new-child') {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: baseParent.prompt }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+    } else if (flow === 'saved-child') {
+      const branchNotice = screen.getByText(
+        '분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.',
+      );
+      expect(branchNotice).toHaveAttribute('id');
+      expect(screen.getByRole('button', { name: '옵션 2 삭제' })).toHaveAttribute(
+        'aria-describedby',
+        branchNotice.getAttribute('id'),
+      );
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+      fireEvent.click(screen.getByText('Q2'));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+    } else if (flow === 'saved-trigger') {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+    } else {
+      fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+      fireEvent.click(
+        await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.text }),
+      );
+      expect(
+        screen.queryByText(
+          '분기 조건으로 사용 중인 옵션을 삭제하면 첫 번째 남은 옵션으로 변경됩니다.',
+        ),
+      ).not.toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    const childPath = `/surveys/${survey.id}/questions/${flow === 'new-child' ? SERVER_CREATED_QUESTION_ID : childId}`;
+    await waitFor(() => {
+      const saveComplete =
+        screen.getByRole('button', { name: '초안 저장' }).hasAttribute('disabled') ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
+    });
+
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childPatches = calls('PATCH', childPath);
+    expect(childPatches.length).toBeGreaterThan(0);
+    const finalChildBody = childPatches.at(-1)?.[2].body;
+
+    if (flow === 'new-child') {
+      const createBody = calls('POST', `/surveys/${survey.id}/questions`)[0]?.[2].body;
+      expect(createBody).not.toHaveProperty('branch_parent_question_id');
+      expect(createBody).not.toHaveProperty('branch_trigger_option_key');
+    }
+
+    if (flow === 'clear-branch') {
+      expect(childPatches).toHaveLength(1);
+      expect(finalChildBody).toMatchObject({ branch_parent_question_id: null });
+    } else if (flow === 'saved-trigger') {
+      expect(childPatches).toHaveLength(1);
+      expect(finalChildBody).toMatchObject({ branch_trigger_option_key: 'yes' });
+    } else {
+      const parentBody = calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`).at(-1)?.[2]
+        .body;
+      const addedKey = (parentBody as { options: Array<{ key: string }> }).options.at(-1)?.key;
+      expect(finalChildBody).toMatchObject({
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: addedKey,
+      });
+    }
+
+    const callIndex = (method: string, path: string, last = false) => {
+      const matches = apiClient.mock.calls
+        .map((call, index) => ({ call, index }))
+        .filter(({ call }) => call[0] === method && call[1] === path);
+      return matches[last ? matches.length - 1 : 0]?.index ?? -1;
+    };
+    const firstChildPatchIndex = callIndex('PATCH', childPath);
+    const finalChildPatchIndex = callIndex('PATCH', childPath, true);
+    const parentPatchIndex = callIndex('PATCH', `/surveys/${survey.id}/questions/${parentId}`);
+    if (flow === 'saved-child') {
+      expect(childPatches[0]?.[2].body).toMatchObject({ branch_parent_question_id: null });
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+      expect(finalChildPatchIndex).toBeGreaterThan(parentPatchIndex);
+    } else if (flow === 'clear-branch') {
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+    } else if (flow === 'saved-trigger') {
+      expect(firstChildPatchIndex).toBeLessThan(parentPatchIndex);
+    } else {
+      expect(firstChildPatchIndex).toBeGreaterThanOrEqual(0);
+      expect(firstChildPatchIndex).toBeGreaterThan(parentPatchIndex);
+    }
+  });
+
+  it.each(['one rejected parent PATCH'] as const)(
+    'keeps a newly created child branch through a retry after %s',
+    async () => {
+      const parentId = '11111111-1111-4111-8111-111111111111';
+      const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+      installQuestionServerOracle([parent], { rejectFirstPatchFor: parentId });
+      renderWithQuery(
+        <SurveyBuilder survey={{ ...survey, questions: [parent] }} canManage onBack={vi.fn()} />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 조건 옵션' }));
+      fireEvent.click(await screen.findByRole('option', { name: '옵션 3' }));
+
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      expect(await screen.findByText('저장하지 못했습니다.')).toBeInTheDocument();
+      expect(calls('POST', `/surveys/${survey.id}/questions`)).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      const childPatches = calls(
+        'PATCH',
+        `/surveys/${survey.id}/questions/${SERVER_CREATED_QUESTION_ID}`,
+      );
+      expect(childPatches).toHaveLength(1);
+      const parentPatches = calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`);
+      const addedKey = (
+        parentPatches.at(-1)?.[2].body as { options: Array<{ key: string }> }
+      ).options.at(-1)?.key;
+      expect(childPatches.at(-1)?.[2].body).toMatchObject({
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: addedKey,
+      });
+    },
+  );
+
+  it('enforces the 50 option limit', () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    for (let index = 0; index < 48; index += 1) {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+    }
+
+    expect(screen.getAllByLabelText(/^옵션 \d+$/)).toHaveLength(50);
+    expect(screen.getByRole('button', { name: '옵션 추가' })).toBeDisabled();
+  });
+
   it('AC-3 saves the distinct survey title with one scalar PATCH', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
@@ -892,6 +1867,40 @@ describe('Survey screens', () => {
       question_ids: ['question-3', 'question-1', 'question-2'],
     });
     expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', '2');
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+  });
+
+  it('does not repeat a successful question delete when reorder fails and save is retried', async () => {
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+      question('question-3', '셋째 질문', 2),
+    ];
+    let rejectFirstReorder = true;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (
+        method === 'PATCH' &&
+        path === '/surveys/survey-1/questions/reorder' &&
+        rejectFirstReorder
+      ) {
+        rejectFirstReorder = false;
+        throw new Error('reorder failed');
+      }
+      return { data: { id: 'question-1' } };
+    });
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(
+      within(screen.getByTestId('survey-question-row-question-2')).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText('저장하지 못했습니다.')).toBeInTheDocument());
+    expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    expect(calls('DELETE', '/surveys/survey-1/questions/question-2')).toHaveLength(1);
   });
 
   it('AC-5 saves a keyboard-only one-step move', async () => {
@@ -1055,6 +2064,7 @@ describe('Survey screens', () => {
         '/surveys/survey-1/questions/question-created',
       ),
     );
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
   });
 
   it('patches the current question state after an edit during its pending create', async () => {

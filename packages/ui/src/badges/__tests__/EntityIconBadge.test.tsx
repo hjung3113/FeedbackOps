@@ -1,32 +1,32 @@
 /// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { EntityIconBadge, ENTITY_ICON_MAP, type EntityIconType } from '../EntityIconBadge.js';
+import { render } from '@testing-library/react';
+import { EntityIconBadge, type EntityIconType } from '../EntityIconBadge.js';
 
-const entityTypes = Object.keys(ENTITY_ICON_MAP) as EntityIconType[];
+// Literal per-type pairs (not read back from ENTITY_ICON_MAP) so a swapped or
+// shared token pair fails here.
+const ENTITY_ICON_CASES = [
+  ['voc', 'V', 'bg-entity-icon-voc', 'text-entity-icon-foreground-light'],
+  ['evidence', 'E', 'bg-entity-icon-evidence', 'text-entity-icon-foreground-light'],
+  ['finding', 'F', 'bg-entity-icon-finding', 'text-entity-icon-foreground-dark'],
+  ['request', 'R', 'bg-entity-icon-request', 'text-entity-icon-foreground-dark'],
+  ['task', 'T', 'bg-entity-icon-task', 'text-entity-icon-foreground-light'],
+  ['survey', 'S', 'bg-entity-icon-survey', 'text-entity-icon-foreground-light'],
+  ['outcome', 'O', 'bg-entity-icon-survey', 'text-entity-icon-foreground-light'],
+] as const satisfies readonly (readonly [EntityIconType, string, string, string])[];
 
 describe('EntityIconBadge', () => {
-  entityTypes.forEach((type) => {
-    const { letter, bg, color } = ENTITY_ICON_MAP[type];
-
-    it(`renders letter "${letter}" for type="${type}"`, () => {
-      render(<EntityIconBadge type={type} />);
-      expect(screen.getByText(letter)).toBeInTheDocument();
-    });
-
-    it(`sets data-bg="${bg}" for type="${type}"`, () => {
+  it.each(ENTITY_ICON_CASES)(
+    'renders type="%s" as %s with %s / %s',
+    (type, letter, backgroundClass, foregroundClass) => {
       const { container } = render(<EntityIconBadge type={type} />);
       const el = container.querySelector(`[data-entity-type="${type}"]`);
+
       expect(el).not.toBeNull();
-      expect(el?.getAttribute('data-bg')).toBe(bg);
-    });
-
-    it(`sets data-color="${color}" for type="${type}"`, () => {
-      const { container } = render(<EntityIconBadge type={type} />);
-      const el = container.querySelector(`[data-entity-type="${type}"]`);
-      expect(el?.getAttribute('data-color')).toBe(color);
-    });
-  });
+      expect(el).toHaveClass(backgroundClass, foregroundClass);
+      expect(el).toHaveAttribute('aria-label', type);
+      expect(el).toHaveTextContent(letter);
+    },
+  );
 
   it('defaults to size=22', () => {
     const { container } = render(<EntityIconBadge type="voc" />);

@@ -2,8 +2,8 @@
 // Focuses on the DirtyConfirmation modal flow driven by useBlocker.
 // VocCreateScreen is stubbed so this test doesn't need a full QueryClient / fetch setup.
 
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 // ── Mock @tanstack/react-router ───────────────────────────────────────────────
@@ -20,8 +20,14 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
   useSearch: () => searchMock(),
   useBlocker: vi.fn(() => blockerMock),
-  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={to} {...rest}>{children}</a>
+  Link: ({
+    to,
+    children,
+    ...rest
+  }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -56,9 +62,7 @@ describe('<CreateRoute>', () => {
     // AlertDialog with open=false should not show the dialog content
     // The confirmation modal renders inside an AlertDialog whose title is
     // '변경사항이 저장되지 않았습니다'
-    expect(
-      screen.queryByText('변경사항이 저장되지 않았습니다'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
   });
 
   it('DirtyConfirmation opens when blocker is blocked; 확인 calls proceed, 취소 calls reset', () => {
@@ -96,5 +100,52 @@ describe('<CreateRoute>', () => {
     fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
     expect(resetFn).toHaveBeenCalledOnce();
     expect(proceedFn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['clean', false],
+    ['dirty', true],
+  ] as const)('blocks browser unload only when the form is %s', async (_state, isDirty) => {
+    const routerModule =
+      await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router');
+    const mockedRouterModule = await import('@tanstack/react-router');
+    const useBlockerMock = vi.mocked(mockedRouterModule.useBlocker);
+    const previousUseBlocker = useBlockerMock.getMockImplementation();
+    const initialUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState(null, '', '/vocs');
+    const history = routerModule.createBrowserHistory();
+    const rootRoute = routerModule.createRootRoute({ component: () => <routerModule.Outlet /> });
+    const vocRoute = routerModule.createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/vocs',
+      component: CreateRoute,
+    });
+    const router = routerModule.createRouter({
+      routeTree: rootRoute.addChildren([vocRoute]),
+      history,
+    });
+    useBlockerMock.mockImplementation(
+      routerModule.useBlocker as typeof mockedRouterModule.useBlocker,
+    );
+    const view = render(<routerModule.RouterProvider router={router} />);
+
+    try {
+      await screen.findByTestId('voc-create-screen-stub');
+      if (isDirty) {
+        act(() => capturedOnDirtyChange?.(true));
+      }
+
+      const beforeUnload = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+
+      expect(beforeUnload.defaultPrevented).toBe(isDirty);
+    } finally {
+      view.unmount();
+      router.history.destroy();
+      window.history.replaceState(null, '', initialUrl);
+      if (previousUseBlocker) {
+        useBlockerMock.mockImplementation(previousUseBlocker);
+      }
+    }
   });
 });

@@ -14,37 +14,63 @@ export interface InternalTaskBadgeProps {
   className?: string;
 }
 
-/**
- * English labels verbatim from `InternalTaskStatusLabels` in
- * `docs/design-prototype/data.js`.
- *
- * NOTE (Slice 3): linked_execution.taskRef is always null per #15,
- * so this badge is never rendered in the current release. It is
- * shipped now because #21 and Slice 4 consume it.
- */
+/** English labels verbatim from `InternalTaskStatusLabels` in `docs/design-prototype/data.js`. */
 const LABELS: Record<InternalTaskStatusEnum, string> = {
-  backlog:  'Backlog',
-  todo:     'Todo',
-  doing:    'Doing',
-  review:   'Review',
-  done:     'Done',
+  backlog: 'Backlog',
+  todo: 'Todo',
+  doing: 'Doing',
+  review: 'Review',
+  done: 'Done',
   released: 'Released',
   reopened: 'Reopened',
 };
 
-/**
- * Squared badge (`rounded-sm`) for internal task status. Keep its neutral
- * rendering until internal statuses have contrast-safe label tokens: the
- * original raw RGB token use rendered no text color or tint.
- */
+const STATUS_CLASS: Record<
+  InternalTaskStatusEnum,
+  { textClassName: string; tintClassName: string }
+> = {
+  backlog: {
+    textClassName: 'text-status-internal-backlog-label',
+    tintClassName: 'bg-status-internal-backlog/12',
+  },
+  todo: {
+    textClassName: 'text-status-internal-todo-label',
+    tintClassName: 'bg-status-internal-todo/12',
+  },
+  doing: {
+    textClassName: 'text-status-internal-doing-label',
+    tintClassName: 'bg-status-internal-doing/12',
+  },
+  review: {
+    textClassName: 'text-status-internal-review-label',
+    tintClassName: 'bg-status-internal-review/12',
+  },
+  done: {
+    textClassName: 'text-status-internal-done-label',
+    tintClassName: 'bg-status-internal-done/12',
+  },
+  released: {
+    textClassName: 'text-status-internal-released-label',
+    tintClassName: 'bg-status-internal-released/12',
+  },
+  reopened: {
+    textClassName: 'text-status-internal-reopened-label',
+    tintClassName: 'bg-status-internal-reopened/12',
+  },
+};
+
+/** Squared Task badge: the base hue supplies the 12% tint and its `-label` pair supplies text. */
 export function InternalTaskBadge({ status, className }: InternalTaskBadgeProps) {
   const token = `--status-internal-${status}`;
+  const { textClassName, tintClassName } = STATUS_CLASS[status];
 
   return (
     <StatusBadgeFrame
       appearance="task"
       {...(className !== undefined ? { className } : {})}
       token={token}
+      textClassName={textClassName}
+      tintClassName={tintClassName}
     >
       {LABELS[status]}
     </StatusBadgeFrame>

@@ -122,7 +122,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 appearance="section"
                 tip="기본은 직접 사용. 다른 팀원·고객사 경험을 대신 등록할 때는 대신 보고."
               >
-                출처
+                <span id="source-context-label">출처</span>
               </FieldLabel>
               <Controller
                 control={form.control}
@@ -131,6 +131,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   <SourceContextSegmented
                     value={field.value}
                     onChange={field.onChange}
+                    labelId="source-context-label"
                     testId="source-context-segmented"
                   />
                 )}

@@ -2,14 +2,25 @@ import type { ApiError } from '@/lib/api';
 import * as React from 'react';
 import { useOpenSurvey, useSurveyQuestionMutations } from '../../../hooks/useSurveys';
 import type { QuestionKind, Survey, SurveyQuestion } from '../../../types';
-import { applyServerQuestionId, denseQuestions, newQuestion } from '../lib/questionDraft';
+import { hasInvalidChoiceOptions } from '../lib/optionValidation';
+import {
+  applyServerQuestionId,
+  denseQuestions,
+  newQuestion,
+  questionSignature,
+} from '../lib/questionDraft';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
+
+function hasInvalidQuestion(question: SurveyQuestion): boolean {
+  return question.prompt.trim().length === 0 || hasInvalidChoiceOptions(question);
+}
 
 export function useSurveyBuilderController(args: {
   survey: Survey;
   canManage: boolean;
   gateState?: 'loading' | 'error' | 'absent' | undefined;
   onBack: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }): {
   title: string;
   onTitleChange: (value: string) => void;
@@ -28,12 +39,14 @@ export function useSurveyBuilderController(args: {
   setLaunchOpen: (open: boolean) => void;
   launchPending: boolean;
   launchError: ApiError | null;
+  launchSaveFailed: boolean;
+  launchOptionValidationFailed: boolean;
   confirmLaunch: () => void;
   patch: (next: SurveyQuestion) => void;
   add: (kind?: QuestionKind) => void;
   remove: (id: string) => void;
   reorder: (fromIndex: number, toIndex: number) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
 } {
   const { survey, canManage, gateState, onBack } = args;
   const [questions, setQuestions] = React.useState<SurveyQuestion[]>(survey.questions ?? []);
@@ -43,16 +56,29 @@ export function useSurveyBuilderController(args: {
   const savedTitleRef = React.useRef(survey.title);
   const savedQuestionsRef = React.useRef<SurveyQuestion[]>(survey.questions ?? []);
   const [selectedId, setSelectedId] = React.useState<string | null>(questions[0]?.id ?? null);
-  const [dirty, setDirty] = React.useState(survey.status === 'draft' && questions.length === 0);
+  const [dirty, setDirty] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveFailed, setSaveFailed] = React.useState(false);
   const [preview, setPreview] = React.useState(false);
-  const [launchOpen, setLaunchOpen] = React.useState(false);
+  const [launchOpen, setLaunchOpenState] = React.useState(false);
+  const [launchSaveFailed, setLaunchSaveFailed] = React.useState(false);
+  const [launchOptionValidationFailed, setLaunchOptionValidationFailed] = React.useState(false);
   const mutations = useSurveyQuestionMutations(survey.id);
   const openSurvey = useOpenSurvey(survey.id);
   const editable = canManage && survey.status === 'draft' && !gateState;
   const selected = questions.find((question) => question.id === selectedId) ?? null;
+  const updateDirty = (next: boolean) => {
+    setDirty(next);
+    args.onDirtyChange?.(next);
+  };
+  const setLaunchOpen = (open: boolean) => {
+    setLaunchOpenState(open);
+    if (open) {
+      setLaunchSaveFailed(false);
+      setLaunchOptionValidationFailed(false);
+    }
+  };
   const updateQuestions = (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => {
     const next = update(questionsRef.current);
     questionsRef.current = next;
@@ -60,8 +86,33 @@ export function useSurveyBuilderController(args: {
   };
 
   const patch = (next: SurveyQuestion) => {
-    updateQuestions((all) => all.map((question) => (question.id === next.id ? next : question)));
-    setDirty(true);
+    updateQuestions((all) => {
+      const current = all.find((question) => question.id === next.id);
+      if (!current) return all;
+      const nextKeys = new Set(next.options?.map((option) => option.key) ?? []);
+      const removedKeys = new Set(
+        (current.options ?? []).map((option) => option.key).filter((key) => !nextKeys.has(key)),
+      );
+      const firstRemainingKey = next.options?.[0]?.key ?? null;
+      return all.map((question) => {
+        if (question.id === next.id) return next;
+        if (
+          question.branch_parent_question_id !== next.id ||
+          !question.branch_trigger_option_key ||
+          !removedKeys.has(question.branch_trigger_option_key)
+        )
+          return question;
+        return firstRemainingKey
+          ? { ...question, branch_trigger_option_key: firstRemainingKey }
+          : {
+              ...question,
+              branch_depth: 0,
+              branch_parent_question_id: null,
+              branch_trigger_option_key: null,
+            };
+      });
+    });
+    updateDirty(true);
     setSaveFailed(false);
   };
 
@@ -69,7 +120,7 @@ export function useSurveyBuilderController(args: {
     const localQuestion = newQuestion(survey.id, questionsRef.current.length, kind);
     updateQuestions((all) => [...all, localQuestion]);
     setSelectedId(localQuestion.id);
-    setDirty(true);
+    updateDirty(true);
     setSaveFailed(false);
   };
 
@@ -79,7 +130,7 @@ export function useSurveyBuilderController(args: {
       if (selectedId === id) setSelectedId(next[0]?.id ?? null);
       return denseQuestions(next);
     });
-    setDirty(true);
+    updateDirty(true);
     setSaveFailed(false);
   };
 
@@ -92,7 +143,7 @@ export function useSurveyBuilderController(args: {
       next.splice(toIndex, 0, moved);
       return denseQuestions(next);
     });
-    setDirty(true);
+    updateDirty(true);
     setSaveFailed(false);
   };
 
@@ -104,20 +155,41 @@ export function useSurveyBuilderController(args: {
   const onTitleChange = (value: string) => {
     titleRef.current = value;
     setTitle(value);
-    setDirty(true);
+    updateDirty(true);
     setSaveFailed(false);
   };
 
   const confirmLaunch = () => {
-    openSurvey.mutate(undefined, {
-      onSuccess: () => {
-        setLaunchOpen(false);
-        onBack();
-      },
-    });
+    setLaunchSaveFailed(false);
+    setLaunchOptionValidationFailed(false);
+    void (async () => {
+      const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
+      if (invalidQuestion) {
+        setSelectedId(invalidQuestion.id);
+        if (invalidQuestion.prompt.trim().length === 0) setLaunchOpen(false);
+        else setLaunchOptionValidationFailed(true);
+        return;
+      }
+      if (dirty && !(await save())) {
+        setLaunchSaveFailed(true);
+        return;
+      }
+      openSurvey.mutate(undefined, {
+        onSuccess: () => {
+          setLaunchOpen(false);
+          onBack();
+        },
+      });
+    })();
   };
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
+    const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
+    if (invalidQuestion) {
+      setSelectedId(invalidQuestion.id);
+      setSaveFailed(false);
+      return false;
+    }
     setIsSaving(true);
     setSaveFailed(false);
     try {
@@ -137,10 +209,23 @@ export function useSurveyBuilderController(args: {
         },
       });
       setSavedAt(savedAt);
-      setDirty(false);
+      const savedQuestions = savedQuestionsRef.current;
+      const questionsAreSaved =
+        questionsRef.current.length === savedQuestions.length &&
+        questionsRef.current.every((question, index) => {
+          const savedQuestion = savedQuestions[index];
+          return (
+            savedQuestion?.id === question.id &&
+            questionSignature(savedQuestion) === questionSignature(question)
+          );
+        });
+      const isClean = titleRef.current === savedTitleRef.current && questionsAreSaved;
+      updateDirty(!isClean);
+      return isClean;
     } catch {
-      setDirty(true);
+      updateDirty(true);
       setSaveFailed(true);
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -162,8 +247,10 @@ export function useSurveyBuilderController(args: {
     setPreview,
     launchOpen,
     setLaunchOpen,
-    launchPending: openSurvey.isPending,
+    launchPending: openSurvey.isPending || isSaving,
     launchError: openSurvey.error,
+    launchSaveFailed,
+    launchOptionValidationFailed,
     confirmLaunch,
     patch,
     add,

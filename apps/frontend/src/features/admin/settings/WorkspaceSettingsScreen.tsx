@@ -309,7 +309,7 @@ function SettingRow({
 }) {
   return (
     <div
-      className={`grid gap-4 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_220px_88px] ${last ? '' : 'border-b border-border-subtle'} ${dirty ? 'bg-surface-row-selected' : ''}`}
+      className={`grid items-start gap-4 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_220px_88px] ${last ? '' : 'border-b border-border-subtle'} ${dirty ? 'bg-surface-row-selected' : ''}`}
     >
       <div>
         <div className="flex items-center gap-1.5">
@@ -360,7 +360,7 @@ function EditableOptionRow({
       dirty={isDirty}
       previousValue={savedValue === 'allowed' ? '허용' : '금지'}
     >
-      <div className="flex items-center justify-end">
+      <div className="flex items-start justify-end">
         {editing ? (
           <Select
             value={value}
@@ -380,8 +380,8 @@ function EditableOptionRow({
           </span>
         )}
       </div>
-      <div className="text-right">
-        <Button variant="subtle" size="sm" onClick={editing ? onDone : onEdit}>
+      <div className="flex h-5 items-center justify-end">
+        <Button variant="secondary" size="sm" onClick={editing ? onDone : onEdit}>
           {editing ? '완료' : GLOSSARY.edit}
         </Button>
       </div>
@@ -436,8 +436,8 @@ function EditableThresholdRow({
           <span className="text-sm font-medium text-text-primary">응답 {value}건</span>
         )}
       </div>
-      <div className="text-right">
-        <Button variant="subtle" size="sm" onClick={editing ? onDone : onEdit}>
+      <div className="flex h-5 items-center justify-end">
+        <Button variant="secondary" size="sm" onClick={editing ? onDone : onEdit}>
           {editing ? '완료' : GLOSSARY.edit}
         </Button>
       </div>
@@ -454,7 +454,7 @@ function LockedRow({
 }: LockedSetting & { last: boolean }) {
   return (
     <SettingRow label={label} description={description} last={last}>
-      <div className="flex items-center justify-end">
+      <div className="flex items-start justify-end">
         <span
           className={`text-sm font-medium ${valueTone === 'red' ? 'text-accent-danger' : 'text-text-primary'}`}
           data-testid={
@@ -464,7 +464,7 @@ function LockedRow({
           {value}
         </span>
       </div>
-      <div className="flex items-end text-right">
+      <div className="flex h-5 items-center justify-end text-right">
         <span className="inline-flex items-center gap-1 rounded-sm bg-surface-row-hover px-2 py-1 text-xs text-text-muted">
           <LockKeyhole className="h-3 w-3" aria-hidden="true" /> 잠김
         </span>

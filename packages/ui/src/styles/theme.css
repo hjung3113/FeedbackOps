@@ -71,6 +71,18 @@
   --color-accent-warn: rgb(var(--color-amber));
   --color-accent-danger: rgb(var(--color-warning-red));
   --color-accent-success: rgb(var(--color-emerald));
+  --color-accent-voc: rgb(var(--accent-voc));
+  --color-accent-task: rgb(var(--accent-task));
+
+  /* --- Entity icon tokens (#801) --- */
+  --color-entity-icon-voc: rgb(var(--entity-icon-voc));
+  --color-entity-icon-evidence: rgb(var(--entity-icon-evidence));
+  --color-entity-icon-finding: rgb(var(--entity-icon-finding));
+  --color-entity-icon-request: rgb(var(--entity-icon-request));
+  --color-entity-icon-task: rgb(var(--entity-icon-task));
+  --color-entity-icon-survey: rgb(var(--entity-icon-survey));
+  --color-entity-icon-foreground-light: rgb(var(--entity-icon-foreground-light));
+  --color-entity-icon-foreground-dark: rgb(var(--entity-icon-foreground-dark));
 
   /* --- Status tokens: Reporter-facing --- */
   --color-status-reporter-received: rgb(var(--color-cyan-spark));
@@ -100,6 +112,14 @@
   --color-status-internal-done: rgb(var(--color-emerald));
   --color-status-internal-released: rgb(var(--color-cyan-spark));
   --color-status-internal-reopened: rgb(var(--color-warning-red));
+  /* #799: label TEXT uses the same hue, darkened for AA contrast; base keys stay the tint. */
+  --color-status-internal-backlog-label: rgb(var(--status-internal-backlog-label));
+  --color-status-internal-todo-label: rgb(var(--status-internal-todo-label));
+  --color-status-internal-doing-label: rgb(var(--status-internal-doing-label));
+  --color-status-internal-review-label: rgb(var(--status-internal-review-label));
+  --color-status-internal-done-label: rgb(var(--status-internal-done-label));
+  --color-status-internal-released-label: rgb(var(--status-internal-released-label));
+  --color-status-internal-reopened-label: rgb(var(--status-internal-reopened-label));
 
   /* --- Severity tokens --- */
   --color-severity-low: rgb(var(--color-storm-cloud));

@@ -1,4 +1,5 @@
 import type { QuestionInput, QuestionKind, SurveyQuestion } from '../../../types';
+import { createClientId } from './createClientId';
 
 export function newQuestion(
   surveyId: string,
@@ -7,7 +8,7 @@ export function newQuestion(
 ): SurveyQuestion {
   const choice = kind === 'single_choice' || kind === 'multiple_choice';
   return {
-    id: `local-${crypto.randomUUID()}`,
+    id: createClientId('local-'),
     survey_id: surveyId,
     kind,
     prompt: '새 질문',

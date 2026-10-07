@@ -1,20 +1,16 @@
-// SourceContextSegmented — segmented tab control for VOC source context.
+// SourceContextSegmented — segmented radio control for VOC source context.
 // Spec §3.4: no proxy sub-fields in this slice.
 
-import * as React from 'react';
-import { Tabs, TabsList, TabsTrigger } from '@fops/ui';
 import { SOURCE_CONTEXTS } from '@fops/shared';
 import type { SourceContext } from '@fops/shared';
-import {
-  Megaphone,
-  Search,
-  User,
-  Users,
-} from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@fops/ui';
+import { Megaphone, Search, User, Users } from 'lucide-react';
+import type * as React from 'react';
 
 export interface SourceContextSegmentedProps {
   value: SourceContext;
   onChange: (next: SourceContext) => void;
+  labelId: string;
   disabled?: boolean;
   testId?: string;
 }
@@ -36,25 +32,28 @@ const ICONS: Record<SourceContext, React.ComponentType<{ size?: number; classNam
 export function SourceContextSegmented({
   value,
   onChange,
+  labelId,
   disabled,
   testId,
 }: SourceContextSegmentedProps): React.ReactElement {
   return (
-    <Tabs
-      value={value}
-      onValueChange={(next) => {
-        // SOURCE_CONTEXTS is readonly tuple — validate before casting
-        if ((SOURCE_CONTEXTS as ReadonlyArray<string>).includes(next)) {
-          onChange(next as SourceContext);
-        }
-      }}
-      data-testid={testId}
-    >
-      <TabsList data-testid="source-context-list" appearance="segmented">
+    <div data-testid={testId}>
+      <RadioGroup
+        value={value}
+        onValueChange={(next) => {
+          // SOURCE_CONTEXTS is readonly tuple — validate before casting
+          if ((SOURCE_CONTEXTS as ReadonlyArray<string>).includes(next)) {
+            onChange(next as SourceContext);
+          }
+        }}
+        appearance="segmented"
+        aria-labelledby={labelId}
+        data-testid="source-context-list"
+      >
         {SOURCE_CONTEXTS.map((ctx) => {
           const Icon = ICONS[ctx];
           return (
-            <TabsTrigger key={ctx} value={ctx} disabled={disabled} appearance="segmented">
+            <RadioGroupItem key={ctx} value={ctx} disabled={disabled} appearance="segmented">
               <Icon
                 size={12}
                 className="shrink-0"
@@ -62,10 +61,10 @@ export function SourceContextSegmented({
                 aria-hidden="true"
               />
               {LABELS[ctx]}
-            </TabsTrigger>
+            </RadioGroupItem>
           );
         })}
-      </TabsList>
-    </Tabs>
+      </RadioGroup>
+    </div>
   );
 }

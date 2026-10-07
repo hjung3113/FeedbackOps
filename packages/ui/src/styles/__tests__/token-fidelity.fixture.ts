@@ -20,6 +20,8 @@
  * same hue/saturation and the lightest HLS value that clears 4.5:1 on the
  * supported light surfaces, its 14% tint, and actual tinted badge row states.
  * The semantic base tokens remain.
+ * #799 (2026-10-06): internal Task status labels gained matching `-label`
+ * tokens measured on each status tint over every Task badge surface.
  */
 
 export interface TokenEntry {
@@ -51,6 +53,18 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--color-deep-violet', hex: '#3157d5', rgb: '49 87 213' },
   { tokenName: '--color-amethyst', hex: '#6a8dff', rgb: '106 141 255' },
   { tokenName: '--color-amber', hex: '#a56300', rgb: '165 99 0' },
+
+  // --- Entity icon tokens (#801) ---
+  { tokenName: '--entity-icon-voc', hex: '#5e6ad2', rgb: '94 106 210' },
+  { tokenName: '--entity-icon-evidence', hex: '#02b8cc', rgb: '2 184 204' },
+  { tokenName: '--entity-icon-finding', hex: '#e4f222', rgb: '228 242 34' },
+  { tokenName: '--entity-icon-request', hex: '#f2c46d', rgb: '242 196 109' },
+  { tokenName: '--entity-icon-task', hex: '#27a644', rgb: '39 166 68' },
+  { tokenName: '--entity-icon-survey', hex: '#8b5cf6', rgb: '139 92 246' },
+  { tokenName: '--entity-icon-foreground-light', hex: '#ffffff', rgb: '255 255 255' },
+  { tokenName: '--entity-icon-foreground-dark', hex: '#08090a', rgb: '8 9 10' },
+  { tokenName: '--accent-voc', raw: 'var(--color-aether-blue)' },
+  { tokenName: '--accent-task', raw: 'var(--color-amethyst)' },
 
   // --- Semantic text tokens ---
   { tokenName: '--text-primary', raw: 'var(--color-porcelain)' },
@@ -114,6 +128,13 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--status-internal-done', raw: 'var(--color-emerald)' },
   { tokenName: '--status-internal-released', raw: 'var(--color-cyan-spark)' },
   { tokenName: '--status-internal-reopened', raw: 'var(--color-warning-red)' },
+  { tokenName: '--status-internal-backlog-label', hex: '#576276', rgb: '87 98 118' },
+  { tokenName: '--status-internal-todo-label', hex: '#565e6f', rgb: '86 94 111' },
+  { tokenName: '--status-internal-doing-label', raw: 'var(--color-aether-blue)' },
+  { tokenName: '--status-internal-review-label', hex: '#0f47ff', rgb: '15 71 255' },
+  { tokenName: '--status-internal-done-label', hex: '#106c45', rgb: '16 108 69' },
+  { tokenName: '--status-internal-released-label', hex: '#00688b', rgb: '0 104 139' },
+  { tokenName: '--status-internal-reopened-label', hex: '#b2202b', rgb: '178 32 43' },
 
   // --- Severity / signal tokens ---
   { tokenName: '--severity-low', raw: 'var(--color-storm-cloud)' },

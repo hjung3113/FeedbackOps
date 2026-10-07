@@ -71,6 +71,10 @@
   --focus-ring: var(--color-neon-lime);
   --focus-ring-danger: var(--color-warning-red);
 
+  /* #801 semantic DetailPanelHeader accents: roles stay distinct from the raw palette. */
+  --accent-voc: var(--color-aether-blue);
+  --accent-task: var(--color-amethyst);
+
   /* --- Status tokens (Reporter-facing VOC status) --- */
   /* Use the base token for the dot/tint (vivid, scannable); use the paired
    * `-label` token for text foreground. #525: the base hues measured
@@ -107,6 +111,20 @@
   --status-internal-released: var(--color-cyan-spark);
   --status-internal-reopened: var(--color-warning-red);
 
+  /* #799 Task status label text: preserve each status hue and tint the badge
+   * with its base token at 12%. Labels keep the same hue/saturation and lower
+   * HLS lightness only until they clear 4.5:1 on that tint over canvas, card,
+   * elevated card, hovered row, selected row, and detail, measured on the
+   * 8-bit painted tint. `doing` already clears on all six surfaces and keeps
+   * its base token as the label. */
+  --status-internal-backlog-label: 87 98 118; /* #576276 — 4.54:1 */
+  --status-internal-todo-label: 86 94 111; /* #565e6f — 4.54:1 */
+  --status-internal-doing-label: var(--color-aether-blue); /* #1428a0 — 7.36:1 */
+  --status-internal-review-label: 15 71 255; /* #0f47ff — 4.51:1 */
+  --status-internal-done-label: 16 108 69; /* #106c45 — 4.63:1 */
+  --status-internal-released-label: 0 104 139; /* #00688b — 4.52:1 */
+  --status-internal-reopened-label: 178 32 43; /* #b2202b — 4.51:1 */
+
   /* --- Severity / signal tokens --- */
   /* `-label` pairs follow the same #525 rationale as the reporter-status
    * tokens above: same hue, darkened only, until >=4.5:1 on a 12% tint. */
@@ -121,6 +139,16 @@
   --confidence-low: var(--color-storm-cloud);
   --confidence-medium: var(--color-cyan-spark);
   --confidence-high: var(--color-emerald);
+
+  /* --- Entity icon tokens (#801; independent of Managed System identity) --- */
+  --entity-icon-voc: 94 106 210; /* #5e6ad2 */
+  --entity-icon-evidence: 2 184 204; /* #02b8cc */
+  --entity-icon-finding: 228 242 34; /* #e4f222 */
+  --entity-icon-request: 242 196 109; /* #f2c46d */
+  --entity-icon-task: 39 166 68; /* #27a644 */
+  --entity-icon-survey: 139 92 246; /* #8b5cf6 */
+  --entity-icon-foreground-light: 255 255 255; /* #ffffff */
+  --entity-icon-foreground-dark: 8 9 10; /* #08090a */
 
   /* --- Managed System identity tokens (prototype data.js scope marks) --- */
   --managed-system-tableau: 94 106 210;  /* #5e6ad2 */

@@ -64,15 +64,15 @@ const TONE_CLASS: Record<StatusBadgeTone, { text: string; tint: string }> = {
     tint: 'bg-[rgb(var(--text-danger)/0.12)]',
   },
   'internal-todo': {
-    text: 'text-status-internal-todo',
+    text: 'text-status-internal-todo-label',
     tint: 'bg-status-internal-todo/12',
   },
   'internal-doing': {
-    text: 'text-status-internal-doing',
+    text: 'text-status-internal-doing-label',
     tint: 'bg-status-internal-doing/12',
   },
   'internal-done': {
-    text: 'text-status-internal-done',
+    text: 'text-status-internal-done-label',
     tint: 'bg-status-internal-done/12',
   },
 };
