@@ -104,11 +104,15 @@ export async function saveSurveyDraft(deps: {
     const savedParent = savedQuestionsRef.current.find((saved) => saved.id === parentId);
     return Boolean(savedParent && !savedParent.branch_parent_question_id);
   };
+  const hasSavedChildren = (question: SurveyQuestion): boolean =>
+    savedQuestionsRef.current.some((saved) => saved.branch_parent_question_id === question.id);
   const shouldDeferBranch = (question: SurveyQuestion): boolean =>
     Boolean(
       question.branch_parent_question_id &&
         question.branch_trigger_option_key &&
-        (!hasSavedTrigger(question) || !hasSavedTopLevelParent(question)),
+        (!hasSavedTrigger(question) ||
+          !hasSavedTopLevelParent(question) ||
+          hasSavedChildren(question)),
     );
 
   for (const local of questionsRef.current.filter((question) => isLocalQuestionId(question.id))) {
@@ -255,6 +259,8 @@ export async function saveSurveyDraft(deps: {
       const triggerKey = current.branch_trigger_option_key;
       if (parentId && triggerKey && !hasSavedTopLevelParent(current))
         throw new Error('Branch parent is not saved as a top-level question');
+      if (parentId && triggerKey && hasSavedChildren(current))
+        throw new Error('Branch parent still has saved children');
       if (parentId && triggerKey && !hasSavedTrigger(current))
         throw new Error('Branch trigger option is not saved on its parent');
       const nextSignature = questionSignature(current);
