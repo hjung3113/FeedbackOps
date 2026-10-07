@@ -228,7 +228,8 @@ describe('DetailPanelHeader — fullscreen toggle', () => {
   });
 
   it('renders no action group when there is neither a provider nor a close action', () => {
-    const { container } = render(<DetailPanelHeader kind="survey" />);
-    expect(container.querySelector('button')).toBeNull();
+    render(<DetailPanelHeader kind="survey" />);
+    // Only the kind chip block remains; an empty toggle/close wrapper would be a second child.
+    expect(screen.getByTestId('detail-panel-header-content').children).toHaveLength(1);
   });
 });

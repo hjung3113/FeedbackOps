@@ -57,8 +57,21 @@ const PANEL_ROUTE_A = (
     <DetailPanelHeader kind="voc" id="VOC-D1" onClose={dispatchClosePanel} />
   </div>
 );
+// Records data-expanded in the commit that first shows route B's panel, before
+// passive effects run, so an effect-based reset cannot hide an expanded frame.
+const routeBFirstCommitExpanded: Array<string | null> = [];
+function FirstCommitProbe() {
+  React.useLayoutEffect(() => {
+    routeBFirstCommitExpanded.push(
+      document.querySelector('[data-testid="app-detail-slot"]')?.getAttribute('data-expanded') ??
+        null,
+    );
+  }, []);
+  return null;
+}
 const PANEL_ROUTE_B = (
   <div data-testid="route-panel-b">
+    <FirstCommitProbe />
     <DetailPanelHeader kind="voc" id="VOC-D2" onClose={dispatchClosePanel} />
   </div>
 );
@@ -85,7 +98,7 @@ function renderAppFrame(children: React.ReactNode) {
   );
 }
 
-function CloseLifecycleHarness() {
+function CloseLifecycleHarness({ closedPanel }: { closedPanel: undefined | null }) {
   const [record, setRecord] = React.useState<'first' | 'closed' | 'next'>('first');
   React.useEffect(() => {
     const handleClose = () => setRecord('closed');
@@ -93,7 +106,7 @@ function CloseLifecycleHarness() {
     return () => window.removeEventListener(CLOSE_PANEL_EVENT, handleClose);
   }, []);
   const detailPanel =
-    record === 'first' ? PANEL_CLOSE_FIRST : record === 'next' ? PANEL_CLOSE_NEXT : undefined;
+    record === 'first' ? PANEL_CLOSE_FIRST : record === 'next' ? PANEL_CLOSE_NEXT : closedPanel;
 
   return (
     <>
@@ -340,26 +353,32 @@ describe('AppFrame', () => {
     expect(screen.getByTestId('app-detail-slot')).toHaveAttribute('data-expanded', 'true');
   });
 
-  it('closing collapses the slot and the next record opens at normal width', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <CloseLifecycleHarness />
-      </QueryClientProvider>,
-    );
-    const slot = screen.getByTestId('app-detail-slot');
-    await waitFor(() => expect(screen.getByTestId('close-first-panel')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
-    expect(slot).toHaveAttribute('data-expanded', 'true');
+  it.each([
+    ['omits the panel', undefined],
+    ['passes null', null],
+  ])(
+    'closing collapses the slot and the next record opens at normal width when the route %s',
+    async (_label, closedPanel) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <CloseLifecycleHarness closedPanel={closedPanel} />
+        </QueryClientProvider>,
+      );
+      const slot = screen.getByTestId('app-detail-slot');
+      await waitFor(() => expect(screen.getByTestId('close-first-panel')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+      expect(slot).toHaveAttribute('data-expanded', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
-    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'false'));
-    expect(slot).toHaveAttribute('data-expanded', 'false');
+      fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+      await waitFor(() => expect(slot).toHaveAttribute('data-open', 'false'));
+      expect(slot).toHaveAttribute('data-expanded', 'false');
 
-    fireEvent.click(screen.getByRole('button', { name: 'open next record' }));
-    await waitFor(() => expect(screen.getByTestId('close-next-panel')).toBeInTheDocument());
-    expect(slot).toHaveAttribute('data-expanded', 'false');
-  });
+      fireEvent.click(screen.getByRole('button', { name: 'open next record' }));
+      await waitFor(() => expect(screen.getByTestId('close-next-panel')).toBeInTheDocument());
+      expect(slot).toHaveAttribute('data-expanded', 'false');
+    },
+  );
 
   it('starts a different shell registrant collapsed on its first slot render', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -377,6 +396,7 @@ describe('AppFrame', () => {
     fireEvent.click(screen.getByRole('button', { name: 'mount second registrant' }));
     expect(await screen.findByTestId('route-panel-b')).toBeInTheDocument();
     expect(slot).toHaveAttribute('data-expanded', 'false');
+    expect(routeBFirstCommitExpanded).toEqual(['false']);
     warn.mockRestore();
   });
 

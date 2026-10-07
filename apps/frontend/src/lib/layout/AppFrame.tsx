@@ -171,6 +171,11 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
       }
       return [...filtered, { key, node }];
     });
+    // Routes close their panel with either an absent prop (clear) or `null` (kept as a
+    // closed registrant); both end the expanded state so the next record opens at normal width.
+    if (node === null || node === undefined) {
+      setExpandedSlotKey((current) => (current === key ? null : current));
+    }
   }, []);
 
   const clear = React.useCallback((key: string) => {
