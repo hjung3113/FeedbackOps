@@ -1,4 +1,5 @@
 import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
+import { InternalLink } from '@/lib/router/InternalLink';
 import { cn } from '@fops/ui';
 import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
 import * as React from 'react';
@@ -264,12 +265,19 @@ export function AppSidebar({
                   {!collapsed && entry.trailing}
                 </button>
               ) : (
-                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active, entry.contextActive)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                <InternalLink
+                  href={scopedHref(entry.href, selectedManagedSystemId)}
+                  className={navItemClass(collapsed, entry.active, entry.contextActive)}
+                  data-testid={`sidebar-nav-${entry.id}`}
+                  aria-current={entry.active ? 'page' : undefined}
+                  title={collapsed ? entry.label : undefined}
+                  aria-label={collapsed ? entry.label : undefined}
+                >
                   {entry.icon && <span className="shrink-0">{entry.icon}</span>}
                   {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
                   {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
                   {!collapsed && entry.trailing}
-                </a>
+                </InternalLink>
               )}
             </React.Fragment>;
           })}
@@ -342,7 +350,14 @@ function ScopeBadge({ testId, label, urgent = false }: { testId: string; label: 
 
 function SidebarFooterLink({ item, collapsed }: { item: SidebarFooterItem; collapsed: boolean }) {
   const props = { className: cn(navItemClass(collapsed), item.disabled && 'opacity-60 cursor-not-allowed'), 'data-testid': `sidebar-footer-${item.id}`, title: collapsed ? item.label : undefined, 'aria-label': collapsed ? item.label : undefined };
-  if (item.href && !item.disabled) return <a href={item.href} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</a>;
+  if (item.href && !item.disabled) {
+    return (
+      <InternalLink href={item.href} {...props}>
+        <span className="shrink-0">{item.icon}</span>
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </InternalLink>
+    );
+  }
   return <button type="button" disabled={item.disabled} {...props}><span className="shrink-0">{item.icon}</span>{!collapsed && <span className="truncate">{item.label}</span>}</button>;
 }
 

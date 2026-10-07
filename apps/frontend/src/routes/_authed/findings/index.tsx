@@ -13,6 +13,7 @@ import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDate } from '@/lib/format/datetime';
+import { InternalLink } from '@/lib/router/InternalLink';
 import { parseRouteSearch } from '@/lib/router/search';
 import type { FindingDto } from '@fops/shared';
 import {
@@ -182,7 +183,7 @@ function FindingsListShell({
             {...(safeReturnTo !== null
               ? {
                   headerExtras: (
-                    <a
+                    <InternalLink
                       href={safeReturnTo}
                       onClick={(event) => {
                         if (
@@ -201,7 +202,7 @@ function FindingsListShell({
                     >
                       <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
                       <span>원래 VOC로 돌아가기</span>
-                    </a>
+                    </InternalLink>
                   ),
                 }
               : {})}

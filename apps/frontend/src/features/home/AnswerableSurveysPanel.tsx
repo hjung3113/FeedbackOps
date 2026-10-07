@@ -3,6 +3,7 @@ import { useAnswerableSurveys } from '@/features/surveys/hooks/useSurveys';
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_PARTICIPATION_COPY } from '@/lib/copy/survey-participation';
 import { formatDate } from '@/lib/format/datetime';
+import { InternalLink } from '@/lib/router/InternalLink';
 import { Button, SkeletonRows } from '@fops/ui';
 import { Link, useRouter } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
@@ -98,9 +99,9 @@ function SurveyParticipationLink({
 
   if (!router)
     return (
-      <a className={className} href={href}>
+      <InternalLink className={className} href={href}>
         {children}
-      </a>
+      </InternalLink>
     );
   if (surveyId === undefined) {
     return (

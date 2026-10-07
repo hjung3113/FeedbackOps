@@ -1,5 +1,6 @@
 import { DASHBOARD_QUEUE_ACTION_LABELS, dashboardActionLabel } from '@/lib/copy/dashboard-actions';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { InternalLink } from '@/lib/router/InternalLink';
 import type { DashboardSummary } from '@fops/shared';
 import { Button } from '@fops/ui';
 import { ArrowRight } from 'lucide-react';
@@ -99,18 +100,18 @@ export function IntegrationDashboardQueueCard({
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
         {queue.secondary_action !== null ? (
-          <a
+          <InternalLink
             className="min-w-0 truncate text-xs text-text-secondary hover:text-text-primary"
             data-testid={`integration-queue-secondary-${queue.id}`}
             href={queue.secondary_action.route}
           >
             {dashboardActionLabel(queue.secondary_action.intent, queue.secondary_action.label)}
-          </a>
+          </InternalLink>
         ) : (
           <span />
         )}
         <Button asChild variant="primary" size="sm">
-          <a
+          <InternalLink
             className="inline-flex shrink-0 items-center gap-1"
             data-testid={`integration-queue-primary-${queue.id}`}
             href={queue.next_action.route}
@@ -118,7 +119,7 @@ export function IntegrationDashboardQueueCard({
             {DASHBOARD_QUEUE_ACTION_LABELS[queue.id] ??
               dashboardActionLabel(queue.next_action.intent, queue.next_action.label)}
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
-          </a>
+          </InternalLink>
         </Button>
       </div>
     </article>
@@ -145,7 +146,7 @@ export function IntegrationJumpCard({
   testId,
 }: IntegrationJumpCardProps): React.ReactElement {
   return (
-    <a
+    <InternalLink
       className="flex min-h-32 flex-col gap-3 rounded-md border border-border-subtle bg-surface-card p-4 hover:bg-surface-row-hover"
       data-testid={testId}
       href={href}
@@ -173,6 +174,6 @@ export function IntegrationJumpCard({
       <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-primary">
         열기 <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
-    </a>
+    </InternalLink>
   );
 }

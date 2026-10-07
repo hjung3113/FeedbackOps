@@ -6,6 +6,7 @@ import {
   formatUnreadBadge,
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
+import { InternalLink } from '@/lib/router/InternalLink';
 import type { RoleLevel } from '@fops/shared';
 import {
   DropdownMenu,
@@ -155,8 +156,8 @@ export function AppRail({
         )}
       </TooltipProvider>
       <div className="flex-1" />
-      {/* Plain anchor like the RailButton entries above (the rail renders outside routes in tests too). */}
-      <a
+      {/* InternalLink like the RailButton entries above; outside a router (some tests) it stays a plain anchor. */}
+      <InternalLink
         href="/home?tab=inbox"
         className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
         aria-label={HOME_INBOX_COPY.railNotificationsLabel(unreadCount)}
@@ -169,7 +170,7 @@ export function AppRail({
             </span>
           )}
         </span>
-      </a>
+      </InternalLink>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -214,7 +215,7 @@ function RailButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <a
+        <InternalLink
           href={href}
           className={cn(
             'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
@@ -226,7 +227,7 @@ function RailButton({
           data-testid={`rail-${item.key}`}
         >
           <Icon className="h-4 w-4" />
-        </a>
+        </InternalLink>
       </TooltipTrigger>
       <TooltipContent side="right" size="sm">
         {item.label}
