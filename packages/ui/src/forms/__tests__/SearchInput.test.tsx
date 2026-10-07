@@ -1,6 +1,13 @@
 /// <reference types="@testing-library/jest-dom" />
 import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '../../components/shadcn/dialog.js';
 import { SearchInput } from '../SearchInput.js';
 
 describe('SearchInput', () => {
@@ -92,5 +99,39 @@ describe('SearchInput controlled mode (#821)', () => {
     render(<SearchInput value="" onValueChange={onValueChange} />);
     fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('inside a Radix Dialog, one Escape closes the dialog and does not clear the box', () => {
+    const valueChanges: string[] = [];
+    function DialogHarness() {
+      const [open, setOpen] = useState(true);
+      const [value, setValue] = useState('로그인');
+      return (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogTitle>대화상자</DialogTitle>
+            <DialogDescription>대화상자 안의 검색 상자</DialogDescription>
+            <SearchInput
+              placeholder="대화상자 검색…"
+              value={value}
+              onValueChange={(next) => {
+                valueChanges.push(next);
+                setValue(next);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    render(<DialogHarness />);
+
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: '대화상자 검색…' }), {
+      key: 'Escape',
+    });
+
+    // The dialog dismissed; the search box kept its value — one key did not
+    // do both jobs.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(valueChanges).toEqual([]);
   });
 });

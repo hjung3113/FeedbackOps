@@ -83,6 +83,9 @@ export function SearchInput({
         className="pl-9"
         onChange={(event) => onValueChange(event.target.value)}
         onKeyDown={(event) => {
+          // A dialog (e.g. Radix) may have already handled this Escape on
+          // document capture; one key must not also clear the box.
+          if (event.defaultPrevented) return;
           if (event.key === 'Escape' && value !== '') {
             event.preventDefault();
             onValueChange('');

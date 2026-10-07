@@ -3,13 +3,16 @@ import { FieldLabel } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { type ReactElement, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VocSourcePicker } from './VocSourcePicker';
 
 const MANAGED_SYSTEM_ID = '30000000-0000-0000-0000-000000000003';
+const OTHER_MANAGED_SYSTEM_ID = '30000000-0000-0000-0000-000000000009';
 const VOC_12_ID = '10000000-0000-0000-0000-000000000012';
 const VOC_13_ID = '10000000-0000-0000-0000-000000000013';
+const EXACT_VOC_ID = '10000000-0000-0000-0000-000000000001';
 
 function makeVoc(
   id: string,
@@ -48,6 +51,24 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function resolveBody(entityType: 'voc' | 'finding', id: string, displayId: string): unknown {
+  return {
+    entity_type: entityType,
+    id,
+    display_id: displayId,
+    route_intent: { route: '/vocs', search: {} },
+  };
+}
+
+/** GET /vocs/:id URLs (no query string), the exact-ID supplement's detail fetches. */
+function detailFetchUrls(calls: unknown[][]): string[] {
+  return calls.map(([url]) => String(url)).filter((url) => /^\/vocs\/[0-9a-f-]+$/.test(url));
+}
+
+function searchedFetchUrls(calls: unknown[][]): string[] {
+  return calls.map(([url]) => String(url)).filter((url) => url.includes('q='));
+}
+
 function vocsUrl(managedSystemId: string, q: string | undefined): string {
   const query = new URLSearchParams({
     view: 'inbox',
@@ -59,19 +80,39 @@ function vocsUrl(managedSystemId: string, q: string | undefined): string {
 }
 
 /**
+ * Handlers for the #815 exact-ID supplement transport: GET /nav/resolve and
+ * GET /vocs/:id. Without a handler the URL returns an empty 200, which fails
+ * response parsing and adds no option.
+ */
+interface ExactLookupHandlers {
+  resolve?: (displayId: string) => Response;
+  vocDetail?: (vocId: string) => Response;
+}
+
+/**
  * Installs a fetch mock whose /vocs response can depend on the requested `q`
- * (server-side search #821). The resolve-path fetches are gone from the picker,
- * so unknown URLs just return an empty 200.
+ * (server-side search #821), with optional handlers for the exact-ID lookup.
+ * Unknown URLs just return an empty 200.
  */
 function installFetch(
   vocsForQ: (q: string | undefined) => VocListItem[] = () => VOCS,
   hasMore = false,
+  exactLookup: ExactLookupHandlers = {},
 ): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/vocs?')) {
       const q = new URL(url, 'http://localhost').searchParams.get('q') ?? undefined;
       return jsonResponse({ items: vocsForQ(q), page: { has_more: hasMore } });
+    }
+    if (url.startsWith('/nav/resolve?')) {
+      const displayId = new URL(url, 'http://localhost').searchParams.get('display_id') ?? '';
+      return exactLookup.resolve !== undefined
+        ? exactLookup.resolve(displayId)
+        : jsonResponse({}, 200);
+    }
+    if (exactLookup.vocDetail !== undefined && /^\/vocs\/[0-9a-f-]+$/.test(url)) {
+      return exactLookup.vocDetail(url.slice('/vocs/'.length));
     }
     return jsonResponse({}, 200);
   });
@@ -142,19 +183,216 @@ describe('VocSourcePicker', () => {
     expect(await within(listbox).findByText(statusText)).toBeInTheDocument();
   });
 
-  it('shows the empty-search copy inside the listbox when the server search returns nothing', async () => {
-    installFetch((q) => (q === undefined ? VOCS : []));
+  it('shows the empty-search copy only after the searched response arrives', async () => {
+    let releaseSearch: ((body: unknown) => void) | undefined;
+    const searchedResponse = new Promise<Response>((resolve) => {
+      releaseSearch = (body: unknown) => resolve(jsonResponse(body));
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('q=')) return searchedResponse;
+      return jsonResponse({ items: VOCS, page: { has_more: false } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
     renderPicker();
     fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
       target: { value: 'VOC-99' },
     });
 
-    expect(
-      await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
-        '검색 결과가 없습니다.',
+    // The copy must come from the searched (empty) server response, not from
+    // an earlier local state: await the parsed q request first.
+    await waitFor(() => {
+      const [searchedUrl] = searchedFetchUrls(fetchMock.mock.calls);
+      expect(searchedUrl).toBeDefined();
+      if (searchedUrl === undefined) return;
+      const parsed = listVocsQuerySchema.safeParse(
+        Object.fromEntries(new URL(searchedUrl, 'http://localhost').searchParams),
+      );
+      expect(parsed.success && parsed.data?.q).toBe('VOC-99');
+    });
+    expect(screen.queryByText('검색 결과가 없습니다.')).not.toBeInTheDocument();
+
+    act(() => releaseSearch?.({ items: [], page: { has_more: false } }));
+    expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('sends the padded lowercase search trimmed as q and lists the searched row', async () => {
+    const fetchMock = installFetch((q) => (q === 'voc-12' ? [VOC_12] : []));
+    const onChange = renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: ' voc-12 ' },
+    });
+
+    await waitFor(() => {
+      expect(searchedFetchUrls(fetchMock.mock.calls)).toHaveLength(1);
+    });
+    const [searchedUrl] = searchedFetchUrls(fetchMock.mock.calls);
+    expect(searchedUrl).toBeDefined();
+    if (searchedUrl === undefined) return;
+    const parsed = listVocsQuerySchema.safeParse(
+      Object.fromEntries(new URL(searchedUrl, 'http://localhost').searchParams),
+    );
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.q).toBe('voc-12');
+
+    // The server's row must survive rendering even though the typed text is
+    // neither trimmed like the request nor matched by the label substring.
+    await userEvent.click(await screen.findByRole('option', { name: 'VOC-12 · 로그인 오류' }));
+    expect(onChange).toHaveBeenCalledWith(VOC_12_ID);
+  });
+
+  it('offers an exact display ID the searched page lacks as the first option', async () => {
+    const voc10 = makeVoc('10000000-0000-0000-0000-000000000010', 'VOC-10', '최근 VOC');
+    installFetch((q) => (q === 'VOC-1' ? [voc10] : []), false, {
+      resolve: () => jsonResponse(resolveBody('voc', EXACT_VOC_ID, 'VOC-1')),
+      vocDetail: () => jsonResponse(makeVoc(EXACT_VOC_ID, 'VOC-1', '오래된 정확 VOC')),
+    });
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-1' },
+    });
+
+    await screen.findByRole('option', { name: 'VOC-1 · 오래된 정확 VOC' });
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'VOC-1 · 오래된 정확 VOC',
+      'VOC-10 · 최근 VOC',
+    ]);
+  });
+
+  it('does not offer an exact VOC from another Managed System', async () => {
+    const voc10 = makeVoc('10000000-0000-0000-0000-000000000010', 'VOC-10', '최근 VOC');
+    const fetchMock = installFetch((q) => (q === 'VOC-1' ? [voc10] : []), false, {
+      resolve: () => jsonResponse(resolveBody('voc', EXACT_VOC_ID, 'VOC-1')),
+      vocDetail: () =>
+        jsonResponse(makeVoc(EXACT_VOC_ID, 'VOC-1', '다른 MS의 VOC', OTHER_MANAGED_SYSTEM_ID)),
+    });
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-1' },
+    });
+
+    await waitFor(() => {
+      expect(detailFetchUrls(fetchMock.mock.calls)).toHaveLength(1);
+    });
+    expect(screen.queryByRole('option', { name: 'VOC-1 · 다른 MS의 VOC' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'VOC-10 · 최근 VOC' })).toBeInTheDocument();
+  });
+
+  it('does not fetch the detail nor offer a non-VOC record for an exact display ID', async () => {
+    const fetchMock = installFetch(() => [], false, {
+      resolve: () => jsonResponse(resolveBody('finding', EXACT_VOC_ID, 'FIN-1')),
+    });
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-1' },
+    });
+
+    await waitFor(() => {
+      const resolveCalls = fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.startsWith('/nav/resolve?'));
+      expect(resolveCalls).toHaveLength(1);
+    });
+    expect(detailFetchUrls(fetchMock.mock.calls)).toHaveLength(0);
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a 404 detail response', 404],
+    ['a summary envelope without a title', 200],
+  ])('adds nothing when the exact lookup detail returns %s', async (_label, status) => {
+    const fetchMock = installFetch(() => [], false, {
+      resolve: () => jsonResponse(resolveBody('voc', EXACT_VOC_ID, 'VOC-1')),
+      vocDetail: (vocId) =>
+        status === 404
+          ? jsonResponse({ code: 'not_found.record', message: 'missing' }, 404)
+          : jsonResponse({ id: vocId, display_id: 'VOC-1' }),
+    });
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-1' },
+    });
+
+    await waitFor(() => {
+      expect(detailFetchUrls(fetchMock.mock.calls)).toHaveLength(1);
+    });
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+
+  it('still offers the exact VOC when the searched page returns 100 other VOC-1… rows', async () => {
+    const many = Array.from({ length: 100 }, (_, index) =>
+      makeVoc(
+        `20000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
+        `VOC-${100 + index}`,
+        `묶음 제목 ${index}`,
       ),
-    ).toBeInTheDocument();
+    );
+    installFetch((q) => (q === 'VOC-1' ? many : []), false, {
+      resolve: () => jsonResponse(resolveBody('voc', EXACT_VOC_ID, 'VOC-1')),
+      vocDetail: () => jsonResponse(makeVoc(EXACT_VOC_ID, 'VOC-1', '오래된 정확 VOC')),
+    });
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-1' },
+    });
+
+    await screen.findByRole('option', { name: 'VOC-1 · 오래된 정확 VOC' });
+    const allOptions = screen.getAllByRole('option');
+    expect(allOptions).toHaveLength(101);
+    expect(allOptions[0]?.textContent).toBe('VOC-1 · 오래된 정확 VOC');
+  });
+
+  it('keeps the selected search-only VOC label on the trigger after the search resets', async () => {
+    const olderVoc = makeVoc(VOC_12_ID, 'VOC-7', '아카이브 이전 VOC');
+    installFetch((q) => (q === undefined ? [] : [olderVoc]));
+
+    function Harness(): ReactElement {
+      const [value, setValue] = useState<string | null>(null);
+      return (
+        <VocSourcePicker
+          managedSystemId={MANAGED_SYSTEM_ID}
+          value={value}
+          onChange={setValue}
+          id="voc-source-picker"
+          invalid={false}
+        />
+      );
+    }
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <FieldLabel htmlFor="voc-source-picker">VOC 선택</FieldLabel>
+        <Harness />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(await screen.findByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-7' },
+    });
+    await userEvent.click(await screen.findByRole('option', { name: 'VOC-7 · 아카이브 이전 VOC' }));
+
+    // Selecting clears the search; once the debounce returns to the newest-100
+    // page (cached empty in this mock), the trigger must still show the
+    // picked VOC.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 700);
+      });
+    });
+    expect(screen.getByRole('combobox', { name: 'VOC 선택' })).toHaveTextContent(
+      'VOC-7 · 아카이브 이전 VOC',
+    );
   });
 
   it('sends the debounced search text as q on GET /vocs (parsed with listVocsQuerySchema)', async () => {

@@ -1346,30 +1346,60 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(body.items.map((item) => item.id)).toEqual([target.id]);
   });
 
-  it('821: q matches a display-ID prefix case-insensitively', async () => {
+  it('821: q matches a display-ID prefix case-insensitively and excludes non-matching rows', async () => {
     const msId = await insertMsDirectly(
       dbHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-q-disp`,
       'Q Display MS',
     );
-    const target = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '접수 지연 문의');
-    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '결제 오류 문의');
+    const target = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '접수 지연 문의',
+    );
+    const other = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '결제 오류 문의',
+    );
 
     // display_id is assigned by the server (voc.next_voc_display_id), so read
-    // it back from an unfiltered list of this MS first.
+    // both back from an unfiltered list of this MS first.
     const unfiltered = await listInboxWithQ(msId, undefined);
-    const targetDisplayId = unfiltered.body.items.find((item) => item.id === target.id)?.display_id;
-    if (targetDisplayId === undefined) throw new Error('target display_id missing');
-    const prefix = targetDisplayId.slice(0, -1);
+    const displayIdOf = (vocId: string): string => {
+      const found = unfiltered.body.items.find((item) => item.id === vocId)?.display_id;
+      if (found === undefined) throw new Error('seeded display_id missing');
+      return found;
+    };
+    const targetDisplayId = displayIdOf(target.id);
+    const otherDisplayId = displayIdOf(other.id);
 
-    const { status, body } = await listInboxWithQ(msId, prefix);
-    expect(status).toBe(200);
-    expect(body.items.length).toBeGreaterThan(0);
-    for (const item of body.items) {
-      expect(item.display_id.startsWith(prefix)).toBe(true);
+    // Shortest prefix of the target that still excludes the other row, so
+    // ignoring q (or matching every row) surfaces the other display ID.
+    let common = 0;
+    while (
+      common < targetDisplayId.length &&
+      common < otherDisplayId.length &&
+      targetDisplayId[common] === otherDisplayId[common]
+    ) {
+      common += 1;
     }
-    expect(body.items.map((item) => item.id)).toContain(target.id);
+    const prefix = targetDisplayId.slice(0, common + 1);
+    expect(prefix.length).toBeGreaterThan(0);
+    expect(otherDisplayId.startsWith(prefix)).toBe(false);
+
+    // Lowercase on purpose: the server match must be case-insensitive ILIKE.
+    const { status, body } = await listInboxWithQ(msId, prefix.toLowerCase());
+    expect(status).toBe(200);
+    expect(body.items.map((item) => item.id)).toEqual([target.id]);
+    for (const item of body.items) {
+      expect(item.display_id.toLowerCase().startsWith(prefix.toLowerCase())).toBe(true);
+    }
   });
 
   it('821: q that is neither a display-ID prefix nor a title substring returns no VOC', async () => {
@@ -1506,6 +1536,15 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       reporterId,
       '검색 페이지 베타',
     );
+    // Same MS, but matches neither the q title substring nor any display-ID
+    // prefix, so ignoring q would surface it on a page.
+    const distractor = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '검색과 무관한 주제',
+    );
 
     const res1 = await app.inject({
       method: 'GET',
@@ -1523,6 +1562,8 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(page1Cursor).toBeDefined();
     if (page1Cursor === undefined) return;
     const page1Ids = page1.items.map((item) => item.id);
+    // The distractor must never appear under an active q.
+    expect(page1Ids.every((id) => id !== distractor.id)).toBe(true);
 
     const res2 = await app.inject({
       method: 'GET',
