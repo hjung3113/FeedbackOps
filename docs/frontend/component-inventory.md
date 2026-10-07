@@ -55,7 +55,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Table | data, comparison | loading, empty, selected | keyboard row navigation |
 | ListRow | object, action-queue | hover, selected, active, permission-limited | row action is keyboard reachable |
 | Panel | detail, blocked, create | loading, dirty, error | close is keyboard reachable |
-| DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe |
+| DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe; fullscreen toggle sits before close inside the detail slot |
 | UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone includes text |
 | Toolbar | view, action, bulk | default, selection-active | one primary action maximum |
 

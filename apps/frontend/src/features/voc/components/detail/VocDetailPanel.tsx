@@ -17,8 +17,6 @@ export interface VocDetailPanelProps {
   managedSystemId?: string;
   /** Called when user closes the panel via X button or 404 selection clear. */
   onClose: () => void;
-  /** Optional fullscreen toggle handler from useFullscreenPanel (#18). */
-  onExpandToggle?: () => void;
 }
 
 // ── Type guards ──────────────────────────────────────────────────────────────
@@ -56,7 +54,6 @@ export function VocDetailPanel({
   vocId,
   managedSystemId,
   onClose,
-  onExpandToggle,
   // `null` while the scope-exit effect clears `selected`: rendering the old
   // record for that tick is the bug this panel is closing over.
 }: VocDetailPanelProps): React.ReactElement | null {
@@ -113,14 +110,7 @@ export function VocDetailPanel({
 
   // 3. Summary envelope — permission blocked
   if (isSummaryEnvelope(data)) {
-    return (
-      <SummaryPermissionView
-        data={data}
-        vocId={vocId}
-        onClose={onClose}
-        {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
-      />
-    );
+    return <SummaryPermissionView data={data} vocId={vocId} onClose={onClose} />;
   }
 
   // 4. Full detail envelope
@@ -138,7 +128,6 @@ export function VocDetailPanel({
       vocId={vocId}
       onClose={onClose}
       {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-      {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
       canRenderAllowedTask={canRenderAllowedTask}
       me={me ?? null}

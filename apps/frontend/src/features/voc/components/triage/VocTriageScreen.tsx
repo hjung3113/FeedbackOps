@@ -12,9 +12,16 @@ import { CreateFindingModal } from '@/features/cross-system/create-finding/Creat
 import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { VOC_TRIAGE_QUEUE_TOTAL_LABELS, VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
+import { useFullscreenPanel } from '@/lib/panel/useFullscreenPanel';
 import type { VocListItem } from '@fops/shared';
-import { ListTabs, type ListToolbarTab, ToolbarKicker } from '@fops/ui';
+import {
+  DetailPanelFullscreenContext,
+  ListTabs,
+  type ListToolbarTab,
+  ToolbarKicker,
+} from '@fops/ui';
 import { Flag } from 'lucide-react';
+import { useEffect } from 'react';
 import type * as React from 'react';
 import { TriagePanel } from './TriagePanel';
 import { TriageQueue } from './TriageQueue';
@@ -69,6 +76,10 @@ export function VocTriageScreen({
     handleOptimisticRestore,
     closeCreateFinding,
   } = useVocTriageScreenController({ items, selectedId });
+  const { isFullscreen, toggle, close } = useFullscreenPanel();
+  useEffect(() => {
+    if (selectedVoc === null) close();
+  }, [close, selectedVoc]);
   const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => ({
     value: tab.value,
     label: tab.label,
@@ -140,7 +151,10 @@ export function VocTriageScreen({
           id={TRIAGE_QUEUE_PANEL_ID}
           role="tabpanel"
           aria-labelledby={`triage-tab-${activeTab}`}
-          className="flex-1 min-w-0 overflow-y-auto border-r border-border-subtle"
+          className={
+            isFullscreen ? 'hidden' : 'flex-1 min-w-0 overflow-y-auto border-r border-border-subtle'
+          }
+          hidden={isFullscreen}
         >
           <TriageQueue
             vocs={liveQueue}
@@ -169,13 +183,15 @@ export function VocTriageScreen({
 
         {/* Right: detail panel (always rendered when queue non-empty) */}
         {selectedVoc !== null && (
-          <div className="w-detail-panel shrink-0">
-            <TriagePanel
-              voc={selectedVoc}
-              onAct={handleAct}
-              onOptimisticRemove={handleOptimisticRemove}
-              onOptimisticRestore={handleOptimisticRestore}
-            />
+          <div className={isFullscreen ? 'flex-1 min-w-0' : 'w-detail-panel shrink-0'}>
+            <DetailPanelFullscreenContext.Provider value={{ expanded: isFullscreen, toggle }}>
+              <TriagePanel
+                voc={selectedVoc}
+                onAct={handleAct}
+                onOptimisticRemove={handleOptimisticRemove}
+                onOptimisticRestore={handleOptimisticRestore}
+              />
+            </DetailPanelFullscreenContext.Provider>
           </div>
         )}
       </div>

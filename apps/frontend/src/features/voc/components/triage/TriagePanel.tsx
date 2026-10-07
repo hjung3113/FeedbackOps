@@ -17,7 +17,8 @@ import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/docume
 import { type FindingSeverity, type VocListItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
-  Button,
+  DetailPanelFullscreenToggle,
+  DetailPanelHeaderActions,
   DetailPanelSectionNav,
   PanelSectionTitle,
   PanelTitleBlock,
@@ -25,7 +26,6 @@ import {
   RichContentRenderer,
   type TipTapDoc,
 } from '@fops/ui';
-import { Maximize2, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
@@ -133,28 +133,13 @@ export function TriagePanel({
       {/* Panel header */}
       <div className="flex items-center justify-between h-toolbar px-5 border-b border-border-subtle shrink-0">
         <span className="font-mono text-xs text-text-muted tabular-nums">{voc.display_id}</span>
-        {/* Expand + more ghost icon buttons (prototype L423-426). No behavior
-            yet — rendered disabled to preserve the prototype affordance.
-            Follow-up: wire panel fullscreen + overflow menu (deferred). */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled
-            aria-label="패널 확장"
-            data-testid="triage-panel-expand"
-          >
-            <Maximize2 size={14} aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled
-            aria-label="더 보기"
-            data-testid="triage-panel-more"
-          >
-            <MoreHorizontal size={14} aria-hidden="true" />
-          </Button>
+          <DetailPanelHeaderActions
+            entityKind="voc"
+            entityId={voc.display_id}
+            copyUrl={`/vocs?view=inbox&selected=${voc.id}`}
+          />
+          <DetailPanelFullscreenToggle />
         </div>
       </div>
 

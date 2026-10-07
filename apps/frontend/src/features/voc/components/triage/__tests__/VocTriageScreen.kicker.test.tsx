@@ -279,4 +279,36 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(count).toBeInTheDocument();
     expect(count.textContent).toContain('1건 처리됨');
   });
+
+  it('expands the triage panel, handles Escape, and keeps its copy and deferred menu actions', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    const queue = screen.getByRole('tabpanel');
+    const expand = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(expand).toBeEnabled();
+    expect(screen.getByRole('button', { name: '링크 복사' })).toBeInTheDocument();
+
+    fireEvent.click(expand);
+    expect(queue).toHaveAttribute('hidden');
+    expect(expand).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(queue).not.toHaveAttribute('hidden');
+    expect(expand).toHaveAttribute('aria-pressed', 'false');
+
+    const more = screen.getByRole('button', { name: '더 보기' });
+    fireEvent.keyDown(more, { key: 'Enter' });
+    expect(screen.getByText('읽음 표시')).toBeInTheDocument();
+    expect(screen.getByText('스누즈')).toBeInTheDocument();
+  });
 });

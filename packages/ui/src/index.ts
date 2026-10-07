@@ -152,6 +152,11 @@ export {
 
 // Panel primitives (Slice 3 #20)
 export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
+export {
+  DetailPanelFullscreenContext,
+  DetailPanelFullscreenToggle,
+  type DetailPanelFullscreenValue,
+} from './panel/DetailPanelFullscreenContext';
 export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
 export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBlock';
 export { FieldRow, type FieldRowProps } from './panel/FieldRow';

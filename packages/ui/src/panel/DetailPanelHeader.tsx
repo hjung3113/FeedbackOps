@@ -1,7 +1,12 @@
 import { X } from 'lucide-react';
+import { useContext } from 'react';
 import type * as React from 'react';
 import { StatusBadgeFrame } from '../badges/StatusBadgeFrame.js';
 import { cn } from '../utils/cn.js';
+import {
+  DetailPanelFullscreenContext,
+  DetailPanelFullscreenToggle,
+} from './DetailPanelFullscreenContext.js';
 
 // Labels and accents follow DETAIL_PANEL_KINDS in docs/design-prototype/panel.jsx.
 export type DetailPanelKind =
@@ -73,6 +78,8 @@ export function DetailPanelHeader({
 }: DetailPanelHeaderProps) {
   const isMilestone = kind === 'milestone';
   const accent = KIND_ACCENT[kind];
+  const hasFullscreenToggle = useContext(DetailPanelFullscreenContext) !== null;
+  const showActions = hasFullscreenToggle || onClose !== undefined;
 
   return (
     <div
@@ -120,21 +127,24 @@ export function DetailPanelHeader({
         {/* Extras slot */}
         {extras !== undefined && <div className="ml-auto flex items-center">{extras}</div>}
 
-        {/* Close button */}
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="패널 닫기"
-            className={cn(
-              'flex items-center justify-center rounded p-1',
-              'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
-              extras === undefined && 'ml-auto',
+        {showActions && (
+          <div className={cn('flex items-center gap-1', extras === undefined && 'ml-auto')}>
+            <DetailPanelFullscreenToggle />
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="패널 닫기"
+                className={cn(
+                  'flex items-center justify-center rounded p-1',
+                  'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
+                  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
+                )}
+              >
+                <X size={16} />
+              </button>
             )}
-          >
-            <X size={16} />
-          </button>
+          </div>
         )}
       </div>
     </div>
