@@ -11,6 +11,10 @@ import {
 } from '../lib/questionDraft';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
 
+function hasInvalidQuestion(question: SurveyQuestion): boolean {
+  return question.prompt.trim().length === 0 || hasInvalidChoiceOptions(question);
+}
+
 export function useSurveyBuilderController(args: {
   survey: Survey;
   canManage: boolean;
@@ -159,10 +163,11 @@ export function useSurveyBuilderController(args: {
     setLaunchSaveFailed(false);
     setLaunchOptionValidationFailed(false);
     void (async () => {
-      const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+      const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
       if (invalidQuestion) {
         setSelectedId(invalidQuestion.id);
-        setLaunchOptionValidationFailed(true);
+        if (invalidQuestion.prompt.trim().length === 0) setLaunchOpen(false);
+        else setLaunchOptionValidationFailed(true);
         return;
       }
       if (dirty && !(await save())) {
@@ -179,7 +184,7 @@ export function useSurveyBuilderController(args: {
   };
 
   const save = async (): Promise<boolean> => {
-    const invalidQuestion = questionsRef.current.find(hasInvalidChoiceOptions);
+    const invalidQuestion = questionsRef.current.find(hasInvalidQuestion);
     if (invalidQuestion) {
       setSelectedId(invalidQuestion.id);
       setSaveFailed(false);

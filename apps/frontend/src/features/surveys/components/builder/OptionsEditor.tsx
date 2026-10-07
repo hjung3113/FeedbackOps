@@ -2,20 +2,8 @@ import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { Button, Input } from '@fops/ui';
 import { Plus, Trash2 } from 'lucide-react';
 import type { SurveyQuestion } from '../../types';
+import { createClientId } from './lib/createClientId';
 import { MAX, MIN } from './lib/optionValidation';
-
-let nextOptionKeySequence = 0;
-
-function createOptionKey(): string {
-  nextOptionKeySequence += 1;
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-    return `option-${crypto.randomUUID()}-${nextOptionKeySequence}`;
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    const randomParts = crypto.getRandomValues(new Uint32Array(4));
-    return `option-${Array.from(randomParts, (part) => part.toString(36)).join('-')}-${nextOptionKeySequence}`;
-  }
-  return `option-${Date.now().toString(36)}-${nextOptionKeySequence.toString(36)}`;
-}
 
 export function OptionsEditor({
   question,
@@ -38,7 +26,7 @@ export function OptionsEditor({
       const match = /^옵션 (\d+)$/.exec(option.label.trim());
       return Math.max(maximum, match ? Number(match[1]) : 0);
     }, options.length);
-    const key = createOptionKey();
+    const key = createClientId('option-');
     onChange({
       options: [...options, { key, label: SURVEY_BUILDER_COPY.optionLabel(lastNumber + 1) }],
     });
