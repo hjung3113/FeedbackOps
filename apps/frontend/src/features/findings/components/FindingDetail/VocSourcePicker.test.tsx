@@ -1,14 +1,13 @@
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, listVocsQuerySchema } from '@fops/shared';
 import { FieldLabel } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VocSourcePicker } from './VocSourcePicker';
 
 const MANAGED_SYSTEM_ID = '30000000-0000-0000-0000-000000000003';
-const OTHER_MANAGED_SYSTEM_ID = '30000000-0000-0000-0000-000000000013';
 const VOC_12_ID = '10000000-0000-0000-0000-000000000012';
 const VOC_13_ID = '10000000-0000-0000-0000-000000000013';
 
@@ -49,24 +48,30 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function vocsUrl(managedSystemId: string, q: string | undefined): string {
+  const query = new URLSearchParams({
+    view: 'inbox',
+    managed_system_id: managedSystemId,
+    limit: '100',
+  });
+  if (q !== undefined && q !== '') query.set('q', q);
+  return `/vocs?${query.toString()}`;
+}
+
+/**
+ * Installs a fetch mock whose /vocs response can depend on the requested `q`
+ * (server-side search #821). The resolve-path fetches are gone from the picker,
+ * so unknown URLs just return an empty 200.
+ */
 function installFetch(
-  resolve?: (displayId: string) => Response,
-  vocs: VocListItem[] = VOCS,
-  resolvedVoc: unknown = VOC_12,
+  vocsForQ: (q: string | undefined) => VocListItem[] = () => VOCS,
   hasMore = false,
 ): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/vocs?')) {
-      return jsonResponse({ items: vocs, page: { has_more: hasMore } });
-    }
-    if (url === `/vocs/${VOC_12_ID}`) return jsonResponse(resolvedVoc);
-    if (url.startsWith('/nav/resolve?display_id=')) {
-      const displayId = new URL(url, 'http://localhost').searchParams.get('display_id') ?? '';
-      return (
-        resolve?.(displayId) ??
-        jsonResponse({ code: 'not_found.record', message: 'not found' }, 404)
-      );
+      const q = new URL(url, 'http://localhost').searchParams.get('q') ?? undefined;
+      return jsonResponse({ items: vocsForQ(q), page: { has_more: hasMore } });
     }
     return jsonResponse({}, 200);
   });
@@ -114,7 +119,7 @@ describe('VocSourcePicker', () => {
     expect(await screen.findByRole('option', { name: expectedOption })).toBeInTheDocument();
     expect(screen.getByRole('listbox', { name: 'VOC 목록' })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      `/vocs?view=inbox&managed_system_id=${MANAGED_SYSTEM_ID}&limit=100`,
+      vocsUrl(MANAGED_SYSTEM_ID, undefined),
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -122,265 +127,128 @@ describe('VocSourcePicker', () => {
   it.each([
     ['loading', 'VOC 목록을 불러오는 중입니다.'],
     ['error', 'VOC 목록을 불러오지 못했습니다.'],
-    ['unavailable', 'VOC를 찾을 수 없거나 권한이 없습니다.'],
   ])('shows the %s status inside the open listbox', async (state, statusText) => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.startsWith('/vocs?')) {
-          if (state === 'loading') return new Promise<Response>(() => {});
-          if (state === 'error') {
-            return jsonResponse({ code: 'internal.unexpected', message: 'failed' }, 500);
-          }
-          return jsonResponse({ items: [], page: { has_more: false } });
-        }
-        if (url.startsWith('/nav/resolve?display_id=')) {
-          return jsonResponse({ code: 'not_found.record', message: 'not found' }, 404);
-        }
-        return jsonResponse({});
+      vi.fn(async () => {
+        if (state === 'loading') return new Promise<Response>(() => {});
+        return jsonResponse({ code: 'internal.unexpected', message: 'failed' }, 500);
       }),
     );
     renderPicker();
     fireEvent.click(screen.getByRole('combobox', { name: 'VOC 선택' }));
     const listbox = screen.getByRole('listbox', { name: 'VOC 목록' });
 
-    if (state === 'unavailable') {
-      fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
-        target: { value: 'VOC-99' },
-      });
-    }
-
     expect(await within(listbox).findByText(statusText)).toBeInTheDocument();
   });
 
-  it('resolves an unlisted VOC display ID and offers it for selection', async () => {
-    const fetchMock = installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'voc',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: {
-            route: '/vocs',
-            search: { view: 'inbox', selected: VOC_12_ID },
-          },
-        }),
-      [VOC_13],
-    );
-    const onChange = renderPicker();
-    const trigger = await screen.findByRole('combobox', { name: 'VOC 선택' });
-    fireEvent.click(trigger);
-    const searchInput = await screen.findByPlaceholderText('VOC ID 또는 제목 검색');
-    await userEvent.type(searchInput, 'VOC-12');
-
-    const option = await screen.findByRole('option', { name: 'VOC-12 · 로그인 오류' });
-    await userEvent.click(option);
-
-    expect(onChange).toHaveBeenCalledWith(VOC_12_ID);
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/nav/resolve?display_id=VOC-12',
-      expect.objectContaining({ method: 'GET' }),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(`/vocs/${VOC_12_ID}`, expect.anything());
-  });
-
-  it.each([
-    [
-      'summary-envelope response',
-      {
-        id: VOC_12_ID,
-        display_id: 'VOC-12',
-        primary_managed_system_id: MANAGED_SYSTEM_ID,
-        reporter_facing_status: 'reviewing',
-        created_at: '2026-10-01T00:00:00.000Z',
-        permission_decisions: {},
-      },
-      false,
-    ],
-    [
-      'reporter-arm response',
-      {
-        id: VOC_12_ID,
-        display_id: 'VOC-12',
-        title: '로그인 오류',
-        primary_managed_system_id: MANAGED_SYSTEM_ID,
-      },
-      true,
-    ],
-  ])('handles a %s from GET /vocs/:id', async (_label, resolvedVoc, selectable) => {
-    installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'voc',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: {
-            route: '/vocs',
-            search: { view: 'inbox', selected: VOC_12_ID },
-          },
-        }),
-      [VOC_13],
-      resolvedVoc,
-    );
+  it('shows the empty-search copy inside the listbox when the server search returns nothing', async () => {
+    installFetch((q) => (q === undefined ? VOCS : []));
     renderPicker();
     fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
     fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
-      target: { value: 'VOC-12' },
+      target: { value: 'VOC-99' },
     });
-    const listbox = screen.getByRole('listbox', { name: 'VOC 목록' });
 
-    if (selectable) {
-      expect(
-        await within(listbox).findByRole('option', { name: 'VOC-12 · 로그인 오류' }),
-      ).toBeInTheDocument();
-    } else {
-      expect(
-        await within(listbox).findByText('VOC를 찾을 수 없거나 권한이 없습니다.'),
-      ).toBeInTheDocument();
-    }
+    expect(
+      await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
+        '검색 결과가 없습니다.',
+      ),
+    ).toBeInTheDocument();
   });
 
-  it('debounces display-ID lookup until the search has settled', async () => {
-    vi.useFakeTimers();
-    const fetchMock = installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'voc',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: {
-            route: '/vocs',
-            search: { view: 'inbox', selected: VOC_12_ID },
-          },
-        }),
-      [VOC_13],
+  it('sends the debounced search text as q on GET /vocs (parsed with listVocsQuerySchema)', async () => {
+    const fetchMock = installFetch();
+    renderPicker();
+    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: '결제' },
+    });
+
+    await waitFor(() => {
+      const searchCalls = fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.includes('q='));
+      expect(searchCalls.length).toBeGreaterThan(0);
+    });
+    const searchedUrls = fetchMock.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes('q='));
+    const searchedUrl = searchedUrls.at(-1);
+    expect(searchedUrl).toBeDefined();
+    if (searchedUrl === undefined) return;
+    const parsed = listVocsQuerySchema.safeParse(
+      Object.fromEntries(new URL(searchedUrl, 'http://localhost').searchParams),
     );
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.view).toBe('inbox');
+    expect(parsed.data?.managed_system_id).toBe(MANAGED_SYSTEM_ID);
+    expect(parsed.data?.limit).toBe(100);
+    expect(parsed.data?.q).toBe('결제');
+  });
+
+  it('debounces the q request until the search has settled', async () => {
+    vi.useFakeTimers();
+    const fetchMock = installFetch();
     renderPicker();
     fireEvent.click(screen.getByRole('combobox', { name: 'VOC 선택' }));
     const searchInput = screen.getByPlaceholderText('VOC ID 또는 제목 검색');
-    fireEvent.change(searchInput, { target: { value: 'VOC-1' } });
-    fireEvent.change(searchInput, { target: { value: 'VOC-12' } });
+    fireEvent.change(searchInput, { target: { value: '결제' } });
+    fireEvent.change(searchInput, { target: { value: '결제 화면' } });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(299);
     });
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/nav/resolve'))).toEqual(
-      [],
-    );
+    expect(
+      fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('q=')),
+    ).toEqual([]);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
       for (let index = 0; index < 10; index += 1) await Promise.resolve();
     });
     expect(
-      fetchMock.mock.calls
-        .filter(([url]) => String(url).startsWith('/nav/resolve'))
-        .map(([url]) => String(url)),
-    ).toEqual(['/nav/resolve?display_id=VOC-12']);
+      fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('q=')),
+    ).toEqual([vocsUrl(MANAGED_SYSTEM_ID, '결제 화면')]);
   });
 
-  it('drops resolved options that no longer match the current search', async () => {
-    installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'voc',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: {
-            route: '/vocs',
-            search: { view: 'inbox', selected: VOC_12_ID },
-          },
-        }),
-      [VOC_13],
-    );
-    renderPicker();
+  it('selects an older VOC that only the server search returns', async () => {
+    const olderVoc = makeVoc(VOC_12_ID, 'VOC-7', '아카이브 이전 VOC');
+    installFetch((q) => (q === undefined ? [] : [olderVoc]));
+    const onChange = renderPicker();
     fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-    const searchInput = screen.getByPlaceholderText('VOC ID 또는 제목 검색');
-    fireEvent.change(searchInput, { target: { value: 'VOC-12' } });
-    expect(await screen.findByRole('option', { name: 'VOC-12 · 로그인 오류' })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: 'VOC-7' },
+    });
 
-    fireEvent.change(searchInput, { target: { value: 'VOC-1' } });
-    expect(screen.queryByRole('option', { name: /^VOC-12/ })).not.toBeInTheDocument();
+    const option = await screen.findByRole('option', { name: 'VOC-7 · 아카이브 이전 VOC' });
+    await userEvent.click(option);
+
+    expect(onChange).toHaveBeenCalledWith(VOC_12_ID);
   });
 
-  it.each([404, 403])(
-    'shows the same unavailable message when display-ID lookup returns %i',
-    async (status) => {
-      installFetch(() =>
-        jsonResponse(
-          {
-            code: status === 404 ? 'not_found.record' : 'permission.denied',
-            message: 'not available',
-          },
-          status,
-        ),
-      );
-      renderPicker();
-      fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-      const searchInput = await screen.findByPlaceholderText('VOC ID 또는 제목 검색');
-      await userEvent.type(searchInput, 'VOC-99');
-
-      expect(
-        await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
-          'VOC를 찾을 수 없거나 권한이 없습니다.',
-        ),
-      ).toBeInTheDocument();
-    },
-  );
-
-  it('does not offer a resolved non-VOC record', async () => {
-    installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'finding',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: { route: '/findings', search: { selected: VOC_12_ID } },
-        }),
-      [VOC_13],
-    );
+  it.each([
+    [
+      'without a search shows the recent-100 hint',
+      '',
+      '최근 100건만 표시됩니다. VOC ID나 제목으로 검색하세요.',
+    ],
+    [
+      'with a search shows the many-results hint',
+      '로그인',
+      '결과가 많습니다. 검색어를 더 입력하세요.',
+    ],
+  ])('has_more hint %s', async (_label, typed, expectedHint) => {
+    installFetch(undefined, true);
     renderPicker();
     fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-    const searchInput = await screen.findByPlaceholderText('VOC ID 또는 제목 검색');
-    await userEvent.type(searchInput, 'VOC-12');
+    if (typed !== '') {
+      fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
+        target: { value: typed },
+      });
+    }
 
-    expect(
-      await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
-        'VOC를 찾을 수 없거나 권한이 없습니다.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /^VOC-12/ })).not.toBeInTheDocument();
-  });
-
-  it('does not offer a VOC from another Managed System', async () => {
-    installFetch(
-      (displayId) =>
-        jsonResponse({
-          entity_type: 'voc',
-          id: VOC_12_ID,
-          display_id: displayId,
-          route_intent: {
-            route: '/vocs',
-            search: { view: 'inbox', selected: VOC_12_ID },
-          },
-        }),
-      [VOC_13],
-      makeVoc(VOC_12_ID, 'VOC-12', '다른 시스템 VOC', OTHER_MANAGED_SYSTEM_ID),
-    );
-    renderPicker();
-    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-    const searchInput = await screen.findByPlaceholderText('VOC ID 또는 제목 검색');
-    await userEvent.type(searchInput, 'VOC-12');
-
-    expect(
-      await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
-        'VOC를 찾을 수 없거나 권한이 없습니다.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('option', { name: 'VOC-12 · 다른 시스템 VOC' }),
-    ).not.toBeInTheDocument();
+    expect(await within(screen.getByRole('dialog')).findByText(expectedHint)).toBeInTheDocument();
   });
 
   it('shows the approved permission copy for a permission-coded list error', async () => {
@@ -396,21 +264,6 @@ describe('VocSourcePicker', () => {
     expect(
       await within(screen.getByRole('listbox', { name: 'VOC 목록' })).findByText(
         '선택한 Managed System의 VOC를 볼 권한이 없습니다.',
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('shows the 100-VOC limit hint inside the popover while searching', async () => {
-    installFetch(undefined, VOCS, VOC_12, true);
-    renderPicker();
-    fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
-    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
-      target: { value: '로그인' },
-    });
-
-    expect(
-      await within(screen.getByRole('dialog')).findByText(
-        '최근 100건만 표시됩니다. 이전 VOC는 VOC ID로 검색하세요.',
       ),
     ).toBeInTheDocument();
   });

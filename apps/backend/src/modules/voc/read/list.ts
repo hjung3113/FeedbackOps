@@ -107,6 +107,16 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       });
     }
 
+    // ── 2c. q cross-view validation (#821) ────────────────────────────────────
+    // Text search is an inbox/my surface only. Schema-level trimming already
+    // normalised blank values to undefined, so a blank q never 422s here.
+    const q = query.q;
+    if (q !== undefined && view === 'triage') {
+      throw new HttpError('validation.failed', 'q is only valid for view=inbox or view=my', {
+        fields: [{ path: ['q'], code: 'invalid_for_view' }],
+      });
+    }
+
     // ── 3. Determine sort key and direction ──────────────────────────────────
     // For triage view, use internal 'triage_pinned' sort.
     // For other views, default to 'created_at:desc' if sort not specified.
@@ -172,6 +182,9 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
     if (filterOwner !== undefined) repoArgs.filterOwner = filterOwner;
     if (filterAnalyticsAreaUnset) repoArgs.filterAnalyticsAreaUnset = true;
+    // #821: q only rides the list path — counts, nav counts, the pinned-row
+    // select, and out_of_scope_summary deliberately never see it.
+    if (q !== undefined) repoArgs.q = q;
     if (decodedCursor !== undefined) repoArgs.cursor = decodedCursor;
 
     const {

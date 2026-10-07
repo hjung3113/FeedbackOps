@@ -51,6 +51,7 @@ type InboxSort =
   | 'reporter_facing_status:asc';
 
 interface InboxSearch {
+  q?: string;
   managedSystem?: string;
   tab?: InboxTab;
   'filter.severity'?: string;
@@ -143,6 +144,9 @@ const SORT_OPTIONS: SortOption[] = [
 
 const DEFAULT_SORT = 'created_at:desc';
 
+// #821: keystrokes settle for this long before the URL q (and thus the fetch) updates.
+const SEARCH_DEBOUNCE_MS = 300;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Parse a comma-list search string into a string array. */
@@ -187,6 +191,31 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const activeTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged');
   const apiTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged');
   const currentSort = search.sort ?? DEFAULT_SORT;
+  // #821: the URL q is the source of truth for the fetch; the box keeps a
+  // local draft so keystrokes do not navigate on every character.
+  const urlQ = search.q ?? '';
+  const [searchDraft, setSearchDraft] = React.useState(urlQ);
+
+  React.useEffect(() => {
+    setSearchDraft(urlQ);
+  }, [urlQ]);
+
+  React.useEffect(() => {
+    if (searchDraft === urlQ) return;
+    const timeoutId = window.setTimeout(() => {
+      void navigate({
+        to: '/vocs',
+        search: (prev) => {
+          const { q: _q, ...rest } = prev;
+          // An empty box removes q; anything else is written verbatim (the
+          // backend owns trimming).
+          return searchDraft === '' ? rest : { ...rest, q: searchDraft };
+        },
+        replace: true,
+      });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchDraft, urlQ, navigate]);
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
@@ -213,9 +242,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     view,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
+    ...(urlQ !== '' ? { q: urlQ } : {}),
     filters: apiFilters,
     sort: currentSort,
   });
+  const isSearching = urlQ !== '';
   // Captured outside JSX: property narrowing does not survive into the renderTrigger callback.
   const deniedMsScoped =
     isPermissionDenied(vocList.error) &&
@@ -311,10 +342,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           : { title: GLOSSARY.myVocs })}
         action={
           <div className="flex items-center gap-2">
-            {/* Prototype placeholder verbatim (screen-voc.jsx). value/onChange is
-                deferred: SearchInput is disabled until the search endpoint ships
-                (no live search facet on GET /vocs). */}
-            <SearchInput placeholder="필터, 키워드…" />
+            {/* #821: server-side text search on GET /vocs. The box is a local
+                draft; the debounced effect above writes the URL q. */}
+            <SearchInput
+              placeholder="필터, 키워드…"
+              value={searchDraft}
+              onValueChange={setSearchDraft}
+            />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
               values={currentFilters}
@@ -398,6 +432,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           selectedId={search.selected ?? null}
           onSelect={handleRowSelect}
           view={view}
+          searching={isSearching}
           onRetry={() => {
             void vocList.refetch();
           }}

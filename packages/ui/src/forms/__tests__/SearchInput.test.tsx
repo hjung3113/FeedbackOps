@@ -1,6 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { SearchInput } from '../SearchInput.js';
 
 describe('SearchInput', () => {
@@ -49,5 +49,48 @@ describe('SearchInput', () => {
     const { container } = render(<SearchInput />);
     const svg = container.querySelector('svg');
     expect(svg).not.toBeNull();
+  });
+});
+
+describe('SearchInput controlled mode (#821)', () => {
+  it('renders an enabled search input labelled by the placeholder', () => {
+    render(<SearchInput placeholder="필터, 키워드…" value="" onValueChange={() => {}} />);
+    const input = screen.getByRole('searchbox', { name: '필터, 키워드…' });
+    expect(input).toBeEnabled();
+    expect(input).toHaveAttribute('type', 'search');
+    expect(input).toHaveAttribute('placeholder', '필터, 키워드…');
+  });
+
+  it('keeps the search icon in controlled mode', () => {
+    const { container } = render(<SearchInput value="" onValueChange={() => {}} />);
+    expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it('calls onValueChange when the value changes', () => {
+    const onValueChange = vi.fn();
+    const { rerender } = render(<SearchInput value="" onValueChange={onValueChange} />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '로그인' } });
+    expect(onValueChange).toHaveBeenCalledWith('로그인');
+
+    // Controlled value flows back through the prop.
+    rerender(<SearchInput value="로그인" onValueChange={onValueChange} />);
+    expect(screen.getByRole('searchbox')).toHaveValue('로그인');
+  });
+
+  it('Escape on a non-empty value clears it and prevents default', () => {
+    const onValueChange = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={onValueChange} />);
+    const input = screen.getByRole('searchbox');
+    const event = createEvent.keyDown(input, { key: 'Escape' });
+    const preventedDefault = !fireEvent(input, event);
+    expect(preventedDefault).toBe(true);
+    expect(onValueChange).toHaveBeenCalledWith('');
+  });
+
+  it('Escape on an empty value does nothing', () => {
+    const onValueChange = vi.fn();
+    render(<SearchInput value="" onValueChange={onValueChange} />);
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

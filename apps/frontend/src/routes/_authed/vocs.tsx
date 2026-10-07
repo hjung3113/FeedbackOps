@@ -23,6 +23,9 @@ export const vocSearchSchema = z
     managedSystem: z.string().optional(),
     // D-1.1: shared VOC list-query schema owns every supported tab value.
     tab: vocTabEnumSchema.optional(),
+    // #821 server-side text search — inbox and my views only. Mirrors the
+    // backend's 100-character cap; the list endpoint owns trimming/validation.
+    q: z.string().max(100).optional(),
     sort: z.enum([
       'created_at:desc',
       'created_at:asc',

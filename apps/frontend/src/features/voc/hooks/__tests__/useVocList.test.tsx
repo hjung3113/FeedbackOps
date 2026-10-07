@@ -84,6 +84,32 @@ describe('useVocList', () => {
     expect(capturedUrl).toContain('sort=created_at%3Adesc');
   });
 
+  test('sends q (#821) in the query string and omits it when absent', async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(typeof input === 'string' ? input : input.toString());
+      return jsonResponse({ items: [], next_cursor: undefined });
+    }) as typeof globalThis.fetch;
+
+    const { result, rerender } = renderHook(
+      (params: Parameters<typeof useVocList>[0]) => useVocList(params),
+      {
+        wrapper: makeWrapper(),
+        initialProps: { view: 'inbox', q: '결제 지연' },
+      },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const lastUrl = urls.at(-1);
+    expect(lastUrl).toBeDefined();
+    if (lastUrl === undefined) return;
+    expect(new URL(lastUrl, 'http://localhost').searchParams.get('q')).toBe('결제 지연');
+
+    // Absent q → no q param on the next fetch.
+    rerender({ view: 'inbox' });
+    await waitFor(() => expect(urls.length).toBeGreaterThan(1));
+    expect(urls.at(-1)).not.toContain('q=');
+  });
+
   test('translates the unified filter.reporterStatus key to the backend param filter.reporter_facing_status (#89)', async () => {
     let capturedUrl = '';
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

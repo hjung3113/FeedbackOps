@@ -8,10 +8,12 @@
 //   - VocDetailPanel is mounted when `selected` is set
 
 import { ApiError } from '@/lib/api/types';
+import { listVocsQuerySchema } from '@fops/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as UseVocListModule from '../../hooks/useVocList';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -617,5 +619,120 @@ describe('useInboxRoute', () => {
       search: (prev: Record<string, unknown>) => Record<string, unknown>;
     };
     expect(call.search({})['filter.severity']).toBe('medium');
+  });
+
+  // ── Server-side text search (#821) ──────────────────────────────────────────
+
+  const SEARCH_BOX_ROLE = 'searchbox';
+  const SEARCH_BOX_NAME = '필터, 키워드…';
+
+  function searchBox() {
+    return screen.getByRole(SEARCH_BOX_ROLE, { name: SEARCH_BOX_NAME });
+  }
+
+  function lastNavigateSearch(): {
+    to: string;
+    search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    replace?: boolean;
+  } {
+    const call = navigateMock.mock.calls.at(-1)?.[0] as {
+      to: string;
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+      replace?: boolean;
+    };
+    expect(call).toBeDefined();
+    return call;
+  }
+
+  async function lastListRequestUrl(): Promise<string> {
+    await waitFor(() => {
+      expect(apiClientMock.mock.calls.some(([method]) => method === 'GET')).toBe(true);
+    });
+    const url = apiClientMock.mock.calls.filter(([method]) => method === 'GET').at(-1)?.[1];
+    expect(typeof url).toBe('string');
+    return url as string;
+  }
+
+  function parseVocsQuery(url: string) {
+    const raw = Object.fromEntries(new URL(url, 'http://localhost').searchParams);
+    const parsed = listVocsQuerySchema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    return parsed;
+  }
+
+  it('writes the debounced q to the URL and sends it on GET /vocs', async () => {
+    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    const route = vocsRoute as unknown as {
+      options: { validateSearch: (raw: unknown) => Record<string, unknown> };
+    };
+    searchState = route.options.validateSearch({ view: 'inbox' });
+    const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.change(searchBox(), { target: { value: '로그인' } });
+
+    // 300 ms debounce: the URL write carries q with replace: true.
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    const navigation = lastNavigateSearch();
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.replace).toBe(true);
+    const nextSearch = navigation.search(searchState);
+    expect(nextSearch.q).toBe('로그인');
+
+    // The URL q is valid route state and drives the request.
+    expect(route.options.validateSearch(nextSearch)).toEqual({
+      view: 'inbox',
+      q: '로그인',
+    });
+    searchState = nextSearch;
+    rerender(<InboxTestHarness view="inbox" />);
+
+    const url = await lastListRequestUrl();
+    const parsed = parseVocsQuery(url);
+    expect(parsed.data?.view).toBe('inbox');
+    expect(parsed.data?.q).toBe('로그인');
+  });
+
+  it('removes q from the URL and the request when the box is emptied', async () => {
+    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    searchState = { view: 'inbox', q: '로그인' };
+    const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.change(searchBox(), { target: { value: '' } });
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    const nextSearch = lastNavigateSearch().search(searchState);
+    expect(nextSearch).not.toHaveProperty('q');
+
+    searchState = nextSearch;
+    rerender(<InboxTestHarness view="inbox" />);
+
+    const parsed = parseVocsQuery(await lastListRequestUrl());
+    expect(parsed.data?.q).toBeUndefined();
+  });
+
+  it('keeps q across a tab change', async () => {
+    searchState = { view: 'inbox', q: '로그인' };
+    render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: '높음' }));
+
+    const nextSearch = lastNavigateSearch().search(searchState);
+    expect(nextSearch.tab).toBe('high');
+    expect(nextSearch.q).toBe('로그인');
+  });
+
+  it('shows the search empty state when q is set and the list is empty', async () => {
+    useVocListMock.mockReturnValue({
+      data: { items: [], next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox', q: '없는 검색어' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
   });
 });

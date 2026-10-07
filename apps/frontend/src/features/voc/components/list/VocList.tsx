@@ -16,6 +16,7 @@
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
+import { VOC_SEARCH_EMPTY_LABEL } from '@/lib/copy/voc';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -104,6 +105,11 @@ export interface VocListProps {
   onSelect: (id: string) => void;
   /** When provided, list emits an empty-state with the variant copy. */
   view?: 'inbox' | 'my';
+  /**
+   * #821: a server-side text search (q) is active. An empty list then renders
+   * the search empty state instead of the queue/my-VOC copy.
+   */
+  searching?: boolean;
   /** Retry handler for error variant. */
   onRetry?: () => void;
   /** Opens the route-owned VOC create flow from an empty list state. */
@@ -123,6 +129,7 @@ export function VocList({
   selectedId,
   onSelect,
   view,
+  searching,
   onRetry,
   onCreate,
 }: VocListProps) {
@@ -188,6 +195,11 @@ export function VocList({
 
   // 3. Empty list
   if (!loading && items.length === 0) {
+    // #821: an active server search owns the empty state — the queue/my-VOC
+    // copy would wrongly imply there is nothing to find.
+    if (searching) {
+      return <ListStateMessage variant="empty" title={VOC_SEARCH_EMPTY_LABEL} />;
+    }
     if (view === 'my') {
       return (
         <ListStateMessage
