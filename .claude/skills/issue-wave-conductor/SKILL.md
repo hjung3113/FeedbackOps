@@ -46,6 +46,15 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    `Sentinel (last line of .review/W-<n>-REPORT.md): <!-- W-<n>-DONE -->` — the launcher registers exactly that. Check
    `ls docs/adr` before a brief assigns an ADR number (parallel issues collide). For "use the shared X" refactors say
    "replace only whole-set declarations; keep literals; never touch `db/schema`".
+   **Self-check before launch.** Each of these cost a review round in session 63:
+   - Name only helpers and schemas that exist; `grep` each one. "Parse with the shared schema" made a worker invent one
+     (#813).
+   - Copy cardinality and validation rules (one parent vs many children, required fields) from the backend
+     validator, not from memory (#827).
+   - When a lifecycle event drives behaviour ("closing collapses"), `grep` every representation the call sites use,
+     e.g. an absent prop vs `detailPanel={null}` (#838).
+   - Before replacing an exact lookup with a capped prefix or contains search, check that the exact hit stays
+     reachable under the cap (#821: `VOC-1` was lost among 100+ newer `VOC-1…`).
 2. **Launch**: `scripts/launch-worker.sh <n> <slug> [be]` (≈5–7 in flight is the sustainable ceiling
    for one conductor; 2–3 when the conductor also runs every harness). It delegates to shared `worker-launch.sh`
    with role `impl`; set `WORKER_ROLE=impl-fallback` when the session selects the fallback, and optionally
@@ -87,6 +96,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    state. Save screenshots into `.review/<n>-shots/`
    and remove generated specs with `scripts/visual.sh capture --clean <n>`. Real-browser checks caught what unit tests
    could not (a blank page on cold `/me` 429, a 404 that spun forever).
+   For a check against live data, start the worktree with `scripts/app-preview.py start <worktree> [--backend]` and
+   drive it with the `ego-browser` skill. Use `--backend` when the branch changes the API. Stop it with
+   `scripts/app-preview.py stop <label>` in the same turn.
 7. **One final review per issue** (user, 2026-10-02; reviewer rules: `templates/review-rules.md`, copied to
    `.review/00-REVIEW-RULES.md`). Run the host verification and the visual capture **first** (the conductor's harness run
    found the #719 nested-route BLOCKER before any reviewer), then one final review covering correctness,
@@ -132,7 +144,16 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   and `down` for throwaway Postgres on port 5439. `drop` removes the matching env file after a successful drop.
 - `scripts/release-gate.sh <develop-checkout>`: fetches develop/main and requires a clean checkout at
   `origin/develop`; it refreshes the release DB and prints a complete PR command on success without creating or
-  merging the PR.
+  merging the PR. The user merges the release PR, or the conductor does with explicit approval in the session,
+  using `gh pr merge <n> --merge`. A ruleset on `main` allows only merge commits; a squash there made the next
+  release conflict (#811 → #837).
+- `scripts/app-preview.py start <checkout> [--backend] [--env <file>] [--name <label>]` / `stop <label>` / `status`:
+  - Serves the checkout's vite on a free port. The proxy goes to the user's backend on :3011 (develop code), or with
+    `--backend` to the checkout's own backend on another free port.
+  - The backend env defaults to `$FOPS_MAIN/.env`, the dev DB on 5434. Pass `--env $WAVE_STATE/env.verify.<n>` when
+    the check writes.
+  - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS), waits for health, and
+    `stop` kills each process group, which covers npx children. State lives in `$WAVE_STATE/preview-<label>.json`.
 
 ## Traps (measured)
 
