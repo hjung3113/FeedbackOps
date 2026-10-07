@@ -2294,11 +2294,21 @@ describe('Survey screens', () => {
 
       if (downstreamKind === 'new') {
         fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+        // #831: new questions start blank; fill them so the draft is valid.
+        fireEvent.change(screen.getByLabelText('질문 제목'), {
+          target: { value: '새 하위 질문 D' },
+        });
+        fireEvent.change(screen.getByLabelText('옵션 1'), { target: { value: '예' } });
+        fireEvent.change(screen.getByLabelText('옵션 2'), { target: { value: '아니오' } });
       } else {
         fireEvent.click(screen.getByText(savedDownstream.prompt));
       }
       fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
-      fireEvent.click(await screen.findByRole('option', { name: clearedParent.prompt }));
+      fireEvent.click(
+        await screen.findByRole('option', {
+          name: (name) => name.endsWith(` · ${clearedParent.prompt}`),
+        }),
+      );
 
       const downstreamId =
         downstreamKind === 'new' ? SERVER_CREATED_QUESTION_ID : savedDownstreamId;
@@ -2402,13 +2412,18 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
     fireEvent.click(
       await screen.findByRole('option', {
-        name: childChange === 'clear' ? '분기 없음' : questionW.prompt,
+        name: (name) =>
+          childChange === 'clear' ? name === '분기 없음' : name.endsWith(` · ${questionW.prompt}`),
       }),
     );
 
     fireEvent.click(screen.getByText(questionX.prompt));
     fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
-    fireEvent.click(await screen.findByRole('option', { name: questionZ.prompt }));
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: (name) => name.endsWith(` · ${questionZ.prompt}`),
+      }),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() => {
