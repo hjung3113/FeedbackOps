@@ -2,9 +2,9 @@
 // Owns: search param forwarding, dirty-block guard, DirtyConfirmation dialog mount.
 // C6 of Slice 3 #19.
 
-import * as React from 'react';
-import { useNavigate, useSearch, useBlocker } from '@tanstack/react-router';
 import { DirtyConfirmation } from '@fops/ui';
+import { useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
+import * as React from 'react';
 import { VocCreateScreen } from '../components/create/VocCreateScreen';
 
 export function CreateRoute(): React.ReactElement {
@@ -14,17 +14,14 @@ export function CreateRoute(): React.ReactElement {
   const navigate = useNavigate();
 
   // formIsDirty is lifted from VocCreateScreen via callback.
-  // Ref + state pair: state drives test observability; ref is consulted by
-  // shouldBlockFn synchronously so a successful submit that reset()s the form
-  // and then navigates does NOT flash the dirty dialog (React state updates
-  // from useEffect would not have propagated by the time the navigation
+  // The ref is consulted synchronously so a successful submit that reset()s
+  // the form and then navigates does NOT flash the dirty dialog (React state
+  // updates from useEffect would not have propagated by the time the navigation
   // intent is evaluated).
   const formIsDirtyRef = React.useRef(false);
-  const [, setFormIsDirty] = React.useState(false);
 
   const handleDirtyChange = React.useCallback((isDirty: boolean): void => {
     formIsDirtyRef.current = isDirty;
-    setFormIsDirty(isDirty);
   }, []);
 
   // Track whether the dirty dialog is open (driven by the blocker resolver).
@@ -34,6 +31,7 @@ export function CreateRoute(): React.ReactElement {
   // Signature from node_modules/@tanstack/react-router/dist/esm/useBlocker.d.ts
   const blocker = useBlocker({
     shouldBlockFn: () => formIsDirtyRef.current,
+    enableBeforeUnload: () => formIsDirtyRef.current,
     withResolver: true,
   });
 
