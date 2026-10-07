@@ -120,7 +120,7 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Playbook for running a set of issues with workers (briefs, host verification, final review, merge, cleanup): `.claude/skills/issue-wave-conductor/`. Integration runs use a throwaway database, never the dev database on port 5434.
+Playbook for running a set of issues with workers (briefs, host verification, role-split review, merge, cleanup): `.claude/skills/issue-wave-conductor/`. Reviewers are chosen per issue by `scripts/review-plan.py`. A code review runs on every non-copy change. A UX review drives throwaway-DB previews for screen changes. UI performance is measured, and a perf reviewer runs only on a regression. A code-quality review runs once per slice. Agent definitions live in `.claude/agents/review-*.md`. Integration runs use a throwaway database, never the dev database on port 5434.
 
 ## PR Review Priorities
 
