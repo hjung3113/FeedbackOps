@@ -691,6 +691,34 @@ describe('useInboxRoute', () => {
     const parsed = parseVocsQuery(url);
     expect(parsed.data?.view).toBe('inbox');
     expect(parsed.data?.q).toBe('로그인');
+    // Owner decision: a search covers the whole inbox, so the default tab is not sent.
+    expect(parsed.data?.tab).toBeUndefined();
+  });
+
+  it('drops the active tab while searching and restores it when the search is cleared', async () => {
+    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    searchState = { view: 'inbox', tab: 'high' };
+    const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+    fireEvent.change(searchBox(), { target: { value: '로그인' } });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    const searching = lastNavigateSearch().search(searchState);
+    expect(searching).toEqual({ view: 'inbox', q: '로그인' });
+
+    searchState = searching;
+    rerender(<InboxTestHarness view="inbox" />);
+    const parsed = parseVocsQuery(await lastListRequestUrl());
+    expect(parsed.data?.tab).toBeUndefined();
+    expect(parsed.data?.q).toBe('로그인');
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveAttribute('aria-selected', 'false');
+    }
+
+    navigateMock.mockClear();
+    fireEvent.change(searchBox(), { target: { value: '' } });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
   });
 
   it('removes q from the URL and the request when the box is emptied', async () => {
@@ -721,6 +749,21 @@ describe('useInboxRoute', () => {
     const nextSearch = lastNavigateSearch().search(searchState);
     expect(nextSearch.tab).toBe('high');
     expect(nextSearch.q).toBe('로그인');
+  });
+
+  it('searches inside a tab the user picks during the search', async () => {
+    const { useVocList } = await vi.importActual<typeof UseVocListModule>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    searchState = { view: 'inbox', tab: 'high', q: '로그인' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const parsed = parseVocsQuery(await lastListRequestUrl());
+    expect(parsed.data?.tab).toBe('high');
+    expect(parsed.data?.q).toBe('로그인');
+    expect(await screen.findByRole('tab', { name: '높음' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('shows the search empty state when q is set and the list is empty', async () => {

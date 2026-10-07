@@ -188,13 +188,24 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   // ── Derived URL state ─────────────────────────────────────────────────────
 
   const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
-  const activeTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged');
-  const apiTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged');
-  const currentSort = search.sort ?? DEFAULT_SORT;
   // #821: the URL q is the source of truth for the fetch; the box keeps a
   // local draft so keystrokes do not navigate on every character.
   const urlQ = search.q ?? '';
+  // #821 owner decision: a search covers the whole inbox. The inbox has no
+  // "all" tab, so a tab-scoped search could never find an already-triaged VOC.
+  // Starting a search drops the tab (remembered below); a tab picked during the
+  // search narrows it to that tab.
+  const searchingAllTabs = view === 'inbox' && urlQ !== '' && search.tab === undefined;
+  const activeTab = searchingAllTabs
+    ? ''
+    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged'));
+  const apiTab = searchingAllTabs
+    ? undefined
+    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged'));
+  const currentSort = search.sort ?? DEFAULT_SORT;
   const [searchDraft, setSearchDraft] = React.useState(urlQ);
+  // The tab the current search started from, restored when the search is cleared.
+  const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
 
   React.useEffect(() => {
     setSearchDraft(urlQ);
@@ -202,20 +213,36 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   React.useEffect(() => {
     if (searchDraft === urlQ) return;
+    const urlTab = search.tab;
     const timeoutId = window.setTimeout(() => {
+      const clearing = searchDraft === '';
+      const starting = urlQ === '' && !clearing && view === 'inbox';
+      if (starting) tabBeforeSearchRef.current = urlTab;
+      const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
+      if (clearing) tabBeforeSearchRef.current = undefined;
       void navigate({
         to: '/vocs',
         search: (prev) => {
           const { q: _q, ...rest } = prev;
-          // An empty box removes q; anything else is written verbatim (the
-          // backend owns trimming).
-          return searchDraft === '' ? rest : { ...rest, q: searchDraft };
+          // An empty box removes q and returns to the tab the search started
+          // from, unless a tab was picked during the search. Anything else is
+          // written verbatim (the backend owns trimming).
+          if (clearing) {
+            return rest.tab === undefined && restoreTab !== undefined
+              ? { ...rest, tab: restoreTab }
+              : rest;
+          }
+          if (starting) {
+            const { tab: _tab, ...withoutTab } = rest;
+            return { ...withoutTab, q: searchDraft };
+          }
+          return { ...rest, q: searchDraft };
         },
         replace: true,
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [searchDraft, urlQ, navigate]);
+  }, [searchDraft, urlQ, navigate, search.tab, view]);
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
