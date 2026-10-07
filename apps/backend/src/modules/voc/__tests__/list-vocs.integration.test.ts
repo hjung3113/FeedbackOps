@@ -1507,14 +1507,22 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       '검색 페이지 베타',
     );
 
-    const page1 = await listInboxWithQ(msId, '검색 페이지');
-    expect(page1.status).toBe(200);
-    expect(page1.body.items).toHaveLength(1);
-    expect(page1.body.page.has_more).toBe(true);
-    const page1Cursor = page1.body.page.cursor;
+    const res1 = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&q=${encodeURIComponent('검색 페이지')}&limit=1`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res1.statusCode).toBe(200);
+    const page1 = res1.json<{
+      items: { id: string }[];
+      page: { cursor?: string; has_more: boolean };
+    }>();
+    expect(page1.items).toHaveLength(1);
+    expect(page1.page.has_more).toBe(true);
+    const page1Cursor = page1.page.cursor;
     expect(page1Cursor).toBeDefined();
     if (page1Cursor === undefined) return;
-    const page1Ids = page1.body.items.map((item) => item.id);
+    const page1Ids = page1.items.map((item) => item.id);
 
     const res2 = await app.inject({
       method: 'GET',
