@@ -3,7 +3,12 @@ import * as React from 'react';
 import { useOpenSurvey, useSurveyQuestionMutations } from '../../../hooks/useSurveys';
 import type { QuestionKind, Survey, SurveyQuestion } from '../../../types';
 import { hasInvalidChoiceOptions } from '../lib/optionValidation';
-import { applyServerQuestionId, denseQuestions, newQuestion } from '../lib/questionDraft';
+import {
+  applyServerQuestionId,
+  denseQuestions,
+  newQuestion,
+  questionSignature,
+} from '../lib/questionDraft';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
 
 export function useSurveyBuilderController(args: {
@@ -199,8 +204,19 @@ export function useSurveyBuilderController(args: {
         },
       });
       setSavedAt(savedAt);
-      updateDirty(false);
-      return true;
+      const savedQuestions = savedQuestionsRef.current;
+      const questionsAreSaved =
+        questionsRef.current.length === savedQuestions.length &&
+        questionsRef.current.every((question, index) => {
+          const savedQuestion = savedQuestions[index];
+          return (
+            savedQuestion?.id === question.id &&
+            questionSignature(savedQuestion) === questionSignature(question)
+          );
+        });
+      const isClean = titleRef.current === savedTitleRef.current && questionsAreSaved;
+      updateDirty(!isClean);
+      return isClean;
     } catch {
       updateDirty(true);
       setSaveFailed(true);

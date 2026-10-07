@@ -1204,6 +1204,158 @@ describe('Survey screens', () => {
     expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
   });
 
+  it('keeps a title edit made during save dirty and sends it on the next save', async () => {
+    let resolveFirstPatch!: (value: { data: Survey }) => void;
+    const firstPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveFirstPatch = resolve;
+    });
+    let surveyPatchCount = 0;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1') {
+        surveyPatchCount += 1;
+        if (surveyPatchCount === 1) return firstPatch;
+      }
+      return { data: survey };
+    });
+    const { router } = renderBuilderRouteWithRouter();
+    await screen.findByTestId('survey-builder');
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '첫 번째 저장 제목' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
+    expect(calls('PATCH', '/surveys/survey-1')[0]?.[2].body).toEqual({
+      title: '첫 번째 저장 제목',
+    });
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '저장 중 바꾼 제목' },
+    });
+    await act(async () => resolveFirstPatch({ data: survey }));
+
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    await act(async () => {
+      void router.navigate({ to: '/away' as never });
+      await Promise.resolve();
+    });
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    await waitFor(() => expect(screen.queryByText('변경사항이 저장되지 않았습니다')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(2));
+    expect(calls('PATCH', '/surveys/survey-1')[1]?.[2].body).toEqual({
+      title: '저장 중 바꾼 제목',
+    });
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    await act(async () => {
+      void router.navigate({ to: '/away' as never });
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('survey-builder-away')).toBeInTheDocument();
+  });
+
+  it('re-saves a title edit left dirty by an earlier save before launching', async () => {
+    let resolveFirstPatch!: (value: { data: Survey }) => void;
+    const firstPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveFirstPatch = resolve;
+    });
+    let resolveSecondPatch!: (value: { data: Survey }) => void;
+    const secondPatch = new Promise<{ data: Survey }>((resolve) => {
+      resolveSecondPatch = resolve;
+    });
+    let surveyPatchCount = 0;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1') {
+        surveyPatchCount += 1;
+        if (surveyPatchCount === 1) return firstPatch;
+        if (surveyPatchCount === 2) return secondPatch;
+      }
+      if (method === 'POST' && path === '/surveys/survey-1/open')
+        return { data: { ...survey, status: 'open' } };
+      return { data: survey };
+    });
+    const onBack = vi.fn();
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={onBack} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '시작 전 저장 제목' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey 제목' }), {
+      target: { value: '저장 중 수정한 제목' },
+    });
+    await act(async () => resolveFirstPatch({ data: survey }));
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(2));
+    expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+    expect(calls('PATCH', '/surveys/survey-1')[1]?.[2].body).toEqual({
+      title: '저장 중 수정한 제목',
+    });
+    await act(async () => resolveSecondPatch({ data: survey }));
+    await waitFor(() => expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(1));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an edit made after its question loop finishes dirty until the next save', async () => {
+    let resolveSecondQuestionPatch!: (value: { data: { id: string } }) => void;
+    const secondQuestionPatch = new Promise<{ data: { id: string } }>((resolve) => {
+      resolveSecondQuestionPatch = resolve;
+    });
+    const secondQuestion = question('question-2', '다음 질문', 1);
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'PATCH' && path === '/surveys/survey-1/questions/question-2')
+        return secondQuestionPatch;
+      return { data: { id: path.endsWith('question-1') ? 'question-1' : 'question-2' } };
+    });
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [...(survey.questions ?? []), secondQuestion] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '첫 질문 저장 값' },
+    });
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.change(screen.getByDisplayValue('다음 질문'), {
+      target: { value: '두 번째 질문 저장 값' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
+    );
+
+    fireEvent.click(screen.getByText('Q1'));
+    fireEvent.change(screen.getByDisplayValue('첫 질문 저장 값'), {
+      target: { value: '첫 질문 저장 중 수정 값' },
+    });
+    await act(async () => resolveSecondQuestionPatch({ data: { id: 'question-2' } }));
+
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(2),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')[1]?.[2].body).toMatchObject({
+      prompt: '첫 질문 저장 중 수정 값',
+    });
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+  });
+
   it('adds a choice option with a unique key and saves a valid question input', async () => {
     const initialOptions = survey.questions?.[0]?.options ?? [];
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
@@ -1571,6 +1723,40 @@ describe('Survey screens', () => {
       question_ids: ['question-3', 'question-1', 'question-2'],
     });
     expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', '2');
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+  });
+
+  it('does not repeat a successful question delete when reorder fails and save is retried', async () => {
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+      question('question-3', '셋째 질문', 2),
+    ];
+    let rejectFirstReorder = true;
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (
+        method === 'PATCH' &&
+        path === '/surveys/survey-1/questions/reorder' &&
+        rejectFirstReorder
+      ) {
+        rejectFirstReorder = false;
+        throw new Error('reorder failed');
+      }
+      return { data: { id: 'question-1' } };
+    });
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(
+      within(screen.getByTestId('survey-question-row-question-2')).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText('저장하지 못했습니다.')).toBeInTheDocument());
+    expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    expect(calls('DELETE', '/surveys/survey-1/questions/question-2')).toHaveLength(1);
   });
 
   it('AC-5 saves a keyboard-only one-step move', async () => {
@@ -1734,6 +1920,7 @@ describe('Survey screens', () => {
         '/surveys/survey-1/questions/question-created',
       ),
     );
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
   });
 
   it('patches the current question state after an edit during its pending create', async () => {
