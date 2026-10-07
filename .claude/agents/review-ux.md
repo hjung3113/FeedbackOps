@@ -68,6 +68,10 @@ Read these before judging. Project authority beats generic taste.
    defect, so you can mark it `new` or `pre-existing`.
 5. **For each scenario, check:**
    - **Completion:** can the actor finish the job, and does the outcome match the brief?
+   - **Expectation, beyond the brief:** would an actor expect this outcome? Examples: what a search or filter
+     covers (other tabs, other views), defaults, what is silently left out. A brief-consistent behaviour that would
+     surprise users is an `owner-question`, not a pass. The 2026-10-08 mock wave passed a search that only
+     covered the active tab because the brief implied it; the owner later decided against that.
    - **Feedback:** pending, success, failure, undo. Is anything silent?
    - **States:** loading, empty, error, permission-limited, dirty or leave, long text, many rows.
    - **Keyboard:** reachable controls, a visible focus ring, Escape and Enter. Check that Escape does not fight
@@ -76,12 +80,15 @@ Read these before judging. Project authority beats generic taste.
    - **Copy:** existing `lib/copy` strings reused, Korean chrome, glossary nouns, no em dash in UI strings.
    - **Consistency with the neighbouring shipped screens:** density, 50px header rhythm, tokens rather than raw
      colours, shared components rather than one-offs.
-6. **Evidence:**
+6. **Data gaps:** when a surface the scenario needs has no records in the seed, create them through the UI on
+   the **branch** preview if that is cheap (e.g. a Finding from a VOC). Otherwise list the surface under "could
+   not check". Never report a surface you could not open as passing.
+7. **Evidence:**
    - On dense list screens, read only the values you need with `page.evaluate(...)` instead of whole snapshots. This
      saves context, and context sets your turn budget.
    - Save screenshots with **absolute** paths into the task's screenshot directory, named
      `<scenario>-<build>-<state>.png`.
-7. Call `finish({ keep: [] })` on the task space before writing the final report.
+8. Call `finish({ keep: [] })` on the task space before writing the final report.
 
 ## Rules
 
