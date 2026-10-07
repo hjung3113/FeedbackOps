@@ -1,21 +1,15 @@
-// DetailHeader — panel header wired with canonical VOC URL + expand toggle.
+// DetailHeader — panel header wired with the canonical VOC URL.
 
-import * as React from 'react';
 import { DetailPanelHeader, DetailPanelHeaderActions } from '@fops/ui';
+import type * as React from 'react';
 
 export interface DetailHeaderProps {
   vocId: string;
   displayId: string;
   onClose: () => void;
-  onExpandToggle?: () => void;
 }
 
-export function DetailHeader({
-  vocId,
-  displayId,
-  onClose,
-  onExpandToggle,
-}: DetailHeaderProps): React.ReactElement {
+export function DetailHeader({ vocId, displayId, onClose }: DetailHeaderProps): React.ReactElement {
   const canonicalUrl = `${window.location.origin}/vocs?view=inbox&selected=${vocId}`;
 
   return (
@@ -24,12 +18,7 @@ export function DetailHeader({
       id={displayId}
       onClose={onClose}
       extras={
-        <DetailPanelHeaderActions
-          entityKind="voc"
-          entityId={displayId}
-          copyUrl={canonicalUrl}
-          {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
-        />
+        <DetailPanelHeaderActions entityKind="voc" entityId={displayId} copyUrl={canonicalUrl} />
       }
     />
   );

@@ -7,10 +7,7 @@ interface FullscreenPanelApi {
   close: () => void;
 }
 
-/**
- * Detail panel fullscreen toggle. Esc collapses. Caller is responsible for resetting on route change
- * (recommended: tie to TanStack `useMatchRoute` + useEffect).
- */
+/** Local fullscreen state for panels such as Triage; AppFrame owns slot-drawer state. */
 export function useFullscreenPanel(initial = false): FullscreenPanelApi {
   const [isFullscreen, setFullscreen] = useState(initial);
 
@@ -21,7 +18,7 @@ export function useFullscreenPanel(initial = false): FullscreenPanelApi {
   useEffect(() => {
     if (!isFullscreen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
+      if (e.key === 'Escape' && !e.defaultPrevented) close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

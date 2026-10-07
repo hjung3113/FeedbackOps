@@ -1,4 +1,4 @@
-import { Link2, Maximize2, MoreVertical } from 'lucide-react';
+import { Link2, MoreVertical } from 'lucide-react';
 import type * as React from 'react';
 import { toast } from 'sonner';
 import {
@@ -14,7 +14,6 @@ export interface DetailPanelHeaderActionsProps {
   entityKind: DetailPanelKind;
   entityId: string;
   copyUrl: string;
-  onExpandToggle?: () => void;
   extraMore?: React.ReactNode;
 }
 
@@ -75,7 +74,6 @@ export function DetailPanelHeaderActions({
   entityKind: _entityKind,
   entityId: _entityId,
   copyUrl,
-  onExpandToggle,
   extraMore,
 }: DetailPanelHeaderActionsProps) {
   async function handleCopyLink() {
@@ -107,19 +105,6 @@ export function DetailPanelHeaderActions({
       >
         <Link2 size={16} />
       </button>
-
-      {/* Expand toggle — hidden when no handler */}
-      {onExpandToggle !== undefined && (
-        <button
-          type="button"
-          aria-label="전체 화면 전환"
-          title="전체 화면 전환"
-          className={iconButtonCls}
-          onClick={onExpandToggle}
-        >
-          <Maximize2 size={16} />
-        </button>
-      )}
 
       {/* Kebab dropdown */}
       <DropdownMenu>

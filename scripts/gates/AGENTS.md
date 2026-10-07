@@ -1,6 +1,6 @@
 # Gate Scripts Agent Guide
 
-Frontend and migration gates. The full gate list is in root `AGENTS.md` → Verification. Whole-issue host checks that bundle these gates: `.claude/skills/issue-wave-conductor/scripts/verify-fe.sh` and `verify-be.sh`.
+Frontend and migration gates. The full gate list is in root `AGENTS.md` → Verification; CI runs it through `scripts/ci/gate.sh`. Whole-issue host checks that bundle these gates: `.claude/skills/issue-wave-conductor/scripts/verify-fe.sh` and `verify-be.sh`.
 
 ## Frontend typecheck gate (`pnpm gate:fe-typecheck`)
 

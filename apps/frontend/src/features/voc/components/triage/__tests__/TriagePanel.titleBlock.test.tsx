@@ -204,10 +204,4 @@ describe('TriagePanel Overview and grouped navigation', () => {
     expect(screen.getByText('불러오는 중…')).toHaveClass('text-text-muted');
     expect(screen.getByTestId('triage-description-region')).not.toHaveTextContent(TRIAGE_VOC.title);
   });
-
-  it('keeps disabled expand and more buttons in the panel header', () => {
-    renderPanel();
-    expect(screen.getByTestId('triage-panel-expand')).toBeDisabled();
-    expect(screen.getByTestId('triage-panel-more')).toBeDisabled();
-  });
 });

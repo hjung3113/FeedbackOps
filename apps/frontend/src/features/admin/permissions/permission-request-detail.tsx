@@ -1,6 +1,12 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
 
-import { Button, FieldRow, OutlineBadge, PanelSectionTitle } from '@fops/ui';
+import {
+  Button,
+  DetailPanelFullscreenToggle,
+  FieldRow,
+  OutlineBadge,
+  PanelSectionTitle,
+} from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
@@ -36,9 +42,12 @@ export function PermissionRequestDetail({
           </p>
         </div>
         <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="패널 닫기">
-          닫기
-        </Button>
+        <div className="flex items-center gap-1">
+          <DetailPanelFullscreenToggle />
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="패널 닫기">
+            닫기
+          </Button>
+        </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-5">

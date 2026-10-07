@@ -36,6 +36,7 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useRouter: () => undefined,
   useNavigate: () => vi.fn(),
 }));
 

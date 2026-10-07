@@ -41,6 +41,7 @@ import {
   useUnreadNotificationCount,
 } from '@/lib/cross-system/useUnreadNotificationCount';
 import { formatRelativeTime } from '@/lib/format/datetime';
+import { InternalLink } from '@/lib/router/InternalLink';
 import { AnswerableSurveysPanel } from './AnswerableSurveysPanel';
 import { InboxPanel } from './InboxPanel';
 
@@ -126,10 +127,10 @@ export function HomeScreen({
                 {HOME_COPY.refresh}
               </Button>
               <Button asChild variant="primary" size="sm">
-                <a href="/vocs?action=create">
+                <InternalLink href="/vocs?action=create">
                   <Plus className="h-3.5 w-3.5" />
                   {HOME_COPY.newVoc}
-                </a>
+                </InternalLink>
               </Button>
             </div>
           </header>
@@ -272,14 +273,14 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
         <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="home-zero-queues">
           <span className="text-xs text-text-muted">{HOME_COPY.noZeroQueueItems}</span>
           {zeroQueues.map((queue) => (
-            <a
+            <InternalLink
               className="inline-flex items-center rounded-full border border-border-subtle bg-surface-card px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
               data-testid={`home-zero-queue-${queue.id}`}
               href={queue.next_action.route}
               key={queue.id}
             >
               {HOME_QUEUE_COPY[queue.id].title} 0
-            </a>
+            </InternalLink>
           ))}
         </div>
       )}
@@ -334,20 +335,20 @@ function ActionQueueRow({
         ].join(' ')}
       >
         {queue.secondary_action && copy.secondaryAction ? (
-          <a
+          <InternalLink
             className="text-xs text-text-secondary hover:text-text-primary"
             href={queue.secondary_action.route}
           >
             {copy.secondaryAction}
-          </a>
+          </InternalLink>
         ) : (
           <span />
         )}
         <Button asChild variant="primary" size="sm" wrapText className="max-w-full">
-          <a href={queue.next_action.route}>
+          <InternalLink href={queue.next_action.route}>
             <span className="min-w-0 wrap-break-word">{copy.primaryAction}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-          </a>
+          </InternalLink>
         </Button>
       </footer>
     </article>
@@ -380,7 +381,7 @@ function MyWorkPanel({
         data-testid="home-my-work"
       >
         {rows.map((row) => (
-          <a
+          <InternalLink
             key={row.id}
             href={row.href}
             className="flex min-h-row-default items-center gap-3 border-b border-border-subtle px-4 last:border-b-0 hover:bg-surface-row-hover"
@@ -393,7 +394,7 @@ function MyWorkPanel({
               <span className="block truncate text-xs text-text-muted">{row.meta}</span>
             </span>
             <ChevronRight className="h-4 w-4 text-text-muted" />
-          </a>
+          </InternalLink>
         ))}
         {rows.length === 0 && (
           <p className="px-4 py-5 text-sm text-text-muted">현재 내게 배정된 작업이 없습니다.</p>
@@ -439,9 +440,9 @@ function CoverageMetricRow({
   return href === undefined ? (
     <div data-testid={`home-coverage-row-${item.id}`}>{body}</div>
   ) : (
-    <a href={href} className="block" data-testid={`home-coverage-row-${item.id}`}>
+    <InternalLink href={href} className="block" data-testid={`home-coverage-row-${item.id}`}>
       {body}
-    </a>
+    </InternalLink>
   );
 }
 
@@ -477,7 +478,9 @@ function PanelHeading({
   action,
   href,
   disabled = false,
-}: { title: string; action?: string; href?: string; disabled?: boolean }): React.ReactElement {
+}:
+  | { title: string; action?: undefined; href?: string; disabled?: boolean }
+  | { title: string; action: string; href: string; disabled?: boolean }): React.ReactElement {
   return (
     <div className="mb-3 flex items-center justify-between">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</h2>
@@ -487,9 +490,9 @@ function PanelHeading({
             {action} <ArrowRight className="inline h-3 w-3" />
           </span>
         ) : (
-          <a href={href} className="text-xs text-text-secondary hover:text-text-primary">
+          <InternalLink href={href} className="text-xs text-text-secondary hover:text-text-primary">
             {action} <ArrowRight className="inline h-3 w-3" />
-          </a>
+          </InternalLink>
         ))}
     </div>
   );

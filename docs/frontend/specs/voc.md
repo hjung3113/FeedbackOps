@@ -81,14 +81,14 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
-| `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task_request' \| 'task' \| 'milestone' \| 'survey' \| 'cluster'` (7 kinds), `id?: string`, `onClose?: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe) |
+| `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task_request' \| 'task' \| 'milestone' \| 'survey' \| 'cluster'` (7 kinds), `id?: string`, `onClose?: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe); fullscreen toggle before close inside the detail slot |
 | `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `badges?: ReactNode`, `className?: string`, `size?: 'lg' \| 'xl'` (default `'lg'`) | `size='lg'`: `text-lg font-semibold tracking-tight leading-[1.35]` (prototype `.panel-title`, VOC detail and triage default). `size='xl'`: `text-xl font-bold tracking-tight` (legacy opt-in only). `children` prop does not exist — use `badges` slot. |
 | `<NestedTextBlock>` | `<NestedTextBlock>` in `packages/ui/src/panel/` | none | `padding?: number`, `children: ReactNode` | Default only |
 | `<FieldRow>` | `<FieldRow>` in `packages/ui/src/panel/` | none | `label: string`, `children: ReactNode` | Default |
 | `<PanelSectionTitle>` | `<PanelSectionTitle>` in `packages/ui/src/panel/` | none | `children: ReactNode`, `action?: ReactNode` | Default |
 | `<Callout tone icon title action>` | `<Callout>` in `packages/ui/src/panel/` | shadcn `<Alert>` (variant prop replaced by `tone`) | `tone: 'amber' \| 'red' \| 'blue' \| 'cyan' \| 'emerald'`, `icon?: ReactNode`, `title?: string`, `action?: ReactNode`, `children: ReactNode` | 5 tones; each binds a raw color token (amber `--color-amber`, red `--color-warning-red`, blue `--color-aether-blue`, cyan `--color-cyan-spark`, emerald `--color-emerald`) |
-| `<DetailPanelHeaderActions entityKind entityId copyHash extraMore?>` | `<DetailPanelHeaderActions>` in `packages/ui/src/panel/` | shadcn `<DropdownMenu>` for kebab, `<Tooltip>` for icon buttons | `entityKind: string` (display name), `entityId: string`, `copyHash: string` (production receives `copyUrl: string` instead), `extraMore?: MoreItem[]` | Default; "copied" toast state after clipboard write |
-| `useFullscreenPanel()` | `useFullscreenPanel()` hook in `apps/frontend/src/lib/panel/` | none | none | `(isFullscreen, toggle)`. Esc + route change collapse it. |
+| `<DetailPanelHeaderActions entityKind entityId copyHash extraMore?>` | `<DetailPanelHeaderActions>` in `packages/ui/src/panel/` | shadcn `<DropdownMenu>` for kebab, `<Tooltip>` for icon buttons | `entityKind: string` (display name), `entityId: string`, `copyHash: string` (production receives `copyUrl: string` instead), `extraMore?: MoreItem[]` | Copy link and kebab; no expand toggle; "copied" toast state after clipboard write |
+| `useFullscreenPanel()` | `useFullscreenPanel()` hook in `apps/frontend/src/lib/panel/` | none | none | `(isFullscreen, toggle)`. Triage's local panel uses it; AppFrame owns detail-slot state. |
 
 ### 3.2 List + toolbar
 
@@ -333,13 +333,13 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 | Affordance | Action | Production wiring |
 |---|---|---|
 | Copy link | Copies `window.location.origin + /vocs?view=inbox&selected=<id>` to clipboard, toasts "링크가 복사되었습니다" | `navigator.clipboard.writeText` |
-| Expand | Toggles `useFullscreenPanel()` (panel takes columns 3-4); Esc collapses | Pure UI |
+| Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame owns detail-slot state; Triage uses `useFullscreenPanel()` |
 | Kebab → Mark read | `PATCH /vocs/:id/read-state` (TBD endpoint, S3-008 follow-up) | If not in Slice 3 backend, render the menu item with `disabledReason: 'Slice 3+에 출시 예정'` |
 | Kebab → Snooze | TBD endpoint | same |
 | Kebab → Subscribe / Unsubscribe | TBD (notifications, ADR-0014) | same |
 | Kebab → Archive | TBD (per Slice 2 archive policy in ADR-0019 Section A; archived VOCs are immutable) | Show confirmation dialog citing immutability |
 
-For Slice 3, only Copy link + Expand land. The kebab menu items render but are disabled with the backend-provided reason (per `interaction-patterns.md` "Permission-blocked commands can appear disabled with reason").
+For Slice 3, only Copy link lands from `<DetailPanelHeaderActions>`. The kebab menu items render but are disabled with the backend-provided reason (per `interaction-patterns.md` "Permission-blocked commands can appear disabled with reason").
 
 ### 5.5 Composer Preview modal
 

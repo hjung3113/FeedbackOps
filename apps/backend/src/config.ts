@@ -61,7 +61,7 @@ const envSchema = z.object({
   SMTP_PASSWORD: optionalEnvString,
   SMTP_FROM: optionalEnvString,
   EMBEDDING_PROVIDER: z.enum(['voyage', 'fake', 'disabled']).default('disabled'),
-  EMBEDDING_API_KEY: z.string().min(1).optional(),
+  EMBEDDING_API_KEY: optionalEnvString,
   EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),
 }).superRefine((config, context) => {
   const originIssue = validateAttachmentOrigin(config.PUBLIC_ATTACHMENT_ORIGIN, config.NODE_ENV);

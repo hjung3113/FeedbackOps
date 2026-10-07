@@ -20,8 +20,14 @@ export function useDetailPanelSlot(node: ReactNode | undefined): void {
   const ctx = useContext(DetailPanelSlotContext);
   const keyRef = useRef<string>(Math.random().toString(36).slice(2));
   useEffect(() => {
-    if (!ctx || node === undefined) return;
-    ctx.setContent(keyRef.current, node);
-    return () => { ctx.clear(keyRef.current); };
+    if (!ctx) return;
+    if (node === undefined) ctx.clear(keyRef.current);
+    else ctx.setContent(keyRef.current, node);
   }, [ctx, node]);
+  useEffect(() => {
+    if (!ctx) return;
+    return () => {
+      ctx.clear(keyRef.current);
+    };
+  }, [ctx]);
 }
