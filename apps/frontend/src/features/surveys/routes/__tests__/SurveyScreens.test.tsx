@@ -1417,6 +1417,44 @@ describe('Survey screens', () => {
     }
   });
 
+  it.each([
+    [
+      'getRandomValues only',
+      {
+        getRandomValues: (values: Uint32Array) => {
+          values.set([1, 2, 3, 4]);
+          return values;
+        },
+      },
+    ],
+    ['crypto unavailable', undefined],
+  ] as const)('W-823 adds questions with unique ids when %s', (_label, cryptoValue) => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    let unmount: (() => void) | undefined;
+    try {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: cryptoValue,
+      });
+      unmount = renderWithQuery(
+        <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+      ).unmount;
+
+      fireEvent.click(screen.getByTestId('survey-question-kind-single_choice'));
+      fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+
+      const ids = screen
+        .getAllByTestId(/^survey-question-row-/)
+        .map((row) => row.getAttribute('data-testid')?.replace('survey-question-row-', ''));
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+    } finally {
+      unmount?.();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      else Reflect.deleteProperty(globalThis, 'crypto');
+    }
+  });
+
   it('removes options down to two while preserving the remaining keys', async () => {
     const parent = survey.questions?.[0] as SurveyQuestion;
     const initialOptions = [...(parent.options ?? []), { key: 'maybe', label: '잘 모르겠어요' }];
@@ -1503,6 +1541,112 @@ describe('Survey screens', () => {
       expect(await screen.findByText('옵션을 입력하세요.')).toBeInTheDocument();
     },
   );
+
+  it.each(['draft-save', 'launch'] as const)(
+    'W-823 rejects whitespace-only prompts before %s and selects the first invalid question',
+    async (action) => {
+      const first = survey.questions?.[0] as SurveyQuestion;
+      const second = { ...question('question-2', '다음 질문', 1) };
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: [first, second] }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('질문 제목'), { target: { value: '   ' } });
+      fireEvent.click(screen.getByText('Q2'));
+      if (action === 'draft-save') {
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+        await act(async () => {
+          await Promise.resolve();
+        });
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Survey 시작' }));
+        fireEvent.click(
+          within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+            'survey-status-confirm',
+          ),
+        );
+      }
+
+      const firstRow = screen.getByTestId('survey-question-row-question-1');
+      const secondRow = screen.getByTestId('survey-question-row-question-2');
+      expect(firstRow).toHaveClass('bg-surface-card');
+      expect(secondRow).not.toHaveClass('bg-surface-card');
+      expect(screen.getByLabelText('질문 제목')).toHaveValue('   ');
+      expect(screen.getByLabelText('질문 제목')).toHaveAttribute('aria-invalid', 'true');
+      expect(await screen.findByText('질문을 입력하세요.')).toBeInTheDocument();
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(0);
+      expect(calls('POST', '/surveys/survey-1/open')).toHaveLength(0);
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      if (action === 'launch') {
+        expect(screen.queryByTestId('survey-open-confirmation')).not.toBeInTheDocument();
+        expect(screen.queryByText('빈 옵션을 채운 후 다시 시작하세요.')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('W-823 blocks changing a branch parent to multiple choice and saves only backend-valid bodies', async () => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    const child: SurveyQuestion = {
+      ...parent,
+      id: childId,
+      prompt: '추가 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    const initialQuestions = [parent, child];
+    installQuestionServerOracle(initialQuestions);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: initialQuestions }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+    fireEvent.click(
+      await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.multiple_choice }),
+    );
+
+    expect(
+      await screen.findByText('분기 질문이 있으면 복수 선택으로 바꿀 수 없습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '질문 유형' })).toHaveTextContent(
+      SURVEY_QUESTION_KIND_LABELS.single_choice,
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
+    fireEvent.click(screen.getByText('Q1'));
+
+    expect(
+      screen.queryByText('분기 질문이 있으면 복수 선택으로 바꿀 수 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '질문 유형' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.change(screen.getByLabelText('질문 제목'), { target: { value: '수정한 추가 질문' } });
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled());
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childPatch = calls('PATCH', `/surveys/${survey.id}/questions/${childId}`)[0]?.[2].body;
+    expect(parseBackendQuestionInput(childPatch).prompt).toBe('수정한 추가 질문');
+    expect(calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`)).toHaveLength(0);
+  });
 
   it.each([
     ['creates a new child branching on a newly added option', 'new-child'],

@@ -1,4 +1,5 @@
 import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import {
   Input,
@@ -9,6 +10,7 @@ import {
   SelectValue,
   Textarea,
 } from '@fops/ui';
+import * as React from 'react';
 import type { QuestionKind, SurveyQuestion } from '../../types';
 import { BranchEditor } from './BranchEditor';
 import { OptionsEditor } from './OptionsEditor';
@@ -25,8 +27,18 @@ export function QuestionEditor({
   editable: boolean;
   onChange: (question: SurveyQuestion) => void;
 }) {
+  const [blockedBranchKindChangeId, setBlockedBranchKindChangeId] = React.useState<string | null>(
+    null,
+  );
   const set = (patch: Partial<SurveyQuestion>) => onChange({ ...question, ...patch });
   const parent = questions.find((candidate) => candidate.id === question.branch_parent_question_id);
+  const hasBranchChildren = questions.some(
+    (candidate) => candidate.branch_parent_question_id === question.id,
+  );
+  const blockedBranchKindChange = blockedBranchKindChangeId === question.id && hasBranchChildren;
+  const branchKindErrorId = `survey-branch-kind-error-${question.id}`;
+  const promptIsBlank = editable && question.prompt.trim().length === 0;
+  const promptErrorId = `survey-prompt-error-${question.id}`;
   const parents = questions.filter(
     (candidate) =>
       candidate.id !== question.id &&
@@ -40,14 +52,30 @@ export function QuestionEditor({
   });
   return (
     <div className="space-y-4">
-      <label className="block text-sm" htmlFor="question-kind">
-        질문 유형
+      <div className="block text-sm">
+        <label htmlFor="question-kind">질문 유형</label>
         <Select
           value={question.kind}
           disabled={!editable}
-          onValueChange={(kind) => set(questionForKind(question, kind as QuestionKind))}
+          onValueChange={(kind) => {
+            if (
+              question.kind === 'single_choice' &&
+              kind === 'multiple_choice' &&
+              hasBranchChildren
+            ) {
+              setBlockedBranchKindChangeId(question.id);
+              return;
+            }
+            setBlockedBranchKindChangeId(null);
+            set(questionForKind(question, kind as QuestionKind));
+          }}
         >
-          <SelectTrigger id="question-kind" aria-label="질문 유형">
+          <SelectTrigger
+            id="question-kind"
+            aria-label="질문 유형"
+            aria-invalid={blockedBranchKindChange}
+            {...(blockedBranchKindChange ? { 'aria-describedby': branchKindErrorId } : {})}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -58,16 +86,28 @@ export function QuestionEditor({
             ))}
           </SelectContent>
         </Select>
-      </label>
-      <label className="block text-sm" htmlFor="question-title">
-        질문 제목
+        {blockedBranchKindChange && (
+          <p id={branchKindErrorId} role="alert" className="mt-1 text-xs text-text-danger-label">
+            {SURVEY_BUILDER_COPY.branchParentKindChange}
+          </p>
+        )}
+      </div>
+      <div className="block text-sm">
+        <label htmlFor="question-title">질문 제목</label>
         <Textarea
           id="question-title"
           value={question.prompt}
+          aria-invalid={promptIsBlank}
+          {...(promptIsBlank ? { 'aria-describedby': promptErrorId } : {})}
           disabled={!editable}
           onChange={(event) => set({ prompt: event.target.value })}
         />
-      </label>
+        {promptIsBlank && (
+          <p id={promptErrorId} role="alert" className="mt-1 text-xs text-text-danger-label">
+            {SURVEY_BUILDER_COPY.emptyPrompt}
+          </p>
+        )}
+      </div>
       {(question.kind === 'single_choice' || question.kind === 'multiple_choice') && (
         <OptionsEditor
           question={question}
