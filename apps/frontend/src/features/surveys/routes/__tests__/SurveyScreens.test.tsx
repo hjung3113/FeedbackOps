@@ -2112,6 +2112,117 @@ describe('Survey screens', () => {
     }
   });
 
+  it.each([
+    ['new D selects cleared C', 'new', false],
+    ['saved D sorts before cleared C', 'saved', false],
+    ['retry after C PATCH fails once', 'saved', true],
+  ] as const)(
+    'W-829 saves when %s becomes a branch parent in the same session',
+    async (_label, downstreamKind, rejectFirstParentPatch) => {
+      const rootParentId = '11111111-1111-4111-8111-111111111111';
+      const clearedParentId = '22222222-2222-4222-8222-222222222222';
+      const savedDownstreamId = '44444444-4444-4444-8444-444444444444';
+      const rootParent: SurveyQuestion = {
+        ...(survey.questions?.[0] as SurveyQuestion),
+        id: rootParentId,
+        prompt: '기준 질문',
+        sort_order: downstreamKind === 'saved' ? 1 : 0,
+      };
+      const clearedParent: SurveyQuestion = {
+        ...rootParent,
+        id: clearedParentId,
+        prompt: '기존 분기 질문',
+        branch_depth: 1,
+        branch_parent_question_id: rootParentId,
+        branch_trigger_option_key: 'no',
+        sort_order: downstreamKind === 'saved' ? 2 : 1,
+      };
+      const savedDownstream: SurveyQuestion = {
+        ...rootParent,
+        id: savedDownstreamId,
+        prompt: '후속 질문',
+        sort_order: 0,
+      };
+      const initialQuestions =
+        downstreamKind === 'saved'
+          ? [savedDownstream, rootParent, clearedParent]
+          : [rootParent, clearedParent];
+      installQuestionServerOracle(initialQuestions, {
+        ...(rejectFirstParentPatch ? { rejectFirstPatchFor: clearedParentId } : {}),
+      });
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{ ...survey, questions: initialQuestions }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByText(clearedParent.prompt));
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: '분기 없음' }));
+
+      if (downstreamKind === 'new') {
+        fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+      } else {
+        fireEvent.click(screen.getByText(savedDownstream.prompt));
+      }
+      fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+      fireEvent.click(await screen.findByRole('option', { name: clearedParent.prompt }));
+
+      const downstreamId =
+        downstreamKind === 'new' ? SERVER_CREATED_QUESTION_ID : savedDownstreamId;
+      const downstreamPath = `/surveys/${survey.id}/questions/${downstreamId}`;
+      const clearedParentPath = `/surveys/${survey.id}/questions/${clearedParentId}`;
+
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      if (rejectFirstParentPatch) {
+        expect(await screen.findByText('저장하지 못했습니다.')).toBeInTheDocument();
+        const rejectedParentPatch = calls('PATCH', clearedParentPath);
+        expect(rejectedParentPatch).toHaveLength(1);
+        expect(rejectedParentPatch[0]?.[2].body).toMatchObject({
+          branch_parent_question_id: null,
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+      }
+      await screen.findByText(/^저장 시각 /);
+
+      expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+      const downstreamPatches = calls('PATCH', downstreamPath);
+      expect(downstreamPatches.length).toBeGreaterThan(0);
+      const finalDownstreamBody = downstreamPatches.at(-1)?.[2].body;
+      expect(parseBackendQuestionInput(finalDownstreamBody)).toMatchObject({
+        branch_parent_question_id: clearedParentId,
+        branch_trigger_option_key: 'yes',
+      });
+
+      const indexedCalls = apiClient.mock.calls.map((call, index) => ({ call, index }));
+      const clearedParentPatchIndex =
+        indexedCalls
+          .filter(
+            ({ call }) =>
+              call[0] === 'PATCH' &&
+              call[1] === clearedParentPath &&
+              (call[2].body as { branch_parent_question_id?: string | null })
+                .branch_parent_question_id === null,
+          )
+          .at(-1)?.index ?? -1;
+      const downstreamAttachIndex =
+        indexedCalls
+          .filter(
+            ({ call }) =>
+              call[0] === 'PATCH' &&
+              call[1] === downstreamPath &&
+              (call[2].body as { branch_parent_question_id?: string | null })
+                .branch_parent_question_id === clearedParentId,
+          )
+          .at(-1)?.index ?? -1;
+      expect(clearedParentPatchIndex).toBeGreaterThanOrEqual(0);
+      expect(downstreamAttachIndex).toBeGreaterThan(clearedParentPatchIndex);
+    },
+  );
+
   it.each(['one rejected parent PATCH'] as const)(
     'keeps a newly created child branch through a retry after %s',
     async () => {
