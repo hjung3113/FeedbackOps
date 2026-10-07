@@ -54,7 +54,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    For several workers, pass repeated `--state` options and `--any`, then remove the returned finished worker
    from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
    on the host and close any terminal immediately; `10` failed → inspect the report/log and write a repair brief;
-   `11` quota → inspect the worker and use the session-approved fallback after stopping the stalled worker;
+   `11` quota → stop the stalled worker, then relaunch in the same worktree with shared `worker-launch.sh
+   --role impl-luna` (not `launch-worker.sh`, which creates a new worktree) and a task that says the worktree holds
+   partial edits; this fallback is a standing user decision (2026-10-07);
    `12` timeout → inspect progress, do not treat it as completion or launch a duplicate; `2` usage → correct
    the arguments. Do not consume a stale report or a sentinel written before the worker stops.
 4. **Verify on the host** (workers already ran their touched tests + typecheck per `templates/impl-rules.md`):
@@ -146,8 +148,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   (#661 fixed three test-only TS errors that passed vitest). `verify-fe.sh` runs both.
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
-- Workers run as codex in an Orca terminal (runtime `codex-orca`, 2026-10-06), so the user can watch them; the
-  state JSON records the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
+- Implementation workers run in an Orca terminal so the user can watch them: GLM 5.3 flash max via omp since
+  2026-10-07 (codex `impl-luna` on a GLM quota stop); reviewers run as codex (`codex-orca`). The state JSON records
+  the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
   If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
   with stdin from `/dev/null`), which needs no Orca terminal.
 - A FE test that stubs `fetch` for any URL hides a 4xx contract error (#653's query was a 422): parse the sent
