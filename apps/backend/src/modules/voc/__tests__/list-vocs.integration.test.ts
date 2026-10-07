@@ -1299,4 +1299,285 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(ids).not.toContain(assignedVoc.id);
     expect(ids).not.toContain(archivedUnsetVoc.id);
   });
+
+  // ── #821: q text search ─────────────────────────────────────────────────────
+
+  /** GET /vocs?view=inbox scoped to one MS, with an optional q. Returns the items array. */
+  async function listInboxWithQ(
+    msId: string,
+    q: string | undefined,
+    cookie: string = adminCookie,
+  ): Promise<{
+    body: {
+      items: { id: string; display_id: string; title: string }[];
+      page: { cursor?: string; has_more: boolean };
+      out_of_scope_summary?: { count: number; severity_distribution: Record<string, number> };
+    };
+    status: number;
+  }> {
+    const qp = q === undefined ? '' : `&q=${encodeURIComponent(q)}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}${qp}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    return { status: res.statusCode, body: res.json() };
+  }
+
+  it.each([
+    [
+      'a title substring mid-word with different case',
+      'iL bOunCe',
+      'Email Bounce Investigation',
+      '전혀 다른 주제 보고',
+    ],
+  ])('821: q matches %s', async (_label, q, matchingTitle, otherTitle) => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-title`,
+      'Q Title MS',
+    );
+    const target = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, matchingTitle);
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, otherTitle);
+
+    const { status, body } = await listInboxWithQ(msId, q);
+    expect(status).toBe(200);
+    expect(body.items.map((item) => item.id)).toEqual([target.id]);
+  });
+
+  it('821: q matches a display-ID prefix case-insensitively and excludes non-matching rows', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-disp`,
+      'Q Display MS',
+    );
+    const target = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '접수 지연 문의',
+    );
+    const other = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '결제 오류 문의',
+    );
+
+    // display_id is assigned by the server (voc.next_voc_display_id), so read
+    // both back from an unfiltered list of this MS first.
+    const unfiltered = await listInboxWithQ(msId, undefined);
+    const displayIdOf = (vocId: string): string => {
+      const found = unfiltered.body.items.find((item) => item.id === vocId)?.display_id;
+      if (found === undefined) throw new Error('seeded display_id missing');
+      return found;
+    };
+    const targetDisplayId = displayIdOf(target.id);
+    const otherDisplayId = displayIdOf(other.id);
+
+    // Shortest prefix of the target that still excludes the other row, so
+    // ignoring q (or matching every row) surfaces the other display ID.
+    let common = 0;
+    while (
+      common < targetDisplayId.length &&
+      common < otherDisplayId.length &&
+      targetDisplayId[common] === otherDisplayId[common]
+    ) {
+      common += 1;
+    }
+    const prefix = targetDisplayId.slice(0, common + 1);
+    expect(prefix.length).toBeGreaterThan(0);
+    expect(otherDisplayId.startsWith(prefix)).toBe(false);
+
+    // Lowercase on purpose: the server match must be case-insensitive ILIKE.
+    const { status, body } = await listInboxWithQ(msId, prefix.toLowerCase());
+    expect(status).toBe(200);
+    expect(body.items.map((item) => item.id)).toEqual([target.id]);
+    for (const item of body.items) {
+      expect(item.display_id.toLowerCase().startsWith(prefix.toLowerCase())).toBe(true);
+    }
+  });
+
+  it('821: q that is neither a display-ID prefix nor a title substring returns no VOC', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-none`,
+      'Q None MS',
+    );
+    const alpha = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '고유 제목 알파');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '다른 제목 베타');
+
+    const unfiltered = await listInboxWithQ(msId, undefined);
+    const alphaDisplayId = unfiltered.body.items.find((item) => item.id === alpha.id)?.display_id;
+    if (alphaDisplayId === undefined) throw new Error('alpha display_id missing');
+    // A display id ends in digits, so appending a letter can never be a prefix
+    // of any display id, and neither title contains it.
+    const q = `${alphaDisplayId}X`;
+
+    const { status, body } = await listInboxWithQ(msId, q);
+    expect(status).toBe(200);
+    expect(body.items).toEqual([]);
+  });
+
+  it.each([
+    ['%', '리포트 100% 완료'],
+    ['_', 'snake_case 필드명'],
+  ])('821: q=%s matches only the VOC whose title contains that literal character', async (q, title) => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-esc`,
+      'Q Escape MS',
+    );
+    const literal = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, title);
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '일반 보고 항목');
+
+    const { status, body } = await listInboxWithQ(msId, q);
+    expect(status).toBe(200);
+    expect(body.items.map((item) => item.id)).toEqual([literal.id]);
+  });
+
+  it('821: q cannot leak out-of-scope VOCs and out_of_scope_summary ignores q', async () => {
+    const msAId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-scope-a`,
+      'Q Scope MS-A',
+    );
+    const msBId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-scope-b`,
+      'Q Scope MS-B',
+    );
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('q821'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+    // Puts MS-B in the effective scope (summary surface) but not the read scope.
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msBId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msAId, reporterId, '범위 내 제목');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, '숨겨진 제목 하나');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, '숨겨진 제목 둘');
+
+    const withoutQ = await listInboxWithQ(msAId, undefined, devCookie);
+    expect(withoutQ.status).toBe(200);
+    expect(withoutQ.body.items).toHaveLength(1);
+    expect(withoutQ.body.out_of_scope_summary?.count).toBe(2);
+
+    // A title that exists only on an MS-B VOC must not leak into items.
+    const withQ = await listInboxWithQ(msAId, '숨겨진', devCookie);
+    expect(withQ.status).toBe(200);
+    expect(withQ.body.items).toEqual([]);
+    expect(withQ.body.out_of_scope_summary?.count).toBe(withoutQ.body.out_of_scope_summary?.count);
+  });
+
+  it.each([
+    ['view=triage rejects q', 'triage', 'x', 'invalid_for_view'],
+    ['more than 100 characters', 'inbox', `${'a'.repeat(101)}`, 'too_big'],
+  ])('821: %s → 422 validation.failed at path q', async (_label, view, q, fieldCode) => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=${view}&q=${encodeURIComponent(q)}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(422);
+    const body = res.json<{
+      code: string;
+      detail?: { fields?: Array<{ path: string[]; code: string }> };
+    }>();
+    expect(body.code).toBe('validation.failed');
+    const qField = body.detail?.fields?.find((field) => field.path.includes('q'));
+    expect(qField).toBeDefined();
+    expect(qField?.code).toBe(fieldCode);
+  });
+
+  it('821: a blank q returns the same items as no q', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-blank`,
+      'Q Blank MS',
+    );
+    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, '공백 검색 대상');
+
+    const withoutQ = await listInboxWithQ(msId, undefined);
+    const blankQ = await listInboxWithQ(msId, '   ');
+    expect(blankQ.status).toBe(200);
+    expect(blankQ.body.items.map((item) => item.id)).toEqual(
+      withoutQ.body.items.map((item) => item.id),
+    );
+    expect(blankQ.body.items.map((item) => item.id)).toContain(voc.id);
+  });
+
+  it('821: cursor pagination works with q (page 2 returns the second match)', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-q-page`,
+      'Q Page MS',
+    );
+    const first = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '검색 페이지 알파',
+    );
+    const second = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '검색 페이지 베타',
+    );
+    // Same MS, but matches neither the q title substring nor any display-ID
+    // prefix, so ignoring q would surface it on a page.
+    const distractor = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      '검색과 무관한 주제',
+    );
+
+    const res1 = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&q=${encodeURIComponent('검색 페이지')}&limit=1`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res1.statusCode).toBe(200);
+    const page1 = res1.json<{
+      items: { id: string }[];
+      page: { cursor?: string; has_more: boolean };
+    }>();
+    expect(page1.items).toHaveLength(1);
+    expect(page1.page.has_more).toBe(true);
+    const page1Cursor = page1.page.cursor;
+    expect(page1Cursor).toBeDefined();
+    if (page1Cursor === undefined) return;
+    const page1Ids = page1.items.map((item) => item.id);
+    // The distractor must never appear under an active q.
+    expect(page1Ids.every((id) => id !== distractor.id)).toBe(true);
+
+    const res2 = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&q=${encodeURIComponent('검색 페이지')}&limit=1&cursor=${encodeURIComponent(page1Cursor)}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res2.statusCode).toBe(200);
+    const page2 = res2.json<{
+      items: { id: string }[];
+      page: { has_more: boolean };
+    }>();
+    expect(page2.items).toHaveLength(1);
+    expect(page2.items[0]!.id).not.toBe(page1Ids[0]);
+    expect([first.id, second.id].sort()).toEqual([...page1Ids, page2.items[0]!.id].sort());
+    expect(page2.page.has_more).toBe(false);
+  });
 });
