@@ -1,4 +1,4 @@
-import { Button, FieldRow, PanelSectionTitle } from '@fops/ui';
+import { Button, DetailPanelFullscreenToggle, FieldRow, PanelSectionTitle } from '@fops/ui';
 
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
@@ -43,15 +43,18 @@ export function PermissionGrantDetail({
             {actorName} · {getCapabilityDisplayLabel(item.capability)}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          aria-label={ADMIN_PERMISSIONS_COPY.closePanel}
-        >
-          {ADMIN_PERMISSIONS_COPY.close}
-        </Button>
+        <div className="flex items-center gap-1">
+          <DetailPanelFullscreenToggle />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label={ADMIN_PERMISSIONS_COPY.closePanel}
+          >
+            {ADMIN_PERMISSIONS_COPY.close}
+          </Button>
+        </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-5">

@@ -138,26 +138,6 @@ describe('DetailPanelHeaderActions — copy link', () => {
   });
 });
 
-describe('DetailPanelHeaderActions — expand toggle', () => {
-  it('renders expand button when onExpandToggle is provided', () => {
-    render(<DetailPanelHeaderActions {...defaultProps} onExpandToggle={() => {}} />);
-    expect(screen.getByRole('button', { name: '전체 화면 전환' })).toBeInTheDocument();
-  });
-
-  it('does not render expand button when onExpandToggle is undefined', () => {
-    render(<DetailPanelHeaderActions {...defaultProps} />);
-    expect(screen.queryByRole('button', { name: '전체 화면 전환' })).toBeNull();
-  });
-
-  it('calls onExpandToggle when expand button clicked', async () => {
-    const onExpandToggle = vi.fn();
-    const user = userEvent.setup();
-    render(<DetailPanelHeaderActions {...defaultProps} onExpandToggle={onExpandToggle} />);
-    await user.click(screen.getByRole('button', { name: '전체 화면 전환' }));
-    expect(onExpandToggle).toHaveBeenCalledOnce();
-  });
-});
-
 describe('DetailPanelHeaderActions — kebab dropdown', () => {
   it('renders more button', () => {
     render(<DetailPanelHeaderActions {...defaultProps} />);

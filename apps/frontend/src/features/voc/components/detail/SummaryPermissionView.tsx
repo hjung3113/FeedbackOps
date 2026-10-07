@@ -9,25 +9,18 @@ export interface SummaryPermissionViewProps {
   data: VocSummaryEnvelope;
   vocId: string;
   onClose: () => void;
-  onExpandToggle?: () => void;
 }
 
 export function SummaryPermissionView({
   data,
   vocId,
   onClose,
-  onExpandToggle,
 }: SummaryPermissionViewProps): React.ReactElement {
   const selfDecision = getSummarySelfDecision(data);
 
   return (
     <div className="flex flex-col h-full">
-      <DetailHeader
-        vocId={vocId}
-        displayId={data.display_id}
-        onClose={onClose}
-        {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
-      />
+      <DetailHeader vocId={vocId} displayId={data.display_id} onClose={onClose} />
       <div className="flex-1 flex items-center justify-center p-4">
         {selfDecision !== null ? (
           <PermissionBlockedPanel

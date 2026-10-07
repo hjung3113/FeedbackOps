@@ -1,6 +1,7 @@
-import { ListShell } from '@fops/ui';
+import { DetailPanelHeader, ListShell } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppFrame } from '../AppFrame';
 
@@ -17,7 +18,145 @@ const entries = [
 const PANEL_CONTENT = <aside data-testid="dp-content">PANEL</aside>;
 const PANEL_A = <aside>A</aside>;
 const PANEL_B = <aside>B</aside>;
+const CLOSE_PANEL_EVENT = 'app-frame-test-close-panel';
+
+function dispatchClosePanel() {
+  window.dispatchEvent(new Event(CLOSE_PANEL_EVENT));
+}
+
+const PANEL_WITH_HEADER = (
+  <div data-testid="header-panel">
+    <DetailPanelHeader kind="voc" id="VOC-A" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_ESCAPE_PREVENTED = (
+  <div data-testid="escape-prevented-panel">
+    <button
+      type="button"
+      data-testid="prevent-escape"
+      aria-label="Prevent Escape"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') event.preventDefault();
+      }}
+    />
+    <DetailPanelHeader kind="voc" id="VOC-B" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_CLOSE_FIRST = (
+  <div data-testid="close-first-panel">
+    <DetailPanelHeader kind="voc" id="VOC-C1" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_CLOSE_NEXT = (
+  <div data-testid="close-next-panel">
+    <DetailPanelHeader kind="voc" id="VOC-C2" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_ROUTE_A = (
+  <div data-testid="route-panel-a">
+    <DetailPanelHeader kind="voc" id="VOC-D1" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_ROUTE_B = (
+  <div data-testid="route-panel-b">
+    <DetailPanelHeader kind="voc" id="VOC-D2" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_RECORD_A = (
+  <div data-testid="record-panel-a">
+    <DetailPanelHeader kind="voc" id="VOC-E1" onClose={dispatchClosePanel} />
+  </div>
+);
+const PANEL_RECORD_B = (
+  <div data-testid="record-panel-b">
+    <DetailPanelHeader kind="voc" id="VOC-E2" onClose={dispatchClosePanel} />
+  </div>
+);
 const originalFetch = globalThis.fetch;
+
+function renderAppFrame(children: React.ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <AppFrame activeDomain="voc" sidebarEntries={entries}>
+        {children}
+      </AppFrame>
+    </QueryClientProvider>,
+  );
+}
+
+function CloseLifecycleHarness() {
+  const [record, setRecord] = React.useState<'first' | 'closed' | 'next'>('first');
+  React.useEffect(() => {
+    const handleClose = () => setRecord('closed');
+    window.addEventListener(CLOSE_PANEL_EVENT, handleClose);
+    return () => window.removeEventListener(CLOSE_PANEL_EVENT, handleClose);
+  }, []);
+  const detailPanel =
+    record === 'first' ? PANEL_CLOSE_FIRST : record === 'next' ? PANEL_CLOSE_NEXT : undefined;
+
+  return (
+    <>
+      <button type="button" onClick={() => setRecord('next')}>
+        open next record
+      </button>
+      <AppFrame activeDomain="voc" sidebarEntries={entries}>
+        <ListShell
+          toolbar={{ title: 'Lifecycle' }}
+          list={<div>list</div>}
+          {...(detailPanel !== undefined ? { detailPanel } : {})}
+        />
+      </AppFrame>
+    </>
+  );
+}
+
+function RouteRegistrantHarness() {
+  const [showSecondRegistrant, setShowSecondRegistrant] = React.useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setShowSecondRegistrant(true)}>
+        mount second registrant
+      </button>
+      <AppFrame activeDomain="voc" sidebarEntries={entries}>
+        <ListShell
+          key="route-a"
+          toolbar={{ title: 'A' }}
+          list={<div />}
+          detailPanel={PANEL_ROUTE_A}
+        />
+        {showSecondRegistrant && (
+          <ListShell
+            key="route-b"
+            toolbar={{ title: 'B' }}
+            list={<div />}
+            detailPanel={PANEL_ROUTE_B}
+          />
+        )}
+      </AppFrame>
+    </>
+  );
+}
+
+function RecordChangeHarness() {
+  const [record, setRecord] = React.useState<'a' | 'b'>('a');
+
+  return (
+    <>
+      <button type="button" onClick={() => setRecord('b')}>
+        switch record
+      </button>
+      <AppFrame activeDomain="voc" sidebarEntries={entries}>
+        <ListShell
+          toolbar={{ title: 'Record change' }}
+          list={<div />}
+          detailPanel={record === 'a' ? PANEL_RECORD_A : PANEL_RECORD_B}
+        />
+      </AppFrame>
+    </>
+  );
+}
 
 beforeEach(() => {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -134,6 +273,116 @@ describe('AppFrame', () => {
     });
 
     warn.mockRestore();
+  });
+
+  it('toggles the slot fullscreen while keeping the main mounted and hidden', async () => {
+    renderAppFrame(
+      <ListShell
+        toolbar={{ title: 'Inbox' }}
+        list={<div>list</div>}
+        detailPanel={PANEL_WITH_HEADER}
+      />,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    const main = screen.getByTestId('app-main');
+    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
+    const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
+
+    expect(slot).toHaveAttribute('data-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(slot).toHaveAttribute('data-expanded', 'true');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(main).toBeInTheDocument();
+    expect(main).toHaveAttribute('hidden');
+
+    fireEvent.click(toggle);
+    expect(slot).toHaveAttribute('data-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(main).not.toHaveAttribute('hidden');
+  });
+
+  it('Escape collapses unless a panel handler prevented it', async () => {
+    const first = renderAppFrame(
+      <ListShell toolbar={{ title: 'Escape' }} list={<div />} detailPanel={PANEL_WITH_HEADER} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('app-detail-slot')).toHaveAttribute('data-open', 'true'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('app-detail-slot')).toHaveAttribute('data-expanded', 'false');
+
+    first.unmount();
+    renderAppFrame(
+      <ListShell
+        toolbar={{ title: 'Escape prevented' }}
+        list={<div />}
+        detailPanel={PANEL_ESCAPE_PREVENTED}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('app-detail-slot')).toHaveAttribute('data-open', 'true'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    fireEvent.keyDown(screen.getByTestId('prevent-escape'), { key: 'Escape' });
+    expect(screen.getByTestId('app-detail-slot')).toHaveAttribute('data-expanded', 'true');
+  });
+
+  it('closing collapses the slot and the next record opens at normal width', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CloseLifecycleHarness />
+      </QueryClientProvider>,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(screen.getByTestId('close-first-panel')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    expect(slot).toHaveAttribute('data-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'false'));
+    expect(slot).toHaveAttribute('data-expanded', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'open next record' }));
+    await waitFor(() => expect(screen.getByTestId('close-next-panel')).toBeInTheDocument());
+    expect(slot).toHaveAttribute('data-expanded', 'false');
+  });
+
+  it('starts a different shell registrant collapsed on its first slot render', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <RouteRegistrantHarness />
+      </QueryClientProvider>,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(screen.getByTestId('route-panel-a')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    expect(slot).toHaveAttribute('data-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'mount second registrant' }));
+    expect(await screen.findByTestId('route-panel-b')).toBeInTheDocument();
+    expect(slot).toHaveAttribute('data-expanded', 'false');
+    warn.mockRestore();
+  });
+
+  it('stays expanded when the same registrant changes its selected record', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <RecordChangeHarness />
+      </QueryClientProvider>,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(screen.getByTestId('record-panel-a')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    expect(slot).toHaveAttribute('data-expanded', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'switch record' }));
+    expect(await screen.findByTestId('record-panel-b')).toBeInTheDocument();
+    expect(slot).toHaveAttribute('data-expanded', 'true');
   });
 });
 

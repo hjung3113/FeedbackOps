@@ -25,7 +25,6 @@ export interface FullDetailViewProps {
   vocId: string;
   managedSystemId?: string;
   onClose: () => void;
-  onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
   canRenderAllowedTask: boolean;
   me: MeResponse | null;
@@ -49,7 +48,6 @@ export function FullDetailView({
   vocId,
   managedSystemId,
   onClose,
-  onExpandToggle,
   isReporterOnOwnVoc,
   canRenderAllowedTask,
   me,
@@ -104,12 +102,7 @@ export function FullDetailView({
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
-        <DetailHeader
-          vocId={vocId}
-          displayId={voc.display_id}
-          onClose={handleClose}
-          {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
-        />
+        <DetailHeader vocId={vocId} displayId={voc.display_id} onClose={handleClose} />
 
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
         <DetailPanelSectionNav sections={detailSections} scrollRef={scrollRef} />

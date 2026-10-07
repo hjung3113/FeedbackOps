@@ -1,14 +1,23 @@
-import * as React from 'react';
-import { DetailPanelSlotContext, cn } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
-import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSystems, fetchNavCounts, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
+import {
+  type SavedView,
+  type SavedViewSurface,
+  createSavedView,
+  deleteSavedView,
+  fetchCapabilityScope,
+  fetchManagedSystems,
+  fetchNavCounts,
+  fetchSavedViews,
+} from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
-import { CommandPalette } from './command-palette/CommandPalette';
-import type { PaletteNavTree } from './command-palette/commands';
+import { DetailPanelFullscreenContext, DetailPanelSlotContext, cn } from '@fops/ui';
+import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavItem } from './AppSidebar';
+import { CommandPalette } from './command-palette/CommandPalette';
+import type { PaletteNavTree } from './command-palette/commands';
 
 export interface AppFrameProps {
   sidebarEntries: SidebarNavItem[];
@@ -44,6 +53,7 @@ interface SlotEntry {
  */
 export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
+  const [expandedSlotKey, setExpandedSlotKey] = React.useState<string | null>(null);
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
   React.useEffect(() => {
     if (syncManagedSystemFromUrl) setSelectedManagedSystemId(managedSystemId);
@@ -165,10 +175,33 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
 
   const clear = React.useCallback((key: string) => {
     setSlots((prev) => prev.filter((s) => s.key !== key));
+    setExpandedSlotKey((current) => (current === key ? null : current));
   }, []);
 
-  const slotNode = slots[slots.length - 1]?.node;
+  const activeSlot = slots[slots.length - 1];
+  const slotNode = activeSlot?.node;
+  const slotKey = activeSlot?.key;
   const slotOpen = slotNode !== undefined && slotNode !== null;
+  const isExpanded = slotOpen && slotKey !== undefined && expandedSlotKey === slotKey;
+  const toggleFullscreen = React.useCallback(() => {
+    if (slotKey === undefined || !slotOpen) return;
+    setExpandedSlotKey((current) => (current === slotKey ? null : slotKey));
+  }, [slotKey, slotOpen]);
+  const fullscreenContextValue = React.useMemo(
+    () => (slotOpen ? { expanded: isExpanded, toggle: toggleFullscreen } : null),
+    [isExpanded, slotOpen, toggleFullscreen],
+  );
+
+  React.useEffect(() => {
+    if (!isExpanded || slotKey === undefined) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        setExpandedSlotKey((current) => (current === slotKey ? null : current));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isExpanded, slotKey]);
 
   // Memoize context value so shells' useDetailPanelSlot effect does not re-fire
   // on every AppFrame re-render. Without this, ctx reference changes each render
@@ -184,21 +217,32 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
           {...(counts !== undefined ? { counts } : {})}
         />
         <AppSidebar {...sidebarProps} />
-        <main className="flex-1 min-w-0 flex flex-col" data-testid="app-main">
+        <main
+          className={cn('flex-1 min-w-0 flex flex-col', isExpanded && 'hidden')}
+          data-testid="app-main"
+          hidden={isExpanded}
+        >
           {children}
         </main>
         <aside
           className={cn(
             'border-l border-border-subtle bg-surface-detail overflow-y-auto transition-[width] duration-150',
             slotOpen
-              ? 'w-(--detail-panel-width) min-w-90 max-w-130'
+              ? isExpanded
+                ? 'flex-1 min-w-0'
+                : 'w-(--detail-panel-width) min-w-90 max-w-130'
               : 'w-0',
           )}
           aria-label="상세 패널"
           data-testid="app-detail-slot"
           data-open={slotOpen ? 'true' : 'false'}
+          data-expanded={isExpanded ? 'true' : 'false'}
         >
-          {slotOpen && slotNode}
+          {slotOpen && (
+            <DetailPanelFullscreenContext.Provider value={fullscreenContextValue}>
+              {slotNode}
+            </DetailPanelFullscreenContext.Provider>
+          )}
         </aside>
         {paletteNavTree !== undefined && (
           <CommandPalette navTree={paletteNavTree} canAccessWorkspaceAdmin={canAccessWorkspaceAdmin} />

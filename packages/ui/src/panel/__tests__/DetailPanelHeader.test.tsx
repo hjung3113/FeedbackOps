@@ -1,6 +1,7 @@
 /// <reference types="@testing-library/jest-dom" />
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { DetailPanelFullscreenContext } from '../DetailPanelFullscreenContext.js';
 import { DetailPanelHeader } from '../DetailPanelHeader.js';
 import type { DetailPanelKind } from '../DetailPanelHeader.js';
 
@@ -181,5 +182,53 @@ describe('DetailPanelHeader — onClose', () => {
   it('omits the close button when no callback is provided', () => {
     render(<DetailPanelHeader kind="survey" id="SRV-1" />);
     expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
+  });
+});
+
+describe('DetailPanelHeader — fullscreen toggle', () => {
+  it('does not render a toggle without a provider', () => {
+    render(<DetailPanelHeader kind="voc" onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: '전체 화면 전환' })).not.toBeInTheDocument();
+  });
+
+  it('renders before close, reflects expanded state, and calls the provider toggle', async () => {
+    const toggle = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DetailPanelFullscreenContext.Provider value={{ expanded: false, toggle }}>
+        <DetailPanelHeader kind="voc" onClose={() => {}} />
+      </DetailPanelFullscreenContext.Provider>,
+    );
+
+    const fullscreen = screen.getByRole('button', { name: '전체 화면 전환' });
+    const close = screen.getByRole('button', { name: '패널 닫기' });
+    expect(fullscreen).toHaveAttribute('title', '전체 화면 전환');
+    expect(fullscreen).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      fullscreen.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(fullscreen.parentElement).toBe(close.parentElement);
+
+    await user.click(fullscreen);
+    expect(toggle).toHaveBeenCalledOnce();
+  });
+
+  it('renders the toggle even when the header has no close action', () => {
+    render(
+      <DetailPanelFullscreenContext.Provider value={{ expanded: true, toggle: vi.fn() }}>
+        <DetailPanelHeader kind="finding" />
+      </DetailPanelFullscreenContext.Provider>,
+    );
+
+    expect(screen.getByRole('button', { name: '전체 화면 전환' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
+  });
+
+  it('renders no action group when there is neither a provider nor a close action', () => {
+    const { container } = render(<DetailPanelHeader kind="survey" />);
+    expect(container.querySelector('button')).toBeNull();
   });
 });
