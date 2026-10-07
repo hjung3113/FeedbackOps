@@ -9,6 +9,7 @@ import {
 import { Eye } from 'lucide-react';
 import * as React from 'react';
 
+import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import {
   SURVEY_PARTICIPATION_COPY,
   respondentIdentityNotice,
@@ -92,7 +93,11 @@ function PreviewSheet({ survey }: { survey: Survey }) {
               <div key={question.id}>
                 <p className="text-sm font-medium" id={`respondent-question-label-${question.id}`}>
                   Q{allQuestions.indexOf(question) + 1}.{' '}
-                  {question.prompt || SURVEY_PARTICIPATION_COPY.titleMissing}
+                  <span className={question.prompt.trim() ? '' : 'font-normal text-text-muted'}>
+                    {question.prompt.trim()
+                      ? question.prompt
+                      : SURVEY_BUILDER_COPY.questionTitleMissing}
+                  </span>
                   {question.is_required && ' *'}
                 </p>
                 <RespondentQuestion

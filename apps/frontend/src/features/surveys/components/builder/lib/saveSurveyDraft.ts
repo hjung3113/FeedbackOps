@@ -39,13 +39,31 @@ export async function saveSurveyDraft(deps: {
   }
 
   const persisted = savedQuestionsRef.current;
-  for (const question of persisted) {
-    if (!questionsRef.current.some((candidate) => candidate.id === question.id)) {
-      await mutations.remove(question.id);
-      savedQuestionsRef.current = savedQuestionsRef.current.filter(
-        (saved) => saved.id !== question.id,
-      );
-    }
+  const removedPersisted = persisted.filter(
+    (question) => !questionsRef.current.some((candidate) => candidate.id === question.id),
+  );
+  const removedParentsWithSurvivingChildren = new Set(
+    removedPersisted
+      .filter((removedParent) =>
+        persisted.some(
+          (savedChild) =>
+            savedChild.branch_parent_question_id === removedParent.id &&
+            questionsRef.current.some((current) => current.id === savedChild.id),
+        ),
+      )
+      .map((question) => question.id),
+  );
+  const deletePersistedQuestion = async (question: SurveyQuestion) => {
+    await mutations.remove(question.id);
+    savedQuestionsRef.current = savedQuestionsRef.current.filter(
+      (saved) => saved.id !== question.id,
+    );
+  };
+  const removedWithoutSurvivingChildren = removedPersisted
+    .filter((question) => !removedParentsWithSurvivingChildren.has(question.id))
+    .sort((a, b) => (a.branch_parent_question_id ? 0 : 1) - (b.branch_parent_question_id ? 0 : 1));
+  for (const question of removedWithoutSurvivingChildren) {
+    await deletePersistedQuestion(question);
   }
 
   const savedOptionKeys = new Map(
@@ -81,15 +99,26 @@ export async function saveSurveyDraft(deps: {
     const triggerKey = question.branch_trigger_option_key;
     return Boolean(parentId && triggerKey && savedOptionKeys.get(parentId)?.has(triggerKey));
   };
+  const hasSavedTopLevelParent = (question: SurveyQuestion): boolean => {
+    const parentId = question.branch_parent_question_id;
+    const savedParent = savedQuestionsRef.current.find((saved) => saved.id === parentId);
+    return Boolean(savedParent && !savedParent.branch_parent_question_id);
+  };
+  const hasSavedChildren = (question: SurveyQuestion): boolean =>
+    savedQuestionsRef.current.some((saved) => saved.branch_parent_question_id === question.id);
+  const shouldDeferBranch = (question: SurveyQuestion): boolean =>
+    Boolean(
+      question.branch_parent_question_id &&
+        question.branch_trigger_option_key &&
+        (!hasSavedTrigger(question) ||
+          !hasSavedTopLevelParent(question) ||
+          hasSavedChildren(question)),
+    );
 
   for (const local of questionsRef.current.filter((question) => isLocalQuestionId(question.id))) {
     const current = questionsRef.current.find((question) => question.id === local.id);
     if (!current) continue;
-    const parentId = current.branch_parent_question_id;
-    const triggerKey = current.branch_trigger_option_key;
-    const deferBranch = Boolean(
-      parentId && triggerKey && !savedOptionKeys.get(parentId)?.has(triggerKey),
-    );
+    const deferBranch = shouldDeferBranch(current);
     const createQuestion = deferBranch ? clearBranch(current) : current;
     let sentSignature = questionSignature(createQuestion);
     const created = await mutations.create(toInput(createQuestion));
@@ -117,7 +146,21 @@ export async function saveSurveyDraft(deps: {
     const currentParent = questionsRef.current.find(
       (question) => question.id === persistedParent.id,
     );
-    if (!currentParent) continue;
+    if (!currentParent) {
+      for (const persistedChild of persisted) {
+        if (persistedChild.branch_parent_question_id !== persistedParent.id) continue;
+        const currentChild = questionsRef.current.find(
+          (question) => question.id === persistedChild.id,
+        );
+        if (
+          currentChild &&
+          (!currentChild.branch_parent_question_id ||
+            currentChild.branch_parent_question_id === persistedParent.id)
+        )
+          detachChildrenFirst.add(persistedChild.id);
+      }
+      continue;
+    }
     const remainingKeys = new Set(currentParent.options?.map((option) => option.key) ?? []);
     const removedKeys = new Set(
       (persistedParent.options ?? [])
@@ -184,11 +227,7 @@ export async function saveSurveyDraft(deps: {
     let sentSignature = questionSignature(persistedQuestion);
     let deferBranch = false;
     while (current) {
-      if (
-        current.branch_parent_question_id &&
-        current.branch_trigger_option_key &&
-        !hasSavedTrigger(current)
-      ) {
+      if (shouldDeferBranch(current)) {
         deferBranch = true;
         deferredBranchIds.add(current.id);
       }
@@ -218,7 +257,11 @@ export async function saveSurveyDraft(deps: {
     while (current) {
       const parentId = current.branch_parent_question_id;
       const triggerKey = current.branch_trigger_option_key;
-      if (parentId && triggerKey && !savedOptionKeys.get(parentId)?.has(triggerKey))
+      if (parentId && triggerKey && !hasSavedTopLevelParent(current))
+        throw new Error('Branch parent is not saved as a top-level question');
+      if (parentId && triggerKey && hasSavedChildren(current))
+        throw new Error('Branch parent still has saved children');
+      if (parentId && triggerKey && !hasSavedTrigger(current))
         throw new Error('Branch trigger option is not saved on its parent');
       const nextSignature = questionSignature(current);
       if (nextSignature === sentSignature) break;
@@ -228,6 +271,12 @@ export async function saveSurveyDraft(deps: {
       rememberSavedOptions(current);
       current = questionsRef.current.find((question) => question.id === childId);
     }
+  }
+
+  for (const question of removedPersisted.filter((removed) =>
+    removedParentsWithSurvivingChildren.has(removed.id),
+  )) {
+    await deletePersistedQuestion(question);
   }
 
   const nextQuestions = denseQuestions(questionsRef.current);

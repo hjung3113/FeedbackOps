@@ -1,9 +1,10 @@
-import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { SURVEY_QUESTION_KIND_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
 import { formatTime } from '@/lib/format/datetime';
 import { surveyQuestionKindSchema } from '@fops/shared';
-import { Button, Input, WorkbenchShell } from '@fops/ui';
+import { Button, DirtyConfirmation, Input, WorkbenchShell } from '@fops/ui';
 import { Check, Megaphone } from 'lucide-react';
+import { useState } from 'react';
 import type { QuestionKind, Survey } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
 import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
@@ -13,13 +14,6 @@ import { QuestionEditor } from './QuestionEditor';
 import { QuestionList } from './QuestionList';
 import { SurveySettings } from './SurveySettings';
 import { useSurveyBuilderController } from './hooks/useSurveyBuilderController';
-
-const FIRST_QUESTION_COPY: Record<QuestionKind, { label: string; help: string }> = {
-  single_choice: { label: '단일 선택', help: '하나의 답변을 고릅니다.' },
-  multiple_choice: { label: '복수 선택', help: '여러 개의 답변을 고릅니다.' },
-  rating: { label: '척도', help: '점수 범위로 평가합니다.' },
-  text: { label: '주관식', help: '직접 답변을 작성합니다.' },
-};
 
 function FirstQuestionOnboarding({ onAdd }: { onAdd: (kind: QuestionKind) => void }) {
   return (
@@ -32,7 +26,6 @@ function FirstQuestionOnboarding({ onAdd }: { onAdd: (kind: QuestionKind) => voi
         </p>
         <div className="mt-6 grid grid-cols-2 gap-3 text-left">
           {surveyQuestionKindSchema.options.map((kind) => {
-            const copy = FIRST_QUESTION_COPY[kind];
             return (
               <button
                 key={kind}
@@ -42,8 +35,12 @@ function FirstQuestionOnboarding({ onAdd }: { onAdd: (kind: QuestionKind) => voi
                 data-testid={`survey-question-kind-${kind}`}
                 data-question-kind={kind}
               >
-                <span className="block text-sm font-medium text-text-primary">{copy.label}</span>
-                <span className="mt-1 block text-xs text-text-muted">{copy.help}</span>
+                <span className="block text-sm font-medium text-text-primary">
+                  {SURVEY_QUESTION_KIND_LABELS[kind]}
+                </span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  {SURVEY_BUILDER_COPY.firstQuestionHelp[kind]}
+                </span>
               </button>
             );
           })}
@@ -92,6 +89,9 @@ export function SurveyBuilder({
     patch,
     add,
     remove,
+    pendingRemoval,
+    confirmRemoval,
+    cancelRemoval,
     reorder,
     save,
   } = useSurveyBuilderController({
@@ -101,6 +101,13 @@ export function SurveyBuilder({
     onBack,
     ...(onDirtyChange ? { onDirtyChange } : {}),
   });
+  const titleIsBlank = editable && title.trim().length === 0;
+  const titleErrorId = 'survey-title-error';
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const confirmLaunchAfterValidation = () => {
+    setShowValidationErrors(true);
+    confirmLaunch();
+  };
 
   const builderPage = (
     <main className="flex h-full flex-col bg-surface-canvas" data-testid="survey-builder">
@@ -115,15 +122,28 @@ export function SurveyBuilder({
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {editable ? (
-            <Input
-              aria-label="Survey 제목"
-              className={
-                // oxlint-disable-next-line shadcn/no-restyle -- the editable survey title is styled as heading text inside the builder toolbar
-                'w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold'
-              }
-              value={title}
-              onChange={(event) => onTitleChange(event.target.value)}
-            />
+            <>
+              <Input
+                aria-label="Survey 제목"
+                aria-invalid={titleIsBlank}
+                {...(titleIsBlank ? { 'aria-describedby': titleErrorId } : {})}
+                className={
+                  // oxlint-disable-next-line shadcn/no-restyle -- the editable survey title is styled as heading text inside the builder toolbar
+                  'w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold'
+                }
+                value={title}
+                onChange={(event) => onTitleChange(event.target.value)}
+              />
+              {titleIsBlank && (
+                <span
+                  id={titleErrorId}
+                  role="alert"
+                  className="whitespace-nowrap text-xs text-text-danger-label"
+                >
+                  {SURVEY_BUILDER_COPY.titleRequired}
+                </span>
+              )}
+            </>
           ) : (
             <h1 className="min-w-0 truncate font-semibold">{title}</h1>
           )}
@@ -149,7 +169,12 @@ export function SurveyBuilder({
               variant="secondary"
               size="sm"
               disabled={!dirty || isSaving}
-              onClick={() => void save()}
+              onClick={() => {
+                setShowValidationErrors(true);
+                void save().then((saved) => {
+                  if (saved) setShowValidationErrors(false);
+                });
+              }}
             >
               <Check className="h-4 w-4" />
               초안 저장
@@ -211,6 +236,7 @@ export function SurveyBuilder({
               question={selected}
               questions={questions}
               editable={editable}
+              showValidationErrors={showValidationErrors}
               onChange={patch}
             />
           ) : questions.length === 0 && editable ? (
@@ -238,8 +264,19 @@ export function SurveyBuilder({
             ? { saveError: SURVEY_BUILDER_COPY.launchSaveFailed }
             : {})}
         onClose={() => setLaunchOpen(false)}
-        onConfirm={confirmLaunch}
+        onConfirm={confirmLaunchAfterValidation}
       />
+      {pendingRemoval && (
+        <DirtyConfirmation
+          open={true}
+          title={SURVEY_BUILDER_COPY.deleteParentTitle}
+          message={SURVEY_BUILDER_COPY.deleteParentWithBranches(pendingRemoval.childCount)}
+          confirmLabel={SURVEY_BUILDER_COPY.deleteQuestion}
+          cancelLabel={SURVEY_BUILDER_COPY.cancelDeleteQuestion}
+          onConfirm={confirmRemoval}
+          onCancel={cancelRemoval}
+        />
+      )}
     </main>
   );
 

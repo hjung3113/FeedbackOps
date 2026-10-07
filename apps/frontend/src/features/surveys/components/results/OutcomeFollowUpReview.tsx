@@ -1,5 +1,6 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
 import { formatShortDate } from '@/lib/format/datetime';
 import type { OutcomeFollowUpItem, OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
 import {
@@ -575,7 +576,8 @@ export function OutcomeFollowUpReview({
               );
             })}
             <span className="ml-auto hidden whitespace-nowrap text-xs text-text-muted lg:inline">
-              저조 = 척도 문항 하위 구간 · 마감 · 공개 기준 이상 응답
+              저조 = {SURVEY_QUESTION_KIND_LABELS.rating} 문항 하위 구간 · 마감 · 공개 기준 이상
+              응답
             </span>
           </div>
         }
