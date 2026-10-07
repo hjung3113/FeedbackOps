@@ -1,6 +1,6 @@
 ---
 name: issue-wave-conductor
-description: Conduct a wave of GitHub issues to merged develop PRs, one issue = one branch = one PR, with codex/omp workers implementing, one final review per issue using the shared routing table, and the conductor verifying on the host. Covers brief writing, launch, watching, host verification, risk-tiered review, visual baselines, merge, and cleanup. Use when the user says "wave 진행", "이슈들 진행해", "다음 이슈", or asks to work through a tracked issue set (e.g. the #578 review remediation) with workers.
+description: Conduct a wave of GitHub issues to merged develop PRs, one issue = one branch = one PR, with codex/omp workers implementing, role-split reviewers chosen per issue by trigger (code always; UX, UI performance when the diff calls for them; code quality once per slice) using the shared routing table, and the conductor verifying on the host. Covers brief writing, launch, watching, host verification, risk-tiered review, visual baselines, merge, and cleanup. Use when the user says "wave 진행", "이슈들 진행해", "다음 이슈", or asks to work through a tracked issue set (e.g. the #578 review remediation) with workers.
 ---
 
 # Issue wave conductor
@@ -18,8 +18,15 @@ The user's session overrides win; pass them with `worker-launch.sh --model/--eff
 model defaults here. All shared scripts are in `~/.claude/skills/orca-dispatch-recipes/scripts/`:
 `worker-launch.sh`, `worker-wait.sh`, and `ship-pr.sh`. They must be installed before dispatch.
 
-Use the local `scripts/launch-worker.sh` for FeedbackOps worktree preparation and implementation launch;
-use shared `worker-launch.sh` directly for `fix`, `review-final`, and intermediate `review-check` roles.
+Use the local `scripts/launch-worker.sh` for FeedbackOps worktree preparation and implementation launch.
+Use shared `worker-launch.sh` directly for `fix`, every reviewer role (`review-final`, `review-ux`, `review-perf`,
+`review-quality`) and intermediate `review-check`.
+Reviewer runtimes:
+
+- codex roles run in an Orca terminal;
+- `claude` roles run as a background `claude -p` with the prompt on stdin. When `.claude/agents/<role>.md` exists in
+  the cwd they also get `--agent <role>`, and the routing table's `--model`/`--effort` override the agent's
+  frontmatter. Measured 2026-10-07: `--model` beats the agent's `model:`.
 The shared launcher records PID or terminal state. A report sentinel alone is not completion:
 `worker-wait.sh` also checks freshness, the last non-empty line, and worker exit or terminal idleness.
 Close a completed worker's terminal immediately; retain its state JSON for the report and later cleanup.
@@ -27,7 +34,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 ## State
 
 - `WAVE_STATE` — a scratch dir (the session scratchpad): shared worker state JSON files (`W-<n>.json`,
-  `W-<n>-FIX<k>.json`, `W-<n>-FINAL.json`, or `W-<n>-CHECK<k>.json`) and `env.verify.<issue>` files.
+  `W-<n>-FIX<k>.json`, `W-<n>-FINAL.json`, `W-<n>-UX.json`, `W-<n>-PERF.json`, `W-<n>-CHECK<k>.json`, or
+  `SLICE-<m>-QUALITY.json`), `env.verify.<issue>` files, and `preview-<label>.json` from `app-preview.py`.
   Pass `--state-dir "$WAVE_STATE"` on each launch and wait; use distinct names and reports for every round.
 - `WAVE_BRIEFS` — brief dir, e.g. `.review/wave/` (gitignored). `FOPS_MAIN` — the main checkout.
 - Throwaway Postgres for BE integration (never the dev DB on 5434): a `pgvector/pgvector:pg16` container on **5439**
@@ -59,6 +67,15 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    for one conductor; 2–3 when the conductor also runs every harness). It delegates to shared `worker-launch.sh`
    with role `impl`; set `WORKER_ROLE=impl-fallback` when the session selects the fallback, and optionally
    `WORKER_MODEL` / `WORKER_EFFORT` for overrides. Parallelise only issues that touch disjoint files.
+   **Complex issues go to `WORKER_ROLE=impl-complex`** (grok 4.7 high, headless; user decision 2026-10-08), and so do
+   their fix rounds: pass `--role impl-complex` instead of `fix`. An issue is complex when any of these hold:
+   - it changes a backend contract and its frontend consumer together, or touches three or more modules;
+   - it touches permissions, a privacy or no-leak rule, auth, a migration, or SQL definer functions;
+   - it carries ordering or state logic: state machines, idempotency or undo, save ordering (the #813–#832 builder
+     saves), or concurrency;
+   - an earlier GLM round on the same issue failed or needed a second fix round.
+   Record the choice and the reason in `W-<n>-VERIFY.md`. Everything else uses `impl` (GLM), and a GLM quota stop
+   uses `impl-luna` as before.
 3. **Wait**: shared `worker-wait.sh --state "$WAVE_STATE/W-<n>.json" --timeout 3600 --poll 30`.
    For several workers, pass repeated `--state` options and `--any`, then remove the returned finished worker
    from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
@@ -96,22 +113,105 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    state. Save screenshots into `.review/<n>-shots/`
    and remove generated specs with `scripts/visual.sh capture --clean <n>`. Real-browser checks caught what unit tests
    could not (a blank page on cold `/me` 429, a 404 that spun forever).
-   For a check against live data, start the worktree with `scripts/app-preview.py start <worktree> [--backend]` and
-   drive it with the `ego-browser` skill. Use `--backend` when the branch changes the API. Stop it with
-   `scripts/app-preview.py stop <label>` in the same turn.
-7. **One final review per issue** (user, 2026-10-02; reviewer rules: `templates/review-rules.md`, copied to
-   `.review/00-REVIEW-RULES.md`). Run the host verification and the visual capture **first** (the conductor's harness run
-   found the #719 nested-route BLOCKER before any reviewer), then one final review covering correctness,
-   contracts/tests, UI and architecture with a `W-<n>-FINAL-TASK.md` (scope, prior rounds, risks to trace, review
-   lens, exact report path and sentinel) and `W-<n>-VERIFY.md`
-   (numbers, captures, your own observations to confirm or reject). Batch every finding into one fix round; the conductor
-   verifies it and ships — no second final review. Launch with shared `worker-launch.sh --role review-final
-   --cwd <worktree> --task <absolute-final-task> --report <absolute-final-report> --sentinel '<task sentinel>'
-   --name W-<n>-FINAL --state-dir "$WAVE_STATE"` and wait as in step 3. Intermediate checks, when needed,
-   use the same interface with role `review-check` and distinct CHECK task/report/state names.
-   No review at all after copy-only or mechanical changes. For a refactor of a
-   hardened invariant (e.g. the #678 Survey denial barrier), tell the reviewer the history and to trace every branch
-   against `origin/develop`. Permission-sensitive reads: "no restricted text may leak" goes first in the brief.
+   For the conductor's own check against live data, `scripts/app-preview.py start <worktree>` serves the branch
+   frontend against the user's :3011 backend. Reviewers never use that mode; see 7b. Stop it in the same turn.
+7. **Role-split review, chosen by trigger** (owner decisions: one review round per issue, 2026-10-02; role split,
+   2026-10-07; design reviewed by Opus 5.5 max on 2026-10-08). Run the host verification and the visual capture
+   **first**: the conductor's harness run found the #719 nested-route BLOCKER before any reviewer.
+
+   **a. Plan.** Run `python3 scripts/review-plan.py <worktree>` on the committed branch; it refuses uncommitted
+   changes. Record its output in `W-<n>-VERIFY.md`.
+   - `code`: launch `review-final`.
+   - `ux: required`: launch `review-ux`.
+   - `ux: optional`: the conductor decides and records a one-line reason.
+   - `perf`: measure. Launch `review-perf` only on a breach (7d).
+   - `flags.permission`: put "no restricted text may leak" first in every reviewer task, and give the UX reviewer a
+     restricted persona.
+   - `flags.instructions`: read the branch's `.claude/**`, `AGENTS.md` and `CLAUDE.md` diff yourself before
+     launching anyone. Reviewers load those files from the branch.
+
+   | Role (routing.tsv) | Task / report / sentinel | Rules |
+   |---|---|---|
+   | `review-final` (code: correctness, contracts, tests, architecture in the diff) | `W-<n>-FINAL-TASK.md` / `-FINAL-REPORT.md` / `<!-- W-<n>-FINAL-DONE -->` | `templates/review-rules.md` → `.review/00-REVIEW-RULES.md` |
+   | `review-ux` (design and UX in the running app, one role) | `W-<n>-UX-TASK.md` / `-UX-REPORT.md` / `<!-- W-<n>-UX-DONE -->` | `.claude/agents/review-ux.md` (`--agent`) |
+   | `review-perf` (UI performance, only on a breach) | `W-<n>-PERF-TASK.md` / `-PERF-REPORT.md` / `<!-- W-<n>-PERF-DONE -->` | `templates/review-rules-perf.md` → `.review/00-REVIEW-RULES-PERF.md` |
+   | `review-quality` (code quality across the slice, step 11) | `SLICE-<m>-QUALITY-TASK.md` / `-QUALITY-REPORT.md` / `<!-- SLICE-<m>-QUALITY-DONE -->` | `.claude/agents/review-quality.md` |
+
+   **b. Launch the code reviewer at once.** It needs no preview, so start it right after the plan and let it run
+   while the previews come up.
+
+   **c. Previews**, only for UX or perf, and always on the issue's **throwaway DB**:
+   - **Never the dev DB.** A branch backend boots pg-boss with supervise and schedule on, and logging in writes
+     session and audit rows.
+   - **DB:** run `verify-db.sh create <n> --migrate-from <worktree>` if it does not exist yet.
+   - **Baseline:** rebase the branch onto `origin/develop` first, so the merge-base is the develop tip. Keep one
+     baseline worktree per wave, detached at `origin/develop`:
+     `git worktree add --detach <wave>/baseline origin/develop`, then `pnpm install --frozen-lockfile`. Refresh it with
+     `git -C <wave>/baseline checkout --detach origin/develop` (re-run the install if the lockfile moved). Never use
+     `$FOPS_MAIN`.
+   - **Start both**, each on its own `<label>.localhost` host (the session cookie is per host, not per port):
+     - `scripts/app-preview.py start <baseline> --backend --env "$WAVE_STATE/env.verify.<n>" --seed --name <n>-develop`;
+     - `scripts/app-preview.py start <worktree> --backend --env "$WAVE_STATE/env.verify.<n>" --name <n>-branch`.
+   - **Browser stages run one at a time across the wave.** At most one claude reviewer runs at a time, because they
+     share the conductor's Claude quota. With 2–3 screen issues in flight, UX reviews queue.
+
+   **d. Measure, then UX.** The perf flag comes first:
+   - `scripts/nav-perf.sh --base develop=<url> --base branch=<url> --targets <rail and touched hrefs> --out
+     <worktree>/.review/<n>-perf/nav-perf.json`.
+   - **Breach:** for any target, the median `branch.readyMs > develop × 1.2 + 50`, a new `reloaded`, `apiCalls` +2,
+     or `timedOut`. A new list query with no bound or index decision also counts.
+   - On a breach, launch `review-perf`. Otherwise paste the comparison table into the code reviewer's task, or into
+     VERIFY if the code reviewer has already started.
+   - Then launch `review-ux` with the two preview URLs, the persona(s), at most three scenarios from the brief, and
+     an absolute screenshot directory under `.review/` that you create first.
+   - Launch every role with shared `worker-launch.sh --role <role> --cwd <worktree> --task <abs task> --report <abs
+     report> --sentinel '<task sentinel>' --name <name> --state-dir "$WAVE_STATE"`.
+
+   **e. Wait, with reviewer exit codes.** Loop `worker-wait.sh --any --kill-on-timeout --state …` over the running
+   reviewers. Use `--timeout 5400` for UX, and 3600 for the others.
+   - `0`: read the report.
+   - `10` (failed):
+     - if a partial report exists, use it;
+     - if it covered nothing, relaunch once;
+     - after a second failure, record the gap in VERIFY.
+   - `11` (quota): wait for the reset, or skip the role and record the reason in VERIFY and the PR body.
+   - `12` (timeout): the process group is already killed. Treat it like `10`.
+   - **Tripwire.** Record `git rev-parse HEAD`, `git status --porcelain` and `git stash list | wc -l` in the worktree
+     and in `$FOPS_MAIN` before the launch, and compare them after the reviews. The allowlist narrows accidents, but
+     `ego-browser` runs arbitrary Node.
+   - Stop both previews (`app-preview.py stop <label>`) as soon as UX and perf are done.
+
+   **f. Merge findings.** Read every report and drop duplicates.
+   - Resolve conflicts in this order:
+     1. product invariants and permission or no-leak rules;
+     2. ADRs, specs and recorded owner decisions;
+     3. correctness and contracts;
+     4. the brief;
+     5. UX on the shipped pattern;
+     6. performance;
+     7. style.
+   - A UX finding that contradicts the brief, or one that is really a product question, is never auto-decided. It
+     goes to the owner:
+     - an **Owner questions** section in the PR body;
+     - a `needs-triage` issue.
+     If it is a `blocker` (the actor cannot finish the task), hold the merge until the owner answers.
+   - An owner decision marked "final — do not re-litigate" is never reversed in a fix round. Only evidence that it
+     causes a blocker goes up.
+   - `pre-existing` findings (also on develop) and anything outside the issue's scope become follow-up issues, not
+     fixes.
+   - Put every kept finding, tagged with its role, into **one** fix brief (`W-<n>-FIX1-TASK.md`). The conductor
+     verifies the fix round and ships. There is no second review.
+   - For a fixed UX or perf `blocker`/`major`:
+     - re-run that scenario and its neighbouring flow, or `nav-perf.sh`, on fresh previews, and record the result;
+     - run the full visual harness when the fix touched `packages/ui`.
+     - **Pending owner call:** when a blocker fix spreads past the files the reviewer saw, should a `review-check`
+       (medium) look at just that diff?
+
+   **g. Rules that still hold:**
+   - No review at all after copy-only or mechanical changes; the plan reports no roles for them.
+   - For a refactor of a hardened invariant (e.g. the #678 Survey denial barrier), tell the code reviewer the history
+     and to trace every branch against `origin/develop`.
+   - Intermediate checks use role `review-check` with distinct CHECK task, report and state names.
 8. **Visual baselines**: sub-threshold changes pass against stale baselines — regenerate deliberately with
    `scripts/visual.sh update <filter...>`. This runs `baseline-keep.py` in read-only report mode and writes
    before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNG list and crops before acting.
@@ -135,6 +235,20 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 10. Keep the session handoff current every few merges: one local-only file at the repo root, `HANDOFF.md`, updated
     in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
     milestone.
+11. **Slice close (before `release-gate.sh`).** When the slice's last issue has merged:
+    - **`review-quality`:** run it from a disposable worktree detached at `origin/develop`:
+      `worker-launch.sh --role review-quality --cwd <disposable> --task <abs SLICE-<m>-QUALITY-TASK.md> --report <abs
+      report> --sentinel '<!-- SLICE-<m>-QUALITY-DONE -->' --name SLICE-<m>-QUALITY --state-dir "$WAVE_STATE"`.
+      Act on its classes:
+      - `release-blocker`: a normal issue loop before the release;
+      - `fix-in-slice`: one chore PR;
+      - `follow-up`: issues in the next milestone.
+    - **Slice walkthrough:** previews of `origin/main` and `origin/develop` (throwaway DB, as in 7c). Then:
+      - one `review-ux` run over the slice's user flows. Several session-63 defects showed only when the app was
+        used, not in any one diff;
+      - one `nav-perf.sh` comparison over the rail targets, as a safety net for perf triggers the plan missed.
+    - Then run the release gate. The user owns the `main` merge, which is always a merge commit.
+    - Before any handoff, `app-preview.py status` must show no previews and no orphans.
 
 ## Tools
 
@@ -147,13 +261,35 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   merging the PR. The user merges the release PR, or the conductor does with explicit approval in the session,
   using `gh pr merge <n> --merge`. A ruleset on `main` allows only merge commits; a squash there made the next
   release conflict (#811 → #837).
-- `scripts/app-preview.py start <checkout> [--backend] [--env <file>] [--name <label>]` / `stop <label>` / `status`:
-  - Serves the checkout's vite on a free port. The proxy goes to the user's backend on :3011 (develop code), or with
-    `--backend` to the checkout's own backend on another free port.
-  - The backend env defaults to `$FOPS_MAIN/.env`, the dev DB on 5434. Pass `--env $WAVE_STATE/env.verify.<n>` when
-    the check writes.
-  - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS), waits for health, and
-    `stop` kills each process group, which covers npx children. State lives in `$WAVE_STATE/preview-<label>.json`.
+- `scripts/review-plan.py <checkout> [--base origin/develop] [--head HEAD]`: step 7a.
+  - It prints `code`, `ux` (`required`/`optional`/false), `perf` and `flags` (`backend`, `migration`, `permission`,
+    `instructions`) with reasons, and refuses uncommitted changes.
+  - `scripts/test-review-plan.py` holds the rule table on a throwaway git repo (14 cases).
+  - Checked against merged PRs: #820, #817 and #835 → code+ux; #842 and #846 → code+ux+perf; #839 → code only.
+- `scripts/nav-perf.sh --base <label>=<url> [--base …] --targets <href,…> --out <json> [--runs 3] [--persona
+  mock-admin-1]`: step 7d.
+  - It times in-app navigation in the ego-browser runtime from the page's own click event to quiet: no fetch in
+    flight and nothing loading for 300 ms, capped at 30 s.
+  - Each pass logs in through the mock-login API. There is one warm-up pass, then the bases alternate for `--runs`
+    passes, and per-target medians are compared.
+  - Failures are recorded per target, and the JSON (with `fs`) is always written.
+  - Validated 2026-10-08:
+    - noise floor, develop vs develop: ≤4 ms;
+    - positive control, the commit before #840 vs develop: reloads on every click, ~290 vs ~100 ms, 15–21 vs 3–11
+      API calls;
+    - a reload-heavy build can hit the `/me` rate limit and drop a sample.
+- `scripts/app-preview.py start <checkout> [--backend --env <throwaway env> [--seed]] [--name <label>]` / `stop <label>|--all` / `status`:
+  - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not
+    collide.
+  - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` runs the
+    idempotent personas seed.
+  - Without `--backend` the proxy goes to the user's :3011. That mode is for the conductor's own checks only.
+  - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS) and stops each process group
+    (npx children).
+  - `status` reports dead PIDs and untracked orphans found by `ps` markers; `stop --all` clears both.
+  - Verified 2026-10-08:
+    - two seeded previews on one throwaway DB kept separate logins (`/me` = admin vs user);
+    - the dev-DB env was refused.
 
 ## Traps (measured)
 
@@ -170,7 +306,7 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
 - Implementation workers run in an Orca terminal so the user can watch them: GLM 5.3 flash max via omp since
-  2026-10-07 (codex `impl-luna` on a GLM quota stop); reviewers run as codex (`codex-orca`). The state JSON records
+  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok (`impl-complex`, 2026-10-08); code and perf reviewers run as codex (`codex-orca`), and UX and quality reviewers as background `claude -p --agent` (no terminal). The state JSON records
   the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
   If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
   with stdin from `/dev/null`), which needs no Orca terminal.

@@ -1,29 +1,38 @@
 #!/usr/bin/env python3
 """app-preview.py — run a checkout's frontend (and optionally its backend) on free ports for real-app checks.
 
-  app-preview.py start <checkout> [--backend] [--env <file>] [--name <label>]
-  app-preview.py stop <label>
+  app-preview.py start <checkout> [--backend --env <file> [--seed]] [--name <label>]
+  app-preview.py stop <label> | --all
   app-preview.py status
 
-`start` serves the checkout's vite on a free port. Its dev proxy goes to:
+`start` serves the checkout's vite on a free port at `http://<label>.localhost:<port>`.
 
-- the user's backend on :3011 (develop code) by default;
-- with `--backend`, to that checkout's own backend, started on another free port.
+Each preview gets its own host because the session cookie is host-only and is not scoped by port. Two previews (or
+a preview and the owner's :3010) would otherwise overwrite each other's login. Chromium resolves `*.localhost` to
+loopback.
 
-The backend env comes from the main checkout's `.env` (the dev DB on :5434) unless `--env` names another file, e.g. a
-throwaway `$WAVE_STATE/env.verify.<n>`. Anything the UI writes goes to that database, so use the throwaway env
-when the check writes.
+The dev proxy goes to:
 
-Each process starts in its own session and `stop` kills the whole process group. That covers npx → node children,
-which a bare PID kill misses. The temporary vite config is an `.mts` file in `$WAVE_STATE`. It imports the
-checkout's `vite.config.ts` and remaps only `server.proxy` targets: a `.ts` config outside the package is bundled as
-CJS and fails on ESM-only plugins.
+- **without `--backend`:** the user's backend on :3011 (develop code, the owner's dev DB). Use this only for the
+  conductor's own quick checks, never for reviewers: logging in writes session and audit rows.
+- **with `--backend`:** the checkout's own backend on a free port.
+  - It **requires `--env`** naming a throwaway env (`$WAVE_STATE/env.verify.<n>` from `verify-db.sh`). An env whose
+    database URL points at port 5434 (the dev DB) is refused. A branch backend boots pg-boss with supervise and
+    schedule on, so on the dev DB it would work the owner's live job queue with unreviewed code.
+  - `--seed` runs the idempotent seed with `SEED_MODE=personas` first, so every mock persona can log in.
 
-The state is kept in `$WAVE_STATE/preview-<label>.json`. Prints one JSON line.
+Each process starts in its own session, and `stop` kills the whole process group (npx → node children). Backends
+carry a `--fops-preview=<label>` argument, and vite configs are named `preview-<label>.vite.config.mts`. That lets
+`status` and `stop --all` find orphans left by an ended session through `ps`. The generated config is an `.mts` file:
+a `.ts` config outside the package is bundled as CJS and fails on ESM-only plugins. It imports the checkout's
+`vite.config.ts` and changes only the port, `allowedHosts` and the proxy targets.
+
+State is kept in `$WAVE_STATE/preview-<label>.json`. Prints one JSON line. Before a handoff, `status` must be empty.
 """
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -34,6 +43,7 @@ from pathlib import Path
 
 NODE22 = '/opt/homebrew/opt/node@22/bin'
 USER_BACKEND_PORT = 3011
+DEV_DB_PORT = '5434'
 
 
 def emit(obj, code=0):
@@ -60,15 +70,19 @@ def free_port():
         return sock.getsockname()[1]
 
 
+def http_ok(url, timeout=2):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            return response.status < 500
+    except Exception:
+        return False
+
+
 def wait_http(url, timeout):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as response:
-                if response.status < 500:
-                    return True
-        except Exception:
-            pass
+        if http_ok(url):
+            return True
         time.sleep(0.5)
     return False
 
@@ -80,15 +94,21 @@ def spawn(cmd, cwd, env, log):
     return proc.pid
 
 
+def alive(pid):
+    try:
+        os.killpg(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
 def kill_group(pid):
     try:
         os.killpg(pid, signal.SIGTERM)
     except ProcessLookupError:
         return
     for _ in range(20):
-        try:
-            os.killpg(pid, 0)
-        except ProcessLookupError:
+        if not alive(pid):
             return
         time.sleep(0.25)
     try:
@@ -111,6 +131,26 @@ def read_env_file(path):
     return env
 
 
+def db_port(url):
+    match = re.search(r'@[^:/]+:(\d+)/', url or '')
+    return match.group(1) if match else None
+
+
+def orphans():
+    """Preview processes visible in `ps` (by marker); the caller filters out the ones it tracks."""
+    out = subprocess.run(['ps', '-axo', 'pid=,pgid=,command='], text=True, capture_output=True).stdout
+    found = []
+    for line in out.splitlines():
+        parts = line.strip().split(None, 2)
+        if len(parts) < 3:
+            continue
+        pid, pgid, command = int(parts[0]), int(parts[1]), parts[2]
+        marker = re.search(r'--fops-preview=([\w.-]+)|preview-([\w.-]+)\.vite\.config\.mts', command)
+        if marker and pid == pgid:
+            found.append({'pid': pid, 'label': marker.group(1) or marker.group(2), 'command': command[:120]})
+    return found
+
+
 def start(args):
     states = state_dir()
     checkout = Path(args.checkout).resolve()
@@ -118,10 +158,12 @@ def start(args):
     backend = checkout / 'apps' / 'backend'
     if not (frontend / 'vite.config.ts').is_file():
         fail(f'not a FeedbackOps checkout: {checkout}', 2)
-    label = args.name or checkout.name
+    label = re.sub(r'[^a-z0-9-]', '-', (args.name or checkout.name).lower()).strip('-') or 'preview'
     state_path = states / f'preview-{label}.json'
     if state_path.exists():
         fail(f'preview {label} is already running; stop it first', 2)
+    if args.seed and not args.backend:
+        fail('--seed needs --backend', 2)
     env = dict(os.environ)
     env['PATH'] = f'{NODE22}:{env.get("PATH", "")}'
 
@@ -132,16 +174,28 @@ def start(args):
 
     state = {'name': label, 'checkout': str(checkout), 'pids': []}
     backend_port = USER_BACKEND_PORT
+    warnings = []
     if args.backend:
-        main_checkout = Path(os.environ.get('FOPS_MAIN', checkout))
-        env_file = Path(args.env) if args.env else main_checkout / '.env'
+        if not args.env:
+            fail('--backend needs --env <throwaway env file> (verify-db.sh create <n> writes $WAVE_STATE/env.verify.<n>)', 2)
+        env_file = Path(args.env)
         if not env_file.is_file():
             fail(f'backend env file not found: {env_file}', 2)
-        backend_port = free_port()
-        backend_env = {**env, **read_env_file(env_file), 'PORT': str(backend_port)}
+        backend_env = {**env, **read_env_file(env_file)}
+        for key in ('DATABASE_URL', 'DATABASE_URL_MIGRATE'):
+            if db_port(backend_env.get(key)) == DEV_DB_PORT:
+                fail(f'refusing {key} on port {DEV_DB_PORT} (the dev DB); use a throwaway env', 2)
         if backend_env.get('NODE_ENV') == 'production':
             fail('refusing NODE_ENV=production', 2)
-        pid = spawn(['npx', 'tsx', 'src/index.ts'], backend, backend_env, states / f'preview-{label}-backend.log')
+        if args.seed:
+            seed = subprocess.run(['npx', 'tsx', 'src/seed/index.ts'], cwd=backend,
+                                  env={**backend_env, 'SEED_MODE': 'personas'}, capture_output=True, text=True)
+            if seed.returncode != 0:
+                fail(f'seed failed: {seed.stderr.strip()[-300:]}')
+        backend_port = free_port()
+        backend_env['PORT'] = str(backend_port)
+        pid = spawn(['npx', 'tsx', 'src/index.ts', f'--fops-preview={label}'], backend, backend_env,
+                    states / f'preview-{label}-backend.log')
         state['pids'].append(pid)
         state.update(backend_port=backend_port, backend_env=str(env_file))
         state_path.write_text(json.dumps(state) + '\n')
@@ -150,11 +204,13 @@ def start(args):
                 kill_group(p)
             state_path.unlink(missing_ok=True)
             fail(f'backend did not become healthy; see {states / f"preview-{label}-backend.log"}')
+    elif not http_ok(f'http://127.0.0.1:{USER_BACKEND_PORT}/health'):
+        warnings.append(f'the user backend on :{USER_BACKEND_PORT} is not answering; API calls will fail')
 
     frontend_port = free_port()
     config = states / f'preview-{label}.vite.config.mts'
     config.write_text(
-        '// Generated by app-preview.py — remaps only the dev proxy targets.\n'
+        '// Generated by app-preview.py: changes only the port, allowedHosts and the dev proxy targets.\n'
         f"import base from {json.dumps(str(frontend / 'vite.config.ts'))};\n"
         'const proxy = Object.fromEntries(\n'
         '  Object.entries(base.server?.proxy ?? {}).map(([key, value]) => [\n'
@@ -164,39 +220,67 @@ def start(args):
         f"      : {{ ...value, target: String(value.target).replace(':{USER_BACKEND_PORT}', ':{backend_port}') }},\n"
         '  ]),\n'
         ');\n'
-        f'export default {{ ...base, server: {{ ...base.server, port: {frontend_port}, strictPort: true, proxy }} }};\n'
+        'export default {\n'
+        '  ...base,\n'
+        f"  server: {{ ...base.server, port: {frontend_port}, strictPort: true, allowedHosts: ['.localhost'], proxy }},\n"
+        '};\n'
     )
     pid = spawn(['npx', 'vite', '--config', str(config)], frontend, env, states / f'preview-{label}-vite.log')
     state['pids'].append(pid)
-    state.update(frontend_port=frontend_port, url=f'http://localhost:{frontend_port}', vite_config=str(config))
+    state.update(frontend_port=frontend_port, url=f'http://{label}.localhost:{frontend_port}', vite_config=str(config))
     state_path.write_text(json.dumps(state) + '\n')
     if not wait_http(f'http://localhost:{frontend_port}/', 90):
         for p in state['pids']:
             kill_group(p)
         state_path.unlink(missing_ok=True)
         fail(f'vite did not start; see {states / f"preview-{label}-vite.log"}')
-    emit({'ok': True, 'command': 'start', **state,
-          'api': f'branch backend :{backend_port}' if args.backend else f'user backend :{USER_BACKEND_PORT} (develop code)'})
+    api = (f'checkout backend :{backend_port} on {state["backend_env"]}' if args.backend
+           else f'user backend :{USER_BACKEND_PORT} (develop code, dev DB): conductor checks only, not reviewers')
+    emit({'ok': True, 'command': 'start', **state, 'api': api, 'warnings': warnings})
 
 
-def stop(args):
-    states = state_dir()
-    state_path = states / f'preview-{args.name}.json'
+def stop_one(states, label):
+    state_path = states / f'preview-{label}.json'
     if not state_path.exists():
-        fail(f'no preview named {args.name}', 2)
+        return False
     state = json.loads(state_path.read_text())
     for pid in state.get('pids', []):
         kill_group(pid)
     if state.get('vite_config'):
         Path(state['vite_config']).unlink(missing_ok=True)
     state_path.unlink()
+    return True
+
+
+def stop(args):
+    states = state_dir()
+    if args.all:
+        stopped = [p.name[len('preview-'):-len('.json')] for p in sorted(states.glob('preview-*.json'))]
+        for label in stopped:
+            stop_one(states, label)
+        killed = []
+        for orphan in orphans():
+            kill_group(orphan['pid'])
+            killed.append(orphan)
+        emit({'ok': True, 'command': 'stop', 'stopped': stopped, 'orphans_killed': killed})
+    if not args.name:
+        fail('stop needs <label> or --all', 2)
+    if not stop_one(states, args.name):
+        fail(f'no preview named {args.name}', 2)
     emit({'ok': True, 'command': 'stop', 'name': args.name})
 
 
 def status(_args):
     states = state_dir()
-    previews = [json.loads(p.read_text()) for p in sorted(states.glob('preview-*.json'))]
-    emit({'ok': True, 'command': 'status', 'previews': previews})
+    previews = []
+    tracked = set()
+    for path in sorted(states.glob('preview-*.json')):
+        state = json.loads(path.read_text())
+        state['alive'] = [pid for pid in state.get('pids', []) if alive(pid)]
+        tracked.update(state.get('pids', []))
+        previews.append(state)
+    untracked = [o for o in orphans() if o['pid'] not in tracked]
+    emit({'ok': True, 'command': 'status', 'previews': previews, 'orphans': untracked})
 
 
 def main():
@@ -204,11 +288,13 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     p_start = sub.add_parser('start')
     p_start.add_argument('checkout')
-    p_start.add_argument('--backend', action='store_true', help="also run the checkout's backend")
-    p_start.add_argument('--env', help='backend env file (default: $FOPS_MAIN/.env, the dev DB)')
-    p_start.add_argument('--name', help='label (default: checkout directory name)')
+    p_start.add_argument('--backend', action='store_true', help="also run the checkout's backend (needs --env)")
+    p_start.add_argument('--env', help='throwaway backend env file, e.g. $WAVE_STATE/env.verify.<n>')
+    p_start.add_argument('--seed', action='store_true', help='run the personas seed before starting the backend')
+    p_start.add_argument('--name', help='label and host prefix (default: checkout directory name)')
     p_stop = sub.add_parser('stop')
-    p_stop.add_argument('name')
+    p_stop.add_argument('name', nargs='?')
+    p_stop.add_argument('--all', action='store_true', help='stop every tracked preview and kill orphans')
     sub.add_parser('status')
     args = parser.parse_args()
     {'start': start, 'stop': stop, 'status': status}[args.command](args)

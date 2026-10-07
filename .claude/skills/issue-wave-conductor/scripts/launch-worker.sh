@@ -14,6 +14,7 @@ orca worktree create --repo path:"$FOPS_MAIN" --name "$N-$SLUG" --base-branch or
 cd "$W" || exit 1; git branch -m "feature/$N-$SLUG"; mkdir -p .review
 cp "$SKILL/templates/impl-rules.md" .review/00-IMPL-RULES.md
 cp "$SKILL/templates/review-rules.md" .review/00-REVIEW-RULES.md
+cp "$SKILL/templates/review-rules-perf.md" .review/00-REVIEW-RULES-PERF.md
 [ -n "$BE" ] && cp "$SKILL/templates/impl-rules-be.md" .review/00-IMPL-RULES-BE.md
 RULES=".review/00-IMPL-RULES.md"; [ -n "$BE" ] && RULES="$RULES and .review/00-IMPL-RULES-BE.md"
 # The shared launcher reads only the task; include the copied rules without moving its final sentinel.
