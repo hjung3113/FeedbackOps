@@ -32,13 +32,20 @@ export async function saveSurveyDraft(deps: {
     mutations,
   } = deps;
 
-  if (titleRef.current !== savedTitleRef.current)
-    await mutations.updateSurvey({ title: titleRef.current });
+  const sentTitle = titleRef.current;
+  if (sentTitle !== savedTitleRef.current) {
+    await mutations.updateSurvey({ title: sentTitle });
+    savedTitleRef.current = sentTitle;
+  }
 
   const persisted = savedQuestionsRef.current;
   for (const question of persisted) {
-    if (!questionsRef.current.some((candidate) => candidate.id === question.id))
+    if (!questionsRef.current.some((candidate) => candidate.id === question.id)) {
       await mutations.remove(question.id);
+      savedQuestionsRef.current = savedQuestionsRef.current.filter(
+        (saved) => saved.id !== question.id,
+      );
+    }
   }
 
   const savedOptionKeys = new Map(
@@ -228,9 +235,14 @@ export async function saveSurveyDraft(deps: {
   const nextIds = nextQuestions.map((question) => question.id);
   const orderChanged =
     previousIds.length !== nextIds.length || previousIds.some((id, index) => id !== nextIds[index]);
-  if (orderChanged) await mutations.reorder(nextIds);
-  updateQuestions(() => nextQuestions);
-  savedQuestionsRef.current = nextQuestions;
-  savedTitleRef.current = titleRef.current;
+  if (orderChanged) {
+    await mutations.reorder(nextIds);
+    const savedById = new Map(savedQuestionsRef.current.map((question) => [question.id, question]));
+    savedQuestionsRef.current = nextIds.flatMap((id, sortOrder) => {
+      const question = savedById.get(id);
+      return question ? [{ ...question, sort_order: sortOrder }] : [];
+    });
+  }
+  updateQuestions((current) => denseQuestions(current));
   return new Date();
 }
