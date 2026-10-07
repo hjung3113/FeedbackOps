@@ -161,7 +161,17 @@ function RecordChangeHarness() {
 beforeEach(() => {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url === '/me') return json({ actor: { id: 'actor', external_id: 'actor', email: 'actor@test', display_name: 'Actor', role_level: 'admin' }, workspace_id: 'workspace' });
+    if (url === '/me')
+      return json({
+        actor: {
+          id: 'actor',
+          external_id: 'actor',
+          email: 'actor@test',
+          display_name: 'Actor',
+          role_level: 'admin',
+        },
+        workspace_id: 'workspace',
+      });
     if (url === '/managed-systems') return json({ items: [], total: 0 });
     if (url === '/nav/counts') return json({ counts: {} });
     throw new Error(`unexpected request ${url}`);
@@ -177,7 +187,9 @@ describe('AppFrame', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <AppFrame activeDomain="voc" sidebarEntries={entries}>main content</AppFrame>
+        <AppFrame activeDomain="voc" sidebarEntries={entries}>
+          main content
+        </AppFrame>
       </QueryClientProvider>,
     );
     expect(screen.getByTestId('app-rail')).toBeInTheDocument();
