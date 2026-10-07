@@ -1652,9 +1652,9 @@ describe('Survey screens', () => {
       target: { value: '업데이트된 질문' },
     });
     fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
-    await waitFor(() =>
-      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
-    );
+    // Wait for the finished save (not just the PATCH) so the flag reset has run.
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
     expect(screen.queryByText('질문을 입력하세요.')).not.toBeInTheDocument();
