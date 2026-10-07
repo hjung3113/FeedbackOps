@@ -139,6 +139,15 @@ function parseBackendQuestionInput(input: unknown) {
       parsed.options.some((option) => !option.key || !option.label))
   )
     throw new Error('422: choice questions require 2-50 unique options');
+  if (
+    parsed.kind === 'rating' &&
+    (parsed.rating_min === undefined ||
+      parsed.rating_max === undefined ||
+      parsed.rating_min >= parsed.rating_max ||
+      parsed.rating_min < 0 ||
+      parsed.rating_max > 10)
+  )
+    throw new Error('422: rating range invalid');
   return parsed;
 }
 
@@ -1659,15 +1668,12 @@ describe('Survey screens', () => {
     expect(calls('PATCH', `/surveys/${survey.id}/questions/${parentId}`)).toHaveLength(0);
   });
 
-  it('W-827 prevents questions with children from becoming children themselves', async () => {
+  it('W-827 excludes in-session children from parent choices while allowing multiple children', async () => {
     const parent = survey.questions?.[0] as SurveyQuestion;
     const child: SurveyQuestion = {
       ...parent,
       id: 'question-2',
       prompt: '첫 번째 조건부 질문',
-      branch_depth: 1,
-      branch_parent_question_id: parent.id,
-      branch_trigger_option_key: 'no',
       sort_order: 1,
     };
     const candidate = question('question-3', '추가 질문', 2);
@@ -1679,14 +1685,123 @@ describe('Survey screens', () => {
       />,
     );
 
+    fireEvent.click(screen.getByText('Q2'));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    const currentParent = await screen.findByRole('option', { name: parent.prompt });
+    expect(currentParent).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getAllByRole('option', { name: parent.prompt })).toHaveLength(1);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
     fireEvent.click(screen.getByText('Q3'));
     fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
 
-    expect(screen.queryByRole('option', { name: parent.prompt })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: parent.prompt })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: child.prompt })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: 'Escape' });
     fireEvent.click(screen.getByText('Q1'));
     expect(screen.queryByRole('combobox', { name: '분기 부모 질문' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['changes its parent to text', 'change-kind'],
+    ['removes its trigger option', 'remove-trigger'],
+  ] as const)('W-827 deletes a removed branch child before it %s', async (_label, change) => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const childId = '22222222-2222-4222-8222-222222222222';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    const child: SurveyQuestion = {
+      ...parent,
+      id: childId,
+      prompt: '조건부 질문',
+      branch_depth: 1,
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'no',
+      sort_order: 1,
+    };
+    installQuestionServerOracle([parent, child]);
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, questions: [parent, child] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      within(screen.getByTestId(`survey-question-row-${childId}`)).getByLabelText('질문 삭제'),
+    );
+    if (change === 'change-kind') {
+      fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+      fireEvent.click(
+        await screen.findByRole('option', { name: SURVEY_QUESTION_KIND_LABELS.text }),
+      );
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: '옵션 추가' }));
+      fireEvent.click(screen.getByRole('button', { name: '옵션 2 삭제' }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => {
+      const saveComplete =
+        screen.queryByText(/^저장 시각 /) !== null ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
+    });
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const deleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === `/surveys/${survey.id}/questions/${childId}`,
+    );
+    const parentPatchIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'PATCH' && call[1] === `/surveys/${survey.id}/questions/${parentId}`,
+    );
+    expect(deleteIndex).toBeGreaterThanOrEqual(0);
+    expect(parentPatchIndex).toBeGreaterThan(deleteIndex);
+  });
+
+  it('W-827 deletes a newly saved child before deleting its parent', async () => {
+    const parentId = '11111111-1111-4111-8111-111111111111';
+    const parent = { ...(survey.questions?.[0] as SurveyQuestion), id: parentId };
+    installQuestionServerOracle([parent]);
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [parent] }} canManage onBack={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '분기 부모 질문' }));
+    fireEvent.click(await screen.findByRole('option', { name: parent.prompt }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+    await waitFor(() => expect(screen.getByText(/^저장 시각 /)).toBeInTheDocument());
+
+    const childPath = `/surveys/${survey.id}/questions/${SERVER_CREATED_QUESTION_ID}`;
+    fireEvent.click(
+      within(
+        screen.getByTestId(`survey-question-row-${SERVER_CREATED_QUESTION_ID}`),
+      ).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(
+      within(screen.getByTestId(`survey-question-row-${parentId}`)).getByLabelText('질문 삭제'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
+
+    await waitFor(() => {
+      const saveComplete =
+        calls('PATCH', `/surveys/${survey.id}/questions/reorder`).length === 2 ||
+        screen.queryByText('저장하지 못했습니다.') !== null;
+      expect(saveComplete).toBe(true);
+    });
+    expect(screen.queryByText('저장하지 못했습니다.')).not.toBeInTheDocument();
+    const childDeleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === childPath,
+    );
+    const parentDeleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === 'DELETE' && call[1] === `/surveys/${survey.id}/questions/${parentId}`,
+    );
+    expect(childDeleteIndex).toBeGreaterThanOrEqual(0);
+    expect(parentDeleteIndex).toBeGreaterThan(childDeleteIndex);
   });
 
   it('W-827 confirms and detaches children before deleting their parent', async () => {

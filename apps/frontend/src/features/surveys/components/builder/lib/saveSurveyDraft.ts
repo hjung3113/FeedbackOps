@@ -42,6 +42,29 @@ export async function saveSurveyDraft(deps: {
   const removedPersisted = persisted.filter(
     (question) => !questionsRef.current.some((candidate) => candidate.id === question.id),
   );
+  const removedParentsWithSurvivingChildren = new Set(
+    removedPersisted
+      .filter((removedParent) =>
+        persisted.some(
+          (savedChild) =>
+            savedChild.branch_parent_question_id === removedParent.id &&
+            questionsRef.current.some((current) => current.id === savedChild.id),
+        ),
+      )
+      .map((question) => question.id),
+  );
+  const deletePersistedQuestion = async (question: SurveyQuestion) => {
+    await mutations.remove(question.id);
+    savedQuestionsRef.current = savedQuestionsRef.current.filter(
+      (saved) => saved.id !== question.id,
+    );
+  };
+  const removedWithoutSurvivingChildren = removedPersisted
+    .filter((question) => !removedParentsWithSurvivingChildren.has(question.id))
+    .sort((a, b) => (a.branch_parent_question_id ? 0 : 1) - (b.branch_parent_question_id ? 0 : 1));
+  for (const question of removedWithoutSurvivingChildren) {
+    await deletePersistedQuestion(question);
+  }
 
   const savedOptionKeys = new Map(
     persisted.map(
@@ -239,11 +262,10 @@ export async function saveSurveyDraft(deps: {
     }
   }
 
-  for (const question of [...removedPersisted].sort((a, b) => b.branch_depth - a.branch_depth)) {
-    await mutations.remove(question.id);
-    savedQuestionsRef.current = savedQuestionsRef.current.filter(
-      (saved) => saved.id !== question.id,
-    );
+  for (const question of removedPersisted.filter((removed) =>
+    removedParentsWithSurvivingChildren.has(removed.id),
+  )) {
+    await deletePersistedQuestion(question);
   }
 
   const nextQuestions = denseQuestions(questionsRef.current);

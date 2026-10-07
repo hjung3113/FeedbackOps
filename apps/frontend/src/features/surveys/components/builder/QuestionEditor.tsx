@@ -46,8 +46,7 @@ export function QuestionEditor({
     (candidate) =>
       candidate.id !== question.id &&
       candidate.kind === 'single_choice' &&
-      candidate.branch_depth === 0 &&
-      !questions.some((child) => child.branch_parent_question_id === candidate.id),
+      !candidate.branch_parent_question_id,
   );
   const branchTriggerOptionKeys = questions.flatMap((candidate) => {
     if (candidate.branch_parent_question_id !== question.id || !candidate.branch_trigger_option_key)
