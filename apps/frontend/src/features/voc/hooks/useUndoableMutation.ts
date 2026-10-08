@@ -2,7 +2,7 @@
 //
 // Signature:
 //   const { mutate, compensate, undoLast, state } = useUndoableMutation<TInput, TOutput>({
-//     mutationFn,   // (input: TInput, signal?: AbortSignal) => Promise<TOutput>
+//     mutationFn,   // (input: TInput) => Promise<TOutput>
 //     snapshot,     // (input: TInput) => TSnapshot  — captures rollback data
 //     compensateFn, // (snapshot: TSnapshot) => Promise<unknown>  — compensating action
 //   });
@@ -11,32 +11,33 @@
 //   idle → (mutate) → pending → (resolve) → settled
 //                             → (reject)  → error
 //   Any state → (undoLast):
-//     if pending  → abort in-flight, fire onAbort(input); if .then later resolves
-//                   (server committed before abort fired), run compensateFn to reconcile.
+//     if pending  → mark aborted-by-user and fire onAbort(input) at once.
+//                   The forward request is never aborted: an abort cannot
+//                   un-send it (#857). When it later resolves, run compensateFn.
+//                   When it fails, there is nothing to compensate.
 //     if settled  → call compensateFn(snapshot)
 //     if error    → no-op
 //     → idle
 //
-// REV-2 #1 (abort-after-settle): the prior implementation dropped the response
-// when signal.aborted was true at the top of .then(). This left the server
-// committed while the local row had been restored by onAbort → divergence.
-// Fix: each mutate() call captures its own state in a closure (Call object).
-// If the call's .then() runs and the call was aborted by the user (undoLast
-// or preempted by a follow-up mutate), the hook runs compensateFn against
-// the original snapshot+output instead of silently dropping the response.
+// Unmount does nothing to the in-flight request. It settles on its own, so a
+// later undo from a root toast (which outlives the panel) sees `settled` and
+// compensates.
 //
-// REV-2 NEW-1 / NEW-2 (second mutate aborts first silently): mutate() used to
-// abort any prior in-flight call without invoking onAbort. The caller's
-// optimistic UI row stayed removed. Fix: when mutate() preempts a pending
-// prior call, fire onAbort(prevInput); when the preempted call's .then
-// later resolves, run compensateFn so the prior server commit is reverted.
+// REV-2 #1: each mutate() call captures its own state in a closure (Call
+// object). If .then() runs after the user undid or a follow-up mutate
+// preempted the call, compensateFn reconciles the server commit instead of
+// dropping the response. The request itself is not aborted.
+//
+// REV-2 NEW-1 / NEW-2: when mutate() preempts a pending prior call, fire
+// onAbort(prevInput) so the caller can restore that optimistic row. If the
+// prior call later resolves, run compensateFn so that server commit is reverted.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 export type MutationState = 'idle' | 'pending' | 'settled' | 'error';
 
 export interface UseUndoableMutationOptions<TInput, TOutput, TSnapshot = TInput> {
-  mutationFn: (input: TInput, signal?: AbortSignal) => Promise<TOutput>;
+  mutationFn: (input: TInput) => Promise<TOutput>;
   snapshot: (input: TInput) => TSnapshot;
   /**
    * Compensating action. Receives the snapshot captured at mutate() time AND
@@ -53,10 +54,11 @@ export interface UseUndoableMutationOptions<TInput, TOutput, TSnapshot = TInput>
    */
   onError?: (err: unknown, input: TInput) => void;
   /**
-   * Optional abort handler — fired when undoLast() aborts an in-flight call,
+   * Optional handler — fired when undoLast() runs while a call is in flight,
    * OR when a follow-up mutate() preempts a pending prior call (REV-2 NEW-1).
    * Receives the original input that was being mutated, so the caller can
-   * compensate optimistic UI side-effects (e.g. restore a removed row).
+   * revert optimistic UI side-effects (e.g. restore a removed row) at once.
+   * The forward request keeps running; compensation happens only if it succeeds.
    */
   onAbort?: (input: TInput) => void;
   /**
@@ -101,9 +103,9 @@ interface Call<TInput, TOutput, TSnapshot> {
   input: TInput;
   snapshot: TSnapshot;
   output: TOutput | null;
-  controller: AbortController;
   // 'pending' → request in flight.
-  // 'aborted-by-user' → undoLast() aborted while pending (REV-2 #1).
+  // 'aborted-by-user' → undoLast() ran while pending. The request is not
+  //   aborted (#857); a later resolve compensates, a rejection does not.
   // 'preempted' → mutate() preempted this call with a new one (REV-2 NEW-1).
   // 'settled' → server returned success and the response was processed.
   // 'error' → server rejected.
@@ -136,27 +138,17 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
   // (REV-3 Cluster X).
   const nextTokenRef = useRef(0);
 
-  // Cleanup: abort any in-flight request on unmount.
-  useEffect(() => {
-    return () => {
-      currentCallRef.current?.controller.abort();
-    };
-  }, []);
-
   const mutate = useCallback((input: TInput): CallToken => {
-    // REV-2 NEW-1: if a prior call is still pending, treat the preemption as
-    // an abort for the prior call so the caller can restore its optimistic
-    // UI. The prior call's .then() may still resolve later — when it does,
-    // its closure runs compensateFn against the prior snapshot to reconcile
-    // any server-side commit (REV-2 NEW-2).
+    // REV-2 NEW-1: if a prior call is still pending, mark it preempted and
+    // restore its optimistic UI. Do not abort the request (#857). Its .then()
+    // may still resolve later — when it does, that closure runs compensateFn
+    // against the prior snapshot (REV-2 NEW-2).
     const prior = currentCallRef.current;
     if (prior && prior.status === 'pending') {
       prior.status = 'preempted';
-      prior.controller.abort();
       optsRef.current.onAbort?.(prior.input);
     }
 
-    const controller = new AbortController();
     nextTokenRef.current += 1;
     const token = nextTokenRef.current as CallToken;
     const call: Call<TInput, TOutput, TSnapshot> = {
@@ -164,7 +156,6 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
       input,
       snapshot: optsRef.current.snapshot(input),
       output: null,
-      controller,
       status: 'pending',
     };
     currentCallRef.current = call;
@@ -173,12 +164,11 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
     setState('pending');
 
     optsRef.current
-      .mutationFn(input, controller.signal)
+      .mutationFn(input)
       .then((output) => {
         call.output = output;
-        // REV-2 #1 / NEW-2: if the call was already aborted (by undoLast or by
-        // a follow-up mutate preemption), the server still committed — run
-        // compensateFn to reconcile, do NOT silently drop the response.
+        // Undo or preemption already restored the local row. The server still
+        // committed — run compensateFn. Do not drop the response.
         if (call.status === 'aborted-by-user' || call.status === 'preempted') {
           call.status = 'settled';
           // REV-4: attach .catch so compensation failures do not become
@@ -200,14 +190,10 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
       })
       .catch((err: unknown) => {
         if (call.status === 'aborted-by-user' || call.status === 'preempted') {
-          // The error is the abort error itself or a network error after abort.
-          // Local row already restored by onAbort; server never committed
-          // (no successful response). Nothing more to do.
+          // Local row already restored by onAbort. The forward request failed,
+          // so there is nothing to compensate.
           return;
         }
-        // Component unmount cleanup aborts the controller without flipping
-        // call.status; swallow that path silently.
-        if (call.controller.signal.aborted) return;
         console.error('[useUndoableMutation] mutation failed', err);
         call.status = 'error';
         if (currentCallRef.current === call) {
@@ -244,13 +230,11 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
     if (callToken !== undefined && call.token !== callToken) return;
 
     if (phase === 'pending') {
-      // REV-2 #1: mark the call as user-aborted so its .then() handler (if it
-      // resolves later because the server already committed) runs compensateFn
-      // to reconcile. Do NOT clear the call ref here; the closure on the
-      // pending promise still needs to inspect call.status.
+      // Mark the call so its .then() compensates if the server commits, and
+      // restore the optimistic UI now. Do not abort the request (#857): the
+      // closure on the pending promise still needs to inspect call.status.
       const abortedInput = call.input;
       call.status = 'aborted-by-user';
-      call.controller.abort();
       phaseRef.current = 'idle';
       setState('idle');
       optsRef.current.onAbort?.(abortedInput);

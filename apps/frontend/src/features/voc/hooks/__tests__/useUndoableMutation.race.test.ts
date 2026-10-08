@@ -52,28 +52,23 @@ describe('useUndoableMutation — settle-vs-undo race (REV-1 #2)', () => {
 //
 // Two race conditions in the abort/settle lifecycle:
 //
-// (A) Abort-after-settle: server commits, but undoLast() aborts BEFORE the
-//     `.then()` handler ran. Old behavior: signal.aborted check at the top of
-//     .then drops the successful output, no compensation fires. Local row was
-//     restored by onAbort, but the server stayed triaged → divergence.
-//     Required behavior: when the response is already received and aborted
-//     fires, treat it as a settled commit and run compensateFn to reconcile
-//     the server back to the snapshot. onAbort still restores the local row.
+// (A) Undo before the response handler: the server response is already
+//     queued, but undoLast() runs BEFORE `.then()`. The forward request is
+//     not aborted (#857). Required behavior: onAbort restores the local row
+//     immediately, and when the response is handled, run compensateFn.
 //
-// (B) Second mutate() aborts the first pending call silently: the prior call's
-//     optimistic row stays removed locally, and (if the server commits) the
-//     prior server row stays triaged. Required behavior: when mutate() is
-//     invoked while a prior call is still pending, fire onAbort(prevInput)
-//     to restore the prior optimistic row, AND if the prior call later
-//     resolves successfully, run compensateFn against the prior snapshot/output
-//     so the server is reverted.
+// (B) Second mutate() while the first is pending: the prior optimistic row
+//     must be restored, and (if the server commits) the prior server row must
+//     be reverted. The prior request is not aborted. Required behavior: fire
+//     onAbort(prevInput), AND if the prior call later resolves, run
+//     compensateFn against the prior snapshot/output.
 
-describe('useUndoableMutation — abort-after-settle (REV-2 #1)', () => {
-  it('runs compensateFn when undoLast() aborts but the response was already received', async () => {
+describe('useUndoableMutation — undo before the response handler (REV-2 #1)', () => {
+  it('runs compensateFn when undoLast() runs but the response was already received', async () => {
     // Resolver we control: lets us settle the server response BEFORE the
     // .then() microtask gets to flush. We grab the resolver and call it
     // before yielding the microtask queue, then synchronously call undoLast().
-    // The undoLast() aborts the controller. The .then() handler then runs
+    // undoLast() does not abort the request. The .then() handler then runs
     // and must NOT drop the output silently — it must trigger compensation
     // because the server has already committed.
     let resolveFn: ((value: string) => void) | undefined;
@@ -93,10 +88,10 @@ describe('useUndoableMutation — abort-after-settle (REV-2 #1)', () => {
     await act(async () => {
       result.current.mutate('race-settle');
       // Resolve the server promise (fulfilled — server committed) BEFORE the
-      // microtask queue flushes inside this act. Then synchronously abort.
+      // microtask queue flushes inside this act. Then synchronously undo.
       resolveFn?.('server-output');
       result.current.undoLast();
-      // Flush microtasks so .then runs and sees signal.aborted.
+      // Flush microtasks so .then runs and compensates the committed response.
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -104,14 +99,14 @@ describe('useUndoableMutation — abort-after-settle (REV-2 #1)', () => {
 
     // onAbort fires immediately on undoLast() — local row restored.
     expect(onAbort).toHaveBeenCalledWith('race-settle');
-    // compensateFn must fire when the .then() handler discovers the server
-    // committed despite the abort — server reverted.
+    // compensateFn must fire when the .then() handler sees the server
+    // committed after undo — server reverted.
     expect(compensateFn).toHaveBeenCalledOnce();
     expect(compensateFn).toHaveBeenCalledWith('snap:race-settle', 'server-output');
   });
 });
 
-describe('useUndoableMutation — second mutate aborts first (REV-2 NEW-1)', () => {
+describe('useUndoableMutation — second mutate preempts first (REV-2 NEW-1)', () => {
   it('fires onAbort for the prior pending call when mutate() is invoked again', () => {
     vi.useFakeTimers();
     try {
@@ -172,12 +167,11 @@ describe('useUndoableMutation — second mutate aborts first (REV-2 NEW-1)', () 
 
     await act(async () => {
       result.current.mutate('first');
-      // Preempt: second mutate aborts the first pending call.
+      // Preempt: second mutate marks the first pending call. The request is
+      // not aborted.
       result.current.mutate('second');
       // Now resolve the first call AFTER it was preempted. The hook should
-      // recognise the first call's .then is firing on an aborted controller
-      // but with a fulfilled value → run compensateFn against the first
-      // snapshot to reconcile the server.
+      // run compensateFn against the first snapshot to reconcile the server.
       resolveFirst?.('first-output');
       await Promise.resolve();
       await Promise.resolve();

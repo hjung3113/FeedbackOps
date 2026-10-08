@@ -1,6 +1,7 @@
 // useUndoableMutation.test.ts — RED tests for the generic undo mutation hook.
 // TDD RED: written before the implementation file exists.
-// Covers: abort in-flight, settled compensate, error rollback, snapshot, dispose.
+// Covers: undo while pending compensates once the call resolves, settled
+// compensate, error rollback, snapshot, unmount leaves the request alone.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -49,7 +50,7 @@ function makeSuccessHook(delay = 0) {
 // ---------------------------------------------------------------------------
 
 describe('useUndoableMutation', () => {
-  it('abort cancels an in-flight mutation before it resolves', () => {
+  it('undo while pending compensates once the call resolves', async () => {
     vi.useFakeTimers();
     try {
       const { mutationFn, snapshot, compensateFn } = makeSuccessHook(500);
@@ -58,13 +59,17 @@ describe('useUndoableMutation', () => {
         useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
       );
 
-      // fire and abort before it resolves
       act(() => { result.current.mutate('hello'); });
       act(() => { result.current.undoLast(); });
 
-      // compensateFn should NOT be called on in-flight abort
+      // The forward request is not aborted. Compensation waits until it resolves.
       expect(compensateFn).not.toHaveBeenCalled();
       expect(result.current.state).toBe('idle');
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+
+      expect(compensateFn).toHaveBeenCalledOnce();
+      expect(compensateFn).toHaveBeenCalledWith('snap:hello', 'ok');
     } finally {
       vi.useRealTimers();
     }
@@ -121,7 +126,7 @@ describe('useUndoableMutation', () => {
     expect(compensateFn).toHaveBeenCalledWith('snap:capture-me', 'ok');
   });
 
-  it('dispose/cleanup aborts any pending in-flight mutation', () => {
+  it('unmount leaves an in-flight mutation running', async () => {
     vi.useFakeTimers();
     try {
       const { mutationFn, snapshot, compensateFn } = makeSuccessHook(1000);
@@ -133,11 +138,13 @@ describe('useUndoableMutation', () => {
       act(() => { result.current.mutate('cleanup-test'); });
       expect(result.current.state).toBe('pending');
 
-      // unmount triggers useEffect cleanup → aborts the controller
       unmount();
 
-      // compensateFn should never have fired
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+      // No undo, so nothing is compensated. The request still resolves.
       expect(compensateFn).not.toHaveBeenCalled();
+      await expect(mutationFn.mock.results[0]?.value).resolves.toBe('ok');
     } finally {
       vi.useRealTimers();
     }

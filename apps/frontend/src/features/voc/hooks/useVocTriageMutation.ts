@@ -46,8 +46,8 @@ export { executeCompensatingPatch } from '../lib/triage-transport';
 export function useVocTriageMutation(): UseMutationResult<TriageOutput, Error, TriageInput> {
   const queryClient = useQueryClient();
   return useMutation<TriageOutput, Error, TriageInput>({
-    // No AbortSignal: the react-query mutation's request lifetime is unchanged
-    // (issue #481 §2) — the signal seam belongs to useTriageCommand only.
+    // No AbortSignal. Undo never aborts a sent PATCH (#857); compensation
+    // belongs to useTriageCommand.
     mutationFn: (input: TriageInput) => patchVocTriage(input),
     onSuccess: () => invalidateNavCounts(queryClient),
   });
