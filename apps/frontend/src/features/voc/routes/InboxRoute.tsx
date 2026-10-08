@@ -147,8 +147,8 @@ const DEFAULT_SORT = 'created_at:desc';
 
 // #821: keystrokes settle for this long before the URL q (and thus the fetch) updates.
 export const SEARCH_DEBOUNCE_MS = 300;
-// #875: while an IME composition is active, wait longer so a paused half-typed syllable is not searched.
-export const SEARCH_COMPOSING_DEBOUNCE_MS = 1000;
+// #875: a draft ending in a Hangul character may still be composing its last syllable.
+export const SEARCH_HANGUL_DEBOUNCE_MS = 1000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -244,11 +244,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     },
     [navigate, search.tab, view],
   );
-  const { draft, setDraft, commit, setComposing } = useCommittedSearchDraft({
+  const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: urlQ,
     write: writeSearchDraft,
     debounceMs: SEARCH_DEBOUNCE_MS,
-    composingDebounceMs: SEARCH_COMPOSING_DEBOUNCE_MS,
+    hangulDebounceMs: SEARCH_HANGUL_DEBOUNCE_MS,
   });
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
@@ -384,7 +384,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               value={draft}
               onValueChange={setDraft}
               onCommit={commit}
-              onComposingChange={setComposing}
             />
             <ListFilterButton
               categories={FILTER_CATEGORIES}

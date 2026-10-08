@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
-// #875: the inbox passes this as `composingDebounceMs` while an IME syllable
-// is composing.
-const COMPOSING_DEBOUNCE_MS = 1000;
+// #875: the inbox passes this as `hangulDebounceMs` for drafts ending in a
+// Hangul character.
+const HANGUL_DEBOUNCE_MS = 1000;
 
 function StrictModeWrapper({ children }: { children: React.ReactNode }) {
   return React.createElement(React.StrictMode, null, children);
@@ -28,8 +28,8 @@ function renderDraft(committed: string, options?: { strict?: boolean }) {
   return { ...hook, write };
 }
 
-// #875: like the inbox, this render passes the composing debounce.
-function renderComposingDraft() {
+// #875: like the inbox, this render passes the Hangul debounce.
+function renderHangulDraft() {
   const write = vi.fn();
   const hook = renderHook(
     ({ committed }: { committed: string }) =>
@@ -37,7 +37,7 @@ function renderComposingDraft() {
         committed,
         write,
         debounceMs: DEBOUNCE_MS,
-        composingDebounceMs: COMPOSING_DEBOUNCE_MS,
+        hangulDebounceMs: HANGUL_DEBOUNCE_MS,
       }),
     { initialProps: { committed: '' } },
   );
@@ -241,49 +241,48 @@ describe('useCommittedSearchDraft', () => {
     expect(result.current.draft).toBe('로그인 오류');
   });
 
-  // ── Composing debounce (#875) ────────────────────────────────────────────────
+  // ── Hangul debounce (#875) ──────────────────────────────────────────────────
   //
-  // The Korean IME keeps the last syllable composing until the next key, so a
-  // full pause while composing would leave a typed 로그인 unsearched (#875 owner
-  // decision). While composing the debounce is only lengthened, and a
-  // compositionend restarts the pending timer with the normal delay.
+  // A draft ending in a Hangul character may still be a half-typed syllable
+  // (로그이 on the way to 로그인 looks like a finished one), and browsers do
+  // not report IME composition reliably, so any Hangul-final draft waits
+  // longer instead of trusting composition events.
 
   it.each([
-    {
-      label: 'while an IME composition is active',
-      composing: true,
-      delayMs: COMPOSING_DEBOUNCE_MS,
-    },
-    { label: 'outside a composition', composing: false, delayMs: DEBOUNCE_MS },
-  ])('debounces the write $label for $delayMs ms', ({ composing, delayMs }) => {
-    const { result, write } = renderComposingDraft();
+    { draft: '로그이', delayMs: HANGUL_DEBOUNCE_MS },
+    { draft: 'ㄹ', delayMs: HANGUL_DEBOUNCE_MS },
+    { draft: 'voc-02', delayMs: DEBOUNCE_MS },
+    { draft: '로그인 ', delayMs: DEBOUNCE_MS },
+  ])('debounces a draft ending in "$draft" for $delayMs ms', ({ draft, delayMs }) => {
+    const { result, write } = renderHangulDraft();
 
     act(() => {
-      if (composing) result.current.setComposing(true);
-      result.current.setDraft('로그이');
+      result.current.setDraft(draft);
     });
 
     act(() => {
-      vi.advanceTimersByTime(DEBOUNCE_MS);
+      vi.advanceTimersByTime(delayMs - 1);
     });
-    if (composing) {
-      expect(write).not.toHaveBeenCalled();
-    } else {
-      expect(write).toHaveBeenCalledTimes(1);
-      expect(write).toHaveBeenCalledWith('로그이', '');
-    }
+    expect(write).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(delayMs - DEBOUNCE_MS);
+      vi.advanceTimersByTime(1);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith(draft, '');
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
     });
     expect(write).toHaveBeenCalledTimes(1);
   });
 
-  it('writes 300 ms after compositionend restarts the pending timer', () => {
-    const { result, write } = renderComposingDraft();
+  // A non-Hangul character (here a space) after a Hangul-final draft restarts
+  // the pending timer back at the normal delay.
+  it('writes 300 ms after a space follows the Hangul-final draft', () => {
+    const { result, write } = renderHangulDraft();
 
     act(() => {
-      result.current.setComposing(true);
       result.current.setDraft('로그이');
     });
     act(() => {
@@ -292,12 +291,17 @@ describe('useCommittedSearchDraft', () => {
     expect(write).not.toHaveBeenCalled();
 
     act(() => {
-      result.current.setComposing(false);
+      result.current.setDraft('로그이 ');
     });
     act(() => {
-      vi.advanceTimersByTime(DEBOUNCE_MS);
+      vi.advanceTimersByTime(DEBOUNCE_MS - 1);
+    });
+    expect(write).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
     });
     expect(write).toHaveBeenCalledTimes(1);
-    expect(write).toHaveBeenCalledWith('로그이', '');
+    expect(write).toHaveBeenCalledWith('로그이 ', '');
   });
 });

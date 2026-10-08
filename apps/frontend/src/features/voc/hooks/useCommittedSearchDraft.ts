@@ -6,33 +6,42 @@
 
 import * as React from 'react';
 
+// #875: a draft whose last character is Hangul may still be a half-typed
+// syllable in progress. The ranges cover Jamo (U+1100–U+11FF, U+3130–U+318F,
+// e.g. ㄹ) and assembled syllables (U+AC00–U+D7A3, e.g. 이).
+function endsWithHangul(draft: string): boolean {
+  if (draft === '') return false;
+  const code = draft.charCodeAt(draft.length - 1);
+  return (
+    (code >= 0x1100 && code <= 0x11ff) ||
+    (code >= 0x3130 && code <= 0x318f) ||
+    (code >= 0xac00 && code <= 0xd7a3)
+  );
+}
+
 export interface UseCommittedSearchDraftOptions {
   committed: string;
   write: (draft: string, base: string) => void;
   debounceMs: number;
   /**
-   * #875: debounce to use while an IME composition is active (a paused
-   * half-typed syllable must not be searched). Omitted: the composing state
-   * does not change the delay.
+   * #875: debounce to use while the draft ends in a Hangul character (the IME
+   * may still be composing that syllable). Omitted: every draft uses
+   * `debounceMs`.
    */
-  composingDebounceMs?: number;
+  hangulDebounceMs?: number;
 }
 
 export function useCommittedSearchDraft({
   committed,
   write,
   debounceMs,
-  composingDebounceMs,
+  hangulDebounceMs,
 }: UseCommittedSearchDraftOptions): {
   draft: string;
   setDraft: (value: string) => void;
   commit: () => void;
-  setComposing: (composing: boolean) => void;
 } {
   const [draft, setDraftState] = React.useState(committed);
-  // #875: an IME composition is active (SearchInput reports start/end). The
-  // debounce effect picks the delay for the current state.
-  const [composing, setComposingState] = React.useState(false);
   // #864: id of the pending debounced write, so an Enter/blur commit can cancel
   // it and the same draft is never written twice.
   const searchDebounceRef = React.useRef<number | undefined>(undefined);
@@ -85,14 +94,15 @@ export function useCommittedSearchDraft({
 
   React.useEffect(() => {
     if (draft === committed) return;
-    // #875: `composing` is a dependency, so a composition start/end re-runs
-    // this effect and restarts the pending timer with the new state's delay.
+    // #875: a paused half-typed syllable (로그이 on the way to 로그인) looks
+    // like a finished one, and browsers do not report IME composition
+    // reliably, so any Hangul-final draft waits longer.
     searchDebounceRef.current = window.setTimeout(
       () => {
         searchDebounceRef.current = undefined;
         commitDraft(draft);
       },
-      composing ? (composingDebounceMs ?? debounceMs) : debounceMs,
+      endsWithHangul(draft) ? (hangulDebounceMs ?? debounceMs) : debounceMs,
     );
     return () => {
       if (searchDebounceRef.current !== undefined) {
@@ -102,7 +112,7 @@ export function useCommittedSearchDraft({
     };
     // `commitDraft` changes with `write`, so a new write identity (a tab change,
     // in the inbox) restarts the timer, as depending on `commitSearchDraft` did.
-  }, [draft, committed, commitDraft, debounceMs, composingDebounceMs, composing]);
+  }, [draft, committed, commitDraft, debounceMs, hangulDebounceMs]);
 
   // #864: Enter/blur commit — write the current draft to the URL at once and
   // cancel any pending debounced write of the same value.
@@ -114,11 +124,5 @@ export function useCommittedSearchDraft({
     commitDraft(draft);
   }
 
-  // #875: SearchInput reports IME composition start/end; the debounce effect
-  // restarts with the delay for the new state.
-  function setComposing(value: boolean): void {
-    setComposingState(value);
-  }
-
-  return { draft, setDraft, commit, setComposing };
+  return { draft, setDraft, commit };
 }
