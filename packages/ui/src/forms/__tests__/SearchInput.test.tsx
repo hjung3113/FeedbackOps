@@ -135,3 +135,33 @@ describe('SearchInput controlled mode (#821)', () => {
     expect(valueChanges).toEqual([]);
   });
 });
+
+describe('SearchInput onCommit (#864)', () => {
+  it.each([
+    ['Enter', (input: HTMLElement) => fireEvent.keyDown(input, { key: 'Enter' })],
+    ['blur', (input: HTMLElement) => fireEvent.blur(input)],
+  ])('calls onCommit on %s', (_trigger, commit) => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    commit(screen.getByRole('searchbox'));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onCommit while typing', () => {
+    const onCommit = vi.fn();
+    const onValueChange = vi.fn();
+    render(<SearchInput value="" onValueChange={onValueChange} onCommit={onCommit} />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '로그인' } });
+    expect(onValueChange).toHaveBeenCalledWith('로그인');
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Escape clears the box but does not call onCommit', () => {
+    const onCommit = vi.fn();
+    const onValueChange = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={onValueChange} onCommit={onCommit} />);
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+    expect(onValueChange).toHaveBeenCalledWith('');
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+});

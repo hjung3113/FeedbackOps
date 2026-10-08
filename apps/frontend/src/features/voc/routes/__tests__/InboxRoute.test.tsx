@@ -778,4 +778,49 @@ describe('useInboxRoute', () => {
 
     expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
   });
+
+  // ── Immediate search commit on Enter / blur (#864) ─────────────────────────
+
+  it.each([
+    ['Enter', (box: HTMLElement) => fireEvent.keyDown(box, { key: 'Enter' })],
+    ['blur', (box: HTMLElement) => fireEvent.blur(box)],
+  ])(
+    'commits the draft to the URL at once on %s, before the debounce elapses',
+    (_trigger, commit) => {
+      vi.useFakeTimers();
+      try {
+        searchState = { view: 'inbox', tab: 'high' };
+        render(<InboxTestHarness view="inbox" />);
+        const box = searchBox();
+        fireEvent.change(box, { target: { value: '로그인' } });
+        expect(navigateMock).not.toHaveBeenCalled();
+
+        commit(box);
+
+        expect(navigateMock).toHaveBeenCalledTimes(1);
+        const navigation = lastNavigateSearch();
+        expect(navigation.to).toBe('/vocs');
+        expect(navigation.replace).toBe(true);
+        // Exact #821 tab rules: a starting search drops the active tab, exactly
+        // like the debounced write does.
+        expect(navigation.search(searchState)).toEqual({ view: 'inbox', q: '로그인' });
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('does not navigate when the committed draft already equals the URL q', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox', q: '로그인' };
+      render(<InboxTestHarness view="inbox" />);
+
+      fireEvent.blur(searchBox());
+
+      expect(navigateMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -21,6 +21,12 @@ export interface SearchInputProps {
    * whose search endpoint has not shipped yet.
    */
   onValueChange?: (value: string) => void;
+  /**
+   * #864: called when the user commits the draft — on Enter and on blur, in
+   * controlled mode only. The current value is already with the parent via
+   * `onValueChange`. Escape keeps its own clear behaviour and never commits.
+   */
+  onCommit?: () => void;
 }
 
 const DISABLED_TOOLTIP = '검색은 다음 슬라이스에서 제공됩니다';
@@ -31,6 +37,7 @@ export function SearchInput({
   className,
   value,
   onValueChange,
+  onCommit,
 }: SearchInputProps) {
   if (onValueChange === undefined) {
     return (
@@ -86,11 +93,13 @@ export function SearchInput({
           // A dialog (e.g. Radix) may have already handled this Escape on
           // document capture; one key must not also clear the box.
           if (event.defaultPrevented) return;
+          if (event.key === 'Enter' && onCommit !== undefined) onCommit();
           if (event.key === 'Escape' && value !== '') {
             event.preventDefault();
             onValueChange('');
           }
         }}
+        {...(onCommit !== undefined ? { onBlur: () => onCommit() } : {})}
       />
     </div>
   );

@@ -206,16 +206,19 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const [searchDraft, setSearchDraft] = React.useState(urlQ);
   // The tab the current search started from, restored when the search is cleared.
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
+  // #864: id of the pending debounced write, so an Enter/blur commit can cancel
+  // it and the same draft is never written twice.
+  const searchDebounceRef = React.useRef<number | undefined>(undefined);
 
-  React.useEffect(() => {
-    setSearchDraft(urlQ);
-  }, [urlQ]);
-
-  React.useEffect(() => {
-    if (searchDraft === urlQ) return;
-    const urlTab = search.tab;
-    const timeoutId = window.setTimeout(() => {
-      const clearing = searchDraft === '';
+  // #864: the one writer for the URL q, shared by the debounce effect and the
+  // immediate Enter/blur commit. Carries the #821 tab rules verbatim: starting
+  // a search drops the remembered tab, clearing restores it.
+  const commitSearchDraft = React.useCallback(
+    (draft: string) => {
+      // A draft the URL already holds must not be written again (#864).
+      if (draft === urlQ) return;
+      const urlTab = search.tab;
+      const clearing = draft === '';
       const starting = urlQ === '' && !clearing && view === 'inbox';
       if (starting) tabBeforeSearchRef.current = urlTab;
       const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
@@ -234,15 +237,33 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           }
           if (starting) {
             const { tab: _tab, ...withoutTab } = rest;
-            return { ...withoutTab, q: searchDraft };
+            return { ...withoutTab, q: draft };
           }
-          return { ...rest, q: searchDraft };
+          return { ...rest, q: draft };
         },
         replace: true,
       });
+    },
+    [urlQ, navigate, search.tab, view],
+  );
+
+  React.useEffect(() => {
+    setSearchDraft(urlQ);
+  }, [urlQ]);
+
+  React.useEffect(() => {
+    if (searchDraft === urlQ) return;
+    searchDebounceRef.current = window.setTimeout(() => {
+      searchDebounceRef.current = undefined;
+      commitSearchDraft(searchDraft);
     }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [searchDraft, urlQ, navigate, search.tab, view]);
+    return () => {
+      if (searchDebounceRef.current !== undefined) {
+        window.clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = undefined;
+      }
+    };
+  }, [searchDraft, urlQ, commitSearchDraft]);
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
@@ -280,6 +301,16 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  // #864: Enter/blur commit — write the current draft to the URL at once and
+  // cancel any pending debounced write of the same value.
+  function handleSearchCommit(): void {
+    if (searchDebounceRef.current !== undefined) {
+      window.clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = undefined;
+    }
+    commitSearchDraft(searchDraft);
+  }
 
   function handleTabChange(next: string): void {
     void navigate({
@@ -370,11 +401,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         action={
           <div className="flex items-center gap-2">
             {/* #821: server-side text search on GET /vocs. The box is a local
-                draft; the debounced effect above writes the URL q. */}
+                draft; the debounced effect or an Enter/blur commit (#864)
+                writes the URL q. */}
             <SearchInput
               placeholder="필터, 키워드…"
               value={searchDraft}
               onValueChange={setSearchDraft}
+              onCommit={handleSearchCommit}
             />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
