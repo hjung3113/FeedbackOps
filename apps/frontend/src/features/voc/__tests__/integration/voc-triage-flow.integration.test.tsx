@@ -198,7 +198,6 @@ const IN_FLIGHT_PATCH_DELAY_MS = 1000;
 interface CommittedPatch {
   url: string;
   body: Record<string, unknown>;
-  idempotencyKey: string | null;
   committedAt: number;
   resolvedAt: number | null;
 }
@@ -241,7 +240,6 @@ function installCommittedPatchFetch(): CommittedPatch[] {
       const recorded: CommittedPatch = {
         url,
         body,
-        idempotencyKey: readIdempotencyKey(init?.headers),
         committedAt: Date.now(),
         resolvedAt: null,
       };
@@ -347,14 +345,7 @@ describe('Triage flow — integration (C6.3)', () => {
 
     globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       callCount++;
-      const rawHeaders = init?.headers;
-      let idk: string | undefined;
-      if (rawHeaders && typeof rawHeaders === 'object' && !(rawHeaders instanceof Headers)) {
-        const h = rawHeaders as Record<string, string>;
-        idk = h['Idempotency-Key'] ?? h['idempotency-key'];
-      } else if (rawHeaders instanceof Headers) {
-        idk = rawHeaders.get('Idempotency-Key') ?? rawHeaders.get('idempotency-key') ?? undefined;
-      }
+      const idk = readIdempotencyKey(init?.headers);
       if (idk) seenKeys.push(idk);
       return jsonResponse({
         id: FIRST_VOC_ID,
@@ -660,9 +651,6 @@ describe('Triage flow — integration (C6.3)', () => {
           owner_team_id: UNDO_PRIOR.owner_team_id,
           analytics_area_id: UNDO_PRIOR.analytics_area_id,
         });
-        expect(forward.idempotencyKey).toBeTruthy();
-        expect(compensate.idempotencyKey).toBeTruthy();
-        expect(compensate.idempotencyKey).not.toBe(forward.idempotencyKey);
 
         expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
       } finally {

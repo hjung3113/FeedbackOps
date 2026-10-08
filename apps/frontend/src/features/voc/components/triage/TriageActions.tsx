@@ -63,8 +63,9 @@ export function TriageActions({
 
       {/* Secondary actions row.
           REV-2 #2 / NEW-1: disable secondary buttons while a mutation is pending
-          so the user cannot start a second mutation that would silently abort
-          the first optimistic row. */}
+          so the user cannot start a second mutation that would mark the first
+          call — its optimistic row is restored at once, the request keeps
+          running, and it is compensated if it succeeds. */}
       <div className="flex gap-2">
         {/* Finding 만들기 */}
         <button
