@@ -1,11 +1,12 @@
 // TriagePanel.undoRestore.test.tsx — codex REV-1 P1-#1
 //
 // Finding: Undo during in-flight triage does not restore the optimistically
-// removed row. Clicking 실행 취소 aborts the in-flight PATCH via
-// useUndoableMutation, but TriagePanel never calls onOptimisticRestore, so the
+// removed row. Clicking 실행 취소 marks the in-flight call via
+// useUndoableMutation (the PATCH keeps running and is compensated if it
+// succeeds), but TriagePanel never calls onOptimisticRestore, so the
 // VOC stays hidden from the queue.
 //
-// Fix expectation: pending-abort path must invoke onOptimisticRestore(vocId).
+// Fix expectation: the undo path must invoke onOptimisticRestore(vocId).
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -142,7 +143,7 @@ describe('TriagePanel — undo while in-flight (REV-1 #1)', () => {
       fireEvent.click(undoBtn);
     });
 
-    // The in-flight PATCH was aborted; the row must be restored to the queue.
+    // Undo marked the call — the PATCH keeps running; the row must be restored to the queue.
     await waitFor(() => {
       expect(onOptimisticRestore).toHaveBeenCalledWith(MOCK_VOC.id);
     });

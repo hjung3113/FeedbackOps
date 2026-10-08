@@ -192,7 +192,7 @@ vi.mock('@tanstack/react-query', () => ({
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 import { Route as vocsRoute } from '@/routes/_authed/vocs';
-import { useInboxRoute } from '../InboxRoute';
+import { SEARCH_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
   const { list, detailPanel } = useInboxRoute(view);
@@ -937,8 +937,6 @@ describe('useInboxRoute', () => {
     expect(screen.queryByRole('rowgroup', { name: 'VOC 목록 로딩 중' })).not.toBeInTheDocument();
   });
 });
-
-const SEARCH_DEBOUNCE_MS = 300;
 
 function foldNavigations(initial: Record<string, unknown>): Record<string, unknown> {
   let state = initial;

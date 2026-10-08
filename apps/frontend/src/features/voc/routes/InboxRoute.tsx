@@ -145,7 +145,7 @@ const SORT_OPTIONS: SortOption[] = [
 const DEFAULT_SORT = 'created_at:desc';
 
 // #821: keystrokes settle for this long before the URL q (and thus the fetch) updates.
-const SEARCH_DEBOUNCE_MS = 300;
+export const SEARCH_DEBOUNCE_MS = 300;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

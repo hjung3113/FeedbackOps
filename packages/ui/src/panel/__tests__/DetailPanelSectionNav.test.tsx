@@ -82,14 +82,22 @@ const entry = (anchor: Element, isIntersecting: boolean, top: number): Intersect
     target: anchor,
   }) as IntersectionObserverEntry;
 
-function renderNavOverAnchors(ids: [string, string]) {
+const mountedScrollContainers: HTMLElement[] = [];
+
+function renderNavOverAnchors(ids: string[], liveTops?: Record<string, number>) {
   const scrollEl = document.createElement('div');
+  // jsdom does not implement scrollTo — stub it so a click-driven jump works.
+  scrollEl.scrollTo = vi.fn();
   for (const id of ids) {
     const anchor = document.createElement('div');
     anchor.setAttribute('data-anchor', id);
+    if (liveTops) {
+      anchor.getBoundingClientRect = vi.fn(() => rect(0, 100, liveTops[id] ?? 0));
+    }
     scrollEl.append(anchor);
   }
   document.body.append(scrollEl);
+  mountedScrollContainers.push(scrollEl);
   const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
   render(
     <DetailPanelSectionNav
@@ -99,7 +107,6 @@ function renderNavOverAnchors(ids: [string, string]) {
   );
   return {
     anchor: (id: string) => scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement,
-    cleanup: () => scrollEl.remove(),
   };
 }
 
@@ -120,6 +127,8 @@ function ScrollBody({ scrollRef }: { scrollRef: { current: HTMLElement | null } 
 }
 
 afterEach(() => {
+  for (const el of mountedScrollContainers) el.remove();
+  mountedScrollContainers.length = 0;
   vi.unstubAllGlobals();
 });
 
@@ -387,7 +396,7 @@ describe('DetailPanelSectionNav', () => {
 
   it('activates the topmost section reported intersecting by the first callback', () => {
     const observer = stubIntersectionObserver();
-    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
     anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 400));
     anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
 
@@ -395,12 +404,11 @@ describe('DetailPanelSectionNav', () => {
 
     expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
     expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass('border-accent-primary');
-    cleanup();
   });
 
   it('keeps the topmost visible section active when a lower section newly intersects (#861 reflow)', () => {
     const observer = stubIntersectionObserver();
-    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
     let betaTop = 400;
     anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
     anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, betaTop));
@@ -414,18 +422,16 @@ describe('DetailPanelSectionNav', () => {
 
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
     expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
-    cleanup();
   });
 
   it('activates the remaining intersecting section when the active one leaves the top zone', () => {
     const observer = stubIntersectionObserver();
-    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
 
     observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
     observer.fire([entry(anchor('alpha'), false, -100)]);
 
     expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
-    cleanup();
   });
 
   it('ranks a still-intersecting anchor by its current position, not its last callback rectangle', () => {
@@ -433,7 +439,7 @@ describe('DetailPanelSectionNav', () => {
     // new entry, so alpha's callback top (300) is stale while its live top is -200. Alpha is the
     // upper intersecting section and must win over newly intersecting beta at 200.
     const observer = stubIntersectionObserver();
-    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
     anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, -200));
     anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 200));
 
@@ -442,7 +448,6 @@ describe('DetailPanelSectionNav', () => {
 
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
     expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
-    cleanup();
   });
 
   it('applies entries during a programmatic jump so a section that left cannot win afterwards', () => {
@@ -452,40 +457,24 @@ describe('DetailPanelSectionNav', () => {
     vi.useFakeTimers();
     try {
       const observer = stubIntersectionObserver();
-      const scrollEl = document.createElement('div');
-      scrollEl.scrollTo = vi.fn();
-      const anchorTop: Record<string, number> = { alpha: -300, beta: 0, gamma: 200 };
-      for (const id of ['alpha', 'beta', 'gamma']) {
-        const el = document.createElement('div');
-        el.setAttribute('data-anchor', id);
-        el.getBoundingClientRect = vi.fn(() => rect(0, 100, anchorTop[id] ?? 0));
-        scrollEl.append(el);
-      }
-      document.body.append(scrollEl);
-      const anchorEl = (id: string) =>
-        scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement;
-      render(
-        <DetailPanelSectionNav
-          sections={['alpha', 'beta', 'gamma'].map((id) => ({
-            id,
-            label: id.charAt(0).toUpperCase() + id.slice(1),
-          }))}
-          scrollRef={{ current: scrollEl }}
-        />,
-      );
+      const { anchor } = renderNavOverAnchors(['alpha', 'beta', 'gamma'], {
+        alpha: -300,
+        beta: 0,
+        gamma: 200,
+      });
 
       observer.fire([
-        entry(anchorEl('alpha'), true, 100),
-        entry(anchorEl('beta'), false, 500),
-        entry(anchorEl('gamma'), false, 800),
+        entry(anchor('alpha'), true, 100),
+        entry(anchor('beta'), false, 500),
+        entry(anchor('gamma'), false, 800),
       ]);
       fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
       expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
 
       // During the guard alpha exits and beta arrives; neither may be discarded.
-      observer.fire([entry(anchorEl('alpha'), false, -300), entry(anchorEl('beta'), true, 0)]);
+      observer.fire([entry(anchor('alpha'), false, -300), entry(anchor('beta'), true, 0)]);
       act(() => vi.advanceTimersByTime(700));
-      observer.fire([entry(anchorEl('gamma'), true, 200)]);
+      observer.fire([entry(anchor('gamma'), true, 200)]);
 
       expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
       expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass(
@@ -494,7 +483,6 @@ describe('DetailPanelSectionNav', () => {
       expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveClass(
         'border-accent-primary',
       );
-      scrollEl.remove();
     } finally {
       vi.useRealTimers();
     }

@@ -1,9 +1,9 @@
 // useUndoableMutation.race.test.ts — codex REV-1 P1-#2
 //
 // Finding: undoLast() branches on the React `state` closure. If the request
-// settles between the click and the abort, the closure can still see
-// 'pending', skip compensation, abort a finished fetch, and silently leave
-// the server-committed state in place.
+// settles between the click and the undo, the closure can still see
+// 'pending', skip compensation, and silently leave the server-committed state
+// in place.
 //
 // Fix: branch on a synchronous ref tied to the actual call lifecycle so that
 // a settle that landed before undoLast() runs is honoured and compensateFn
@@ -31,7 +31,7 @@ describe('useUndoableMutation — settle-vs-undo race (REV-1 #2)', () => {
     // resolves the mutationFn (so isSettledRef flips to true) before
     // undoLast() runs at the end of the block — but the closure inside
     // undoLast still has state='pending'. The correct behaviour is to
-    // compensate, not silently abort.
+    // compensate the settled call, not silently drop the committed response.
     await act(async () => {
       result.current.mutate('race-me');
       // Yield once so the mutationFn microtask resolves and the phase ref
@@ -72,7 +72,7 @@ describe('useUndoableMutation — undo before the response handler (REV-2 #1)', 
     // and must NOT drop the output silently — it must trigger compensation
     // because the server has already committed.
     let resolveFn: ((value: string) => void) | undefined;
-    const mutationFn = vi.fn((_input: string, _signal?: AbortSignal) => {
+    const mutationFn = vi.fn((_input: string) => {
       return new Promise<string>((resolve) => {
         resolveFn = resolve;
       });
@@ -111,13 +111,9 @@ describe('useUndoableMutation — second mutate preempts first (REV-2 NEW-1)', (
     vi.useFakeTimers();
     try {
       const mutationFn = vi.fn(
-        (_input: string, signal?: AbortSignal) =>
-          new Promise<string>((resolve, reject) => {
-            const timer = setTimeout(() => resolve('ok'), 500);
-            signal?.addEventListener('abort', () => {
-              clearTimeout(timer);
-              reject(new DOMException('Aborted', 'AbortError'));
-            });
+        (_input: string) =>
+          new Promise<string>((resolve) => {
+            setTimeout(() => resolve('ok'), 500);
           }),
       );
       const snapshot = vi.fn((input: string) => `snap:${input}`);
@@ -149,7 +145,7 @@ describe('useUndoableMutation — second mutate preempts first (REV-2 NEW-1)', (
     // First call: server promise that we resolve at our chosen tick.
     let resolveFirst: ((v: string) => void) | undefined;
     // Second call: resolves quickly with a different output.
-    const mutationFn = vi.fn((input: string, _signal?: AbortSignal) => {
+    const mutationFn = vi.fn((input: string) => {
       if (input === 'first') {
         return new Promise<string>((resolve) => {
           resolveFirst = resolve;
