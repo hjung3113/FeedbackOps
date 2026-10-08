@@ -388,20 +388,28 @@ describe('DetailPanelSectionNav', () => {
   it('activates the topmost section reported intersecting by the first callback', () => {
     const observer = stubIntersectionObserver();
     const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 400));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
 
-    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+    observer.fire([entry(anchor('alpha'), true, 400), entry(anchor('beta'), true, 100)]);
 
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass('border-accent-primary');
     cleanup();
   });
 
   it('keeps the topmost visible section active when a lower section newly intersects (#861 reflow)', () => {
     const observer = stubIntersectionObserver();
     const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    let betaTop = 400;
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, betaTop));
 
     observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
-    // Reflow: beta slides up into the top zone while alpha is still intersecting above it.
+    // Real observer delivery: a target emits only when its intersecting state changes, so beta
+    // must exit the top zone before it re-enters after the reflow.
+    observer.fire([entry(anchor('beta'), false, 50)]);
+    betaTop = 150;
     observer.fire([entry(anchor('beta'), true, 150)]);
 
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
@@ -418,6 +426,78 @@ describe('DetailPanelSectionNav', () => {
 
     expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
     cleanup();
+  });
+
+  it('ranks a still-intersecting anchor by its current position, not its last callback rectangle', () => {
+    // Report trace 2: after a manual scroll only beta emits — alpha stays intersecting with no
+    // new entry, so alpha's callback top (300) is stale while its live top is -200. Alpha is the
+    // upper intersecting section and must win over newly intersecting beta at 200.
+    const observer = stubIntersectionObserver();
+    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, -200));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 200));
+
+    observer.fire([entry(anchor('alpha'), true, 300), entry(anchor('beta'), false, 700)]);
+    observer.fire([entry(anchor('beta'), true, 200)]);
+
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    cleanup();
+  });
+
+  it('applies entries during a programmatic jump so a section that left cannot win afterwards', () => {
+    // Report trace 1: entries arriving inside the 700 ms jump guard must still update the map.
+    // If they are dropped, long-left alpha keeps its stale intersecting flag and beats beta once
+    // the guard expires and gamma enters.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const scrollEl = document.createElement('div');
+      scrollEl.scrollTo = vi.fn();
+      const anchorTop: Record<string, number> = { alpha: -300, beta: 0, gamma: 200 };
+      for (const id of ['alpha', 'beta', 'gamma']) {
+        const el = document.createElement('div');
+        el.setAttribute('data-anchor', id);
+        el.getBoundingClientRect = vi.fn(() => rect(0, 100, anchorTop[id] ?? 0));
+        scrollEl.append(el);
+      }
+      document.body.append(scrollEl);
+      const anchorEl = (id: string) =>
+        scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement;
+      render(
+        <DetailPanelSectionNav
+          sections={['alpha', 'beta', 'gamma'].map((id) => ({
+            id,
+            label: id.charAt(0).toUpperCase() + id.slice(1),
+          }))}
+          scrollRef={{ current: scrollEl }}
+        />,
+      );
+
+      observer.fire([
+        entry(anchorEl('alpha'), true, 100),
+        entry(anchorEl('beta'), false, 500),
+        entry(anchorEl('gamma'), false, 800),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+
+      // During the guard alpha exits and beta arrives; neither may be discarded.
+      observer.fire([entry(anchorEl('alpha'), false, -300), entry(anchorEl('beta'), true, 0)]);
+      act(() => vi.advanceTimersByTime(700));
+      observer.fire([entry(anchorEl('gamma'), true, 200)]);
+
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass(
+        'border-accent-primary',
+      );
+      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveClass(
+        'border-accent-primary',
+      );
+      scrollEl.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('labels both scroll controls in Korean and scrolls the track in both directions', async () => {

@@ -148,23 +148,25 @@ export function DetailPanelSectionNav({
       };
     }
 
-    // #861: entries only carry the anchors whose intersection changed, so the active section
-    // must be recomputed from every anchor's latest state, not from the changed entries alone.
+    // #861: entries only carry the anchors whose intersection changed, so every entry updates the
+    // map — even inside a programmatic jump, whose guard suppresses only the selection. The map
+    // holds flags only; the winner is ranked by each anchor's current box, read at selection time.
     // Declared here so a rebuilt observer (scrollRef/sectionKey change) starts from a clean map.
-    const intersectionState = new Map<string, { isIntersecting: boolean; top: number }>();
+    const intersectionState = new Map<string, boolean>();
     const observer = new IntersectionObserver(
       (entries) => {
-        if (programmaticRef.current) return;
         for (const e of entries) {
-          intersectionState.set(e.target.getAttribute('data-anchor') ?? '', {
-            isIntersecting: e.isIntersecting,
-            top: e.boundingClientRect.top,
-          });
+          intersectionState.set(e.target.getAttribute('data-anchor') ?? '', e.isIntersecting);
         }
-        const visible = [...intersectionState]
-          .filter(([, state]) => state.isIntersecting)
-          .sort((a, b) => a[1].top - b[1].top);
-        if (visible[0]) setActiveSection(visible[0][0]);
+        if (programmaticRef.current) return;
+        const visible = anchors
+          .filter((a) => intersectionState.get(a.getAttribute('data-anchor') ?? '') === true)
+          .map((a) => ({
+            id: a.getAttribute('data-anchor') ?? '',
+            top: a.getBoundingClientRect().top,
+          }))
+          .sort((a, b) => a.top - b.top);
+        if (visible[0]) setActiveSection(visible[0].id);
       },
       { root, rootMargin: '0px 0px -66% 0px', threshold: 0 },
     );
