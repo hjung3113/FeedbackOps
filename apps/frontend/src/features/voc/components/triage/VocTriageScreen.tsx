@@ -183,14 +183,30 @@ export function VocTriageScreen({
 
         {/* Right: detail panel (always rendered when queue non-empty) */}
         {selectedVoc !== null && (
-          <div className={isFullscreen ? 'flex-1 min-w-0' : 'w-detail-panel shrink-0'}>
+          <div
+            className={
+              isFullscreen ? 'flex-1 min-w-0 bg-surface-detail' : 'w-detail-panel shrink-0'
+            }
+          >
             <DetailPanelFullscreenContext.Provider value={{ expanded: isFullscreen, toggle }}>
-              <TriagePanel
-                voc={selectedVoc}
-                onAct={handleAct}
-                onOptimisticRemove={handleOptimisticRemove}
-                onOptimisticRestore={handleOptimisticRestore}
-              />
+              {/* #852: fullscreen keeps a centred reading column; the gutters keep the panel
+                  background. The wrapper is always present (`contents` when collapsed) so toggling
+                  never remounts the panel and its staged triage choices survive. */}
+              <div
+                data-testid="triage-panel-column"
+                className={
+                  isFullscreen
+                    ? 'mx-auto h-full w-full max-w-[60rem] border-x border-border-subtle'
+                    : 'contents'
+                }
+              >
+                <TriagePanel
+                  voc={selectedVoc}
+                  onAct={handleAct}
+                  onOptimisticRemove={handleOptimisticRemove}
+                  onOptimisticRestore={handleOptimisticRestore}
+                />
+              </div>
             </DetailPanelFullscreenContext.Provider>
           </div>
         )}

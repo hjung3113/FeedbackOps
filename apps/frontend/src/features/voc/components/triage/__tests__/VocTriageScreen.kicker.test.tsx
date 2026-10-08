@@ -300,11 +300,15 @@ describe('VocTriageScreen — V1 inline kicker', () => {
 
     fireEvent.click(expand);
     expect(queue).toHaveAttribute('hidden');
-    expect(expand).toHaveAttribute('aria-pressed', 'true');
+    // #852 wraps the expanded panel in a reading column, which remounts the
+    // panel subtree — re-query the toggle instead of holding the stale node.
+    const expanded = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(expanded).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(queue).not.toHaveAttribute('hidden');
-    expect(expand).toHaveAttribute('aria-pressed', 'false');
+    const collapsed = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(collapsed).toHaveAttribute('aria-pressed', 'false');
 
     const more = screen.getByRole('button', { name: '더 보기' });
     fireEvent.keyDown(more, { key: 'Enter' });

@@ -245,7 +245,19 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
         >
           {slotOpen && (
             <DetailPanelFullscreenContext.Provider value={fullscreenContextValue}>
-              {slotNode}
+              {/* #852: expanded drawers render as a centred reading column. The wrapper is always
+                  present (`contents` when collapsed, so layout is unchanged): a conditional wrapper
+                  would remount the panel on toggle and drop unsaved input. */}
+              <div
+                data-testid="app-detail-slot-column"
+                className={cn(
+                  isExpanded
+                    ? 'mx-auto h-full w-full max-w-[60rem] border-x border-border-subtle'
+                    : 'contents',
+                )}
+              >
+                {slotNode}
+              </div>
             </DetailPanelFullscreenContext.Provider>
           )}
         </aside>
