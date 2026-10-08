@@ -51,6 +51,58 @@ function stubResizeObserver() {
   };
 }
 
+function stubIntersectionObserver() {
+  const instances: Array<{ callback: IntersectionObserverCallback }> = [];
+  class TestIntersectionObserver {
+    callback: IntersectionObserverCallback;
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+      instances.push(this);
+    }
+    observe(_target: Element) {}
+    unobserve(_target: Element) {}
+    disconnect() {}
+  }
+  vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
+  return {
+    fire(entries: IntersectionObserverEntry[]) {
+      const observer = instances.at(-1);
+      if (!observer) throw new Error('no IntersectionObserver instance');
+      act(() => {
+        observer.callback(entries, observer as unknown as IntersectionObserver);
+      });
+    },
+  };
+}
+
+const entry = (anchor: Element, isIntersecting: boolean, top: number): IntersectionObserverEntry =>
+  ({
+    isIntersecting,
+    boundingClientRect: rect(0, 100, top),
+    target: anchor,
+  }) as IntersectionObserverEntry;
+
+function renderNavOverAnchors(ids: [string, string]) {
+  const scrollEl = document.createElement('div');
+  for (const id of ids) {
+    const anchor = document.createElement('div');
+    anchor.setAttribute('data-anchor', id);
+    scrollEl.append(anchor);
+  }
+  document.body.append(scrollEl);
+  const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
+  render(
+    <DetailPanelSectionNav
+      sections={ids.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }))}
+      scrollRef={scrollRef}
+    />,
+  );
+  return {
+    anchor: (id: string) => scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement,
+    cleanup: () => scrollEl.remove(),
+  };
+}
+
 function ScrollBody({ scrollRef }: { scrollRef: { current: HTMLElement | null } }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -331,6 +383,41 @@ describe('DetailPanelSectionNav', () => {
     act(() => window.dispatchEvent(new Event('resize')));
     expect(track.scrollBy).toHaveBeenCalledWith({ left: 100, behavior: 'smooth' });
     scrollEl.remove();
+  });
+
+  it('activates the topmost section reported intersecting by the first callback', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+
+    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    cleanup();
+  });
+
+  it('keeps the topmost visible section active when a lower section newly intersects (#861 reflow)', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+
+    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+    // Reflow: beta slides up into the top zone while alpha is still intersecting above it.
+    observer.fire([entry(anchor('beta'), true, 150)]);
+
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    cleanup();
+  });
+
+  it('activates the remaining intersecting section when the active one leaves the top zone', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor, cleanup } = renderNavOverAnchors(['alpha', 'beta']);
+
+    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+    observer.fire([entry(anchor('alpha'), false, -100)]);
+
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+    cleanup();
   });
 
   it('labels both scroll controls in Korean and scrolls the track in both directions', async () => {

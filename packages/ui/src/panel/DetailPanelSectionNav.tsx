@@ -148,17 +148,23 @@ export function DetailPanelSectionNav({
       };
     }
 
+    // #861: entries only carry the anchors whose intersection changed, so the active section
+    // must be recomputed from every anchor's latest state, not from the changed entries alone.
+    // Declared here so a rebuilt observer (scrollRef/sectionKey change) starts from a clean map.
+    const intersectionState = new Map<string, { isIntersecting: boolean; top: number }>();
     const observer = new IntersectionObserver(
       (entries) => {
         if (programmaticRef.current) return;
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .map((e) => ({
-            id: e.target.getAttribute('data-anchor') ?? '',
+        for (const e of entries) {
+          intersectionState.set(e.target.getAttribute('data-anchor') ?? '', {
+            isIntersecting: e.isIntersecting,
             top: e.boundingClientRect.top,
-          }))
-          .sort((a, b) => a.top - b.top);
-        if (visible[0]?.id) setActiveSection(visible[0].id);
+          });
+        }
+        const visible = [...intersectionState]
+          .filter(([, state]) => state.isIntersecting)
+          .sort((a, b) => a[1].top - b[1].top);
+        if (visible[0]) setActiveSection(visible[0][0]);
       },
       { root, rootMargin: '0px 0px -66% 0px', threshold: 0 },
     );
