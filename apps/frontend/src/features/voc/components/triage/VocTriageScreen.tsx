@@ -16,6 +16,7 @@ import { useFullscreenPanel } from '@/lib/panel/useFullscreenPanel';
 import type { VocListItem } from '@fops/shared';
 import {
   DetailPanelFullscreenContext,
+  DetailPanelReadingColumn,
   ListTabs,
   type ListToolbarTab,
   ToolbarKicker,
@@ -183,14 +184,20 @@ export function VocTriageScreen({
 
         {/* Right: detail panel (always rendered when queue non-empty) */}
         {selectedVoc !== null && (
-          <div className={isFullscreen ? 'flex-1 min-w-0' : 'w-detail-panel shrink-0'}>
+          <div
+            className={
+              isFullscreen ? 'flex-1 min-w-0 bg-surface-detail' : 'w-detail-panel shrink-0'
+            }
+          >
             <DetailPanelFullscreenContext.Provider value={{ expanded: isFullscreen, toggle }}>
-              <TriagePanel
-                voc={selectedVoc}
-                onAct={handleAct}
-                onOptimisticRemove={handleOptimisticRemove}
-                onOptimisticRestore={handleOptimisticRestore}
-              />
+              <DetailPanelReadingColumn data-testid="triage-panel-column">
+                <TriagePanel
+                  voc={selectedVoc}
+                  onAct={handleAct}
+                  onOptimisticRemove={handleOptimisticRemove}
+                  onOptimisticRestore={handleOptimisticRestore}
+                />
+              </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
           </div>
         )}

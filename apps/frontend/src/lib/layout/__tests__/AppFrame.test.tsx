@@ -326,6 +326,46 @@ describe('AppFrame', () => {
     expect(main).not.toHaveAttribute('hidden');
   });
 
+  it('expanded slot wraps the panel in a centred reading column (#852)', async () => {
+    renderAppFrame(
+      <ListShell
+        toolbar={{ title: 'Inbox' }}
+        list={<div>list</div>}
+        detailPanel={PANEL_WITH_HEADER}
+      />,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
+
+    const panelBefore = screen.getByTestId('header-panel');
+    const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(slot).toHaveAttribute('data-expanded', 'true');
+
+    // Toggling must not remount the panel (unsaved input would be lost).
+    expect(screen.getByTestId('header-panel')).toBe(panelBefore);
+    expect(screen.getByRole('button', { name: '전체 화면 전환' })).toBe(toggle);
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
+  });
+
+  it('collapsed slot keeps a layout-neutral column wrapper (#852)', async () => {
+    renderAppFrame(
+      <ListShell
+        toolbar={{ title: 'Inbox' }}
+        list={<div>list</div>}
+        detailPanel={PANEL_WITH_HEADER}
+      />,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
+
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
+    expect(screen.getByTestId('header-panel').parentElement).toBe(
+      screen.getByTestId('app-detail-slot-column'),
+    );
+  });
+
   it('Escape collapses unless a panel handler prevented it', async () => {
     const first = renderAppFrame(
       <ListShell toolbar={{ title: 'Escape' }} list={<div />} detailPanel={PANEL_WITH_HEADER} />,

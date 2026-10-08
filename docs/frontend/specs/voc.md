@@ -333,7 +333,7 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 | Affordance | Action | Production wiring |
 |---|---|---|
 | Copy link | Copies `window.location.origin + /vocs?view=inbox&selected=<id>` to clipboard, toasts "링크가 복사되었습니다" | `navigator.clipboard.writeText` |
-| Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame owns detail-slot state; Triage uses `useFullscreenPanel()` |
+| Expand | `DetailPanelHeader` owns the toggle for every detail-slot drawer; Triage uses a local toggle. An expanded panel is a centred 60rem reading column with bordered gutters, in both the detail slot and Triage. Esc collapses unless already handled; closing the panel and changing route collapse it. | AppFrame owns detail-slot state; Triage uses `useFullscreenPanel()` |
 | Kebab → Mark read | `PATCH /vocs/:id/read-state` (TBD endpoint, S3-008 follow-up) | If not in Slice 3 backend, render the menu item with `disabledReason: 'Slice 3+에 출시 예정'` |
 | Kebab → Snooze | TBD endpoint | same |
 | Kebab → Subscribe / Unsubscribe | TBD (notifications, ADR-0014) | same |

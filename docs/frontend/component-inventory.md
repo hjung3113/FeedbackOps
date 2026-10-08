@@ -56,6 +56,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | ListRow | object, action-queue | hover, selected, active, permission-limited | row action is keyboard reachable |
 | Panel | detail, blocked, create | loading, dirty, error | close is keyboard reachable |
 | DetailPanelHeader | VOC, Finding, Task Request, Task, Milestone, Survey, Cluster | record id available or omitted | kind chip uses its accent and dot; non-Milestone headers retain the accent stripe; fullscreen toggle sits before close inside the detail slot |
+| DetailPanelReadingColumn | detail slot, Triage | expanded, collapsed, no fullscreen context | expanded: centred 60rem column with bordered gutters; otherwise `contents`, so the panel stays mounted across the toggle |
 | UnassignedBadge | owner, reviewer | assigned value or missing | default label is `담당자 없음`; reviewer uses `검토자 없음`; danger tone includes text |
 | Toolbar | view, action, bulk | default, selection-active | one primary action maximum |
 
@@ -103,7 +104,7 @@ Names in the primitive table and the composed list above are design-time names. 
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
 | LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |
-| DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
+| DetailPanel, Panel | `DetailPanelHeader`, `DetailPanelReadingColumn`, `DetailPanelSectionNav`, `PanelTitleBlock` (`inset=none`), `PanelSectionTitle` (`inset=panel`, `size=tiny`), `FieldRow`, `NestedTextBlock`, `Callout` | `packages/ui/src/panel/` |
 | StatusBadge | shared `ReporterStatusBadge`, `InternalTaskBadge`; feature-local `SurveyStatusBadge`, `LinkStatusBadge`, `MilestoneStatusBadge` | `packages/ui/src/badges/`, `apps/frontend/src/features/surveys/components/`, `apps/frontend/src/features/integration/components/`, `apps/frontend/src/features/tasks/components/` |
 | SignalBadge | `SeverityBadge`, `SeverityIndicator`, `UnassignedBadge`, `ManagedSystemPill`, `EntityIconBadge`, generic `OutlineBadge` | `packages/ui/src/badges/`, `packages/ui/src/indicators/` |
 | RichContentEditor | `RichEditor` + `RichContentRenderer` | `packages/ui/src/rich-content/` |

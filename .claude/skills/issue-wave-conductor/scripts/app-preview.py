@@ -20,6 +20,10 @@ The dev proxy goes to:
     database URL points at port 5434 (the dev DB) is refused. A branch backend boots pg-boss with supervise and
     schedule on, so on the dev DB it would work the owner's live job queue with unreviewed code.
   - `--seed` runs the idempotent seed with `SEED_MODE=personas` first, so every mock persona can log in.
+    After the backend is healthy it runs `preview-fixtures.mjs`, which creates one `[preview]` record per
+    drawer surface, including Task Request (one converted, one pending). A fixtures failure is a warning on
+    the start JSON (`fixtures`), not a failed start. The child's stdout and stderr are written to
+    `$WAVE_STATE/preview-<label>-fixtures.log` and are not copied into that JSON.
 
 Each process starts in its own session, and `stop` kills the whole process group (npx → node children). Backends
 carry a `--fops-preview=<label>` argument, and vite configs are named `preview-<label>.vite.config.mts`. That lets
@@ -131,6 +135,101 @@ def read_env_file(path):
     return env
 
 
+def _as_text(value):
+    if value is None:
+        return ''
+    if isinstance(value, bytes):
+        return value.decode('utf-8', 'replace')
+    return value
+
+
+def _write_fixtures_log(log_path, stdout, stderr):
+    Path(log_path).write_text(f'--- stdout ---\n{_as_text(stdout)}\n--- stderr ---\n{_as_text(stderr)}')
+
+
+def _project_ref(value):
+    if not isinstance(value, dict) or 'id' not in value or 'display_id' not in value:
+        return None
+    if not (value['id'] is None or isinstance(value['id'], str)):
+        return None
+    if not (value['display_id'] is None or isinstance(value['display_id'], str)):
+        return None
+    return {'id': value['id'], 'display_id': value['display_id']}
+
+
+def project_fixtures_result(result):
+    """Keep ok/created/reused/failed. Anything else is a fixed shape error."""
+    unexpected = {'ok': False, 'error': 'preview fixtures JSON had an unexpected shape'}
+    if not isinstance(result, dict) or not isinstance(result.get('ok'), bool):
+        return dict(unexpected)
+    created, reused, failed = result.get('created'), result.get('reused'), result.get('failed')
+    if not isinstance(created, dict) or not isinstance(reused, list) or not isinstance(failed, list):
+        return dict(unexpected)
+    projected_created = {}
+    for kind, ref in created.items():
+        projected = _project_ref(ref)
+        if not isinstance(kind, str) or projected is None:
+            return dict(unexpected)
+        projected_created[kind] = projected
+    projected_reused = []
+    for row in reused:
+        projected = _project_ref(row) if isinstance(row, dict) else None
+        if projected is None or not isinstance(row.get('kind'), str):
+            return dict(unexpected)
+        projected_reused.append({
+            'kind': row['kind'],
+            'id': projected['id'],
+            'display_id': projected['display_id'],
+        })
+    projected_failed = []
+    for row in failed:
+        if not isinstance(row, dict):
+            return dict(unexpected)
+        step, status, code = row.get('step'), row.get('status'), row.get('code')
+        if (
+            not isinstance(step, str)
+            or isinstance(status, bool)
+            or not isinstance(status, int)
+            or not isinstance(code, str)
+        ):
+            return dict(unexpected)
+        projected_failed.append({'step': step, 'status': status, 'code': code})
+    return {'ok': result['ok'], 'created': projected_created, 'reused': projected_reused, 'failed': projected_failed}
+
+
+def run_preview_fixtures(port, env, log_path):
+    """One [preview] record per drawer, Task Request (one converted, one pending).
+
+    Failure is a result object, not an exception. Child stdout and stderr are written to
+    log_path and are never returned.
+    """
+    script = Path(__file__).resolve().parent / 'preview-fixtures.mjs'
+    node = str(Path(NODE22) / 'node')
+    log_path = Path(log_path)
+    try:
+        proc = subprocess.run(
+            [node, str(script), '--api', f'http://127.0.0.1:{port}'],
+            capture_output=True, text=True, env=env, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _write_fixtures_log(log_path, exc.stdout, exc.stderr)
+        return {'ok': False, 'error': f'preview fixtures timed out; see {log_path}'}
+    except OSError as exc:
+        return {'ok': False, 'error': f'preview fixtures failed to start: {exc}'}
+    _write_fixtures_log(log_path, proc.stdout, proc.stderr)
+    line = next(
+        (candidate.strip() for candidate in reversed(proc.stdout.splitlines()) if candidate.strip()),
+        '',
+    )
+    if not line:
+        return {'ok': False, 'error': f'preview fixtures produced no JSON; see {log_path}'}
+    try:
+        result = json.loads(line)
+    except json.JSONDecodeError:
+        return {'ok': False, 'error': f'preview fixtures produced invalid JSON; see {log_path}'}
+    return project_fixtures_result(result)
+
+
 def db_port(url):
     match = re.search(r'@[^:/]+:(\d+)/', url or '')
     return match.group(1) if match else None
@@ -175,6 +274,7 @@ def start(args):
     state = {'name': label, 'checkout': str(checkout), 'pids': []}
     backend_port = USER_BACKEND_PORT
     warnings = []
+    fixtures = None
     if args.backend:
         if not args.env:
             fail('--backend needs --env <throwaway env file> (verify-db.sh create <n> writes $WAVE_STATE/env.verify.<n>)', 2)
@@ -204,6 +304,10 @@ def start(args):
                 kill_group(p)
             state_path.unlink(missing_ok=True)
             fail(f'backend did not become healthy; see {states / f"preview-{label}-backend.log"}')
+        if args.seed:
+            fixtures = run_preview_fixtures(backend_port, env, states / f'preview-{label}-fixtures.log')
+            if fixtures.get('ok') is not True:
+                warnings.append('preview fixtures did not succeed; see the fixtures field')
     elif not http_ok(f'http://127.0.0.1:{USER_BACKEND_PORT}/health'):
         warnings.append(f'the user backend on :{USER_BACKEND_PORT} is not answering; API calls will fail')
 
@@ -236,7 +340,10 @@ def start(args):
         fail(f'vite did not start; see {states / f"preview-{label}-vite.log"}')
     api = (f'checkout backend :{backend_port} on {state["backend_env"]}' if args.backend
            else f'user backend :{USER_BACKEND_PORT} (develop code, dev DB): conductor checks only, not reviewers')
-    emit({'ok': True, 'command': 'start', **state, 'api': api, 'warnings': warnings})
+    payload = {'ok': True, 'command': 'start', **state, 'api': api, 'warnings': warnings}
+    if args.seed:
+        payload['fixtures'] = fixtures
+    emit(payload)
 
 
 def stop_one(states, label):
@@ -290,7 +397,8 @@ def main():
     p_start.add_argument('checkout')
     p_start.add_argument('--backend', action='store_true', help="also run the checkout's backend (needs --env)")
     p_start.add_argument('--env', help='throwaway backend env file, e.g. $WAVE_STATE/env.verify.<n>')
-    p_start.add_argument('--seed', action='store_true', help='run the personas seed before starting the backend')
+    p_start.add_argument('--seed', action='store_true',
+                         help='personas seed, then one [preview] record per drawer surface')
     p_start.add_argument('--name', help='label and host prefix (default: checkout directory name)')
     p_stop = sub.add_parser('stop')
     p_stop.add_argument('name', nargs='?')

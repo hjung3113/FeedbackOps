@@ -10,6 +10,9 @@ vi.mock('react-dom/client', () => ({
 vi.mock('@tanstack/react-router', () => ({
   createRouter: () => ({}),
   RouterProvider: () => null,
+  // #850: app-router builds its search (de)serializers at module load.
+  parseSearchWith: () => () => ({}),
+  stringifySearchWith: () => () => '',
 }));
 
 vi.mock('./routeTree.gen', () => ({ routeTree: {} }));
