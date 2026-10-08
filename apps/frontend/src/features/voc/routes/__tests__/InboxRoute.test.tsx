@@ -673,7 +673,7 @@ describe('useInboxRoute', () => {
 
     fireEvent.change(searchBox(), { target: { value: '로그인' } });
 
-    // A Hangul-final draft waits the 1000 ms #875 debounce; the URL write
+    // A Hangul-final draft waits the 700 ms #875 debounce; the URL write
     // carries q with replace: true.
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
     const navigation = lastNavigateSearch();
@@ -705,7 +705,7 @@ describe('useInboxRoute', () => {
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
     fireEvent.change(searchBox(), { target: { value: '로그인' } });
-    // Hangul-final draft: the write lands after the 1000 ms #875 debounce.
+    // Hangul-final draft: the write lands after the 700 ms #875 debounce.
     await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
     const searching = lastNavigateSearch().search(searchState);
     expect(searching).toEqual({ view: 'inbox', q: '로그인' });
