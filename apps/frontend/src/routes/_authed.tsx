@@ -407,7 +407,7 @@ function AuthedShell() {
     const filter: Record<string, unknown> = { view };
     const managedSystem = current.get('managedSystem');
     if (managedSystem) filter.managed_system_id = managedSystem;
-    for (const key of ['tab', 'sort', 'filter.severity', 'filter.owner'] as const) {
+    for (const key of ['tab', 'sort', 'q', 'filter.severity', 'filter.owner'] as const) {
       const value = current.get(key);
       if (value) filter[key] = value;
     }
@@ -430,6 +430,7 @@ function AuthedShell() {
             : {}),
           ...(typeof filter.tab === 'string' ? { tab: filter.tab as never } : {}),
           ...(typeof filter.sort === 'string' ? { sort: filter.sort as never } : {}),
+          ...(typeof filter.q === 'string' ? { q: filter.q } : {}),
           ...(typeof filter['filter.severity'] === 'string'
             ? { 'filter.severity': filter['filter.severity'] }
             : {}),
