@@ -176,6 +176,8 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
+  // The real useVocList imports this. The mock useQuery below ignores it.
+  keepPreviousData: (previous: unknown) => previous,
   useQuery: (options: {
     queryKey?: readonly unknown[];
     queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
@@ -823,4 +825,128 @@ describe('useInboxRoute', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps a tab picked before a repeated commit is acknowledged', () => {
+    vi.useFakeTimers();
+    try {
+      // 높음 is not the active tab, so picking it is a real change. The URL
+      // still shows the pre-commit search when the tab and the blur run.
+      searchState = { view: 'inbox', tab: 'untriaged' };
+      render(<InboxTestHarness view="inbox" />);
+      const box = searchBox();
+      fireEvent.change(box, { target: { value: '로그인' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      // Radix TabsTrigger activates on mouseDown.
+      fireEvent.mouseDown(screen.getByRole('tab', { name: '높음' }));
+      fireEvent.blur(box);
+
+      expect(navigateMock).toHaveBeenCalledTimes(2);
+      expect(foldNavigations({ view: 'inbox', tab: 'untriaged' })).toEqual({
+        view: 'inbox',
+        q: '로그인',
+        tab: 'high',
+      });
+
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(navigateMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('commits a newer draft while the first commit is pending without dropping the tab', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox', tab: 'untriaged' };
+      render(<InboxTestHarness view="inbox" />);
+      const box = searchBox();
+      fireEvent.change(box, { target: { value: '로그인' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      fireEvent.mouseDown(screen.getByRole('tab', { name: '높음' }));
+      fireEvent.change(box, { target: { value: '로그인 오류' } });
+      fireEvent.blur(box);
+
+      expect(navigateMock).toHaveBeenCalledTimes(3);
+      expect(foldNavigations({ view: 'inbox', tab: 'untriaged' })).toEqual({
+        view: 'inbox',
+        q: '로그인 오류',
+        tab: 'high',
+      });
+
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(navigateMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a newer draft typed while a commit is still unacknowledged', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox' };
+      const { rerender } = render(<InboxTestHarness view="inbox" />);
+      const box = searchBox();
+      fireEvent.change(box, { target: { value: '로그인' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      fireEvent.change(box, { target: { value: '로그인 오류' } });
+
+      searchState = { view: 'inbox', q: '로그인' };
+      rerender(<InboxTestHarness view="inbox" />);
+
+      expect(searchBox()).toHaveValue('로그인 오류');
+
+      fireEvent.blur(searchBox());
+      expect(navigateMock).toHaveBeenCalledTimes(2);
+      expect(lastNavigateSearch().search(searchState)).toEqual({
+        view: 'inbox',
+        q: '로그인 오류',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows skeletons instead of the previous empty page while placeholder data is in flight', () => {
+    useVocListMock.mockReturnValue({
+      data: { items: [], next_cursor: undefined },
+      isLoading: false,
+      isPlaceholderData: true,
+      error: null,
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox', q: '다음' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(screen.queryByText('검색 결과가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.getByRole('rowgroup', { name: 'VOC 목록 로딩 중' })).toBeInTheDocument();
+  });
+
+  it('keeps previous rows mounted while the next page is placeholder data', () => {
+    useVocListMock.mockReturnValue({
+      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
+      isLoading: false,
+      isPlaceholderData: true,
+      error: null,
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox', q: '다음' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(screen.getByText('피드백 1')).toBeInTheDocument();
+    expect(screen.queryByText('검색 결과가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('rowgroup', { name: 'VOC 목록 로딩 중' })).not.toBeInTheDocument();
+  });
 });
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+function foldNavigations(initial: Record<string, unknown>): Record<string, unknown> {
+  let state = initial;
+  for (const [call] of navigateMock.mock.calls) {
+    const navigation = call as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    state = navigation.search(state);
+  }
+  return state;
+}

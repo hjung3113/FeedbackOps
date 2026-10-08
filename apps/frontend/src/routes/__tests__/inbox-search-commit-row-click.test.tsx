@@ -1,11 +1,8 @@
-// #864: the inbox search commits at once on Enter and on blur. #849's UX
-// review measured the loss: type a term and save a view within the 300 ms
-// debounce and the view is stored without `q`. This drives the REAL inbox
-// (VocRouteShell) and the REAL sidebar saved-view form. After the real-timer
-// mount, timers are frozen for the type → blur → navigation → submit window
-// and the 300 ms debounce is never advanced, so any `q` in the POST
-// /saved-views body can only have come from the immediate commit. React's
-// async `act` yields via setImmediate, which stays real.
+// #864: mousedown on a row blurs the search box, and the blur commit writes q
+// before click. Without placeholder data the new list query has no cache, the
+// rows swap for skeletons, and the click never writes `selected`. This drives
+// the real inbox. The next list request is left pending so the failure does
+// not depend on a fast response. The 300 ms debounce is frozen and not advanced.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -24,6 +21,8 @@ import type { AppRouterContext } from '../__root';
 import { AuthedLayout, authenticatedBeforeLoad } from '../_authed';
 import { VocRouteShell, validateVocSearch } from '../_authed/vocs';
 
+const ROW_ID = '00000000-0000-4000-8000-000000000008';
+
 const ME = {
   actor: {
     id: 'actor-1',
@@ -35,6 +34,25 @@ const ME = {
   workspace_id: 'workspace-1',
 };
 
+const ROW = {
+  id: ROW_ID,
+  display_id: 'VOC-SEED-08',
+  title: '시드 행',
+  primary_managed_system_id: '00000000-0000-4000-8000-0000000000aa',
+  analytics_area_id: null,
+  reporter_id: '00000000-0000-4000-8000-0000000000bb',
+  owner_user_id: null,
+  owner_team_id: null,
+  severity: 'high' as const,
+  reporter_facing_status: 'received' as const,
+  triage_state: 'untriaged' as const,
+  source_context: 'direct_use' as const,
+  created_at: '2026-10-08T00:00:00.000Z',
+  updated_at: '2026-10-08T00:00:00.000Z',
+  similar_count: 0,
+  attachment_count: 0,
+};
+
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -42,47 +60,21 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-interface SavedViewRow {
-  id: string;
-  surface: 'voc';
-  name: string;
-  filter: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
+function hang(): Promise<Response> {
+  return new Promise(() => {});
 }
 
-function savedView(id: string, name: string, filter: Record<string, unknown>): SavedViewRow {
-  return {
-    id,
-    surface: 'voc',
-    name,
-    filter,
-    created_at: '2026-10-08T00:00:00.000Z',
-    updated_at: '2026-10-08T00:00:00.000Z',
-  };
-}
-
-interface HarnessOptions {
-  /** Resolved with the saved view's filter when the POST /saved-views lands. */
-  onSavedViewPost: (filter: Record<string, unknown>) => void;
-}
-
-function mountInboxHarness({ onSavedViewPost }: HarnessOptions) {
+function mountInbox() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
-    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
-    if (method === 'POST' && url === '/saved-views') {
-      const input = body as { name: string; filter: Record<string, unknown> };
-      onSavedViewPost(input.filter);
-      return jsonResponse(200, savedView('view-new', input.name, input.filter));
-    }
-    if (method === 'GET' && url === '/saved-views?surface=voc') {
-      return jsonResponse(200, { items: [] });
-    }
     if (method === 'GET' && url.startsWith('/vocs?')) {
-      return jsonResponse(200, { items: [] });
+      const q = new URL(url, 'http://localhost').searchParams.get('q');
+      // The committed draft has no cached page. Leave it pending.
+      if (q !== null) return hang();
+      return jsonResponse(200, { items: [ROW] });
     }
+    if (method === 'GET' && url.startsWith('/vocs/')) return hang();
     if (url === '/me') return jsonResponse(200, ME);
     if (url.startsWith('/managed-systems')) return jsonResponse(200, { items: [], total: 0 });
     if (url.startsWith('/analytics-areas')) return jsonResponse(200, { items: [] });
@@ -94,6 +86,7 @@ function mountInboxHarness({ onSavedViewPost }: HarnessOptions) {
     if (url.startsWith('/notifications?')) {
       return jsonResponse(200, { items: [], page: { has_more: false }, unread_count: 0 });
     }
+    if (url.startsWith('/saved-views')) return jsonResponse(200, { items: [] });
     return jsonResponse(200, {});
   });
   vi.stubGlobal('fetch', fetchMock as typeof globalThis.fetch);
@@ -138,43 +131,35 @@ function mountInboxHarness({ onSavedViewPost }: HarnessOptions) {
   return { router };
 }
 
-describe('#864 saving a view right after typing keeps q', () => {
+describe('#864 a row click while a search draft is pending still selects the row', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it('commits q on blur so the POST /saved-views body has it before the debounce could elapse', async () => {
-    let resolvePost!: (filter: Record<string, unknown>) => void;
-    const postedFilter = new Promise<Record<string, unknown>>((resolve) => {
-      resolvePost = resolve;
-    });
-    const { router } = mountInboxHarness({ onSavedViewPost: resolvePost });
+  it('writes selected when pointerdown, mousedown, blur, mouseup and click land before the debounce', async () => {
+    const { router } = mountInbox();
     const box = await screen.findByRole('searchbox', { name: '필터, 키워드…' });
-    const nameField = await screen.findByLabelText('저장된 보기 이름');
+    const row = (await screen.findByText('VOC-SEED-08')).closest('[role="row"]');
+    expect(row).not.toBeNull();
+    if (row === null) return;
 
-    // Mount and the first reads stay on real timers. Freeze only the
-    // interaction window, and do not fake setImmediate: async act waits on it.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     try {
-      // The user's flow starts by focusing the box; jsdom does not focus on
-      // fireEvent.change, so focus explicitly — otherwise the later focus() on
-      // the name field blurs nothing and no commit can happen.
       box.focus();
-      fireEvent.change(box, { target: { value: '로그인' } });
-      nameField.focus(); // blurs the search box — commit at once (#864)
-      // The commit's navigate() settles in microtasks; flush so the URL (and
-      // with it savedViewFilter) carries q before the save. The 300 ms
-      // debounce is frozen and is not advanced.
+      fireEvent.change(box, { target: { value: 'voc-0' } });
+      fireEvent.pointerDown(row);
+      fireEvent.mouseDown(row);
+      fireEvent.blur(box);
+      // The browser flushes the blur commit's navigation before mouseup/click.
+      // That is the gap where a cache miss detaches the row.
       await act(async () => {});
-      fireEvent.change(nameField, { target: { value: '검색 보기' } });
-      fireEvent.click(screen.getByTestId('saved-view-save'));
+      fireEvent.mouseUp(row);
+      fireEvent.click(row);
+      await act(async () => {});
 
-      const filter = await postedFilter;
-      expect(filter.q).toBe('로그인');
-
-      const search = router.state.location.search as Record<string, unknown>;
-      expect(search.q).toBe('로그인');
+      const search = router.state.location.search as { selected?: string };
+      expect(search.selected).toBe(ROW_ID);
     } finally {
       vi.useRealTimers();
     }

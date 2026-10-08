@@ -164,4 +164,39 @@ describe('SearchInput onCommit (#864)', () => {
     expect(onValueChange).toHaveBeenCalledWith('');
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['keyCode 229', { keyCode: 229 }],
+  ])('does not call onCommit for a composition Enter (%s)', (_label, composition) => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    dispatchEnter(screen.getByRole('searchbox'), composition);
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('commits a normal Enter after a composition Enter', () => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    const input = screen.getByRole('searchbox');
+    dispatchEnter(input, { isComposing: true });
+    dispatchEnter(input, {});
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
 });
+
+function dispatchEnter(
+  input: HTMLElement,
+  composition: { isComposing?: boolean; keyCode?: number },
+): void {
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    cancelable: true,
+    isComposing: composition.isComposing === true,
+  });
+  if (composition.keyCode !== undefined) {
+    Object.defineProperty(event, 'keyCode', { value: composition.keyCode });
+  }
+  fireEvent(input, event);
+}
