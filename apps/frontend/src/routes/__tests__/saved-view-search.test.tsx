@@ -139,34 +139,6 @@ describe('#849 saved views keep the inbox search', () => {
     vi.unstubAllGlobals();
   });
 
-  it('saving from a URL with q=voc-1 sends a filter containing q', async () => {
-    const { requests } = mountSavedViewHarness({ initialPath: '/vocs?view=inbox&q=voc-1' });
-    fireEvent.change(await screen.findByLabelText('저장된 보기 이름'), {
-      target: { value: '검색 보기' },
-    });
-    fireEvent.click(screen.getByTestId('saved-view-save'));
-
-    await waitFor(() => expect(postsToSavedViews(requests)).toHaveLength(1));
-    expect(postsToSavedViews(requests)[0]?.body).toMatchObject({
-      surface: 'voc',
-      name: '검색 보기',
-      filter: { q: 'voc-1' },
-    });
-  });
-
-  it('applying a view with q navigates with q', async () => {
-    const { router } = mountSavedViewHarness({
-      initialPath: '/vocs?view=inbox',
-      savedViews: [savedView('view-1', '검색 보기', { view: 'inbox', q: 'voc-1' })],
-    });
-    fireEvent.click(await screen.findByTestId('saved-view-apply-view-1'));
-
-    await waitFor(() => {
-      const search = new URLSearchParams(router.state.location.searchStr);
-      expect(search.get('q')).toBe('voc-1');
-    });
-  });
-
   it('applying a view without q clears the current search', async () => {
     const { router } = mountSavedViewHarness({
       initialPath: '/vocs?view=inbox&q=stale-search',
@@ -181,9 +153,7 @@ describe('#849 saved views keep the inbox search', () => {
     });
   });
 
-  // #849: the router may JSON-quote string search values (#850), so the raw
-  // query string round `savedViewFilter` persists quotes for `true`, `null`,
-  // and JSON-shaped text. The saved term must round-trip byte-for-byte.
+  // Saving and applying a view keeps the search term exactly, including values the router JSON-quotes.
   it.each([['voc-1'], ['123'], ['true'], ['null'], ['"login error"']])(
     'saving and applying keeps the exact search term %s',
     async (term) => {

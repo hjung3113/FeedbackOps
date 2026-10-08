@@ -16,6 +16,7 @@ import { useFullscreenPanel } from '@/lib/panel/useFullscreenPanel';
 import type { VocListItem } from '@fops/shared';
 import {
   DetailPanelFullscreenContext,
+  DetailPanelReadingColumn,
   ListTabs,
   type ListToolbarTab,
   ToolbarKicker,
@@ -189,24 +190,14 @@ export function VocTriageScreen({
             }
           >
             <DetailPanelFullscreenContext.Provider value={{ expanded: isFullscreen, toggle }}>
-              {/* #852: fullscreen keeps a centred reading column; the gutters keep the panel
-                  background. The wrapper is always present (`contents` when collapsed) so toggling
-                  never remounts the panel and its staged triage choices survive. */}
-              <div
-                data-testid="triage-panel-column"
-                className={
-                  isFullscreen
-                    ? 'mx-auto h-full w-full max-w-[60rem] border-x border-border-subtle'
-                    : 'contents'
-                }
-              >
+              <DetailPanelReadingColumn data-testid="triage-panel-column">
                 <TriagePanel
                   voc={selectedVoc}
                   onAct={handleAct}
                   onOptimisticRemove={handleOptimisticRemove}
                   onOptimisticRestore={handleOptimisticRestore}
                 />
-              </div>
+              </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
           </div>
         )}

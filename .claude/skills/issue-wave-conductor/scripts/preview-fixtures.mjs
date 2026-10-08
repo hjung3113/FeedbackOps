@@ -2,13 +2,27 @@
 // One [preview] record per drawer surface on a throwaway preview database.
 // Task Request is the exception: one converted, one left pending_review.
 //
+// Usage: node preview-fixtures.mjs --api http://127.0.0.1:<port>
+//
 // Idempotent: each record's title (or the request's reason / evidence summary)
 // starts with "[preview]". The matching list is read before every create.
 //
 // Mutations share a 10/minute actor bucket
 // (apps/backend/src/lib/rate-limit-tiers.ts). Writes are split across personas
-// so one start stays under that cap. Approve of a permission request uses the
+// so one fresh start stays under that cap. A permission-request approve uses the
 // separate sensitive bucket.
+//
+// Fresh-start mutation tally (the permission approve is not in this bucket):
+//   mock-admin-1: 8 — finding, two task requests, task approve, convert,
+//     milestone, milestone assign, personal-read permission request
+//   mock-admin-2: 4 when the cluster system is not tableau (cluster, two
+//     members, one outcome response); 1 when it is
+//   mock-developer-1: 4 when the cluster system is tableau (cluster, two
+//     members, one outcome response); 1 otherwise
+//   mock-developer-2: 9 — two surveys, three questions, two opens, one
+//     outcome response, close
+//   mock-user-1: 2 — discovery and outcome responses
+//   mock-user-2: 2 — outcome response, permission request
 //
 // The outcome follow-up review renders a row only when the survey is closed,
 // the response count meets the anonymity threshold (minimum 5, core.md), and
@@ -40,119 +54,6 @@ const TITLE = {
   personalRead: `${MARK} personal response read for the follow-up review`,
 };
 
-const DRY_RUN_STEPS = [
-  { step: 'finding', method: 'POST', path: '/vocs/:id/create-finding', persona: 'mock-admin-1' },
-  {
-    step: 'task_request',
-    method: 'POST',
-    path: '/findings/:id/request-task',
-    persona: 'mock-admin-1',
-  },
-  { step: 'task', method: 'POST', path: '/task-requests/:id/approve', persona: 'mock-admin-1' },
-  { step: 'task', method: 'POST', path: '/task-requests/:id/convert', persona: 'mock-admin-1' },
-  {
-    step: 'task_request_pending',
-    method: 'POST',
-    path: '/findings/:id/request-task',
-    persona: 'mock-admin-1',
-  },
-  { step: 'milestone', method: 'POST', path: '/milestones', persona: 'mock-admin-1' },
-  { step: 'milestone', method: 'POST', path: '/tasks/:id/milestone', persona: 'mock-admin-1' },
-  { step: 'voc_cluster', method: 'POST', path: '/voc-clusters', persona: 'mock-developer-1' },
-  {
-    step: 'voc_cluster',
-    method: 'POST',
-    path: '/voc-clusters/:id/vocs',
-    persona: 'mock-developer-1',
-  },
-  { step: 'discovery_survey', method: 'POST', path: '/surveys', persona: 'mock-developer-2' },
-  {
-    step: 'discovery_survey',
-    method: 'POST',
-    path: '/surveys/:id/questions',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'discovery_survey',
-    method: 'POST',
-    path: '/surveys/:id/open',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'discovery_response',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-user-1',
-  },
-  { step: 'outcome_survey', method: 'POST', path: '/surveys', persona: 'mock-developer-2' },
-  {
-    step: 'outcome_survey',
-    method: 'POST',
-    path: '/surveys/:id/questions',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'outcome_survey',
-    method: 'POST',
-    path: '/surveys/:id/open',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'outcome_response',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-user-1',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-user-2',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-admin-2',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-developer-1',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/surveys/:id/responses',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/surveys/:id/close',
-    persona: 'mock-developer-2',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/permission-requests',
-    persona: 'mock-admin-1',
-  },
-  {
-    step: 'outcome_follow_up',
-    method: 'POST',
-    path: '/permissions/requests/:id/approve',
-    persona: 'mock-admin-2',
-  },
-  {
-    step: 'permission_request',
-    method: 'POST',
-    path: '/permission-requests',
-    persona: 'mock-user-2',
-  },
-];
-
 const created = {};
 const reused = [];
 const failed = [];
@@ -161,11 +62,9 @@ let origin = 'http://127.0.0.1';
 
 function parseArgs(argv) {
   let api = '';
-  let dryRun = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--dry-run') dryRun = true;
-    else if (arg === '--api') {
+    if (arg === '--api') {
       api = argv[i + 1] ?? '';
       i += 1;
     } else if (arg.startsWith('--api=')) api = arg.slice('--api='.length);
@@ -181,7 +80,7 @@ function parseArgs(argv) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return { error: `invalid --api ${api}` };
   }
-  return { api: url.origin, dryRun };
+  return { api: url.origin };
 }
 
 function finish(payload, code = 0) {
@@ -192,7 +91,8 @@ function finish(payload, code = 0) {
 async function guard(step, fn) {
   try {
     return await fn();
-  } catch {
+  } catch (error) {
+    console.error(`[${step}]`, error);
     recordFailed(step, 0, 'script_error');
     return null;
   }
@@ -234,8 +134,7 @@ function marked(value) {
 }
 
 function findMarked(rows, field, exact) {
-  const hits = rows.filter((row) => marked(row?.[field]));
-  return hits.find((row) => row[field] === exact) ?? hits[0] ?? null;
+  return rows.find((row) => row?.[field] === exact) ?? null;
 }
 
 async function request(path, { method = 'GET', persona, body, query, idempotency, ifMatch } = {}) {
@@ -353,7 +252,7 @@ async function loadSeedVocs() {
     groups.set(row.primary_managed_system_id, group);
   }
   const pair = [...groups.values()].find((group) => group.length >= 2);
-  if (!pair) return { ok: false, status: 404, code: 'not_found.record' };
+  if (!pair) return { ok: false, status: 0, code: 'seed_missing' };
   return { ok: true, vocs: pair.slice(0, 2) };
 }
 
@@ -391,8 +290,7 @@ async function stepTaskRequest(finding) {
     recordFailed(step, listed.status, listed.code);
     return null;
   }
-  // Exact summary only. findMarked's prefix fallback would claim the pending request.
-  const existing = itemsOf(listed.body).find((row) => row.evidence_summary === TITLE.taskRequest);
+  const existing = findMarked(itemsOf(listed.body), 'evidence_summary', TITLE.taskRequest);
   if (existing) {
     remember(step, existing, false);
     return existing;
@@ -428,9 +326,7 @@ async function stepTaskRequestPending(finding) {
     recordFailed(step, listed.status, listed.code);
     return null;
   }
-  const existing = itemsOf(listed.body).find(
-    (row) => row.evidence_summary === TITLE.taskRequestPending,
-  );
+  const existing = findMarked(itemsOf(listed.body), 'evidence_summary', TITLE.taskRequestPending);
   if (existing) {
     remember(step, existing, false);
     return existing;
@@ -492,11 +388,11 @@ async function stepTask(taskRequest) {
     status = approved.body?.status ?? 'approved';
   }
   if (status !== 'approved' && status !== 'converted') {
-    recordFailed(step, 422, 'not_approved');
+    recordFailed(step, 0, 'not_approved');
     return null;
   }
   if (status === 'converted') {
-    recordFailed(step, 404, 'not_found.record');
+    recordFailed(step, 0, 'already_converted');
     return null;
   }
   const converted = await request(`/task-requests/${taskRequest.id}/convert`, {
@@ -574,7 +470,7 @@ async function stepCluster(vocs, systems) {
   }
   const managedSystemId = vocs[0].primary_managed_system_id;
   const slug = [...(systems?.values() ?? [])].find((row) => row.id === managedSystemId)?.slug;
-  const persona = slug === 'tableau' ? 'mock-developer-1' : 'mock-admin-1';
+  const persona = slug === 'tableau' ? 'mock-developer-1' : 'mock-admin-2';
   if (!sessions[persona]) {
     recordFailed(step, 0, 'not_logged_in');
     return null;
@@ -674,7 +570,7 @@ const TEXT_QUESTION = {
 async function ensureSurvey(kind, { title, type, systemId, questions }) {
   const persona = 'mock-developer-2';
   if (!systemId) {
-    recordFailed(kind, 404, 'not_found.record');
+    recordFailed(kind, 0, 'seed_missing');
     return null;
   }
   if (!sessions[persona]) {
@@ -921,7 +817,7 @@ async function stepPermission(systemId) {
     return;
   }
   if (!systemId) {
-    recordFailed(step, 404, 'not_found.record');
+    recordFailed(step, 0, 'seed_missing');
     return;
   }
   const listed = await request('/permission-requests/mine', { persona });
@@ -956,7 +852,6 @@ async function stepPermission(systemId) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.error) finish({ ok: false, error: args.error }, 2);
-  if (args.dryRun) finish({ ok: true, dry_run: true, steps: DRY_RUN_STEPS });
 
   origin = args.api;
   for (const persona of PERSONAS) await login(persona, args.api);
@@ -980,8 +875,8 @@ async function main() {
     recordFailed('discovery_survey', systems.status, systems.code);
     recordFailed('outcome_survey', systems.status, systems.code);
   } else if (!powerBiId) {
-    recordFailed('discovery_survey', 404, 'not_found.record');
-    recordFailed('outcome_survey', 404, 'not_found.record');
+    recordFailed('discovery_survey', 0, 'seed_missing');
+    recordFailed('outcome_survey', 0, 'seed_missing');
   } else {
     discovery = await guard('discovery_survey', () =>
       ensureSurvey('discovery_survey', {

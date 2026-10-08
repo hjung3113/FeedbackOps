@@ -11,7 +11,12 @@ import {
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
-import { DetailPanelFullscreenContext, DetailPanelSlotContext, cn } from '@fops/ui';
+import {
+  DetailPanelFullscreenContext,
+  DetailPanelReadingColumn,
+  DetailPanelSlotContext,
+  cn,
+} from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 import { AppRail, type RailDomain } from './AppRail';
@@ -245,19 +250,9 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
         >
           {slotOpen && (
             <DetailPanelFullscreenContext.Provider value={fullscreenContextValue}>
-              {/* #852: expanded drawers render as a centred reading column. The wrapper is always
-                  present (`contents` when collapsed, so layout is unchanged): a conditional wrapper
-                  would remount the panel on toggle and drop unsaved input. */}
-              <div
-                data-testid="app-detail-slot-column"
-                className={cn(
-                  isExpanded
-                    ? 'mx-auto h-full w-full max-w-[60rem] border-x border-border-subtle'
-                    : 'contents',
-                )}
-              >
+              <DetailPanelReadingColumn data-testid="app-detail-slot-column">
                 {slotNode}
-              </div>
+              </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
           )}
         </aside>

@@ -33,11 +33,8 @@ const ME = {
   workspace_id: '22222222-2222-4222-8222-222222222222',
 };
 
-const originalFetch = globalThis.fetch;
-
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('/vocs inbox numeric search (#850)', () => {
@@ -62,7 +59,6 @@ describe('/vocs inbox numeric search (#850)', () => {
       if (url.pathname === '/me/permissions/check') {
         return jsonResponse(200, { state: 'approved', decision: { allow: true } });
       }
-      if (url.pathname === '/me/saved-views') return jsonResponse(200, { items: [] });
       return jsonResponse(200, {});
     });
     vi.stubGlobal('fetch', fetchMock as typeof globalThis.fetch);

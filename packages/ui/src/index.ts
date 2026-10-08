@@ -155,6 +155,7 @@ export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } 
 export {
   DetailPanelFullscreenContext,
   DetailPanelFullscreenToggle,
+  DetailPanelReadingColumn,
   type DetailPanelFullscreenValue,
 } from './panel/DetailPanelFullscreenContext';
 export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';

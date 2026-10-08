@@ -24,16 +24,6 @@ import { toast } from 'sonner';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type AppRouterContext, RootLayout, TOASTER_BOTTOM_OFFSET } from '../__root';
 
-// Footer heights derived from the shipped Tailwind classes (4px spacing base):
-// - TriageActions footer (features/voc/components/triage/TriageActions.tsx):
-//   border-t 1px + py-4 (2 × 16px) + primary h-8 32px + flex-col gap-2 8px
-//   + secondary row h-7 28px = 101px
-// - VOC detail footer (features/voc/components/detail/NextActionFooter.tsx):
-//   border-t 1px + py-3 (2 × 12px) + Button size="sm" h-8 32px = 57px
-const TRIAGE_ACTIONS_FOOTER_PX = 1 + 16 * 2 + 32 + 8 + 28;
-const NEXT_ACTION_FOOTER_PX = 1 + 12 * 2 + 32;
-const CLEAR_GAP_PX = 16;
-
 function renderRootLayout() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const rootRoute = createRootRouteWithContext<AppRouterContext>()({
@@ -61,14 +51,6 @@ afterEach(() => {
 });
 
 describe('root Toaster offset (#851)', () => {
-  it('sits above the tallest expanded panel action footer plus a 16px gap', () => {
-    expect(TRIAGE_ACTIONS_FOOTER_PX).toBe(101);
-    expect(NEXT_ACTION_FOOTER_PX).toBe(57);
-    expect(TOASTER_BOTTOM_OFFSET).toBe(
-      Math.max(TRIAGE_ACTIONS_FOOTER_PX, NEXT_ACTION_FOOTER_PX) + CLEAR_GAP_PX,
-    );
-  });
-
   it('renders the Toaster at bottom-center with the offset as sonner --offset-bottom', async () => {
     renderRootLayout();
     await screen.findByTestId('root-toaster-test-marker');

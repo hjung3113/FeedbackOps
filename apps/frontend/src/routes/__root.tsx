@@ -18,7 +18,7 @@ export interface AppRouterContext {
 //   - VOC detail NextActionFooter (features/voc/components/detail/NextActionFooter.tsx):
 //     border-t 1px + py-3 (2 × 12px) + Button size="sm" h-8 32px = 57px
 // 101px (tallest) + 16px gap = 117px. Passed as sonner's desktop `offset`;
-// mobile keeps sonner's default via `mobileOffset`.
+// `mobileOffset` is not set, so sonner's mobile default (16px) applies.
 export const TOASTER_BOTTOM_OFFSET = 117;
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({

@@ -402,23 +402,24 @@ function AuthedShell() {
   );
   const savedViewFilter = React.useMemo<Record<string, unknown> | undefined>(() => {
     if (activeDomain !== 'voc' || location.pathname !== '/vocs') return undefined;
-    const current = new URLSearchParams(location.searchStr);
-    const view = current.get('view') ?? VOC_DEFAULT_VIEW;
+    const search = location.search as Record<string, unknown>;
+    const viewValue = search.view;
+    const view = typeof viewValue === 'string' && viewValue !== '' ? viewValue : VOC_DEFAULT_VIEW;
     const filter: Record<string, unknown> = { view };
-    const managedSystem = current.get('managedSystem');
-    if (managedSystem) filter.managed_system_id = managedSystem;
-    for (const key of ['tab', 'sort', 'filter.severity', 'filter.owner'] as const) {
-      const value = current.get(key);
-      if (value) filter[key] = value;
+    const managedSystem = search.managedSystem;
+    if (typeof managedSystem === 'string' && managedSystem !== '') {
+      filter.managed_system_id = managedSystem;
     }
-    // #849: `q` is free text and the router may JSON-quote it in the URL
-    // (#850), so read the decoded search object, not the raw query string.
-    const q = location.search.q;
-    if (typeof q === 'string' && q !== '') filter.q = q;
-    const reporterStatus = current.get('filter.reporterStatus');
-    if (reporterStatus) filter['filter.reporter_facing_status'] = reporterStatus;
+    for (const key of ['tab', 'sort', 'q', 'filter.severity', 'filter.owner'] as const) {
+      const value = search[key];
+      if (typeof value === 'string' && value !== '') filter[key] = value;
+    }
+    const reporterStatus = search['filter.reporterStatus'];
+    if (typeof reporterStatus === 'string' && reporterStatus !== '') {
+      filter['filter.reporter_facing_status'] = reporterStatus;
+    }
     return filter;
-  }, [activeDomain, location.pathname, location.searchStr, location.search]);
+  }, [activeDomain, location.pathname, location.search]);
   const applySavedView = React.useCallback(
     (view: SavedView) => {
       if (view.surface !== 'voc') return;
