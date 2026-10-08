@@ -14,6 +14,7 @@ import {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ME_QUERY_KEY } from '../../lib/auth/useMe';
+import { parseAppSearch, stringifyAppSearch } from '../../lib/router/search-serialization';
 import type { AppRouterContext } from '../__root';
 import { AuthedLayout, authenticatedBeforeLoad } from '../_authed';
 
@@ -113,6 +114,8 @@ function mountSavedViewHarness({ initialPath, savedViews = [] }: HarnessOptions)
     routeTree: rootRoute.addChildren([authedRoute.addChildren([vocsRoute]), loginRoute]),
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: [initialPath] }),
+    parseSearch: parseAppSearch,
+    stringifySearch: stringifyAppSearch,
   });
 
   render(
@@ -177,4 +180,31 @@ describe('#849 saved views keep the inbox search', () => {
       expect(search.get('view')).toBe('inbox');
     });
   });
+
+  // #849: the router may JSON-quote string search values (#850), so the raw
+  // query string round `savedViewFilter` persists quotes for `true`, `null`,
+  // and JSON-shaped text. The saved term must round-trip byte-for-byte.
+  it.each([['voc-1'], ['123'], ['true'], ['null'], ['"login error"']])(
+    'saving and applying keeps the exact search term %s',
+    async (term) => {
+      const { requests, router } = mountSavedViewHarness({
+        initialPath: `/vocs${stringifyAppSearch({ view: 'inbox', q: term })}`,
+        savedViews: [savedView('view-1', '검색 보기', { view: 'inbox', q: term })],
+      });
+      fireEvent.change(await screen.findByLabelText('저장된 보기 이름'), {
+        target: { value: '검색 보기' },
+      });
+      fireEvent.click(screen.getByTestId('saved-view-save'));
+
+      await waitFor(() => expect(postsToSavedViews(requests)).toHaveLength(1));
+      const body = postsToSavedViews(requests)[0]?.body as { filter: { q?: unknown } };
+      expect(body.filter.q).toBe(term);
+
+      fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
+      await waitFor(() => {
+        const search = router.state.location.search as Record<string, unknown>;
+        expect(search.q).toBe(term);
+      });
+    },
+  );
 });
