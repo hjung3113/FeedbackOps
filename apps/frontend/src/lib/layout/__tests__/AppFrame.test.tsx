@@ -366,6 +366,30 @@ describe('AppFrame', () => {
     );
   });
 
+  it.each([
+    ['collapsed', false],
+    ['expanded', true],
+  ])('keeps the aside seam border only while the slot is %s (#862)', async (_label, expand) => {
+    renderAppFrame(
+      <ListShell
+        toolbar={{ title: 'Inbox' }}
+        list={<div>list</div>}
+        detailPanel={PANEL_WITH_HEADER}
+      />,
+    );
+    const slot = screen.getByTestId('app-detail-slot');
+    await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
+    if (expand) {
+      fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+      expect(slot).toHaveAttribute('data-expanded', 'true');
+    }
+    if (expand) {
+      expect(slot).not.toHaveClass('border-l');
+    } else {
+      expect(slot).toHaveClass('border-l');
+    }
+  });
+
   it('Escape collapses unless a panel handler prevented it', async () => {
     const first = renderAppFrame(
       <ListShell toolbar={{ title: 'Escape' }} list={<div />} detailPanel={PANEL_WITH_HEADER} />,
