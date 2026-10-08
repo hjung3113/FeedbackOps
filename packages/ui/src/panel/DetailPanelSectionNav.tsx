@@ -148,17 +148,25 @@ export function DetailPanelSectionNav({
       };
     }
 
+    // #861: entries only carry the anchors whose intersection changed, so every entry updates the
+    // map — even inside a programmatic jump, whose guard suppresses only the selection. The map
+    // holds flags only; the winner is ranked by each anchor's current box, read at selection time.
+    // Declared here so a rebuilt observer (scrollRef/sectionKey change) starts from a clean map.
+    const intersectionState = new Map<string, boolean>();
     const observer = new IntersectionObserver(
       (entries) => {
+        for (const e of entries) {
+          intersectionState.set(e.target.getAttribute('data-anchor') ?? '', e.isIntersecting);
+        }
         if (programmaticRef.current) return;
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .map((e) => ({
-            id: e.target.getAttribute('data-anchor') ?? '',
-            top: e.boundingClientRect.top,
+        const visible = anchors
+          .filter((a) => intersectionState.get(a.getAttribute('data-anchor') ?? '') === true)
+          .map((a) => ({
+            id: a.getAttribute('data-anchor') ?? '',
+            top: a.getBoundingClientRect().top,
           }))
           .sort((a, b) => a.top - b.top);
-        if (visible[0]?.id) setActiveSection(visible[0].id);
+        if (visible[0]) setActiveSection(visible[0].id);
       },
       { root, rootMargin: '0px 0px -66% 0px', threshold: 0 },
     );

@@ -4,7 +4,8 @@ export const ROUTER_FALLBACK_COPY = {
     title: '화면을 불러오지 못했습니다',
     body: '잠시 후 다시 시도하세요.',
     action: '다시 시도',
-    meRateLimitedTitle: '로그인 상태를 확인할 수 없습니다',
+    // #871: a 429 on /me is throttling, not a session problem.
+    meRateLimitedTitle: '요청이 너무 많습니다',
     meRateLimitedBody: '잠시 후 다시 시도하세요.',
   },
   notFound: {

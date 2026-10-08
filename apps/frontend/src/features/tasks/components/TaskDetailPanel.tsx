@@ -239,7 +239,9 @@ export function TaskDetailPanel({
       onClose={onClose}
     >
       <DetailPanelSectionNav sections={TASK_DETAIL_SECTIONS} scrollRef={scrollRef} />
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      {/* #862: first-section top spacing mirrors the sibling detail panels
+          (Milestone/VOC scroll bodies carry pt-7 under the section nav). */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pt-7">
         <div data-anchor="overview">
           <PanelSectionTitle inset="panel">요약</PanelSectionTitle>
           <PanelTitleBlock

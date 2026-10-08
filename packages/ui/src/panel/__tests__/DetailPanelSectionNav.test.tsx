@@ -51,6 +51,65 @@ function stubResizeObserver() {
   };
 }
 
+function stubIntersectionObserver() {
+  const instances: Array<{ callback: IntersectionObserverCallback }> = [];
+  class TestIntersectionObserver {
+    callback: IntersectionObserverCallback;
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback;
+      instances.push(this);
+    }
+    observe(_target: Element) {}
+    unobserve(_target: Element) {}
+    disconnect() {}
+  }
+  vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
+  return {
+    fire(entries: IntersectionObserverEntry[]) {
+      const observer = instances.at(-1);
+      if (!observer) throw new Error('no IntersectionObserver instance');
+      act(() => {
+        observer.callback(entries, observer as unknown as IntersectionObserver);
+      });
+    },
+  };
+}
+
+const entry = (anchor: Element, isIntersecting: boolean, top: number): IntersectionObserverEntry =>
+  ({
+    isIntersecting,
+    boundingClientRect: rect(0, 100, top),
+    target: anchor,
+  }) as IntersectionObserverEntry;
+
+const mountedScrollContainers: HTMLElement[] = [];
+
+function renderNavOverAnchors(ids: string[], liveTops?: Record<string, number>) {
+  const scrollEl = document.createElement('div');
+  // jsdom does not implement scrollTo — stub it so a click-driven jump works.
+  scrollEl.scrollTo = vi.fn();
+  for (const id of ids) {
+    const anchor = document.createElement('div');
+    anchor.setAttribute('data-anchor', id);
+    if (liveTops) {
+      anchor.getBoundingClientRect = vi.fn(() => rect(0, 100, liveTops[id] ?? 0));
+    }
+    scrollEl.append(anchor);
+  }
+  document.body.append(scrollEl);
+  mountedScrollContainers.push(scrollEl);
+  const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
+  render(
+    <DetailPanelSectionNav
+      sections={ids.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }))}
+      scrollRef={scrollRef}
+    />,
+  );
+  return {
+    anchor: (id: string) => scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement,
+  };
+}
+
 function ScrollBody({ scrollRef }: { scrollRef: { current: HTMLElement | null } }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -68,6 +127,8 @@ function ScrollBody({ scrollRef }: { scrollRef: { current: HTMLElement | null } 
 }
 
 afterEach(() => {
+  for (const el of mountedScrollContainers) el.remove();
+  mountedScrollContainers.length = 0;
   vi.unstubAllGlobals();
 });
 
@@ -331,6 +392,100 @@ describe('DetailPanelSectionNav', () => {
     act(() => window.dispatchEvent(new Event('resize')));
     expect(track.scrollBy).toHaveBeenCalledWith({ left: 100, behavior: 'smooth' });
     scrollEl.remove();
+  });
+
+  it('activates the topmost section reported intersecting by the first callback', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 400));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+
+    observer.fire([entry(anchor('alpha'), true, 400), entry(anchor('beta'), true, 100)]);
+
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass('border-accent-primary');
+  });
+
+  it('keeps the topmost visible section active when a lower section newly intersects (#861 reflow)', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
+    let betaTop = 400;
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, betaTop));
+
+    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+    // Real observer delivery: a target emits only when its intersecting state changes, so beta
+    // must exit the top zone before it re-enters after the reflow.
+    observer.fire([entry(anchor('beta'), false, 50)]);
+    betaTop = 150;
+    observer.fire([entry(anchor('beta'), true, 150)]);
+
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+  });
+
+  it('activates the remaining intersecting section when the active one leaves the top zone', () => {
+    const observer = stubIntersectionObserver();
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
+
+    observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
+    observer.fire([entry(anchor('alpha'), false, -100)]);
+
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+  });
+
+  it('ranks a still-intersecting anchor by its current position, not its last callback rectangle', () => {
+    // Report trace 2: after a manual scroll only beta emits — alpha stays intersecting with no
+    // new entry, so alpha's callback top (300) is stale while its live top is -200. Alpha is the
+    // upper intersecting section and must win over newly intersecting beta at 200.
+    const observer = stubIntersectionObserver();
+    const { anchor } = renderNavOverAnchors(['alpha', 'beta']);
+    anchor('alpha').getBoundingClientRect = vi.fn(() => rect(0, 100, -200));
+    anchor('beta').getBoundingClientRect = vi.fn(() => rect(0, 100, 200));
+
+    observer.fire([entry(anchor('alpha'), true, 300), entry(anchor('beta'), false, 700)]);
+    observer.fire([entry(anchor('beta'), true, 200)]);
+
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+  });
+
+  it('applies entries during a programmatic jump so a section that left cannot win afterwards', () => {
+    // Report trace 1: entries arriving inside the 700 ms jump guard must still update the map.
+    // If they are dropped, long-left alpha keeps its stale intersecting flag and beats beta once
+    // the guard expires and gamma enters.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor } = renderNavOverAnchors(['alpha', 'beta', 'gamma'], {
+        alpha: -300,
+        beta: 0,
+        gamma: 200,
+      });
+
+      observer.fire([
+        entry(anchor('alpha'), true, 100),
+        entry(anchor('beta'), false, 500),
+        entry(anchor('gamma'), false, 800),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+
+      // During the guard alpha exits and beta arrives; neither may be discarded.
+      observer.fire([entry(anchor('alpha'), false, -300), entry(anchor('beta'), true, 0)]);
+      act(() => vi.advanceTimersByTime(700));
+      observer.fire([entry(anchor('gamma'), true, 200)]);
+
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass(
+        'border-accent-primary',
+      );
+      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveClass(
+        'border-accent-primary',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('labels both scroll controls in Korean and scrolls the track in both directions', async () => {

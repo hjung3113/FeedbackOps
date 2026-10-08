@@ -5,7 +5,8 @@
  * Renders the right-column detail panel in the WorkbenchShell triage view.
  *
  * C3.2: wires useUndoableMutation into TriageActions for optimistic mutation,
- * 4-sec undo, abort/compensate, and full error matrix.
+ * 4-sec undo (undo marks the call; the request keeps running and is
+ * compensated if it succeeds), and full error matrix.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.5):
  *   .panel-scroll → pt-7 pr-6 pb-8 pl-6 overflow-y-auto flex-1
