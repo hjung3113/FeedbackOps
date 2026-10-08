@@ -9,7 +9,7 @@ import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 const DEBOUNCE_MS = 300;
 // #875: the inbox passes this as `hangulDebounceMs` for drafts ending in a
 // Hangul character.
-const HANGUL_DEBOUNCE_MS = 1000;
+const HANGUL_DEBOUNCE_MS = 700;
 
 function StrictModeWrapper({ children }: { children: React.ReactNode }) {
   return React.createElement(React.StrictMode, null, children);
