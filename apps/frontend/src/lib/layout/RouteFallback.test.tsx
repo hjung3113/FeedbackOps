@@ -265,7 +265,7 @@ describe('router fallback screens', () => {
 
     renderRouter(router, queryClient);
 
-    expect(await screen.findByText('로그인 상태를 확인할 수 없습니다')).toBeInTheDocument();
+    expect(await screen.findByText('요청이 너무 많습니다')).toBeInTheDocument();
     expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     expect(screen.queryByTestId('app-frame')).not.toBeInTheDocument();
     const fetchCountAtFallback = fetchMock.mock.calls.length;
@@ -302,7 +302,7 @@ describe('router fallback screens', () => {
 
     renderRouter(router, queryClient);
 
-    expect(await screen.findByText('로그인 상태를 확인할 수 없습니다')).toBeInTheDocument();
+    expect(await screen.findByText('요청이 너무 많습니다')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
