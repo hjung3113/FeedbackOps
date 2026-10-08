@@ -61,6 +61,24 @@ test.describe('/home visual harness', () => {
     );
   });
 
+  // #888: Radix <Tabs> wraps the PageShell. Without flex sizing it grew to the
+  // content height, the document scrolled, and the rail and sidebar slid up.
+  test('scrolls a long dashboard inside the page, not the document', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await installMockApi(page, { home: 'populated' });
+    await page.goto('/home');
+    await expect(page.getByTestId('home-screen')).toBeVisible();
+    const overflow = await page.evaluate(() => {
+      const shellScroll = document.querySelector('[data-shell="page"] > .overflow-y-auto');
+      return {
+        document: document.documentElement.scrollHeight - window.innerHeight,
+        page: shellScroll ? shellScroll.scrollHeight - shellScroll.clientHeight : 0,
+      };
+    });
+    expect(overflow.page).toBeGreaterThan(0);
+    expect(overflow.document).toBe(0);
+  });
+
   // #280 removed the dead My Work entry point, not the panel — the panel still
   // renders assigned Tasks and pending Requests, and this is its empty state.
   test('renders the empty assigned-work state', async ({ page }) => {

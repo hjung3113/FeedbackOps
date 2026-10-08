@@ -104,7 +104,10 @@ export function HomeScreen({
   };
 
   return (
+    // #888: Tabs renders a div between <main> and PageShell. It needs the flex
+    // sizing a shell gets, or PageShell grows to its content and the document scrolls.
     <Tabs
+      className="flex min-h-0 flex-1 flex-col"
       value={activeTab}
       onValueChange={(value) => {
         if (value === 'dashboard' || value === 'inbox') onTabChange?.(value);
