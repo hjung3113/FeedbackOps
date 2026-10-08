@@ -152,11 +152,13 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    - **Start both**, each on its own `<label>.localhost` host (the session cookie is per host, not per port):
      - `scripts/app-preview.py start <baseline> --backend --env "$WAVE_STATE/env.verify.<n>" --seed --name <n>-develop`;
      - `scripts/app-preview.py start <worktree> --backend --env "$WAVE_STATE/env.verify.<n>" --name <n>-branch`.
-   - `--seed` creates one `[preview]` record per drawer surface after the backend is healthy (Finding,
-     Task Request (one converted, one pending), Task, Milestone, VOC Cluster, Survey and a response,
-     outcome follow-up, Permission request). The branch preview shares that throwaway database, so it sees
-     the same records without its own `--seed`. A fixtures failure is a warning on the start JSON
-     (`fixtures`), not a failed start.
+   - `--seed` only on a fresh issue database. It creates one `[preview]` record per drawer surface after
+     the backend is healthy (Finding, Task Request (one converted, one pending), Task, Milestone, VOC
+     Cluster, Survey and a response, outcome follow-up, Permission request). The branch preview shares
+     that throwaway database, so it sees the same records without its own `--seed`. Once fixtures exist,
+     the personas seed fails on the `[preview]` Cluster's member foreign key
+     (`voc_cluster_members_voc_id_fkey`), measured 2026-10-08. To restart previews on a seeded database,
+     omit `--seed`. A fixtures failure is a warning on the start JSON (`fixtures`), not a failed start.
    - **Browser stages run one at a time across the wave.** At most one claude reviewer runs at a time, because they
      share the conductor's Claude quota. With 2–3 screen issues in flight, UX reviews queue.
 
@@ -305,11 +307,13 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 - `scripts/app-preview.py start <checkout> [--backend --env <throwaway env> [--seed]] [--name <label>]` / `stop <label>|--all` / `status`:
   - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not
     collide.
-  - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` runs the
-    idempotent personas seed, then `scripts/preview-fixtures.mjs` against the healthy backend. That script
-    creates one `[preview]` record per drawer surface, including Task Request (one converted, one pending).
-    A fixtures failure is a warning on the start JSON (`fixtures`), not a failed start. Child stdout and
-    stderr go to `$WAVE_STATE/preview-<label>-fixtures.log`, not into that JSON.
+  - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` only on a
+    fresh issue database: it runs the personas seed, then `scripts/preview-fixtures.mjs` against the healthy
+    backend. That script creates one `[preview]` record per drawer surface, including Task Request (one
+    converted, one pending). Once fixtures exist, the personas seed fails on the `[preview]` Cluster's member
+    foreign key (`voc_cluster_members_voc_id_fkey`), measured 2026-10-08. To restart previews on a seeded
+    database, omit `--seed`. A fixtures failure is a warning on the start JSON (`fixtures`), not a failed
+    start. Child stdout and stderr go to `$WAVE_STATE/preview-<label>-fixtures.log`, not into that JSON.
   - Without `--backend` the proxy goes to the user's :3011. That mode is for the conductor's own checks only.
   - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS) and stops each process group
     (npx children).

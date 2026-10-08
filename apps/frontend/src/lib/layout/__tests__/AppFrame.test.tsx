@@ -314,19 +314,15 @@ describe('AppFrame', () => {
     const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
 
     expect(slot).toHaveAttribute('data-expanded', 'false');
-    // #852's reading column wrapper is always present, so the panel stays
-    // mounted across the toggle; the re-query returns the same node.
     fireEvent.click(toggle);
-    const expandedToggle = screen.getByRole('button', { name: '전체 화면 전환' });
     expect(slot).toHaveAttribute('data-expanded', 'true');
-    expect(expandedToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(main).toBeInTheDocument();
     expect(main).toHaveAttribute('hidden');
 
-    fireEvent.click(expandedToggle);
-    const collapsedToggle = screen.getByRole('button', { name: '전체 화면 전환' });
+    fireEvent.click(toggle);
     expect(slot).toHaveAttribute('data-expanded', 'false');
-    expect(collapsedToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(main).not.toHaveAttribute('hidden');
   });
 
@@ -342,19 +338,15 @@ describe('AppFrame', () => {
     await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
 
     const panelBefore = screen.getByTestId('header-panel');
-    fireEvent.click(screen.getByRole('button', { name: '전체 화면 전환' }));
+    const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
+    fireEvent.click(toggle);
     expect(slot).toHaveAttribute('data-expanded', 'true');
 
     // Toggling must not remount the panel (unsaved input would be lost).
     expect(screen.getByTestId('header-panel')).toBe(panelBefore);
-    const wrapper = screen.getByTestId('header-panel').parentElement;
-    expect(wrapper).not.toBe(slot);
-    expect(wrapper?.className).toContain('w-full');
-    expect(wrapper?.className).toContain('max-w-[60rem]');
-    expect(wrapper?.className).toContain('mx-auto');
-    expect(wrapper?.className).toContain('border-x');
-    expect(wrapper?.className).toContain('border-border-subtle');
-    expect(wrapper?.parentElement).toBe(slot);
+    expect(screen.getByRole('button', { name: '전체 화면 전환' })).toBe(toggle);
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
   });
 
   it('collapsed slot keeps a layout-neutral column wrapper (#852)', async () => {
@@ -368,9 +360,10 @@ describe('AppFrame', () => {
     const slot = screen.getByTestId('app-detail-slot');
     await waitFor(() => expect(slot).toHaveAttribute('data-open', 'true'));
 
-    const column = screen.getByTestId('header-panel').parentElement;
-    expect(column?.parentElement).toBe(slot);
-    expect(column?.className).toBe('contents');
+    expect(screen.getByTestId('app-detail-slot-column')).toBeInTheDocument();
+    expect(screen.getByTestId('header-panel').parentElement).toBe(
+      screen.getByTestId('app-detail-slot-column'),
+    );
   });
 
   it('Escape collapses unless a panel handler prevented it', async () => {

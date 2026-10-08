@@ -1,8 +1,8 @@
-// VocTriageScreen.fullscreen.test.tsx — #852 expanded reading column (TDD)
+// VocTriageScreen.fullscreen.test.tsx — #852 expanded reading column
 //
-// In fullscreen the panel column wraps TriagePanel in a centred max-w
-// reading column. The wrapper is always present: collapsed it is a
-// layout-neutral `contents` column, so the toggle never remounts the panel.
+// The column wrapper stays mounted across the fullscreen toggle, so the
+// panel and its toggle node are not remounted. Class tokens are pinned on
+// DetailPanelReadingColumn.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -67,10 +67,8 @@ function ControlledTriageScreen() {
   );
 }
 
-const READING_COLUMN_SELECTOR = '[class*="max-w-[60rem]"]';
-
 describe('VocTriageScreen — #852 expanded reading column', () => {
-  it('fullscreen panel column wraps the panel in the centred reading column', () => {
+  it('fullscreen toggle keeps the same panel and toggle nodes', () => {
     render(
       <Wrapper>
         <ControlledTriageScreen />
@@ -78,19 +76,13 @@ describe('VocTriageScreen — #852 expanded reading column', () => {
     );
 
     const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
-    expect(toggle.closest(READING_COLUMN_SELECTOR)).toBeNull();
-    expect(screen.getByTestId('triage-panel-column').className).toBe('contents');
+    const panel = screen.getByTestId('triage-description-region');
+    expect(screen.getByTestId('triage-panel-column')).toBeInTheDocument();
 
-    // The column wrapper is always present, so toggling never remounts the panel:
-    // the same toggle node survives and staged triage choices are kept.
+    // The column wrapper is always present, so toggling never remounts the panel.
     fireEvent.click(toggle);
     expect(screen.getByRole('button', { name: '전체 화면 전환' })).toBe(toggle);
-    const wrapper = toggle.closest(READING_COLUMN_SELECTOR);
-    expect(wrapper).not.toBeNull();
-    expect(wrapper?.className).toContain('w-full');
-    expect(wrapper?.className).toContain('max-w-[60rem]');
-    expect(wrapper?.className).toContain('mx-auto');
-    expect(wrapper?.className).toContain('border-x');
-    expect(wrapper?.className).toContain('border-border-subtle');
+    expect(screen.getByTestId('triage-description-region')).toBe(panel);
+    expect(screen.getByTestId('triage-panel-column')).toBeInTheDocument();
   });
 });

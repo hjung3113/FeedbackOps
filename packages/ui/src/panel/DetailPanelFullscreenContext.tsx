@@ -16,6 +16,29 @@ const iconButtonCls = cn(
   'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
 );
 
+export function DetailPanelReadingColumn({
+  children,
+  ...dataAttrs
+}: React.PropsWithChildren<{ 'data-testid'?: string }>): React.ReactElement {
+  const fullscreen = useContext(DetailPanelFullscreenContext);
+  const expanded = fullscreen?.expanded === true;
+
+  return (
+    // Expanded drawers render as a centred reading column. The wrapper is always
+    // present (`contents` when collapsed, or when there is no fullscreen context,
+    // so layout is unchanged): a conditional wrapper would remount the panel on
+    // toggle and drop unsaved input.
+    <div
+      {...dataAttrs}
+      className={cn(
+        expanded ? 'mx-auto h-full w-full max-w-[60rem] border-x border-border-subtle' : 'contents',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function DetailPanelFullscreenToggle(): React.ReactElement | null {
   const fullscreen = useContext(DetailPanelFullscreenContext);
   if (fullscreen === null) return null;
