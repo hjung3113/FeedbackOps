@@ -4,31 +4,25 @@
 //
 // Forward PATCH /vocs/:id:
 //   Idempotency-Key auto-minted by the API client for PATCH (D-3.5);
-//   If-Match: input.ifMatch (click-time voc.updated_at);
-//   AbortSignal forwarded only when the caller provides one.
+//   If-Match: input.ifMatch (click-time voc.updated_at).
+//   No AbortSignal: an abort cannot un-send a request (#857).
 // Compensating PATCH /vocs/:id:
 //   EXPLICIT fresh Idempotency-Key (D-3.5) — do NOT rely on the auto-mint
 //   (which would reuse the auto-generated key from the same process if called
-//   too quickly). Takes no AbortSignal: the compensating PATCH must not be
-//   bound to the undo AbortController.
+//   too quickly).
 // GET /vocs/:id:
-//   No If-Match / Idempotency-Key. Signal comes only from the query context —
-//   never the mutation's AbortSignal.
+//   No If-Match / Idempotency-Key. Signal comes only from the query context.
 
 import { apiClient } from '@/lib/api/client';
 import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { buildCompensatePayload, buildPayload } from './triage-payload';
 import type { TriageInput, TriageOutput, TriageSnapshot } from './triage-types';
 
-export async function patchVocTriage(
-  input: TriageInput,
-  opts?: { signal?: AbortSignal },
-): Promise<TriageOutput> {
+export async function patchVocTriage(input: TriageInput): Promise<TriageOutput> {
   const res = await apiClient<TriageOutput>('PATCH', `/vocs/${input.vocId}`, {
     body: buildPayload(input),
     ifMatch: input.ifMatch,
     // Idempotency-Key auto-minted by the API client for PATCH (D-3.5)
-    ...(opts?.signal !== undefined && { signal: opts.signal }),
   });
   return res.data;
 }

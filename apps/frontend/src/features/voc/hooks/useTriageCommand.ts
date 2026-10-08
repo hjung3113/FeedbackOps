@@ -8,7 +8,10 @@
 //     the panelLocked guard before the remove;
 //   - snapshot() runs synchronously inside mutate() before the PATCH starts,
 //     so it still sees the pre-auto-advance voc row;
-//   - abort (undo of an in-flight call) restores the row immediately;
+//   - undo of an in-flight call restores the row immediately. The forward
+//     PATCH is never aborted (#857): an abort cannot un-send a request;
+//   - when that PATCH succeeds, a compensating PATCH follows, whether undo
+//     came before or after it settled. When it fails, nothing is compensated;
 //   - compensation restores the row only after the compensating PATCH
 //     resolves.
 
@@ -63,12 +66,11 @@ export function useTriageCommand({
     undoLast,
     state: mutationState,
   } = useUndoableMutation<TriageInput, TriageOutput, TriageSnapshot>({
-    // The signal goes to the forward PATCH only — never to the refetch or the
-    // compensating PATCH (issue #481 risk 2: an in-flight undo has already
-    // aborted the controller, so a late resolve would otherwise fail the
-    // compensation path).
-    mutationFn: async (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> => {
-      const output = await patchVocTriage(input, { ...(signal !== undefined && { signal }) });
+    // No AbortSignal. An abort cannot un-send a forward PATCH the server may
+    // already have committed (#857). The refetch and the compensating PATCH
+    // are likewise not tied to the forward call's lifetime.
+    mutationFn: async (input: TriageInput): Promise<TriageOutput> => {
+      const output = await patchVocTriage(input);
       invalidateNavCounts(queryClient);
       return output;
     },
@@ -105,11 +107,11 @@ export function useTriageCommand({
         throw err;
       }
     },
-    // REV-1 #1: when the user undoes while the PATCH is still in-flight,
-    // useUndoableMutation aborts the controller and fires onAbort with the
-    // original input. Restore the row to the queue using that input — never
-    // current props, which may already point at the auto-advanced VOC.
-    // No compensating PATCH here: restore is immediate, not server-gated.
+    // REV-1 #1: when the user undoes while the PATCH is still in-flight, the
+    // hook fires onAbort with the original input and leaves the request
+    // running (#857). Restore the row from that input — never current props,
+    // which may already point at the auto-advanced VOC. Compensation runs
+    // later, only if the forward PATCH succeeds.
     onAbort: (input: TriageInput) => {
       onOptimisticRestoreRef.current?.(input.vocId);
     },

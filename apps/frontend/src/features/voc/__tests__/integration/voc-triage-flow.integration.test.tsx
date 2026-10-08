@@ -176,6 +176,120 @@ function clickAnySeverityChip() {
   if (chips[0]) fireEvent.click(chips[0]);
 }
 
+// #857: the forward PATCH is committed the moment fetch is called. It resolves
+// after a delay, and rejects with AbortError if its signal aborts first — the
+// same race the browser has with a request the server has already accepted.
+const IN_FLIGHT_PATCH_DELAY_MS = 1000;
+
+interface CommittedPatch {
+  url: string;
+  body: Record<string, unknown>;
+  idempotencyKey: string | null;
+  committedAt: number;
+  resolvedAt: number | null;
+}
+
+function readIdempotencyKey(rawHeaders: HeadersInit | undefined): string | null {
+  if (rawHeaders == null) return null;
+  if (rawHeaders instanceof Headers) {
+    return rawHeaders.get('Idempotency-Key') ?? rawHeaders.get('idempotency-key');
+  }
+  if (Array.isArray(rawHeaders)) {
+    const found = rawHeaders.find(([name]) => name.toLowerCase() === 'idempotency-key');
+    return found?.[1] ?? null;
+  }
+  const record = rawHeaders as Record<string, string>;
+  return record['Idempotency-Key'] ?? record['idempotency-key'] ?? null;
+}
+
+function installCommittedPatchFetch(): CommittedPatch[] {
+  const patches: CommittedPatch[] = [];
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const url =
+      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    if (method !== 'PATCH') {
+      return jsonResponse({
+        id: 'ignored',
+        triage_state: 'untriaged',
+        updated_at: '2026-05-02T00:00:00.000Z',
+        items: [],
+        actors: [],
+      });
+    }
+    const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+    const recorded: CommittedPatch = {
+      url,
+      body,
+      idempotencyKey: readIdempotencyKey(init?.headers),
+      committedAt: Date.now(),
+      resolvedAt: null,
+    };
+    patches.push(recorded);
+    await new Promise<void>((resolve, reject) => {
+      const signal = init?.signal;
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, IN_FLIGHT_PATCH_DELAY_MS);
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    recorded.resolvedAt = Date.now();
+    const triageState = body.triage_state;
+    return jsonResponse({
+      id: url.split('/').pop(),
+      triage_state: typeof triageState === 'string' ? triageState : 'triaged',
+      updated_at:
+        triageState === 'untriaged' ? '2026-05-03T00:00:00.000Z' : '2026-05-02T00:00:00.000Z',
+    });
+  }) as typeof globalThis.fetch;
+  return patches;
+}
+
+const UNDO_PRIOR = {
+  severity: 'low' as const,
+  owner_user_id: '00000000-0000-0000-0000-0000000000aa',
+  owner_team_id: null,
+  analytics_area_id: '00000000-0000-0000-0000-0000000000bb',
+};
+
+const UNDO_TARGET: VocListItem = {
+  id: 'voc-undo-target',
+  display_id: 'VOC-UNDO-TARGET',
+  title: 'undo target',
+  reporter_facing_status: 'received',
+  severity: UNDO_PRIOR.severity,
+  owner_user_id: UNDO_PRIOR.owner_user_id,
+  owner_team_id: UNDO_PRIOR.owner_team_id,
+  analytics_area_id: UNDO_PRIOR.analytics_area_id,
+  primary_managed_system_id: '00000000-0000-0000-0000-000000000001',
+  reporter_id: '00000000-0000-0000-0000-000000000010',
+  triage_state: 'untriaged',
+  source_context: 'direct_use',
+  created_at: '2026-05-01T00:00:00.000Z',
+  updated_at: '2026-05-01T00:00:00.000Z',
+  similar_count: 0,
+  attachment_count: 0,
+};
+
+const UNDO_OTHER: VocListItem = {
+  ...UNDO_TARGET,
+  id: 'voc-undo-other',
+  display_id: 'VOC-UNDO-OTHER',
+  title: 'still in the queue',
+  severity: null,
+  owner_user_id: null,
+  analytics_area_id: null,
+};
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('Triage flow — integration (C6.3)', () => {
@@ -411,4 +525,104 @@ describe('Triage flow — integration (C6.3)', () => {
     // The PATCH URL must not contain a sort query parameter
     expect(capturedUrl).not.toContain('sort=');
   });
+
+  // #857: undo must reconcile a PATCH the server already committed. An abort
+  // cannot un-send it. Covers the last-row unmount and an in-flight undo while
+  // the panel stays mounted.
+  it.each([
+    { name: 'the last VOC in the tab', others: [] as VocListItem[] },
+    { name: 'a VOC with others left', others: [UNDO_OTHER] },
+  ])(
+    'undo while the forward PATCH is in flight compensates after it resolves ($name)',
+    async ({ others }) => {
+      const patches = installCommittedPatchFetch();
+      const items = [UNDO_TARGET, ...others];
+      const Wrapper = makeWrapper();
+      const { baseElement } = render(
+        <Wrapper>
+          <VocTriageScreen
+            items={items}
+            selectedId={UNDO_TARGET.id}
+            activeTab="unassigned"
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '높음' }));
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
+      });
+
+      // The forward PATCH is committed immediately, and has not settled yet.
+      expect(patches).toHaveLength(1);
+      expect(patches[0]?.resolvedAt).toBeNull();
+      expect(patches[0]?.url).toContain(`/vocs/${UNDO_TARGET.id}`);
+      expect(patches[0]?.body).toMatchObject({ triage_state: 'triaged', severity: 'high' });
+
+      if (others.length === 0) {
+        // Confirming the last row empties the queue and unmounts the panel
+        // while the PATCH is still in flight.
+        expect(screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /triage 확정/i })).not.toBeInTheDocument();
+        expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
+      } else {
+        expect(screen.getByRole('button', { name: /VOC-UNDO-OTHER/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /triage 확정/i })).toBeInTheDocument();
+      }
+
+      expect(capturedToastRenderer).not.toBeNull();
+      const toastHost = renderCapturedToast(baseElement);
+      // The host is appended to document.body, outside the render container,
+      // so a later case would otherwise see the previous toast's button.
+      try {
+        const undoBtn = toastHost?.querySelector('button');
+        expect(undoBtn).not.toBeNull();
+        expect(undoBtn?.textContent).toBe('실행 취소');
+        await act(async () => {
+          if (undoBtn) fireEvent.click(undoBtn);
+        });
+
+        await waitFor(
+          () => {
+            expect(patches).toHaveLength(2);
+            expect(patches[0]?.resolvedAt).not.toBeNull();
+            expect(patches[1]?.body.triage_state).toBe('untriaged');
+          },
+          { timeout: 5000 },
+        );
+
+        const forward = patches[0];
+        const compensate = patches[1];
+        expect(forward).toBeDefined();
+        expect(compensate).toBeDefined();
+        if (!forward || !compensate || forward.resolvedAt === null) {
+          throw new Error('forward PATCH did not resolve before compensation');
+        }
+        expect(compensate.committedAt).toBeGreaterThanOrEqual(forward.resolvedAt);
+        expect(compensate.url).toContain(`/vocs/${UNDO_TARGET.id}`);
+        expect(compensate.body).toEqual({
+          triage_state: 'untriaged',
+          severity: UNDO_PRIOR.severity,
+          owner_user_id: UNDO_PRIOR.owner_user_id,
+          owner_team_id: UNDO_PRIOR.owner_team_id,
+          analytics_area_id: UNDO_PRIOR.analytics_area_id,
+        });
+        expect(forward.idempotencyKey).toBeTruthy();
+        expect(compensate.idempotencyKey).toBeTruthy();
+        expect(compensate.idempotencyKey).not.toBe(forward.idempotencyKey);
+
+        expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
+      } finally {
+        toastHost?.remove();
+      }
+    },
+    15000,
+  );
 });
