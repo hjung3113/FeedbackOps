@@ -319,7 +319,10 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 4. Mutation fires: `PATCH /vocs/:id` with the triage payload, `Idempotency-Key: <uuidv4>` header (per ADR-0015).
 5. **On success:** toast remains until timeout; no further action.
 6. **On failure:** rollback local state (re-insert VOC), preserve user-entered values in the panel, toast with `tone: 'danger'`, show retry. Error body parsed per ADR-0012 (`code`, `message`, optional `requestable_permission`).
-7. **On undo:** the local optimistic state is reverted at once. The forward PATCH is never aborted, because an abort cannot un-send a request. When it succeeds, a compensating PATCH with the prior values and a fresh `Idempotency-Key` follows, whether undo came before or after it settled. When it fails, nothing is compensated.
+7. **On undo:** the forward PATCH is never aborted, because an abort cannot un-send a request.
+   - **Undo while the forward PATCH is in flight:** restore the local optimistic state at once. Never abort the request. Compensate if it succeeds; nothing to compensate if it fails.
+   - **Undo after it settled:** send the compensating PATCH first, then restore when it succeeds.
+   The compensating PATCH keeps the prior values, uses the forward response's `updated_at` as `If-Match`, and uses a fresh `Idempotency-Key`.
 
 **Idempotency key rules** (per ADR-0015 §Idempotency):
 - One key per logical user-intent batch. Generating a fresh key on undo prevents the dedupe layer from returning the cached confirm response when the user intends a different write.

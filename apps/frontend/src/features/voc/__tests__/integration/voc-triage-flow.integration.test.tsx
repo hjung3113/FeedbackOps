@@ -155,6 +155,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const capturedToastRoots = new WeakMap<HTMLElement, { unmount: () => void }>();
+
 // Render a captured toast renderer into a host element and return the container.
 function renderCapturedToast(container: HTMLElement): HTMLElement | null {
   if (!capturedToastRenderer) return null;
@@ -164,10 +166,22 @@ function renderCapturedToast(container: HTMLElement): HTMLElement | null {
   const node = capturedToastRenderer('toast-id-triage');
   const { createRoot } = require('react-dom/client') as typeof import('react-dom/client');
   const root = createRoot(toastEl);
+  capturedToastRoots.set(toastEl, root);
   act(() => {
     root.render(node as React.ReactElement);
   });
   return toastEl;
+}
+
+function unmountCapturedToast(host: HTMLElement | null): void {
+  if (!host) return;
+  const root = capturedToastRoots.get(host);
+  if (root) {
+    act(() => {
+      root.unmount();
+    });
+  }
+  host.remove();
 }
 
 // Helper: click the first severity chip to make the panel dirty.
@@ -202,56 +216,76 @@ function readIdempotencyKey(rawHeaders: HeadersInit | undefined): string | null 
   return record['Idempotency-Key'] ?? record['idempotency-key'] ?? null;
 }
 
+// In-flight fetch promises for the committed-PATCH mock. The it.each cases
+// drain this before unmount so a 1s timer cannot resolve during the next case.
+const committedPatchFlights: Promise<unknown>[] = [];
+
 function installCommittedPatchFetch(): CommittedPatch[] {
+  committedPatchFlights.length = 0;
   const patches: CommittedPatch[] = [];
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const method = (init?.method ?? 'GET').toUpperCase();
-    const url =
-      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    if (method !== 'PATCH') {
-      return jsonResponse({
-        id: 'ignored',
-        triage_state: 'untriaged',
-        updated_at: '2026-05-02T00:00:00.000Z',
-        items: [],
-        actors: [],
-      });
-    }
-    const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
-    const recorded: CommittedPatch = {
-      url,
-      body,
-      idempotencyKey: readIdempotencyKey(init?.headers),
-      committedAt: Date.now(),
-      resolvedAt: null,
-    };
-    patches.push(recorded);
-    await new Promise<void>((resolve, reject) => {
-      const signal = init?.signal;
-      const onAbort = () => {
-        clearTimeout(timer);
-        reject(new DOMException('The operation was aborted.', 'AbortError'));
-      };
-      const timer = setTimeout(() => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve();
-      }, IN_FLIGHT_PATCH_DELAY_MS);
-      if (signal?.aborted) {
-        onAbort();
-        return;
+  globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const flight = (async () => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (method !== 'PATCH') {
+        return jsonResponse({
+          id: 'ignored',
+          triage_state: 'untriaged',
+          updated_at: '2026-05-02T00:00:00.000Z',
+          items: [],
+          actors: [],
+        });
       }
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
-    recorded.resolvedAt = Date.now();
-    const triageState = body.triage_state;
-    return jsonResponse({
-      id: url.split('/').pop(),
-      triage_state: typeof triageState === 'string' ? triageState : 'triaged',
-      updated_at:
-        triageState === 'untriaged' ? '2026-05-03T00:00:00.000Z' : '2026-05-02T00:00:00.000Z',
-    });
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      const recorded: CommittedPatch = {
+        url,
+        body,
+        idempotencyKey: readIdempotencyKey(init?.headers),
+        committedAt: Date.now(),
+        resolvedAt: null,
+      };
+      patches.push(recorded);
+      await new Promise<void>((resolve, reject) => {
+        const signal = init?.signal;
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        };
+        const timer = setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve();
+        }, IN_FLIGHT_PATCH_DELAY_MS);
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
+      recorded.resolvedAt = Date.now();
+      const triageState = body.triage_state;
+      return jsonResponse({
+        id: url.split('/').pop(),
+        triage_state: typeof triageState === 'string' ? triageState : 'triaged',
+        updated_at:
+          triageState === 'untriaged' ? '2026-05-03T00:00:00.000Z' : '2026-05-02T00:00:00.000Z',
+      });
+    })();
+    committedPatchFlights.push(flight);
+    return flight;
   }) as typeof globalThis.fetch;
   return patches;
+}
+
+async function drainCommittedPatchFlights(): Promise<void> {
+  let seen = -1;
+  while (committedPatchFlights.length !== seen) {
+    seen = committedPatchFlights.length;
+    const pending = committedPatchFlights.slice();
+    await act(async () => {
+      await Promise.allSettled(pending);
+    });
+  }
 }
 
 const UNDO_PRIOR = {
@@ -538,7 +572,7 @@ describe('Triage flow — integration (C6.3)', () => {
       const patches = installCommittedPatchFetch();
       const items = [UNDO_TARGET, ...others];
       const Wrapper = makeWrapper();
-      const { baseElement } = render(
+      const { baseElement, unmount } = render(
         <Wrapper>
           <VocTriageScreen
             items={items}
@@ -550,38 +584,41 @@ describe('Triage flow — integration (C6.3)', () => {
         </Wrapper>,
       );
 
-      fireEvent.click(screen.getByRole('button', { name: '높음' }));
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
-      });
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
-      });
-
-      // The forward PATCH is committed immediately, and has not settled yet.
-      expect(patches).toHaveLength(1);
-      expect(patches[0]?.resolvedAt).toBeNull();
-      expect(patches[0]?.url).toContain(`/vocs/${UNDO_TARGET.id}`);
-      expect(patches[0]?.body).toMatchObject({ triage_state: 'triaged', severity: 'high' });
-
-      if (others.length === 0) {
-        // Confirming the last row empties the queue and unmounts the panel
-        // while the PATCH is still in flight.
-        expect(screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /triage 확정/i })).not.toBeInTheDocument();
-        expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
-      } else {
-        expect(screen.getByRole('button', { name: /VOC-UNDO-OTHER/i })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i })).not.toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /triage 확정/i })).toBeInTheDocument();
-      }
-
-      expect(capturedToastRenderer).not.toBeNull();
-      const toastHost = renderCapturedToast(baseElement);
-      // The host is appended to document.body, outside the render container,
-      // so a later case would otherwise see the previous toast's button.
+      let toastHost: HTMLElement | null = null;
       try {
+        fireEvent.click(screen.getByRole('button', { name: '높음' }));
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
+        });
+
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
+        });
+
+        // The forward PATCH is committed immediately, and has not settled yet.
+        expect(patches).toHaveLength(1);
+        expect(patches[0]?.resolvedAt).toBeNull();
+        expect(patches[0]?.url).toContain(`/vocs/${UNDO_TARGET.id}`);
+        expect(patches[0]?.body).toMatchObject({ triage_state: 'triaged', severity: 'high' });
+
+        if (others.length === 0) {
+          // Confirming the last row empties the queue and unmounts the panel
+          // while the PATCH is still in flight.
+          expect(
+            screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i }),
+          ).not.toBeInTheDocument();
+          expect(screen.queryByRole('button', { name: /triage 확정/i })).not.toBeInTheDocument();
+          expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
+        } else {
+          expect(screen.getByRole('button', { name: /VOC-UNDO-OTHER/i })).toBeInTheDocument();
+          expect(
+            screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i }),
+          ).not.toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /triage 확정/i })).toBeInTheDocument();
+        }
+
+        expect(capturedToastRenderer).not.toBeNull();
+        toastHost = renderCapturedToast(baseElement);
         const undoBtn = toastHost?.querySelector('button');
         expect(undoBtn).not.toBeNull();
         expect(undoBtn?.textContent).toBe('실행 취소');
@@ -589,15 +626,24 @@ describe('Triage flow — integration (C6.3)', () => {
           if (undoBtn) fireEvent.click(undoBtn);
         });
 
+        // Pending undo restores the row at once, before either PATCH timer settles.
+        expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
+        expect(patches[0]?.resolvedAt).toBeNull();
+
+        // The compensating PATCH has its own 1s timer. Wait for that response;
+        // its continuation is the second restore. `not.toBeNull()` is not enough:
+        // a missing patch's `resolvedAt` is `undefined`.
         await waitFor(
           () => {
-            expect(patches).toHaveLength(2);
-            expect(patches[0]?.resolvedAt).not.toBeNull();
-            expect(patches[1]?.body.triage_state).toBe('untriaged');
+            expect(patches[1]?.resolvedAt).toEqual(expect.any(Number));
           },
           { timeout: 5000 },
         );
+        await act(async () => {
+          await Promise.resolve();
+        });
 
+        expect(patches).toHaveLength(2);
         const forward = patches[0];
         const compensate = patches[1];
         expect(forward).toBeDefined();
@@ -620,7 +666,9 @@ describe('Triage flow — integration (C6.3)', () => {
 
         expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
       } finally {
-        toastHost?.remove();
+        await drainCommittedPatchFlights();
+        unmountCapturedToast(toastHost);
+        unmount();
       }
     },
     15000,

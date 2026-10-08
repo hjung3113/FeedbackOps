@@ -220,52 +220,49 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
   // NEVER on the React `state` closure. If the request settled between the
   // click and undoLast running, phaseRef.current === 'settled' here even
   // though `state` is still 'pending' in this closure.
-  const undoLast = useCallback(
-    (callToken?: CallToken) => {
-      const phase = phaseRef.current;
-      const call = currentCallRef.current;
-      if (!call) return;
-      // REV-3 Cluster X: when a token is supplied, only undo if it matches the
-      // current call. Stale toasts (issued before a follow-up mutate replaced
-      // the current call) are inert.
-      if (callToken !== undefined && call.token !== callToken) return;
+  const undoLast = useCallback((callToken?: CallToken) => {
+    const phase = phaseRef.current;
+    const call = currentCallRef.current;
+    if (!call) return;
+    // REV-3 Cluster X: when a token is supplied, only undo if it matches the
+    // current call. Stale toasts (issued before a follow-up mutate replaced
+    // the current call) are inert.
+    if (callToken !== undefined && call.token !== callToken) return;
 
-      if (phase === 'pending') {
-        // Mark the call so its .then() compensates if the server commits, and
-        // restore the optimistic UI now. Do not abort the request (#857): the
-        // closure on the pending promise still needs to inspect call.status.
-        const abortedInput = call.input;
-        call.status = 'aborted-by-user';
-        phaseRef.current = 'idle';
-        setState('idle');
-        optsRef.current.onAbort?.(abortedInput);
-        // Detach from currentCallRef so a follow-up mutate doesn't see this
-        // call as still pending.
-        currentCallRef.current = null;
-        return;
-      }
+    if (phase === 'pending') {
+      // Mark the call so its .then() compensates if the server commits, and
+      // restore the optimistic UI now. Do not abort the request (#857): the
+      // closure on the pending promise still needs to inspect call.status.
+      const abortedInput = call.input;
+      call.status = 'aborted-by-user';
+      phaseRef.current = 'idle';
+      setState('idle');
+      optsRef.current.onAbort?.(abortedInput);
+      // Detach from currentCallRef so a follow-up mutate doesn't see this
+      // call as still pending.
+      currentCallRef.current = null;
+      return;
+    }
 
-      if (phase === 'settled') {
-        // Already resolved: fire compensate, then reset.
-        // REV-4: attach .catch so compensation failures (refetch error, 409, etc.)
-        // do not become unhandled rejections. Surface via onCompensateError.
-        void compensate()
-          .then(() => {
-            phaseRef.current = 'idle';
-            setState('idle');
-          })
-          .catch((err: unknown) => {
-            phaseRef.current = 'idle';
-            setState('idle');
-            optsRef.current.onCompensateError?.(err);
-          });
-        return;
-      }
+    if (phase === 'settled') {
+      // Already resolved: fire compensate, then reset.
+      // REV-4: attach .catch so compensation failures (refetch error, 409, etc.)
+      // do not become unhandled rejections. Surface via onCompensateError.
+      void compensate()
+        .then(() => {
+          phaseRef.current = 'idle';
+          setState('idle');
+        })
+        .catch((err: unknown) => {
+          phaseRef.current = 'idle';
+          setState('idle');
+          optsRef.current.onCompensateError?.(err);
+        });
+      return;
+    }
 
-      // error or idle: no-op
-    },
-    [compensate],
-  );
+    // error or idle: no-op
+  }, [compensate]);
 
   return { mutate, undoLast, compensate, state };
 }
