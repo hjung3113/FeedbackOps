@@ -152,6 +152,11 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    - **Start both**, each on its own `<label>.localhost` host (the session cookie is per host, not per port):
      - `scripts/app-preview.py start <baseline> --backend --env "$WAVE_STATE/env.verify.<n>" --seed --name <n>-develop`;
      - `scripts/app-preview.py start <worktree> --backend --env "$WAVE_STATE/env.verify.<n>" --name <n>-branch`.
+   - `--seed` creates one `[preview]` record per drawer surface after the backend is healthy (Finding,
+     Task Request (one converted, one pending), Task, Milestone, VOC Cluster, Survey and a response,
+     outcome follow-up, Permission request). The branch preview shares that throwaway database, so it sees
+     the same records without its own `--seed`. A fixtures failure is a warning on the start JSON
+     (`fixtures`), not a failed start.
    - **Browser stages run one at a time across the wave.** At most one claude reviewer runs at a time, because they
      share the conductor's Claude quota. With 2–3 screen issues in flight, UX reviews queue.
 
@@ -219,7 +224,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
        (now an expectation check in the agent).
      - It found 4 real issues no code review had (#849–#852).
      - Tripwires were clean, and no preview or orphan was left.
-   - Until #853 lands, name the drawers or records the seed lacks in the UX task, and treat them as unverified.
+   - A `--seed` preview has one `[preview]` record per drawer surface (Finding,
+     Task Request (one converted, one pending), Task, Milestone, VOC Cluster, discovery Survey with a
+     response, outcome Survey follow-up, and a Permission request). UX tasks can open those drawers.
 
    **g. Rules that still hold:**
    - No review at all after copy-only or mechanical changes; the plan reports no roles for them.
@@ -299,7 +306,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not
     collide.
   - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` runs the
-    idempotent personas seed.
+    idempotent personas seed, then `scripts/preview-fixtures.mjs` against the healthy backend. That script
+    creates one `[preview]` record per drawer surface, including Task Request (one converted, one pending).
+    A fixtures failure is a warning on the start JSON (`fixtures`), not a failed start.
   - Without `--backend` the proxy goes to the user's :3011. That mode is for the conductor's own checks only.
   - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS) and stops each process group
     (npx children).

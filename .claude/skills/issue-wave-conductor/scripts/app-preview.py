@@ -20,6 +20,9 @@ The dev proxy goes to:
     database URL points at port 5434 (the dev DB) is refused. A branch backend boots pg-boss with supervise and
     schedule on, so on the dev DB it would work the owner's live job queue with unreviewed code.
   - `--seed` runs the idempotent seed with `SEED_MODE=personas` first, so every mock persona can log in.
+    After the backend is healthy it runs `preview-fixtures.mjs`, which creates one `[preview]` record per
+    drawer surface, including Task Request (one converted, one pending). A fixtures failure is a warning on
+    the start JSON (`fixtures`), not a failed start.
 
 Each process starts in its own session, and `stop` kills the whole process group (npx → node children). Backends
 carry a `--fops-preview=<label>` argument, and vite configs are named `preview-<label>.vite.config.mts`. That lets
@@ -131,6 +134,37 @@ def read_env_file(path):
     return env
 
 
+def run_preview_fixtures(port, env):
+    """One [preview] record per drawer, Task Request (one converted, one pending).
+
+    Failure is a result object, not an exception.
+    """
+    script = Path(__file__).resolve().parent / 'preview-fixtures.mjs'
+    node = str(Path(NODE22) / 'node')
+    try:
+        proc = subprocess.run(
+            [node, str(script), '--api', f'http://127.0.0.1:{port}'],
+            capture_output=True, text=True, env=env, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return {'ok': False, 'error': 'preview fixtures timed out'}
+    except OSError as exc:
+        return {'ok': False, 'error': f'preview fixtures failed to start: {exc}'}
+    line = next(
+        (candidate.strip() for candidate in reversed(proc.stdout.splitlines()) if candidate.strip()),
+        '',
+    )
+    if not line:
+        return {'ok': False, 'error': 'preview fixtures produced no JSON', 'stderr': proc.stderr.strip()[-300:]}
+    try:
+        result = json.loads(line)
+    except json.JSONDecodeError:
+        return {'ok': False, 'error': 'preview fixtures produced invalid JSON', 'stdout': line[-300:]}
+    if not isinstance(result, dict):
+        return {'ok': False, 'error': 'preview fixtures JSON was not an object'}
+    return result
+
+
 def db_port(url):
     match = re.search(r'@[^:/]+:(\d+)/', url or '')
     return match.group(1) if match else None
@@ -175,6 +209,7 @@ def start(args):
     state = {'name': label, 'checkout': str(checkout), 'pids': []}
     backend_port = USER_BACKEND_PORT
     warnings = []
+    fixtures = None
     if args.backend:
         if not args.env:
             fail('--backend needs --env <throwaway env file> (verify-db.sh create <n> writes $WAVE_STATE/env.verify.<n>)', 2)
@@ -204,6 +239,10 @@ def start(args):
                 kill_group(p)
             state_path.unlink(missing_ok=True)
             fail(f'backend did not become healthy; see {states / f"preview-{label}-backend.log"}')
+        if args.seed:
+            fixtures = run_preview_fixtures(backend_port, env)
+            if fixtures.get('ok') is not True:
+                warnings.append('preview fixtures did not succeed; see the fixtures field')
     elif not http_ok(f'http://127.0.0.1:{USER_BACKEND_PORT}/health'):
         warnings.append(f'the user backend on :{USER_BACKEND_PORT} is not answering; API calls will fail')
 
@@ -236,7 +275,10 @@ def start(args):
         fail(f'vite did not start; see {states / f"preview-{label}-vite.log"}')
     api = (f'checkout backend :{backend_port} on {state["backend_env"]}' if args.backend
            else f'user backend :{USER_BACKEND_PORT} (develop code, dev DB): conductor checks only, not reviewers')
-    emit({'ok': True, 'command': 'start', **state, 'api': api, 'warnings': warnings})
+    payload = {'ok': True, 'command': 'start', **state, 'api': api, 'warnings': warnings}
+    if args.seed:
+        payload['fixtures'] = fixtures
+    emit(payload)
 
 
 def stop_one(states, label):
@@ -290,7 +332,8 @@ def main():
     p_start.add_argument('checkout')
     p_start.add_argument('--backend', action='store_true', help="also run the checkout's backend (needs --env)")
     p_start.add_argument('--env', help='throwaway backend env file, e.g. $WAVE_STATE/env.verify.<n>')
-    p_start.add_argument('--seed', action='store_true', help='run the personas seed before starting the backend')
+    p_start.add_argument('--seed', action='store_true',
+                         help='personas seed, then one [preview] record per drawer surface')
     p_start.add_argument('--name', help='label and host prefix (default: checkout directory name)')
     p_stop = sub.add_parser('stop')
     p_stop.add_argument('name', nargs='?')
