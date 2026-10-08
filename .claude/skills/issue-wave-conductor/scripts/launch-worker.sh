@@ -2,7 +2,7 @@
 # launch-worker.sh <issue> <slug> [be] — worktree from origin/develop → branch feature/<issue>-<slug>, copy the brief
 # ($WAVE_BRIEFS/<issue>-task.md) + rules templates into .review/, wait for the setup install to finish, close the setup
 # shells, generate the route tree, then delegate launch and worker state to the shared worker-ops script.
-# WORKER_ROLE defaults to impl; use impl-fallback for the routing table's fallback.
+# WORKER_ROLE defaults to impl; impl-mid, impl-complex and impl-fallback select the routing table rows of those names.
 # Optional WORKER_MODEL / WORKER_EFFORT override the shared routing.tsv for this session.
 # Needs: WAVE_STATE, WAVE_BRIEFS, FOPS_MAIN (main checkout path).
 : "${WAVE_STATE:?}"; : "${WAVE_BRIEFS:?}"; : "${FOPS_MAIN:?}"; set -u
