@@ -1,8 +1,8 @@
 // VocTriageScreen.fullscreen.test.tsx — #852 expanded reading column (TDD)
 //
 // In fullscreen the panel column wraps TriagePanel in a centred max-w
-// reading column; the collapsed column keeps the fixed width with no
-// wrapper; collapsed it is a layout-neutral `contents` column.
+// reading column. The wrapper is always present: collapsed it is a
+// layout-neutral `contents` column, so the toggle never remounts the panel.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';

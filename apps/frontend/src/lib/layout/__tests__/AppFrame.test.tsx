@@ -314,8 +314,8 @@ describe('AppFrame', () => {
     const toggle = screen.getByRole('button', { name: '전체 화면 전환' });
 
     expect(slot).toHaveAttribute('data-expanded', 'false');
-    // #852 wraps the expanded panel in a reading column, which remounts the
-    // panel subtree — re-query the toggle instead of holding the stale node.
+    // #852's reading column wrapper is always present, so the panel stays
+    // mounted across the toggle; the re-query returns the same node.
     fireEvent.click(toggle);
     const expandedToggle = screen.getByRole('button', { name: '전체 화면 전환' });
     expect(slot).toHaveAttribute('data-expanded', 'true');
