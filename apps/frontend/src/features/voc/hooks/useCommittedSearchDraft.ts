@@ -1,0 +1,102 @@
+// useCommittedSearchDraft — local draft that commits onto an external value.
+//
+// Moved out of useInboxRoute (#821 debounce, #864 immediate commit). `committed`
+// is the value already written (the URL q). `write` runs at most once per
+// distinct draft; `base` is what that write moves away from.
+
+import * as React from 'react';
+
+export interface UseCommittedSearchDraftOptions {
+  committed: string;
+  write: (draft: string, base: string) => void;
+  debounceMs: number;
+}
+
+export function useCommittedSearchDraft({
+  committed,
+  write,
+  debounceMs,
+}: UseCommittedSearchDraftOptions): {
+  draft: string;
+  setDraft: (value: string) => void;
+  commit: () => void;
+} {
+  const [draft, setDraftState] = React.useState(committed);
+  // #864: id of the pending debounced write, so an Enter/blur commit can cancel
+  // it and the same draft is never written twice.
+  const searchDebounceRef = React.useRef<number | undefined>(undefined);
+  // The last draft written to the URL and not yet acknowledged by it. A repeat
+  // of that draft is skipped, and start/restore uses it instead of the stale URL.
+  const pendingCommitRef = React.useRef<string | undefined>(undefined);
+  // When the box moves past `pendingCommitRef`, this holds that pending draft
+  // so the acknowledgement must not copy the URL back over the newer text.
+  const draftAheadOfRef = React.useRef<string | undefined>(undefined);
+
+  const commitDraft = React.useCallback(
+    (next: string) => {
+      const base = pendingCommitRef.current !== undefined ? pendingCommitRef.current : committed;
+      // Already written (pending or acknowledged) — do not write it again.
+      if (next === base) return;
+      pendingCommitRef.current = next;
+      draftAheadOfRef.current = undefined;
+      write(next, base);
+    },
+    [committed, write],
+  );
+
+  function setDraft(value: string): void {
+    const pending = pendingCommitRef.current;
+    if (pending !== undefined && value !== pending && value !== committed) {
+      draftAheadOfRef.current = pending;
+    } else {
+      draftAheadOfRef.current = undefined;
+    }
+    setDraftState(value);
+  }
+
+  React.useEffect(() => {
+    const pending = pendingCommitRef.current;
+    if (pending !== undefined && committed === pending) {
+      pendingCommitRef.current = undefined;
+    }
+    // Strict mode runs this effect twice. The ref stays set so the second run
+    // still refuses to replace a draft typed ahead of this acknowledgement.
+    if (draftAheadOfRef.current !== undefined && committed === draftAheadOfRef.current) {
+      return;
+    }
+    draftAheadOfRef.current = undefined;
+    if (pending !== undefined && pending !== committed) {
+      setDraftState((current) => (current === pending ? current : committed));
+      return;
+    }
+    setDraftState(committed);
+  }, [committed]);
+
+  React.useEffect(() => {
+    if (draft === committed) return;
+    searchDebounceRef.current = window.setTimeout(() => {
+      searchDebounceRef.current = undefined;
+      commitDraft(draft);
+    }, debounceMs);
+    return () => {
+      if (searchDebounceRef.current !== undefined) {
+        window.clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = undefined;
+      }
+    };
+    // `commitDraft` changes with `write`, so a new write identity (a tab change,
+    // in the inbox) restarts the timer, as depending on `commitSearchDraft` did.
+  }, [draft, committed, commitDraft, debounceMs]);
+
+  // #864: Enter/blur commit — write the current draft to the URL at once and
+  // cancel any pending debounced write of the same value.
+  function commit(): void {
+    if (searchDebounceRef.current !== undefined) {
+      window.clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = undefined;
+    }
+    commitDraft(draft);
+  }
+
+  return { draft, setDraft, commit };
+}
