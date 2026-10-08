@@ -20,8 +20,8 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
 import { toast } from 'sonner';
+import { afterEach, describe, expect, it } from 'vitest';
 import { type AppRouterContext, RootLayout, TOASTER_BOTTOM_OFFSET } from '../__root';
 
 // Footer heights derived from the shipped Tailwind classes (4px spacing base):
