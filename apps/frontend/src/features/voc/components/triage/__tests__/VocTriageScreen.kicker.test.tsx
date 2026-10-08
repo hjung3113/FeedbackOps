@@ -300,11 +300,15 @@ describe('VocTriageScreen — V1 inline kicker', () => {
 
     fireEvent.click(expand);
     expect(queue).toHaveAttribute('hidden');
-    expect(expand).toHaveAttribute('aria-pressed', 'true');
+    // #852's reading column wrapper is always present, so the panel stays
+    // mounted across the toggle; the re-query returns the same node.
+    const expanded = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(expanded).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(queue).not.toHaveAttribute('hidden');
-    expect(expand).toHaveAttribute('aria-pressed', 'false');
+    const collapsed = screen.getByRole('button', { name: '전체 화면 전환' });
+    expect(collapsed).toHaveAttribute('aria-pressed', 'false');
 
     const more = screen.getByRole('button', { name: '더 보기' });
     fireEvent.keyDown(more, { key: 'Enter' });
