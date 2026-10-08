@@ -170,6 +170,40 @@ describe('useCommittedSearchDraft', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  // The inbox passes a new writer when the tab changes; the pending debounce
+  // restarts and fires through the new writer, as it did inside the route.
+  it('restarts the debounce through a new writer', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ write }: { write: (draft: string, base: string) => void }) =>
+        useCommittedSearchDraft({ committed: '', write, debounceMs: DEBOUNCE_MS }),
+      { initialProps: { write: first } },
+    );
+
+    act(() => {
+      result.current.setDraft('로그인');
+    });
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS - 100);
+    });
+    rerender({ write: second });
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS - 100);
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledWith('로그인', '');
+  });
+
+  // Draft survival under the StrictMode wrapper; the acknowledgement itself
+  // runs once here, so this does not replay the effect.
   it('keeps a draft typed ahead of an acknowledgement under StrictMode', () => {
     const { result, rerender } = renderDraft('', { strict: true });
 
