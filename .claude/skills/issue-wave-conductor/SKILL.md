@@ -308,7 +308,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   - `--backend` requires a throwaway `--env` and refuses an env whose DB is on port 5434. `--seed` runs the
     idempotent personas seed, then `scripts/preview-fixtures.mjs` against the healthy backend. That script
     creates one `[preview]` record per drawer surface, including Task Request (one converted, one pending).
-    A fixtures failure is a warning on the start JSON (`fixtures`), not a failed start.
+    A fixtures failure is a warning on the start JSON (`fixtures`), not a failed start. Child stdout and
+    stderr go to `$WAVE_STATE/preview-<label>-fixtures.log`, not into that JSON.
   - Without `--backend` the proxy goes to the user's :3011. That mode is for the conductor's own checks only.
   - It generates an `.mts` vite config (a `.ts` one outside the package bundles as CJS) and stops each process group
     (npx children).

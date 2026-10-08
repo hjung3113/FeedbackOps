@@ -213,6 +213,15 @@ function recordFailed(step, status, code) {
   failed.push({ step, status, code: code || 'unknown' });
 }
 
+function isRedirectRefusal(error) {
+  let current = error;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    if (current.message === 'unexpected redirect') return true;
+    current = current.cause;
+  }
+  return false;
+}
+
 function itemsOf(body) {
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.items)) return body.items;
@@ -248,12 +257,19 @@ async function request(path, { method = 'GET', persona, body, query, idempotency
     response = await fetch(url, {
       method,
       headers,
+      redirect: 'error',
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+  } catch (error) {
+    const code = isRedirectRefusal(error) ? 'redirect_refused' : 'network_error';
+    return { ok: false, status: 0, code, body: null };
+  }
+  let text;
+  try {
+    text = await response.text();
   } catch {
     return { ok: false, status: 0, code: 'network_error', body: null };
   }
-  const text = await response.text();
   let parsed = null;
   if (text) {
     try {
@@ -283,11 +299,16 @@ async function login(persona, api) {
   try {
     response = await fetch(new URL('/auth/mock-login', `${api}/`), {
       method: 'POST',
+      redirect: 'error',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ external_id: persona }),
     });
-  } catch {
-    recordFailed(`login:${persona}`, 0, 'network_error');
+  } catch (error) {
+    recordFailed(
+      `login:${persona}`,
+      0,
+      isRedirectRefusal(error) ? 'redirect_refused' : 'network_error',
+    );
     return;
   }
   const cookie = cookieHeader(response);
@@ -803,6 +824,19 @@ async function stepOutcomeFollowUp(survey) {
       recordFailed(step, closed.status, closed.code);
       return;
     }
+  } else {
+    // Reused closed survey: classifiable is the safe flag that the cohort meets the threshold.
+    const preview = await request(`/surveys/${survey.id}/outcome-follow-up`, {
+      persona: 'mock-admin-1',
+    });
+    if (!preview.ok) {
+      recordFailed(step, preview.status, preview.code);
+      return;
+    }
+    if (preview.body?.classifiable !== true) {
+      recordFailed(step, 0, 'prerequisite_missing');
+      return;
+    }
   }
   const systemId = survey.primary_managed_system_id;
   const check = await request('/me/permissions/check', {
@@ -814,6 +848,10 @@ async function stepOutcomeFollowUp(survey) {
     return;
   }
   if (check.body?.decision?.allow !== true) {
+    if (!sessions['mock-admin-1'] || !sessions['mock-admin-2']) {
+      recordFailed(step, 0, 'prerequisite_missing');
+      return;
+    }
     produced = true;
     const pending = await request('/permission-requests', {
       persona: 'mock-admin-1',
