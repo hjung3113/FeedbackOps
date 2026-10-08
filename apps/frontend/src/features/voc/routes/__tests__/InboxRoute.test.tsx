@@ -192,7 +192,7 @@ vi.mock('@tanstack/react-query', () => ({
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 import { Route as vocsRoute } from '@/routes/_authed/vocs';
-import { SEARCH_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
+import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
   const { list, detailPanel } = useInboxRoute(view);
@@ -673,8 +673,9 @@ describe('useInboxRoute', () => {
 
     fireEvent.change(searchBox(), { target: { value: '로그인' } });
 
-    // 300 ms debounce: the URL write carries q with replace: true.
-    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    // A Hangul-final draft waits the 1000 ms #875 debounce; the URL write
+    // carries q with replace: true.
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
     const navigation = lastNavigateSearch();
     expect(navigation.to).toBe('/vocs');
     expect(navigation.replace).toBe(true);
@@ -704,7 +705,8 @@ describe('useInboxRoute', () => {
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
     fireEvent.change(searchBox(), { target: { value: '로그인' } });
-    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    // Hangul-final draft: the write lands after the 1000 ms #875 debounce.
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
     const searching = lastNavigateSearch().search(searchState);
     expect(searching).toEqual({ view: 'inbox', q: '로그인' });
 
@@ -861,6 +863,39 @@ describe('useInboxRoute', () => {
 
       vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
       expect(navigateMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ── Hangul debounce (#875) ──────────────────────────────────────────────────
+  //
+  // A draft ending in a Hangul character may still be a half-typed syllable
+  // (로그이, heading for 로그인), so the URL waits for the longer debounce.
+  // No composition events are involved: native macOS Korean input does not
+  // always send them.
+
+  it('does not navigate mid-syllable and commits after the Hangul debounce', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox' };
+      render(<InboxTestHarness view="inbox" />);
+      const box = searchBox();
+
+      fireEvent.change(box, { target: { value: '로그이' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(SEARCH_HANGUL_DEBOUNCE_MS - SEARCH_DEBOUNCE_MS - 1);
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+
+      expect(navigateMock).toHaveBeenCalledTimes(1);
+      const navigation = lastNavigateSearch();
+      expect(navigation.to).toBe('/vocs');
+      expect(navigation.replace).toBe(true);
+      expect(navigation.search(searchState)).toEqual({ view: 'inbox', q: '로그이' });
     } finally {
       vi.useRealTimers();
     }
