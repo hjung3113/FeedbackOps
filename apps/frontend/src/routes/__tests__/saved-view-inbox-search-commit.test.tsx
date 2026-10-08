@@ -1,9 +1,9 @@
 // #864: the inbox search commits at once on Enter and on blur. #849's UX
-// review measured the loss: type a term and save a view within the 300 ms
-// debounce and the view is stored without `q`. This drives the REAL inbox
+// review measured the loss: type a term and save a view within the debounce
+// and the view is stored without `q`. This drives the REAL inbox
 // (VocRouteShell) and the REAL sidebar saved-view form. After the real-timer
 // mount, timers are frozen for the type → blur → navigation → submit window
-// and the 300 ms debounce is never advanced, so any `q` in the POST
+// and the debounce is never advanced, so any `q` in the POST
 // /saved-views body can only have come from the immediate commit. React's
 // async `act` yields via setImmediate, which stays real.
 
@@ -164,8 +164,8 @@ describe('#864 saving a view right after typing keeps q', () => {
       fireEvent.change(box, { target: { value: '로그인' } });
       nameField.focus(); // blurs the search box — commit at once (#864)
       // The commit's navigate() settles in microtasks; flush so the URL (and
-      // with it savedViewFilter) carries q before the save. The 300 ms
-      // debounce is frozen and is not advanced.
+      // with it savedViewFilter) carries q before the save. The debounce
+      // is frozen and is not advanced.
       await act(async () => {});
       fireEvent.change(nameField, { target: { value: '검색 보기' } });
       fireEvent.click(screen.getByTestId('saved-view-save'));
