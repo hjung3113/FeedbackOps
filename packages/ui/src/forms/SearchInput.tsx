@@ -29,6 +29,12 @@ export interface SearchInputProps {
    * Escape keeps its own clear behaviour and never commits.
    */
   onCommit?: () => void;
+  /**
+   * #875: called with `true` on `compositionstart` and `false` on
+   * `compositionend`, in controlled mode only. Lets the parent lengthen its
+   * search debounce while an IME syllable is composing.
+   */
+  onComposingChange?: (composing: boolean) => void;
 }
 
 const DISABLED_TOOLTIP = '검색은 다음 슬라이스에서 제공됩니다';
@@ -40,6 +46,7 @@ export function SearchInput({
   value,
   onValueChange,
   onCommit,
+  onComposingChange,
 }: SearchInputProps) {
   if (onValueChange === undefined) {
     return (
@@ -106,6 +113,12 @@ export function SearchInput({
           }
         }}
         {...(onCommit !== undefined ? { onBlur: () => onCommit() } : {})}
+        {...(onComposingChange !== undefined
+          ? {
+              onCompositionStart: () => onComposingChange(true),
+              onCompositionEnd: () => onComposingChange(false),
+            }
+          : {})}
       />
     </div>
   );

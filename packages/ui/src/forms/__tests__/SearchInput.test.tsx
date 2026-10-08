@@ -185,6 +185,22 @@ describe('SearchInput onCommit (#864)', () => {
   });
 });
 
+describe('SearchInput onComposingChange (#875)', () => {
+  it('reports compositionstart as true and compositionend as false', () => {
+    const onComposingChange = vi.fn();
+    render(
+      <SearchInput value="로그" onValueChange={() => {}} onComposingChange={onComposingChange} />,
+    );
+    const input = screen.getByRole('searchbox');
+
+    fireEvent.compositionStart(input);
+    expect(onComposingChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.compositionEnd(input);
+    expect(onComposingChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
 function dispatchEnter(
   input: HTMLElement,
   composition: { isComposing?: boolean; keyCode?: number },

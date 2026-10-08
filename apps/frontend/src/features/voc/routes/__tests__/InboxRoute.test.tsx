@@ -866,6 +866,37 @@ describe('useInboxRoute', () => {
     }
   });
 
+  // ── Composing debounce (#875) ───────────────────────────────────────────────
+  //
+  // A paused half-typed syllable (로그이|, heading for 로그인) must not be
+  // committed by the normal debounce while the IME composition is active.
+
+  it('does not navigate mid-syllable and commits after compositionend', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox' };
+      render(<InboxTestHarness view="inbox" />);
+      const box = searchBox();
+
+      fireEvent.compositionStart(box);
+      fireEvent.change(box, { target: { value: '로그이' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      fireEvent.compositionEnd(box);
+      fireEvent.change(box, { target: { value: '로그인' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+
+      expect(navigateMock).toHaveBeenCalledTimes(1);
+      const navigation = lastNavigateSearch();
+      expect(navigation.to).toBe('/vocs');
+      expect(navigation.replace).toBe(true);
+      expect(navigation.search(searchState)).toEqual({ view: 'inbox', q: '로그인' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows skeletons instead of the previous empty page while placeholder data is in flight', () => {
     useVocListMock.mockReturnValue({
       data: { items: [], next_cursor: undefined },

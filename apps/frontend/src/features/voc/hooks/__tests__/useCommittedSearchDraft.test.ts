@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
+// #875: the inbox passes this as `composingDebounceMs` while an IME syllable
+// is composing.
+const COMPOSING_DEBOUNCE_MS = 1000;
 
 function StrictModeWrapper({ children }: { children: React.ReactNode }) {
   return React.createElement(React.StrictMode, null, children);
@@ -21,6 +24,22 @@ function renderDraft(committed: string, options?: { strict?: boolean }) {
       initialProps: { committed },
       ...(options?.strict === true ? { wrapper: StrictModeWrapper } : {}),
     },
+  );
+  return { ...hook, write };
+}
+
+// #875: like the inbox, this render passes the composing debounce.
+function renderComposingDraft() {
+  const write = vi.fn();
+  const hook = renderHook(
+    ({ committed }: { committed: string }) =>
+      useCommittedSearchDraft({
+        committed,
+        write,
+        debounceMs: DEBOUNCE_MS,
+        composingDebounceMs: COMPOSING_DEBOUNCE_MS,
+      }),
+    { initialProps: { committed: '' } },
   );
   return { ...hook, write };
 }
@@ -220,5 +239,65 @@ describe('useCommittedSearchDraft', () => {
     rerender({ committed: '로그인' });
 
     expect(result.current.draft).toBe('로그인 오류');
+  });
+
+  // ── Composing debounce (#875) ────────────────────────────────────────────────
+  //
+  // The Korean IME keeps the last syllable composing until the next key, so a
+  // full pause while composing would leave a typed 로그인 unsearched (#875 owner
+  // decision). While composing the debounce is only lengthened, and a
+  // compositionend restarts the pending timer with the normal delay.
+
+  it.each([
+    {
+      label: 'while an IME composition is active',
+      composing: true,
+      delayMs: COMPOSING_DEBOUNCE_MS,
+    },
+    { label: 'outside a composition', composing: false, delayMs: DEBOUNCE_MS },
+  ])('debounces the write $label for $delayMs ms', ({ composing, delayMs }) => {
+    const { result, write } = renderComposingDraft();
+
+    act(() => {
+      if (composing) result.current.setComposing(true);
+      result.current.setDraft('로그이');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    if (composing) {
+      expect(write).not.toHaveBeenCalled();
+    } else {
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith('로그이', '');
+    }
+
+    act(() => {
+      vi.advanceTimersByTime(delayMs - DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes 300 ms after compositionend restarts the pending timer', () => {
+    const { result, write } = renderComposingDraft();
+
+    act(() => {
+      result.current.setComposing(true);
+      result.current.setDraft('로그이');
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(write).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setComposing(false);
+    });
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith('로그이', '');
   });
 });
