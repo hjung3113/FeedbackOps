@@ -135,3 +135,68 @@ describe('SearchInput controlled mode (#821)', () => {
     expect(valueChanges).toEqual([]);
   });
 });
+
+describe('SearchInput onCommit (#864)', () => {
+  it.each([
+    ['Enter', (input: HTMLElement) => fireEvent.keyDown(input, { key: 'Enter' })],
+    ['blur', (input: HTMLElement) => fireEvent.blur(input)],
+  ])('calls onCommit on %s', (_trigger, commit) => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    commit(screen.getByRole('searchbox'));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onCommit while typing', () => {
+    const onCommit = vi.fn();
+    const onValueChange = vi.fn();
+    render(<SearchInput value="" onValueChange={onValueChange} onCommit={onCommit} />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '로그인' } });
+    expect(onValueChange).toHaveBeenCalledWith('로그인');
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Escape clears the box but does not call onCommit', () => {
+    const onCommit = vi.fn();
+    const onValueChange = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={onValueChange} onCommit={onCommit} />);
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+    expect(onValueChange).toHaveBeenCalledWith('');
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['keyCode 229', { keyCode: 229 }],
+  ])('does not call onCommit for a composition Enter (%s)', (_label, composition) => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    dispatchEnter(screen.getByRole('searchbox'), composition);
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('commits a normal Enter after a composition Enter', () => {
+    const onCommit = vi.fn();
+    render(<SearchInput value="로그인" onValueChange={() => {}} onCommit={onCommit} />);
+    const input = screen.getByRole('searchbox');
+    dispatchEnter(input, { isComposing: true });
+    dispatchEnter(input, {});
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+});
+
+function dispatchEnter(
+  input: HTMLElement,
+  composition: { isComposing?: boolean; keyCode?: number },
+): void {
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    cancelable: true,
+    isComposing: composition.isComposing === true,
+  });
+  if (composition.keyCode !== undefined) {
+    Object.defineProperty(event, 'keyCode', { value: composition.keyCode });
+  }
+  fireEvent(input, event);
+}

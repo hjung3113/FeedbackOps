@@ -1,6 +1,6 @@
 import { apiClient } from '@/lib/api';
 import type { VocListItem } from '@fops/shared';
-import { type UseQueryResult, useQuery } from '@tanstack/react-query';
+import { type UseQueryResult, keepPreviousData, useQuery } from '@tanstack/react-query';
 
 export interface UseVocListParams {
   view: 'inbox' | 'my' | 'triage';
@@ -77,6 +77,12 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
       const res = await apiClient<VocListPage>('GET', `/vocs?${qs.toString()}`, { signal });
       return res.data;
     },
+    // #864: a blur commit changes this key before the row's click. Keep the
+    // previous page (rows keyed by voc.id) mounted until the next one arrives.
+    // A first load has no previous page, so pending/error stay as they were.
+    // Not for triage: a tab switch there must not leave the previous tab's
+    // VOCs actionable under the new tab.
+    ...(view === 'triage' ? {} : { placeholderData: keepPreviousData }),
     staleTime: 30_000,
     retry: 1,
   });

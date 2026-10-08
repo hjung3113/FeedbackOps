@@ -21,6 +21,14 @@ export interface SearchInputProps {
    * whose search endpoint has not shipped yet.
    */
   onValueChange?: (value: string) => void;
+  /**
+   * #864: called when the user commits the draft — on Enter and on blur, in
+   * controlled mode only. An Enter that confirms an IME composition
+   * (`isComposing`, or keyCode 229) does not commit; the next ordinary Enter
+   * does. The current value is already with the parent via `onValueChange`.
+   * Escape keeps its own clear behaviour and never commits.
+   */
+  onCommit?: () => void;
 }
 
 const DISABLED_TOOLTIP = '검색은 다음 슬라이스에서 제공됩니다';
@@ -31,6 +39,7 @@ export function SearchInput({
   className,
   value,
   onValueChange,
+  onCommit,
 }: SearchInputProps) {
   if (onValueChange === undefined) {
     return (
@@ -86,11 +95,17 @@ export function SearchInput({
           // A dialog (e.g. Radix) may have already handled this Escape on
           // document capture; one key must not also clear the box.
           if (event.defaultPrevented) return;
+          // Confirming an IME composition also reports Enter. keyCode 229 is the
+          // fallback where isComposing is missing (older Chrome/Safari).
+          const native = event.nativeEvent;
+          const composingEnter = native.isComposing || native.keyCode === 229;
+          if (event.key === 'Enter' && onCommit !== undefined && !composingEnter) onCommit();
           if (event.key === 'Escape' && value !== '') {
             event.preventDefault();
             onValueChange('');
           }
         }}
+        {...(onCommit !== undefined ? { onBlur: () => onCommit() } : {})}
       />
     </div>
   );
