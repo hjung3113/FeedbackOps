@@ -68,15 +68,21 @@ test.describe('/home visual harness', () => {
     await installMockApi(page, { home: 'populated' });
     await page.goto('/home');
     await expect(page.getByTestId('home-screen')).toBeVisible();
-    const overflow = await page.evaluate(() => {
-      const shellScroll = document.querySelector('[data-shell="page"] > .overflow-y-auto');
-      return {
-        document: document.documentElement.scrollHeight - window.innerHeight,
-        page: shellScroll ? shellScroll.scrollHeight - shellScroll.clientHeight : 0,
-      };
-    });
-    expect(overflow.page).toBeGreaterThan(0);
-    expect(overflow.document).toBe(0);
+    // The [data-shell="page"] > .overflow-y-auto lookup depends on PageShell's
+    // DOM structure (packages/ui/src/layout/PageShell.tsx); polling the page
+    // overflow also waits for the populated queues to render.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const shellScroll = document.querySelector('[data-shell="page"] > .overflow-y-auto');
+          return shellScroll ? shellScroll.scrollHeight - shellScroll.clientHeight : 0;
+        }),
+      )
+      .toBeGreaterThan(0);
+    const documentOverflow = await page.evaluate(
+      () => document.documentElement.scrollHeight - window.innerHeight,
+    );
+    expect(documentOverflow).toBe(0);
   });
 
   // #280 removed the dead My Work entry point, not the panel — the panel still

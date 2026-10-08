@@ -27,6 +27,9 @@ export interface PageShellProps {
  * The scroll region fills the available height; the inner padded column mirrors
  * the prototype's `.main-padded` (28px 32px 36px) and, when not `fluid`, caps at
  * 1600px centered so huge monitors stay readable without leaving a 1024px gutter.
+ *
+ * Render as the flex child of AppFrame `<main>`; a wrapper in between (e.g.
+ * Radix `Tabs`) needs `flex min-h-0 flex-1 flex-col`.
  */
 export function PageShell({
   header,

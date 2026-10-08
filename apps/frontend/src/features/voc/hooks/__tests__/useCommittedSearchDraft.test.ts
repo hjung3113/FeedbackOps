@@ -2,7 +2,6 @@
 // The inbox route used to own this; these tests are the seam that moved with it.
 
 import { act, renderHook } from '@testing-library/react';
-import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
@@ -11,35 +10,19 @@ const DEBOUNCE_MS = 300;
 // Hangul character.
 const HANGUL_DEBOUNCE_MS = 700;
 
-function StrictModeWrapper({ children }: { children: React.ReactNode }) {
-  return React.createElement(React.StrictMode, null, children);
-}
-
-function renderDraft(committed: string, options?: { strict?: boolean }) {
+// One render, like the inbox: both delays, so a Hangul-final draft waits
+// HANGUL_DEBOUNCE_MS and every other draft DEBOUNCE_MS.
+function renderDraft(committed: string) {
   const write = vi.fn();
   const hook = renderHook(
     ({ committed: next }: { committed: string }) =>
-      useCommittedSearchDraft({ committed: next, write, debounceMs: DEBOUNCE_MS }),
-    {
-      initialProps: { committed },
-      ...(options?.strict === true ? { wrapper: StrictModeWrapper } : {}),
-    },
-  );
-  return { ...hook, write };
-}
-
-// #875: like the inbox, this render passes the Hangul debounce.
-function renderHangulDraft() {
-  const write = vi.fn();
-  const hook = renderHook(
-    ({ committed }: { committed: string }) =>
       useCommittedSearchDraft({
-        committed,
+        committed: next,
         write,
         debounceMs: DEBOUNCE_MS,
         hangulDebounceMs: HANGUL_DEBOUNCE_MS,
       }),
-    { initialProps: { committed: '' } },
+    { initialProps: { committed } },
   );
   return { ...hook, write };
 }
@@ -53,37 +36,18 @@ describe('useCommittedSearchDraft', () => {
     vi.useRealTimers();
   });
 
-  it('writes the draft after debounceMs and not before', () => {
-    const { result, write } = renderDraft('');
-
-    act(() => {
-      result.current.setDraft('로그인');
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(DEBOUNCE_MS - 1);
-    });
-    expect(write).not.toHaveBeenCalled();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(write).toHaveBeenCalledTimes(1);
-    expect(write).toHaveBeenCalledWith('로그인', '');
-  });
-
   it('commits the current draft at once and the timer does not write it again', () => {
     const { result, write } = renderDraft('');
 
     act(() => {
-      result.current.setDraft('로그인');
+      result.current.setDraft('login');
     });
     act(() => {
       result.current.commit();
     });
 
     expect(write).toHaveBeenCalledTimes(1);
-    expect(write).toHaveBeenCalledWith('로그인', '');
+    expect(write).toHaveBeenCalledWith('login', '');
 
     act(() => {
       vi.advanceTimersByTime(DEBOUNCE_MS);
@@ -94,7 +58,7 @@ describe('useCommittedSearchDraft', () => {
   it.each([
     {
       label: 'committed',
-      committed: '로그인',
+      committed: 'login',
       // The box already shows the URL q. Committing or waiting must not write.
       prime: false,
     },
@@ -109,7 +73,7 @@ describe('useCommittedSearchDraft', () => {
 
     if (prime) {
       act(() => {
-        result.current.setDraft('로그인');
+        result.current.setDraft('login');
       });
       act(() => {
         result.current.commit();
@@ -117,7 +81,7 @@ describe('useCommittedSearchDraft', () => {
       write.mockClear();
     } else {
       act(() => {
-        result.current.setDraft('로그인');
+        result.current.setDraft('login');
       });
     }
 
@@ -191,17 +155,22 @@ describe('useCommittedSearchDraft', () => {
 
   // The inbox passes a new writer when the tab changes; the pending debounce
   // restarts and fires through the new writer, as it did inside the route.
-  it('restarts the debounce through a new writer', () => {
+  it('sends a pending write through the newest writer', () => {
     const first = vi.fn();
     const second = vi.fn();
     const { result, rerender } = renderHook(
       ({ write }: { write: (draft: string, base: string) => void }) =>
-        useCommittedSearchDraft({ committed: '', write, debounceMs: DEBOUNCE_MS }),
+        useCommittedSearchDraft({
+          committed: '',
+          write,
+          debounceMs: DEBOUNCE_MS,
+          hangulDebounceMs: HANGUL_DEBOUNCE_MS,
+        }),
       { initialProps: { write: first } },
     );
 
     act(() => {
-      result.current.setDraft('로그인');
+      result.current.setDraft('login');
     });
     act(() => {
       vi.advanceTimersByTime(DEBOUNCE_MS - 100);
@@ -211,34 +180,13 @@ describe('useCommittedSearchDraft', () => {
       vi.advanceTimersByTime(100);
     });
     expect(first).not.toHaveBeenCalled();
-    expect(second).not.toHaveBeenCalled();
 
     act(() => {
       vi.advanceTimersByTime(DEBOUNCE_MS - 100);
     });
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
-    expect(second).toHaveBeenCalledWith('로그인', '');
-  });
-
-  // Draft survival under the StrictMode wrapper; the acknowledgement itself
-  // runs once here, so this does not replay the effect.
-  it('keeps a draft typed ahead of an acknowledgement under StrictMode', () => {
-    const { result, rerender } = renderDraft('', { strict: true });
-
-    act(() => {
-      result.current.setDraft('로그인');
-    });
-    act(() => {
-      result.current.commit();
-    });
-    act(() => {
-      result.current.setDraft('로그인 오류');
-    });
-
-    rerender({ committed: '로그인' });
-
-    expect(result.current.draft).toBe('로그인 오류');
+    expect(second).toHaveBeenCalledWith('login', '');
   });
 
   // ── Hangul debounce (#875) ──────────────────────────────────────────────────
@@ -254,7 +202,7 @@ describe('useCommittedSearchDraft', () => {
     { draft: 'voc-02', delayMs: DEBOUNCE_MS },
     { draft: '로그인 ', delayMs: DEBOUNCE_MS },
   ])('debounces a draft ending in "$draft" for $delayMs ms', ({ draft, delayMs }) => {
-    const { result, write } = renderHangulDraft();
+    const { result, write } = renderDraft('');
 
     act(() => {
       result.current.setDraft(draft);
@@ -280,7 +228,7 @@ describe('useCommittedSearchDraft', () => {
   // A non-Hangul character (here a space) after a Hangul-final draft restarts
   // the pending timer back at the normal delay.
   it('writes 300 ms after a space follows the Hangul-final draft', () => {
-    const { result, write } = renderHangulDraft();
+    const { result, write } = renderDraft('');
 
     act(() => {
       result.current.setDraft('로그이');

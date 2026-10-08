@@ -1,8 +1,8 @@
 // useCommittedSearchDraft — local draft that commits onto an external value.
 //
 // Moved out of useInboxRoute (#821 debounce, #864 immediate commit). `committed`
-// is the value already written (the URL q). `write` runs at most once per
-// distinct draft; `base` is what that write moves away from.
+// is the value already written (the inbox passes the URL `q`). `write` runs at
+// most once per distinct draft; `base` is what that write moves away from.
 
 import * as React from 'react';
 
@@ -25,10 +25,9 @@ export interface UseCommittedSearchDraftOptions {
   debounceMs: number;
   /**
    * #875: debounce to use while the draft ends in a Hangul character (the IME
-   * may still be composing that syllable). Omitted: every draft uses
-   * `debounceMs`.
+   * may still be composing that syllable).
    */
-  hangulDebounceMs?: number;
+  hangulDebounceMs: number;
 }
 
 export function useCommittedSearchDraft({
@@ -45,8 +44,9 @@ export function useCommittedSearchDraft({
   // #864: id of the pending debounced write, so an Enter/blur commit can cancel
   // it and the same draft is never written twice.
   const searchDebounceRef = React.useRef<number | undefined>(undefined);
-  // The last draft written to the URL and not yet acknowledged by it. A repeat
-  // of that draft is skipped, and start/restore uses it instead of the stale URL.
+  // The last draft passed to `write` and not yet acknowledged by `committed`. A
+  // repeat of that draft is skipped, and start/restore uses it instead of the
+  // stale `committed`.
   const pendingCommitRef = React.useRef<string | undefined>(undefined);
   // When the box moves past `pendingCommitRef`, this holds that pending draft
   // so the acknowledgement must not copy the URL back over the newer text.
@@ -102,7 +102,7 @@ export function useCommittedSearchDraft({
         searchDebounceRef.current = undefined;
         commitDraft(draft);
       },
-      endsWithHangul(draft) ? (hangulDebounceMs ?? debounceMs) : debounceMs,
+      endsWithHangul(draft) ? hangulDebounceMs : debounceMs,
     );
     return () => {
       if (searchDebounceRef.current !== undefined) {
@@ -110,11 +110,11 @@ export function useCommittedSearchDraft({
         searchDebounceRef.current = undefined;
       }
     };
-    // `commitDraft` changes with `write`, so a new write identity (a tab change,
-    // in the inbox) restarts the timer, as depending on `commitSearchDraft` did.
+    // `commitDraft` changes with `write`, so a new `write` identity restarts
+    // the timer.
   }, [draft, committed, commitDraft, debounceMs, hangulDebounceMs]);
 
-  // #864: Enter/blur commit — write the current draft to the URL at once and
+  // #864: Enter/blur commit — `write` the current draft at once and
   // cancel any pending debounced write of the same value.
   function commit(): void {
     if (searchDebounceRef.current !== undefined) {

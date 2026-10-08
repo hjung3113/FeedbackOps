@@ -671,21 +671,20 @@ describe('useInboxRoute', () => {
     searchState = route.options.validateSearch({ view: 'inbox' });
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
-    fireEvent.change(searchBox(), { target: { value: '로그인' } });
+    fireEvent.change(searchBox(), { target: { value: 'login' } });
 
-    // A Hangul-final draft waits the 700 ms #875 debounce; the URL write
-    // carries q with replace: true.
-    await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
+    // The URL write carries q with replace: true.
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     const navigation = lastNavigateSearch();
     expect(navigation.to).toBe('/vocs');
     expect(navigation.replace).toBe(true);
     const nextSearch = navigation.search(searchState);
-    expect(nextSearch.q).toBe('로그인');
+    expect(nextSearch.q).toBe('login');
 
     // The URL q is valid route state and drives the request.
     expect(route.options.validateSearch(nextSearch)).toEqual({
       view: 'inbox',
-      q: '로그인',
+      q: 'login',
     });
     searchState = nextSearch;
     rerender(<InboxTestHarness view="inbox" />);
@@ -693,7 +692,7 @@ describe('useInboxRoute', () => {
     const url = await lastListRequestUrl();
     const parsed = parseVocsQuery(url);
     expect(parsed.data?.view).toBe('inbox');
-    expect(parsed.data?.q).toBe('로그인');
+    expect(parsed.data?.q).toBe('login');
     // Owner decision: a search covers the whole inbox, so the default tab is not sent.
     expect(parsed.data?.tab).toBeUndefined();
   });
@@ -704,17 +703,16 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox', tab: 'high' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
-    fireEvent.change(searchBox(), { target: { value: '로그인' } });
-    // Hangul-final draft: the write lands after the 700 ms #875 debounce.
-    await waitFor(() => expect(navigateMock).toHaveBeenCalled(), { timeout: 2000 });
+    fireEvent.change(searchBox(), { target: { value: 'login' } });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     const searching = lastNavigateSearch().search(searchState);
-    expect(searching).toEqual({ view: 'inbox', q: '로그인' });
+    expect(searching).toEqual({ view: 'inbox', q: 'login' });
 
     searchState = searching;
     rerender(<InboxTestHarness view="inbox" />);
     const parsed = parseVocsQuery(await lastListRequestUrl());
     expect(parsed.data?.tab).toBeUndefined();
-    expect(parsed.data?.q).toBe('로그인');
+    expect(parsed.data?.q).toBe('login');
     for (const tab of screen.getAllByRole('tab')) {
       expect(tab).toHaveAttribute('aria-selected', 'false');
     }
