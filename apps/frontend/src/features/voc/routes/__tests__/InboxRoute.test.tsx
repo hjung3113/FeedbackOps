@@ -812,20 +812,6 @@ describe('useInboxRoute', () => {
     },
   );
 
-  it('does not navigate when the committed draft already equals the URL q', () => {
-    vi.useFakeTimers();
-    try {
-      searchState = { view: 'inbox', q: '로그인' };
-      render(<InboxTestHarness view="inbox" />);
-
-      fireEvent.blur(searchBox());
-
-      expect(navigateMock).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('keeps a tab picked before a repeated commit is acknowledged', () => {
     vi.useFakeTimers();
     try {
@@ -875,32 +861,6 @@ describe('useInboxRoute', () => {
 
       vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
       expect(navigateMock).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('keeps a newer draft typed while a commit is still unacknowledged', () => {
-    vi.useFakeTimers();
-    try {
-      searchState = { view: 'inbox' };
-      const { rerender } = render(<InboxTestHarness view="inbox" />);
-      const box = searchBox();
-      fireEvent.change(box, { target: { value: '로그인' } });
-      fireEvent.keyDown(box, { key: 'Enter' });
-      fireEvent.change(box, { target: { value: '로그인 오류' } });
-
-      searchState = { view: 'inbox', q: '로그인' };
-      rerender(<InboxTestHarness view="inbox" />);
-
-      expect(searchBox()).toHaveValue('로그인 오류');
-
-      fireEvent.blur(searchBox());
-      expect(navigateMock).toHaveBeenCalledTimes(2);
-      expect(lastNavigateSearch().search(searchState)).toEqual({
-        view: 'inbox',
-        q: '로그인 오류',
-      });
     } finally {
       vi.useRealTimers();
     }

@@ -25,6 +25,7 @@ import { ArrowRight, Flag, Link as LinkIcon, Plus, TriangleAlert, User } from 'l
 import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
+import { useCommittedSearchDraft } from '../hooks/useCommittedSearchDraft';
 import { useVocList } from '../hooks/useVocList';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -203,36 +204,21 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     ? undefined
     : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged'));
   const currentSort = search.sort ?? DEFAULT_SORT;
-  const [searchDraft, setSearchDraft] = React.useState(urlQ);
   // The tab the current search started from, restored when the search is cleared.
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
-  // #864: id of the pending debounced write, so an Enter/blur commit can cancel
-  // it and the same draft is never written twice.
-  const searchDebounceRef = React.useRef<number | undefined>(undefined);
-  // The last draft written to the URL and not yet acknowledged by it. A repeat
-  // of that draft is skipped, and start/restore uses it instead of the stale URL.
-  const pendingCommitRef = React.useRef<string | undefined>(undefined);
-  // When the box moves past `pendingCommitRef`, this holds that pending draft
-  // so the acknowledgement must not copy the URL back over the newer text.
-  const draftAheadOfRef = React.useRef<string | undefined>(undefined);
-
-  // #864: the one writer for the URL q, shared by the debounce effect and the
-  // immediate Enter/blur commit. Carries the #821 tab rules: starting a search
-  // drops the remembered tab, clearing restores it. While a commit is still
-  // pending, those rules see that draft — not the URL it has not reached yet.
-  const commitSearchDraft = React.useCallback(
-    (draft: string) => {
-      const baseQ = pendingCommitRef.current !== undefined ? pendingCommitRef.current : urlQ;
-      // Already written (pending or acknowledged) — do not write it again.
-      if (draft === baseQ) return;
+  // #864: the hook calls this to write the URL q, from its debounced effect and
+  // its immediate Enter/blur commit. Carries the #821 tab rules: starting a
+  // search drops the remembered tab, clearing restores it. While a commit is
+  // still pending, those rules see `base` — that draft, not the URL it has not
+  // reached yet. `urlQ` is not a dep: the hook reads it as `committed`.
+  const writeSearchDraft = React.useCallback(
+    (draft: string, base: string) => {
       const urlTab = search.tab;
       const clearing = draft === '';
-      const starting = baseQ === '' && !clearing && view === 'inbox';
+      const starting = base === '' && !clearing && view === 'inbox';
       if (starting) tabBeforeSearchRef.current = urlTab;
       const restoreTab = clearing ? tabBeforeSearchRef.current : undefined;
       if (clearing) tabBeforeSearchRef.current = undefined;
-      pendingCommitRef.current = draft;
-      draftAheadOfRef.current = undefined;
       void navigate({
         to: '/vocs',
         search: (prev) => {
@@ -254,50 +240,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         replace: true,
       });
     },
-    [urlQ, navigate, search.tab, view],
+    [navigate, search.tab, view],
   );
-
-  function handleSearchDraftChange(value: string): void {
-    const pending = pendingCommitRef.current;
-    if (pending !== undefined && value !== pending && value !== urlQ) {
-      draftAheadOfRef.current = pending;
-    } else {
-      draftAheadOfRef.current = undefined;
-    }
-    setSearchDraft(value);
-  }
-
-  React.useEffect(() => {
-    const pending = pendingCommitRef.current;
-    if (pending !== undefined && urlQ === pending) {
-      pendingCommitRef.current = undefined;
-    }
-    // Strict mode runs this effect twice. The ref stays set so the second run
-    // still refuses to replace a draft typed ahead of this acknowledgement.
-    if (draftAheadOfRef.current !== undefined && urlQ === draftAheadOfRef.current) {
-      return;
-    }
-    draftAheadOfRef.current = undefined;
-    if (pending !== undefined && pending !== urlQ) {
-      setSearchDraft((current) => (current === pending ? current : urlQ));
-      return;
-    }
-    setSearchDraft(urlQ);
-  }, [urlQ]);
-
-  React.useEffect(() => {
-    if (searchDraft === urlQ) return;
-    searchDebounceRef.current = window.setTimeout(() => {
-      searchDebounceRef.current = undefined;
-      commitSearchDraft(searchDraft);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (searchDebounceRef.current !== undefined) {
-        window.clearTimeout(searchDebounceRef.current);
-        searchDebounceRef.current = undefined;
-      }
-    };
-  }, [searchDraft, urlQ, commitSearchDraft]);
+  const { draft, setDraft, commit } = useCommittedSearchDraft({
+    committed: urlQ,
+    write: writeSearchDraft,
+    debounceMs: SEARCH_DEBOUNCE_MS,
+  });
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
   const currentFilters: Record<string, string[]> = React.useMemo(() => {
@@ -335,16 +284,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-
-  // #864: Enter/blur commit — write the current draft to the URL at once and
-  // cancel any pending debounced write of the same value.
-  function handleSearchCommit(): void {
-    if (searchDebounceRef.current !== undefined) {
-      window.clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = undefined;
-    }
-    commitSearchDraft(searchDraft);
-  }
 
   function handleTabChange(next: string): void {
     void navigate({
@@ -435,13 +374,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         action={
           <div className="flex items-center gap-2">
             {/* #821: server-side text search on GET /vocs. The box is a local
-                draft; the debounced effect or an Enter/blur commit (#864)
-                writes the URL q. */}
+                draft; useCommittedSearchDraft writes the URL q on debounce or
+                Enter/blur (#864). */}
             <SearchInput
               placeholder="필터, 키워드…"
-              value={searchDraft}
-              onValueChange={handleSearchDraftChange}
-              onCommit={handleSearchCommit}
+              value={draft}
+              onValueChange={setDraft}
+              onCommit={commit}
             />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
