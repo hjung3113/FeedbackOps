@@ -9,7 +9,8 @@ import { parseSearchWith, stringifySearchWith } from '@tanstack/react-router';
 // `z.string()` search schema and the value was dropped.
 //
 // Audit (#850): no route search schema declares a number — every value is a
-// string except `builder: z.boolean()`. So digits never need to be a number.
+// string except the booleans `builder` (Survey detail) and `includeArchived`
+// (Admin Analytics Areas). So digits never need to be a number.
 
 /**
  * JSON-parses one decoded search value, but a JSON number is rolled back to
