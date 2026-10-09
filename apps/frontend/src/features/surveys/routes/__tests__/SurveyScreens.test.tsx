@@ -3103,15 +3103,15 @@ describe('Survey screens', () => {
         }
         if (state === 'loaded-empty') {
           expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
-          expect(screen.getByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
-          expect(screen.getByRole('tab', { name: /초안\s*,\s*0/ })).toBeInTheDocument();
-          expect(screen.getByRole('tab', { name: /진행 중\s*,\s*0/ })).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: /^전체\s*,\s*0$/ })).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: /^초안\s*,\s*0$/ })).toBeInTheDocument();
+          expect(screen.getByRole('tab', { name: /^진행 중\s*,\s*0$/ })).toBeInTheDocument();
           return;
         }
         expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /전체\s*,\s*1/ })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /초안\s*,\s*1/ })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /진행 중\s*,\s*0/ })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /^전체\s*,\s*1$/ })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /^초안\s*,\s*1$/ })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /^진행 중\s*,\s*0$/ })).toBeInTheDocument();
       },
     );
 
@@ -3146,9 +3146,9 @@ describe('Survey screens', () => {
         </QueryClientProvider>,
       );
       expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /초안\s*,\s*0/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /진행 중\s*,\s*0/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^전체\s*,\s*0$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^초안\s*,\s*0$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^진행 중\s*,\s*0$/ })).toBeInTheDocument();
     });
   });
 });

@@ -169,8 +169,11 @@ export function VocTriageScreen({
         </div>
 
         {/* Deep link target this queue cannot show (#383) — never silently
-            swap in another VOC's commit form. */}
-        {deepLinkTargetMissing && (
+            swap in another VOC's commit form. #922 FIX1: an uncached deep link
+            mounts with queuePending=true and empty items, which is not yet
+            evidence the target is missing — suppress the notice until the
+            queue request settles. */}
+        {deepLinkTargetMissing && queuePending !== true && (
           <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"

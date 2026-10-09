@@ -204,9 +204,9 @@ describe('integration links route', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /전체\s*,\s*2/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /활성\s*,\s*1/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /분리됨\s*,\s*1/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^전체\s*,\s*2$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^활성\s*,\s*1$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^분리됨\s*,\s*1$/ })).toBeInTheDocument();
       expect(screen.getByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText(`엔티티 링크 ${LINK_B.slice(0, 8)}`)).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
@@ -326,7 +326,7 @@ describe('integration links route', () => {
     );
 
     await screen.findByText('권한 제한');
-    await userEvent.click(screen.getByRole('tab', { name: /분리됨\s*,\s*1/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^분리됨\s*,\s*1$/ }));
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
@@ -368,12 +368,12 @@ describe('integration links route', () => {
     );
 
     expect(await screen.findByText(`엔티티 링크 ${LINK_A.slice(0, 8)}`)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /활성\s*,\s*2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^활성\s*,\s*2$/ })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '더 보기' }));
 
     expect(await screen.findByText(`엔티티 링크 ${LINK_C.slice(0, 8)}`)).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByRole('tab', { name: /활성\s*,\s*2/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^활성\s*,\s*2$/ })).toBeInTheDocument();
     expect(
       urls.some(
         (rawUrl) => new URL(rawUrl, 'http://localhost').searchParams.get('cursor') === 'page-2',
@@ -527,9 +527,9 @@ describe('integration links route', () => {
         expect(screen.queryByRole('tab', { name: /^오래됨\s*,\s*\d+$/ })).not.toBeInTheDocument();
         return;
       }
-      expect(await screen.findByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /오래됨\s*,\s*0/ })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /취소됨\s*,\s*0/ })).toBeInTheDocument();
+      expect(await screen.findByRole('tab', { name: /^전체\s*,\s*0$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^오래됨\s*,\s*0$/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^취소됨\s*,\s*0$/ })).toBeInTheDocument();
     },
   );
 
@@ -611,8 +611,8 @@ describe('integration links route', () => {
       releaseRead?.();
     });
 
-    expect(await screen.findByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /오래됨\s*,\s*0/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /취소됨\s*,\s*0/ })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /^전체\s*,\s*0$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^오래됨\s*,\s*0$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^취소됨\s*,\s*0$/ })).toBeInTheDocument();
   });
 });

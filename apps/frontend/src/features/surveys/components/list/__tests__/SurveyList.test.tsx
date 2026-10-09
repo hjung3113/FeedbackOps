@@ -153,18 +153,18 @@ describe('SurveyList tabs', () => {
     );
 
     expect(screen.getByRole('tablist', { name: 'Survey status' })).toBeInTheDocument();
-    const allTab = screen.getByRole('tab', { name: /전체\s*,\s*2/ });
+    const allTab = screen.getByRole('tab', { name: /^전체\s*,\s*2$/ });
     const panel = screen.getByRole('tabpanel');
     expect(allTab).toHaveAttribute('aria-selected', 'true');
     expect(allTab).toHaveAttribute('aria-controls', panel.id);
     expect(document.getElementById(allTab.getAttribute('aria-controls') ?? '')).toBe(panel);
     expect(panel).toHaveAttribute('aria-labelledby', allTab.id);
-    expect(screen.getByRole('tab', { name: /진행 중\s*,\s*1/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /초안\s*,\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^진행 중\s*,\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^초안\s*,\s*1$/ })).toBeInTheDocument();
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /진행 중\s*,\s*1/ }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^진행 중\s*,\s*1$/ }));
 
-    const openTab = screen.getByRole('tab', { name: /진행 중\s*,\s*1/ });
+    const openTab = screen.getByRole('tab', { name: /^진행 중\s*,\s*1$/ });
     expect(openTab).toHaveAttribute('aria-selected', 'true');
     expect(openTab).toHaveAttribute('aria-controls', panel.id);
     expect(document.getElementById(openTab.getAttribute('aria-controls') ?? '')).toBe(panel);

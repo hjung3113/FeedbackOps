@@ -2,8 +2,9 @@
 // Renders OutOfScopeSummaryBanner above rows when outOfScopeSummary is provided.
 // #922: renders the queue-level pending state here (not at the route level) so
 // the tablist above stays mounted and focused while a tab refetch runs.
-// Renders TriageEmpty when queue is empty — tab-scoped copy when the whole
-// queue still has rows, queue-empty copy when it is truly empty.
+// Renders TriageEmpty when queue is empty — queue-empty copy only when the
+// whole queue is known to be empty (queueTotal === 0), tab-scoped copy
+// otherwise (FIX1: an unknown total claims nothing about the whole queue).
 
 import type { VocListItem } from '@fops/shared';
 import type * as React from 'react';
@@ -33,7 +34,10 @@ export function TriageQueue({
   queueTotal,
   outOfScopeSummary,
 }: TriageQueueProps): React.ReactElement {
-  const tabScopedEmpty = queueTotal !== undefined && queueTotal > 0;
+  // #922 FIX1: an unknown total is not evidence of a truly empty queue — only
+  // a known zero earns the whole-queue success copy; an unknown (or positive)
+  // total gets the neutral tab-empty copy.
+  const tabScopedEmpty = queueTotal !== 0;
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {outOfScopeSummary !== undefined && (
@@ -45,9 +49,12 @@ export function TriageQueue({
       )}
 
       {queuePending === true ? (
-        <div className="flex items-center justify-center h-full">
+        // #922 FIX1: <output> carries the implicit "status" role, so the
+        // pending cue reaches assistive tech when the tab changes but rows
+        // are still loading.
+        <output className="flex items-center justify-center h-full">
           <span className="text-sm text-text-muted">불러오는 중…</span>
-        </div>
+        </output>
       ) : vocs.length === 0 ? (
         <TriageEmpty {...(tabScopedEmpty ? { tabScoped: true } : {})} />
       ) : (

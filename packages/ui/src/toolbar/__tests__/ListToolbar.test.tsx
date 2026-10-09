@@ -157,7 +157,7 @@ describe('ListToolbar — tabs mode', () => {
 
   it('renders badgeCount as a bare number when defined', () => {
     render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
-    const tab = screen.getByRole('tab', { name: /미배정\s*,\s*5/ });
+    const tab = screen.getByRole('tab', { name: /^미배정\s*,\s*5$/ });
     expect(tab).toBeInTheDocument();
     expect(screen.getByText('5')).toHaveClass('text-tiny', 'text-text-muted', 'tabular-nums');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -165,7 +165,7 @@ describe('ListToolbar — tabs mode', () => {
 
   it('announces a counted tab as "label, count" through an sr-only separator', () => {
     render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
-    const tab = screen.getByRole('tab', { name: /미배정\s*,\s*5/ });
+    const tab = screen.getByRole('tab', { name: /^미배정\s*,\s*5$/ });
     // The separator lives only in the accessibility tree; the visible count stays bare.
     expect(tab.querySelector('.sr-only')).toHaveTextContent(',');
     expect(screen.getByText('5')).not.toHaveClass('sr-only');
@@ -178,7 +178,7 @@ describe('ListToolbar — tabs mode', () => {
     ];
     render(<ListToolbar tabs={tabsWithZero} activeTab="a" />);
 
-    expect(screen.getByRole('tab', { name: /탭A\s*,\s*0/ })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: /^탭A\s*,\s*0$/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -211,10 +211,10 @@ describe('ListToolbar — tabs mode', () => {
     render(<ListToolbar tabs={countedTabs} activeTab="selected" />);
 
     const selectedCount = screen
-      .getByRole('tab', { name: /Selected\s*,\s*1/ })
+      .getByRole('tab', { name: /^Selected\s*,\s*1$/ })
       .querySelector('span:not(.sr-only)');
     const otherCount = screen
-      .getByRole('tab', { name: /Other\s*,\s*2/ })
+      .getByRole('tab', { name: /^Other\s*,\s*2$/ })
       .querySelector('span:not(.sr-only)');
     expect(selectedCount).toHaveClass('group-data-[state=active]:text-text-secondary');
     expect(otherCount).toHaveClass('text-text-muted');

@@ -6,7 +6,7 @@
 // stays mounted and the focused tab keeps focus.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -128,12 +128,19 @@ describe('TriageRoute — pending tab keeps the screen mounted (#922)', () => {
     );
   });
 
-  it('keeps the tablist in the document and the focused tab focused while the next tab loads', async () => {
+  it('keeps the newly active tab focused while its list request is pending', async () => {
     const view = renderRoute();
     const unassignedTab = await screen.findByRole('tab', { name: /미배정/ });
     unassignedTab.focus();
     expect(document.activeElement).toBe(unassignedTab);
 
+    // Keyboard activation on the tablist: ArrowRight activates the adjacent
+    // tab (Radix automatic activation). Roving focus moves the real focus
+    // node after a timer, so wait for the activation to land before the
+    // router hands back the new tab.
+    fireEvent.keyDown(unassignedTab, { key: 'ArrowRight' });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(view.getByRole('tab', { name: /미분류/ }));
     searchState = { view: 'triage', tab: 'untriaged' };
     view.rerender(
       <QueryClientProvider client={qc}>
@@ -141,15 +148,59 @@ describe('TriageRoute — pending tab keeps the screen mounted (#922)', () => {
       </QueryClientProvider>,
     );
 
-    // The tab strip survived the refetch...
+    // The tab strip survived the uncached refetch...
     expect(view.getByRole('tablist')).toBeInTheDocument();
-    expect(view.getByRole('tab', { name: /미분류/ })).toHaveAttribute('aria-selected', 'true');
-    // ...and the same trigger node kept focus — no route-level screen swap.
-    expect(document.activeElement).toBe(unassignedTab);
+    const untriagedTab = view.getByRole('tab', { name: /미분류/ });
+    expect(untriagedTab).toHaveAttribute('aria-selected', 'true');
+    // ...and the newly active trigger kept keyboard focus — no route-level
+    // screen swap dropped focus to <body>.
+    expect(document.activeElement).toBe(untriagedTab);
 
-    // The pending state lives in the queue column, not at the route level.
-    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
+    // The pending state lives in the queue column and is announced as a
+    // status region, not mistaken for an empty queue.
+    // (The toolbar's <output> total also has implicit role "status", so scope
+    // the query to the tabpanel.)
+    expect(within(view.getByRole('tabpanel')).getByRole('status')).toHaveTextContent(
+      '불러오는 중…',
+    );
     expect(screen.queryByText('큐가 비었습니다')).not.toBeInTheDocument();
     expect(screen.queryByText('Queued VOC')).not.toBeInTheDocument();
+  });
+
+  it('never shows the missing-target notice while a deep link resolves', async () => {
+    searchState = { view: 'triage', selected: QUEUED_VOC.id };
+    // Uncached deep link: the list request starts and stays unresolved.
+    useVocListMock.mockImplementation(() => ({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    }));
+
+    const view = renderRoute();
+
+    // Pending: an empty queue is not evidence the target is missing.
+    expect(screen.queryByTestId('triage-deeplink-missing')).not.toBeInTheDocument();
+    expect(within(view.getByRole('tabpanel')).getByRole('status')).toHaveTextContent(
+      '불러오는 중…',
+    );
+
+    // The request resolves with the pinned VOC present.
+    useVocListMock.mockImplementation(() => ({
+      data: { items: [QUEUED_VOC], next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }));
+    view.rerender(
+      <QueryClientProvider client={qc}>
+        <TriageRoute />
+      </QueryClientProvider>,
+    );
+
+    // Settled with the VOC in the queue: the notice never appeared at any
+    // point and the deep-link target's own panel is rendered.
+    expect(screen.queryByTestId('triage-deeplink-missing')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Queued VOC' })).toBeInTheDocument();
   });
 });

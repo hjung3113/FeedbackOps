@@ -1,15 +1,15 @@
 // TriageEmpty — zero-state for the triage queue.
 // Prototype ref: screen-voc-create.jsx:691-697
 // Copy is verbatim from prototype.
-// #922: tabScoped renders the tab-scoped copy when the active tab is empty but
-// the queue total is greater than zero; the default keeps the queue-empty copy.
+// #922/FIX1: tabScoped renders the tab-scoped copy unless the queue total is a
+// known zero; the default keeps the queue-empty copy.
 
 import { VOC_TRIAGE_TAB_EMPTY_LABEL } from '@/lib/copy/voc-views';
 import { CheckCircle } from 'lucide-react';
 import type * as React from 'react';
 
 export interface TriageEmptyProps {
-  /** #922: active tab is empty while the queue total is greater than zero. */
+  /** #922/FIX1: the queue total is not a known zero (rows elsewhere, or unknown). */
   tabScoped?: boolean;
 }
 

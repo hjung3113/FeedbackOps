@@ -235,8 +235,8 @@ describe('TriageRoute', () => {
     await waitFor(() => {
       expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
     });
-    expect(screen.getByRole('tab', { name: /미배정\s*,\s*2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높음\s*,\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /미분류/ })).not.toHaveTextContent(/\d/);
     expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
@@ -269,8 +269,8 @@ describe('TriageRoute', () => {
     });
 
     await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
-    expect(screen.getByRole('tab', { name: /미배정\s*,\s*2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높음\s*,\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toBeInTheDocument();
   });
 
   it('shows an unavailable queue total after nav counts fail', async () => {
@@ -292,11 +292,11 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /높음\s*,\s*1/ })).toHaveAttribute(
+      expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toHaveAttribute(
         'aria-selected',
         'true',
       );
-      expect(screen.getByRole('tab', { name: /미배정\s*,\s*2/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
     });
   });
 

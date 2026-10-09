@@ -54,7 +54,9 @@ describe('TriageQueue', () => {
   });
 
   it('renders TriageEmpty when queue is empty', () => {
-    render(<TriageQueue vocs={[]} selectedId={null} onSelect={vi.fn()} />);
+    // FIX1: the queue-empty copy now requires a known zero total; the default
+    // (unknown) renders the neutral tab-empty copy, covered by the it.each.
+    render(<TriageQueue vocs={[]} selectedId={null} onSelect={vi.fn()} queueTotal={0} />);
     // TriageEmpty renders "큐가 비었습니다" copy from prototype
     expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
   });
@@ -83,11 +85,23 @@ describe('TriageQueue', () => {
       present: '큐가 비었습니다',
       absent: '이 탭에 해당하는 VOC가 없습니다',
     },
+    {
+      // FIX1: an unknown total is not evidence of a truly empty queue — it
+      // must not claim every VOC was processed.
+      queueTotal: undefined,
+      present: '이 탭에 해당하는 VOC가 없습니다',
+      absent: '큐가 비었습니다',
+    },
   ])(
     'picks the right empty copy for queueTotal=$queueTotal (#922)',
     ({ queueTotal, present, absent }) => {
       render(
-        <TriageQueue vocs={[]} selectedId={null} onSelect={vi.fn()} queueTotal={queueTotal} />,
+        <TriageQueue
+          vocs={[]}
+          selectedId={null}
+          onSelect={vi.fn()}
+          {...(queueTotal !== undefined ? { queueTotal } : {})}
+        />,
       );
       expect(screen.getByText(present)).toBeInTheDocument();
       expect(screen.queryByText(absent)).not.toBeInTheDocument();
