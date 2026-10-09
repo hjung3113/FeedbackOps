@@ -423,11 +423,13 @@ Per `<ReporterStatusChangeBlock>` (Pack 8):
 | Triage 확정 & 다음 VOC | Atomic `PATCH /vocs/:id` with `{ severity, owner_user_id, owner_team_id, analytics_area_id, triage_state: 'triaged' }` + Idempotency-Key + `If-Match: <updated_at>` | `PATCH /vocs/:id` (backend service must apply `SELECT … FOR UPDATE` on the VOC row per ADR-0019 Section E pattern extended to VOC — see S3-002) |
 | Finding 만들기 | Same triage commit, then opens the Finding create flow (ADR-0024) | `PATCH /vocs/:id`, then `POST /vocs/:id/create-finding` |
 | 보류 | Triage state stays `untriaged`; sends `{ postpone_review: true }` and the backend sets `triage_state_review_postponed_at` (valid only while `untriaged`) | `PATCH /vocs/:id` |
+| 보류 취소 | Triage 보류를 취소하며 `{ postpone_review: false }`만 보냅니다. 보류된 `untriaged` VOC의 `triage_state_review_postponed_at`를 비우고, 보류되지 않은 VOC에서는 no-op입니다. `postpone_review`는 `true`와 `false` 모두 `triage_state`와 함께 보낼 수 없습니다. 자세한 조건은 [API 계약](../../implementation/api/voc.md) 참조 | `PATCH /vocs/:id` |
 
 **Audit events emitted by backend** (consumed by Activity sections, frontend never invents these names):
 - `voc_created`
 - `voc_triage_committed` (severity / owner / AA)
 - `voc_triage_postponed` (보류)
+- `voc_triage_postpone_cleared` (보류 취소)
 - `voc_owner_assigned`
 - `voc_severity_set`
 - `voc_analytics_area_linked`
