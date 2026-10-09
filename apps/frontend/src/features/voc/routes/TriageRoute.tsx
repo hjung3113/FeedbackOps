@@ -161,11 +161,7 @@ export function TriageRoute(): React.ReactElement {
       selectedId={search.selected ?? null}
       activeTab={activeTab}
       queuePending={isLoading}
-      queueContext={JSON.stringify([
-        activeTab,
-        search.managedSystem ?? null,
-        search.selected ?? null,
-      ])}
+      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
       queueSettled={isSuccess && !isFetching}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}

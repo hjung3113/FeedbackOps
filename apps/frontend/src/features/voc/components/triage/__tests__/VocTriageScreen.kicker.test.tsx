@@ -254,7 +254,22 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
   });
 
-  it('shows "N건 처리됨" after a VOC is optimistically removed (confirm)', () => {
+  it('shows "N건 처리됨" after a successful confirm', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              updated_at: '2026-05-02T00:00:00.000Z',
+              items: [],
+              available: false,
+              reason: 'provider_disabled',
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
     const items: VocListItem[] = [
       MOCK_VOC,
       { ...MOCK_VOC, id: 'voc-kicker-002', display_id: 'VOC-K-002' },
@@ -273,13 +288,15 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
 
     // Stage a severity so the confirm button enables, then confirm to trigger
-    // the optimistic remove that drives the processed count.
+    // the command; only its successful response drives the processed count.
     fireEvent.click(screen.getByRole('button', { name: /높음/ }));
     fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
 
-    const count = screen.getByTestId('triage-processed-count');
+    expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
+    const count = await screen.findByTestId('triage-processed-count');
     expect(count).toBeInTheDocument();
     expect(count.textContent).toContain('1건 처리됨');
+    vi.unstubAllGlobals();
   });
 
   it('expands the triage panel, handles Escape, and keeps its copy and deferred menu actions', () => {

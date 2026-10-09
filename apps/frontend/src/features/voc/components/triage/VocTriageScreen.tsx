@@ -36,7 +36,7 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
   queuePending?: boolean;
-  /** Queue query identity (tab, scope and any server filters/pin). */
+  /** Exclusion context: tab and Managed System scope, independent of selection/pin. */
   queueContext?: string;
   /** True only after a successful queue read, with no fetch in flight. */
   queueSettled?: boolean;
@@ -82,6 +82,7 @@ export function VocTriageScreen({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticRestore,
+    handleProcessed,
     closeCreateFinding,
   } = useVocTriageScreenController({
     items,
@@ -213,6 +214,7 @@ export function VocTriageScreen({
                   onAct={handleAct}
                   onOptimisticRemove={handleOptimisticRemove}
                   onOptimisticRestore={handleOptimisticRestore}
+                  onProcessed={handleProcessed}
                 />
               </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
