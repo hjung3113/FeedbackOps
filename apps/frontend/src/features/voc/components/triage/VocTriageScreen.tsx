@@ -22,7 +22,7 @@ import {
   ToolbarKicker,
 } from '@fops/ui';
 import { Flag } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type * as React from 'react';
 import { TriagePanel } from './TriagePanel';
 import { TriageQueue } from './TriageQueue';
@@ -36,9 +36,13 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
   queuePending?: boolean;
+  /** #935: true when the queue read failed with no rows; renders the load-error state in the queue column. */
+  queueError?: boolean;
+  /** #935: retry handler for a failed queue read, wired to the load-error state's button. */
+  onRetryQueue?: () => void;
   /** Exclusion context: tab and Managed System scope, independent of selection/pin. */
   queueContext?: string;
-  /** True only after a successful queue read, with no fetch in flight. */
+  /** True only after a successful, non-placeholder queue read, with no fetch in flight. */
   queueSettled?: boolean;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
@@ -47,6 +51,9 @@ export interface VocTriageScreenProps {
     count: number;
     severity_distribution: Record<string, number>;
   };
+  processedCount?: number;
+  onProcessed?: (delta: 1 | -1) => void;
+  onAdvanceVoc?: (id: string | null) => void;
   onSelectVoc: (id: string) => void;
   onTabChange: (tab: TriageTab) => void;
 }
@@ -64,18 +71,39 @@ export function VocTriageScreen({
   selectedId,
   activeTab,
   queuePending,
+  queueError,
+  onRetryQueue,
   queueContext,
   queueSettled,
   queueTotal,
   queueTotalUnavailableState,
   tabCounts,
   outOfScopeSummary,
+  processedCount = 0,
+  onProcessed,
+  onAdvanceVoc,
   onSelectVoc,
   onTabChange,
 }: VocTriageScreenProps): React.ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [pendingFocus, setPendingFocus] = useState<{
+    id: string | null;
+    sourceId: string | null;
+    context: string;
+  } | null>(null);
+  // Undo does not reselect or refocus the restored VOC (owner, 2026-10-10: cost > gain).
+  // To reinstate, see #957 (reselection) and #964 (focus correction after sonner's focus return).
+  function handleAdvanceVoc(id: string | null): void {
+    setPendingFocus({ id, sourceId: selectedId, context: queueContext ?? activeTab });
+    if (onAdvanceVoc) onAdvanceVoc(id);
+    else if (id !== null) onSelectVoc(id);
+  }
+  function handleSelectVoc(id: string): void {
+    setPendingFocus(null);
+    onSelectVoc(id);
+  }
   const {
     liveQueue,
-    processedCount,
     selectedVoc,
     deepLinkTargetMissing,
     createFindingTarget,
@@ -84,13 +112,13 @@ export function VocTriageScreen({
     handleOptimisticPostpone,
     handleOptimisticRestore,
     handleOptimisticRollback,
-    handleProcessed,
+    handleQueueOutcome,
     closeCreateFinding,
   } = useVocTriageScreenController({
     items,
     selectedId,
     activeTab,
-    onSelectVoc,
+    onAdvanceVoc: handleAdvanceVoc,
     queueContext: queueContext ?? activeTab,
     queueSettled: queueSettled === true,
   });
@@ -98,6 +126,38 @@ export function VocTriageScreen({
   useEffect(() => {
     if (selectedVoc === null) close();
   }, [close, selectedVoc]);
+  useEffect(() => {
+    if (!pendingFocus) return;
+    if (
+      pendingFocus.context !== (queueContext ?? activeTab) ||
+      (selectedId !== pendingFocus.id && selectedId !== pendingFocus.sourceId)
+    ) {
+      setPendingFocus(null);
+      return;
+    }
+    if (createFindingTarget) return;
+    // Wait for the URL-driven selection to render before moving focus.
+    if (pendingFocus.id !== (selectedVoc?.id ?? null)) return;
+    const target =
+      pendingFocus.id === null
+        ? rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+        : isFullscreen
+          ? rootRef.current?.querySelector<HTMLElement>('[data-testid="triage-panel-column"] h2')
+          : rootRef.current?.querySelector<HTMLElement>(
+              '[role="tabpanel"] button[aria-selected="true"]',
+            );
+    if (!target) return;
+    target.focus();
+    setPendingFocus(null);
+  }, [
+    pendingFocus,
+    createFindingTarget,
+    selectedId,
+    selectedVoc,
+    isFullscreen,
+    queueContext,
+    activeTab,
+  ]);
   const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => {
     const badgeCount = tabCounts?.[tab.value];
     return {
@@ -114,7 +174,7 @@ export function VocTriageScreen({
       : `전체 대기열 ${queueTotal} VOC`;
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={rootRef} className="flex flex-col h-full">
       {/* Toolbar: kicker (V1 inline identity) + title + tab strip */}
       {/* V1: ShellHeader removed from WorkbenchShell; route identity lives here as a left-edge kicker. */}
       <div
@@ -157,7 +217,10 @@ export function VocTriageScreen({
         <ListTabs
           tabs={tabs}
           activeTab={activeTab}
-          onTabChange={(next) => onTabChange(next as TriageTab)}
+          onTabChange={(next) => {
+            setPendingFocus(null);
+            onTabChange(next as TriageTab);
+          }}
           align="end"
         />
       </div>
@@ -178,8 +241,10 @@ export function VocTriageScreen({
             activeTab={activeTab}
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}
-            onSelect={onSelectVoc}
+            onSelect={handleSelectVoc}
             {...(queuePending === true ? { queuePending } : {})}
+            {...(queueError === true ? { queueError } : {})}
+            {...(onRetryQueue !== undefined ? { onRetryQueue } : {})}
             {...(queueTotal !== undefined ? { queueTotal } : {})}
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
@@ -189,8 +254,9 @@ export function VocTriageScreen({
             swap in another VOC's commit form. #922 FIX1: an uncached deep link
             mounts with queuePending=true and empty items, which is not yet
             evidence the target is missing — suppress the notice until the
-            queue request settles. */}
-        {deepLinkTargetMissing && queuePending !== true && (
+            queue request settles. #935: a failed read is likewise not
+            evidence — suppress while the queue error state is up. */}
+        {deepLinkTargetMissing && queuePending !== true && queueError !== true && (
           <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"
@@ -217,12 +283,19 @@ export function VocTriageScreen({
                 <TriagePanel
                   voc={selectedVoc}
                   onAct={handleAct}
-                  onOptimisticRemove={handleOptimisticRemove}
-                  onOptimisticPostpone={handleOptimisticPostpone}
-                  onMutationFailure={onSelectVoc}
+                  onOptimisticRemove={(id, input) => {
+                    setPendingFocus(null);
+                    handleOptimisticRemove(id, input);
+                  }}
+                  onOptimisticPostpone={(id, input) => {
+                    setPendingFocus(null);
+                    handleOptimisticPostpone(id, input);
+                  }}
+                  onMutationFailure={handleSelectVoc}
+                  onQueueOutcome={handleQueueOutcome}
                   onOptimisticRollback={handleOptimisticRollback}
                   onOptimisticRestore={handleOptimisticRestore}
-                  onProcessed={handleProcessed}
+                  {...(onProcessed !== undefined ? { onProcessed } : {})}
                 />
               </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>
@@ -238,7 +311,13 @@ export function VocTriageScreen({
           defaultTitle={createFindingTarget.defaultTitle}
           defaultSeverity={createFindingTarget.defaultSeverity}
           open={createFindingTarget !== null}
-          onClose={closeCreateFinding}
+          onCreated={() => {
+            setPendingFocus(null);
+          }}
+          onClose={() => {
+            if (pendingFocus?.id !== (selectedVoc?.id ?? null)) setPendingFocus(null);
+            closeCreateFinding();
+          }}
         />
       )}
     </div>

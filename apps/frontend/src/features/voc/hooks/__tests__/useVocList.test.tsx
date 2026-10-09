@@ -143,4 +143,56 @@ describe('useVocList', () => {
     // retry: 1 in the hook means up to 2 attempts; allow extra time.
     await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
   });
+
+  test('does not retain an old-limit page after a limit change and failed pin', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.searchParams.get('limit') === '1') return jsonResponse({ items: [ITEM] });
+      throw new Error('new page failed');
+    });
+    const { result, rerender } = renderHook(
+      (params: Parameters<typeof useVocList>[0]) => useVocList(params),
+      {
+        wrapper: makeWrapper(),
+        initialProps: { view: 'triage', limit: 1, pinVocId: 'voc-1' },
+      },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    rerender({ view: 'triage', limit: 2, pinVocId: 'voc-1' });
+    rerender({ view: 'triage', limit: 2, pinVocId: 'voc-2' });
+    await waitFor(
+      () => {
+        expect(result.current.isError).toBe(true);
+        expect(result.current.fetchStatus).toBe('idle');
+      },
+      { timeout: 5000 },
+    );
+    expect(result.current.data).toBeUndefined();
+  });
+
+  test('exposes the failed query status alongside retained pin-only data', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.searchParams.get('pin_voc_id') === 'voc-1') {
+        return jsonResponse({ items: [ITEM] });
+      }
+      throw new Error('pin failed');
+    });
+    const { result, rerender } = renderHook(
+      (params: Parameters<typeof useVocList>[0]) => useVocList(params),
+      { wrapper: makeWrapper(), initialProps: { view: 'triage', pinVocId: 'voc-1' } },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const page = result.current.data;
+    rerender({ view: 'triage', pinVocId: 'voc-2' });
+    await waitFor(
+      () => {
+        expect(result.current.isError).toBe(true);
+        expect(result.current.fetchStatus).toBe('idle');
+      },
+      { timeout: 5000 },
+    );
+    expect(result.current.isSuccess).toBe(false);
+    expect(result.current.data).toBe(page);
+  });
 });

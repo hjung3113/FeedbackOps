@@ -3,6 +3,7 @@ import { cn } from '../utils/cn.js';
 
 export interface PanelTitleBlockProps {
   title: string;
+  titleTabIndex?: number;
   badges?: React.ReactNode;
   className?: string;
   inset?: 'default' | 'none';
@@ -19,6 +20,7 @@ export interface PanelTitleBlockProps {
 
 export function PanelTitleBlock({
   title,
+  titleTabIndex,
   badges,
   className,
   inset = 'default',
@@ -34,7 +36,16 @@ export function PanelTitleBlock({
     <div
       className={cn('flex flex-col gap-2 px-4 py-3', inset === 'none' && 'px-0! py-0!', className)}
     >
-      <h2 className={titleClass}>{title}</h2>
+      <h2
+        className={cn(
+          titleClass,
+          titleTabIndex !== undefined &&
+            'ring-offset-surface-canvas focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+        )}
+        tabIndex={titleTabIndex}
+      >
+        {title}
+      </h2>
       {badges !== undefined && <div className="flex flex-wrap gap-2">{badges}</div>}
     </div>
   );

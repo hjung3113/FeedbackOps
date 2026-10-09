@@ -39,6 +39,8 @@ import {
   VOC_POSTPONE_INVALID_STATE_LABEL,
 } from '@/lib/copy/voc-views';
 import { formatDate } from '@/lib/format/datetime';
+import type { TriageQueueOutcome } from '../../hooks/useTriageQueue';
+import type { TriageInput } from '../../lib/triage-types';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -68,8 +70,8 @@ export interface TriagePanelProps {
    * C3.2: Optimistic remove — called synchronously on confirm/finding/skip
    * so the queue filters this VOC out immediately.
    */
-  onOptimisticRemove?: (vocId: string) => void;
-  onOptimisticPostpone?: (vocId: string) => void;
+  onOptimisticRemove?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticPostpone?: (vocId: string, input?: TriageInput) => void;
   /** Count only successfully committed actions in the mounted screen session. */
   onProcessed?: (delta: 1 | -1) => void;
   /**
@@ -77,8 +79,9 @@ export interface TriagePanelProps {
    * the queue (stale_write, rate_limited, permission.denied paths).
    */
   onMutationFailure?: (vocId: string) => void;
-  onOptimisticRollback?: (vocId: string) => void;
-  onOptimisticRestore?: (vocId: string) => void;
+  onQueueOutcome?: (input: TriageInput, outcome: TriageQueueOutcome) => void;
+  onOptimisticRollback?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticRestore?: (vocId: string, input?: TriageInput) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -102,6 +105,7 @@ export function TriagePanel({
   onProcessed,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
 }: TriagePanelProps): React.ReactElement {
   const {
@@ -129,6 +133,7 @@ export function TriagePanel({
     ...(onOptimisticPostpone !== undefined ? { onOptimisticPostpone } : {}),
     ...(onProcessed !== undefined ? { onProcessed } : {}),
     ...(onMutationFailure !== undefined ? { onMutationFailure } : {}),
+    ...(onQueueOutcome !== undefined ? { onQueueOutcome } : {}),
     ...(onOptimisticRollback !== undefined ? { onOptimisticRollback } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });
@@ -171,7 +176,7 @@ export function TriagePanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
         {/* ADR-0051 intentionally groups the real description into Overview. */}
         <div className="mb-8" data-anchor="overview">
-          <PanelTitleBlock title={voc.title} inset="none" className="mb-2" />
+          <PanelTitleBlock title={voc.title} titleTabIndex={-1} inset="none" className="mb-2" />
           <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>

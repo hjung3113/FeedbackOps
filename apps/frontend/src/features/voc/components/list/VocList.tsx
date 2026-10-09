@@ -16,7 +16,7 @@
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
-import { VOC_SEARCH_EMPTY_LABEL } from '@/lib/copy/voc';
+import { VOC_LIST_LOAD_ERROR_LABELS, VOC_SEARCH_EMPTY_LABEL } from '@/lib/copy/voc';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -180,12 +180,12 @@ export function VocList({
   if (error !== null && items.length === 0) {
     return (
       <EmptyState
-        title="불러오기 실패"
-        body="잠시 후 다시 시도해 주세요."
+        title={VOC_LIST_LOAD_ERROR_LABELS.title}
+        body={VOC_LIST_LOAD_ERROR_LABELS.body}
         action={
           onRetry !== undefined ? (
             <Button onClick={onRetry} type="button">
-              다시 시도
+              {VOC_LIST_LOAD_ERROR_LABELS.retry}
             </Button>
           ) : undefined
         }

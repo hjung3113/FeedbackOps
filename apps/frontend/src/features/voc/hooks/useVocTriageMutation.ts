@@ -10,7 +10,7 @@
 //   finding:  same body as confirm (triage is committed; navigation is Slice 5)
 //
 // Headers: Idempotency-Key (auto-minted by the API client), If-Match: voc.updated_at
-// Compensating PATCH: same endpoint with prior values + triage_state:'untriaged' +
+// Compensating PATCH: same endpoint with prior values + prior triage_state +
 //   EXPLICIT fresh Idempotency-Key (D-3.5) — executeCompensatingPatch is
 //   re-exported from lib/triage-transport.ts.
 //

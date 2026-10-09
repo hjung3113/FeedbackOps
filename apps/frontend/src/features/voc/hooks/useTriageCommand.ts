@@ -31,14 +31,16 @@ import {
 import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
 import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
+import type { TriageQueueOutcome } from './useTriageQueue';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;
   onProcessed?: ((delta: 1 | -1) => void) | undefined;
   onMutationFailure?: ((vocId: string) => void) | undefined;
-  onOptimisticRollback?: ((vocId: string) => void) | undefined;
-  onOptimisticRestore?: ((vocId: string) => void) | undefined;
+  onQueueOutcome?: ((input: TriageInput, outcome: TriageQueueOutcome) => void) | undefined;
+  onOptimisticRollback?: ((vocId: string, input?: TriageInput) => void) | undefined;
+  onOptimisticRestore?: ((vocId: string, input?: TriageInput) => void) | undefined;
 }
 
 export interface UseTriageCommandResult {
@@ -52,6 +54,7 @@ export function useTriageCommand({
   voc,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
   onProcessed,
 }: UseTriageCommandArgs): UseTriageCommandResult {
@@ -80,6 +83,9 @@ export function useTriageCommand({
   const onOptimisticRollbackRef = React.useRef(onOptimisticRollback);
   onOptimisticRollbackRef.current = onOptimisticRollback;
 
+  const onQueueOutcomeRef = React.useRef(onQueueOutcome);
+  onQueueOutcomeRef.current = onQueueOutcome;
+
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
 
@@ -103,6 +109,9 @@ export function useTriageCommand({
         return output;
       } catch (err) {
         failuresRef.current.get(input)?.();
+        if (undoneRef.current.has(input)) {
+          onQueueOutcomeRef.current?.(input, 'late-failure');
+        }
         if (err instanceof ApiError && err.code === 'conflict.stale_write') {
           invalidateTriageLists();
         }
@@ -114,10 +123,11 @@ export function useTriageCommand({
     // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
     // restore the VOC to), NOT from staged panelState (the new values the
     // user just chose). If we snapshot staged values, the compensating
-    // PATCH writes the new values back with triage_state='untriaged' and
+    // PATCH writes the new values back instead of the prior state and
     // permanently mutates severity/owner/AA.
     snapshot: (input: TriageInput) => ({
       ...buildTriageSnapshot(input, {
+        triageState: voc.triage_state,
         severity: voc.severity,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,
@@ -132,7 +142,11 @@ export function useTriageCommand({
           snapshot,
           output,
           restore: (vocId: string) => {
-            onOptimisticRestoreRef.current?.(vocId);
+            onOptimisticRestoreRef.current?.(
+              vocId,
+              ...(onQueueOutcomeRef.current ? [snapshot.input] : []),
+            );
+            onQueueOutcomeRef.current?.(snapshot.input, 'compensated');
             if (countedRef.current.delete(snapshot.input)) {
               onProcessedRef.current?.(-1);
             }
@@ -141,6 +155,8 @@ export function useTriageCommand({
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
       } catch (err) {
+        onQueueOutcomeRef.current?.(snapshot.input, 'compensation-failure');
+        invalidateTriageLists();
         // REV-4 case 1: the refetch-failure toast fires exactly once, here —
         // BEFORE the rethrow; onCompensateError sees the __refetchFailure tag
         // and skips so the user never sees the toast twice.
@@ -157,7 +173,7 @@ export function useTriageCommand({
     // later, only if the forward PATCH succeeds.
     onAbort: (input: TriageInput) => {
       undoneRef.current.add(input);
-      onOptimisticRestoreRef.current?.(input.vocId);
+      onOptimisticRestoreRef.current?.(input.vocId, ...(onQueueOutcomeRef.current ? [input] : []));
       invalidateTriageLists();
     },
     // REV-4: surface a toast when compensateFn rejects. Two paths land here:
@@ -176,10 +192,19 @@ export function useTriageCommand({
     // never vocIdRef.current — VocTriageScreen auto-advances the selected VOC after
     // optimistic remove, so vocIdRef.current points at the NEXT row, not the failed one.
     onError: (err: unknown, input: TriageInput) => {
-      onMutationFailureRef.current?.(input.vocId);
       const decision = classifyTriageMutationError(err);
+      if (decision.restore || decision.lockPanel) {
+        onMutationFailureRef.current?.(input.vocId);
+      }
       if (decision.restore) {
-        (onOptimisticRollbackRef.current ?? onOptimisticRestoreRef.current)?.(input.vocId);
+        (onOptimisticRollbackRef.current ?? onOptimisticRestoreRef.current)?.(
+          input.vocId,
+          ...(onQueueOutcomeRef.current ? [input] : []),
+        );
+      }
+      if (!decision.restore) {
+        onQueueOutcomeRef.current?.(input, decision.lockPanel ? 'locked' : 'archived');
+        invalidateTriageLists();
       }
       if (decision.lockPanel) {
         setPanelLocked(true);

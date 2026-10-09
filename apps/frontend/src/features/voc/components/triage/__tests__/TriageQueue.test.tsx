@@ -3,7 +3,7 @@
 // TDD RED: these tests are written before the implementation file exists.
 
 import type { VocListItem } from '@fops/shared';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageQueue } from '../TriageQueue';
 
@@ -101,4 +101,23 @@ describe('TriageQueue', () => {
       expect(screen.queryByText(absent)).not.toBeInTheDocument();
     },
   );
+
+  // #935: a failed queue read with no rows renders the shared list load-error
+  // state; retry re-enters the route's refetch.
+  it('renders the load-error state on queueError and calls onRetryQueue on retry click (#935)', () => {
+    const onRetryQueue = vi.fn();
+    render(
+      <TriageQueue
+        vocs={[]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        queueError
+        onRetryQueue={onRetryQueue}
+      />,
+    );
+    expect(screen.getByText('불러오기 실패')).toBeInTheDocument();
+    expect(screen.getByText('잠시 후 다시 시도해 주세요.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(onRetryQueue).toHaveBeenCalledTimes(1);
+  });
 });

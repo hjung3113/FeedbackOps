@@ -1,5 +1,6 @@
+import { VOC_TRIAGE_TAB_EMPTY_LABEL } from '@/lib/copy/voc-views';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { Toaster, toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -327,6 +328,134 @@ describe('TriageRoute — FIX1 session and cache regressions', () => {
       resolveCompensation(json({ updated_at: '2026-01-03T00:00:00.000Z' }));
     });
     expect(screen.queryByTestId('triage-processed-count')).toBeNull();
+    qc.clear();
+  });
+});
+
+// #935: a failed queue read must show the load-error state with a retry
+// button — not the whole-queue or tab-empty copy. These run the real
+// useVocList against a stubbed global fetch, the seam the mocked-hook tests
+// cannot exercise. The hook sets `retry: 1` itself (overriding the QueryClient
+// default), so a settled failure takes ~1 s: waits pass an explicit timeout
+// instead of relying on the findBy default.
+describe('TriageRoute — failed queue read (#935)', () => {
+  const SETTLE = { timeout: 5_000 } as const;
+
+  beforeEach(() => {
+    searchState = { view: 'triage', tab: 'untriaged' };
+    navigateMock.mockReset();
+    vi.mocked(fetchNavCounts).mockResolvedValue({ counts: { 'voc.triage': 2 } });
+    vi.mocked(useMe).mockReturnValue(ADMIN_ME as unknown as ReturnType<typeof useMe>);
+    vi.mocked(usePermissionCheck).mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { state: 'approved', decision: { allow: true, via: 'role' } },
+    } as unknown as ReturnType<typeof usePermissionCheck>);
+  });
+
+  afterEach(() => {
+    toast.dismiss();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { case: 'a', description: 'uncached key whose queue request fails every call' },
+    { case: 'b', description: 'cached empty page whose background refetch fails every call' },
+  ])(
+    'shows the queue error state in the queue column and recovers on retry ($case: $description)',
+    async ({ case: kind }) => {
+      let failReads = kind === 'a';
+      let serveRows = false;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), 'http://localhost');
+          if (url.pathname.endsWith('/vocs')) {
+            if (failReads) return json({ code: 'internal.unexpected', message: 'boom' }, 500);
+            return json({ items: serveRows ? [QUEUED_VOC, SECOND_VOC] : [] });
+          }
+          return json({ items: [], actors: [], available: false, reason: 'provider_disabled' });
+        }),
+      );
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      mountRoute(qc);
+      if (kind === 'b') {
+        // The first read of this key succeeds with an empty page; every later
+        // read fails, so a background refetch fails over a cached empty page
+        // (TanStack keeps the last success: data stays, items stay zero).
+        await screen.findByText(VOC_TRIAGE_TAB_EMPTY_LABEL);
+        failReads = true;
+        await act(async () => {
+          await qc.invalidateQueries({ queryKey: triageKey('untriaged') });
+        });
+      }
+      const panel = screen.getByRole('tabpanel');
+      expect(await within(panel).findByText('불러오기 실패', {}, SETTLE)).toBeInTheDocument();
+      expect(within(panel).getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+      // Toolbar and tablist stay mounted, as for queuePending.
+      expect(screen.getByRole('tab', { name: /미분류/ })).toBeInTheDocument();
+      expect(screen.queryByText('큐가 비었습니다')).not.toBeInTheDocument();
+      expect(screen.queryByText(VOC_TRIAGE_TAB_EMPTY_LABEL)).not.toBeInTheDocument();
+
+      // Reads succeed again → retry refetches the queue and renders rows.
+      failReads = false;
+      serveRows = true;
+      fireEvent.click(within(panel).getByRole('button', { name: '다시 시도' }));
+      expect(
+        await within(panel).findByRole('button', { name: /VOC-101/ }, SETTLE),
+      ).toBeInTheDocument();
+      expect(within(panel).getByRole('button', { name: /VOC-102/ })).toBeInTheDocument();
+      qc.clear();
+    },
+  );
+
+  it('keeps cached rows and shows no queue error when a background refetch of a non-empty page fails', async () => {
+    let failReads = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname.endsWith('/vocs')) {
+          if (failReads) return json({ code: 'internal.unexpected', message: 'boom' }, 500);
+          return json({ items: [QUEUED_VOC, SECOND_VOC] });
+        }
+        return json({ items: [], actors: [], available: false, reason: 'provider_disabled' });
+      }),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mountRoute(qc);
+    await screen.findByRole('button', { name: /VOC-101/ });
+    failReads = true;
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: triageKey('untriaged') });
+    });
+    expect(screen.getByRole('button', { name: /VOC-101/ })).toBeInTheDocument();
+    expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
+    qc.clear();
+  });
+
+  it('suppresses the deep-link-missing notice while the queue read failed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname.endsWith('/vocs')) {
+          return json({ code: 'internal.unexpected', message: 'boom' }, 500);
+        }
+        return json({ items: [], actors: [], available: false, reason: 'provider_disabled' });
+      }),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    searchState = {
+      view: 'triage',
+      tab: 'untriaged',
+      selected: '00000000-0000-0000-0000-0000000000cc',
+    };
+    mountRoute(qc);
+    expect(
+      await within(screen.getByRole('tabpanel')).findByText('불러오기 실패', {}, SETTLE),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('triage-deeplink-missing')).not.toBeInTheDocument();
     qc.clear();
   });
 });

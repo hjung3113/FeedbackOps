@@ -20,7 +20,7 @@ in your report.
    acceptance criterion; `it.each` for variants. **Do not change the setup, fixtures, render entry point or
    assertions of existing tests** unless the task says the behaviour they pin is being removed — then say which
    test and why in the report.
-6. Scope is exactly the task file. No unrelated refactors. User-facing copy: reuse `apps/frontend/src/lib/copy/*`
+6. Scope is exactly the task file, including any pre-existing items it lists as folds. No unrelated refactors. User-facing copy: reuse `apps/frontend/src/lib/copy/*`
    and the screen's existing wording (ADR-0060). UI chrome is Korean; domain nouns (VOC, Finding, Task, Task
    Request, Survey, Cluster, Managed System, Analytics Area, Milestone, Evidence, Triage) and Task workflow statuses
    stay English (ADR-0057 A2, amended by #675). Update any doc the change makes wrong, in the

@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api';
 import type { VocListItem } from '@fops/shared';
-import { type UseQueryResult, keepPreviousData, useQuery } from '@tanstack/react-query';
+import { type UseQueryResult, hashKey, keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 
 export interface UseVocListParams {
   view: 'inbox' | 'my' | 'triage';
@@ -42,11 +43,28 @@ export interface VocListPage {
 export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage> {
   const { view, managedSystemId, tab, q, filters, sort, cursor, limit, pinVocId, enabled } = params;
 
-  return useQuery({
+  const queryKey = [
+    'vocs',
+    view,
+    managedSystemId,
+    tab,
+    q,
+    filters,
+    sort,
+    cursor,
+    ...(limit === undefined ? [] : [limit]),
+    pinVocId,
+  ] as const;
+
+  const contextKey = view === 'triage' ? hashKey(queryKey.slice(0, -1)) : '';
+  const retainedPage = useRef<{ contextKey: string; data: VocListPage } | null>(null);
+  if (retainedPage.current?.contextKey !== contextKey) retainedPage.current = null;
+
+  const query = useQuery({
     // pinVocId belongs in the key: two deep links differing only by target must
     // not share a cached queue (#383). q likewise (#821) — a search must not
     // read another search's cached page.
-    queryKey: ['vocs', view, managedSystemId, tab, q, filters, sort, cursor, pinVocId] as const,
+    queryKey,
     enabled: enabled !== false,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams();
@@ -80,10 +98,33 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
     // #864: a blur commit changes this key before the row's click. Keep the
     // previous page (rows keyed by voc.id) mounted until the next one arrives.
     // A first load has no previous page, so pending/error stay as they were.
-    // Not for triage: a tab switch there must not leave the previous tab's
-    // VOCs actionable under the new tab.
-    ...(view === 'triage' ? {} : { placeholderData: keepPreviousData }),
+    // Triage keeps rows only for a pin-only change; tabs/scopes still load empty.
+    placeholderData:
+      view === 'triage'
+        ? (previousData, previousQuery) =>
+            previousQuery &&
+            hashKey(previousQuery.queryKey.slice(0, -1)) === hashKey(queryKey.slice(0, -1))
+              ? previousData
+              : undefined
+        : keepPreviousData,
     staleTime: 30_000,
     retry: 1,
   });
+  // Placeholder data disappears on error. Retain only a real successful page
+  // from this full non-pin context; the failed query still cannot settle exclusions.
+  if (view === 'triage' && query.isSuccess && !query.isPlaceholderData) {
+    retainedPage.current = { contextKey, data: query.data };
+  }
+  if (view === 'triage' && query.isError && !query.data && retainedPage.current) {
+    const data = retainedPage.current.data;
+    return new Proxy(query, {
+      get(target, property, receiver) {
+        if (property === 'data') return data;
+        if (property === 'isLoadingError') return false;
+        if (property === 'isRefetchError') return true;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  }
+  return query;
 }

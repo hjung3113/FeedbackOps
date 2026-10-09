@@ -45,16 +45,37 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   then runs that checkout's migrations with its `env.verify.<n>` exported. Drop the DB and env file after the issue
   merges; `docker rm -f` at wave end.
 
+## Slice start
+
+Before the first brief, read every candidate issue for the slice and collect each decision only the owner can make
+(product behaviour, copy, test deletion, scope). Ask them in one `AskUserQuestion` round, each with a recommended
+option, and record the answers on the issues. In sessions 63–65 five such questions arrived one by one mid-slice
+(#920, #940, F4, #908, #902) and each paused the wave. A decision that surfaces later still gets asked at once, but
+plan for none.
+
+**Value gate (owner, 2026-10-10).** Before an issue enters a slice, and before any finding is folded or filed, weigh
+the user's gain against the maintenance it adds (new state, timing workarounds, spread ownership, extra tests).
+Prefer not to do work whose maintenance cost outweighs the gain. Proceed anyway when it fixes a critical bug (wrong
+data, data loss, a leak, an actor who cannot finish the task) or the UX gain is clearly larger than the cost. Say
+which applies in the brief's first line; drop or close the rest with the owner's approval.
+
+**Choosing the slice.** The next slice comes from owner priorities and the product backlog, not by default from the
+previous slice's review follow-ups. Review follow-ups wait for a **polish slice**, run when the owner asks or an
+area has collected several. After a polish slice the area is not reopened by review findings alone, only by a
+blocker or an owner request.
+
 ## Loop per issue
 
 1. **Brief** (`$WAVE_BRIEFS/<n>-task.md`): re-verify every fact on current `origin/develop` (paths, line numbers,
    existing helpers, the owning seam) — issue text goes stale. Sections: *Facts (verified on develop)* / *Do* /
    *Acceptance (tests)* / sentinel line. Name the approved surfaces to reuse, the exact error envelopes to keep, what
-   is out of scope, and conductor decisions as "final — do not re-litigate". End the brief with
+   is out of scope, and conductor decisions as "final — do not re-litigate". Search merged PR bodies for earlier
+   notes on the touched area (`gh pr list --state merged --search "\"Noted, not filed\" <component or route>"`) and
+   put the matching ones into *Do* (they fold under 7f's rules); a note seen a second time is filed. End the brief with
    `Sentinel (last line of .review/W-<n>-REPORT.md): <!-- W-<n>-DONE -->` — the launcher registers exactly that. Check
    `ls docs/adr` before a brief assigns an ADR number (parallel issues collide). For "use the shared X" refactors say
    "replace only whole-set declarations; keep literals; never touch `db/schema`".
-   **Self-check before launch.** Each of these cost a review round in session 63:
+   **Self-check before launch.** Each of these cost a review round in sessions 63–65:
    - Name only helpers and schemas that exist; `grep` each one. "Parse with the shared schema" made a worker invent one
      (#813).
    - Copy cardinality and validation rules (one parent vs many children, required fields) from the backend
@@ -63,27 +84,45 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
      e.g. an absent prop vs `detailPanel={null}` (#838).
    - Before replacing an exact lookup with a capped prefix or contains search, check that the exact hit stays
      reachable under the cap (#821: `VOC-1` was lost among 100+ newer `VOC-1…`).
+   - Trace every regression-test sequence the brief prescribes: it must reach the buggy branch, so removing the fix
+     turns it red (#891's sequence could not hit the race).
+   - Integration tests for a client-driven contract send the exact body the frontend sends (#921 never tested
+     `{ postpone_review: false }`).
+   - A change that keeps a component mounted across a context change lists the component's local state and decides
+     each one's lifetime (#922 kept the Triage screen mounted, so exclusions leaked across tabs: #937).
+   - A guard that waits for an event needs a bounded release for the no-event path, tested from a non-zero origin
+     (#901).
+   - A brief that removes a role, test id or label lists every test that queries it (#798).
+   **Brief check.** Before launching an `impl-complex` or `impl-mid` brief, have it checked against
+   `templates/brief-check.md`: a task `$WAVE_BRIEFS/<n>-BRIEFCHECK-TASK.md` that names the brief, the template, the
+   report path and the sentinel `<!-- W-<n>-BRIEFCHECK-DONE -->`, launched with `worker-launch.sh --role
+   review-check --cwd "$FOPS_MAIN"` while the main checkout is clean at `origin/develop`. If Orca refuses that
+   checkout, use `--role impl-fallback --model gpt-6.1-sol --effort medium` (background, no terminal). Fold the
+   findings into the brief, then launch. Mechanical `impl` briefs skip it.
 2. **Launch**: `scripts/launch-worker.sh <n> <slug> [be]` (≈5–7 in flight is the sustainable ceiling
    for one conductor; 2–3 when the conductor also runs every harness). It delegates to shared `worker-launch.sh`
    with role `impl`; set `WORKER_ROLE=impl-fallback` when the session selects the fallback, and optionally
    `WORKER_MODEL` / `WORKER_EFFORT` for overrides. Parallelise only issues that touch disjoint files.
-   **Complex issues go to `WORKER_ROLE=impl-complex`** (grok 4.7 xhigh, headless; user decisions 2026-10-08), and so do
+   **Complex issues go to `WORKER_ROLE=impl-complex`** (model in `routing.tsv`; user decisions 2026-10-08), and so do
    their fix rounds: pass `--role impl-complex` instead of `fix`. An issue is complex when any of these hold:
    - it changes a backend contract and its frontend consumer together, or touches three or more modules;
    - it touches permissions, a privacy or no-leak rule, auth, a migration, or SQL definer functions;
    - it carries ordering or state logic: state machines, idempotency or undo, save ordering (the #813–#832 builder
      saves), or concurrency;
    - an earlier GLM round on the same issue failed or needed a second fix round.
-   **Small issues that still need judgment go to `WORKER_ROLE=impl-mid`** (grok 4.7 high, headless; user decision
+   **Small issues that still need judgment go to `WORKER_ROLE=impl-mid`** (model in `routing.tsv`; user decision
    2026-10-08), and so do their fix rounds. These are single-component behaviour fixes, accessibility or layout
    corrections, and doc-versus-code reconciliations, where the brief cannot spell out every line.
    Record the choice and the reason in `W-<n>-VERIFY.md`. Mechanical briefs (copy constants, renames, fully
-   specified edits) use `impl` (GLM), and a GLM quota stop uses `impl-luna` as before.
-3. **Wait**: shared `worker-wait.sh --state "$WAVE_STATE/W-<n>.json" --timeout 3600 --poll 30`.
+   specified edits) use `impl`, and an `impl` quota stop uses `impl-luna` as before.
+3. **Wait**: shared `worker-wait.sh --state "$WAVE_STATE/W-<n>.json" --timeout 3600 --poll 30`, always with the Bash
+   tool's `run_in_background`: the harness wakes the conductor when it exits. Never poll in the foreground or with
+   `until`/`sleep` loops; sessions 63–65 spent 319 foreground waits (about 6.4 h), each re-reading the whole
+   conversation. `scripts/wave-status.py` (or the `/wave` pane) shows every worker at a glance.
    For several workers, pass repeated `--state` options and `--any`, then remove the returned finished worker
    from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
-   on the host and close any terminal immediately; `10` failed → inspect the report/log and write a repair brief;
-   `11` quota → stop the stalled worker, then relaunch in the same worktree with shared `worker-launch.sh
+   on the host and close any terminal immediately; `10` failed → read the result's `log_tail` first, then the report/log, and write a repair brief;
+   `11` quota (including a grok API 402) → stop the stalled worker, then relaunch in the same worktree with shared `worker-launch.sh
    --role impl-luna` (not `launch-worker.sh`, which creates a new worktree) and a task that says the worktree holds
    partial edits; this fallback is a standing user decision (2026-10-07);
    `12` timeout → inspect progress, do not treat it as completion or launch a duplicate; `2` usage → correct
@@ -210,10 +249,36 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
      If it is a `blocker` (the actor cannot finish the task), hold the merge until the owner answers.
    - An owner decision marked "final — do not re-litigate" is never reversed in a fix round. Only evidence that it
      causes a blocker goes up.
-   - `pre-existing` findings (also on develop) and anything outside the issue's scope become follow-up issues, not
-     fixes.
+   - **Pre-existing or out-of-scope findings: fold, file, or note** (owner, 2026-10-10: handle simple ones while
+     working). Apply the value gate first.
+     - **Fold** into this issue's fix round when all hold: (1) no owner decision (behaviour, copy meaning, test
+       deletion, scope) and no API, DB, migration or permission change; (2) a defect fix or copy change, not a
+       refactor; (3) touches only files in the issue's diff, the feature folder of a route that diff changes
+       (`apps/frontend/src/features/<f>/`, `apps/backend/src/modules/<m>/`) or `apps/frontend/src/lib/copy/*`, and
+       never `packages/ui`, `packages/shared`, `lib/layout` or another feature; (4) at most 30 changed non-test lines
+       per item and at most 3 items per issue; (5) a behaviour change carries a regression test that fails without
+       it; (6) not state, focus, undo/compensation, lifecycle or concurrency code, unless the file is already in the
+       issue's diff and the issue gets the fix-diff check below. Folds never delete tests. A fold that changes
+       specced behaviour updates the spec in the same PR; if the spec disagrees, it is an owner decision, so file it.
+     - Folds go into the FIX1 brief's *Do*, each with its finding ID, in their own FIX1 commit. Then run
+       `review-plan.py <worktree> --base <pre-fix head>`; if it reports a role the original plan did not run, revert
+       that commit and file the items. A fold that fails host verification or the fix-diff check is reverted and
+       filed, never fixed in another round. The PR body lists them under **Also fixed (pre-existing)** with the
+       finding and its test.
+     - **File** one issue when the finding fails (3) or (4), trips that review-plan check, or needs an owner
+       decision, a contract change or a cross-module refactor. Group related findings into one issue; never one
+       issue per nit.
+     - **Note** (no issue) `minor`/`nit` findings outside the touched area: one line each under **Noted, not
+       filed** in the PR body. The touched area is the routes the conductor lists in the UX task as rendering a
+       changed file.
+   - A re-check or fix-diff check reports only whether the fixed finding is fixed and any regression against the
+     pre-fix head. Pre-existing findings from a re-check are noted, never filed unless `blocker`.
    - Put every kept finding, tagged with its role, into **one** fix brief (`W-<n>-FIX1-TASK.md`). The conductor
-     verifies the fix round and ships. There is no second review.
+     verifies the fix round and ships. There is no second full review.
+   - **Fix-diff check for `impl-complex` issues.** When the issue is routed `impl-complex` (recorded in VERIFY), its
+     FIX1, folds included, gets one `review-check` on the fix diff (in Slice 45 it found a new major in 2 of 2
+     focus/lifecycle fix rounds, #957 and #964). Its findings go into at most one FIX2, which the conductor reviews
+     directly (diff read, mutation check, a real-browser re-check for focus) with no further reviewer and no folds.
    - For a fixed UX or perf `blocker`/`major`:
      - re-run that scenario and its neighbouring flow, or `nav-perf.sh`, on fresh previews, and record the result;
      - run the full visual harness when the fix touched `packages/ui`.
@@ -238,6 +303,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    - For a refactor of a hardened invariant (e.g. the #678 Survey denial barrier), tell the code reviewer the history
      and to trace every branch against `origin/develop`.
    - Intermediate checks use role `review-check` with distinct CHECK task, report and state names.
+   - When an issue merged earlier in the same slice touched the same component, hook or endpoint, the code
+     reviewer's task names that PR and asks for the combined behaviour (#922 → #937 was a same-slice regression).
 8. **Visual baselines**: sub-threshold changes pass against stale baselines — regenerate deliberately with
    `scripts/visual.sh update <filter...>`. This runs `baseline-keep.py` in read-only report mode and writes
    before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNG list and crops before acting.
@@ -254,15 +321,18 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    omit `--merge` and leave the PR open. Only when the user granted auto-merge **this session**, set
    `SHIP_AUTOMERGE=1` and add `--merge --issue <n> --close-comment '<verification and outcome>'`.
    Pass only finished resources via repeated `--worktree <path>` / `--terminal <handle>`; never pass a worktree
-   still needed for verification, review or user merge. Exit `20` leaves a rebase conflict for resolution;
+   still needed for verification, review or user merge. `ship-pr.sh` cleans them only after a verified merge
+   (otherwise the JSON lists them as `cleanup_skipped`); never chain `orca worktree rm` after it in one command
+   (#902 lost its worktree to a failed ship). Exit `20` leaves a rebase conflict for resolution;
    `21` means CI failed; `22` means CI timed out; `30`/`31` reject forbidden or unauthorized merge. Inspect the
    final JSON and confirm the pinned head before claiming shipped/merged. Close every finished terminal and
    remove every finished worktree; drop the issue's throwaway verify DB only after merge.
 10. Keep the session handoff current every few merges: one local-only file at the repo root, `HANDOFF.md`, updated
-    in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
-    milestone.
+    in place (no dated copies). File only owner decisions and 7f "file" items as issues in the wave's milestone; a
+    flake is filed on its second occurrence; deferred nits are noted, not filed. The handoff's "next candidates"
+    follows "Choosing the slice" above, and so does the memory snapshot of the slice status.
 11. **Slice close (before `release-gate.sh`).** When the slice's last issue has merged:
-    - **`review-quality`** (codex astra high since 2026-10-09; it runs in an Orca terminal, so make the disposable
+    - **`review-quality`** (codex; it runs in an Orca terminal, so make the disposable
       worktree with `orca worktree create --base-branch origin/develop`, not `git worktree add`). The task file's
       first line is "Read `.claude/agents/review-quality.md` and follow it as your role definition." Then:
       `worker-launch.sh --role review-quality --cwd <disposable> --task <abs SLICE-<m>-QUALITY-TASK.md> --report <abs
@@ -270,16 +340,28 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
       Act on its classes:
       - `release-blocker`: a normal issue loop before the release;
       - `fix-in-slice`: one chore PR;
-      - `follow-up`: issues in the next milestone.
+      - `follow-up`: through the 7f triage (fold into the chore, file one grouped issue, or note).
+      Slice-close folds are limited to copy, a11y attributes, dead code and docs. A behaviour `major` from the
+      walkthrough gets its own issue loop, not a fold into the chore.
     - **Slice walkthrough:** previews of `origin/main` and `origin/develop` (throwaway DB, as in 7c). Then:
       - one `review-ux` run over the slice's user flows. Several session-63 defects showed only when the app was
         used, not in any one diff;
       - one `nav-perf.sh` comparison over the rail targets, as a safety net for perf triggers the plan missed.
+    - **Delta quality review:** when review findings added issues to the slice after the quality review (#937 and
+      #940 in Slice 44), run one short `review-quality` on those files before the release gate.
     - Then run the release gate. The user owns the `main` merge, which is always a merge commit.
+    - **One slice per session.** Once the release PR is open, write the handoff and recommend a fresh session.
+      Sessions 63–65 ran 13 slices in one conversation: three compactions, English replies, and every turn
+      re-reading a huge context.
     - Before any handoff, `app-preview.py status` must show no previews and no orphans.
 
 ## Tools
 
+- `scripts/wave-status.py [--json] [--prs] [--state-dir <dir>]`: a read-only snapshot of the wave (workers and
+  reviewers with status, role, model and minutes; live previews; worktrees; containers; open PRs with CI). It
+  reads `$WAVE_STATE`, or every recent session `wave/` dir of this repo. Use it when the owner asks for progress.
+  The user-level `wave-panel` mod (`/wave`) draws the same snapshot as a pane and a status-line count.
+  `scripts/test-wave-status.py` holds its state rules.
 - `scripts/visual.sh`: `run`, `update`, `stable`, and `capture`; it selects the current checkout from the working
   directory (or `VISUAL_ROOT`). `capture --clean <name>` moves its temporary spec to Trash when available.
 - `scripts/verify-db.sh`: `up`, `create <n> [--migrate-from <checkout>]`, `drop <n>`, `reset-rate-limits <n>`,
@@ -345,8 +427,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   (#661 fixed three test-only TS errors that passed vitest). `verify-fe.sh` runs both.
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
-- Implementation workers run in an Orca terminal so the user can watch them: GLM 5.3 flash max via omp since
-  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok xhigh (`impl-complex`) and small judgment issues headless grok high (`impl-mid`), both 2026-10-08; code, perf and slice-quality reviewers run as codex (`codex-orca`; quality is astra high since 2026-10-09), and the UX reviewer as background `claude -p --agent review-ux` (no terminal). Simple conductor-side chores (screenshots and captures, simple research, doc synthesis, read-only queries) go to role `research` (background codex luna xhigh) instead of the conductor. The state JSON records
+- Implementation workers run in an Orca terminal so the user can watch them: `impl` via omp since
+  2026-10-07 (`impl-luna` on a quota stop); `impl-complex` and `impl-mid` use whatever runtime `routing.tsv` names (headless or an Orca terminal); code, perf and slice-quality reviewers run as codex (`codex-orca`), and the UX reviewer as background `claude -p --agent review-ux` (no terminal). Simple conductor-side chores (screenshots and captures, simple research, doc synthesis, read-only queries) go to role `research` (background codex) instead of the conductor. The state JSON records
   the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
   If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
   with stdin from `/dev/null`), which needs no Orca terminal.

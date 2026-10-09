@@ -167,10 +167,67 @@ describe('TriagePanel — compensating PATCH payload (REV-1 #3)', () => {
     // Compensating PATCH must restore the PRIOR values, not the staged ones.
     const comp = requests[1];
     expect(comp).toBeTruthy();
-    expect(comp?.body.triage_state).toBe('untriaged');
+    expect(comp?.body.triage_state).toBe('triaged');
     expect(comp?.body.severity).toBe('low'); // PRIOR, not 'high'
     expect(comp?.body.owner_user_id).toBe('00000000-0000-0000-0000-000000000aaa'); // PRIOR
     expect(comp?.body.owner_team_id).toBeNull();
     expect(comp?.body.analytics_area_id).toBe('00000000-0000-0000-0000-000000000bbb'); // PRIOR
+  });
+
+  it('settled confirm undo restores needs_more_information and its prior fields', async () => {
+    const voc: VocListItem = { ...PRIOR_VOC, triage_state: 'needs_more_information' };
+    const requests: Array<{ body: Record<string, unknown>; headers: Headers }> = [];
+    const onProcessed = vi.fn();
+    const forwardUpdatedAt = '2026-05-02T00:00:00.000Z';
+
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PATCH' && init.body) {
+        const body = JSON.parse(init.body as string) as Record<string, unknown>;
+        requests.push({ body, headers: new Headers(init.headers) });
+        return jsonResponse({
+          id: voc.id,
+          triage_state: body.triage_state,
+          updated_at: forwardUpdatedAt,
+        });
+      }
+      return jsonResponse({ actors: [] });
+    }) as typeof globalThis.fetch;
+
+    const Wrapper = makeWrapper();
+    const { baseElement } = render(
+      <Wrapper>
+        <TriagePanel voc={voc} onAct={vi.fn()} onProcessed={onProcessed} />
+      </Wrapper>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^높음$/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
+    });
+    await waitFor(() => expect(onProcessed).toHaveBeenCalledWith(1));
+    expect(requests[0]?.body).toMatchObject({ triage_state: 'triaged', severity: 'high' });
+
+    const toastEl = renderCapturedToast(baseElement);
+    const undoBtn = toastEl?.querySelector('button');
+    expect(undoBtn).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(undoBtn as HTMLElement);
+    });
+    await waitFor(() => expect(requests).toHaveLength(2));
+
+    expect(requests[1]?.body).toEqual({
+      triage_state: 'needs_more_information',
+      severity: 'low',
+      owner_user_id: '00000000-0000-0000-0000-000000000aaa',
+      owner_team_id: null,
+      analytics_area_id: '00000000-0000-0000-0000-000000000bbb',
+    });
+    expect(requests[1]?.headers.get('if-match')).toBe(forwardUpdatedAt);
+    expect(requests[1]?.headers.get('idempotency-key')).toBeTruthy();
+    expect(requests[1]?.headers.get('idempotency-key')).not.toBe(
+      requests[0]?.headers.get('idempotency-key'),
+    );
   });
 });
