@@ -36,7 +36,14 @@ export function PanelTitleBlock({
     <div
       className={cn('flex flex-col gap-2 px-4 py-3', inset === 'none' && 'px-0! py-0!', className)}
     >
-      <h2 className={titleClass} tabIndex={titleTabIndex}>
+      <h2
+        className={cn(
+          titleClass,
+          titleTabIndex !== undefined &&
+            'ring-offset-surface-canvas focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
+        )}
+        tabIndex={titleTabIndex}
+      >
         {title}
       </h2>
       {badges !== undefined && <div className="flex flex-wrap gap-2">{badges}</div>}

@@ -10,6 +10,7 @@ export interface VocTriageScreenControllerArgs {
   queueSettled: boolean;
   activeTab: string;
   onAdvanceVoc: (id: string | null) => void;
+  onRestoreVoc?: (id: string) => void;
 }
 
 export interface VocTriageScreenController {
@@ -48,6 +49,7 @@ export function useVocTriageScreenController({
   queueSettled,
   activeTab,
   onAdvanceVoc,
+  onRestoreVoc,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
   const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone, commandEnded } =
     useTriageQueue(items, queueContext, queueSettled);
@@ -68,6 +70,14 @@ export function useVocTriageScreenController({
   }, [items]);
 
   const removedSelectionRef = useRef<{ vocId: string; nextId: string | null } | null>(null);
+  const commandAdvances = useRef(
+    new WeakMap<TriageInput, { id: string | null; context: string }>(),
+  );
+  const commandOwners = useRef(new Map<string, TriageInput>());
+  // The acting panel may unmount when it empties the queue; its undo callback
+  // still needs the screen's current selection and navigation handler.
+  const restoreSelection = useRef({ selectedId, queueContext, onRestoreVoc });
+  restoreSelection.current = { selectedId, queueContext, onRestoreVoc };
   const selectedInQueue = liveQueue.find((voc) => voc.id === selectedId) ?? null;
   // Preserve the distinction between a previously queued selection, which may
   // auto-advance after removal, and a missing deep link, which must not fall
@@ -104,18 +114,26 @@ export function useVocTriageScreenController({
     }
   }
 
-  function advance(vocId: string, removing: boolean): void {
+  function advance(vocId: string, removing: boolean, input?: TriageInput): void {
     const index = liveQueue.findIndex((voc) => voc.id === vocId);
     const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
     if (removing) removedSelectionRef.current = { vocId, nextId: next?.id ?? null };
     // A singleton mark keeps its row and selection; removal clears the pin.
+    if (input) {
+      const previous = commandOwners.current.get(vocId);
+      if (previous) commandAdvances.current.delete(previous);
+      commandOwners.current.set(vocId, input);
+      if (next || removing) {
+        commandAdvances.current.set(input, { id: next?.id ?? null, context: queueContext });
+      }
+    }
     if (next || removing) onAdvanceVoc(next?.id ?? null);
   }
 
   function handleOptimisticRemove(vocId: string, input?: TriageInput): void {
     const item = items.find((voc) => voc.id === vocId);
     if (!item) return;
-    advance(vocId, true);
+    advance(vocId, true, input);
     optimisticRemove(
       vocId,
       {
@@ -134,7 +152,7 @@ export function useVocTriageScreenController({
       return;
     }
     optimisticPostpone(vocId, input);
-    advance(vocId, false);
+    advance(vocId, false, input);
   }
 
   return {
@@ -145,14 +163,29 @@ export function useVocTriageScreenController({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticPostpone,
-    handleQueueOutcome: commandEnded,
+    handleQueueOutcome: (input, outcome) => {
+      commandAdvances.current.delete(input);
+      if (commandOwners.current.get(input.vocId) === input) {
+        commandOwners.current.delete(input.vocId);
+      }
+      commandEnded(input, outcome);
+    },
     handleOptimisticRollback: (vocId, input) => {
       optimisticRestore(vocId, 'rollback', input);
     },
-    // Undo and compensation keep the current selection (as before #940); a forward
-    // failure reselects the failed VOC through onMutationFailure instead.
+    // Undo reselects only while selection still matches this command's advance.
+    // A forward failure reselects the failed VOC through onMutationFailure instead.
     handleOptimisticRestore: (vocId, input) => {
       optimisticRestore(vocId, undefined, input);
+      const advanceTarget = input ? commandAdvances.current.get(input) : undefined;
+      if (input) commandAdvances.current.delete(input);
+      const current = restoreSelection.current;
+      if (
+        advanceTarget?.context === current.queueContext &&
+        current.selectedId === advanceTarget.id
+      ) {
+        current.onRestoreVoc?.(vocId);
+      }
     },
     closeCreateFinding: () => setCreateFindingTarget(null),
   };

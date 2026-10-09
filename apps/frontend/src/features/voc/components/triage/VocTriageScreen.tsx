@@ -66,6 +66,20 @@ const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
 ];
 const TRIAGE_QUEUE_PANEL_ID = 'triage-queue-panel';
 
+function canRestoreFocus(root: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  if (
+    active?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], dialog')
+  ) {
+    return false;
+  }
+  return (
+    active === document.body ||
+    (active !== null && root?.contains(active) === true) ||
+    (active?.closest('[data-sonner-toast]') !== null && active?.textContent === '실행 취소')
+  );
+}
+
 export function VocTriageScreen({
   items,
   selectedId,
@@ -86,17 +100,29 @@ export function VocTriageScreen({
   onTabChange,
 }: VocTriageScreenProps): React.ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [pendingFocus, setPendingFocus] = useState<{ id: string | null; context: string } | null>(
-    null,
-  );
+  const [pendingFocus, setPendingFocus] = useState<{
+    id: string | null;
+    sourceId: string | null;
+    context: string;
+    restore?: boolean;
+  } | null>(null);
   function handleAdvanceVoc(id: string | null): void {
-    setPendingFocus({ id, context: queueContext ?? activeTab });
+    setPendingFocus({ id, sourceId: selectedId, context: queueContext ?? activeTab });
     if (onAdvanceVoc) onAdvanceVoc(id);
     else if (id !== null) onSelectVoc(id);
   }
   function handleSelectVoc(id: string): void {
     setPendingFocus(null);
     onSelectVoc(id);
+  }
+  function handleRestoreVoc(id: string): void {
+    setPendingFocus(
+      canRestoreFocus(rootRef.current)
+        ? { id, sourceId: selectedId, context: queueContext ?? activeTab, restore: true }
+        : null,
+    );
+    if (onAdvanceVoc) onAdvanceVoc(id);
+    else onSelectVoc(id);
   }
   const {
     liveQueue,
@@ -115,6 +141,7 @@ export function VocTriageScreen({
     selectedId,
     activeTab,
     onAdvanceVoc: handleAdvanceVoc,
+    onRestoreVoc: handleRestoreVoc,
     queueContext: queueContext ?? activeTab,
     queueSettled: queueSettled === true,
   });
@@ -123,8 +150,16 @@ export function VocTriageScreen({
     if (selectedVoc === null) close();
   }, [close, selectedVoc]);
   useEffect(() => {
-    if (!pendingFocus || createFindingTarget) return;
-    if (pendingFocus.context !== (queueContext ?? activeTab)) {
+    if (!pendingFocus) return;
+    if (
+      pendingFocus.context !== (queueContext ?? activeTab) ||
+      (selectedId !== pendingFocus.sourceId && selectedId !== pendingFocus.id)
+    ) {
+      setPendingFocus(null);
+      return;
+    }
+    if (createFindingTarget) return;
+    if (pendingFocus.restore && !canRestoreFocus(rootRef.current)) {
       setPendingFocus(null);
       return;
     }
@@ -141,7 +176,15 @@ export function VocTriageScreen({
     if (!target) return;
     target.focus();
     setPendingFocus(null);
-  }, [pendingFocus, createFindingTarget, selectedVoc, isFullscreen, queueContext, activeTab]);
+  }, [
+    pendingFocus,
+    createFindingTarget,
+    selectedId,
+    selectedVoc,
+    isFullscreen,
+    queueContext,
+    activeTab,
+  ]);
   const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => {
     const badgeCount = tabCounts?.[tab.value];
     return {
@@ -290,7 +333,10 @@ export function VocTriageScreen({
           defaultSeverity={createFindingTarget.defaultSeverity}
           open={createFindingTarget !== null}
           onCreated={() => setPendingFocus(null)}
-          onClose={closeCreateFinding}
+          onClose={() => {
+            if (pendingFocus?.id !== (selectedVoc?.id ?? null)) setPendingFocus(null);
+            closeCreateFinding();
+          }}
         />
       )}
     </div>
