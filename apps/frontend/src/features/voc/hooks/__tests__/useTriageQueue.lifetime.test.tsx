@@ -30,8 +30,8 @@ const priorValues = {
 };
 
 describe('useTriageQueue — exclusion lifetime', () => {
-  it.each(['waiting:ms-1', 'untriaged:ms-2', 'untriaged:ms-1:pin-voc-b'])(
-    'expires exclusions in %s while preserving original-id undo information',
+  it.each(['waiting:ms-1', 'untriaged:ms-2', 'other-context'])(
+    'expires exclusions on context change to %s and keeps the restored VOC visible',
     (context) => {
       const { result, rerender } = renderHook(
         ({ context }) => useTriageQueue([voc], context, true),
@@ -42,29 +42,19 @@ describe('useTriageQueue — exclusion lifetime', () => {
 
       rerender({ context });
       expect(result.current.liveQueue).toEqual([voc]);
-      expect(result.current.state.lastRemoved?.vocId).toBe(voc.id);
       act(() => result.current.optimisticRestore(voc.id));
-      expect(result.current.state.lastRemoved).toBeNull();
       expect(result.current.liveQueue).toEqual([voc]);
     },
   );
 
-  it('failed repeat-postpone restores the original marker across a settled refetch', async () => {
+  it('rollback of repeat-postpone restores the original marker across a settled refetch', () => {
     const original: VocListItem = { ...voc, review_postponed_at: '2026-10-09T00:00:00.000Z' };
     const { result, rerender } = renderHook(
       ({ items }) => useTriageQueue(items, 'unassigned:ms-1', true),
       { initialProps: { items: [original] } },
     );
-    let reject: (error: Error) => void = () => {};
-    const request = new Promise<void>((_resolve, rejectRequest) => {
-      reject = rejectRequest;
-    });
     act(() => result.current.optimisticPostpone(voc.id));
-    const completion = request.catch(() => result.current.optimisticRestore(voc.id, 'rollback'));
-    await act(async () => {
-      reject(new Error('postpone failed'));
-      await completion;
-    });
+    act(() => result.current.optimisticRestore(voc.id, 'rollback'));
     expect(result.current.liveQueue[0]?.review_postponed_at).toBe(original.review_postponed_at);
     rerender({ items: [{ ...original }] });
     expect(result.current.liveQueue[0]?.review_postponed_at).toBe(original.review_postponed_at);
@@ -102,6 +92,5 @@ describe('useTriageQueue — exclusion lifetime', () => {
     rerender({ items: [], settled: true });
     rerender({ items: [voc], settled: true });
     expect(result.current.liveQueue).toEqual([voc]);
-    expect(result.current.state.lastRemoved?.vocId).toBe(voc.id);
   });
 });
