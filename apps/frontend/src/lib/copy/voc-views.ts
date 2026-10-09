@@ -10,4 +10,7 @@ export const VOC_TRIAGE_QUEUE_TOTAL_LABELS = {
   unavailable: '전체 대기열 알 수 없음',
 } as const;
 
+/** #922: shown when the active tab has no rows but the queue total is greater than zero. */
+export const VOC_TRIAGE_TAB_EMPTY_LABEL = '이 탭에 해당하는 VOC가 없습니다';
+
 export const VOC_INBOX_NO_LINK_TAB_LABEL = GLOSSARY.noLink;

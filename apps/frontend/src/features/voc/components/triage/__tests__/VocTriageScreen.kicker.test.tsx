@@ -121,8 +121,11 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /높음 3/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /미배정\s*,\s*1/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: /높음\s*,\s*3/ })).toBeInTheDocument();
   });
 
   it('uses the shared untriaged label for the triage tab', () => {

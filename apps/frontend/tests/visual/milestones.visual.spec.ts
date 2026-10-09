@@ -211,7 +211,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.evaluate(() => document.fonts.ready);
     // Fixture: 5 milestones → the All tab's count badge is the last toolbar
     // content to arrive; its presence implies the counts query settled.
-    await expect(page.getByRole('tab', { name: /^전체 5$/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^전체\s*,\s*5$/ })).toBeVisible();
 
     const search = page.getByPlaceholder('Milestone 검색…');
     await expect(search).toBeVisible();

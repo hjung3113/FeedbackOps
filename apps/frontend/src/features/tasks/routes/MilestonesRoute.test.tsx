@@ -460,7 +460,7 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('0');
     expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('0');
     // A genuine zero is rendered as a bare count; unavailable counts stay absent.
-    expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
   });
 
   // R6 correction — a settled error on the LIST read hides the totals and

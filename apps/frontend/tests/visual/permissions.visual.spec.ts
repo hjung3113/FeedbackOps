@@ -44,7 +44,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
 
     const list = page.getByTestId('permission-requests-list');
     const detail = page.getByTestId('permission-request-detail-panel');
-    await expect(page.getByRole('tab', { name: /^대기 중\s*3$/ })).toHaveAttribute(
+    await expect(page.getByRole('tab', { name: /^대기 중\s*,\s*3$/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -243,7 +243,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await installMockApi(page);
 
     await page.goto('/admin/permissions/requests');
-    await page.getByRole('tab', { name: /^승인됨\s*1$/ }).click();
+    await page.getByRole('tab', { name: /^승인됨\s*,\s*1$/ }).click();
 
     const list = page.getByTestId('permission-requests-list');
     await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();

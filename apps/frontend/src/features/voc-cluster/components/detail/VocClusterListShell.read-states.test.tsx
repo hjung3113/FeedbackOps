@@ -166,20 +166,22 @@ describe('VocClusterListShell tab counts (#706)', () => {
         expect(screen.getByRole('tab', { name: '전체' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: '확정' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Finding 없음' })).toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^확정 \d+$/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole('tab', { name: /^Finding 없음 \d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^전체\s*,\s*\d+$/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /^확정\s*,\s*\d+$/ })).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole('tab', { name: /^Finding 없음\s*,\s*\d+$/ }),
+        ).not.toBeInTheDocument();
         return;
       }
       if (state === 'empty') {
-        expect(screen.getByRole('tab', { name: '전체 0' })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: '확정 0' })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Finding 없음 0' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /확정\s*,\s*0/ })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Finding 없음\s*,\s*0/ })).toBeInTheDocument();
         return;
       }
-      expect(screen.getByRole('tab', { name: '전체 3' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: '확정 2' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Finding 없음 2' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /전체\s*,\s*3/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /확정\s*,\s*2/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Finding 없음\s*,\s*2/ })).toBeInTheDocument();
     },
   );
 
@@ -201,7 +203,7 @@ describe('VocClusterListShell tab counts (#706)', () => {
       'data-variant',
       'error',
     );
-    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체\s*,\s*\d+$/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '다시 시도' }));
 
@@ -209,16 +211,16 @@ describe('VocClusterListShell tab counts (#706)', () => {
     // the error view and the counts stay absent while it is unresolved.
     expect(await screen.findByTestId('cluster-list-skeleton')).toBeInTheDocument();
     expect(screen.queryByTestId('list-state-message')).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /^전체 \d+$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /^확정 \d+$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /^Finding 없음 \d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^전체\s*,\s*\d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^확정\s*,\s*\d+$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Finding 없음\s*,\s*\d+$/ })).not.toBeInTheDocument();
 
     await act(async () => {
       releaseRead?.();
     });
 
-    expect(await screen.findByRole('tab', { name: '전체 0' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '확정 0' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Finding 없음 0' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /전체\s*,\s*0/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /확정\s*,\s*0/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Finding 없음\s*,\s*0/ })).toBeInTheDocument();
   });
 });

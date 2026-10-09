@@ -34,6 +34,8 @@ export interface VocTriageScreenProps {
   items: VocListItem[];
   selectedId: string | null;
   activeTab: TriageTab;
+  /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
+  queuePending?: boolean;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
   tabCounts?: Partial<Record<TriageTab, number>>;
@@ -57,6 +59,7 @@ export function VocTriageScreen({
   items,
   selectedId,
   activeTab,
+  queuePending,
   queueTotal,
   queueTotalUnavailableState,
   tabCounts,
@@ -159,6 +162,8 @@ export function VocTriageScreen({
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}
             onSelect={onSelectVoc}
+            {...(queuePending === true ? { queuePending } : {})}
+            {...(queueTotal !== undefined ? { queueTotal } : {})}
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
         </div>
