@@ -191,8 +191,9 @@ vi.mock('@tanstack/react-query', () => ({
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 
+import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS } from '@/lib/forms/search-debounce';
 import { Route as vocsRoute } from '@/routes/_authed/vocs';
-import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
+import { useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
   const { list, detailPanel } = useInboxRoute(view);

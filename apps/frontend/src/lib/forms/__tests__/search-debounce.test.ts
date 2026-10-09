@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endsWithHangul, searchDebounceMs } from '../search-debounce';
+import { searchDebounceMs } from '../search-debounce';
 
 describe('searchDebounceMs', () => {
   it.each([
@@ -10,6 +10,5 @@ describe('searchDebounceMs', () => {
     { draft: '', delayMs: 300 },
   ])('waits $delayMs ms for "$draft"', ({ draft, delayMs }) => {
     expect(searchDebounceMs(draft)).toBe(delayMs);
-    expect(endsWithHangul(draft)).toBe(delayMs === 700);
   });
 });

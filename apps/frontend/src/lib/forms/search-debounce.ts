@@ -6,7 +6,7 @@ export const SEARCH_HANGUL_DEBOUNCE_MS = 700;
 // #875: a draft whose last character is Hangul may still be a half-typed
 // syllable in progress. The ranges cover Jamo (U+1100–U+11FF, U+3130–U+318F,
 // e.g. ㄹ) and assembled syllables (U+AC00–U+D7A3, e.g. 이).
-export function endsWithHangul(draft: string): boolean {
+function endsWithHangul(draft: string): boolean {
   if (draft === '') return false;
   const code = draft.charCodeAt(draft.length - 1);
   return (
