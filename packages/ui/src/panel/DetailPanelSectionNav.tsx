@@ -17,9 +17,9 @@
  *
  * Sections flagged `overflow: true` render inside a trailing dropdown instead of the
  * pinned strip (#519 — a deliberate deviation from the prototype, whose strip overflows a
- * 440px panel). The trigger reads 더보기 until an overflowed section is active, then it
- * reads that section's label. With no flagged section the output is identical to the
- * prototype strip. The strip root is a navigation landmark.
+ * 440px panel). The trigger always reads 더보기; when an overflowed section is active,
+ * its accessible name includes that section's label. With no flagged section, it matches
+ * the prototype strip. The strip root is a navigation landmark.
  *
  * Mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root.
  */
@@ -258,8 +258,10 @@ export function DetailPanelSectionNav({
 
   const pinned = sections.filter((s) => !s.overflow);
   const overflowed = sections.filter((s) => s.overflow);
-  const overflowTriggerLabel =
-    overflowed.find((section) => section.id === activeSection)?.label ?? '더보기';
+  const activeOverflowSection = overflowed.find((section) => section.id === activeSection);
+  const overflowTriggerAccessibleName = activeOverflowSection
+    ? `더보기, 현재 ${activeOverflowSection.label}`
+    : '더보기';
   const scrollTabs = (direction: 'left' | 'right') => {
     const nav = navRef.current;
     if (!nav) return;
@@ -365,6 +367,7 @@ export function DetailPanelSectionNav({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                aria-label={overflowTriggerAccessibleName}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-2.5 py-1.5',
                   'border-0 border-b-2 bg-transparent cursor-pointer',
@@ -375,7 +378,7 @@ export function DetailPanelSectionNav({
                     : 'border-transparent text-text-muted hover:text-text-secondary',
                 )}
               >
-                {overflowTriggerLabel}
+                더보기
                 <ChevronDown className="h-3 w-3" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>

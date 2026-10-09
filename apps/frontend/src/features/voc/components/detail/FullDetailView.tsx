@@ -36,7 +36,7 @@ export interface FullDetailViewProps {
 // Execution section only shown when there's an active finding/task (Slice 4+).
 export const VOC_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'overview', label: '요약' },
-  { id: 'triage', label: 'Triage (읽기 전용)' },
+  { id: 'triage', label: 'Triage' },
   { id: 'description', label: '본문', overflow: true },
   { id: 'trail', label: '이력' },
   { id: 'conversation', label: '대화', overflow: true },

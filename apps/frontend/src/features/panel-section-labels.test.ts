@@ -12,7 +12,7 @@ const cases = [
     sections: VOC_DETAIL_SECTIONS,
     expected: [
       ['overview', '요약'],
-      ['triage', 'Triage (읽기 전용)'],
+      ['triage', 'Triage'],
       ['description', '본문'],
       ['trail', '이력'],
       ['conversation', '대화'],
@@ -78,10 +78,10 @@ const cases = [
     expected: [
       ['summary', '요약'],
       ['metadata', '소스 / 심각도 / 신뢰도'],
-      ['evidence', 'Evidence 하이라이트'],
-      ['managed-system', '주요 Managed System'],
-      ['analytics-area', '영향 Analytics Area'],
-      ['links', '연결된 VOC / Task'],
+      ['evidence', 'Evidence'],
+      ['managed-system', 'Managed System'],
+      ['analytics-area', 'Analytics Area'],
+      ['links', '연결'],
       ['notes', '진행 메모'],
     ],
   },

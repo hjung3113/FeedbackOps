@@ -717,7 +717,7 @@ describe('<VocDetailPanel>', () => {
     await screen.findByText('테스트 VOC 제목');
     expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/같은 Managed System의 VOC/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Triage (읽기 전용)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '같은 Managed System의 VOC' }),
     ).not.toBeInTheDocument();
@@ -734,7 +734,7 @@ describe('<VocDetailPanel>', () => {
 
     await screen.findByText('테스트 VOC 제목');
     expect(screen.queryByText('Triage (읽기 전용)')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Triage (읽기 전용)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
   });
 
   it('#337: scoped envelope renders Triage and Similar with their navigation entries', async () => {
@@ -766,8 +766,8 @@ describe('<VocDetailPanel>', () => {
     await screen.findByText('테스트 VOC 제목');
     expect(screen.getByRole('heading', { name: 'Triage (읽기 전용)' })).toBeInTheDocument();
     expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Triage (읽기 전용)' })).toBeInTheDocument();
-    for (const label of ['요약', 'Triage (읽기 전용)', '이력', '작성']) {
+    expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
+    for (const label of ['요약', 'Triage', '이력', '작성']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
     expect(

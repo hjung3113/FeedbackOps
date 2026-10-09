@@ -298,8 +298,9 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
 
     expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
-    // The active overflow section replaces the idle 더보기 name; the underline stays.
-    const more = screen.getByRole('button', { name: 'Details' });
+    // The active section is announced by the trigger; its visible label stays fixed.
+    const more = screen.getByRole('button', { name: '더보기, 현재 Details' });
+    expect(more).toHaveTextContent(/^더보기$/);
     expect(more).not.toHaveAttribute('aria-current');
     expect(more).toHaveClass('border-accent-primary', 'text-text-primary');
     expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
@@ -343,9 +344,9 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.keyDown(idle, { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: '본문' }));
 
-    const active = screen.getByRole('button', { name: '본문' });
-    expect(active).toHaveTextContent(/^본문$/);
-    expect(active).toHaveAccessibleName('본문');
+    const active = screen.getByRole('button', { name: '더보기, 현재 본문' });
+    expect(active).toHaveTextContent(/^더보기$/);
+    expect(active).toHaveAccessibleName('더보기, 현재 본문');
     expect(active).toHaveClass('border-accent-primary', 'text-text-primary');
     expect(screen.queryByRole('button', { name: '더보기' })).not.toBeInTheDocument();
     document.body.removeChild(scrollEl);

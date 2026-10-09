@@ -8,7 +8,6 @@ import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/ap
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
-import { GLOSSARY } from '@/lib/copy/glossary';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -42,10 +41,10 @@ export interface FindingDetailController {
 export const DETAIL_SECTIONS = [
   { id: 'summary', label: '요약' },
   { id: 'metadata', label: '소스 / 심각도 / 신뢰도' },
-  { id: 'evidence', label: GLOSSARY.evidenceHighlight },
-  { id: 'managed-system', label: '주요 Managed System' },
-  { id: 'analytics-area', label: '영향 Analytics Area' },
-  { id: 'links', label: '연결된 VOC / Task' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'managed-system', label: 'Managed System' },
+  { id: 'analytics-area', label: 'Analytics Area' },
+  { id: 'links', label: '연결' },
   { id: 'notes', label: '진행 메모' },
 ];
 
