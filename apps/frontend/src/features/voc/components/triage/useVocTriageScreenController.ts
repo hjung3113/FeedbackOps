@@ -5,6 +5,10 @@ import { useTriageQueue } from '../../hooks/useTriageQueue';
 export interface VocTriageScreenControllerArgs {
   items: VocListItem[];
   selectedId: string | null;
+  queueContext: string;
+  queueSettled: boolean;
+  activeTab: string;
+  onSelectVoc: (id: string) => void;
 }
 
 export interface VocTriageScreenController {
@@ -30,20 +34,26 @@ export interface VocTriageScreenController {
     },
   ) => void;
   handleOptimisticRemove: (vocId: string) => void;
+  handleOptimisticPostpone: (vocId: string) => void;
   handleOptimisticRestore: (vocId: string) => void;
+  handleOptimisticRollback: (vocId: string) => void;
+  handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
 }
 
 export function useVocTriageScreenController({
   items,
   selectedId,
+  queueContext,
+  queueSettled,
+  activeTab,
+  onSelectVoc,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
-  const {
-    state: queueState,
-    liveQueue,
-    optimisticRemove,
-    optimisticRestore,
-  } = useTriageQueue(items);
+  const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone } = useTriageQueue(
+    items,
+    queueContext,
+    queueSettled,
+  );
   const [createFindingTarget, setCreateFindingTarget] = useState<{
     vocId: string;
     managedSystemId: string;
@@ -52,7 +62,12 @@ export function useVocTriageScreenController({
     defaultSeverity: FindingSeverity;
   } | null>(null);
 
-  const processedCount = queueState.optimisticallyRemoved.size;
+  const [processedCount, setProcessedCount] = useState(0);
+
+  function handleProcessed(delta: 1 | -1): void {
+    setProcessedCount((count) => count + delta);
+  }
+
   // Keep session history in a ref because a refetch removes the item from both
   // `items` and the live queue before selection can determine whether it was
   // previously present.
@@ -104,6 +119,17 @@ export function useVocTriageScreenController({
     });
   }
 
+  function handleOptimisticPostpone(vocId: string): void {
+    if (activeTab === 'untriaged') {
+      handleOptimisticRemove(vocId);
+      return;
+    }
+    optimisticPostpone(vocId);
+    const index = liveQueue.findIndex((voc) => voc.id === vocId);
+    const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
+    if (next) onSelectVoc(next.id);
+  }
+
   return {
     liveQueue,
     processedCount,
@@ -112,7 +138,16 @@ export function useVocTriageScreenController({
     createFindingTarget,
     handleAct,
     handleOptimisticRemove,
-    handleOptimisticRestore: optimisticRestore,
+    handleOptimisticPostpone,
+    handleOptimisticRollback: (vocId) => {
+      optimisticRestore(vocId, 'rollback');
+    },
+    // Undo and compensation keep the current selection (as before #940); a forward
+    // failure reselects the failed VOC through onMutationFailure instead.
+    handleOptimisticRestore: (vocId) => {
+      optimisticRestore(vocId);
+    },
+    handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),
   };
 }

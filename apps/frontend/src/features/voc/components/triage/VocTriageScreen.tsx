@@ -34,6 +34,12 @@ export interface VocTriageScreenProps {
   items: VocListItem[];
   selectedId: string | null;
   activeTab: TriageTab;
+  /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
+  queuePending?: boolean;
+  /** Exclusion context: tab and Managed System scope, independent of selection/pin. */
+  queueContext?: string;
+  /** True only after a successful queue read, with no fetch in flight. */
+  queueSettled?: boolean;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
   tabCounts?: Partial<Record<TriageTab, number>>;
@@ -49,7 +55,7 @@ const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
   { value: 'unassigned', label: VOC_TRIAGE_TAB_LABELS.unassigned },
   { value: 'untriaged', label: TRIAGE_STATE_LABELS.untriaged },
   { value: 'high', label: VOC_TRIAGE_TAB_LABELS.high },
-  { value: 'waiting', label: '보류' },
+  { value: 'waiting', label: VOC_TRIAGE_TAB_LABELS.waiting },
 ];
 const TRIAGE_QUEUE_PANEL_ID = 'triage-queue-panel';
 
@@ -57,6 +63,9 @@ export function VocTriageScreen({
   items,
   selectedId,
   activeTab,
+  queuePending,
+  queueContext,
+  queueSettled,
   queueTotal,
   queueTotalUnavailableState,
   tabCounts,
@@ -72,9 +81,19 @@ export function VocTriageScreen({
     createFindingTarget,
     handleAct,
     handleOptimisticRemove,
+    handleOptimisticPostpone,
     handleOptimisticRestore,
+    handleOptimisticRollback,
+    handleProcessed,
     closeCreateFinding,
-  } = useVocTriageScreenController({ items, selectedId });
+  } = useVocTriageScreenController({
+    items,
+    selectedId,
+    activeTab,
+    onSelectVoc,
+    queueContext: queueContext ?? activeTab,
+    queueSettled: queueSettled === true,
+  });
   const { isFullscreen, toggle, close } = useFullscreenPanel();
   useEffect(() => {
     if (selectedVoc === null) close();
@@ -156,16 +175,22 @@ export function VocTriageScreen({
           hidden={isFullscreen}
         >
           <TriageQueue
+            activeTab={activeTab}
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}
             onSelect={onSelectVoc}
+            {...(queuePending === true ? { queuePending } : {})}
+            {...(queueTotal !== undefined ? { queueTotal } : {})}
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
         </div>
 
         {/* Deep link target this queue cannot show (#383) — never silently
-            swap in another VOC's commit form. */}
-        {deepLinkTargetMissing && (
+            swap in another VOC's commit form. #922 FIX1: an uncached deep link
+            mounts with queuePending=true and empty items, which is not yet
+            evidence the target is missing — suppress the notice until the
+            queue request settles. */}
+        {deepLinkTargetMissing && queuePending !== true && (
           <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"
@@ -193,7 +218,11 @@ export function VocTriageScreen({
                   voc={selectedVoc}
                   onAct={handleAct}
                   onOptimisticRemove={handleOptimisticRemove}
+                  onOptimisticPostpone={handleOptimisticPostpone}
+                  onMutationFailure={onSelectVoc}
+                  onOptimisticRollback={handleOptimisticRollback}
                   onOptimisticRestore={handleOptimisticRestore}
+                  onProcessed={handleProcessed}
                 />
               </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>

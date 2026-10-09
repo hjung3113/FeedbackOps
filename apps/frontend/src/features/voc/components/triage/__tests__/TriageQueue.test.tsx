@@ -2,10 +2,10 @@
 // Covers: renders rows, empty state, OutOfScopeSummary.
 // TDD RED: these tests are written before the implementation file exists.
 
+import type { VocListItem } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageQueue } from '../TriageQueue';
-import type { VocListItem } from '@fops/shared';
 
 const VOCS: VocListItem[] = [
   {
@@ -24,6 +24,7 @@ const VOCS: VocListItem[] = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
   {
@@ -42,33 +43,16 @@ const VOCS: VocListItem[] = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
 ];
 
 describe('TriageQueue', () => {
   it('renders all voc rows when queue is non-empty', () => {
-    render(
-      <TriageQueue
-        vocs={VOCS}
-        selectedId={null}
-        onSelect={vi.fn()}
-      />,
-    );
+    render(<TriageQueue vocs={VOCS} selectedId={null} onSelect={vi.fn()} />);
     expect(screen.getByText('First VOC')).toBeInTheDocument();
     expect(screen.getByText('Second VOC')).toBeInTheDocument();
-  });
-
-  it('renders TriageEmpty when queue is empty', () => {
-    render(
-      <TriageQueue
-        vocs={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-      />,
-    );
-    // TriageEmpty renders "큐가 비었습니다" copy from prototype
-    expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
   });
 
   it('renders OutOfScopeSummaryBanner when outOfScopeSummary is provided', () => {
@@ -83,4 +67,38 @@ describe('TriageQueue', () => {
     // OutOfScopeSummaryBanner is rendered above rows
     expect(screen.getByText(/2건/)).toBeInTheDocument();
   });
+
+  it.each([
+    {
+      queueTotal: 7,
+      present: '이 탭에 해당하는 VOC가 없습니다',
+      absent: '큐가 비었습니다',
+    },
+    {
+      queueTotal: 0,
+      present: '큐가 비었습니다',
+      absent: '이 탭에 해당하는 VOC가 없습니다',
+    },
+    {
+      // FIX1: an unknown total is not evidence of a truly empty queue — it
+      // must not claim every VOC was processed.
+      queueTotal: undefined,
+      present: '이 탭에 해당하는 VOC가 없습니다',
+      absent: '큐가 비었습니다',
+    },
+  ])(
+    'picks the right empty copy for queueTotal=$queueTotal (#922)',
+    ({ queueTotal, present, absent }) => {
+      render(
+        <TriageQueue
+          vocs={[]}
+          selectedId={null}
+          onSelect={vi.fn()}
+          {...(queueTotal !== undefined ? { queueTotal } : {})}
+        />,
+      );
+      expect(screen.getByText(present)).toBeInTheDocument();
+      expect(screen.queryByText(absent)).not.toBeInTheDocument();
+    },
+  );
 });

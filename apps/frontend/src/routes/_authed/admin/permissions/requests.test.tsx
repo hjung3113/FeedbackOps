@@ -206,7 +206,7 @@ describe("/admin/permissions/requests", () => {
     renderRoute();
     await waitFor(() =>
       expect(
-        screen.getByRole("tab", { name: /대기 중 1/ }),
+        screen.getByRole("tab", { name: /^대기 중\s*,\s*1$/ }),
       ).toBeInTheDocument(),
     );
     expect(screen.getAllByRole("tab")).toHaveLength(5);
@@ -215,7 +215,7 @@ describe("/admin/permissions/requests", () => {
         "workspace.read",
       ),
     ).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /승인됨 1/ }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^승인됨\s*,\s*1$/ }));
     await waitFor(() =>
       expect(
         within(screen.getByTestId("permission-requests-list")).getByText(
@@ -246,7 +246,7 @@ describe("/admin/permissions/requests", () => {
       ).not.toBeInTheDocument(),
     );
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /추가 정보 필요 1/ }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^추가 정보 필요\s*,\s*1$/ }));
     await waitFor(() =>
       expect(
         screen.getByTestId("permission-request-detail-panel"),
@@ -263,7 +263,7 @@ describe("/admin/permissions/requests", () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /승인됨 1/ }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^승인됨\s*,\s*1$/ }));
 
     await waitFor(() =>
       expect(
@@ -369,7 +369,7 @@ describe("/admin/permissions/requests", () => {
     fireEvent.click(screen.getByRole("button", { name: "승인" }));
     expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument();
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /추가 정보 필요 1/ }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^추가 정보 필요\s*,\s*1$/ }));
     await waitFor(() =>
       expect(screen.queryByTestId("self-approval-audit-capture")).not.toBeInTheDocument(),
     );

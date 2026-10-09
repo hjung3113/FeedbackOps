@@ -16,7 +16,11 @@ export function useTriagePanelController({
   voc,
   onAct,
   onOptimisticRemove,
+  onOptimisticPostpone,
+  onProcessed,
   onOptimisticRestore,
+  onOptimisticRollback,
+  onMutationFailure,
 }: {
   voc: VocListItem;
   onAct?: (
@@ -30,6 +34,10 @@ export function useTriagePanelController({
     },
   ) => void;
   onOptimisticRemove?: (vocId: string) => void;
+  onOptimisticPostpone?: (vocId: string) => void;
+  onProcessed?: (delta: 1 | -1) => void;
+  onMutationFailure?: (vocId: string) => void;
+  onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }) {
   const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
@@ -94,7 +102,10 @@ export function useTriagePanelController({
   // input assembly, and the toast UI.
   const { panelLocked, isSubmitting, commit, undoLast } = useTriageCommand({
     voc,
+    onProcessed,
     onOptimisticRestore,
+    onOptimisticRollback,
+    onMutationFailure,
   });
 
   // Keep a stable ref to undoLast so the toast closure always sees the latest version.
@@ -130,14 +141,16 @@ export function useTriagePanelController({
       // REV-3 Cluster X: capture the per-call token so the toast we issue
       // below binds its undo to THIS call only. Once a follow-up mutate
       // replaces the current call, this toast becomes inert.
-      const callToken: CallToken = commit(input);
+      const callToken: CallToken = commit(input, () => {
+        toast.dismiss(successToastId);
+      });
 
       // Show UndoToast via sonner's toast.custom
       // Prototype ref: screen-voc-create.jsx:699-730 → UndoToast positioning
       const message =
         kind === 'finding' ? `${voc.display_id} Finding 만들기` : `${voc.display_id} Triage 확정됨`;
 
-      toast.custom(
+      const successToastId = toast.custom(
         (toastId) => (
           <UndoToast
             message={message}
@@ -180,21 +193,23 @@ export function useTriagePanelController({
   );
 
   const handleSkip = React.useCallback(() => {
-    if (panelLocked) return;
+    if (panelLocked || voc.triage_state !== 'untriaged' || voc.review_postponed_at != null) return;
     const input: TriageInput = {
       kind: 'skip',
       vocId: voc.id,
       ifMatch: voc.updated_at,
     };
 
-    // Optimistic remove
-    onOptimisticRemove?.(voc.id);
+    // The active tab determines whether postponing removes or marks the row.
+    (onOptimisticPostpone ?? onOptimisticRemove)?.(voc.id);
 
     // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
-    const callToken: CallToken = commit(input);
+    const callToken: CallToken = commit(input, () => {
+      toast.dismiss(successToastId);
+    });
 
     const message = `${voc.display_id} 보류 처리됨`;
-    toast.custom(
+    const successToastId = toast.custom(
       (toastId) => (
         <UndoToast
           message={message}
@@ -212,7 +227,18 @@ export function useTriagePanelController({
     );
 
     onAct?.('skip');
-  }, [panelLocked, voc.id, voc.display_id, voc.updated_at, onOptimisticRemove, onAct, commit]);
+  }, [
+    panelLocked,
+    voc.id,
+    voc.display_id,
+    voc.updated_at,
+    onOptimisticRemove,
+    onOptimisticPostpone,
+    voc.triage_state,
+    voc.review_postponed_at,
+    onAct,
+    commit,
+  ]);
 
   return {
     panelState,

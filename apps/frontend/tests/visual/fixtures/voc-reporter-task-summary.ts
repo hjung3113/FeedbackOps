@@ -27,6 +27,7 @@ export const reporterTaskSummaryVoc: VocDetailEnvelope =
     severity: "medium",
     reporter_facing_status: "progress",
     triage_state: "triaged",
+    review_postponed_at: null,
     source_context: "direct_use",
     created_at: "2026-07-18T09:00:00.000Z",
     updated_at: "2026-07-18T09:00:00.000Z",

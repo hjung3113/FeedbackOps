@@ -86,6 +86,7 @@ const vocBase = {
   severity: 'medium' as const,
   reporter_facing_status: 'received' as const,
   triage_state: 'untriaged' as const,
+  review_postponed_at: null,
   source_context: 'direct_use' as const,
   created_at: '2026-07-21T06:00:00.000Z',
   updated_at: '2026-07-21T06:00:00.000Z',

@@ -235,8 +235,8 @@ describe('TriageRoute', () => {
     await waitFor(() => {
       expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
     });
-    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /미분류/ })).not.toHaveTextContent(/\d/);
     expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
@@ -269,8 +269,8 @@ describe('TriageRoute', () => {
     });
 
     await waitFor(() => expect(total).toHaveTextContent('7 VOC'));
-    expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /높음 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toBeInTheDocument();
   });
 
   it('shows an unavailable queue total after nav counts fail', async () => {
@@ -292,8 +292,11 @@ describe('TriageRoute', () => {
     renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /높음 1/ })).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByRole('tab', { name: /미배정 2/ })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^높음\s*,\s*1$/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(screen.getByRole('tab', { name: /^미배정\s*,\s*2$/ })).toBeInTheDocument();
     });
   });
 
@@ -314,6 +317,7 @@ describe('TriageRoute', () => {
   ])(
     'shows the $tab badge from nav counts and no badge when $key is absent',
     async ({ label, key, count }) => {
+      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const counts = {
         'voc.triage': 7,
         'voc.tab.unassigned': 2,
@@ -325,7 +329,7 @@ describe('TriageRoute', () => {
       const present = renderWithQc(<TriageRoute />);
       await waitFor(() => {
         expect(
-          screen.getByRole('tab', { name: new RegExp(`${label} ${count}`) }),
+          screen.getByRole('tab', { name: new RegExp(`^${escapedLabel}\\s*,\\s*${count}$`) }),
         ).toBeInTheDocument();
       });
       present.unmount();
@@ -358,6 +362,27 @@ describe('TriageRoute', () => {
     expect(callArg.to).toBe('/vocs');
     const result = callArg.search({});
     expect(result).toHaveProperty('tab', 'high');
+  });
+
+  it('drops selected from the next search when the tab changes (#922)', async () => {
+    renderWithQc(<TriageRoute />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const highTab = screen.getByRole('tab', { name: /높음/i });
+    fireEvent.mouseDown(highTab);
+
+    const callArg = navigateMock.mock.calls[0]?.[0] as {
+      to: string;
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(callArg.to).toBe('/vocs');
+    // #383 deep links enter with ?selected=…; switching tabs must drop the pin
+    // or the pinned VOC unions into every tab's list.
+    const result = callArg.search({ view: 'triage', selected: 'voc-9' });
+    expect(result).toHaveProperty('tab', 'high');
+    expect(result.selected).toBeUndefined();
   });
 
   it('clicking a row calls navigate with selected param', async () => {

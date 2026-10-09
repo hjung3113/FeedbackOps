@@ -95,7 +95,7 @@ export function TriageRoute(): React.ReactElement {
   // target as `selected`. Already-triaged VOCs are excluded by the queue
   // predicate, so the target must be pinned explicitly or the queue cannot show
   // it. Out-of-scope / unknown ids are dropped server-side.
-  const { data, isLoading } = useVocList({
+  const { data, isLoading, isSuccess, isFetching } = useVocList({
     view: 'triage',
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     tab: activeTab,
@@ -113,13 +113,16 @@ export function TriageRoute(): React.ReactElement {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   function handleTabChange(tab: TriageTab): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, tab }) as any });
+    // #922: changing tabs drops the #383 deep-link pin (selected) — a pinned
+    // VOC must not union into every tab's list. Deep-link entry keeps pinning.
+    void navigate({
+      to: '/vocs',
+      search: (prev) => ({ ...prev, tab, selected: undefined }),
+    });
   }
 
   function handleSelectVoc(id: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, selected: id }) as any });
+    void navigate({ to: '/vocs', search: (prev) => ({ ...prev, selected: id }) });
   }
 
   // ── Loading state ────────────────────────────────────────────────────────────
@@ -148,20 +151,18 @@ export function TriageRoute(): React.ReactElement {
     );
   }
 
-  // Approved branch: show queue loading spinner separately from the gate.
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <span className="text-sm text-text-muted">불러오는 중…</span>
-      </div>
-    );
-  }
-
+  // #922: a pending tab refetch must not swap the whole screen for a loading
+  // state — that unmounts the tablist and drops focus. The pending state is
+  // handed to the screen and rendered inside the queue column instead; the
+  // route-level loading state above stays only for useMe + capability load.
   return (
     <VocTriageScreen
       items={items}
       selectedId={search.selected ?? null}
       activeTab={activeTab}
+      queuePending={isLoading}
+      queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
+      queueSettled={isSuccess && !isFetching}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
       {...(tabCounts !== undefined ? { tabCounts } : {})}

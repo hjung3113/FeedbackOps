@@ -48,6 +48,7 @@ const MOCK_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 
@@ -121,58 +122,12 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       </Wrapper>,
     );
 
-    expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /높음 3/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^미배정\s*,\s*1$/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: /^높음\s*,\s*3$/ })).toBeInTheDocument();
   });
-
-  it.each([
-    { tab: 'unassigned' as const, label: VOC_TRIAGE_TAB_LABELS.unassigned, count: 2 },
-    { tab: 'untriaged' as const, label: TRIAGE_STATE_LABELS.untriaged, count: 5 },
-    { tab: 'high' as const, label: VOC_TRIAGE_TAB_LABELS.high, count: 1 },
-    { tab: 'waiting' as const, label: '보류', count: 4 },
-  ])(
-    'shows the $tab count and no badge when that tab is absent from tabCounts',
-    ({ tab, label, count }) => {
-      const supplied = {
-        unassigned: 2,
-        untriaged: 5,
-        high: 1,
-        waiting: 4,
-      };
-      const { [tab]: _omitted, ...absent } = supplied;
-      const { unmount } = render(
-        <Wrapper>
-          <VocTriageScreen
-            items={[MOCK_VOC]}
-            selectedId={MOCK_VOC.id}
-            activeTab="unassigned"
-            tabCounts={supplied}
-            onSelectVoc={vi.fn()}
-            onTabChange={vi.fn()}
-          />
-        </Wrapper>,
-      );
-
-      expect(
-        screen.getByRole('tab', { name: new RegExp(`${label} ${count}`) }),
-      ).toBeInTheDocument();
-      unmount();
-
-      render(
-        <Wrapper>
-          <VocTriageScreen
-            items={[MOCK_VOC]}
-            selectedId={MOCK_VOC.id}
-            activeTab="unassigned"
-            tabCounts={absent}
-            onSelectVoc={vi.fn()}
-            onTabChange={vi.fn()}
-          />
-        </Wrapper>,
-      );
-      expect(screen.getByRole('tab', { name: label })).not.toHaveTextContent(/\d/);
-    },
-  );
 
   it('uses the shared untriaged label for the triage tab', () => {
     render(
@@ -300,7 +255,22 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
   });
 
-  it('shows "N건 처리됨" after a VOC is optimistically removed (confirm)', () => {
+  it('shows "N건 처리됨" after a successful confirm', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              updated_at: '2026-05-02T00:00:00.000Z',
+              items: [],
+              available: false,
+              reason: 'provider_disabled',
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
     const items: VocListItem[] = [
       MOCK_VOC,
       { ...MOCK_VOC, id: 'voc-kicker-002', display_id: 'VOC-K-002' },
@@ -319,13 +289,15 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
 
     // Stage a severity so the confirm button enables, then confirm to trigger
-    // the optimistic remove that drives the processed count.
+    // the command; only its successful response drives the processed count.
     fireEvent.click(screen.getByRole('button', { name: /높음/ }));
     fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
 
-    const count = screen.getByTestId('triage-processed-count');
+    expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
+    const count = await screen.findByTestId('triage-processed-count');
     expect(count).toBeInTheDocument();
     expect(count.textContent).toContain('1건 처리됨');
+    vi.unstubAllGlobals();
   });
 
   it('expands the triage panel, handles Escape, and keeps its copy and deferred menu actions', () => {

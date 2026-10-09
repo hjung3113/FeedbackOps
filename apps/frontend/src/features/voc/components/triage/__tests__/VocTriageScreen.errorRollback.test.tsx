@@ -54,6 +54,7 @@ const VOC_A: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 
@@ -73,6 +74,7 @@ const VOC_B: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 

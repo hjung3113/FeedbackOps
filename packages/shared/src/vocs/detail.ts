@@ -5,7 +5,9 @@ import { LinkedAttachmentSchema } from './attachment.js';
 import { conversationEntrySchema } from './conversation.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
 
-export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
+// Postponement is a list-only projection; preserve the existing detail read surface.
+const vocDetailBaseSchema = vocListItemSchema.omit({ review_postponed_at: true });
+export const vocDetailEnvelopeSchema = vocDetailBaseSchema.extend({
   // The capped peer preview uses the same authorized peer set as similar_count.
   // similar_count remains the sole total; this array is intentionally not paginated.
   similar: z

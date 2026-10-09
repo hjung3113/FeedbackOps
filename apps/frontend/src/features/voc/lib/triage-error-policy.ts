@@ -6,6 +6,7 @@
 
 import { ApiError } from '@/lib/api';
 import { formatRetryAfter, rateLimitedMessage } from '@/lib/copy/rate-limit';
+import { VOC_POSTPONE_INVALID_STATE_LABEL } from '@/lib/copy/voc-views';
 
 export type TriageToast = { level: 'warning' | 'error'; message: string };
 
@@ -25,6 +26,29 @@ export interface TriageMutationDecision {
  */
 export function classifyTriageMutationError(err: unknown): TriageMutationDecision {
   if (err instanceof ApiError) {
+    const fields = err.detail?.fields;
+    if (
+      err.status === 422 &&
+      err.code === 'validation.failed' &&
+      Array.isArray(fields) &&
+      fields.some(
+        (field: unknown) =>
+          field !== null &&
+          typeof field === 'object' &&
+          'path' in field &&
+          Array.isArray(field.path) &&
+          field.path.length === 1 &&
+          field.path[0] === 'postpone_review' &&
+          'code' in field &&
+          field.code === 'invalid_state',
+      )
+    ) {
+      return {
+        restore: true,
+        lockPanel: false,
+        toast: { level: 'error', message: VOC_POSTPONE_INVALID_STATE_LABEL },
+      };
+    }
     switch (err.code) {
       case 'conflict.stale_write':
         return {

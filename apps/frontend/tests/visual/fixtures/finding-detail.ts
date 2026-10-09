@@ -127,6 +127,7 @@ export const findingSourceVoc = vocDetailEnvelopeSchema.parse({
   severity: 'high',
   reporter_facing_status: 'received',
   triage_state: 'untriaged',
+  review_postponed_at: null,
   source_context: 'direct_use',
   created_at: dates.voc,
   updated_at: dates.voc,

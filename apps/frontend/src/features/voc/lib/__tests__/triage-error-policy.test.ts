@@ -21,3 +21,12 @@ describe('classifyTriageMutationError — rate_limited.actor', () => {
     expect(classifyTriageMutationError(err).toast.message).toEqual(expected);
   });
 });
+
+it('maps postpone_review invalid_state to an actionable state message', () => {
+  const err = new ApiError(422, {
+    code: 'validation.failed',
+    message: 'invalid state',
+    detail: { fields: [{ path: ['postpone_review'], code: 'invalid_state' }] },
+  });
+  expect(classifyTriageMutationError(err).toast.message).toBe('미분류 VOC만 보류할 수 있습니다.');
+});
