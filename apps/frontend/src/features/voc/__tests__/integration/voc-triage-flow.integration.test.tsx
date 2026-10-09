@@ -707,6 +707,134 @@ describe('Triage flow — integration (C6.3)', () => {
     }
   });
 
+  it('946 FIX1 F1: an older late failure preserves the newer mark and archived exclusion', async () => {
+    const { toast } = await import('sonner');
+    const requests: Array<(response: Response) => void> = [];
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => requests.push(resolve))
+        : Promise.resolve(jsonResponse({ items: [] })),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen() {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const view = render(<SelectedScreen />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    const host = renderCapturedToast(view.baseElement);
+    try {
+      await act(async () => {
+        const undo = host?.querySelector('button');
+        if (!undo) throw new Error('Undo missing');
+        fireEvent.click(undo);
+      });
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /VOC-I-001/ })));
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+      expect(requests).toHaveLength(2);
+      await act(async () => requests[0]?.(jsonResponse({ code: 'conflict.stale_write' }, 409)));
+      const row = screen.getByRole('button', { name: /VOC-I-001/ });
+      expect(within(row).getByText('보류')).toBeInTheDocument();
+      expect(row).toHaveAccessibleDescription(/보류/);
+      await act(async () => requests[1]?.(jsonResponse({ code: 'conflict.record_archived' }, 409)));
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+      );
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith('이 항목은 보관되어 변경할 수 없습니다.');
+    } finally {
+      unmountCapturedToast(host);
+    }
+  });
+
+  it('946 FIX1 F2: archived mark excludes the current row after its panel unmounts', async () => {
+    const { toast } = await import('sonner');
+    let resolveForward: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => {
+            resolveForward = resolve;
+          })
+        : Promise.reject(new Error('refresh unavailable')),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen({ items }: { items: VocListItem[] }) {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={items}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const view = render(<SelectedScreen items={MOCK_VOCS} />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    view.rerender(<SelectedScreen items={MOCK_VOCS.slice(1)} />);
+    expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument();
+    view.rerender(<SelectedScreen items={[]} />);
+    expect(screen.queryByRole('button', { name: '보류' })).not.toBeInTheDocument();
+    view.rerender(<SelectedScreen items={MOCK_VOCS} />);
+    expect(screen.getByRole('button', { name: /VOC-I-001/ })).toBeInTheDocument();
+    await act(async () => resolveForward(jsonResponse({ code: 'conflict.record_archived' }, 409)));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('이 항목은 보관되어 변경할 수 없습니다.');
+  });
+
+  it('946 FIX1 F3: archived mark keeps selection on the advanced VOC', async () => {
+    let resolveForward: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => {
+            resolveForward = resolve;
+          })
+        : Promise.resolve(jsonResponse({ items: [] })),
+    ) as typeof globalThis.fetch;
+    const onSelectVoc = vi.fn();
+    const Wrapper = makeWrapper();
+    function SelectedScreen() {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={(id) => {
+            onSelectVoc(id);
+            setSelectedId(id);
+          }}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    render(<SelectedScreen />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    expect(onSelectVoc).toHaveBeenLastCalledWith('voc-int-0002');
+    await act(async () => resolveForward(jsonResponse({ code: 'conflict.parent_archived' }, 409)));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+    );
+    expect(onSelectVoc).toHaveBeenLastCalledWith('voc-int-0002');
+    expect(onSelectVoc).not.toHaveBeenCalledWith(FIRST_VOC_ID);
+    expect(screen.getByRole('button', { name: /VOC-I-002/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
   it.each(['conflict.record_archived', 'conflict.parent_archived'])(
     '946: failed mark with %s excludes the archived row',
     async (code) => {

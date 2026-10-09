@@ -40,6 +40,7 @@ import {
 } from '@/lib/copy/voc-views';
 import { formatDate } from '@/lib/format/datetime';
 import type { TriageQueueOutcome } from '../../hooks/useTriageQueue';
+import type { TriageInput } from '../../lib/triage-types';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -69,8 +70,8 @@ export interface TriagePanelProps {
    * C3.2: Optimistic remove — called synchronously on confirm/finding/skip
    * so the queue filters this VOC out immediately.
    */
-  onOptimisticRemove?: (vocId: string) => void;
-  onOptimisticPostpone?: (vocId: string) => void;
+  onOptimisticRemove?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticPostpone?: (vocId: string, input?: TriageInput) => void;
   /** Count only successfully committed actions in the mounted screen session. */
   onProcessed?: (delta: 1 | -1) => void;
   /**
@@ -78,9 +79,9 @@ export interface TriagePanelProps {
    * the queue (stale_write, rate_limited, permission.denied paths).
    */
   onMutationFailure?: (vocId: string) => void;
-  onQueueOutcome?: (vocId: string, outcome: TriageQueueOutcome) => void;
-  onOptimisticRollback?: (vocId: string) => void;
-  onOptimisticRestore?: (vocId: string) => void;
+  onQueueOutcome?: (input: TriageInput, outcome: TriageQueueOutcome) => void;
+  onOptimisticRollback?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticRestore?: (vocId: string, input?: TriageInput) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
