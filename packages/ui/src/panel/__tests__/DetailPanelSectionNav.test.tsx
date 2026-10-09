@@ -777,6 +777,54 @@ describe('DetailPanelSectionNav', () => {
     },
   );
 
+  it('releases a stalled jump 700ms after its last pulse, then re-ranks past that landing', () => {
+    // Target is 400 and the max scroll is 1800, so 120 is part-way: one pulse arms the
+    // stall net and neither the clamp nor scrollend can release it. 699ms is still the
+    // jump. The next millisecond records 120, and only a later scroll more than 1px
+    // away ranks the topmost intersecting anchor.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor, scrollEl } = renderNavOverAnchors(
+        ['alpha', 'beta'],
+        { alpha: 12, beta: 400 },
+        { rootTop: 0, rootHeight: 200, scrollTop: 0 },
+      );
+      setScrollRange(scrollEl, 2000, 200);
+
+      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+
+      scrollEl.scrollTop = 120;
+      act(() => {
+        fireEvent.scroll(scrollEl);
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(699);
+      });
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), true, 400)]);
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+
+      scrollEl.scrollTop = 100;
+      act(() => {
+        fireEvent.scroll(scrollEl);
+      });
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('releases the jump guard when the scroll stops at its maximum short of the target', () => {
     // Target is 900. The root clamps at 260, so 258 is still short and 259 is within 1px.
     vi.useFakeTimers();
