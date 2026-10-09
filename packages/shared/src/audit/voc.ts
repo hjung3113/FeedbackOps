@@ -74,10 +74,9 @@ const ownerRefSchema = z
     user_id: uuid().nullable(),
     team_id: uuid().nullable(),
   })
-  .refine(
-    (r) => !(r.user_id && r.team_id),
-    { message: 'owner XOR: user_id and team_id cannot both be set' },
-  );
+  .refine((r) => !(r.user_id && r.team_id), {
+    message: 'owner XOR: user_id and team_id cannot both be set',
+  });
 
 export const vocOwnerAssignedDetailSchema = z
   .object({
@@ -85,10 +84,9 @@ export const vocOwnerAssignedDetailSchema = z
     from: ownerRefSchema,
     to: ownerRefSchema,
   })
-  .refine(
-    (d) => !(d.from.user_id === d.to.user_id && d.from.team_id === d.to.team_id),
-    { message: 'owner assignment must change at least one of user_id / team_id' },
-  );
+  .refine((d) => !(d.from.user_id === d.to.user_id && d.from.team_id === d.to.team_id), {
+    message: 'owner assignment must change at least one of user_id / team_id',
+  });
 export type VocOwnerAssignedDetail = z.infer<typeof vocOwnerAssignedDetailSchema>;
 
 // ── voc_analytics_area_linked ──────────────────────────────────────────────
@@ -98,7 +96,9 @@ export const vocAnalyticsAreaLinkedDetailSchema = z
     from: uuid().nullable(),
     to: uuid().nullable(),
   })
-  .refine((d) => d.from !== d.to, { message: 'analytics_area_linked must record an actual change' });
+  .refine((d) => d.from !== d.to, {
+    message: 'analytics_area_linked must record an actual change',
+  });
 export type VocAnalyticsAreaLinkedDetail = z.infer<typeof vocAnalyticsAreaLinkedDetailSchema>;
 
 // ── voc_cluster_decision_recorded ─────────────────────────────────────────
@@ -121,9 +121,10 @@ export const publicUpdateCreatedDetailSchema = z
     skip_reason: z.string().nullable(),
   })
   .refine(
-    (d) => d.skip_public_update
-      ? typeof d.skip_reason === 'string' && d.skip_reason.trim().length >= 8
-      : d.skip_reason === null,
+    (d) =>
+      d.skip_public_update
+        ? typeof d.skip_reason === 'string' && d.skip_reason.trim().length >= 8
+        : d.skip_reason === null,
     { message: 'skip_reason must be null when skip=false, >=8 trimmed chars when skip=true' },
   );
 export type PublicUpdateCreatedDetail = z.infer<typeof publicUpdateCreatedDetailSchema>;
@@ -166,6 +167,17 @@ export const vocTriagePostponedDetailSchema = z.object({
 });
 export type VocTriagePostponedDetail = z.infer<typeof vocTriagePostponedDetailSchema>;
 
+// ── voc_triage_postpone_cleared ────────────────────────────────────────────
+// Emitted when `postpone_review: false` clears a set
+// `triage_state_review_postponed_at` on an untriaged VOC. Same detail shape
+// as `voc_triage_postponed`. A false flag on a VOC that is not postponed
+// writes no row.
+export const vocTriagePostponeClearedDetailSchema = z.object({
+  voc_id: uuid(),
+  actor_id: uuid(),
+});
+export type VocTriagePostponeClearedDetail = z.infer<typeof vocTriagePostponeClearedDetailSchema>;
+
 // ── voc_description_edited ─────────────────────────────────────────────────
 // Emitted by PATCH /vocs/:id/description (Slice 3 #17) when the Reporter
 // makes an actual diff (non-empty changes object). Per-key types are
@@ -189,20 +201,16 @@ const attachmentsDeltaSchema = z.object({
   to: z.array(attachmentRefSchema),
 });
 
-export const vocDescriptionEditedDetailSchema = z
-  .object({
-    voc_id: uuid(),
-    changes: z
-      .object({
-        title: stringChangeSchema.optional(),
-        description_rich_content: richHashChangeSchema.optional(),
-        attachments: attachmentsDeltaSchema.optional(),
-      })
-      .refine(
-        (o) => Object.keys(o).length > 0,
-        { message: 'changes must be non-empty' },
-      ),
-  });
+export const vocDescriptionEditedDetailSchema = z.object({
+  voc_id: uuid(),
+  changes: z
+    .object({
+      title: stringChangeSchema.optional(),
+      description_rich_content: richHashChangeSchema.optional(),
+      attachments: attachmentsDeltaSchema.optional(),
+    })
+    .refine((o) => Object.keys(o).length > 0, { message: 'changes must be non-empty' }),
+});
 export type VocDescriptionEditedDetail = z.infer<typeof vocDescriptionEditedDetailSchema>;
 
 // ── public_update_review_candidate_created ────────────────────────────────
@@ -274,6 +282,7 @@ export const VOC_AUDIT_EVENT_TYPES = [
   'reporter_reply_created',
   'internal_comment_created',
   'voc_triage_postponed',
+  'voc_triage_postpone_cleared',
   'voc_description_edited',
 ] as const;
 
@@ -302,21 +311,16 @@ export const VOC_AUDIT_EVENT_DETAIL_SCHEMAS = {
   reporter_reply_created: reporterReplyCreatedDetailSchema,
   internal_comment_created: internalCommentCreatedDetailSchema,
   voc_triage_postponed: vocTriagePostponedDetailSchema,
+  voc_triage_postpone_cleared: vocTriagePostponeClearedDetailSchema,
   voc_description_edited: vocDescriptionEditedDetailSchema,
 } as const satisfies Record<(typeof VOC_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const VOC_REVIEW_CANDIDATE_AUDIT_EVENT_DETAIL_SCHEMAS = {
   public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
-} as const satisfies Record<
-  (typeof VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const VOC_RECOMMENDATION_AUDIT_EVENT_DETAIL_SCHEMAS = {
   voc_recommendation_dismissed: vocRecommendationDismissedDetailSchema,
   voc_recommendation_confirmed: vocRecommendationConfirmedDetailSchema,
-} as const satisfies Record<
-  (typeof VOC_RECOMMENDATION_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof VOC_RECOMMENDATION_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

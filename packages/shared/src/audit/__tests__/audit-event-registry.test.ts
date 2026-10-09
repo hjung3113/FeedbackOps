@@ -40,6 +40,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'reporter_reply_created',
   'internal_comment_created',
   'voc_triage_postponed',
+  'voc_triage_postpone_cleared',
   'voc_description_edited',
   'attachment_uploaded',
   'entity_link.created',
@@ -95,7 +96,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(75);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(76);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

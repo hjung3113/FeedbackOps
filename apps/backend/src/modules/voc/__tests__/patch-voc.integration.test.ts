@@ -283,7 +283,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
             'managed_system_registered','managed_system_updated','managed_system_archived',
             'analytics_area_registered','analytics_area_updated','analytics_area_archived',
             'voc_created','voc_triage_committed','voc_severity_set','voc_owner_assigned',
-            'voc_analytics_area_linked','voc_triage_postponed'
+            'voc_analytics_area_linked','voc_triage_postponed','voc_triage_postpone_cleared'
           )
           and subject_id in (
             select id from voc.vocs
@@ -974,6 +974,254 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       [voc.id],
     );
     expect(afterTriage.rows[0]?.postponed_at).toBeNull();
+  });
+
+  // ── 10d. postpone_review: false clears a postponed untriaged review (#921) ──
+  it('PATCH { postpone_review: false } after postpone clears postponed_at and tab=waiting', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-undo', 'Postpone Undo MS');
+    const aaId = await createAa(app, admin, {
+      managed_system_id: msId,
+      slug: 'aa-postpone-undo',
+      name: 'AA Postpone Undo',
+    });
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    const postponed = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(postponed.statusCode).toBe(200);
+    const afterPostpone = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(afterPostpone.rows[0]?.postponed_at).not.toBeNull();
+
+    const waitingUrl = `/vocs?view=triage&tab=waiting&managed_system_id=${msId}`;
+    const waitingBefore = await app.inject({
+      method: 'GET',
+      url: waitingUrl,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}` },
+    });
+    expect(waitingBefore.statusCode).toBe(200);
+    expect(
+      (waitingBefore.json() as { items: { id: string }[] }).items.map((item) => item.id),
+    ).toContain(voc.id);
+
+    const typesBefore = await getAuditTypes(voc.id);
+    const cleared = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      {
+        postpone_review: false,
+        severity: 'low',
+        owner_user_id: adminActorId,
+        analytics_area_id: aaId,
+      },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: (postponed.json() as { updated_at: string }).updated_at,
+      },
+    );
+    expect(cleared.statusCode).toBe(200);
+    const clearedBody = cleared.json() as {
+      triage_state: string;
+      severity: string | null;
+      owner_user_id: string | null;
+      analytics_area_id: string | null;
+    };
+    expect(clearedBody.triage_state).toBe('untriaged');
+    expect(clearedBody.severity).toBe('low');
+    expect(clearedBody.owner_user_id).toBe(adminActorId);
+    expect(clearedBody.analytics_area_id).toBe(aaId);
+
+    const afterClear = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(afterClear.rows[0]?.postponed_at).toBeNull();
+
+    const waitingAfter = await app.inject({
+      method: 'GET',
+      url: waitingUrl,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}` },
+    });
+    expect(waitingAfter.statusCode).toBe(200);
+    expect(
+      (waitingAfter.json() as { items: { id: string }[] }).items.map((item) => item.id),
+    ).not.toContain(voc.id);
+
+    if (MIGRATE_URL) {
+      const typesAfter = await getAuditTypes(voc.id);
+      expect(typesAfter.filter((t) => t === 'voc_triage_postpone_cleared')).toHaveLength(1);
+      expect(typesAfter.length).toBe(typesBefore.length + 4);
+      expect(typesAfter.filter((t) => t === 'voc_severity_set')).toHaveLength(1);
+      expect(typesAfter.filter((t) => t === 'voc_owner_assigned')).toHaveLength(1);
+      expect(typesAfter.filter((t) => t === 'voc_analytics_area_linked')).toHaveLength(1);
+    }
+  });
+
+  // ── 10d2. the exact Triage skip-undo body clears a postpone ──────────────
+  it('PATCH { postpone_review: false } alone clears a postponed review with one audit row', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-undo-only', 'Postpone Undo Only MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    const postponed = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(postponed.statusCode).toBe(200);
+    const typesBefore = await getAuditTypes(voc.id);
+
+    const cleared = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: false },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: (postponed.json() as { updated_at: string }).updated_at,
+      },
+    );
+    expect(cleared.statusCode).toBe(200);
+    const afterClear = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(afterClear.rows[0]?.postponed_at).toBeNull();
+    if (MIGRATE_URL) {
+      const typesAfter = await getAuditTypes(voc.id);
+      expect(typesAfter.length).toBe(typesBefore.length + 1);
+      expect(typesAfter.filter((t) => t === 'voc_triage_postpone_cleared')).toHaveLength(1);
+    }
+  });
+
+  // ── 10e. postpone_review: false on a VOC that is not postponed ──────────
+  it('PATCH { postpone_review: false } on a non-postponed VOC writes no postpone audit and applies other fields', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-noop', 'Postpone Noop MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    const typesBefore = await getAuditTypes(voc.id);
+
+    const res = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: false, severity: 'low' },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { severity: string | null }).severity).toBe('low');
+
+    const row = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(row.rows[0]?.postponed_at).toBeNull();
+
+    if (MIGRATE_URL) {
+      const typesAfter = await getAuditTypes(voc.id);
+      expect(typesAfter).not.toContain('voc_triage_postponed');
+      expect(typesAfter).not.toContain('voc_triage_postpone_cleared');
+      expect(typesAfter.filter((t) => t === 'voc_severity_set')).toHaveLength(1);
+      expect(typesAfter.length).toBe(typesBefore.length + 1);
+    }
+  });
+
+  // ── 10f. postpone_review: false + triage_state stays validation.failed ──
+  it('PATCH { postpone_review: false, triage_state: triaged } → 422 validation.failed', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(
+      app,
+      admin,
+      'it-patch-postpone-false-mutex',
+      'Postpone False Mutex MS',
+    );
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    const res = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: false, triage_state: 'triaged' },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('validation.failed');
+  });
+
+  // ── 10g. postpone_review: false uses the same voc.triage check as true ──
+  it('developer without voc.triage gets the same error for postpone_review false as for true', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-perm', 'Postpone Perm MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    const { externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `921-perm-${randomUUID().slice(0, 8)}`,
+    );
+    const devCookie = await loginAs(app, externalId);
+
+    const postponed = await patchVoc(
+      app,
+      devCookie,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    const cleared = await patchVoc(
+      app,
+      devCookie,
+      voc.id,
+      { postpone_review: false },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+
+    expect(postponed.statusCode).toBe(403);
+    expect(cleared.statusCode).toBe(403);
+    expect(cleared.json().code).toBe(postponed.json().code);
+    expect(cleared.json().code).toBe('permission.scope_required');
+    expect(cleared.json().detail.requiredScope).toEqual([msId]);
+    expect(cleared.json().requestable_permission.permission).toBe('voc.triage');
   });
 
   // ── 11. Owner mutex: both owner_user_id + owner_team_id → 422 ──────────
