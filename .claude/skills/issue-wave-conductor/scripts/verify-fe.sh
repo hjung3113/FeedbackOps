@@ -1,6 +1,7 @@
 #!/bin/bash
 # verify-fe.sh <worktree> — FE host checks (Node 22): full vitest (+packages/ui if touched), FE typecheck gate, root typecheck,
-# boundaries + fixture test, design-system lint cap, backend tsc. Logs in $WAVE_STATE/verify-<basename>/. Prints a summary.
+# boundaries + fixture test, design-system lint cap, backend tsc, worker hygiene (no new biome-ignore). Logs in $WAVE_STATE/verify-<basename>/. Prints a summary.
+here=$(cd "$(dirname "$0")" && pwd)
 : "${WAVE_STATE:?set WAVE_STATE}"; wt=$1; log=$WAVE_STATE/verify-$(basename "$wt"); mkdir -p "$log"
 export PATH=/opt/homebrew/opt/node@22/bin:$PATH; cd "$wt" || exit 2
 first_failure=0
@@ -31,9 +32,11 @@ run_check boundaries "$log/boundaries.log" node scripts/check-boundaries.mjs
 run_check design-lint "$log/design-lint.log" pnpm -s lint:design
 run_check boundaries-test "$log/boundaries-test.log" node scripts/check-boundaries.test.mjs
 run_check be-tsc "$log/be-tsc.log" pnpm --filter @fops/backend exec tsc --noEmit
+run_check worker-hygiene "$log/worker-hygiene.log" bash "$here/worker-hygiene.sh" "$wt"
 print_summary > "$log/summary.txt"
 grep -E "Test Files|Tests " "$log/vitest.log" | tail -2 >> "$log/summary.txt"
 grep -E "FAIL " "$log/vitest.log" | sort -u | head -5 >> "$log/summary.txt"
 echo "be-tsc errors=$(grep -c 'error TS' "$log/be-tsc.log")" >> "$log/summary.txt"
+grep -v "^worker-hygiene: no new" "$log/worker-hygiene.log" >> "$log/summary.txt"
 cat "$log/summary.txt"
 exit "$first_failure"
