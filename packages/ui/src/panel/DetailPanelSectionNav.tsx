@@ -18,6 +18,8 @@
  * Sections flagged `overflow: true` render inside a trailing "더보기" dropdown instead of the
  * pinned strip (#519 — a deliberate deviation from the prototype, whose strip overflows a
  * 440px panel). With no flagged section the output is identical to the prototype strip.
+ *
+ * Mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root.
  */
 
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -99,6 +101,51 @@ function stickyCover(root: HTMLElement, header: HTMLElement | null): number {
   return Math.max(0, headerRect.bottom - root.getBoundingClientRect().top);
 }
 
+type JumpPhase = 'idle' | 'jumping' | 'awaiting-scroll';
+
+/** Stall net. It starts only once the jump's scroll moves, and restarts on each pulse. */
+const JUMP_SAFETY_MS = 700;
+const JUMP_END_EPSILON_PX = 1;
+
+interface JumpRelease {
+  root: HTMLElement;
+  onScroll: () => void;
+  onScrollEnd: () => void;
+  timeoutId: ReturnType<typeof setTimeout> | null;
+}
+
+interface RefBox<T> {
+  current: T;
+}
+
+function clearJumpRelease(release: JumpRelease | null): void {
+  if (!release) return;
+  if (release.timeoutId !== null) clearTimeout(release.timeoutId);
+  release.timeoutId = null;
+  release.root.removeEventListener('scroll', release.onScroll);
+  release.root.removeEventListener('scrollend', release.onScrollEnd);
+}
+
+/** Leave the jump and arm the next-scroll re-rank. No-op unless a jump is in progress. */
+function releaseJump(phaseRef: RefBox<JumpPhase>, releaseRef: RefBox<JumpRelease | null>): void {
+  if (phaseRef.current !== 'jumping') return;
+  clearJumpRelease(releaseRef.current);
+  releaseRef.current = null;
+  phaseRef.current = 'awaiting-scroll';
+}
+
+function scrollReachedJumpEnd(root: HTMLElement, targetTop: number): boolean {
+  const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+  const top = root.scrollTop;
+  if (Math.abs(top - targetTop) <= JUMP_END_EPSILON_PX) return true;
+  // Hitting the clamp is the end only when the target lies past it. A jump that
+  // starts at the bottom must still be able to scroll upward.
+  if (targetTop > maxScroll + JUMP_END_EPSILON_PX) {
+    return Math.abs(top - maxScroll) <= JUMP_END_EPSILON_PX;
+  }
+  return false;
+}
+
 export function DetailPanelSectionNav({
   sections,
   scrollRef,
@@ -108,9 +155,8 @@ export function DetailPanelSectionNav({
   const [activeSection, setActiveSection] = React.useState(firstSection);
   const navRef = React.useRef<HTMLDivElement>(null);
   const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
-  const programmaticRef = React.useRef(false);
-  const recomputeOnNextScrollRef = React.useRef(false);
-  const jumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpPhaseRef = React.useRef<JumpPhase>('idle');
+  const jumpReleaseRef = React.useRef<JumpRelease | null>(null);
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -138,7 +184,8 @@ export function DetailPanelSectionNav({
 
   React.useEffect(() => {
     return () => {
-      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
+      clearJumpRelease(jumpReleaseRef.current);
+      jumpReleaseRef.current = null;
     };
   }, []);
 
@@ -184,7 +231,8 @@ export function DetailPanelSectionNav({
     if (typeof IntersectionObserver === 'undefined') {
       // Same ranking as the observer: topmost anchor inside the top band, not nearest top.
       const updateActiveSection = () => {
-        if (programmaticRef.current) return;
+        if (jumpPhaseRef.current === 'jumping') return;
+        if (jumpPhaseRef.current === 'awaiting-scroll') jumpPhaseRef.current = 'idle';
         const rootRect = root.getBoundingClientRect();
         const id = topmostAnchor(anchors, (anchor) => inObserverTopBand(anchor, rootRect));
         if (id) setActiveSection(id);
@@ -213,7 +261,7 @@ export function DetailPanelSectionNav({
         for (const e of entries) {
           intersectionState.set(anchorId(e.target), e.isIntersecting);
         }
-        if (programmaticRef.current) return;
+        if (jumpPhaseRef.current === 'jumping') return;
         selectTopmostIntersecting();
       },
       { root, rootMargin: OBSERVER_ROOT_MARGIN, threshold: 0 },
@@ -221,8 +269,8 @@ export function DetailPanelSectionNav({
     // #876: do not recompute when the jump guard ends — that would drop a just-clicked lower
     // section. The next user scroll ranks the anchors that are intersecting now.
     const recomputeAfterJump = () => {
-      if (programmaticRef.current || !recomputeOnNextScrollRef.current) return;
-      recomputeOnNextScrollRef.current = false;
+      if (jumpPhaseRef.current !== 'awaiting-scroll') return;
+      jumpPhaseRef.current = 'idle';
       selectTopmostIntersecting();
     };
     for (const anchor of anchors) observer.observe(anchor);
@@ -239,21 +287,49 @@ export function DetailPanelSectionNav({
       const root = scrollRef?.current;
       const el = root?.querySelector<HTMLElement>(`[data-anchor="${id}"]`);
       if (!root || !el) return;
-      programmaticRef.current = true;
+
+      clearJumpRelease(jumpReleaseRef.current);
+      jumpReleaseRef.current = null;
+      jumpPhaseRef.current = 'jumping';
       setActiveSection(id);
       const rootRect = root.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       const cover = stickyCover(root, stickyHeaderRef.current);
-      root.scrollTo({
-        top: root.scrollTop + elRect.top - rootRect.top - cover,
-        behavior: 'smooth',
-      });
-      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
-      jumpTimeoutRef.current = setTimeout(() => {
-        jumpTimeoutRef.current = null;
-        programmaticRef.current = false;
-        recomputeOnNextScrollRef.current = true;
-      }, 700);
+      const originTop = root.scrollTop;
+      const targetTop = originTop + elRect.top - rootRect.top - cover;
+      // The 700ms net must not start at the click. A late smooth scroll (the #901 repro)
+      // consumes a click-timed guard before the first pixel moves.
+      const release: JumpRelease = {
+        root,
+        timeoutId: null,
+        onScroll: () => {},
+        onScrollEnd: () => {
+          releaseJump(jumpPhaseRef, jumpReleaseRef);
+        },
+      };
+      release.onScroll = () => {
+        if (jumpPhaseRef.current !== 'jumping') return;
+        if (root.scrollTop === originTop) return;
+        if (scrollReachedJumpEnd(root, targetTop)) {
+          releaseJump(jumpPhaseRef, jumpReleaseRef);
+          return;
+        }
+        if (release.timeoutId !== null) clearTimeout(release.timeoutId);
+        release.timeoutId = setTimeout(() => {
+          if (jumpReleaseRef.current !== release) return;
+          releaseJump(jumpPhaseRef, jumpReleaseRef);
+        }, JUMP_SAFETY_MS);
+      };
+      jumpReleaseRef.current = release;
+      root.addEventListener('scroll', release.onScroll, { passive: true });
+      root.addEventListener('scrollend', release.onScrollEnd);
+      root.scrollTo({ top: targetTop, behavior: 'smooth' });
+      if (
+        jumpPhaseRef.current === 'jumping' &&
+        Math.abs(root.scrollTop - targetTop) <= JUMP_END_EPSILON_PX
+      ) {
+        releaseJump(jumpPhaseRef, jumpReleaseRef);
+      }
     },
     [revealSection, scrollRef],
   );
@@ -278,6 +354,7 @@ export function DetailPanelSectionNav({
     <TooltipProvider delayDuration={400}>
       <div
         ref={stickyHeaderRef}
+        data-testid="detail-panel-section-nav-strip"
         className={cn(
           // .panel-section-nav: sticky, flex, horizontal, borderBottom, overflow-x scroll, no scrollbar
           'sticky top-0 z-10 flex items-center gap-0',
