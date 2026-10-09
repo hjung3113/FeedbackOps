@@ -326,7 +326,7 @@ Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
    Undo invalidates the triage list queries, and successful compensation invalidates them again after restoring the original ID. Successful compensation decrements the session counter once; undo before success is never counted.
    Failed compensation (detail refetch failure or compensating PATCH rejection) discards the marker override and invalidates the triage lists so the server decides the marker. Exclusions are unchanged: undo after settle keeps its exclusion until the existing context/settled-read expiry rules retire it; in-flight undo or preemption already restored the row, so server reads decide visibility without a new exclusion. Existing failure toasts fire once.
    Once a command's lifecycle has ended (forward failure, compensation success or failure), no local override for that VOC outlives the next settled server read.
-   The compensating PATCH keeps the prior values, uses the forward response's `updated_at` as `If-Match`, and uses a fresh `Idempotency-Key`.
+   The compensating PATCH keeps the prior `triage_state`, severity, owner, and Analytics Area values, uses the forward response's `updated_at` as `If-Match`, and uses a fresh `Idempotency-Key`.
 
 **Idempotency key rules** (per ADR-0015 §Idempotency):
 - One key per logical user-intent batch. Generating a fresh key on undo prevents the dedupe layer from returning the cached confirm response when the user intends a different write.
