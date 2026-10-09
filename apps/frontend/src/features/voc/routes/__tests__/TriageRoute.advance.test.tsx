@@ -307,7 +307,9 @@ it.each(['dismiss', 'create'])(
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     await waitFor(() => expect(router.state.location.search.selected).toBe(third.id));
     if (action === 'dismiss') {
-      fireEvent.click(within(dialog).getByRole('button', { name: '취소' }));
+      const cancel = within(dialog).getByRole('button', { name: '취소' });
+      fireEvent.pointerDown(cancel);
+      fireEvent.click(cancel);
       await waitFor(() => expect(screen.getByRole('button', { name: /VOC-3/ })).toHaveFocus());
     } else {
       const focus = vi.spyOn(screen.getByRole('button', { name: /VOC-3/, hidden: true }), 'focus');

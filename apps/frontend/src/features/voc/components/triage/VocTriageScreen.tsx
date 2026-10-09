@@ -293,8 +293,10 @@ export function VocTriageScreen({
         lastScreenFocus.current = event.target;
       }}
       onPointerDownCapture={() => {
+        // Only an armed undo restore yields to a pointer; a Finding-deferred advance
+        // (the modal is a React descendant via its portal) must survive its dismissal.
         releaseRestoreFocus.current?.();
-        setPendingFocus(null);
+        setPendingFocus((current) => (current?.restore ? null : current));
       }}
     >
       {/* Toolbar: kicker (V1 inline identity) + title + tab strip */}
