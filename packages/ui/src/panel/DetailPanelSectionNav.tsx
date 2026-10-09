@@ -53,7 +53,7 @@ export interface DetailPanelSectionNavProps {
   className?: string;
 }
 
-/** Observer rootMargin: the bottom 66% is outside the band, leaving the top 34%. */
+/** Bottom rootMargin fraction. Percentage margins resolve against root width, not height. */
 const OBSERVER_BOTTOM_MARGIN = 0.66;
 const OBSERVER_ROOT_MARGIN = '0px 0px -66% 0px';
 
@@ -80,7 +80,13 @@ function topmostAnchor(
 }
 
 function inObserverTopBand(anchor: HTMLElement, rootRect: DOMRect): boolean {
-  const bandBottom = rootRect.top + rootRect.height * (1 - OBSERVER_BOTTOM_MARGIN);
+  // Intersection Observer resolves a percentage rootMargin against the root's width,
+  // so `-66%` ends the band at rootBottom - 0.66 * width, not 34% of the height.
+  // Floor at rootTop so a short, wide root cannot push the band above the root.
+  const bandBottom = Math.max(
+    rootRect.top,
+    rootRect.bottom - OBSERVER_BOTTOM_MARGIN * rootRect.width,
+  );
   const box = anchor.getBoundingClientRect();
   return box.bottom > rootRect.top && box.top < bandBottom;
 }
@@ -104,6 +110,7 @@ export function DetailPanelSectionNav({
   const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
   const programmaticRef = React.useRef(false);
   const recomputeOnNextScrollRef = React.useRef(false);
+  const jumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -128,6 +135,12 @@ export function DetailPanelSectionNav({
   React.useEffect(() => {
     setActiveSection(firstSection);
   }, [firstSection, sectionKey]);
+
+  React.useEffect(() => {
+    return () => {
+      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
+    };
+  }, []);
 
   const updateAnchorScrollMargins = React.useCallback(() => {
     const root = scrollRef?.current;
@@ -235,7 +248,9 @@ export function DetailPanelSectionNav({
         top: root.scrollTop + elRect.top - rootRect.top - cover,
         behavior: 'smooth',
       });
-      setTimeout(() => {
+      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
+      jumpTimeoutRef.current = setTimeout(() => {
+        jumpTimeoutRef.current = null;
         programmaticRef.current = false;
         recomputeOnNextScrollRef.current = true;
       }, 700);
@@ -350,9 +365,6 @@ export function DetailPanelSectionNav({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                {...(overflowed.some((s) => activeSection === s.id)
-                  ? { 'aria-current': 'true' as const }
-                  : {})}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-2.5 py-1.5',
                   'border-0 border-b-2 bg-transparent cursor-pointer',
@@ -368,22 +380,26 @@ export function DetailPanelSectionNav({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              {overflowed.map((s) => (
-                <DropdownMenuItem
-                  key={s.id}
-                  onSelect={() => {
-                    scrollTo(s.id);
-                  }}
-                  {...(activeSection === s.id ? { 'aria-current': 'true' as const } : {})}
-                >
-                  {s.label}
-                  {s.count !== undefined && (
-                    <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-caption leading-body">
-                      {s.count}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {overflowed.map((s) => {
+                const isCurrent = activeSection === s.id;
+                return (
+                  <DropdownMenuItem
+                    key={s.id}
+                    onSelect={() => {
+                      scrollTo(s.id);
+                    }}
+                    {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
+                    {...(isCurrent ? { className: 'font-medium text-text-primary' } : {})}
+                  >
+                    {s.label}
+                    {s.count !== undefined && (
+                      <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-caption leading-body">
+                        {s.count}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

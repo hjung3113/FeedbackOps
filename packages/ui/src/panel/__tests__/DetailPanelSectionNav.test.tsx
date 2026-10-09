@@ -311,13 +311,14 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
 
     expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: /더보기/ })).toHaveAttribute('aria-current', 'true');
+    const more = screen.getByRole('button', { name: /더보기/ });
+    expect(more).not.toHaveAttribute('aria-current');
+    expect(more).toHaveClass('border-accent-primary', 'text-text-primary');
     expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
     fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: 'Details' })).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
+    const currentItem = screen.getByRole('menuitem', { name: 'Details' });
+    expect(currentItem).toHaveAttribute('aria-current', 'true');
+    expect(currentItem).toHaveClass('font-medium', 'text-text-primary');
     document.body.removeChild(scrollEl);
   });
 
@@ -379,7 +380,9 @@ describe('DetailPanelSectionNav', () => {
       anchors.set(section.id, anchor);
       scrollEl.append(anchor);
     }
-    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+    // Height 100: the default rect height is 24, and 0.66 * this root's width (100)
+    // would floor the band at the root top and drop Properties at y=100.
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 100, 100, 100));
     document.body.append(scrollEl);
 
     render(
@@ -650,10 +653,47 @@ describe('DetailPanelSectionNav', () => {
     }
   });
 
+  it('holds the later jump until its own guard ends, then recomputes on the next scroll', () => {
+    // Beta at 0 ms, Gamma at 500 ms. The first timeout must not release the guard at 700 ms.
+    // Gamma stays current through a scroll then; the first scroll after 1200 ms recomputes.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor, scrollEl } = renderNavOverAnchors(['alpha', 'beta', 'gamma'], {
+        alpha: 12,
+        beta: 180,
+        gamma: 400,
+      });
+
+      observer.fire([
+        entry(anchor('alpha'), true, 12),
+        entry(anchor('beta'), false, 400),
+        entry(anchor('gamma'), false, 800),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      act(() => vi.advanceTimersByTime(500));
+      fireEvent.click(screen.getByRole('button', { name: 'Gamma' }));
+
+      act(() => vi.advanceTimersByTime(200));
+      act(() => fireEvent.scroll(scrollEl));
+      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
+
+      act(() => vi.advanceTimersByTime(500));
+      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
+      act(() => fireEvent.scroll(scrollEl));
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveAttribute('aria-current');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ranks the fallback by the same top band as the observer when abs() disagrees', () => {
-    // Root height 1000 → top band is y 0..340. alpha (top -40, height 80) and beta
-    // (top 30, height 80) both overlap it. abs(top - rootTop) picks beta (30 < 40);
-    // the topmost in-band anchor is alpha.
+    // Root is 400 wide by 1000 tall. A percentage rootMargin uses the width, so the
+    // band ends at 1000 - 0.66 * 400 = 736, not at 34% of the height (340). alpha
+    // (top -40, height 80) and beta (top 30, height 80) both overlap that band.
+    // abs(top - rootTop) picks beta (30 < 40); the topmost in-band anchor is alpha.
     const tops = { alpha: -40, beta: 30 };
     const layout = { rootTop: 0, rootHeight: 1000, anchorHeight: 80 };
 
@@ -669,6 +709,29 @@ describe('DetailPanelSectionNav', () => {
     cleanup();
     vi.stubGlobal('IntersectionObserver', undefined);
     renderNavOverAnchors(['alpha', 'beta'], tops, layout);
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('picks the same in-between anchor on a non-square root as the width-based observer band', () => {
+    // 400 × 1000. Height × 34% ends at 340; rootBottom - 0.66 × width ends at 736.
+    // Alpha at 400 is between those bottoms. Beta at 760 is below both and starts current.
+    const tops = { beta: 760, alpha: 400 };
+    const layout = { rootTop: 0, rootHeight: 1000 };
+
+    const observer = stubIntersectionObserver();
+    const observed = renderNavOverAnchors(['beta', 'alpha'], tops, layout);
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+    observer.fire([
+      entry(observed.anchor('alpha'), true, 400),
+      entry(observed.anchor('beta'), false, 760),
+    ]);
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+
+    cleanup();
+    vi.stubGlobal('IntersectionObserver', undefined);
+    renderNavOverAnchors(['beta', 'alpha'], tops, layout);
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
   });
