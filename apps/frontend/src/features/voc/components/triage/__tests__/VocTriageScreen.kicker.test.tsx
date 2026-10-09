@@ -114,8 +114,7 @@ describe('VocTriageScreen — V1 inline kicker', () => {
           selectedId={PINNED_OUT_OF_TAB_VOC.id}
           activeTab="unassigned"
           queueTotal={7}
-          unassignedTabCount={1}
-          highTabCount={3}
+          tabCounts={{ unassigned: 1, high: 3 }}
           onSelectVoc={vi.fn()}
           onTabChange={vi.fn()}
         />
@@ -125,6 +124,55 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(screen.getByRole('tab', { name: /미배정 1/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /높음 3/ })).toBeInTheDocument();
   });
+
+  it.each([
+    { tab: 'unassigned' as const, label: VOC_TRIAGE_TAB_LABELS.unassigned, count: 2 },
+    { tab: 'untriaged' as const, label: TRIAGE_STATE_LABELS.untriaged, count: 5 },
+    { tab: 'high' as const, label: VOC_TRIAGE_TAB_LABELS.high, count: 1 },
+    { tab: 'waiting' as const, label: '보류', count: 4 },
+  ])(
+    'shows the $tab count and no badge when that tab is absent from tabCounts',
+    ({ tab, label, count }) => {
+      const supplied = {
+        unassigned: 2,
+        untriaged: 5,
+        high: 1,
+        waiting: 4,
+      };
+      const { [tab]: _omitted, ...absent } = supplied;
+      const { unmount } = render(
+        <Wrapper>
+          <VocTriageScreen
+            items={[MOCK_VOC]}
+            selectedId={MOCK_VOC.id}
+            activeTab="unassigned"
+            tabCounts={supplied}
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+
+      expect(
+        screen.getByRole('tab', { name: new RegExp(`${label} ${count}`) }),
+      ).toBeInTheDocument();
+      unmount();
+
+      render(
+        <Wrapper>
+          <VocTriageScreen
+            items={[MOCK_VOC]}
+            selectedId={MOCK_VOC.id}
+            activeTab="unassigned"
+            tabCounts={absent}
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+      expect(screen.getByRole('tab', { name: label })).not.toHaveTextContent(/\d/);
+    },
+  );
 
   it('uses the shared untriaged label for the triage tab', () => {
     render(
