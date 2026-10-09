@@ -34,6 +34,8 @@ export interface VocTriageScreenProps {
   items: VocListItem[];
   selectedId: string | null;
   activeTab: TriageTab;
+  /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
+  queuePending?: boolean;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
   tabCounts?: Partial<Record<TriageTab, number>>;
@@ -57,6 +59,7 @@ export function VocTriageScreen({
   items,
   selectedId,
   activeTab,
+  queuePending,
   queueTotal,
   queueTotalUnavailableState,
   tabCounts,
@@ -159,13 +162,18 @@ export function VocTriageScreen({
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}
             onSelect={onSelectVoc}
+            {...(queuePending === true ? { queuePending } : {})}
+            {...(queueTotal !== undefined ? { queueTotal } : {})}
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
         </div>
 
         {/* Deep link target this queue cannot show (#383) — never silently
-            swap in another VOC's commit form. */}
-        {deepLinkTargetMissing && (
+            swap in another VOC's commit form. #922 FIX1: an uncached deep link
+            mounts with queuePending=true and empty items, which is not yet
+            evidence the target is missing — suppress the notice until the
+            queue request settles. */}
+        {deepLinkTargetMissing && queuePending !== true && (
           <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"

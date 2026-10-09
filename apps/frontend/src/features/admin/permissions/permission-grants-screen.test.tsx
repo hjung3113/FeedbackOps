@@ -314,8 +314,8 @@ describe('/admin/permissions/grants screen', () => {
     expect(deniesTab).not.toHaveTextContent('0');
 
     api.releaseLists();
-    await screen.findByRole('tab', { name: /권한 2/ });
-    expect(screen.getByRole('tab', { name: /차단 1/ })).toBeInTheDocument();
+    await screen.findByRole('tab', { name: /^권한\s*,\s*2$/ });
+    expect(screen.getByRole('tab', { name: /^차단\s*,\s*1$/ })).toBeInTheDocument();
   });
 
   test('keeps the failed list count unknown', async () => {
@@ -324,7 +324,7 @@ describe('/admin/permissions/grants screen', () => {
 
     await screen.findByText('활성 권한을 불러오지 못했습니다.');
     expect(screen.getByRole('tab', { name: '권한' })).not.toHaveTextContent('0');
-    expect(screen.getByRole('tab', { name: /차단 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^차단\s*,\s*1$/ })).toBeInTheDocument();
   });
 
   test('selecting a row writes selected to the URL', async () => {

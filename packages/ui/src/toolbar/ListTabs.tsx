@@ -176,9 +176,15 @@ export function ListTabs({
                       {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />}
                       {tab.label}
                       {tab.badgeCount !== undefined && (
-                        <span className="text-tiny text-text-muted tabular-nums group-data-[state=active]:text-text-secondary">
-                          {tab.badgeCount}
-                        </span>
+                        <>
+                          {/* #922: the bare count must not glue onto the label in the
+                              accessible name ("미분류2"); a visually hidden separator
+                              keeps the visual a bare number. */}
+                          <span className="sr-only">, </span>
+                          <span className="text-tiny text-text-muted tabular-nums group-data-[state=active]:text-text-secondary">
+                            {tab.badgeCount}
+                          </span>
+                        </>
                       )}
                     </TabsTrigger>
                   );

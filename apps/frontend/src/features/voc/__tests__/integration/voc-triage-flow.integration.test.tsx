@@ -594,12 +594,14 @@ describe('Triage flow — integration (C6.3)', () => {
 
         if (others.length === 0) {
           // Confirming the last row empties the queue and unmounts the panel
-          // while the PATCH is still in flight.
+          // while the PATCH is still in flight. The screen gets no queueTotal,
+          // so FIX1 renders the neutral tab-empty copy — not the whole-queue
+          // success claim.
           expect(
             screen.queryByRole('button', { name: /VOC-UNDO-TARGET/i }),
           ).not.toBeInTheDocument();
           expect(screen.queryByRole('button', { name: /triage 확정/i })).not.toBeInTheDocument();
-          expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
+          expect(screen.getByText('이 탭에 해당하는 VOC가 없습니다')).toBeInTheDocument();
         } else {
           expect(screen.getByRole('button', { name: /VOC-UNDO-OTHER/i })).toBeInTheDocument();
           expect(
