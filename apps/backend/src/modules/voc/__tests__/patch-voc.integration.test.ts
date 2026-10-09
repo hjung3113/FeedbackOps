@@ -1072,6 +1072,50 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
+  // ── 10d2. the exact Triage skip-undo body clears a postpone ──────────────
+  it('PATCH { postpone_review: false } alone clears a postponed review with one audit row', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-undo-only', 'Postpone Undo Only MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    const postponed = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(postponed.statusCode).toBe(200);
+    const typesBefore = await getAuditTypes(voc.id);
+
+    const cleared = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: false },
+      {
+        idempotencyKey: randomUUID(),
+        ifMatch: (postponed.json() as { updated_at: string }).updated_at,
+      },
+    );
+    expect(cleared.statusCode).toBe(200);
+    const afterClear = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      'select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(afterClear.rows[0]?.postponed_at).toBeNull();
+    if (MIGRATE_URL) {
+      const typesAfter = await getAuditTypes(voc.id);
+      expect(typesAfter.length).toBe(typesBefore.length + 1);
+      expect(typesAfter.filter((t) => t === 'voc_triage_postpone_cleared')).toHaveLength(1);
+    }
+  });
+
   // ── 10e. postpone_review: false on a VOC that is not postponed ──────────
   it('PATCH { postpone_review: false } on a non-postponed VOC writes no postpone audit and applies other fields', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
