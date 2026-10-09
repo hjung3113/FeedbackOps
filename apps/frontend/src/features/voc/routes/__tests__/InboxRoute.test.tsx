@@ -192,7 +192,7 @@ vi.mock('@tanstack/react-query', () => ({
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 import { Route as vocsRoute } from '@/routes/_authed/vocs';
-import { SEARCH_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
+import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS, useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
   const { list, detailPanel } = useInboxRoute(view);
@@ -671,20 +671,20 @@ describe('useInboxRoute', () => {
     searchState = route.options.validateSearch({ view: 'inbox' });
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
-    fireEvent.change(searchBox(), { target: { value: '로그인' } });
+    fireEvent.change(searchBox(), { target: { value: 'login' } });
 
-    // 300 ms debounce: the URL write carries q with replace: true.
+    // The URL write carries q with replace: true.
     await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     const navigation = lastNavigateSearch();
     expect(navigation.to).toBe('/vocs');
     expect(navigation.replace).toBe(true);
     const nextSearch = navigation.search(searchState);
-    expect(nextSearch.q).toBe('로그인');
+    expect(nextSearch.q).toBe('login');
 
     // The URL q is valid route state and drives the request.
     expect(route.options.validateSearch(nextSearch)).toEqual({
       view: 'inbox',
-      q: '로그인',
+      q: 'login',
     });
     searchState = nextSearch;
     rerender(<InboxTestHarness view="inbox" />);
@@ -692,7 +692,7 @@ describe('useInboxRoute', () => {
     const url = await lastListRequestUrl();
     const parsed = parseVocsQuery(url);
     expect(parsed.data?.view).toBe('inbox');
-    expect(parsed.data?.q).toBe('로그인');
+    expect(parsed.data?.q).toBe('login');
     // Owner decision: a search covers the whole inbox, so the default tab is not sent.
     expect(parsed.data?.tab).toBeUndefined();
   });
@@ -703,16 +703,16 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox', tab: 'high' };
     const { rerender } = render(<InboxTestHarness view="inbox" />);
 
-    fireEvent.change(searchBox(), { target: { value: '로그인' } });
+    fireEvent.change(searchBox(), { target: { value: 'login' } });
     await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     const searching = lastNavigateSearch().search(searchState);
-    expect(searching).toEqual({ view: 'inbox', q: '로그인' });
+    expect(searching).toEqual({ view: 'inbox', q: 'login' });
 
     searchState = searching;
     rerender(<InboxTestHarness view="inbox" />);
     const parsed = parseVocsQuery(await lastListRequestUrl());
     expect(parsed.data?.tab).toBeUndefined();
-    expect(parsed.data?.q).toBe('로그인');
+    expect(parsed.data?.q).toBe('login');
     for (const tab of screen.getAllByRole('tab')) {
       expect(tab).toHaveAttribute('aria-selected', 'false');
     }
@@ -812,20 +812,6 @@ describe('useInboxRoute', () => {
     },
   );
 
-  it('does not navigate when the committed draft already equals the URL q', () => {
-    vi.useFakeTimers();
-    try {
-      searchState = { view: 'inbox', q: '로그인' };
-      render(<InboxTestHarness view="inbox" />);
-
-      fireEvent.blur(searchBox());
-
-      expect(navigateMock).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('keeps a tab picked before a repeated commit is acknowledged', () => {
     vi.useFakeTimers();
     try {
@@ -880,27 +866,34 @@ describe('useInboxRoute', () => {
     }
   });
 
-  it('keeps a newer draft typed while a commit is still unacknowledged', () => {
+  // ── Hangul debounce (#875) ──────────────────────────────────────────────────
+  //
+  // A draft ending in a Hangul character may still be a half-typed syllable
+  // (로그이, heading for 로그인), so the URL waits for the longer debounce.
+  // No composition events are involved: native macOS Korean input does not
+  // always send them.
+
+  it('does not navigate mid-syllable and commits after the Hangul debounce', () => {
     vi.useFakeTimers();
     try {
       searchState = { view: 'inbox' };
-      const { rerender } = render(<InboxTestHarness view="inbox" />);
+      render(<InboxTestHarness view="inbox" />);
       const box = searchBox();
-      fireEvent.change(box, { target: { value: '로그인' } });
-      fireEvent.keyDown(box, { key: 'Enter' });
-      fireEvent.change(box, { target: { value: '로그인 오류' } });
 
-      searchState = { view: 'inbox', q: '로그인' };
-      rerender(<InboxTestHarness view="inbox" />);
+      fireEvent.change(box, { target: { value: '로그이' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(navigateMock).not.toHaveBeenCalled();
 
-      expect(searchBox()).toHaveValue('로그인 오류');
+      vi.advanceTimersByTime(SEARCH_HANGUL_DEBOUNCE_MS - SEARCH_DEBOUNCE_MS - 1);
+      expect(navigateMock).not.toHaveBeenCalled();
 
-      fireEvent.blur(searchBox());
-      expect(navigateMock).toHaveBeenCalledTimes(2);
-      expect(lastNavigateSearch().search(searchState)).toEqual({
-        view: 'inbox',
-        q: '로그인 오류',
-      });
+      vi.advanceTimersByTime(1);
+
+      expect(navigateMock).toHaveBeenCalledTimes(1);
+      const navigation = lastNavigateSearch();
+      expect(navigation.to).toBe('/vocs');
+      expect(navigation.replace).toBe(true);
+      expect(navigation.search(searchState)).toEqual({ view: 'inbox', q: '로그이' });
     } finally {
       vi.useRealTimers();
     }

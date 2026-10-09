@@ -67,15 +67,18 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
    for one conductor; 2–3 when the conductor also runs every harness). It delegates to shared `worker-launch.sh`
    with role `impl`; set `WORKER_ROLE=impl-fallback` when the session selects the fallback, and optionally
    `WORKER_MODEL` / `WORKER_EFFORT` for overrides. Parallelise only issues that touch disjoint files.
-   **Complex issues go to `WORKER_ROLE=impl-complex`** (grok 4.7 high, headless; user decision 2026-10-08), and so do
+   **Complex issues go to `WORKER_ROLE=impl-complex`** (grok 4.7 xhigh, headless; user decisions 2026-10-08), and so do
    their fix rounds: pass `--role impl-complex` instead of `fix`. An issue is complex when any of these hold:
    - it changes a backend contract and its frontend consumer together, or touches three or more modules;
    - it touches permissions, a privacy or no-leak rule, auth, a migration, or SQL definer functions;
    - it carries ordering or state logic: state machines, idempotency or undo, save ordering (the #813–#832 builder
      saves), or concurrency;
    - an earlier GLM round on the same issue failed or needed a second fix round.
-   Record the choice and the reason in `W-<n>-VERIFY.md`. Everything else uses `impl` (GLM), and a GLM quota stop
-   uses `impl-luna` as before.
+   **Small issues that still need judgment go to `WORKER_ROLE=impl-mid`** (grok 4.7 high, headless; user decision
+   2026-10-08), and so do their fix rounds. These are single-component behaviour fixes, accessibility or layout
+   corrections, and doc-versus-code reconciliations, where the brief cannot spell out every line.
+   Record the choice and the reason in `W-<n>-VERIFY.md`. Mechanical briefs (copy constants, renames, fully
+   specified edits) use `impl` (GLM), and a GLM quota stop uses `impl-luna` as before.
 3. **Wait**: shared `worker-wait.sh --state "$WAVE_STATE/W-<n>.json" --timeout 3600 --poll 30`.
    For several workers, pass repeated `--state` options and `--any`, then remove the returned finished worker
    from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
@@ -341,7 +344,7 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
 - Implementation workers run in an Orca terminal so the user can watch them: GLM 5.3 flash max via omp since
-  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok (`impl-complex`, 2026-10-08); code and perf reviewers run as codex (`codex-orca`), and UX and quality reviewers as background `claude -p --agent` (no terminal). The state JSON records
+  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok xhigh (`impl-complex`) and small judgment issues headless grok high (`impl-mid`), both 2026-10-08; code and perf reviewers run as codex (`codex-orca`), and UX and quality reviewers as background `claude -p --agent` (no terminal). The state JSON records
   the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
   If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
   with stdin from `/dev/null`), which needs no Orca terminal.
