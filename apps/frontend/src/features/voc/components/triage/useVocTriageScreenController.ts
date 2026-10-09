@@ -5,6 +5,8 @@ import { useTriageQueue } from '../../hooks/useTriageQueue';
 export interface VocTriageScreenControllerArgs {
   items: VocListItem[];
   selectedId: string | null;
+  queueContext: string;
+  queueSettled: boolean;
 }
 
 export interface VocTriageScreenController {
@@ -37,13 +39,15 @@ export interface VocTriageScreenController {
 export function useVocTriageScreenController({
   items,
   selectedId,
+  queueContext,
+  queueSettled,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
   const {
     state: queueState,
     liveQueue,
     optimisticRemove,
     optimisticRestore,
-  } = useTriageQueue(items);
+  } = useTriageQueue(items, queueContext, queueSettled);
   const [createFindingTarget, setCreateFindingTarget] = useState<{
     vocId: string;
     managedSystemId: string;

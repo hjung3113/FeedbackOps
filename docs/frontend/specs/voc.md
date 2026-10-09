@@ -314,7 +314,7 @@ The shortcut is Ctrl+K on Windows/Linux and ⌘K on macOS.
 Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 
 1. User clicks `Triage 확정 & 다음 VOC` (or `Finding 만들기` / `보류`).
-2. Frontend computes `next` row, selects it, and removes the acted-on VOC from the local visible queue.
+2. Frontend computes `next` row, selects it, and removes the acted-on VOC from the local visible queue. The optimistic exclusion belongs only to that queue context (tab, Managed System scope, and server filters/deep-link pin). It expires when the context changes or a successful, settled queue read no longer includes the VOC; pending/error reads do not expire it. Undo and error restoration still use the original VOC ID. The screen and toolbar remain mounted across tab changes.
 3. Toast (`<UndoToast>`) appears with `실행 취소` action and 4-second auto-dismiss.
 4. Mutation fires: `PATCH /vocs/:id` with the triage payload, `Idempotency-Key: <uuidv4>` header (per ADR-0015).
 5. **On success:** toast remains until timeout; no further action.
