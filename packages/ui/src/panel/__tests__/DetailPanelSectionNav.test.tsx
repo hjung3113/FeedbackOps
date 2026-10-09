@@ -84,29 +84,58 @@ const entry = (anchor: Element, isIntersecting: boolean, top: number): Intersect
 
 const mountedScrollContainers: HTMLElement[] = [];
 
-function renderNavOverAnchors(ids: string[], liveTops?: Record<string, number>) {
+interface NavAnchorLayout {
+  rootTop?: number;
+  rootHeight?: number;
+  scrollTop?: number;
+  anchorHeight?: number;
+  /** Mount the nav inside the scroll root so `root.contains(header)` is true. */
+  headerInside?: boolean;
+}
+
+function renderNavOverAnchors(
+  ids: string[],
+  liveTops?: Record<string, number>,
+  layout?: NavAnchorLayout,
+) {
   const scrollEl = document.createElement('div');
   // jsdom does not implement scrollTo — stub it so a click-driven jump works.
   scrollEl.scrollTo = vi.fn();
+  if (layout?.scrollTop !== undefined) scrollEl.scrollTop = layout.scrollTop;
+  if (layout?.rootTop !== undefined || layout?.rootHeight !== undefined) {
+    const top = layout.rootTop ?? 0;
+    const height = layout.rootHeight ?? 0;
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 400, top, height));
+  }
   for (const id of ids) {
     const anchor = document.createElement('div');
     anchor.setAttribute('data-anchor', id);
-    if (liveTops) {
-      anchor.getBoundingClientRect = vi.fn(() => rect(0, 100, liveTops[id] ?? 0));
+    if (liveTops || layout?.anchorHeight !== undefined) {
+      const height = layout?.anchorHeight ?? 24;
+      anchor.getBoundingClientRect = vi.fn(() => rect(0, 100, liveTops?.[id] ?? 0, height));
     }
     scrollEl.append(anchor);
   }
+  // A React root replaces its container's children, so the nav mounts in a child
+  // when it must sit inside the scroll root without wiping the anchors.
+  const mountPoint = layout?.headerInside ? document.createElement('div') : null;
+  if (mountPoint) scrollEl.append(mountPoint);
   document.body.append(scrollEl);
   mountedScrollContainers.push(scrollEl);
   const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
-  render(
+  const rendered = render(
     <DetailPanelSectionNav
       sections={ids.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }))}
       scrollRef={scrollRef}
     />,
+    mountPoint ? { container: mountPoint } : undefined,
   );
+  const header = rendered.container.querySelector('.sticky');
+  if (!header) throw new Error('section nav header not rendered');
   return {
     anchor: (id: string) => scrollEl.querySelector(`[data-anchor="${id}"]`) as HTMLElement,
+    scrollEl,
+    header: header as HTMLElement,
   };
 }
 
@@ -149,8 +178,8 @@ describe('DetailPanelSectionNav', () => {
   it('first section is active by default', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
     const overviewBtn = screen.getByRole('button', { name: /overview/i });
-    // Active section has accent border class
-    expect(overviewBtn.className).toMatch(/border-accent-primary/);
+    expect(overviewBtn).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^body$/i })).not.toHaveAttribute('aria-current');
   });
 
   it('sets active section on click', () => {
@@ -159,11 +188,11 @@ describe('DetailPanelSectionNav', () => {
     scrollEl.style.overflow = 'auto';
     // jsdom does not implement scrollTo — stub it to prevent errors
     scrollEl.scrollTo = vi.fn();
-    SECTIONS.forEach((s) => {
+    for (const s of SECTIONS) {
       const el = document.createElement('div');
       el.setAttribute('data-anchor', s.id);
       scrollEl.appendChild(el);
-    });
+    }
     document.body.appendChild(scrollEl);
 
     const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
@@ -173,37 +202,10 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.click(bodyBtn);
 
     // After clicking, body button should become active immediately
-    expect(bodyBtn.className).toMatch(/border-accent-primary/);
+    expect(bodyBtn).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /overview/i })).not.toHaveAttribute('aria-current');
 
     document.body.removeChild(scrollEl);
-  });
-
-  it('keeps a section heading below the sticky navigation after a jump', () => {
-    const scrollEl = document.createElement('div');
-    scrollEl.scrollTop = 10;
-    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 120, 30));
-    scrollEl.scrollTo = vi.fn();
-    const overview = document.createElement('div');
-    overview.setAttribute('data-anchor', 'overview');
-    overview.getBoundingClientRect = vi.fn(() => rect(0, 120, 130));
-    scrollEl.append(overview);
-    document.body.append(scrollEl);
-
-    const { container } = render(
-      <DetailPanelSectionNav
-        sections={[{ id: 'overview', label: 'Overview' }]}
-        scrollRef={{ current: scrollEl }}
-      />,
-    );
-    const stickyNav = container.firstElementChild as HTMLDivElement;
-    stickyNav.getBoundingClientRect = vi.fn(() => rect(0, 120));
-
-    act(() => window.dispatchEvent(new Event('resize')));
-    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
-
-    expect(overview.style.scrollMarginTop).toBe('24px');
-    expect(scrollEl.scrollTo).toHaveBeenCalledWith({ top: 86, behavior: 'smooth' });
-    scrollEl.remove();
   });
 
   it('sets anchor scroll margins after the scroll body ref attaches and updates them after header resize', () => {
@@ -276,12 +278,18 @@ describe('DetailPanelSectionNav', () => {
     // Driving it by keyboard matches this repo's established pattern (see
     // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
     fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: 'Details' })).not.toHaveAttribute('aria-current');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
 
     expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: /더보기/ }).className).toMatch(
-      /border-accent-primary/,
-    );
+    const more = screen.getByRole('button', { name: /더보기/ });
+    expect(more).not.toHaveAttribute('aria-current');
+    expect(more).toHaveClass('border-accent-primary', 'text-text-primary');
+    expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    const currentItem = screen.getByRole('menuitem', { name: 'Details' });
+    expect(currentItem).toHaveAttribute('aria-current', 'true');
+    expect(currentItem).toHaveClass('font-medium', 'text-text-primary');
     document.body.removeChild(scrollEl);
   });
 
@@ -343,7 +351,9 @@ describe('DetailPanelSectionNav', () => {
       anchors.set(section.id, anchor);
       scrollEl.append(anchor);
     }
-    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 100, 100));
+    // Height 100: the default rect height is 24, and 0.66 * this root's width (100)
+    // would floor the band at the root top and drop Properties at y=100.
+    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 100, 100, 100));
     document.body.append(scrollEl);
 
     render(
@@ -385,7 +395,10 @@ describe('DetailPanelSectionNav', () => {
     anchorTop.set('properties', 100);
     act(() => fireEvent.scroll(scrollEl));
 
-    expect(screen.getByRole('button', { name: 'Properties' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Properties' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
     expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 100, behavior: 'smooth' });
 
     scrollBy.mockClear();
@@ -402,8 +415,8 @@ describe('DetailPanelSectionNav', () => {
 
     observer.fire([entry(anchor('alpha'), true, 400), entry(anchor('beta'), true, 100)]);
 
-    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
-    expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
   });
 
   it('keeps the topmost visible section active when a lower section newly intersects (#861 reflow)', () => {
@@ -420,8 +433,8 @@ describe('DetailPanelSectionNav', () => {
     betaTop = 150;
     observer.fire([entry(anchor('beta'), true, 150)]);
 
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
   });
 
   it('activates the remaining intersecting section when the active one leaves the top zone', () => {
@@ -431,7 +444,7 @@ describe('DetailPanelSectionNav', () => {
     observer.fire([entry(anchor('beta'), true, 400), entry(anchor('alpha'), true, 100)]);
     observer.fire([entry(anchor('alpha'), false, -100)]);
 
-    expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('ranks a still-intersecting anchor by its current position, not its last callback rectangle', () => {
@@ -446,8 +459,8 @@ describe('DetailPanelSectionNav', () => {
     observer.fire([entry(anchor('alpha'), true, 300), entry(anchor('beta'), false, 700)]);
     observer.fire([entry(anchor('beta'), true, 200)]);
 
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveClass('border-accent-primary');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveClass('border-accent-primary');
+    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
   });
 
   it('applies entries during a programmatic jump so a section that left cannot win afterwards', () => {
@@ -469,20 +482,16 @@ describe('DetailPanelSectionNav', () => {
         entry(anchor('gamma'), false, 800),
       ]);
       fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
 
       // During the guard alpha exits and beta arrives; neither may be discarded.
       observer.fire([entry(anchor('alpha'), false, -300), entry(anchor('beta'), true, 0)]);
       act(() => vi.advanceTimersByTime(700));
       observer.fire([entry(anchor('gamma'), true, 200)]);
 
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveClass('border-accent-primary');
-      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveClass(
-        'border-accent-primary',
-      );
-      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveClass(
-        'border-accent-primary',
-      );
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveAttribute('aria-current');
     } finally {
       vi.useRealTimers();
     }
@@ -526,5 +535,158 @@ describe('DetailPanelSectionNav', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('이전 탭 보기');
     await user.click(left);
     expect(track.scrollBy).toHaveBeenLastCalledWith({ left: -120, behavior: 'smooth' });
+  });
+
+  // Hand-computed from the boxes, not from the offset helper:
+  // clear:    20 + 180 - 80 - 0 = 120 (33px header sits above the root)
+  // overlap:  10 + 140 - 40 - 13 = 97 (header bottom 53, root top 40)
+  // inside:   40 + 200 - 0 - 33 = 207 (the height, not the 45px overlap)
+  it.each([
+    {
+      placement: 'outside the scroll root and clear of it',
+      headerInside: false,
+      headerTop: 0,
+      headerHeight: 33,
+      rootTop: 80,
+      rootHeight: 400,
+      scrollTop: 20,
+      anchorTop: 180,
+      expectedTop: 120,
+      expectedMargin: '0px',
+    },
+    {
+      placement: 'outside the scroll root and overlapping it',
+      headerInside: false,
+      headerTop: 20,
+      headerHeight: 33,
+      rootTop: 40,
+      rootHeight: 400,
+      scrollTop: 10,
+      anchorTop: 140,
+      expectedTop: 97,
+      expectedMargin: '13px',
+    },
+    {
+      placement: 'inside the scroll root',
+      headerInside: true,
+      headerTop: 12,
+      headerHeight: 33,
+      rootTop: 0,
+      rootHeight: 500,
+      scrollTop: 40,
+      anchorTop: 200,
+      expectedTop: 207,
+      expectedMargin: '33px',
+    },
+  ])('scrolls a tab to the anchor minus the sticky cover when the header is $placement', (row) => {
+    const { anchor, scrollEl, header } = renderNavOverAnchors(
+      ['overview', 'body'],
+      { overview: 0, body: row.anchorTop },
+      {
+        rootTop: row.rootTop,
+        rootHeight: row.rootHeight,
+        scrollTop: row.scrollTop,
+        headerInside: row.headerInside,
+      },
+    );
+    header.getBoundingClientRect = vi.fn(() => rect(0, 300, row.headerTop, row.headerHeight));
+    act(() => window.dispatchEvent(new Event('resize')));
+    fireEvent.click(screen.getByRole('button', { name: 'Body' }));
+
+    expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
+    expect(scrollEl.scrollTo).toHaveBeenCalledWith({ top: row.expectedTop, behavior: 'smooth' });
+    expect(anchor('body').style.scrollMarginTop).toBe(row.expectedMargin);
+  });
+
+  it('recomputes the topmost intersecting anchor on the first scroll after a jump', () => {
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor, scrollEl } = renderNavOverAnchors(['alpha', 'beta'], {
+        alpha: 12,
+        beta: 180,
+      });
+
+      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      // The short landing leaves alpha intersecting. The guard must keep beta selected.
+      observer.fire([entry(anchor('beta'), true, 180)]);
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+
+      act(() => vi.advanceTimersByTime(701));
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
+
+      act(() => fireEvent.scroll(scrollEl));
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds the later jump until its own guard ends, then recomputes on the next scroll', () => {
+    // Beta at 0 ms, Gamma at 500 ms. The first timeout must not release the guard at 700 ms.
+    // Gamma stays current through a scroll then; the first scroll after 1200 ms recomputes.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor, scrollEl } = renderNavOverAnchors(['alpha', 'beta', 'gamma'], {
+        alpha: 12,
+        beta: 180,
+        gamma: 400,
+      });
+
+      observer.fire([
+        entry(anchor('alpha'), true, 12),
+        entry(anchor('beta'), false, 400),
+        entry(anchor('gamma'), false, 800),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      act(() => vi.advanceTimersByTime(500));
+      fireEvent.click(screen.getByRole('button', { name: 'Gamma' }));
+
+      act(() => vi.advanceTimersByTime(200));
+      act(() => fireEvent.scroll(scrollEl));
+      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
+
+      act(() => vi.advanceTimersByTime(500));
+      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
+      act(() => fireEvent.scroll(scrollEl));
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveAttribute('aria-current');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    {
+      // Root is 400 wide by 1000 tall. A percentage rootMargin uses the width, so the
+      // band ends at 1000 - 0.66 * 400 = 736, not at 34% of the height (340). alpha
+      // (top -40, height 80) and beta (top 30, height 80) both overlap that band.
+      // abs(top - rootTop) picks beta (30 < 40); the topmost in-band anchor is alpha.
+      tops: { alpha: -40, beta: 30 },
+      layout: { rootTop: 0, rootHeight: 1000, anchorHeight: 80 },
+      expected: 'Alpha',
+    },
+    {
+      // 400 × 1000. Height × 34% ends at 340; rootBottom - 0.66 × width ends at 736.
+      // Alpha at 400 is between those bottoms. Beta at 760 is below both. Beta is
+      // listed first, so a missed ranking would leave it current.
+      tops: { beta: 760, alpha: 400 },
+      layout: { rootTop: 0, rootHeight: 1000 },
+      expected: 'Alpha',
+    },
+  ])('ranks the no-observer fallback by the width-based top band', ({ tops, layout, expected }) => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    const ids = Object.keys(tops);
+    renderNavOverAnchors(ids, tops, layout);
+    expect(screen.getByRole('button', { name: expected })).toHaveAttribute('aria-current', 'true');
+    for (const id of ids) {
+      const name = id.charAt(0).toUpperCase() + id.slice(1);
+      if (name === expected) continue;
+      expect(screen.getByRole('button', { name })).not.toHaveAttribute('aria-current');
+    }
   });
 });

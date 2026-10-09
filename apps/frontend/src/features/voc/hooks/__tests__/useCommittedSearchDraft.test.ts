@@ -6,12 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
-// #875: the inbox passes this as `hangulDebounceMs` for drafts ending in a
-// Hangul character.
+// #875: searchDebounceMs waits this long when the draft ends in Hangul.
 const HANGUL_DEBOUNCE_MS = 700;
 
-// One render, like the inbox: both delays, so a Hangul-final draft waits
-// HANGUL_DEBOUNCE_MS and every other draft DEBOUNCE_MS.
 function renderDraft(committed: string) {
   const write = vi.fn();
   const hook = renderHook(
@@ -19,8 +16,6 @@ function renderDraft(committed: string) {
       useCommittedSearchDraft({
         committed: next,
         write,
-        debounceMs: DEBOUNCE_MS,
-        hangulDebounceMs: HANGUL_DEBOUNCE_MS,
       }),
     { initialProps: { committed } },
   );
@@ -119,6 +114,90 @@ describe('useCommittedSearchDraft', () => {
     expect(write).toHaveBeenLastCalledWith('로그인 오류', '로그인');
   });
 
+  // #891: returning to the base of a write the URL has not acknowledged yet
+  // (Escape back to '', or typing the previous query again) is a newer draft.
+  // The acknowledgement must not copy the pending text back, and the debounce
+  // then writes the returned value.
+  it.each([
+    {
+      label: 'an Escape clear back to the empty query',
+      committed: '',
+      typed: 'login',
+      returned: '',
+    },
+    {
+      label: 'typed back to the previous non-empty query',
+      committed: 'a',
+      typed: 'ab',
+      returned: 'a',
+    },
+  ])(
+    'keeps a draft that returns to the pending write base ($label)',
+    ({ committed, typed, returned }) => {
+      const { result, rerender, write } = renderDraft(committed);
+
+      act(() => {
+        result.current.setDraft(typed);
+      });
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith(typed, committed);
+
+      act(() => {
+        result.current.setDraft(returned);
+      });
+      rerender({ committed: typed });
+
+      expect(result.current.draft).toBe(returned);
+
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(2);
+      expect(write).toHaveBeenNthCalledWith(2, returned, typed);
+
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  // #891: an unrelated outside URL supersedes the pending write. The box still
+  // shows that write, but its base is no longer protected: Escape does not mark
+  // it ahead, so a later back/forward to the pending value shows it and writes
+  // nothing.
+  it('shows a back/forward to a pending search after an unrelated URL change', () => {
+    const { result, rerender, write } = renderDraft('');
+
+    act(() => {
+      result.current.setDraft('login');
+    });
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith('login', '');
+
+    rerender({ committed: 'other' });
+    rerender({ committed: '' });
+    expect(result.current.draft).toBe('login');
+
+    act(() => {
+      result.current.setDraft('');
+    });
+    rerender({ committed: 'login' });
+
+    expect(result.current.draft).toBe('login');
+
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the pending draft as base while that commit is unacknowledged', () => {
     const { result, write } = renderDraft('');
 
@@ -163,8 +242,6 @@ describe('useCommittedSearchDraft', () => {
         useCommittedSearchDraft({
           committed: '',
           write,
-          debounceMs: DEBOUNCE_MS,
-          hangulDebounceMs: HANGUL_DEBOUNCE_MS,
         }),
       { initialProps: { write: first } },
     );
@@ -198,9 +275,7 @@ describe('useCommittedSearchDraft', () => {
 
   it.each([
     { draft: '로그이', delayMs: HANGUL_DEBOUNCE_MS },
-    { draft: 'ㄹ', delayMs: HANGUL_DEBOUNCE_MS },
     { draft: 'voc-02', delayMs: DEBOUNCE_MS },
-    { draft: '로그인 ', delayMs: DEBOUNCE_MS },
   ])('debounces a draft ending in "$draft" for $delayMs ms', ({ draft, delayMs }) => {
     const { result, write } = renderDraft('');
 

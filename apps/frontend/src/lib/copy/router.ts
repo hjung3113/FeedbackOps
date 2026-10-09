@@ -1,3 +1,5 @@
+import { RATE_LIMIT_TITLE } from './rate-limit';
+
 export const ROUTER_FALLBACK_COPY = {
   pending: '불러오는 중…',
   error: {
@@ -5,7 +7,7 @@ export const ROUTER_FALLBACK_COPY = {
     body: '잠시 후 다시 시도하세요.',
     action: '다시 시도',
     // #871: a 429 on /me is throttling, not a session problem.
-    meRateLimitedTitle: '요청이 너무 많습니다',
+    meRateLimitedTitle: RATE_LIMIT_TITLE,
     meRateLimitedBody: '잠시 후 다시 시도하세요.',
   },
   notFound: {

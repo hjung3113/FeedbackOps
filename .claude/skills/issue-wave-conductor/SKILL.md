@@ -262,7 +262,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
     in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
     milestone.
 11. **Slice close (before `release-gate.sh`).** When the slice's last issue has merged:
-    - **`review-quality`:** run it from a disposable worktree detached at `origin/develop`:
+    - **`review-quality`** (codex astra high since 2026-10-09; it runs in an Orca terminal, so make the disposable
+      worktree with `orca worktree create --base-branch origin/develop`, not `git worktree add`). The task file's
+      first line is "Read `.claude/agents/review-quality.md` and follow it as your role definition." Then:
       `worker-launch.sh --role review-quality --cwd <disposable> --task <abs SLICE-<m>-QUALITY-TASK.md> --report <abs
       report> --sentinel '<!-- SLICE-<m>-QUALITY-DONE -->' --name SLICE-<m>-QUALITY --state-dir "$WAVE_STATE"`.
       Act on its classes:
@@ -344,7 +346,7 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 - The main checkout's `node_modules` goes stale across merges (a wave-end gate failed on a missing `nodemailer`):
   `pnpm install --frozen-lockfile` before the final gate there.
 - Implementation workers run in an Orca terminal so the user can watch them: GLM 5.3 flash max via omp since
-  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok xhigh (`impl-complex`) and small judgment issues headless grok high (`impl-mid`), both 2026-10-08; code and perf reviewers run as codex (`codex-orca`), and UX and quality reviewers as background `claude -p --agent` (no terminal). The state JSON records
+  2026-10-07 (codex `impl-luna` on a GLM quota stop); complex issues run headless grok xhigh (`impl-complex`) and small judgment issues headless grok high (`impl-mid`), both 2026-10-08; code, perf and slice-quality reviewers run as codex (`codex-orca`; quality is astra high since 2026-10-09), and the UX reviewer as background `claude -p --agent review-ux` (no terminal). Simple conductor-side chores (screenshots and captures, simple research, doc synthesis, read-only queries) go to role `research` (background codex luna xhigh) instead of the conductor. The state JSON records
   the terminal handle — close it after verification or pass it to `ship-pr.sh --terminal`.
   If Orca hangs at `runtimeState: starting`, launch with `WORKER_ROLE=impl-fallback` (background `codex exec`
   with stdin from `/dev/null`), which needs no Orca terminal.

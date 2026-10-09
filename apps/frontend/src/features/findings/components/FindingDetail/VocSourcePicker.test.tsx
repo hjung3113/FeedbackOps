@@ -425,14 +425,36 @@ describe('VocSourcePicker', () => {
     expect(parsed.data?.q).toBe('결제');
   });
 
+  it('does not request a Hangul-final search at 300 ms and requests it once at 700 ms', async () => {
+    vi.useFakeTimers();
+    const fetchMock = installFetch();
+    renderPicker();
+    fireEvent.click(screen.getByRole('combobox', { name: 'VOC 선택' }));
+    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
+      target: { value: '로그이' },
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(searchedFetchUrls(fetchMock.mock.calls)).toEqual([]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    expect(searchedFetchUrls(fetchMock.mock.calls)).toEqual([vocsUrl(MANAGED_SYSTEM_ID, '로그이')]);
+  });
+
+  // Non-Hangul on purpose: a Hangul-final draft waits 700 ms (#894).
   it('debounces the q request until the search has settled', async () => {
     vi.useFakeTimers();
     const fetchMock = installFetch();
     renderPicker();
     fireEvent.click(screen.getByRole('combobox', { name: 'VOC 선택' }));
     const searchInput = screen.getByPlaceholderText('VOC ID 또는 제목 검색');
-    fireEvent.change(searchInput, { target: { value: '결제' } });
-    fireEvent.change(searchInput, { target: { value: '결제 화면' } });
+    fireEvent.change(searchInput, { target: { value: 'pay' } });
+    fireEvent.change(searchInput, { target: { value: 'pay screen' } });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(299);
@@ -447,7 +469,7 @@ describe('VocSourcePicker', () => {
     });
     expect(
       fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('q=')),
-    ).toEqual([vocsUrl(MANAGED_SYSTEM_ID, '결제 화면')]);
+    ).toEqual([vocsUrl(MANAGED_SYSTEM_ID, 'pay screen')]);
   });
 
   it('selects an older VOC that only the server search returns', async () => {

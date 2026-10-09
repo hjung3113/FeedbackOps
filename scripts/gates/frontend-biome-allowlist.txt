@@ -242,18 +242,17 @@ apps/frontend/src/lib/layout/AppFrame.tsx format -- pre-existing on develop; imp
 packages/ui/src/badges/__tests__/SeverityBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
 packages/ui/src/badges/__tests__/ReporterStatusBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
 packages/ui/src/indicators/__tests__/SeverityIndicator.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer severities.forEach() and inner bars.forEach() calls this branch did not write, only added a new it() block using the same pre-existing pattern
-# #519 (VOC detail nav overflow + unified footer). The 4 identities below were measured
+# #519 (VOC detail nav overflow + unified footer). Originally measured
 # with the gate's own --reporter=json --max-diagnostics=500 invocation against origin/develop's
 # real tracked file content (checked out in place, not a scratch copy elsewhere in the tree —
 # an untracked copy under a different filename silently under-reports lint diagnostics here).
-# All four sit in code this branch's diff never touches (isNextAction's bracket-key type guard;
-# the two scrollRef IntersectionObserver useEffects predating this file's biome adoption, already
-# marked with a now-inert `// eslint-disable-line` comment biome does not honor; the pre-existing
-# SECTIONS.forEach test setup helper).
+# NextActionFooter's useLiteralKeys is unchanged by later slices. The two DetailPanelSectionNav
+# noForEach lines were removed after forEach became for…of. useExhaustiveDependencies was
+# remeasured 2026-10-09 (6x): the firstSection reset effect (extra sectionKey),
+# updateAnchorScrollMargins (omits sections, extra sectionKey), and the IntersectionObserver
+# effect (omits sections — reported on sections.map and sections.length — and extra sectionKey).
 apps/frontend/src/features/voc/components/detail/NextActionFooter.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (3x, unchanged by #519; isNextAction's r['id']/r['label']/r['available'] guard this branch did not touch)
-packages/ui/src/panel/__tests__/DetailPanelSectionNav.test.tsx lint/complexity/noForEach -- pre-existing on develop (1x, unchanged by #519; SECTIONS.forEach() setup in an existing test this branch did not touch)
-packages/ui/src/panel/DetailPanelSectionNav.tsx lint/complexity/noForEach -- pre-existing on develop (1x, unchanged by #519; anchors.forEach() inside the pre-existing IntersectionObserver effect)
-packages/ui/src/panel/DetailPanelSectionNav.tsx lint/correctness/useExhaustiveDependencies -- pre-existing on develop (4x, unchanged by #519; the two scrollRef/sectionKey effects already carry a `// eslint-disable-line react-hooks/exhaustive-deps` comment biome does not recognize)
+packages/ui/src/panel/DetailPanelSectionNav.tsx lint/correctness/useExhaustiveDependencies -- remeasured 2026-10-09 (6x): firstSection reset effect (extra sectionKey), updateAnchorScrollMargins (omits sections, extra sectionKey), and the IntersectionObserver effect (omits sections, extra sectionKey); eslint-disable-line comments biome does not recognize
 apps/frontend/src/features/voc/hooks/useTriagePanelState.ts lint/correctness/useExhaustiveDependencies -- pre-existing on develop (2x, measured on the develop copy; #520 only adds `baseline` to the return value; the voc.id reset effect carries an eslint-disable comment biome does not recognize)
 apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, measured on the develop copy 2026-09-28; #521 only changes the empty/error branch)
 apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (1x, measured on the develop copy 2026-09-28; row click handler unchanged by #521)

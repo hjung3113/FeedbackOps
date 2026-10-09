@@ -5,6 +5,7 @@
 // through lib/api/errorMapper (its conflict.stale_write copy differs).
 
 import { ApiError } from '@/lib/api';
+import { rateLimitedMessage } from '@/lib/copy/rate-limit';
 
 export type TriageToast = { level: 'warning' | 'error'; message: string };
 
@@ -53,7 +54,7 @@ export function classifyTriageMutationError(err: unknown): TriageMutationDecisio
         return {
           restore: true,
           lockPanel: false,
-          toast: { level: 'warning', message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' },
+          toast: { level: 'warning', message: rateLimitedMessage() },
         };
       case 'conflict.idempotency_key_reuse':
         // Lock the panel — user must switch VOC to unlock
