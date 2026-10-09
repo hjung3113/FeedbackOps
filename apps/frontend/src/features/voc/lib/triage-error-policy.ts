@@ -5,8 +5,7 @@
 // through lib/api/errorMapper (its conflict.stale_write copy differs).
 
 import { ApiError } from '@/lib/api';
-import { formatRetryAfter } from '@/lib/api/errorMapper';
-import { rateLimitedMessage } from '@/lib/copy/rate-limit';
+import { formatRetryAfter, rateLimitedMessage } from '@/lib/copy/rate-limit';
 
 export type TriageToast = { level: 'warning' | 'error'; message: string };
 

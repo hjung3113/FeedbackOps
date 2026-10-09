@@ -515,8 +515,8 @@ Endpoint contracts (request and response bodies, error codes, permissions, audit
 
 ### 8.2 Headers, rate limit, error rendering
 
-- `Retry-After` honored on `429 rate_limited.actor` per ADR-0015 — frontend retry helper backs off and toasts "잠시 후 다시 시도해 주세요. (Nm Ns 후)".
-- All errors map through `apps/frontend/src/lib/api/errorMapper.ts`; its `CATALOG` directly defines user-facing copy keyed on `code`. Frontend **never** displays the raw English `message` field.
+- A `429` envelope's `detail.retry_after_seconds` is what the toast renders, via `formatRetryAfter` in `apps/frontend/src/lib/copy/rate-limit.ts`. A finite number greater than 0 and below 60 is shown as `{n}초`; 60 or above is rounded up to whole minutes (`{ceil(n / 60)}분`). The actor message is `요청이 너무 많습니다. {wait} 후 다시 시도해 주세요.` with that wait, or `요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.` when the value is missing, not a finite number, or not positive. The `Retry-After` header is parsed in `apps/frontend/src/lib/api/client.ts` and is not an input to this copy.
+- `apps/frontend/src/lib/api/errorMapper.ts`'s `CATALOG` owns user-facing copy for most codes, keyed on `code`. The Triage mutation policy (`apps/frontend/src/features/voc/lib/triage-error-policy.ts`) classifies its own errors and uses the same rate-limit copy. The frontend **never** displays the raw English `message` field.
 - `requestable_permission` (present on `permission.*` codes when safe) is forwarded into `<PermissionBlockedPanel state="request_access">` props automatically.
 
 ---

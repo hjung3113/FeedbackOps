@@ -1,5 +1,5 @@
 import type { ErrorCode } from '@fops/shared';
-import { ipRateLimitedMessage, rateLimitedMessage } from '../copy/rate-limit';
+import { formatRetryAfter, ipRateLimitedMessage, rateLimitedMessage } from '../copy/rate-limit';
 import { UnauthenticatedError } from './auth';
 import { ApiError, type ApiErrorEnvelope, type MappedError, type Tone } from './types';
 
@@ -88,14 +88,6 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'reporter_facing_status.invalid_transition': { tone: 'warning', message: '허용되지 않는 상태 전환입니다.' },
   'reporter_facing_status.gate_blocked':       { tone: 'warning', message: '권한 게이트로 상태를 변경할 수 없습니다.' },
 };
-
-export function formatRetryAfter(detail?: Record<string, unknown>): string | undefined {
-  const raw = detail?.retry_after_seconds;
-  const secs = typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
-  if (secs === undefined || secs <= 0) return undefined;
-  if (secs < 60) return `${secs}초`;
-  return `${Math.ceil(secs / 60)}분`;
-}
 
 export function errorMapper(
   envelope: ApiErrorEnvelope | null | undefined,
