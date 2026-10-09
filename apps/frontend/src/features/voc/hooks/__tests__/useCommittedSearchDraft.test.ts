@@ -170,6 +170,39 @@ describe('useCommittedSearchDraft', () => {
     },
   );
 
+  // #891: an unrelated outside URL supersedes the pending write. The box still
+  // shows that write, but its base is no longer protected: Escape does not mark
+  // it ahead, so a later back/forward to the pending value shows it and writes
+  // nothing.
+  it('shows a back/forward to a pending search after an unrelated URL change', () => {
+    const { result, rerender, write } = renderDraft('');
+
+    act(() => {
+      result.current.setDraft('login');
+    });
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith('login', '');
+
+    rerender({ committed: 'other' });
+    rerender({ committed: '' });
+    expect(result.current.draft).toBe('login');
+
+    act(() => {
+      result.current.setDraft('');
+    });
+    rerender({ committed: 'login' });
+
+    expect(result.current.draft).toBe('login');
+
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the pending draft as base while that commit is unacknowledged', () => {
     const { result, write } = renderDraft('');
 

@@ -87,8 +87,14 @@ export function useCommittedSearchDraft({
 
   React.useEffect(() => {
     const pending = pendingCommitRef.current;
+    const base = pendingBaseRef.current;
     if (pending !== undefined && committed === pending) {
       pendingCommitRef.current = undefined;
+      pendingBaseRef.current = undefined;
+    } else if (pending !== undefined && committed !== base) {
+      // #891: this outside URL is neither the pending write nor its base, so
+      // that write has been superseded. Drop the base; a later return to it
+      // must not be treated as ahead of the old write.
       pendingBaseRef.current = undefined;
     }
     // Strict mode runs this effect twice. The ref stays set so the second run

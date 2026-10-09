@@ -866,10 +866,10 @@ describe('useInboxRoute', () => {
     }
   });
 
-  // #891: Escape clears back to empty while a later q is still unacknowledged.
-  // The clear must survive that acknowledgement and restore the tab the search
-  // started from.
-  it('restores the tab when Escape clears a search whose later q is still pending', () => {
+  // #891: Escape clears the box while the first q is still unacknowledged.
+  // Acknowledging that q must leave the box empty, and the clear restores the
+  // tab the search started from.
+  it('keeps an Escape clear and restores the tab when the pending q is acknowledged', () => {
     vi.useFakeTimers();
     try {
       searchState = { view: 'inbox', tab: 'high' };
@@ -877,22 +877,17 @@ describe('useInboxRoute', () => {
 
       fireEvent.change(searchBox(), { target: { value: 'login' } });
       vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
-      const searching = lastNavigateSearch().search(searchState);
-      expect(searching).toEqual({ view: 'inbox', q: 'login' });
-
-      searchState = searching;
-      rerender(<InboxTestHarness view="inbox" />);
-
-      fireEvent.change(searchBox(), { target: { value: 'login2' } });
-      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
-      const pending = lastNavigateSearch().search(searchState);
-      expect(pending).toEqual({ view: 'inbox', q: 'login2' });
+      expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', q: 'login' });
 
       fireEvent.keyDown(searchBox(), { key: 'Escape' });
-      searchState = pending;
+      expect(searchBox()).toHaveValue('');
+
+      searchState = { view: 'inbox', q: 'login' };
       rerender(<InboxTestHarness view="inbox" />);
+      expect(searchBox()).toHaveValue('');
 
       vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(searchBox()).toHaveValue('');
       expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
     } finally {
       vi.useRealTimers();
