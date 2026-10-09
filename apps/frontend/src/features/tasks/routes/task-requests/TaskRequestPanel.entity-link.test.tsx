@@ -309,7 +309,7 @@ describe('TaskRequestPanel converted Task entity link', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('검토 결정')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '검토 결정' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

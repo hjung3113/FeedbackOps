@@ -225,7 +225,7 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    const decisionSection = screen.getByText('검토 결정').closest('section');
+    const decisionSection = screen.getByRole('heading', { name: '검토 결정' }).closest('section');
     expect(decisionSection).not.toBeNull();
     const buttons = within(decisionSection as HTMLElement).getAllByRole('button');
     const convert = screen.getByRole('button', { name: 'Task로 전환' });
@@ -274,7 +274,9 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    const decisionSection = screen.getByText('검토 결정').closest('section') as HTMLElement;
+    const decisionSection = screen
+      .getByRole('heading', { name: '검토 결정' })
+      .closest('section') as HTMLElement;
     const primaryGroup = within(decisionSection).getByRole('group', { name: '주요 결정' });
     const secondaryGroup = within(decisionSection).getByRole('group', { name: '보조 결정' });
     expect(within(primaryGroup).getAllByRole('button')).toHaveLength(1);
@@ -337,7 +339,9 @@ describe('TaskRequestPanel next actions', () => {
       />,
     );
 
-    const decisionSection = screen.getByText('검토 결정').closest('section') as HTMLElement;
+    const decisionSection = screen
+      .getByRole('heading', { name: '검토 결정' })
+      .closest('section') as HTMLElement;
     const submit = within(decisionSection).getByTestId('task-request-convert-submit');
     const primaryActions = within(decisionSection)
       .getAllByRole('button')
@@ -481,7 +485,7 @@ describe('TaskRequestPanel next actions', () => {
       expect(within(summary as HTMLElement).getByText('김지원')).toBeInTheDocument();
       expect(summary).toHaveTextContent(formatShortDateTime(decidedAt));
       expect(screen.getByRole('button', { name: '결정 요약' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '결정' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '검토 결정' })).not.toBeInTheDocument();
       expect(screen.queryByText('검토 결정')).not.toBeInTheDocument();
 
       if (reason) {

@@ -314,8 +314,8 @@ describe('/admin/analytics-areas route', () => {
       '개요',
       '권한 경계',
       '정의',
-      '작업량',
-      'Findings',
+      '작업량 신호',
+      '최근 Finding',
       '사용 위치',
     ]) {
       expect(within(drawer).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();

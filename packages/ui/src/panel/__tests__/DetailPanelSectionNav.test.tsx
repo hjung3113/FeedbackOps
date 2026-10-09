@@ -298,11 +298,12 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
 
     expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
-    const more = screen.getByRole('button', { name: /더보기/ });
+    // The active overflow section replaces the idle 더보기 name; the underline stays.
+    const more = screen.getByRole('button', { name: 'Details' });
     expect(more).not.toHaveAttribute('aria-current');
     expect(more).toHaveClass('border-accent-primary', 'text-text-primary');
     expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
-    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    fireEvent.keyDown(more, { key: 'Enter' });
     const currentItem = screen.getByRole('menuitem', { name: 'Details' });
     expect(currentItem).toHaveAttribute('aria-current', 'true');
     expect(currentItem).toHaveClass('font-medium', 'text-text-primary');
@@ -312,6 +313,48 @@ describe('DetailPanelSectionNav', () => {
   it('does not render the overflow trigger when no section is overflowed', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
     expect(screen.queryByRole('button', { name: /더보기/ })).toBeNull();
+  });
+
+  it('names the overflow trigger for the active overflow section, and 더보기 when none is active', () => {
+    const scrollEl = document.createElement('div');
+    scrollEl.scrollTo = vi.fn();
+    const overview = document.createElement('div');
+    overview.setAttribute('data-anchor', 'overview');
+    const body = document.createElement('div');
+    body.setAttribute('data-anchor', 'body');
+    scrollEl.append(overview, body);
+    document.body.appendChild(scrollEl);
+
+    const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'body', label: '본문', overflow: true },
+        ]}
+        scrollRef={scrollRef}
+      />,
+    );
+
+    const idle = screen.getByRole('button', { name: '더보기' });
+    expect(idle).toHaveTextContent(/^더보기$/);
+    expect(idle).toHaveAccessibleName('더보기');
+
+    fireEvent.keyDown(idle, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: '본문' }));
+
+    const active = screen.getByRole('button', { name: '본문' });
+    expect(active).toHaveTextContent(/^본문$/);
+    expect(active).toHaveAccessibleName('본문');
+    expect(active).toHaveClass('border-accent-primary', 'text-text-primary');
+    expect(screen.queryByRole('button', { name: '더보기' })).not.toBeInTheDocument();
+    document.body.removeChild(scrollEl);
+  });
+
+  it('exposes the strip as a navigation landmark named 섹션 이동', () => {
+    render(<DetailPanelSectionNav sections={SECTIONS} />);
+    const landmark = screen.getByRole('navigation', { name: '섹션 이동' });
+    expect(landmark).toBe(screen.getByTestId('detail-panel-section-nav-strip'));
   });
 
   it('shows an overflow affordance and scrolls a clipped tab into view', () => {

@@ -78,7 +78,7 @@ function buildTriageSections() {
     { id: 'overview', label: '개요' },
     { id: 'assignment', label: '담당 배정' },
     { id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL },
-    { id: 'summary', label: '요약' },
+    { id: 'summary', label: '요약 · 변경 사항' },
   ];
 }
 

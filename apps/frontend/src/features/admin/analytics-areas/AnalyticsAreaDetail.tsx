@@ -56,8 +56,8 @@ export function AnalyticsAreaSlideOver({
     { id: 'overview', label: '개요' },
     { id: 'guardrail', label: '권한 경계' },
     { id: 'definition', label: '정의' },
-    { id: 'workload', label: '작업량' },
-    { id: 'findings', label: 'Findings' },
+    { id: 'workload', label: '작업량 신호' },
+    { id: 'findings', label: '최근 Finding' },
     { id: 'used-by', label: '사용 위치' },
   ];
 
