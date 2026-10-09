@@ -119,6 +119,57 @@ describe('useCommittedSearchDraft', () => {
     expect(write).toHaveBeenLastCalledWith('로그인 오류', '로그인');
   });
 
+  // #891: returning to the base of a write the URL has not acknowledged yet
+  // (Escape back to '', or typing the previous query again) is a newer draft.
+  // The acknowledgement must not copy the pending text back, and the debounce
+  // then writes the returned value.
+  it.each([
+    {
+      label: 'an Escape clear back to the empty query',
+      committed: '',
+      typed: 'login',
+      returned: '',
+    },
+    {
+      label: 'typed back to the previous non-empty query',
+      committed: 'a',
+      typed: 'ab',
+      returned: 'a',
+    },
+  ])(
+    'keeps a draft that returns to the pending write base ($label)',
+    ({ committed, typed, returned }) => {
+      const { result, rerender, write } = renderDraft(committed);
+
+      act(() => {
+        result.current.setDraft(typed);
+      });
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith(typed, committed);
+
+      act(() => {
+        result.current.setDraft(returned);
+      });
+      rerender({ committed: typed });
+
+      expect(result.current.draft).toBe(returned);
+
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(2);
+      expect(write).toHaveBeenNthCalledWith(2, returned, typed);
+
+      act(() => {
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      expect(write).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('uses the pending draft as base while that commit is unacknowledged', () => {
     const { result, write } = renderDraft('');
 

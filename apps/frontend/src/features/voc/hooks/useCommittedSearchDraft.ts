@@ -48,6 +48,9 @@ export function useCommittedSearchDraft({
   // repeat of that draft is skipped, and start/restore uses it instead of the
   // stale `committed`.
   const pendingCommitRef = React.useRef<string | undefined>(undefined);
+  // The value that pending write moved away from. Until `committed` catches
+  // up, that base is still the URL, so a draft equal to it is easy to miss.
+  const pendingBaseRef = React.useRef<string | undefined>(undefined);
   // When the box moves past `pendingCommitRef`, this holds that pending draft
   // so the acknowledgement must not copy the URL back over the newer text.
   const draftAheadOfRef = React.useRef<string | undefined>(undefined);
@@ -58,6 +61,7 @@ export function useCommittedSearchDraft({
       // Already written (pending or acknowledged) — do not write it again.
       if (next === base) return;
       pendingCommitRef.current = next;
+      pendingBaseRef.current = base;
       draftAheadOfRef.current = undefined;
       write(next, base);
     },
@@ -66,7 +70,14 @@ export function useCommittedSearchDraft({
 
   function setDraft(value: string): void {
     const pending = pendingCommitRef.current;
-    if (pending !== undefined && value !== pending && value !== committed) {
+    // #891: moving back to the pending write's base (Escape to '', or typing
+    // the previous query again) is ahead of that write, like any newer draft.
+    const returnedToPendingBase = value === pendingBaseRef.current;
+    if (
+      pending !== undefined &&
+      value !== pending &&
+      (value !== committed || returnedToPendingBase)
+    ) {
       draftAheadOfRef.current = pending;
     } else {
       draftAheadOfRef.current = undefined;
@@ -78,6 +89,7 @@ export function useCommittedSearchDraft({
     const pending = pendingCommitRef.current;
     if (pending !== undefined && committed === pending) {
       pendingCommitRef.current = undefined;
+      pendingBaseRef.current = undefined;
     }
     // Strict mode runs this effect twice. The ref stays set so the second run
     // still refuses to replace a draft typed ahead of this acknowledgement.

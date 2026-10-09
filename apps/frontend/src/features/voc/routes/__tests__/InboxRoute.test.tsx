@@ -866,6 +866,39 @@ describe('useInboxRoute', () => {
     }
   });
 
+  // #891: Escape clears back to empty while a later q is still unacknowledged.
+  // The clear must survive that acknowledgement and restore the tab the search
+  // started from.
+  it('restores the tab when Escape clears a search whose later q is still pending', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox', tab: 'high' };
+      const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+      fireEvent.change(searchBox(), { target: { value: 'login' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      const searching = lastNavigateSearch().search(searchState);
+      expect(searching).toEqual({ view: 'inbox', q: 'login' });
+
+      searchState = searching;
+      rerender(<InboxTestHarness view="inbox" />);
+
+      fireEvent.change(searchBox(), { target: { value: 'login2' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      const pending = lastNavigateSearch().search(searchState);
+      expect(pending).toEqual({ view: 'inbox', q: 'login2' });
+
+      fireEvent.keyDown(searchBox(), { key: 'Escape' });
+      searchState = pending;
+      rerender(<InboxTestHarness view="inbox" />);
+
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // ── Hangul debounce (#875) ──────────────────────────────────────────────────
   //
   // A draft ending in a Hangul character may still be a half-typed syllable
