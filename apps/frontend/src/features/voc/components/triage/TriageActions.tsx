@@ -88,25 +88,27 @@ export function TriageActions({
           Finding 만들기
         </button>
 
-        {/* 보류 */}
-        <button
-          type="button"
-          aria-label="보류"
-          title={skipDisabledReason}
-          disabled={submitting || skipDisabledReason !== undefined}
-          onClick={onSkip}
-          className={cn(
-            'flex-1 inline-flex items-center justify-center gap-1.5',
-            'h-7 px-2.5 rounded-md text-sm font-medium',
-            'text-text-secondary',
-            'hover:bg-surface-card hover:text-text-primary',
-            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
-            'disabled:opacity-40 disabled:pointer-events-none',
-          )}
-        >
-          <ChevronRight size={11} aria-hidden="true" />
-          보류
-        </button>
+        {/* 보류 — a disabled button gets no pointer events, so the wrapper carries the
+            reason tooltip. */}
+        <span className="flex-1 inline-flex" title={skipDisabledReason}>
+          <button
+            type="button"
+            aria-label="보류"
+            disabled={submitting || skipDisabledReason !== undefined}
+            onClick={onSkip}
+            className={cn(
+              'w-full inline-flex items-center justify-center gap-1.5',
+              'h-7 px-2.5 rounded-md text-sm font-medium',
+              'text-text-secondary',
+              'hover:bg-surface-card hover:text-text-primary',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
+              'disabled:opacity-40 disabled:pointer-events-none',
+            )}
+          >
+            <ChevronRight size={11} aria-hidden="true" />
+            보류
+          </button>
+        </span>
       </div>
     </div>
   );

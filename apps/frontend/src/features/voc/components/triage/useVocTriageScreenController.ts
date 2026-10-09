@@ -142,9 +142,10 @@ export function useVocTriageScreenController({
     handleOptimisticRollback: (vocId) => {
       optimisticRestore(vocId, 'rollback');
     },
+    // Undo and compensation keep the current selection (as before #940); a forward
+    // failure reselects the failed VOC through onMutationFailure instead.
     handleOptimisticRestore: (vocId) => {
       optimisticRestore(vocId);
-      onSelectVoc(vocId);
     },
     handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),

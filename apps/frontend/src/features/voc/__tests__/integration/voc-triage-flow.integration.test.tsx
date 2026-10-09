@@ -431,7 +431,11 @@ describe('Triage flow — integration (C6.3)', () => {
         </Wrapper>,
       );
       expect(screen.getByRole('button', { name: '보류' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: '보류' })).toHaveAttribute('title', reason);
+      // The disabled button gets no pointer events; its wrapper carries the reason tooltip.
+      expect(screen.getByRole('button', { name: '보류' }).parentElement).toHaveAttribute(
+        'title',
+        reason,
+      );
     },
   );
 
