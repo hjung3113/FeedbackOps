@@ -5,22 +5,19 @@ import { classifyTriageMutationError } from '../triage-error-policy';
 // Issue #908: the rate_limited.actor triage toast names the Retry-After wait
 // the same way lib/api/errorMapper does.
 describe('classifyTriageMutationError — rate_limited.actor', () => {
-  it('names the Retry-After wait in the toast when the detail carries one', () => {
+  it.each([
+    [
+      'with a Retry-After wait',
+      { retry_after_seconds: 30 },
+      '요청이 너무 많습니다. 30초 후 다시 시도해 주세요.',
+    ],
+    ['without a Retry-After wait', undefined, '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'],
+  ])('builds the toast %s', (_label, detail, expected) => {
     const err = new ApiError(429, {
       code: 'rate_limited.actor',
       message: 'rate limit exceeded',
-      detail: { retry_after_seconds: 30 },
+      ...(detail !== undefined ? { detail } : {}),
     });
-    const decision = classifyTriageMutationError(err);
-    expect(decision.toast.message).toEqual('요청이 너무 많습니다. 30초 후 다시 시도해 주세요.');
-  });
-
-  it('keeps the generic 잠시 후 toast without a Retry-After detail', () => {
-    const err = new ApiError(429, {
-      code: 'rate_limited.actor',
-      message: 'rate limit exceeded',
-    });
-    const decision = classifyTriageMutationError(err);
-    expect(decision.toast.message).toEqual('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+    expect(classifyTriageMutationError(err).toast.message).toEqual(expected);
   });
 });

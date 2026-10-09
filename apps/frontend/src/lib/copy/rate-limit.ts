@@ -1,6 +1,7 @@
-// rate-limit.ts — single source for the 429 rate-limit copy (issue #884),
-// shared by the router /me fallback, lib/api/errorMapper, and the VOC triage
-// error policy. Rendered strings must stay byte-identical.
+// rate-limit.ts — single source for the 429 rate-limit copy: the actor variant
+// (#884; the router /me fallback, lib/api/errorMapper, the VOC triage policy)
+// and the same-IP variant (#908; errorMapper). Rendered strings must stay
+// byte-identical.
 
 export const RATE_LIMIT_TITLE = '요청이 너무 많습니다';
 
