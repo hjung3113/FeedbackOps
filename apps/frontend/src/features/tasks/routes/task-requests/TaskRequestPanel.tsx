@@ -28,7 +28,9 @@ export function buildTaskRequestSections(
 ): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
-    showDecisionSummary ? { id: 'outcome', label: '결정 요약' } : { id: 'decision', label: '결정' },
+    showDecisionSummary
+      ? { id: 'outcome', label: '결정 요약' }
+      : { id: 'decision', label: '검토 결정' },
     hasFindingSource ? { id: 'source', label: '출처' } : null,
     { id: 'properties', label: '속성' },
     { id: 'audit', label: '이력' },

@@ -571,7 +571,7 @@ describe('<VocDetailPanel>', () => {
   it('does not render an empty related-entity section in the happy path', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
-    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Triage (읽기 전용)' })).toBeInTheDocument();
     // #679 FIX2: the reference's relaxed 'BODY' variance is superseded by the
     // Korean-chrome policy; the label is 본문.
     expect(screen.getByText('본문')).toBeInTheDocument();
@@ -622,7 +622,7 @@ describe('<VocDetailPanel>', () => {
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
-  it('puts 설명 and 대화 in overflow while keeping the dead Internal anchor absent', async () => {
+  it('puts 본문 and 대화 in overflow while keeping the dead Internal anchor absent', async () => {
     const { container } = renderWithClient(
       <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
     );
@@ -635,7 +635,7 @@ describe('<VocDetailPanel>', () => {
     // Driving it by keyboard matches this repo's established pattern (see
     // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
     fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: '설명' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '본문' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '대화' })).toBeInTheDocument();
   });
 
@@ -764,7 +764,7 @@ describe('<VocDetailPanel>', () => {
     );
 
     await screen.findByText('테스트 VOC 제목');
-    expect(screen.getByText('Triage (읽기 전용)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Triage (읽기 전용)' })).toBeInTheDocument();
     expect(screen.getByLabelText('같은 Managed System의 VOC 1건')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
     for (const label of ['요약', 'Triage', '이력', '작성']) {
@@ -783,7 +783,7 @@ describe('<VocDetailPanel>', () => {
     Object.defineProperty(scrollContainer, 'scrollTo', { configurable: true, value: scrollTo });
 
     fireEvent.keyDown(moreButton, { key: 'Enter' });
-    const descriptionItem = screen.getByRole('menuitem', { name: '설명' });
+    const descriptionItem = screen.getByRole('menuitem', { name: '본문' });
     const similarItem = screen.getByRole('menuitem', { name: '같은 Managed System의 VOC' });
     expect(descriptionItem).toHaveFocus();
     await user.keyboard('{ArrowDown}');

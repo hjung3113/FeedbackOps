@@ -61,7 +61,7 @@ function clusterDisplayId(data: {
 export function buildVocClusterDetailSections(memberCount: number): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
-    { id: 'why', label: '근거' },
+    { id: 'why', label: '그룹화 사유' },
     { id: 'execution', label: '실행' },
     { id: 'members', label: '멤버', count: memberCount },
     { id: 'properties', label: '속성' },

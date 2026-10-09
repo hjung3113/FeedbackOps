@@ -112,7 +112,7 @@ function renderRoute() {
 
 async function mountRoute() {
   renderRoute();
-  await screen.findByText('검토 결정');
+  await screen.findByRole('heading', { name: '검토 결정' });
 }
 
 async function openDialog(buttonName: string, dialogName: string) {
@@ -255,7 +255,7 @@ describe('TaskRequestsRoute decision dialogs', () => {
     api.fetchTaskRequests.mockResolvedValue({ items: [taskRequest, otherTaskRequest] });
     api.approveTaskRequest.mockResolvedValue(approvedItem);
     const queryClient = renderRoute();
-    await screen.findByText('검토 결정');
+    await screen.findByRole('heading', { name: '검토 결정' });
 
     api.fetchTaskRequests.mockResolvedValue({ items: [approvedItem, otherTaskRequest] });
     fireEvent.click(screen.getByRole('button', { name: '승인' }));

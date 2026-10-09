@@ -40,7 +40,7 @@ export interface FindingDetailController {
 // ADR-0057 A2 amendment keeps navigation Korean and entity nouns English.
 export const DETAIL_SECTIONS = [
   { id: 'summary', label: '요약' },
-  { id: 'metadata', label: '소스/심각도/신뢰도' },
+  { id: 'metadata', label: '소스 / 심각도 / 신뢰도' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'managed-system', label: 'Managed System' },
   { id: 'analytics-area', label: 'Analytics Area' },

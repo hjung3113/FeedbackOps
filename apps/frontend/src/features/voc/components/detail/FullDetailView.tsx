@@ -37,7 +37,7 @@ export interface FullDetailViewProps {
 export const VOC_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'overview', label: '요약' },
   { id: 'triage', label: 'Triage' },
-  { id: 'description', label: '설명', overflow: true },
+  { id: 'description', label: '본문', overflow: true },
   { id: 'trail', label: '이력' },
   { id: 'conversation', label: '대화', overflow: true },
   { id: 'compose', label: '작성' },
