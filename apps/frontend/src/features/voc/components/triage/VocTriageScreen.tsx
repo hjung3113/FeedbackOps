@@ -84,6 +84,7 @@ export function VocTriageScreen({
     handleOptimisticPostpone,
     handleOptimisticRestore,
     handleOptimisticRollback,
+    handleQueueOutcome,
     handleProcessed,
     closeCreateFinding,
   } = useVocTriageScreenController({
@@ -220,6 +221,7 @@ export function VocTriageScreen({
                   onOptimisticRemove={handleOptimisticRemove}
                   onOptimisticPostpone={handleOptimisticPostpone}
                   onMutationFailure={onSelectVoc}
+                  onQueueOutcome={handleQueueOutcome}
                   onOptimisticRollback={handleOptimisticRollback}
                   onOptimisticRestore={handleOptimisticRestore}
                   onProcessed={handleProcessed}

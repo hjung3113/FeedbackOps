@@ -8,6 +8,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { useTriageCommand } from '../../hooks/useTriageCommand';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
+import type { TriageQueueOutcome } from '../../hooks/useTriageQueue';
 import type { CallToken } from '../../hooks/useUndoableMutation';
 import type { TriageInput } from '../../lib/triage-types';
 import type { OwnerCandidate } from './OwnerPicker';
@@ -20,6 +21,7 @@ export function useTriagePanelController({
   onProcessed,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
 }: {
   voc: VocListItem;
@@ -33,12 +35,13 @@ export function useTriagePanelController({
       severity: FindingSeverity;
     },
   ) => void;
-  onOptimisticRemove?: (vocId: string) => void;
-  onOptimisticPostpone?: (vocId: string) => void;
+  onOptimisticRemove?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticPostpone?: (vocId: string, input?: TriageInput) => void;
   onProcessed?: (delta: 1 | -1) => void;
   onMutationFailure?: (vocId: string) => void;
-  onOptimisticRollback?: (vocId: string) => void;
-  onOptimisticRestore?: (vocId: string) => void;
+  onQueueOutcome?: (input: TriageInput, outcome: TriageQueueOutcome) => void;
+  onOptimisticRollback?: (vocId: string, input?: TriageInput) => void;
+  onOptimisticRestore?: (vocId: string, input?: TriageInput) => void;
 }) {
   const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
   const { actors } = useWorkspaceActors();
@@ -105,6 +108,7 @@ export function useTriagePanelController({
     onProcessed,
     onOptimisticRestore,
     onOptimisticRollback,
+    onQueueOutcome,
     onMutationFailure,
   });
 
@@ -135,7 +139,7 @@ export function useTriagePanelController({
       };
 
       // Optimistic remove synchronously
-      onOptimisticRemove?.(voc.id);
+      onOptimisticRemove?.(voc.id, ...(onQueueOutcome ? [input] : []));
 
       // Fire the undoable mutation — error surfaces via mutationState+lastError.
       // REV-3 Cluster X: capture the per-call token so the toast we issue
@@ -187,6 +191,7 @@ export function useTriagePanelController({
       voc.severity,
       panelState,
       onOptimisticRemove,
+      onQueueOutcome,
       onAct,
       commit,
     ],
@@ -201,7 +206,7 @@ export function useTriagePanelController({
     };
 
     // The active tab determines whether postponing removes or marks the row.
-    (onOptimisticPostpone ?? onOptimisticRemove)?.(voc.id);
+    (onOptimisticPostpone ?? onOptimisticRemove)?.(voc.id, ...(onQueueOutcome ? [input] : []));
 
     // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
     const callToken: CallToken = commit(input, () => {
@@ -234,6 +239,7 @@ export function useTriagePanelController({
     voc.updated_at,
     onOptimisticRemove,
     onOptimisticPostpone,
+    onQueueOutcome,
     voc.triage_state,
     voc.review_postponed_at,
     onAct,

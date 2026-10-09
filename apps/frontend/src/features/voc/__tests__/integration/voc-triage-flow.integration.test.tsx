@@ -15,7 +15,7 @@
 // Playwright is used only for pixel-diff baselines, not here.
 
 import type { VocListItem } from '@fops/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -544,6 +544,493 @@ describe('Triage flow — integration (C6.3)', () => {
       );
     } finally {
       unmountCapturedToast(toastHost);
+    }
+  });
+
+  it.each(['patch rejection', 'refetch failure'] as const)(
+    '946: pending mark undo + %s lets the settled server marker win',
+    async (failure) => {
+      const { toast } = await import('sonner');
+      const { COMPENSATE_FAILURE_TOAST, REFETCH_FAILURE_TOAST } = await import(
+        '../../lib/triage-error-policy'
+      );
+      let resolveForward: (response: Response) => void = () => {};
+      let patches = 0;
+      let forwardResolved = false;
+      let serverItems = MOCK_VOCS;
+      const postponed = MOCK_VOCS.map((voc) =>
+        voc.id === FIRST_VOC_ID ? { ...voc, review_postponed_at: '2026-05-02T00:00:00.000Z' } : voc,
+      );
+      globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          patches += 1;
+          if (patches === 1) {
+            return new Promise<Response>((resolve) => {
+              resolveForward = resolve;
+            });
+          }
+          serverItems = postponed;
+          return Promise.resolve(jsonResponse({ code: 'conflict.stale_write' }, 409));
+        }
+        if (String(input) === '/vocs?triage=946') {
+          return Promise.resolve(jsonResponse({ items: serverItems }));
+        }
+        if (String(input).endsWith(`/vocs/${FIRST_VOC_ID}`)) {
+          if (forwardResolved) serverItems = postponed;
+          return Promise.reject(new Error('detail unavailable'));
+        }
+        return Promise.resolve(jsonResponse({ items: [], actors: [] }));
+      }) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      function SelectedScreen() {
+        const queue = useQuery({
+          queryKey: ['vocs', 'triage', '946'],
+          queryFn: async () => {
+            const response = await fetch('/vocs?triage=946');
+            return (await response.json()) as { items: VocListItem[] };
+          },
+          initialData: { items: MOCK_VOCS },
+        });
+        const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+        return (
+          <VocTriageScreen
+            items={queue.data.items}
+            queueSettled={!queue.isFetching}
+            selectedId={selectedId}
+            activeTab="unassigned"
+            onSelectVoc={setSelectedId}
+            onTabChange={vi.fn()}
+          />
+        );
+      }
+      const view = render(<SelectedScreen />, { wrapper: Wrapper });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '보류' }));
+      });
+      const host = renderCapturedToast(view.baseElement);
+      try {
+        const undo = host?.querySelector('button');
+        if (!undo) throw new Error('Undo missing');
+        await act(async () => {
+          fireEvent.click(undo);
+          forwardResolved = true;
+          resolveForward(
+            failure === 'patch rejection'
+              ? jsonResponse({ updated_at: '2026-05-02T00:00:00.000Z' })
+              : new Response(null, { status: 200 }),
+          );
+        });
+        const message =
+          failure === 'patch rejection' ? COMPENSATE_FAILURE_TOAST : REFETCH_FAILURE_TOAST;
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message), {
+          timeout: 5000,
+        });
+        expect(vi.mocked(toast.error).mock.calls.filter(([copy]) => copy === message)).toHaveLength(
+          1,
+        );
+        await waitFor(() => {
+          const row = screen.getByRole('button', { name: /VOC-I-001/ });
+          expect(within(row).getByText('보류')).toBeInTheDocument();
+          expect(row).toHaveAccessibleDescription(/보류/);
+        });
+      } finally {
+        unmountCapturedToast(host);
+      }
+    },
+  );
+
+  it('946: late mark failure after undo discards its override without changing selection', async () => {
+    const { toast } = await import('sonner');
+    let rejectForward: (error: Error) => void = () => {};
+    let patches = 0;
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'PATCH') return Promise.resolve(jsonResponse({ items: [] }));
+      patches += 1;
+      if (patches > 1) return Promise.resolve(jsonResponse({ updated_at: 'fresh' }));
+      return new Promise<Response>((_resolve, reject) => {
+        rejectForward = reject;
+      });
+    }) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen({ items }: { items: VocListItem[] }) {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={items}
+          queueSettled
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const view = render(<SelectedScreen items={MOCK_VOCS} />, { wrapper: Wrapper });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '보류' }));
+    });
+    const host = renderCapturedToast(view.baseElement);
+    try {
+      await act(async () => {
+        const undo = host?.querySelector('button');
+        if (!undo) throw new Error('Undo missing');
+        fireEvent.click(undo);
+        fireEvent.click(screen.getByRole('button', { name: /VOC-I-003/ }));
+      });
+      expect(screen.getByRole('button', { name: /VOC-I-003/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await act(async () => rejectForward(new Error('late mark failure')));
+      view.rerender(
+        <SelectedScreen
+          items={MOCK_VOCS.map((voc) =>
+            voc.id === FIRST_VOC_ID
+              ? { ...voc, review_postponed_at: '2026-05-02T00:00:00.000Z' }
+              : voc,
+          )}
+        />,
+      );
+      await waitFor(() => {
+        const row = screen.getByRole('button', { name: /VOC-I-001/ });
+        expect(within(row).getByText('보류')).toBeInTheDocument();
+        expect(row).toHaveAccessibleDescription(/보류/);
+      });
+      expect(screen.getByRole('button', { name: /VOC-I-003/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+    } finally {
+      unmountCapturedToast(host);
+    }
+  });
+
+  it('946 FIX1 F1: an older late failure preserves the newer mark and archived exclusion', async () => {
+    const { toast } = await import('sonner');
+    const requests: Array<(response: Response) => void> = [];
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => requests.push(resolve))
+        : Promise.resolve(jsonResponse({ items: [] })),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen() {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const view = render(<SelectedScreen />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    const host = renderCapturedToast(view.baseElement);
+    try {
+      await act(async () => {
+        const undo = host?.querySelector('button');
+        if (!undo) throw new Error('Undo missing');
+        fireEvent.click(undo);
+      });
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /VOC-I-001/ })));
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+      expect(requests).toHaveLength(2);
+      await act(async () => requests[0]?.(jsonResponse({ code: 'conflict.stale_write' }, 409)));
+      const row = screen.getByRole('button', { name: /VOC-I-001/ });
+      expect(within(row).getByText('보류')).toBeInTheDocument();
+      expect(row).toHaveAccessibleDescription(/보류/);
+      await act(async () => requests[1]?.(jsonResponse({ code: 'conflict.record_archived' }, 409)));
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+      );
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith('이 항목은 보관되어 변경할 수 없습니다.');
+    } finally {
+      unmountCapturedToast(host);
+    }
+  });
+
+  it('946 FIX1 F2: archived mark excludes the current row after its panel unmounts', async () => {
+    const { toast } = await import('sonner');
+    let resolveForward: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => {
+            resolveForward = resolve;
+          })
+        : Promise.reject(new Error('refresh unavailable')),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen({ items }: { items: VocListItem[] }) {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={items}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const view = render(<SelectedScreen items={MOCK_VOCS} />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    view.rerender(<SelectedScreen items={MOCK_VOCS.slice(1)} />);
+    expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument();
+    view.rerender(<SelectedScreen items={[]} />);
+    expect(screen.queryByRole('button', { name: '보류' })).not.toBeInTheDocument();
+    view.rerender(<SelectedScreen items={MOCK_VOCS} />);
+    expect(screen.getByRole('button', { name: /VOC-I-001/ })).toBeInTheDocument();
+    await act(async () => resolveForward(jsonResponse({ code: 'conflict.record_archived' }, 409)));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('이 항목은 보관되어 변경할 수 없습니다.');
+  });
+
+  it('946 FIX1 F3: archived mark keeps selection on the advanced VOC', async () => {
+    let resolveForward: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((resolve) => {
+            resolveForward = resolve;
+          })
+        : Promise.resolve(jsonResponse({ items: [] })),
+    ) as typeof globalThis.fetch;
+    const onSelectVoc = vi.fn();
+    const Wrapper = makeWrapper();
+    function SelectedScreen() {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={(id) => {
+            onSelectVoc(id);
+            setSelectedId(id);
+          }}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    render(<SelectedScreen />, { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    expect(onSelectVoc).toHaveBeenLastCalledWith('voc-int-0002');
+    await act(async () => resolveForward(jsonResponse({ code: 'conflict.parent_archived' }, 409)));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+    );
+    expect(onSelectVoc).toHaveBeenLastCalledWith('voc-int-0002');
+    expect(onSelectVoc).not.toHaveBeenCalledWith(FIRST_VOC_ID);
+    expect(screen.getByRole('button', { name: /VOC-I-002/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it.each(['conflict.record_archived', 'conflict.parent_archived'])(
+    '946: failed mark with %s excludes the archived row',
+    async (code) => {
+      const { toast } = await import('sonner');
+      let resolveForward: (response: Response) => void = () => {};
+      globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'PATCH'
+          ? new Promise<Response>((resolve) => {
+              resolveForward = resolve;
+            })
+          : Promise.resolve(jsonResponse({ items: [] })),
+      ) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      render(
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={FIRST_VOC_ID}
+          activeTab="unassigned"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />,
+        { wrapper: Wrapper },
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '보류' }));
+      });
+      expect(
+        within(screen.getByRole('button', { name: /VOC-I-001/ })).getByText('보류'),
+      ).toBeInTheDocument();
+      await act(async () => resolveForward(jsonResponse({ code }, 409)));
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument(),
+      );
+      expect(
+        vi
+          .mocked(toast.error)
+          .mock.calls.filter(([copy]) => copy === '이 항목은 보관되어 변경할 수 없습니다.'),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('946: settled remove undo + compensation failure preserves the same-context exclusion', async () => {
+    const { toast } = await import('sonner');
+    const { COMPENSATE_FAILURE_TOAST } = await import('../../lib/triage-error-policy');
+    let patches = 0;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'PATCH') return jsonResponse({ items: [] });
+      patches += 1;
+      return patches === 1
+        ? jsonResponse({ updated_at: '2026-05-02T00:00:00.000Z' })
+        : jsonResponse({ code: 'conflict.stale_write' }, 409);
+    }) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    const view = render(
+      <VocTriageScreen
+        items={MOCK_VOCS}
+        queueSettled
+        selectedId={FIRST_VOC_ID}
+        activeTab="untriaged"
+        onSelectVoc={vi.fn()}
+        onTabChange={vi.fn()}
+      />,
+      { wrapper: Wrapper },
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    await waitFor(() => expect(screen.getByText(/1건 처리됨/)).toBeInTheDocument());
+    const host = renderCapturedToast(view.baseElement);
+    try {
+      const undo = host?.querySelector('button');
+      if (!undo) throw new Error('Undo missing');
+      await act(async () => fireEvent.click(undo));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(COMPENSATE_FAILURE_TOAST));
+      view.rerender(
+        <VocTriageScreen
+          items={[...MOCK_VOCS]}
+          queueSettled
+          selectedId={FIRST_VOC_ID}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument();
+    } finally {
+      unmountCapturedToast(host);
+    }
+  });
+
+  it.each(['rollback', 'locked'] as const)(
+    '946: forward mark %s discards the override and preserves its error policy',
+    async (outcome) => {
+      let resolveForward: (response: Response) => void = () => {};
+      globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'PATCH'
+          ? new Promise<Response>((resolve) => {
+              resolveForward = resolve;
+            })
+          : Promise.resolve(jsonResponse({ items: [] })),
+      ) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      function SelectedScreen({ items }: { items: VocListItem[] }) {
+        const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+        return (
+          <VocTriageScreen
+            items={items}
+            queueSettled
+            selectedId={selectedId}
+            activeTab="unassigned"
+            onSelectVoc={outcome === 'locked' ? vi.fn() : setSelectedId}
+            onTabChange={vi.fn()}
+          />
+        );
+      }
+      const view = render(<SelectedScreen items={MOCK_VOCS} />, { wrapper: Wrapper });
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+      // A new server marker arrives while the optimistic mark is pending.
+      const postponed = MOCK_VOCS.map((voc) =>
+        voc.id === FIRST_VOC_ID ? { ...voc, review_postponed_at: '2026-05-02T00:00:00.000Z' } : voc,
+      );
+      if (outcome === 'rollback') view.rerender(<SelectedScreen items={postponed} />);
+      await act(async () =>
+        resolveForward(
+          jsonResponse(
+            { code: outcome === 'locked' ? 'conflict.idempotency_key_reuse' : 'permission.denied' },
+            409,
+          ),
+        ),
+      );
+      const row = screen.getByRole('button', { name: /VOC-I-001/ });
+      expect(row).toHaveAttribute('aria-selected', 'true');
+      if (outcome === 'rollback') {
+        expect(within(row).getByText('보류')).toBeInTheDocument();
+        expect(row).toHaveAccessibleDescription(/보류/);
+      } else {
+        expect(within(row).queryByText('보류')).not.toBeInTheDocument();
+      }
+      // A settled read clearing the marker must no longer be masked by the mark.
+      view.rerender(<SelectedScreen items={[...MOCK_VOCS]} />);
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).queryByText('보류'),
+        ).not.toBeInTheDocument(),
+      );
+      if (outcome === 'locked') {
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+        expect(
+          vi.mocked(globalThis.fetch).mock.calls.filter(([, init]) => init?.method === 'PATCH'),
+        ).toHaveLength(1);
+      } else {
+        expect(screen.getByRole('button', { name: '보류' })).not.toBeDisabled();
+      }
+    },
+  );
+
+  it('946: successful mark compensation clears the marker until the next settled read', async () => {
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? jsonResponse({ updated_at: '2026-05-02T00:00:00.000Z' })
+        : jsonResponse({ items: [] }),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    const postponed = MOCK_VOCS.map((voc) =>
+      voc.id === FIRST_VOC_ID ? { ...voc, review_postponed_at: '2026-05-02T00:00:00.000Z' } : voc,
+    );
+    const content = (items: VocListItem[]) => (
+      <VocTriageScreen
+        items={items}
+        queueSettled
+        selectedId={FIRST_VOC_ID}
+        activeTab="unassigned"
+        onSelectVoc={vi.fn()}
+        onTabChange={vi.fn()}
+      />
+    );
+    const view = render(content(MOCK_VOCS), { wrapper: Wrapper });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '보류' })));
+    await waitFor(() => expect(screen.getByText(/1건 처리됨/)).toBeInTheDocument());
+    view.rerender(content(postponed));
+    const host = renderCapturedToast(view.baseElement);
+    try {
+      const undo = host?.querySelector('button');
+      if (!undo) throw new Error('Undo missing');
+      await act(async () => fireEvent.click(undo));
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).queryByText('보류'),
+        ).not.toBeInTheDocument(),
+      );
+      view.rerender(content([...postponed]));
+      await waitFor(() => {
+        const row = screen.getByRole('button', { name: /VOC-I-001/ });
+        expect(within(row).getByText('보류')).toBeInTheDocument();
+        expect(row).toHaveAccessibleDescription(/보류/);
+      });
+    } finally {
+      unmountCapturedToast(host);
     }
   });
 

@@ -1,6 +1,7 @@
 import type { FindingSeverity, VocListItem } from '@fops/shared';
 import { useEffect, useRef, useState } from 'react';
-import { useTriageQueue } from '../../hooks/useTriageQueue';
+import { type TriageQueueOutcome, useTriageQueue } from '../../hooks/useTriageQueue';
+import type { TriageInput } from '../../lib/triage-types';
 
 export interface VocTriageScreenControllerArgs {
   items: VocListItem[];
@@ -33,10 +34,11 @@ export interface VocTriageScreenController {
       severity: FindingSeverity;
     },
   ) => void;
-  handleOptimisticRemove: (vocId: string) => void;
-  handleOptimisticPostpone: (vocId: string) => void;
-  handleOptimisticRestore: (vocId: string) => void;
-  handleOptimisticRollback: (vocId: string) => void;
+  handleOptimisticRemove: (vocId: string, input?: TriageInput) => void;
+  handleOptimisticPostpone: (vocId: string, input?: TriageInput) => void;
+  handleOptimisticRestore: (vocId: string, input?: TriageInput) => void;
+  handleQueueOutcome: (input: TriageInput, outcome: TriageQueueOutcome) => void;
+  handleOptimisticRollback: (vocId: string, input?: TriageInput) => void;
   handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
 }
@@ -49,11 +51,8 @@ export function useVocTriageScreenController({
   activeTab,
   onSelectVoc,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
-  const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone } = useTriageQueue(
-    items,
-    queueContext,
-    queueSettled,
-  );
+  const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone, commandEnded } =
+    useTriageQueue(items, queueContext, queueSettled);
   const [createFindingTarget, setCreateFindingTarget] = useState<{
     vocId: string;
     managedSystemId: string;
@@ -108,23 +107,27 @@ export function useVocTriageScreenController({
     }
   }
 
-  function handleOptimisticRemove(vocId: string): void {
+  function handleOptimisticRemove(vocId: string, input?: TriageInput): void {
     const item = items.find((voc) => voc.id === vocId);
     if (!item) return;
-    optimisticRemove(vocId, {
-      severity: item.severity,
-      ownerUserId: item.owner_user_id,
-      ownerTeamId: item.owner_team_id,
-      analyticsAreaId: item.analytics_area_id,
-    });
+    optimisticRemove(
+      vocId,
+      {
+        severity: item.severity,
+        ownerUserId: item.owner_user_id,
+        ownerTeamId: item.owner_team_id,
+        analyticsAreaId: item.analytics_area_id,
+      },
+      input,
+    );
   }
 
-  function handleOptimisticPostpone(vocId: string): void {
+  function handleOptimisticPostpone(vocId: string, input?: TriageInput): void {
     if (activeTab === 'untriaged') {
-      handleOptimisticRemove(vocId);
+      handleOptimisticRemove(vocId, input);
       return;
     }
-    optimisticPostpone(vocId);
+    optimisticPostpone(vocId, input);
     const index = liveQueue.findIndex((voc) => voc.id === vocId);
     const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
     if (next) onSelectVoc(next.id);
@@ -139,13 +142,14 @@ export function useVocTriageScreenController({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticPostpone,
-    handleOptimisticRollback: (vocId) => {
-      optimisticRestore(vocId, 'rollback');
+    handleQueueOutcome: commandEnded,
+    handleOptimisticRollback: (vocId, input) => {
+      optimisticRestore(vocId, 'rollback', input);
     },
     // Undo and compensation keep the current selection (as before #940); a forward
     // failure reselects the failed VOC through onMutationFailure instead.
-    handleOptimisticRestore: (vocId) => {
-      optimisticRestore(vocId);
+    handleOptimisticRestore: (vocId, input) => {
+      optimisticRestore(vocId, undefined, input);
     },
     handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),
