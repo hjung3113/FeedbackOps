@@ -105,20 +105,33 @@ export function VocTriageScreen({
     sourceId: string | null;
     context: string;
     restore?: boolean;
+    expiresAt?: number;
+    undoToast?: Element | null;
   } | null>(null);
+  const releaseRestoreFocus = useRef<(() => void) | null>(null);
   function handleAdvanceVoc(id: string | null): void {
+    releaseRestoreFocus.current?.();
     setPendingFocus({ id, sourceId: selectedId, context: queueContext ?? activeTab });
     if (onAdvanceVoc) onAdvanceVoc(id);
     else if (id !== null) onSelectVoc(id);
   }
   function handleSelectVoc(id: string): void {
+    releaseRestoreFocus.current?.();
     setPendingFocus(null);
     onSelectVoc(id);
   }
   function handleRestoreVoc(id: string): void {
+    releaseRestoreFocus.current?.();
     setPendingFocus(
       canRestoreFocus(rootRef.current)
-        ? { id, sourceId: selectedId, context: queueContext ?? activeTab, restore: true }
+        ? {
+            id,
+            sourceId: selectedId,
+            context: queueContext ?? activeTab,
+            restore: true,
+            expiresAt: Date.now() + 1000,
+            undoToast: document.activeElement?.closest('[data-sonner-toast]') ?? null,
+          }
         : null,
     );
     if (onAdvanceVoc) onAdvanceVoc(id);
@@ -149,6 +162,24 @@ export function VocTriageScreen({
   useEffect(() => {
     if (selectedVoc === null) close();
   }, [close, selectedVoc]);
+  const focusContext = useRef({ selectedId, context: queueContext ?? activeTab, pendingFocus });
+  focusContext.current = { selectedId, context: queueContext ?? activeTab, pendingFocus };
+  useEffect(() => {
+    if (!pendingFocus?.restore) return;
+    const retire = () => {
+      releaseRestoreFocus.current?.();
+      setPendingFocus((current) => (current === pendingFocus ? null : current));
+    };
+    const onFocusChange = () => {
+      if (!canRestoreFocus(rootRef.current)) retire();
+    };
+    const expiry = setTimeout(retire, Math.max(0, (pendingFocus.expiresAt ?? 0) - Date.now()));
+    document.addEventListener('focusin', onFocusChange);
+    return () => {
+      clearTimeout(expiry);
+      document.removeEventListener('focusin', onFocusChange);
+    };
+  }, [pendingFocus]);
   useEffect(() => {
     if (!pendingFocus) return;
     if (
@@ -174,8 +205,58 @@ export function VocTriageScreen({
               '[role="tabpanel"] button[aria-selected="true"]',
             );
     if (!target) return;
+    if (!pendingFocus.restore) {
+      target.focus();
+      setPendingFocus(null);
+      return;
+    }
+    // Sonner can return focus on blur as well as teardown. Keep this request
+    // armed across the initial focus, but release even when neither path fires.
+    let correction: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      document.removeEventListener('focusin', onFocusReturn);
+      clearTimeout(correction);
+      if (releaseRestoreFocus.current === release) releaseRestoreFocus.current = null;
+    };
+    const finish = () => {
+      release();
+      setPendingFocus((current) => (current === pendingFocus ? null : current));
+    };
+    const onFocusReturn = () => {
+      if (!canRestoreFocus(rootRef.current)) {
+        finish();
+        return;
+      }
+      const active = document.activeElement;
+      if (
+        active === target ||
+        !active?.closest('[role="tabpanel"] button[aria-selected], [role="tab"]') ||
+        !rootRef.current?.contains(active)
+      ) {
+        return;
+      }
+      clearTimeout(correction);
+      // Run after sonner's blur handler has cleared its own focus-return target.
+      correction = setTimeout(() => {
+        const current = focusContext.current;
+        if (
+          current.pendingFocus === pendingFocus &&
+          Date.now() < (pendingFocus.expiresAt ?? 0) &&
+          current.selectedId === pendingFocus.id &&
+          current.context === pendingFocus.context &&
+          target.isConnected &&
+          canRestoreFocus(rootRef.current)
+        ) {
+          target.focus();
+          // Blur may return focus before the toast's cleanup path runs.
+          if (!pendingFocus.undoToast?.isConnected) finish();
+        } else finish();
+      }, 0);
+    };
+    releaseRestoreFocus.current = release;
+    document.addEventListener('focusin', onFocusReturn);
     target.focus();
-    setPendingFocus(null);
+    return release;
   }, [
     pendingFocus,
     createFindingTarget,
@@ -245,6 +326,7 @@ export function VocTriageScreen({
           tabs={tabs}
           activeTab={activeTab}
           onTabChange={(next) => {
+            releaseRestoreFocus.current?.();
             setPendingFocus(null);
             onTabChange(next as TriageTab);
           }}
@@ -310,8 +392,16 @@ export function VocTriageScreen({
                 <TriagePanel
                   voc={selectedVoc}
                   onAct={handleAct}
-                  onOptimisticRemove={handleOptimisticRemove}
-                  onOptimisticPostpone={handleOptimisticPostpone}
+                  onOptimisticRemove={(id, input) => {
+                    releaseRestoreFocus.current?.();
+                    setPendingFocus(null);
+                    handleOptimisticRemove(id, input);
+                  }}
+                  onOptimisticPostpone={(id, input) => {
+                    releaseRestoreFocus.current?.();
+                    setPendingFocus(null);
+                    handleOptimisticPostpone(id, input);
+                  }}
                   onMutationFailure={handleSelectVoc}
                   onQueueOutcome={handleQueueOutcome}
                   onOptimisticRollback={handleOptimisticRollback}
@@ -332,7 +422,10 @@ export function VocTriageScreen({
           defaultTitle={createFindingTarget.defaultTitle}
           defaultSeverity={createFindingTarget.defaultSeverity}
           open={createFindingTarget !== null}
-          onCreated={() => setPendingFocus(null)}
+          onCreated={() => {
+            releaseRestoreFocus.current?.();
+            setPendingFocus(null);
+          }}
           onClose={() => {
             if (pendingFocus?.id !== (selectedVoc?.id ?? null)) setPendingFocus(null);
             closeCreateFinding();

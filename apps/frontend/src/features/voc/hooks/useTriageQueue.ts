@@ -15,26 +15,13 @@ import type { TriageInput } from '../lib/triage-types';
 
 // ── State shape ───────────────────────────────────────────────────────────────
 
-export interface TriagePriorValues {
-  severity: string | null;
-  ownerUserId: string | null;
-  ownerTeamId: string | null;
-  analyticsAreaId: string | null;
-}
-
 export interface TriageQueueState {
   /** VOC ids that have been optimistically removed from the live queue. */
   optimisticallyRemoved: Set<string>;
-  /** The most recently removed item — used for the undo flow. */
-  lastRemoved: {
-    vocId: string;
-    priorValues: TriagePriorValues;
-  } | null;
 }
 
 export const initialTriageQueueState: TriageQueueState = {
   optimisticallyRemoved: new Set(),
-  lastRemoved: null,
 };
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -43,14 +30,10 @@ export type TriageQueueAction =
   | {
       type: 'optimistic_remove';
       vocId: string;
-      priorValues: TriagePriorValues;
     }
   | {
       type: 'optimistic_restore';
       vocId: string;
-    }
-  | {
-      type: 'clear_last_removed';
     }
   | {
       type: 'expire_exclusions';
@@ -69,7 +52,6 @@ export function triageQueueReducer(
       next.add(action.vocId);
       return {
         optimisticallyRemoved: next,
-        lastRemoved: { vocId: action.vocId, priorValues: action.priorValues },
       };
     }
 
@@ -78,8 +60,6 @@ export function triageQueueReducer(
       next.delete(action.vocId);
       return {
         optimisticallyRemoved: next,
-        // Only clear lastRemoved if it matches the restored id
-        lastRemoved: state.lastRemoved?.vocId === action.vocId ? null : state.lastRemoved,
       };
     }
 
@@ -88,9 +68,6 @@ export function triageQueueReducer(
       for (const vocId of action.vocIds) next.delete(vocId);
       return { ...state, optimisticallyRemoved: next };
     }
-
-    case 'clear_last_removed':
-      return { ...state, lastRemoved: null };
 
     default:
       return state;
@@ -111,8 +88,8 @@ export interface UseTriageQueueResult {
   dispatch: React.Dispatch<TriageQueueAction>;
   /** Server items filtered by optimisticallyRemoved. */
   liveQueue: VocListItem[];
-  /** Optimistically remove a voc and set lastRemoved for undo. */
-  optimisticRemove: (vocId: string, priorValues: TriagePriorValues, input?: TriageInput) => void;
+  /** Optimistically remove a VOC from this queue context. */
+  optimisticRemove: (vocId: string, input?: TriageInput) => void;
   /** Restore a previously removed voc (undo path). */
   optimisticRestore: (vocId: string, reason?: 'rollback', input?: TriageInput) => void;
   optimisticPostpone: (vocId: string, input?: TriageInput) => void;
@@ -164,7 +141,7 @@ export function useTriageQueue(
 
   const [exclusionContext, setExclusionContext] = useState(contextKey);
   // Adjust before committing children so old exclusions never hide a new context's rows.
-  // Expiring exclusions preserves lastRemoved and the original-id undo/error path.
+  // Expiring exclusions preserves the original-id undo/error path.
   if (exclusionContext !== contextKey) {
     setExclusionContext(contextKey);
     dispatch({ type: 'expire_exclusions', vocIds: [...state.optimisticallyRemoved] });
@@ -186,15 +163,11 @@ export function useTriageQueue(
     [serverItems, state.optimisticallyRemoved, postponedOverrides],
   );
 
-  function optimisticRemove(
-    vocId: string,
-    priorValues: TriagePriorValues,
-    input?: TriageInput,
-  ): void {
+  function optimisticRemove(vocId: string, input?: TriageInput): void {
     if (input) commandOwners.current.set(vocId, input);
     markedCommands.current.delete(vocId);
     postponedInSession.current.delete(vocId);
-    dispatch({ type: 'optimistic_remove', vocId, priorValues });
+    dispatch({ type: 'optimistic_remove', vocId });
   }
 
   function optimisticRestore(vocId: string, reason?: 'rollback', input?: TriageInput): void {
@@ -246,12 +219,6 @@ export function useTriageQueue(
         dispatch({
           type: 'optimistic_remove',
           vocId,
-          priorValues: {
-            severity: voc.severity,
-            ownerUserId: voc.owner_user_id,
-            ownerTeamId: voc.owner_team_id,
-            analyticsAreaId: voc.analytics_area_id,
-          },
         });
       }
     }

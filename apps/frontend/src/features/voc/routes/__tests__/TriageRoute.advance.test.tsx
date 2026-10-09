@@ -482,3 +482,181 @@ it('counts a successful response arriving while the screen is unmounted by the p
   });
   await screen.findByText(/1건 처리됨/);
 });
+
+it.each(['row click', 'action advance'])(
+  'keeps rows and the selected panel after the final failed uncached pin read: %s',
+  async (action) => {
+    const { router } = mount();
+    await screen.findByRole('heading', { name: second.title });
+    const client = clients[clients.length - 1] as QueryClient;
+    const initialKey = [
+      'vocs',
+      'triage',
+      undefined,
+      'untriaged',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      second.id,
+    ];
+    await waitFor(() => expect(client.getQueryState(initialKey)?.fetchStatus).toBe('idle'));
+    const destinationKey = [...initialKey.slice(0, -1), third.id];
+    expect(client.getQueryState(destinationKey)).toBeUndefined();
+    const successfulFetch = fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/vocs' && url.searchParams.get('view') === 'triage') {
+        return Promise.reject(new Error('Queue read failed'));
+      }
+      return successfulFetch(input, init);
+    });
+    if (action === 'row click') fireEvent.click(screen.getByRole('button', { name: /VOC-3/ }));
+    else await confirm();
+    await waitFor(() => expect(router.state.location.search.selected).toBe(third.id));
+    await waitFor(
+      () => {
+        expect(client.getQueryState(destinationKey)?.status).toBe('error');
+        expect(client.getQueryState(destinationKey)?.fetchStatus).toBe('idle');
+      },
+      { timeout: 5000 },
+    );
+    expect(screen.getByRole('button', { name: /VOC-1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /VOC-3/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: third.title })).toBeInTheDocument();
+    expect(screen.queryByText('불러오기 실패')).toBeNull();
+    if (action === 'action advance')
+      expect(screen.queryByRole('button', { name: /VOC-2/ })).toBeNull();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /높음/ }));
+    const tabKey = [...initialKey.slice(0, 3), 'high', ...initialKey.slice(4, -1), undefined];
+    await waitFor(
+      () => {
+        expect(client.getQueryState(tabKey)?.status).toBe('error');
+        expect(client.getQueryState(tabKey)?.fetchStatus).toBe('idle');
+      },
+      { timeout: 5000 },
+    );
+    await screen.findByText('불러오기 실패');
+    expect(screen.queryByRole('button', { name: /VOC-1/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: third.title })).toBeNull();
+    await act(async () => {
+      await router.navigate({
+        to: '/vocs',
+        search: (prev) => ({
+          ...prev,
+          tab: 'untriaged',
+          managedSystem: 'scope-b',
+          selected: third.id,
+        }),
+      });
+    });
+    const scopeKey = [...initialKey.slice(0, 2), 'scope-b', ...destinationKey.slice(3)];
+    await waitFor(
+      () => {
+        expect(client.getQueryState(scopeKey)?.status).toBe('error');
+        expect(client.getQueryState(scopeKey)?.fetchStatus).toBe('idle');
+      },
+      { timeout: 5000 },
+    );
+    await screen.findByText('불러오기 실패');
+    expect(screen.queryByRole('button', { name: /VOC-1/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: third.title })).toBeNull();
+  },
+);
+
+it.each(['confirm', 'mark', 'remove', 'empty queue'])(
+  'corrects sonner focus return after restored selection: %s',
+  async (mode) => {
+    toast.dismiss();
+    const toaster = render(<Toaster />);
+    const { router } = mount(
+      mode === 'mark' ? { tab: 'unassigned' } : mode === 'empty queue' ? { items: [second] } : {},
+    );
+    await screen.findByRole('heading', { name: second.title });
+    if (mode === 'mark' || mode === 'remove') {
+      fireEvent.click(screen.getByRole('button', { name: '보류' }));
+    } else await confirm();
+    await screen.findByText(/1건 처리됨/);
+    const undo = await screen.findByRole('button', { name: '실행 취소' });
+    undo.focus();
+    fireEvent.click(undo);
+    await waitFor(() => expect(router.state.location.search.selected).toBe(second.id));
+    await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+    const returnedTarget =
+      mode === 'empty queue'
+        ? screen.getByRole('tab', { name: /미분류/ })
+        : screen.getByRole('button', { name: /VOC-3/ });
+    await act(async () => {
+      toaster.unmount();
+      returnedTarget.focus();
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+    // The correction after teardown consumes this request.
+    await act(async () => returnedTarget.focus());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(returnedTarget).toHaveFocus();
+  },
+);
+
+it.each(['no return', 'row click', 'Back', 'input', 'dialog', 'navigation'])(
+  'retires the undo focus window before a later return: %s',
+  async (reason) => {
+    toast.dismiss();
+    render(<Toaster />);
+    const { router, history } = mount();
+    await screen.findByRole('heading', { name: second.title });
+    fireEvent.click(screen.getByRole('button', { name: /VOC-1/ }));
+    await screen.findByRole('heading', { name: 'Queue item 1' });
+    fireEvent.click(screen.getByRole('button', { name: /VOC-2/ }));
+    await screen.findByRole('heading', { name: second.title });
+    await confirm();
+    await screen.findByText(/1건 처리됨/);
+    const undo = await screen.findByRole('button', { name: '실행 취소' });
+    undo.focus();
+    fireEvent.click(undo);
+    await waitFor(() => expect(router.state.location.search.selected).toBe(second.id));
+    await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+    const returnedTarget = screen.getByRole('button', { name: /VOC-3/ });
+    if (reason === 'no return') {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+      });
+    } else if (reason === 'row click') {
+      fireEvent.click(screen.getByRole('button', { name: /VOC-4/ }));
+      await screen.findByRole('heading', { name: 'Queue item 4' });
+    } else if (reason === 'Back') {
+      await act(async () => history.back());
+      await screen.findByRole('heading', { name: 'Queue item 1' });
+    } else if (reason === 'navigation') {
+      await act(async () => {
+        await router.navigate({ to: '/findings' });
+      });
+      await screen.findByText('Findings destination');
+    } else {
+      render(
+        reason === 'input' ? (
+          <input aria-label="Other work" />
+        ) : (
+          <dialog open>
+            <button type="button">Other action</button>
+          </dialog>
+        ),
+      );
+      await act(async () =>
+        (reason === 'input'
+          ? screen.getByRole('textbox', { name: 'Other work' })
+          : screen.getByRole('button', { name: 'Other action' })
+        ).focus(),
+      );
+    }
+    await act(async () => returnedTarget.focus());
+    // Let a deferred correction run before checking that cancellation held.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    if (reason === 'navigation') expect(screen.queryByRole('button', { name: /VOC-2/ })).toBeNull();
+    else expect(returnedTarget).toHaveFocus();
+  },
+);

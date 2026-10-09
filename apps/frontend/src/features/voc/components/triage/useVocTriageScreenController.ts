@@ -141,16 +141,7 @@ export function useVocTriageScreenController({
     const item = items.find((voc) => voc.id === vocId);
     if (!item) return;
     advance(vocId, true, input);
-    optimisticRemove(
-      vocId,
-      {
-        severity: item.severity,
-        ownerUserId: item.owner_user_id,
-        ownerTeamId: item.owner_team_id,
-        analyticsAreaId: item.analytics_area_id,
-      },
-      input,
-    );
+    optimisticRemove(vocId, input);
   }
 
   function handleOptimisticPostpone(vocId: string, input?: TriageInput): void {

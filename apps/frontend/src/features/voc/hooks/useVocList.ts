@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api';
 import type { VocListItem } from '@fops/shared';
 import { type UseQueryResult, hashKey, keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 
 export interface UseVocListParams {
   view: 'inbox' | 'my' | 'triage';
@@ -54,7 +55,11 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
     pinVocId,
   ] as const;
 
-  return useQuery({
+  const contextKey = view === 'triage' ? hashKey([...queryKey.slice(0, -1), limit]) : '';
+  const retainedPage = useRef<{ contextKey: string; data: VocListPage } | null>(null);
+  if (retainedPage.current?.contextKey !== contextKey) retainedPage.current = null;
+
+  const query = useQuery({
     // pinVocId belongs in the key: two deep links differing only by target must
     // not share a cached queue (#383). q likewise (#821) — a search must not
     // read another search's cached page.
@@ -104,4 +109,18 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
     staleTime: 30_000,
     retry: 1,
   });
+  // Placeholder data disappears on error. Retain only a real successful page
+  // from this full non-pin context; the failed query still cannot settle exclusions.
+  if (view === 'triage' && query.isSuccess && !query.isPlaceholderData) {
+    retainedPage.current = { contextKey, data: query.data };
+  }
+  if (view === 'triage' && query.isError && !query.data && retainedPage.current) {
+    return {
+      ...query,
+      data: retainedPage.current.data,
+      isLoadingError: false,
+      isRefetchError: true,
+    };
+  }
+  return query;
 }

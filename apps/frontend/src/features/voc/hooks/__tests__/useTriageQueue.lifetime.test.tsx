@@ -22,13 +22,6 @@ const voc: VocListItem = {
   review_postponed_at: null,
   attachment_count: 0,
 };
-const priorValues = {
-  severity: null,
-  ownerUserId: null,
-  ownerTeamId: null,
-  analyticsAreaId: null,
-};
-
 describe('useTriageQueue — exclusion lifetime', () => {
   it.each(['waiting:ms-1', 'untriaged:ms-2', 'other-context'])(
     'expires exclusions on context change to %s and keeps the restored VOC visible',
@@ -37,7 +30,7 @@ describe('useTriageQueue — exclusion lifetime', () => {
         ({ context }) => useTriageQueue([voc], context, true),
         { initialProps: { context: 'untriaged:ms-1' } },
       );
-      act(() => result.current.optimisticRemove(voc.id, priorValues));
+      act(() => result.current.optimisticRemove(voc.id));
       expect(result.current.liveQueue).toEqual([]);
 
       rerender({ context });
@@ -83,7 +76,7 @@ describe('useTriageQueue — exclusion lifetime', () => {
       ({ items, settled }) => useTriageQueue(items, 'untriaged:ms-1', settled),
       { initialProps: { items: [voc], settled: true } },
     );
-    act(() => result.current.optimisticRemove(voc.id, priorValues));
+    act(() => result.current.optimisticRemove(voc.id));
     // Pending/error reads can temporarily supply no rows; they are not settlement.
     rerender({ items: [], settled: false });
     rerender({ items: [voc], settled: false });
