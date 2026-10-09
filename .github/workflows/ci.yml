@@ -56,7 +56,8 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        # Google's Docker Hub mirror (same digest): GitHub runners hit Docker Hub's unauthenticated pull limit.
+        image: mirror.gcr.io/pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
