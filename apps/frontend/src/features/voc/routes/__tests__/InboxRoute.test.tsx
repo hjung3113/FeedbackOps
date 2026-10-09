@@ -866,6 +866,34 @@ describe('useInboxRoute', () => {
     }
   });
 
+  // #891: Escape clears the box while the first q is still unacknowledged.
+  // Acknowledging that q must leave the box empty, and the clear restores the
+  // tab the search started from.
+  it('keeps an Escape clear and restores the tab when the pending q is acknowledged', () => {
+    vi.useFakeTimers();
+    try {
+      searchState = { view: 'inbox', tab: 'high' };
+      const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+      fireEvent.change(searchBox(), { target: { value: 'login' } });
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', q: 'login' });
+
+      fireEvent.keyDown(searchBox(), { key: 'Escape' });
+      expect(searchBox()).toHaveValue('');
+
+      searchState = { view: 'inbox', q: 'login' };
+      rerender(<InboxTestHarness view="inbox" />);
+      expect(searchBox()).toHaveValue('');
+
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      expect(searchBox()).toHaveValue('');
+      expect(lastNavigateSearch().search(searchState)).toEqual({ view: 'inbox', tab: 'high' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // ── Hangul debounce (#875) ──────────────────────────────────────────────────
   //
   // A draft ending in a Hangul character may still be a half-typed syllable
