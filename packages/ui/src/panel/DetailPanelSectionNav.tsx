@@ -361,10 +361,10 @@ export function DetailPanelSectionNav({
         releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
       } else if (jumpPhaseRef.current === 'jumping' && release.timeoutId === null) {
         // No scroll event means no stall net. Bound a browser that ignores scrollTo,
-        // or a root that never moves, without timing out a scroll that is underway.
+        // a root that never moves, or a root that loses its box. A moving scroll
+        // replaces this timer with the stall net, so firing means none arrived.
         release.timeoutId = setTimeout(() => {
           if (jumpReleaseRef.current !== release) return;
-          if (root.scrollTop !== originTop) return;
           releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
         }, JUMP_START_WATCHDOG_MS);
       }

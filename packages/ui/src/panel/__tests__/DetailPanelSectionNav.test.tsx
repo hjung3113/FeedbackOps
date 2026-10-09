@@ -880,6 +880,36 @@ describe('DetailPanelSectionNav', () => {
     }
   });
 
+  it('releases by the watchdog when the scroll root loses its box before it scrolls', () => {
+    // A nonzero click origin, then the root collapses to scrollTop 0 with no scroll event
+    // (a detached root). The watchdog must still release.
+    vi.useFakeTimers();
+    try {
+      const observer = stubIntersectionObserver();
+      const { anchor, scrollEl } = renderNavOverAnchors(
+        ['alpha', 'beta'],
+        { alpha: 12, beta: 400 },
+        { rootTop: 0, rootHeight: 200, scrollTop: 120 },
+      );
+      setScrollRange(scrollEl, 2000, 200);
+
+      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
+      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+      scrollEl.scrollTop = 0;
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      scrollEl.scrollTop = 40;
+      act(() => {
+        fireEvent.scroll(scrollEl);
+      });
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the clicked section through the landing pulse and the observer delivery in that frame', () => {
     // Max is 260, target is 900. 259 is within 1px and releases. The finishing pulse to 260
     // and that frame's observer entry must not replace Beta; the next scroll that leaves does.
