@@ -4,20 +4,8 @@
 // is the value already written (the inbox passes the URL `q`). `write` runs at
 // most once per distinct draft; `base` is what that write moves away from.
 
+import { endsWithHangul } from '@/lib/forms/search-debounce';
 import * as React from 'react';
-
-// #875: a draft whose last character is Hangul may still be a half-typed
-// syllable in progress. The ranges cover Jamo (U+1100–U+11FF, U+3130–U+318F,
-// e.g. ㄹ) and assembled syllables (U+AC00–U+D7A3, e.g. 이).
-function endsWithHangul(draft: string): boolean {
-  if (draft === '') return false;
-  const code = draft.charCodeAt(draft.length - 1);
-  return (
-    (code >= 0x1100 && code <= 0x11ff) ||
-    (code >= 0x3130 && code <= 0x318f) ||
-    (code >= 0xac00 && code <= 0xd7a3)
-  );
-}
 
 export interface UseCommittedSearchDraftOptions {
   committed: string;

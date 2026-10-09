@@ -8,6 +8,7 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
+import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS } from '@/lib/forms/search-debounce';
 import {
   Button,
   type FilterCategory,
@@ -145,10 +146,7 @@ const SORT_OPTIONS: SortOption[] = [
 
 const DEFAULT_SORT = 'created_at:desc';
 
-// #821: keystrokes settle for this long before the URL q (and thus the fetch) updates.
-export const SEARCH_DEBOUNCE_MS = 300;
-// #875: a draft ending in a Hangul character may still be composing its last syllable.
-export const SEARCH_HANGUL_DEBOUNCE_MS = 700;
+export { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

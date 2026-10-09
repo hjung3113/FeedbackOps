@@ -2,6 +2,7 @@ import { ApiError, apiRequest } from '@/lib/api';
 import { fetchNavResolve } from '@/lib/api/nav';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_SOURCE_PICKER_COPY } from '@/lib/copy/voc';
+import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import { vocListItemSchema } from '@fops/shared';
 import { Combobox } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -36,11 +37,6 @@ interface VocSourcePickerProps {
   describedBy?: string;
 }
 
-// #821: keystrokes settle for this long before the debounced text goes to the
-// server as `q` on GET /vocs (display-ID prefix + title substring search).
-// The #815 exact-display-ID lookup runs as a supplement on the same debounce.
-const SEARCH_DEBOUNCE_MS = 300;
-
 const EXACT_DISPLAY_ID_PATTERN = /^VOC-[1-9][0-9]*$/;
 
 interface PickerOption {
@@ -63,10 +59,13 @@ export function VocSourcePicker({
   // its value, to keep the trigger label.
   const [selectedOption, setSelectedOption] = useState<PickerOption | null>(null);
 
+  // #821: keystrokes settle for this long before the debounced text goes to the
+  // server as `q` on GET /vocs (display-ID prefix + title substring search).
+  // The #815 exact-display-ID lookup runs as a supplement on the same debounce.
   useEffect(() => {
     const timeoutId = window.setTimeout(
       () => setDebouncedSearch(search.trim()),
-      SEARCH_DEBOUNCE_MS,
+      searchDebounceMs(search),
     );
     return () => window.clearTimeout(timeoutId);
   }, [search]);
