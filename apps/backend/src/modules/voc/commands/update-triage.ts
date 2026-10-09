@@ -114,7 +114,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
         },
       );
     }
-    if (input.postpone_review === true && input.triage_state !== undefined) {
+    if (input.postpone_review !== undefined && input.triage_state !== undefined) {
       throw new HttpError(
         'validation.failed',
         'postpone_review and triage_state cannot be set together',
@@ -306,7 +306,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       return composeEnvelope(pLockedVoc, pNextStates);
     }
 
-    // 7b. Standard diff path (no postpone_review).
+    // 7b. Standard diff path. `postpone_review: false` is handled here.
     type VocPatch = {
       severity?: 'low' | 'medium' | 'high' | 'critical' | null;
       ownerUserId?: string | null;
@@ -368,8 +368,25 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       }
     }
 
+    // `postpone_review: false` clears a postponed untriaged review. On a VOC
+    // that is not postponed the flag does not touch the timestamp and writes
+    // no audit row; other fields in this request still apply above.
+    const clearingPostpone =
+      input.postpone_review === false &&
+      row.triageState === 'untriaged' &&
+      row.triageStateReviewPostponedAt !== null;
+    if (clearingPostpone) {
+      patch.triageStateReviewPostponedAt = null;
+    }
+
     // 8. Empty diff — return current state without any writes.
-    if (!severityChanged && !ownerChanged && !aaChanged && !triageStateChanged) {
+    if (
+      !severityChanged &&
+      !ownerChanged &&
+      !aaChanged &&
+      !triageStateChanged &&
+      !clearingPostpone
+    ) {
       const nextStates = await nextReporterStates(
         row.reporterFacingStatus as ReporterFacingStatus,
         tx,
@@ -393,6 +410,19 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     const newTriageState = updated.triageState as VocEnvelope['triage_state'];
 
     // 10. Emit audit events in deterministic order (same tx).
+    // a0. voc_triage_postpone_cleared — first, mirroring voc_triage_postponed.
+    if (clearingPostpone) {
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_triage_postpone_cleared',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${updated.displayId} triage review postpone cleared`,
+        detail: { voc_id: vocId, actor_id: actor.actor_id },
+      });
+    }
+
     // a. voc_severity_set — emitted for any severity change including null
     //    (de-triage / severity-clear). Schema now accepts nullable `to`
     //    (F2 — vocSeveritySetDetailSchema widened).
