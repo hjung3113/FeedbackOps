@@ -8,16 +8,6 @@ import { describe, expect, it } from 'vitest';
 import { TriageEmpty } from '../TriageEmpty';
 
 describe('TriageEmpty', () => {
-  it('renders the empty queue message', () => {
-    render(<TriageEmpty />);
-    expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
-  });
-
-  it('renders the helper sub-text', () => {
-    render(<TriageEmpty />);
-    expect(screen.getByText(/새 VOC가 들어오면 자동으로 추가됩니다/)).toBeInTheDocument();
-  });
-
   it.each([
     {
       tabScoped: true,
@@ -25,6 +15,7 @@ describe('TriageEmpty', () => {
       subtext: null,
     },
     {
+      // Default (whole-queue) variant: title plus the helper sub-text.
       tabScoped: false,
       title: '큐가 비었습니다',
       subtext: /새 VOC가 들어오면 자동으로 추가됩니다/,

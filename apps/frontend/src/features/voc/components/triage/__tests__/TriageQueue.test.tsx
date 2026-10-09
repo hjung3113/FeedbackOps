@@ -53,14 +53,6 @@ describe('TriageQueue', () => {
     expect(screen.getByText('Second VOC')).toBeInTheDocument();
   });
 
-  it('renders TriageEmpty when queue is empty', () => {
-    // FIX1: the queue-empty copy now requires a known zero total; the default
-    // (unknown) renders the neutral tab-empty copy, covered by the it.each.
-    render(<TriageQueue vocs={[]} selectedId={null} onSelect={vi.fn()} queueTotal={0} />);
-    // TriageEmpty renders "큐가 비었습니다" copy from prototype
-    expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
-  });
-
   it('renders OutOfScopeSummaryBanner when outOfScopeSummary is provided', () => {
     render(
       <TriageQueue
