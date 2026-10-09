@@ -9,12 +9,11 @@ export interface VocTriageScreenControllerArgs {
   queueContext: string;
   queueSettled: boolean;
   activeTab: string;
-  onSelectVoc: (id: string) => void;
+  onAdvanceVoc: (id: string | null) => void;
 }
 
 export interface VocTriageScreenController {
   liveQueue: VocListItem[];
-  processedCount: number;
   selectedVoc: VocListItem | null;
   deepLinkTargetMissing: boolean;
   createFindingTarget: {
@@ -39,7 +38,6 @@ export interface VocTriageScreenController {
   handleOptimisticRestore: (vocId: string, input?: TriageInput) => void;
   handleQueueOutcome: (input: TriageInput, outcome: TriageQueueOutcome) => void;
   handleOptimisticRollback: (vocId: string, input?: TriageInput) => void;
-  handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
 }
 
@@ -49,7 +47,7 @@ export function useVocTriageScreenController({
   queueContext,
   queueSettled,
   activeTab,
-  onSelectVoc,
+  onAdvanceVoc,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
   const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone, commandEnded } =
     useTriageQueue(items, queueContext, queueSettled);
@@ -61,12 +59,6 @@ export function useVocTriageScreenController({
     defaultSeverity: FindingSeverity;
   } | null>(null);
 
-  const [processedCount, setProcessedCount] = useState(0);
-
-  function handleProcessed(delta: 1 | -1): void {
-    setProcessedCount((count) => count + delta);
-  }
-
   // Keep session history in a ref because a refetch removes the item from both
   // `items` and the live queue before selection can determine whether it was
   // previously present.
@@ -75,6 +67,7 @@ export function useVocTriageScreenController({
     for (const voc of items) everInQueueRef.current.add(voc.id);
   }, [items]);
 
+  const removedSelectionRef = useRef<{ vocId: string; nextId: string | null } | null>(null);
   const selectedInQueue = liveQueue.find((voc) => voc.id === selectedId) ?? null;
   // Preserve the distinction between a previously queued selection, which may
   // auto-advance after removal, and a missing deep link, which must not fall
@@ -84,7 +77,11 @@ export function useVocTriageScreenController({
     selectedInQueue === null &&
     !items.some((voc) => voc.id === selectedId) &&
     !everInQueueRef.current.has(selectedId);
-  const selectedVoc = deepLinkTargetMissing ? null : (selectedInQueue ?? liveQueue[0] ?? null);
+  const actionFallback =
+    removedSelectionRef.current?.vocId === selectedId
+      ? (liveQueue.find((voc) => voc.id === removedSelectionRef.current?.nextId) ?? null)
+      : (liveQueue[0] ?? null);
+  const selectedVoc = deepLinkTargetMissing ? null : (selectedInQueue ?? actionFallback);
 
   function handleAct(
     kind: 'confirm' | 'finding' | 'skip',
@@ -107,9 +104,18 @@ export function useVocTriageScreenController({
     }
   }
 
+  function advance(vocId: string, removing: boolean): void {
+    const index = liveQueue.findIndex((voc) => voc.id === vocId);
+    const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
+    if (removing) removedSelectionRef.current = { vocId, nextId: next?.id ?? null };
+    // A singleton mark keeps its row and selection; removal clears the pin.
+    if (next || removing) onAdvanceVoc(next?.id ?? null);
+  }
+
   function handleOptimisticRemove(vocId: string, input?: TriageInput): void {
     const item = items.find((voc) => voc.id === vocId);
     if (!item) return;
+    advance(vocId, true);
     optimisticRemove(
       vocId,
       {
@@ -128,14 +134,11 @@ export function useVocTriageScreenController({
       return;
     }
     optimisticPostpone(vocId, input);
-    const index = liveQueue.findIndex((voc) => voc.id === vocId);
-    const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
-    if (next) onSelectVoc(next.id);
+    advance(vocId, false);
   }
 
   return {
     liveQueue,
-    processedCount,
     selectedVoc,
     deepLinkTargetMissing,
     createFindingTarget,
@@ -151,7 +154,6 @@ export function useVocTriageScreenController({
     handleOptimisticRestore: (vocId, input) => {
       optimisticRestore(vocId, undefined, input);
     },
-    handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),
   };
 }

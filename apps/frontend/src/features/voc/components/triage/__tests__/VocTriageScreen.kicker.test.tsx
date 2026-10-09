@@ -275,15 +275,23 @@ describe('VocTriageScreen — V1 inline kicker', () => {
       MOCK_VOC,
       { ...MOCK_VOC, id: 'voc-kicker-002', display_id: 'VOC-K-002' },
     ];
-    render(
-      <Wrapper>
+    function RouteSession() {
+      const [processedCount, setProcessedCount] = useState(0);
+      return (
         <VocTriageScreen
           items={items}
           selectedId={MOCK_VOC.id}
           activeTab="untriaged"
           onSelectVoc={vi.fn()}
           onTabChange={vi.fn()}
+          processedCount={processedCount}
+          onProcessed={(delta) => setProcessedCount((count) => count + delta)}
         />
+      );
+    }
+    render(
+      <Wrapper>
+        <RouteSession />
       </Wrapper>,
     );
     expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();

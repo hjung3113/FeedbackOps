@@ -176,7 +176,7 @@ export function TriagePanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
         {/* ADR-0051 intentionally groups the real description into Overview. */}
         <div className="mb-8" data-anchor="overview">
-          <PanelTitleBlock title={voc.title} inset="none" className="mb-2" />
+          <PanelTitleBlock title={voc.title} titleTabIndex={-1} inset="none" className="mb-2" />
           <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>
