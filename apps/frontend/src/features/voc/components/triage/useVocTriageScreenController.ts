@@ -74,6 +74,13 @@ export function useVocTriageScreenController({
     new WeakMap<TriageInput, { id: string | null; context: string }>(),
   );
   const commandOwners = useRef(new Map<string, TriageInput>());
+  useEffect(() => {
+    return () => {
+      // Compensation survives the screen, but its selection/focus eligibility does not.
+      commandAdvances.current = new WeakMap();
+      commandOwners.current.clear();
+    };
+  }, []);
   // The acting panel may unmount when it empties the queue; its undo callback
   // still needs the screen's current selection and navigation handler.
   const restoreSelection = useRef({ selectedId, queueContext, onRestoreVoc });
@@ -171,6 +178,10 @@ export function useVocTriageScreenController({
       commandEnded(input, outcome);
     },
     handleOptimisticRollback: (vocId, input) => {
+      if (input) {
+        commandAdvances.current.delete(input);
+        if (commandOwners.current.get(vocId) === input) commandOwners.current.delete(vocId);
+      }
       optimisticRestore(vocId, 'rollback', input);
     },
     // Undo reselects only while selection still matches this command's advance.

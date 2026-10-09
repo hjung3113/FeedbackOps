@@ -367,6 +367,49 @@ it('keeps successful progress across a real permission gate unmount', async () =
   await screen.findByText(/1건 처리됨/);
 });
 
+it('settled undo preserves the new scope selection after a permission gate unmount', async () => {
+  toast.dismiss();
+  render(<Toaster />);
+  const holdPermission = deferred();
+  const holdCompensation = deferred();
+  const { router } = mount({ holdPermission });
+  await screen.findByRole('heading', { name: second.title });
+  await confirm();
+  await waitFor(() => expect(router.state.location.search.selected).toBe(third.id));
+  await screen.findByText(/1건 처리됨/);
+  const forwardFetch = fetch;
+  const compensate = vi.fn(() => holdCompensation.promise);
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === 'PATCH' ? compensate() : forwardFetch(input, init),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: '실행 취소' }));
+  await waitFor(() => expect(compensate).toHaveBeenCalled());
+  await act(async () => {
+    await router.navigate({
+      to: '/vocs',
+      search: (prev) => ({ ...prev, managedSystem: 'scope-a' }),
+    });
+  });
+  await screen.findByText('불러오는 중…');
+  expect(screen.queryByRole('tab')).toBeNull();
+  await act(async () => {
+    holdPermission.resolve(json({ state: 'approved', decision: { allow: true } }));
+  });
+  await screen.findByText(/1건 처리됨/);
+  const fourth = await screen.findByRole('button', { name: /VOC-4/ });
+  fireEvent.click(fourth);
+  await screen.findByRole('heading', { name: 'Queue item 4' });
+  fourth.focus();
+  expect(router.state.location.search.selected).toBe(rows[3]?.id);
+  await act(async () => {
+    holdCompensation.resolve(json({ updated_at: '2026-01-03T00:00:00.000Z' }));
+  });
+  await waitFor(() => expect(screen.queryByText(/1건 처리됨/)).toBeNull());
+  expect(router.state.location.search.selected).toBe(rows[3]?.id);
+  expect(router.state.location.search.managedSystem).toBe('scope-a');
+  expect(fourth).toHaveFocus();
+});
+
 it('wraps a last-row removal to the first other row', async () => {
   const { router } = mount();
   await screen.findByRole('heading', { name: second.title });
