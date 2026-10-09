@@ -271,6 +271,8 @@ it.each(['input', 'dialog'])(
         : screen.getByRole('button', { name: 'Other action' });
     other.focus();
     fireEvent.click(await screen.findByRole('button', { name: '실행 취소' }));
+    // The count drops only after the compensation and its restore callback have run.
+    await waitFor(() => expect(screen.queryByText(/1건 처리됨/)).not.toBeInTheDocument());
     await waitFor(() => expect(router.state.location.search.selected).toBe(third.id));
     await screen.findByRole('heading', { name: third.title });
     expect(other).toHaveFocus();
