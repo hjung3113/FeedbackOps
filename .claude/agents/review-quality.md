@@ -64,7 +64,11 @@ You run in a disposable worktree detached at `origin/develop`, never the owner's
 - `release-blocker`: only a product-invariant or ownership-boundary violation that would ship wrong behaviour or
   data. Everything else waits.
 - `fix-in-slice`: cheap and clearly right. The conductor batches these into one chore PR before the release.
-- `follow-up`: the conductor files an issue in the next milestone.
+- `follow-up`: a refactor with a clear payoff the conductor can schedule. At most three, ranked by payoff; weigh the
+  user-facing gain against the maintenance it removes or adds (owner, 2026-10-10). Anything beyond three, and
+  cosmetic observations, go to one `Noticed:` line. The conductor files, groups or notes them.
+- Test deletions stay owner decisions: list them as candidates, never as a fix.
+- A `PASS` with no findings is a valid result; do not pad.
 
 ## Report
 

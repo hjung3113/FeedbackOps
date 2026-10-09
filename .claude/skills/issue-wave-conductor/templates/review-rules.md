@@ -35,6 +35,11 @@ instructions.
 - Architecture: check root and applicable nested `AGENTS.md`, domain invariants, module/write ownership,
   shared-component boundaries and the ADRs relevant to the touched behaviour.
 
+Reporting bar: report out-of-scope `pre-existing` findings only at `major` or above, with `fix size: <files>,
+≈<lines>` and `owner decision needed: yes/no`; omit pre-existing `minor`/`nit` outside the diff. In a fix-diff check,
+report only whether the fixed findings are fixed and any regression against the pre-fix head. A `PASS` with no
+findings is a valid result; do not pad.
+
 ## Report
 
 Write only the report file named in your task:
