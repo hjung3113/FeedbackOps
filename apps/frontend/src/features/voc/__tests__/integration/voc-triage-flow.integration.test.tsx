@@ -41,6 +41,18 @@ vi.mock('sonner', () => ({
 
 import { VocTriageScreen } from '../../components/triage/VocTriageScreen';
 
+// #941: session progress is supplied by the route, not owned by the screen.
+function RouteCounterScreen(props: React.ComponentProps<typeof VocTriageScreen>) {
+  const [processedCount, setProcessedCount] = React.useState(0);
+  return (
+    <VocTriageScreen
+      {...props}
+      processedCount={processedCount}
+      onProcessed={(delta) => setProcessedCount((count) => count + delta)}
+    />
+  );
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 // Stable reference to the first VOC so non-null assertions are avoided throughout.
@@ -889,7 +901,7 @@ describe('Triage flow — integration (C6.3)', () => {
     }) as typeof globalThis.fetch;
     const Wrapper = makeWrapper();
     const view = render(
-      <VocTriageScreen
+      <RouteCounterScreen
         items={MOCK_VOCS}
         queueSettled
         selectedId={FIRST_VOC_ID}
@@ -908,7 +920,7 @@ describe('Triage flow — integration (C6.3)', () => {
       await act(async () => fireEvent.click(undo));
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith(COMPENSATE_FAILURE_TOAST));
       view.rerender(
-        <VocTriageScreen
+        <RouteCounterScreen
           items={[...MOCK_VOCS]}
           queueSettled
           selectedId={FIRST_VOC_ID}
@@ -1000,7 +1012,7 @@ describe('Triage flow — integration (C6.3)', () => {
       voc.id === FIRST_VOC_ID ? { ...voc, review_postponed_at: '2026-05-02T00:00:00.000Z' } : voc,
     );
     const content = (items: VocListItem[]) => (
-      <VocTriageScreen
+      <RouteCounterScreen
         items={items}
         queueSettled
         selectedId={FIRST_VOC_ID}

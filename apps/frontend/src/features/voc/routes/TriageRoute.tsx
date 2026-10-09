@@ -29,6 +29,7 @@ import { PermissionBlockedPanel } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
+import { useCallback, useState } from 'react';
 import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
 import { useVocList } from '../hooks/useVocList';
 
@@ -64,6 +65,10 @@ function triageTabCounts(
 export function TriageRoute(): React.ReactElement {
   const search = useSearch({ strict: false }) as TriageSearch;
   const navigate = useNavigate();
+  const [processedCount, setProcessedCount] = useState(0);
+  const handleProcessed = useCallback((delta: 1 | -1): void => {
+    setProcessedCount((count) => count + delta);
+  }, []);
   const { isLoading: meLoading } = useMe();
 
   // Active tab defaults to 'unassigned' when not set in URL
@@ -95,13 +100,14 @@ export function TriageRoute(): React.ReactElement {
   // target as `selected`. Already-triaged VOCs are excluded by the queue
   // predicate, so the target must be pinned explicitly or the queue cannot show
   // it. Out-of-scope / unknown ids are dropped server-side.
-  const { data, isLoading, isSuccess, isFetching, isError, refetch } = useVocList({
-    view: 'triage',
-    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-    tab: activeTab,
-    ...(search.selected !== undefined ? { pinVocId: search.selected } : {}),
-    enabled: isApproved,
-  });
+  const { data, isLoading, isSuccess, isFetching, isPlaceholderData, isError, refetch } =
+    useVocList({
+      view: 'triage',
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+      tab: activeTab,
+      ...(search.selected !== undefined ? { pinVocId: search.selected } : {}),
+      enabled: isApproved,
+    });
 
   const items = data?.items ?? [];
   // #935: a failed queue read shows the load-error state only when there are
@@ -127,6 +133,14 @@ export function TriageRoute(): React.ReactElement {
 
   function handleSelectVoc(id: string): void {
     void navigate({ to: '/vocs', search: (prev) => ({ ...prev, selected: id }) });
+  }
+
+  function handleAdvanceVoc(id: string | null): void {
+    void navigate({
+      to: '/vocs',
+      search: (prev) => ({ ...prev, selected: id ?? undefined }),
+      replace: true,
+    });
   }
 
   // #935: retry a failed queue read in place.
@@ -173,11 +187,14 @@ export function TriageRoute(): React.ReactElement {
       {...(queueError ? { queueError } : {})}
       onRetryQueue={handleRetryQueue}
       queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
-      queueSettled={isSuccess && !isFetching}
+      queueSettled={isSuccess && !isFetching && !isPlaceholderData}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
       {...(tabCounts !== undefined ? { tabCounts } : {})}
       {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
+      processedCount={processedCount}
+      onProcessed={handleProcessed}
+      onAdvanceVoc={handleAdvanceVoc}
       onSelectVoc={handleSelectVoc}
       onTabChange={handleTabChange}
     />

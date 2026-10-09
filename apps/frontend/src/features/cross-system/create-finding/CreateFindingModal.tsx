@@ -46,6 +46,7 @@ export interface CreateFindingModalProps {
   defaultSeverity?: FindingSeverity;
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
 // ── Severity options ──────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ export function CreateFindingModal({
   defaultSeverity = 'medium',
   open,
   onClose,
+  onCreated,
 }: CreateFindingModalProps): React.ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +162,7 @@ export function CreateFindingModal({
           form.reset();
           setEditedFields(INITIAL_TEXT_FIELD_INTERACTION);
           mutation.reset();
+          onCreated?.();
           onClose();
           const returnTo = location.pathname === '/vocs' ? location.href : undefined;
           void navigate({
