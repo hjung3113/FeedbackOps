@@ -105,6 +105,8 @@ type JumpPhase = 'idle' | 'jumping' | 'awaiting-scroll';
 
 /** Stall net. It starts only once the jump's scroll moves, and restarts on each pulse. */
 const JUMP_SAFETY_MS = 700;
+/** Bounds a jump whose scroll never starts. A moving jump does not use this. */
+const JUMP_START_WATCHDOG_MS = 1500;
 const JUMP_END_EPSILON_PX = 1;
 
 interface JumpRelease {
@@ -126,24 +128,54 @@ function clearJumpRelease(release: JumpRelease | null): void {
   release.root.removeEventListener('scrollend', release.onScrollEnd);
 }
 
-/** Leave the jump and arm the next-scroll re-rank. No-op unless a jump is in progress. */
-function releaseJump(phaseRef: RefBox<JumpPhase>, releaseRef: RefBox<JumpRelease | null>): void {
+/** Leave the jump and remember where it landed. No-op unless a jump is in progress. */
+function releaseJump(
+  phaseRef: RefBox<JumpPhase>,
+  releaseRef: RefBox<JumpRelease | null>,
+  landingTopRef: RefBox<number | null>,
+): void {
   if (phaseRef.current !== 'jumping') return;
+  landingTopRef.current = releaseRef.current?.root.scrollTop ?? null;
   clearJumpRelease(releaseRef.current);
   releaseRef.current = null;
   phaseRef.current = 'awaiting-scroll';
 }
 
-function scrollReachedJumpEnd(root: HTMLElement, targetTop: number): boolean {
+/** True when this scroll is no longer the jump's own landing pulse. */
+function scrollLeftJumpLanding(root: HTMLElement, landingTop: number | null): boolean {
+  if (landingTop === null) return false;
+  return Math.abs(root.scrollTop - landingTop) > JUMP_END_EPSILON_PX;
+}
+
+/**
+ * Rank on a scroll only after the jump has landed and the position has left that landing.
+ * Idle scrolls rank. The jump's own finishing pulse stays within 1px of the landing, so it
+ * does not. A queued observer delivery is not a scroll and must not call this.
+ */
+function consumeUserScrollAfterJump(
+  phaseRef: RefBox<JumpPhase>,
+  landingTopRef: RefBox<number | null>,
+  root: HTMLElement,
+): boolean {
+  if (phaseRef.current === 'jumping') return false;
+  if (phaseRef.current === 'idle') return true;
+  if (!scrollLeftJumpLanding(root, landingTopRef.current)) return false;
+  phaseRef.current = 'idle';
+  landingTopRef.current = null;
+  return true;
+}
+
+/** Where a browser will actually land. Targets outside the scroll range clamp. */
+function reachableJumpTop(root: HTMLElement, targetTop: number): number {
   const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
-  const top = root.scrollTop;
-  if (Math.abs(top - targetTop) <= JUMP_END_EPSILON_PX) return true;
-  // Hitting the clamp is the end only when the target lies past it. A jump that
-  // starts at the bottom must still be able to scroll upward.
-  if (targetTop > maxScroll + JUMP_END_EPSILON_PX) {
-    return Math.abs(top - maxScroll) <= JUMP_END_EPSILON_PX;
-  }
-  return false;
+  return Math.min(Math.max(targetTop, 0), maxScroll);
+}
+
+function scrollReachedJumpEnd(root: HTMLElement, targetTop: number): boolean {
+  // The raw target is not the end when it lies past the clamp. A jump that starts
+  // already on that clamp never emits scroll or scrollend; one that starts at the
+  // bottom and aims upward is not at its end just because scrollTop is the maximum.
+  return Math.abs(root.scrollTop - reachableJumpTop(root, targetTop)) <= JUMP_END_EPSILON_PX;
 }
 
 export function DetailPanelSectionNav({
@@ -157,6 +189,7 @@ export function DetailPanelSectionNav({
   const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
   const jumpPhaseRef = React.useRef<JumpPhase>('idle');
   const jumpReleaseRef = React.useRef<JumpRelease | null>(null);
+  const jumpLandingTopRef = React.useRef<number | null>(null);
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -231,8 +264,7 @@ export function DetailPanelSectionNav({
     if (typeof IntersectionObserver === 'undefined') {
       // Same ranking as the observer: topmost anchor inside the top band, not nearest top.
       const updateActiveSection = () => {
-        if (jumpPhaseRef.current === 'jumping') return;
-        if (jumpPhaseRef.current === 'awaiting-scroll') jumpPhaseRef.current = 'idle';
+        if (!consumeUserScrollAfterJump(jumpPhaseRef, jumpLandingTopRef, root)) return;
         const rootRect = root.getBoundingClientRect();
         const id = topmostAnchor(anchors, (anchor) => inObserverTopBand(anchor, rootRect));
         if (id) setActiveSection(id);
@@ -261,16 +293,17 @@ export function DetailPanelSectionNav({
         for (const e of entries) {
           intersectionState.set(anchorId(e.target), e.isIntersecting);
         }
-        if (jumpPhaseRef.current === 'jumping') return;
+        // Keep the clicked section through the jump and through the landing frame's own
+        // observer delivery. Flags still update above, so the later user scroll can rank them.
+        if (jumpPhaseRef.current !== 'idle') return;
         selectTopmostIntersecting();
       },
       { root, rootMargin: OBSERVER_ROOT_MARGIN, threshold: 0 },
     );
     // #876: do not recompute when the jump guard ends — that would drop a just-clicked lower
-    // section. The next user scroll ranks the anchors that are intersecting now.
+    // section. Only a scroll that leaves the landing position ranks (#901).
     const recomputeAfterJump = () => {
-      if (jumpPhaseRef.current !== 'awaiting-scroll') return;
-      jumpPhaseRef.current = 'idle';
+      if (!consumeUserScrollAfterJump(jumpPhaseRef, jumpLandingTopRef, root)) return;
       selectTopmostIntersecting();
     };
     for (const anchor of anchors) observer.observe(anchor);
@@ -304,31 +337,36 @@ export function DetailPanelSectionNav({
         timeoutId: null,
         onScroll: () => {},
         onScrollEnd: () => {
-          releaseJump(jumpPhaseRef, jumpReleaseRef);
+          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
         },
       };
       release.onScroll = () => {
         if (jumpPhaseRef.current !== 'jumping') return;
         if (root.scrollTop === originTop) return;
         if (scrollReachedJumpEnd(root, targetTop)) {
-          releaseJump(jumpPhaseRef, jumpReleaseRef);
+          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
           return;
         }
         if (release.timeoutId !== null) clearTimeout(release.timeoutId);
         release.timeoutId = setTimeout(() => {
           if (jumpReleaseRef.current !== release) return;
-          releaseJump(jumpPhaseRef, jumpReleaseRef);
+          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
         }, JUMP_SAFETY_MS);
       };
       jumpReleaseRef.current = release;
       root.addEventListener('scroll', release.onScroll, { passive: true });
       root.addEventListener('scrollend', release.onScrollEnd);
       root.scrollTo({ top: targetTop, behavior: 'smooth' });
-      if (
-        jumpPhaseRef.current === 'jumping' &&
-        Math.abs(root.scrollTop - targetTop) <= JUMP_END_EPSILON_PX
-      ) {
-        releaseJump(jumpPhaseRef, jumpReleaseRef);
+      if (jumpPhaseRef.current === 'jumping' && scrollReachedJumpEnd(root, targetTop)) {
+        releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
+      } else if (jumpPhaseRef.current === 'jumping' && release.timeoutId === null) {
+        // No scroll event means no stall net. Bound a browser that ignores scrollTo,
+        // or a root that never moves, without timing out a scroll that is underway.
+        release.timeoutId = setTimeout(() => {
+          if (jumpReleaseRef.current !== release) return;
+          if (root.scrollTop !== originTop) return;
+          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
+        }, JUMP_START_WATCHDOG_MS);
       }
     },
     [revealSection, scrollRef],
