@@ -39,6 +39,7 @@ import {
   VOC_POSTPONE_INVALID_STATE_LABEL,
 } from '@/lib/copy/voc-views';
 import { formatDate } from '@/lib/format/datetime';
+import type { TriageQueueOutcome } from '../../hooks/useTriageQueue';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -77,6 +78,7 @@ export interface TriagePanelProps {
    * the queue (stale_write, rate_limited, permission.denied paths).
    */
   onMutationFailure?: (vocId: string) => void;
+  onQueueOutcome?: (vocId: string, outcome: TriageQueueOutcome) => void;
   onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }
@@ -102,6 +104,7 @@ export function TriagePanel({
   onProcessed,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
 }: TriagePanelProps): React.ReactElement {
   const {
@@ -129,6 +132,7 @@ export function TriagePanel({
     ...(onOptimisticPostpone !== undefined ? { onOptimisticPostpone } : {}),
     ...(onProcessed !== undefined ? { onProcessed } : {}),
     ...(onMutationFailure !== undefined ? { onMutationFailure } : {}),
+    ...(onQueueOutcome !== undefined ? { onQueueOutcome } : {}),
     ...(onOptimisticRollback !== undefined ? { onOptimisticRollback } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });

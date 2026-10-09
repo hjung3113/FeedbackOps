@@ -98,6 +98,13 @@ export function triageQueueReducer(
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
+export type TriageQueueOutcome =
+  | 'late-failure'
+  | 'archived'
+  | 'locked'
+  | 'compensation-failure'
+  | 'compensated';
+
 export interface UseTriageQueueResult {
   state: TriageQueueState;
   dispatch: React.Dispatch<TriageQueueAction>;
@@ -108,6 +115,7 @@ export interface UseTriageQueueResult {
   /** Restore a previously removed voc (undo path). */
   optimisticRestore: (vocId: string, reason?: 'rollback') => void;
   optimisticPostpone: (vocId: string) => void;
+  commandEnded: (vocId: string, outcome: TriageQueueOutcome) => void;
 }
 
 export function useTriageQueue(
@@ -121,20 +129,30 @@ export function useTriageQueue(
     () => new Map(),
   );
 
+  // Remember the commit mode even after a read acknowledges the marker or undo clears it.
+  const markedCommands = useRef(new Set<string>());
+  const terminalOverrides = useRef(new Set<string>());
   const postponedInSession = useRef(new Set<string>());
 
-  // Retire local markers once a settled server read acknowledges the state.
+  // A settled read retires acknowledged markers and every terminal override.
   useEffect(() => {
     if (!serverSettled) return;
     setPostponedOverrides((current) => {
-      const acknowledged = serverItems.filter(
-        (voc) =>
-          current.has(voc.id) &&
-          (current.get(voc.id) === null) === (voc.review_postponed_at === null),
+      const acknowledged = [...current.keys()].filter(
+        (vocId) =>
+          terminalOverrides.current.has(vocId) ||
+          serverItems.some(
+            (voc) =>
+              voc.id === vocId &&
+              (current.get(vocId) === null) === (voc.review_postponed_at === null),
+          ),
       );
       if (acknowledged.length === 0) return current;
       const next = new Map(current);
-      for (const voc of acknowledged) next.delete(voc.id);
+      for (const vocId of acknowledged) {
+        next.delete(vocId);
+        terminalOverrides.current.delete(vocId);
+      }
       return next;
     });
   }, [serverItems, serverSettled]);
@@ -164,11 +182,16 @@ export function useTriageQueue(
   );
 
   function optimisticRemove(vocId: string, priorValues: TriagePriorValues): void {
+    markedCommands.current.delete(vocId);
     postponedInSession.current.delete(vocId);
     dispatch({ type: 'optimistic_remove', vocId, priorValues });
   }
 
   function optimisticRestore(vocId: string, reason?: 'rollback'): void {
+    if (reason === 'rollback') {
+      markedCommands.current.delete(vocId);
+      terminalOverrides.current.delete(vocId);
+    }
     dispatch({ type: 'optimistic_restore', vocId });
     const wasPostponed = postponedInSession.current.delete(vocId);
     setPostponedOverrides((current) => {
@@ -185,9 +208,53 @@ export function useTriageQueue(
   }
 
   function optimisticPostpone(vocId: string): void {
+    terminalOverrides.current.delete(vocId);
+    markedCommands.current.add(vocId);
     postponedInSession.current.add(vocId);
     setPostponedOverrides((current) => new Map(current).set(vocId, new Date().toISOString()));
   }
 
-  return { state, dispatch, liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone };
+  function commandEnded(vocId: string, outcome: TriageQueueOutcome): void {
+    // Once a command ends (forward failure or compensation success/failure),
+    // no local override for that VOC outlives the next settled server read.
+    const wasMark = markedCommands.current.delete(vocId);
+    postponedInSession.current.delete(vocId);
+    if (outcome === 'compensated') {
+      terminalOverrides.current.add(vocId);
+      return;
+    }
+    terminalOverrides.current.delete(vocId);
+    if (outcome === 'archived' && wasMark) {
+      const voc = serverItems.find((item) => item.id === vocId);
+      if (voc) {
+        dispatch({
+          type: 'optimistic_remove',
+          vocId,
+          priorValues: {
+            severity: voc.severity,
+            ownerUserId: voc.owner_user_id,
+            ownerTeamId: voc.owner_team_id,
+            analyticsAreaId: voc.analytics_area_id,
+          },
+        });
+      }
+    }
+    // Failure cleanup never restores exclusions or changes selection.
+    setPostponedOverrides((current) => {
+      if (!current.has(vocId)) return current;
+      const next = new Map(current);
+      next.delete(vocId);
+      return next;
+    });
+  }
+
+  return {
+    state,
+    dispatch,
+    liveQueue,
+    optimisticRemove,
+    optimisticRestore,
+    optimisticPostpone,
+    commandEnded,
+  };
 }

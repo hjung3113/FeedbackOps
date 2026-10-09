@@ -8,6 +8,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { useTriageCommand } from '../../hooks/useTriageCommand';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
+import type { TriageQueueOutcome } from '../../hooks/useTriageQueue';
 import type { CallToken } from '../../hooks/useUndoableMutation';
 import type { TriageInput } from '../../lib/triage-types';
 import type { OwnerCandidate } from './OwnerPicker';
@@ -20,6 +21,7 @@ export function useTriagePanelController({
   onProcessed,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
 }: {
   voc: VocListItem;
@@ -37,6 +39,7 @@ export function useTriagePanelController({
   onOptimisticPostpone?: (vocId: string) => void;
   onProcessed?: (delta: 1 | -1) => void;
   onMutationFailure?: (vocId: string) => void;
+  onQueueOutcome?: (vocId: string, outcome: TriageQueueOutcome) => void;
   onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }) {
@@ -105,6 +108,7 @@ export function useTriagePanelController({
     onProcessed,
     onOptimisticRestore,
     onOptimisticRollback,
+    onQueueOutcome,
     onMutationFailure,
   });
 

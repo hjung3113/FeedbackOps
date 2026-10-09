@@ -31,12 +31,14 @@ import {
 import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
 import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
+import type { TriageQueueOutcome } from './useTriageQueue';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;
   onProcessed?: ((delta: 1 | -1) => void) | undefined;
   onMutationFailure?: ((vocId: string) => void) | undefined;
+  onQueueOutcome?: ((vocId: string, outcome: TriageQueueOutcome) => void) | undefined;
   onOptimisticRollback?: ((vocId: string) => void) | undefined;
   onOptimisticRestore?: ((vocId: string) => void) | undefined;
 }
@@ -52,6 +54,7 @@ export function useTriageCommand({
   voc,
   onOptimisticRestore,
   onOptimisticRollback,
+  onQueueOutcome,
   onMutationFailure,
   onProcessed,
 }: UseTriageCommandArgs): UseTriageCommandResult {
@@ -80,6 +83,9 @@ export function useTriageCommand({
   const onOptimisticRollbackRef = React.useRef(onOptimisticRollback);
   onOptimisticRollbackRef.current = onOptimisticRollback;
 
+  const onQueueOutcomeRef = React.useRef(onQueueOutcome);
+  onQueueOutcomeRef.current = onQueueOutcome;
+
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
 
@@ -103,6 +109,9 @@ export function useTriageCommand({
         return output;
       } catch (err) {
         failuresRef.current.get(input)?.();
+        if (undoneRef.current.has(input)) {
+          onQueueOutcomeRef.current?.(input.vocId, 'late-failure');
+        }
         if (err instanceof ApiError && err.code === 'conflict.stale_write') {
           invalidateTriageLists();
         }
@@ -133,6 +142,7 @@ export function useTriageCommand({
           output,
           restore: (vocId: string) => {
             onOptimisticRestoreRef.current?.(vocId);
+            onQueueOutcomeRef.current?.(vocId, 'compensated');
             if (countedRef.current.delete(snapshot.input)) {
               onProcessedRef.current?.(-1);
             }
@@ -141,6 +151,8 @@ export function useTriageCommand({
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
       } catch (err) {
+        onQueueOutcomeRef.current?.(snapshot.input.vocId, 'compensation-failure');
+        invalidateTriageLists();
         // REV-4 case 1: the refetch-failure toast fires exactly once, here —
         // BEFORE the rethrow; onCompensateError sees the __refetchFailure tag
         // and skips so the user never sees the toast twice.
@@ -180,6 +192,10 @@ export function useTriageCommand({
       const decision = classifyTriageMutationError(err);
       if (decision.restore) {
         (onOptimisticRollbackRef.current ?? onOptimisticRestoreRef.current)?.(input.vocId);
+      }
+      if (!decision.restore) {
+        onQueueOutcomeRef.current?.(input.vocId, decision.lockPanel ? 'locked' : 'archived');
+        invalidateTriageLists();
       }
       if (decision.lockPanel) {
         setPanelLocked(true);
