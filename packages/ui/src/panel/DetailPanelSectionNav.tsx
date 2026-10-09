@@ -15,9 +15,11 @@
  *   .panel-section-nav-button.active  → border-b-accent-primary text-text-primary
  *   .panel-section-nav-count          → px-1 py-px rounded-full bg-surface-canvas text-text-muted text-caption font-mono
  *
- * Sections flagged `overflow: true` render inside a trailing "더보기" dropdown instead of the
+ * Sections flagged `overflow: true` render inside a trailing dropdown instead of the
  * pinned strip (#519 — a deliberate deviation from the prototype, whose strip overflows a
- * 440px panel). With no flagged section the output is identical to the prototype strip.
+ * 440px panel). The trigger always reads 더보기; when an overflowed section is active,
+ * its accessible name includes that section's label. With no flagged section, it matches
+ * the prototype strip. The strip root is a navigation landmark.
  *
  * Mount the nav as a sibling above the scroll root; the cover is then the strip's overlap with the root.
  */
@@ -38,6 +40,7 @@ import {
 } from '../components/shadcn/tooltip.js';
 import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
+import { useJumpGuard } from './useJumpGuard.js';
 
 export interface PanelSection {
   id: string;
@@ -53,6 +56,11 @@ export interface DetailPanelSectionNavProps {
   /** Ref to the scrollable container that holds the anchored sections. */
   scrollRef?: React.RefObject<HTMLElement | null>;
   className?: string;
+  /**
+   * Accessible name of the strip. Defaulted here because `packages/ui` cannot
+   * import app copy.
+   */
+  navigationLabel?: string;
 }
 
 /** Bottom rootMargin fraction. Percentage margins resolve against root width, not height. */
@@ -101,95 +109,17 @@ function stickyCover(root: HTMLElement, header: HTMLElement | null): number {
   return Math.max(0, headerRect.bottom - root.getBoundingClientRect().top);
 }
 
-type JumpPhase = 'idle' | 'jumping' | 'awaiting-scroll';
-
-/** Stall net. It starts only once the jump's scroll moves, and restarts on each pulse. */
-const JUMP_SAFETY_MS = 700;
-/** Bounds a jump whose scroll never starts. A moving jump does not use this. */
-const JUMP_START_WATCHDOG_MS = 1500;
-const JUMP_END_EPSILON_PX = 1;
-
-interface JumpRelease {
-  root: HTMLElement;
-  onScroll: () => void;
-  onScrollEnd: () => void;
-  timeoutId: ReturnType<typeof setTimeout> | null;
-}
-
-interface RefBox<T> {
-  current: T;
-}
-
-function clearJumpRelease(release: JumpRelease | null): void {
-  if (!release) return;
-  if (release.timeoutId !== null) clearTimeout(release.timeoutId);
-  release.timeoutId = null;
-  release.root.removeEventListener('scroll', release.onScroll);
-  release.root.removeEventListener('scrollend', release.onScrollEnd);
-}
-
-/** Leave the jump and remember where it landed. No-op unless a jump is in progress. */
-function releaseJump(
-  phaseRef: RefBox<JumpPhase>,
-  releaseRef: RefBox<JumpRelease | null>,
-  landingTopRef: RefBox<number | null>,
-): void {
-  if (phaseRef.current !== 'jumping') return;
-  landingTopRef.current = releaseRef.current?.root.scrollTop ?? null;
-  clearJumpRelease(releaseRef.current);
-  releaseRef.current = null;
-  phaseRef.current = 'awaiting-scroll';
-}
-
-/** True when this scroll is no longer the jump's own landing pulse. */
-function scrollLeftJumpLanding(root: HTMLElement, landingTop: number | null): boolean {
-  if (landingTop === null) return false;
-  return Math.abs(root.scrollTop - landingTop) > JUMP_END_EPSILON_PX;
-}
-
-/**
- * Rank on a scroll only after the jump has landed and the position has left that landing.
- * Idle scrolls rank. The jump's own finishing pulse stays within 1px of the landing, so it
- * does not. A queued observer delivery is not a scroll and must not call this.
- */
-function consumeUserScrollAfterJump(
-  phaseRef: RefBox<JumpPhase>,
-  landingTopRef: RefBox<number | null>,
-  root: HTMLElement,
-): boolean {
-  if (phaseRef.current === 'jumping') return false;
-  if (phaseRef.current === 'idle') return true;
-  if (!scrollLeftJumpLanding(root, landingTopRef.current)) return false;
-  phaseRef.current = 'idle';
-  landingTopRef.current = null;
-  return true;
-}
-
-/** Where a browser will actually land. Targets outside the scroll range clamp. */
-function reachableJumpTop(root: HTMLElement, targetTop: number): number {
-  const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
-  return Math.min(Math.max(targetTop, 0), maxScroll);
-}
-
-function scrollReachedJumpEnd(root: HTMLElement, targetTop: number): boolean {
-  // The raw target is not the end when it lies past the clamp. A jump that starts
-  // already on that clamp never emits scroll or scrollend; one that starts at the
-  // bottom and aims upward is not at its end just because scrollTop is the maximum.
-  return Math.abs(root.scrollTop - reachableJumpTop(root, targetTop)) <= JUMP_END_EPSILON_PX;
-}
-
 export function DetailPanelSectionNav({
   sections,
   scrollRef,
   className,
+  navigationLabel = '섹션 이동',
 }: DetailPanelSectionNavProps): React.ReactElement | null {
   const firstSection = sections[0]?.id ?? '';
   const [activeSection, setActiveSection] = React.useState(firstSection);
   const navRef = React.useRef<HTMLDivElement>(null);
-  const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
-  const jumpPhaseRef = React.useRef<JumpPhase>('idle');
-  const jumpReleaseRef = React.useRef<JumpRelease | null>(null);
-  const jumpLandingTopRef = React.useRef<number | null>(null);
+  const stickyHeaderRef = React.useRef<HTMLElement>(null);
+  const { startJump, isSuppressed, admitUserScroll } = useJumpGuard();
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -214,13 +144,6 @@ export function DetailPanelSectionNav({
   React.useEffect(() => {
     setActiveSection(firstSection);
   }, [firstSection, sectionKey]);
-
-  React.useEffect(() => {
-    return () => {
-      clearJumpRelease(jumpReleaseRef.current);
-      jumpReleaseRef.current = null;
-    };
-  }, []);
 
   const updateAnchorScrollMargins = React.useCallback(() => {
     const root = scrollRef?.current;
@@ -264,7 +187,7 @@ export function DetailPanelSectionNav({
     if (typeof IntersectionObserver === 'undefined') {
       // Same ranking as the observer: topmost anchor inside the top band, not nearest top.
       const updateActiveSection = () => {
-        if (!consumeUserScrollAfterJump(jumpPhaseRef, jumpLandingTopRef, root)) return;
+        if (!admitUserScroll(root)) return;
         const rootRect = root.getBoundingClientRect();
         const id = topmostAnchor(anchors, (anchor) => inObserverTopBand(anchor, rootRect));
         if (id) setActiveSection(id);
@@ -295,7 +218,7 @@ export function DetailPanelSectionNav({
         }
         // Keep the clicked section through the jump and through the landing frame's own
         // observer delivery. Flags still update above, so the later user scroll can rank them.
-        if (jumpPhaseRef.current !== 'idle') return;
+        if (isSuppressed()) return;
         selectTopmostIntersecting();
       },
       { root, rootMargin: OBSERVER_ROOT_MARGIN, threshold: 0 },
@@ -303,7 +226,7 @@ export function DetailPanelSectionNav({
     // #876: do not recompute when the jump guard ends — that would drop a just-clicked lower
     // section. Only a scroll that leaves the landing position ranks (#901).
     const recomputeAfterJump = () => {
-      if (!consumeUserScrollAfterJump(jumpPhaseRef, jumpLandingTopRef, root)) return;
+      if (!admitUserScroll(root)) return;
       selectTopmostIntersecting();
     };
     for (const anchor of anchors) observer.observe(anchor);
@@ -312,7 +235,7 @@ export function DetailPanelSectionNav({
       observer.disconnect();
       root.removeEventListener('scroll', recomputeAfterJump);
     };
-  }, [scrollRef, sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [admitUserScroll, isSuppressed, scrollRef, sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollTo = React.useCallback(
     (id: string) => {
@@ -321,61 +244,24 @@ export function DetailPanelSectionNav({
       const el = root?.querySelector<HTMLElement>(`[data-anchor="${id}"]`);
       if (!root || !el) return;
 
-      clearJumpRelease(jumpReleaseRef.current);
-      jumpReleaseRef.current = null;
-      jumpPhaseRef.current = 'jumping';
       setActiveSection(id);
       const rootRect = root.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       const cover = stickyCover(root, stickyHeaderRef.current);
-      const originTop = root.scrollTop;
-      const targetTop = originTop + elRect.top - rootRect.top - cover;
-      // The 700ms net must not start at the click. A late smooth scroll (the #901 repro)
-      // consumes a click-timed guard before the first pixel moves.
-      const release: JumpRelease = {
-        root,
-        timeoutId: null,
-        onScroll: () => {},
-        onScrollEnd: () => {
-          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
-        },
-      };
-      release.onScroll = () => {
-        if (jumpPhaseRef.current !== 'jumping') return;
-        if (root.scrollTop === originTop) return;
-        if (scrollReachedJumpEnd(root, targetTop)) {
-          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
-          return;
-        }
-        if (release.timeoutId !== null) clearTimeout(release.timeoutId);
-        release.timeoutId = setTimeout(() => {
-          if (jumpReleaseRef.current !== release) return;
-          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
-        }, JUMP_SAFETY_MS);
-      };
-      jumpReleaseRef.current = release;
-      root.addEventListener('scroll', release.onScroll, { passive: true });
-      root.addEventListener('scrollend', release.onScrollEnd);
-      root.scrollTo({ top: targetTop, behavior: 'smooth' });
-      if (jumpPhaseRef.current === 'jumping' && scrollReachedJumpEnd(root, targetTop)) {
-        releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
-      } else if (jumpPhaseRef.current === 'jumping' && release.timeoutId === null) {
-        // No scroll event means no stall net. Bound a browser that ignores scrollTo,
-        // a root that never moves, or a root that loses its box. A moving scroll
-        // replaces this timer with the stall net, so firing means none arrived.
-        release.timeoutId = setTimeout(() => {
-          if (jumpReleaseRef.current !== release) return;
-          releaseJump(jumpPhaseRef, jumpReleaseRef, jumpLandingTopRef);
-        }, JUMP_START_WATCHDOG_MS);
-      }
+      const targetTop = root.scrollTop + elRect.top - rootRect.top - cover;
+      startJump(root, targetTop);
     },
-    [revealSection, scrollRef],
+    [revealSection, scrollRef, startJump],
   );
 
   if (!sections.length) return null;
 
   const pinned = sections.filter((s) => !s.overflow);
   const overflowed = sections.filter((s) => s.overflow);
+  const activeOverflowSection = overflowed.find((section) => section.id === activeSection);
+  const overflowTriggerAccessibleName = activeOverflowSection
+    ? `더보기, 현재 ${activeOverflowSection.label}`
+    : '더보기';
   const scrollTabs = (direction: 'left' | 'right') => {
     const nav = navRef.current;
     if (!nav) return;
@@ -390,8 +276,9 @@ export function DetailPanelSectionNav({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div
+      <nav
         ref={stickyHeaderRef}
+        aria-label={navigationLabel}
         data-testid="detail-panel-section-nav-strip"
         className={cn(
           // .panel-section-nav: sticky, flex, horizontal, borderBottom, overflow-x scroll, no scrollbar
@@ -480,6 +367,7 @@ export function DetailPanelSectionNav({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                aria-label={overflowTriggerAccessibleName}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-2.5 py-1.5',
                   'border-0 border-b-2 bg-transparent cursor-pointer',
@@ -535,7 +423,7 @@ export function DetailPanelSectionNav({
             </TooltipContent>
           </Tooltip>
         )}
-      </div>
+      </nav>
     </TooltipProvider>
   );
 }

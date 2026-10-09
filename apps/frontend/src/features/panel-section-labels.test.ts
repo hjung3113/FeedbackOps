@@ -13,7 +13,7 @@ const cases = [
     expected: [
       ['overview', '요약'],
       ['triage', 'Triage'],
-      ['description', '설명'],
+      ['description', '본문'],
       ['trail', '이력'],
       ['conversation', '대화'],
       ['compose', '작성'],
@@ -24,7 +24,7 @@ const cases = [
     sections: buildTaskRequestSections(false, true),
     expected: [
       ['overview', '요약'],
-      ['decision', '결정'],
+      ['decision', '검토 결정'],
       ['source', '출처'],
       ['properties', '속성'],
       ['audit', '이력'],
@@ -56,7 +56,7 @@ const cases = [
     sections: buildVocClusterDetailSections(6),
     expected: [
       ['overview', '요약'],
-      ['why', '근거'],
+      ['why', '그룹화 사유'],
       ['execution', '실행'],
       ['members', '멤버'],
       ['properties', '속성'],
@@ -77,7 +77,7 @@ const cases = [
     sections: FINDING_SECTIONS,
     expected: [
       ['summary', '요약'],
-      ['metadata', '소스/심각도/신뢰도'],
+      ['metadata', '소스 / 심각도 / 신뢰도'],
       ['evidence', 'Evidence'],
       ['managed-system', 'Managed System'],
       ['analytics-area', 'Analytics Area'],

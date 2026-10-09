@@ -30,7 +30,10 @@ import {
 import type * as React from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
-import { SEMANTIC_VOC_RECOMMENDATIONS_LABEL } from '@/lib/copy/voc';
+import {
+  SEMANTIC_VOC_RECOMMENDATIONS_LABEL,
+  VOC_TRIAGE_SUMMARY_SECTION_LABEL,
+} from '@/lib/copy/voc';
 import { formatDate } from '@/lib/format/datetime';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
@@ -78,7 +81,7 @@ function buildTriageSections() {
     { id: 'overview', label: '개요' },
     { id: 'assignment', label: '담당 배정' },
     { id: 'similar', label: SEMANTIC_VOC_RECOMMENDATIONS_LABEL },
-    { id: 'summary', label: '요약' },
+    { id: 'summary', label: VOC_TRIAGE_SUMMARY_SECTION_LABEL },
   ];
 }
 
@@ -243,7 +246,7 @@ export function TriagePanel({
 
         {/* Compact changed-fields summary */}
         <div className="mb-0" data-anchor="summary">
-          <PanelSectionTitle>요약 · 변경 사항</PanelSectionTitle>
+          <PanelSectionTitle>{VOC_TRIAGE_SUMMARY_SECTION_LABEL}</PanelSectionTitle>
           <TriageSummaryCard
             panelState={panelState}
             baseline={baseline}

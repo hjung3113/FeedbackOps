@@ -11,6 +11,8 @@ export type NavCountKey =
   | 'voc.my'
   | 'voc.tab.high'
   | 'voc.tab.unassigned'
+  | 'voc.tab.untriaged'
+  | 'voc.tab.waiting'
   | 'voc.inbox.no-link'
   | 'voc.clusters'
   | 'findings.all'

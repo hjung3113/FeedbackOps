@@ -15,6 +15,7 @@ import {
   vocOwnerAssignedDetailSchema,
   vocSeveritySetDetailSchema,
   vocTriageCommittedDetailSchema,
+  vocTriagePostponeClearedDetailSchema,
   vocTriagePostponedDetailSchema,
 } from '../voc.js';
 
@@ -417,6 +418,18 @@ describe('vocTriagePostponedDetailSchema', () => {
   });
 });
 
+describe('vocTriagePostponeClearedDetailSchema', () => {
+  it('accepts the same shape as voc_triage_postponed', () => {
+    const parsed = vocTriagePostponeClearedDetailSchema.parse({ voc_id: U, actor_id: U });
+    expect(parsed).toEqual({ voc_id: U, actor_id: U });
+  });
+
+  it('rejects a missing voc_id or actor_id', () => {
+    expect(() => vocTriagePostponeClearedDetailSchema.parse({ actor_id: U })).toThrow(z.ZodError);
+    expect(() => vocTriagePostponeClearedDetailSchema.parse({ voc_id: U })).toThrow(z.ZodError);
+  });
+});
+
 describe('vocDescriptionEditedDetailSchema', () => {
   const hash64 = 'a'.repeat(64);
 
@@ -502,6 +515,7 @@ describe('AUDIT_EVENT_TYPES registry', () => {
     'reporter_reply_created',
     'internal_comment_created',
     'voc_triage_postponed',
+    'voc_triage_postpone_cleared',
     'voc_description_edited',
   ] as const;
 

@@ -306,6 +306,40 @@ describe('TriageRoute', () => {
     expect(screen.getByRole('tab', { name: '보류' })).not.toHaveTextContent(/\d/);
   });
 
+  it.each([
+    { tab: 'unassigned', label: '미배정', key: 'voc.tab.unassigned' as const, count: 2 },
+    { tab: 'untriaged', label: '미분류', key: 'voc.tab.untriaged' as const, count: 5 },
+    { tab: 'high', label: '높음', key: 'voc.tab.high' as const, count: 1 },
+    { tab: 'waiting', label: '보류', key: 'voc.tab.waiting' as const, count: 4 },
+  ])(
+    'shows the $tab badge from nav counts and no badge when $key is absent',
+    async ({ label, key, count }) => {
+      const counts = {
+        'voc.triage': 7,
+        'voc.tab.unassigned': 2,
+        'voc.tab.untriaged': 5,
+        'voc.tab.high': 1,
+        'voc.tab.waiting': 4,
+      };
+      vi.mocked(fetchNavCounts).mockResolvedValue({ counts });
+      const present = renderWithQc(<TriageRoute />);
+      await waitFor(() => {
+        expect(
+          screen.getByRole('tab', { name: new RegExp(`${label} ${count}`) }),
+        ).toBeInTheDocument();
+      });
+      present.unmount();
+
+      const { [key]: _omitted, ...withoutKey } = counts;
+      vi.mocked(fetchNavCounts).mockResolvedValue({ counts: withoutKey });
+      renderWithQc(<TriageRoute />);
+      await waitFor(() => {
+        expect(screen.getByTestId('triage-queue-total')).toHaveTextContent('7 VOC');
+      });
+      expect(screen.getByRole('tab', { name: label })).not.toHaveTextContent(/\d/);
+    },
+  );
+
   it('selecting a tab calls navigate with tab param', async () => {
     renderWithQc(<TriageRoute />);
     await waitFor(() => {

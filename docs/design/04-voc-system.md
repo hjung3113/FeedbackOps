@@ -307,7 +307,7 @@ Purpose:
 
 Views:
 
-Triage tabs are the four-tab strip with a URL `tab` param defined by ADR-0022 (`미배정`, `미트리아지`, `높은 심각도`, `보류`).
+Triage tabs are the four-tab strip with a URL `tab` param defined by ADR-0022 (`미배정`, `미트리아지`, `높은 심각도`, `보류`). `미트리아지` (`tab=untriaged`) excludes postponed VOCs; they are in `보류` (`tab=waiting`).
 
 Quick Actions:
 

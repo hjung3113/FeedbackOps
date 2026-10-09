@@ -2,6 +2,8 @@
 export const SAME_MANAGED_SYSTEM_VOC_LABEL = '같은 Managed System의 VOC';
 export const SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL = '같은 Managed System의 최근 VOC';
 export const SEMANTIC_VOC_RECOMMENDATIONS_LABEL = '유사 VOC 추천';
+export const VOC_TRIAGE_SUMMARY_SECTION_LABEL = '요약 · 변경 사항';
+export const VOC_DETAIL_BODY_LABEL = '본문';
 
 // #821: one string for every "server search returned nothing" surface
 // (inbox list empty state and the Evidence VOC picker listbox).

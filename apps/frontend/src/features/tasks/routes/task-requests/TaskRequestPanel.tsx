@@ -1,5 +1,6 @@
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import {
@@ -28,7 +29,9 @@ export function buildTaskRequestSections(
 ): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
-    showDecisionSummary ? { id: 'outcome', label: '결정 요약' } : { id: 'decision', label: '결정' },
+    showDecisionSummary
+      ? { id: 'outcome', label: '결정 요약' }
+      : { id: 'decision', label: TASK_REQUEST_REVIEW_DECISION_LABEL },
     hasFindingSource ? { id: 'source', label: '출처' } : null,
     { id: 'properties', label: '속성' },
     { id: 'audit', label: '이력' },

@@ -140,6 +140,73 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     ).not.toContain(triagedUnlinkedVoc.id);
   });
 
+  it('emits exact untriaged and waiting triage tab counts for the fixture', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-tab-counts`, 'Tab counts');
+    const plainA = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'plain untriaged',
+    );
+    const plainB = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'second plain untriaged',
+    );
+    const postponed = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'waiting untriaged',
+      { postponedAt: true },
+    );
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'needs more', {
+      triageState: 'needs_more_information',
+    });
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'already triaged', {
+      triageState: 'triaged',
+    });
+
+    const listIds = async (tab: 'untriaged' | 'waiting') => {
+      const list = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=triage&tab=${tab}&managed_system_id=${ms}`,
+        headers: headers(adminCookie),
+      });
+      expect(list.statusCode).toBe(200);
+      return list.json<{ items: { id: string }[] }>().items.map((item) => item.id);
+    };
+    const untriagedIds = await listIds('untriaged');
+    const waitingIds = await listIds('waiting');
+    // #920: postponed untriaged rows are in waiting only.
+    expect(untriagedIds).not.toContain(postponed.id);
+    expect(waitingIds).toContain(postponed.id);
+    expect(untriagedIds).toEqual(expect.arrayContaining([plainA.id, plainB.id]));
+    expect(waitingIds).not.toContain(plainA.id);
+    expect(waitingIds).not.toContain(plainB.id);
+
+    const badge = await counts(adminCookie, `?managed_system_id=${ms}`);
+    expect(badge.response.statusCode).toBe(200);
+    // #885 pinned untriaged = 3, counting the postponed row. #920 partitions it out.
+    expect(badge.body.counts['voc.tab.untriaged']).toBe(2);
+    expect(badge.body.counts['voc.tab.waiting']).toBe(1);
+    expect(untriagedIds).toHaveLength(2);
+    expect(waitingIds).toHaveLength(1);
+    expect(badge.body.counts['voc.tab.untriaged']).toBe(untriagedIds.length);
+    expect(badge.body.counts['voc.tab.waiting']).toBe(waitingIds.length);
+  });
+
+  it('omits untriaged and waiting tab counts for an actor without VOC read', async () => {
+    const result = await counts(userCookie);
+    expect(result.response.statusCode).toBe(200);
+    expect(Object.hasOwn(result.body.counts, 'voc.tab.untriaged')).toBe(false);
+    expect(Object.hasOwn(result.body.counts, 'voc.tab.waiting')).toBe(false);
+  });
+
   it('filters counts to each actor read scope', async () => {
     const msA = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-scope-a`, 'Scope A');
     const msB = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-scope-b`, 'Scope B');

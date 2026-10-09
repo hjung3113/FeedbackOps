@@ -1,4 +1,5 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
 import type { TaskDto } from '@fops/shared';
 import { Button, InternalTaskBadge, ObjectRow, PanelSectionTitle, UnassignedBadge } from '@fops/ui';
 import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
@@ -25,7 +26,7 @@ export function TaskRequestDecisionSection({
 }) {
   return (
     <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
-      <PanelSectionTitle>검토 결정</PanelSectionTitle>
+      <PanelSectionTitle>{TASK_REQUEST_REVIEW_DECISION_LABEL}</PanelSectionTitle>
       <div className="flex flex-col gap-2">
         {resultingTask && (
           <div className="flex flex-col gap-1">

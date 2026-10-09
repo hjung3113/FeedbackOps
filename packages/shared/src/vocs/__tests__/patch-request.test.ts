@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  patchVocRequestSchema,
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
+  patchVocRequestSchema,
 } from '../patch-request.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
@@ -40,9 +40,7 @@ describe('patchVocRequestSchema', () => {
   });
 
   it('rejects owner_user_id + owner_team_id both non-null (mutex)', () => {
-    expect(() =>
-      patchVocRequestSchema.parse({ owner_user_id: U, owner_team_id: U }),
-    ).toThrow();
+    expect(() => patchVocRequestSchema.parse({ owner_user_id: U, owner_team_id: U })).toThrow();
   });
 
   it('accepts postpone_review: true without triage_state', () => {
@@ -56,9 +54,10 @@ describe('patchVocRequestSchema', () => {
     ).toThrow();
   });
 
-  it('accepts postpone_review: false + triage_state (not mutex when false)', () => {
-    const result = patchVocRequestSchema.parse({ postpone_review: false, triage_state: 'triaged' });
-    expect(result.triage_state).toBe('triaged');
+  it('rejects postpone_review: false + triage_state together (mutex)', () => {
+    expect(() =>
+      patchVocRequestSchema.parse({ postpone_review: false, triage_state: 'triaged' }),
+    ).toThrow();
   });
 
   it('rejects invalid severity value', () => {
@@ -78,13 +77,10 @@ describe('patchVocRequestSchema', () => {
     expect(result.analytics_area_id).toBeNull();
   });
 
-  it.each(['low', 'medium', 'high', 'critical'] as const)(
-    'accepts severity=%s',
-    (severity) => {
-      const result = patchVocRequestSchema.parse({ severity });
-      expect(result.severity).toBe(severity);
-    },
-  );
+  it.each(['low', 'medium', 'high', 'critical'] as const)('accepts severity=%s', (severity) => {
+    const result = patchVocRequestSchema.parse({ severity });
+    expect(result.severity).toBe(severity);
+  });
 
   it('accepts both owner fields null simultaneously', () => {
     const result = patchVocRequestSchema.parse({ owner_user_id: null, owner_team_id: null });
@@ -106,9 +102,7 @@ describe('patchVocRequestSchema', () => {
     // .strict() is set on the schema so unknown keys throw ZodError with
     // code 'unrecognized_keys' — mistyped or unsupported fields are rejected
     // rather than silently stripped, surfacing as validation.failed upstream.
-    expect(() =>
-      patchVocRequestSchema.parse({ severity: 'low', unknownField: 'x' }),
-    ).toThrow();
+    expect(() => patchVocRequestSchema.parse({ severity: 'low', unknownField: 'x' })).toThrow();
   });
 });
 
@@ -118,7 +112,14 @@ describe('FORBIDDEN_PATCH_FIELDS', () => {
   });
 
   it('contains all immutable server-resolved fields', () => {
-    for (const f of ['title', 'description_rich_content', 'display_id', 'reporter_id', 'workspace_id', 'primary_managed_system_id'] as const) {
+    for (const f of [
+      'title',
+      'description_rich_content',
+      'display_id',
+      'reporter_id',
+      'workspace_id',
+      'primary_managed_system_id',
+    ] as const) {
       expect(FORBIDDEN_PATCH_FIELDS).toContain(f);
     }
   });

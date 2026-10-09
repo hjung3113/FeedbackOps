@@ -29,9 +29,7 @@ export type ForbiddenPatchField = (typeof FORBIDDEN_PATCH_FIELDS)[number];
 
 // reporter_facing_status has a dedicated code; all other forbidden fields map
 // to the generic unexpected-field code so the route can dispatch per-field.
-export const FORBIDDEN_PATCH_FIELD_ERROR_CODES: Readonly<
-  Record<ForbiddenPatchField, ErrorCode>
-> = {
+export const FORBIDDEN_PATCH_FIELD_ERROR_CODES: Readonly<Record<ForbiddenPatchField, ErrorCode>> = {
   reporter_facing_status: 'voc.reporter_status_via_public_update_only',
   title: 'validation.unexpected_field',
   description_rich_content: 'validation.unexpected_field',
@@ -49,26 +47,22 @@ export const patchVocRequestSchema = z
     owner_team_id: z.string().uuid().nullable().optional(),
     analytics_area_id: z.string().uuid().nullable().optional(),
     triage_state: triageStateSchema.optional(),
+    // true postpones an untriaged review (sets triage_state_review_postponed_at).
+    // false clears that timestamp when the VOC is untriaged and it is set.
     postpone_review: z.boolean().optional(),
   })
   // Unknown keys are rejected so mistyped or unsupported fields surface
   // as `unrecognized_keys` rather than being silently stripped.
   .strict()
   // Owner XOR: both fields non-null simultaneously is invalid.
-  .refine(
-    (d) => !(d.owner_user_id != null && d.owner_team_id != null),
-    {
-      message: 'owner_user_id and owner_team_id are mutually exclusive',
-      path: ['owner_team_id'],
-    },
-  )
-  // postpone_review and triage_state are mutually exclusive.
-  .refine(
-    (d) => !(d.postpone_review === true && d.triage_state !== undefined),
-    {
-      message: 'postpone_review and triage_state cannot be set in the same request',
-      path: ['postpone_review'],
-    },
-  );
+  .refine((d) => !(d.owner_user_id != null && d.owner_team_id != null), {
+    message: 'owner_user_id and owner_team_id are mutually exclusive',
+    path: ['owner_team_id'],
+  })
+  // postpone_review (true or false) and triage_state are mutually exclusive.
+  .refine((d) => !(d.postpone_review !== undefined && d.triage_state !== undefined), {
+    message: 'postpone_review and triage_state cannot be set in the same request',
+    path: ['postpone_review'],
+  });
 
 export type PatchVocRequest = z.infer<typeof patchVocRequestSchema>;

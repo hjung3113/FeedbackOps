@@ -1,3 +1,7 @@
+import {
+  ANALYTICS_AREA_RECENT_FINDINGS_LABEL,
+  ANALYTICS_AREA_WORKLOAD_SIGNALS_LABEL,
+} from '@/lib/copy/analytics-areas';
 import { GLOSSARY } from '@/lib/copy/glossary';
 
 import {
@@ -56,8 +60,8 @@ export function AnalyticsAreaSlideOver({
     { id: 'overview', label: '개요' },
     { id: 'guardrail', label: '권한 경계' },
     { id: 'definition', label: '정의' },
-    { id: 'workload', label: '작업량' },
-    { id: 'findings', label: 'Findings' },
+    { id: 'workload', label: ANALYTICS_AREA_WORKLOAD_SIGNALS_LABEL },
+    { id: 'findings', label: ANALYTICS_AREA_RECENT_FINDINGS_LABEL },
     { id: 'used-by', label: '사용 위치' },
   ];
 
@@ -135,7 +139,7 @@ export function AnalyticsAreaSlideOver({
           </div>
 
           <div data-anchor="workload" className="px-4 py-3">
-            <PanelSectionTitle>작업량 신호</PanelSectionTitle>
+            <PanelSectionTitle>{ANALYTICS_AREA_WORKLOAD_SIGNALS_LABEL}</PanelSectionTitle>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1 rounded-md bg-surface-canvas p-3">
                 <span className="text-xs text-text-muted">활성 Finding</span>
@@ -154,7 +158,7 @@ export function AnalyticsAreaSlideOver({
           </div>
 
           <div data-anchor="findings" className="px-4 py-3">
-            <PanelSectionTitle>최근 Finding</PanelSectionTitle>
+            <PanelSectionTitle>{ANALYTICS_AREA_RECENT_FINDINGS_LABEL}</PanelSectionTitle>
             <div
               className="rounded-md border border-border-subtle bg-surface-card p-4 text-center text-xs text-text-muted"
               data-testid="aa-findings-defer"

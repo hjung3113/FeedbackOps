@@ -298,11 +298,13 @@ describe('DetailPanelSectionNav', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
 
     expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
-    const more = screen.getByRole('button', { name: /더보기/ });
+    // The active section is announced by the trigger; its visible label stays fixed.
+    const more = screen.getByRole('button', { name: '더보기, 현재 Details' });
+    expect(more).toHaveTextContent(/^더보기$/);
     expect(more).not.toHaveAttribute('aria-current');
     expect(more).toHaveClass('border-accent-primary', 'text-text-primary');
     expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('aria-current');
-    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    fireEvent.keyDown(more, { key: 'Enter' });
     const currentItem = screen.getByRole('menuitem', { name: 'Details' });
     expect(currentItem).toHaveAttribute('aria-current', 'true');
     expect(currentItem).toHaveClass('font-medium', 'text-text-primary');
@@ -312,6 +314,48 @@ describe('DetailPanelSectionNav', () => {
   it('does not render the overflow trigger when no section is overflowed', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
     expect(screen.queryByRole('button', { name: /더보기/ })).toBeNull();
+  });
+
+  it('names the overflow trigger for the active overflow section, and 더보기 when none is active', () => {
+    const scrollEl = document.createElement('div');
+    scrollEl.scrollTo = vi.fn();
+    const overview = document.createElement('div');
+    overview.setAttribute('data-anchor', 'overview');
+    const body = document.createElement('div');
+    body.setAttribute('data-anchor', 'body');
+    scrollEl.append(overview, body);
+    document.body.appendChild(scrollEl);
+
+    const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'body', label: '본문', overflow: true },
+        ]}
+        scrollRef={scrollRef}
+      />,
+    );
+
+    const idle = screen.getByRole('button', { name: '더보기' });
+    expect(idle).toHaveTextContent(/^더보기$/);
+    expect(idle).toHaveAccessibleName('더보기');
+
+    fireEvent.keyDown(idle, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: '본문' }));
+
+    const active = screen.getByRole('button', { name: '더보기, 현재 본문' });
+    expect(active).toHaveTextContent(/^더보기$/);
+    expect(active).toHaveAccessibleName('더보기, 현재 본문');
+    expect(active).toHaveClass('border-accent-primary', 'text-text-primary');
+    expect(screen.queryByRole('button', { name: '더보기' })).not.toBeInTheDocument();
+    document.body.removeChild(scrollEl);
+  });
+
+  it('exposes the strip as a navigation landmark named 섹션 이동', () => {
+    render(<DetailPanelSectionNav sections={SECTIONS} />);
+    const landmark = screen.getByRole('navigation', { name: '섹션 이동' });
+    expect(landmark).toBe(screen.getByTestId('detail-panel-section-nav-strip'));
   });
 
   it('shows an overflow affordance and scrolls a clipped tab into view', () => {
@@ -644,318 +688,6 @@ describe('DetailPanelSectionNav', () => {
     act(() => fireEvent.scroll(scrollEl));
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('holds the later jump until its own guard ends, then recomputes on the next scroll', () => {
-    // Gamma replaces Beta before Beta lands. Arriving at Beta's target must not end Gamma's
-    // jump, and Beta's already-armed stall net must not either. The first scroll that leaves
-    // Gamma's landing recomputes.
-    vi.useFakeTimers();
-    try {
-      const observer = stubIntersectionObserver();
-      const { anchor, scrollEl } = renderNavOverAnchors(
-        ['alpha', 'beta', 'gamma'],
-        { alpha: 12, beta: 180, gamma: 400 },
-        { rootTop: 0, rootHeight: 200, scrollTop: 0 },
-      );
-      setScrollRange(scrollEl, 2000, 200);
-
-      observer.fire([
-        entry(anchor('alpha'), true, 12),
-        entry(anchor('beta'), false, 400),
-        entry(anchor('gamma'), false, 800),
-      ]);
-      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-      scrollEl.scrollTop = 100;
-      act(() => fireEvent.scroll(scrollEl));
-      // 400ms into Beta's 700ms net. Gamma takes over and keeps moving short of its own target.
-      act(() => {
-        vi.advanceTimersByTime(400);
-      });
-      fireEvent.click(screen.getByRole('button', { name: 'Gamma' }));
-
-      scrollEl.scrollTop = 180;
-      act(() => fireEvent.scroll(scrollEl));
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('gamma'), true, 400)]);
-      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
-
-      scrollEl.scrollTop = 220;
-      act(() => fireEvent.scroll(scrollEl));
-      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
-
-      act(() => {
-        fireEvent(scrollEl, new Event('scrollend'));
-      });
-      expect(screen.getByRole('button', { name: 'Gamma' })).toHaveAttribute('aria-current', 'true');
-      scrollEl.scrollTop = 100;
-      act(() => fireEvent.scroll(scrollEl));
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Gamma' })).not.toHaveAttribute('aria-current');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  // Target is 400 (beta top 400, root top 0, cover 0). Max scroll is 1800, so neither an
-  // intermediate position nor the 1px window around the target is the clamp. The 700ms
-  // advance is the old guard: a timeout-only release re-ranks on the first movement.
-  it.each([
-    { end: 'target' as const, release: 'the scroll reaches the target' },
-    { end: 'scrollend' as const, release: 'scrollend fires' },
-  ])(
-    'keeps the clicked section current when the smooth scroll starts after 700ms until $release',
-    ({ end }) => {
-      vi.useFakeTimers();
-      try {
-        const observer = stubIntersectionObserver();
-        const { anchor, scrollEl } = renderNavOverAnchors(
-          ['alpha', 'beta'],
-          { alpha: 12, beta: 400 },
-          { rootTop: 0, rootHeight: 200, scrollTop: 0 },
-        );
-        setScrollRange(scrollEl, 2000, 200);
-
-        observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
-        fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-        expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute(
-          'aria-current',
-          'true',
-        );
-
-        act(() => {
-          vi.advanceTimersByTime(700);
-        });
-
-        // Motion itself runs longer than 700ms. Pulses 500ms apart must not let a
-        // timer that started on the first pixel release before the scroll ends.
-        for (const top of [80, 200, 398]) {
-          scrollEl.scrollTop = top;
-          act(() => {
-            fireEvent.scroll(scrollEl);
-          });
-          act(() => {
-            vi.advanceTimersByTime(500);
-          });
-          observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), true, 400)]);
-          expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute(
-            'aria-current',
-            'true',
-          );
-        }
-
-        if (end === 'target') {
-          scrollEl.scrollTop = 399;
-          act(() => {
-            fireEvent.scroll(scrollEl);
-          });
-        } else {
-          act(() => {
-            fireEvent(scrollEl, new Event('scrollend'));
-          });
-        }
-        expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute(
-          'aria-current',
-          'true',
-        );
-
-        scrollEl.scrollTop = 380;
-        act(() => {
-          fireEvent.scroll(scrollEl);
-        });
-        expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute(
-          'aria-current',
-          'true',
-        );
-        expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-      } finally {
-        vi.useRealTimers();
-      }
-    },
-  );
-
-  it('releases a stalled jump 700ms after its last pulse, then re-ranks past that landing', () => {
-    // Target is 400 and the max scroll is 1800, so 120 is part-way: one pulse arms the
-    // stall net and neither the clamp nor scrollend can release it. 699ms is still the
-    // jump. The next millisecond records 120, and only a later scroll more than 1px
-    // away ranks the topmost intersecting anchor.
-    vi.useFakeTimers();
-    try {
-      const observer = stubIntersectionObserver();
-      const { anchor, scrollEl } = renderNavOverAnchors(
-        ['alpha', 'beta'],
-        { alpha: 12, beta: 400 },
-        { rootTop: 0, rootHeight: 200, scrollTop: 0 },
-      );
-      setScrollRange(scrollEl, 2000, 200);
-
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
-      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      scrollEl.scrollTop = 120;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-
-      act(() => {
-        vi.advanceTimersByTime(699);
-      });
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), true, 400)]);
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Alpha' })).not.toHaveAttribute('aria-current');
-
-      act(() => {
-        vi.advanceTimersByTime(1);
-      });
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      scrollEl.scrollTop = 100;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('releases the jump guard when the scroll stops at its maximum short of the target', () => {
-    // Target is 900. The root clamps at 260, so 258 is still short and 259 is within 1px.
-    vi.useFakeTimers();
-    try {
-      const observer = stubIntersectionObserver();
-      const { anchor, scrollEl } = renderNavOverAnchors(
-        ['alpha', 'beta'],
-        { alpha: 12, beta: 900 },
-        { rootTop: 0, rootHeight: 200, scrollTop: 0 },
-      );
-      setScrollRange(scrollEl, 460, 200);
-
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 900)]);
-      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-
-      scrollEl.scrollTop = 258;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), true, 900)]);
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      scrollEl.scrollTop = 259;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      scrollEl.scrollTop = 250;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('releases at once when a click is already at the maximum and the target lies past it', () => {
-    // Max is 260 and the panel is already there. Beta's target is 1160, so the browser
-    // clamps and emits no scroll and no scrollend. The click must still release, and the
-    // first scroll that leaves 260 re-ranks.
-    const observer = stubIntersectionObserver();
-    const { anchor, scrollEl } = renderNavOverAnchors(
-      ['alpha', 'beta'],
-      { alpha: 12, beta: 900 },
-      { rootTop: 0, rootHeight: 200, scrollTop: 260 },
-    );
-    setScrollRange(scrollEl, 460, 200);
-
-    observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 900)]);
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-    expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-    scrollEl.scrollTop = 200;
-    act(() => {
-      fireEvent.scroll(scrollEl);
-    });
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('releases a jump that never moves once the start watchdog elapses', () => {
-    // scrollTo is a no-op here, and the target is inside the range, so nothing scrolls.
-    // 1499ms must keep the guard up. 1500ms releases it, and the next scroll that moves re-ranks.
-    vi.useFakeTimers();
-    try {
-      const observer = stubIntersectionObserver();
-      const { anchor, scrollEl } = renderNavOverAnchors(
-        ['alpha', 'beta'],
-        { alpha: 12, beta: 400 },
-        { rootTop: 0, rootHeight: 200, scrollTop: 0 },
-      );
-      setScrollRange(scrollEl, 2000, 200);
-
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
-      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      act(() => {
-        vi.advanceTimersByTime(1499);
-      });
-      observer.fire([entry(anchor('alpha'), true, 12)]);
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      act(() => {
-        vi.advanceTimersByTime(1);
-      });
-      observer.fire([entry(anchor('alpha'), true, 12)]);
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-
-      scrollEl.scrollTop = 40;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-      expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('releases by the watchdog when the scroll root loses its box before it scrolls', () => {
-    // A nonzero click origin, then the root collapses to scrollTop 0 with no scroll event
-    // (a detached root). The watchdog must still release.
-    vi.useFakeTimers();
-    try {
-      const observer = stubIntersectionObserver();
-      const { anchor, scrollEl } = renderNavOverAnchors(
-        ['alpha', 'beta'],
-        { alpha: 12, beta: 400 },
-        { rootTop: 0, rootHeight: 200, scrollTop: 120 },
-      );
-      setScrollRange(scrollEl, 2000, 200);
-
-      observer.fire([entry(anchor('alpha'), true, 12), entry(anchor('beta'), false, 400)]);
-      fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-      scrollEl.scrollTop = 0;
-      act(() => {
-        vi.advanceTimersByTime(1500);
-      });
-
-      scrollEl.scrollTop = 40;
-      act(() => {
-        fireEvent.scroll(scrollEl);
-      });
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('keeps the clicked section through the landing pulse and the observer delivery in that frame', () => {

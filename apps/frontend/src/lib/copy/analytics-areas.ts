@@ -1,0 +1,2 @@
+export const ANALYTICS_AREA_WORKLOAD_SIGNALS_LABEL = '작업량 신호';
+export const ANALYTICS_AREA_RECENT_FINDINGS_LABEL = '최근 Finding';

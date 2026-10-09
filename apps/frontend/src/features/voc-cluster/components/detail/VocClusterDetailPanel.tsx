@@ -33,6 +33,7 @@ import {
   FINDING_SEVERITY_LABELS,
   FINDING_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
+import { VOC_CLUSTER_GROUPING_REASON_LABEL } from '@/lib/copy/voc-cluster';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDate } from '@/lib/format/datetime';
@@ -61,7 +62,7 @@ function clusterDisplayId(data: {
 export function buildVocClusterDetailSections(memberCount: number): PanelSection[] {
   return [
     { id: 'overview', label: '요약' },
-    { id: 'why', label: '근거' },
+    { id: 'why', label: VOC_CLUSTER_GROUPING_REASON_LABEL },
     { id: 'execution', label: '실행' },
     { id: 'members', label: '멤버', count: memberCount },
     { id: 'properties', label: '속성' },
@@ -237,7 +238,7 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <section data-anchor="why" className="flex flex-col gap-1">
-            <PanelSectionTitle>그룹화 사유</PanelSectionTitle>
+            <PanelSectionTitle>{VOC_CLUSTER_GROUPING_REASON_LABEL}</PanelSectionTitle>
             {data.rationale ? (
               <p
                 className="rounded-md border border-border-subtle bg-surface-card p-3 text-sm text-text-primary whitespace-pre-wrap"

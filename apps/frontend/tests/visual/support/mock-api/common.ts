@@ -77,6 +77,8 @@ export function createCommonHandlers(context: MockApiContext): MockApiHandler[] 
             'voc.my': 2,
             'voc.tab.high': 1,
             'voc.tab.unassigned': 3,
+            'voc.tab.untriaged': 4,
+            'voc.tab.waiting': 2,
             'voc.clusters': 4,
             'findings.all': 8,
             'surveys.all': 5,
