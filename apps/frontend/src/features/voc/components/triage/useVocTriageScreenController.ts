@@ -36,6 +36,7 @@ export interface VocTriageScreenController {
   handleOptimisticRemove: (vocId: string) => void;
   handleOptimisticPostpone: (vocId: string) => void;
   handleOptimisticRestore: (vocId: string) => void;
+  handleOptimisticRollback: (vocId: string) => void;
   handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
 }
@@ -138,7 +139,13 @@ export function useVocTriageScreenController({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticPostpone,
-    handleOptimisticRestore: optimisticRestore,
+    handleOptimisticRollback: (vocId) => {
+      optimisticRestore(vocId, 'rollback');
+    },
+    handleOptimisticRestore: (vocId) => {
+      optimisticRestore(vocId);
+      onSelectVoc(vocId);
+    },
     handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),
   };

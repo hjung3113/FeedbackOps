@@ -15,6 +15,7 @@ import { TriageRow } from './TriageRow';
 export interface TriageQueueProps {
   vocs: VocListItem[];
   selectedId: string | null;
+  activeTab?: string;
   onSelect: (id: string) => void;
   /** #922: true while the active tab's queue query loads; shows the pending state in place of rows. */
   queuePending?: boolean;
@@ -29,6 +30,7 @@ export interface TriageQueueProps {
 export function TriageQueue({
   vocs,
   selectedId,
+  activeTab,
   onSelect,
   queuePending,
   queueTotal,
@@ -62,6 +64,7 @@ export function TriageQueue({
           <TriageRow
             key={voc.id}
             voc={voc}
+            showPostponedMarker={activeTab !== 'waiting'}
             selected={voc.id === selectedId}
             onSelect={() => {
               onSelect(voc.id);

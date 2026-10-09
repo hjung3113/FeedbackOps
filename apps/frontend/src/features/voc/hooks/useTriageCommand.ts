@@ -36,6 +36,8 @@ import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 export interface UseTriageCommandArgs {
   voc: VocListItem;
   onProcessed?: ((delta: 1 | -1) => void) | undefined;
+  onMutationFailure?: ((vocId: string) => void) | undefined;
+  onOptimisticRollback?: ((vocId: string) => void) | undefined;
   onOptimisticRestore?: ((vocId: string) => void) | undefined;
 }
 
@@ -49,6 +51,8 @@ export interface UseTriageCommandResult {
 export function useTriageCommand({
   voc,
   onOptimisticRestore,
+  onOptimisticRollback,
+  onMutationFailure,
   onProcessed,
 }: UseTriageCommandArgs): UseTriageCommandResult {
   const queryClient = useQueryClient();
@@ -69,6 +73,12 @@ export function useTriageCommand({
   // queue side-effects must close over the original mutation input instead.
   const onProcessedRef = React.useRef(onProcessed);
   onProcessedRef.current = onProcessed;
+
+  const onMutationFailureRef = React.useRef(onMutationFailure);
+  onMutationFailureRef.current = onMutationFailure;
+
+  const onOptimisticRollbackRef = React.useRef(onOptimisticRollback);
+  onOptimisticRollbackRef.current = onOptimisticRollback;
 
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
@@ -93,6 +103,7 @@ export function useTriageCommand({
         return output;
       } catch (err) {
         failuresRef.current.get(input)?.();
+        onMutationFailureRef.current?.(input.vocId);
         if (err instanceof ApiError && err.code === 'conflict.stale_write') {
           invalidateTriageLists();
         }
@@ -168,7 +179,7 @@ export function useTriageCommand({
     onError: (err: unknown, input: TriageInput) => {
       const decision = classifyTriageMutationError(err);
       if (decision.restore) {
-        onOptimisticRestoreRef.current?.(input.vocId);
+        (onOptimisticRollbackRef.current ?? onOptimisticRestoreRef.current)?.(input.vocId);
       }
       if (decision.lockPanel) {
         setPanelLocked(true);

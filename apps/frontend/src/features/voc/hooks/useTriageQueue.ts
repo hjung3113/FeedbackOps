@@ -106,7 +106,7 @@ export interface UseTriageQueueResult {
   /** Optimistically remove a voc and set lastRemoved for undo. */
   optimisticRemove: (vocId: string, priorValues: TriagePriorValues) => void;
   /** Restore a previously removed voc (undo path). */
-  optimisticRestore: (vocId: string) => void;
+  optimisticRestore: (vocId: string, reason?: 'rollback') => void;
   optimisticPostpone: (vocId: string) => void;
 }
 
@@ -168,12 +168,19 @@ export function useTriageQueue(
     dispatch({ type: 'optimistic_remove', vocId, priorValues });
   }
 
-  function optimisticRestore(vocId: string): void {
+  function optimisticRestore(vocId: string, reason?: 'rollback'): void {
     dispatch({ type: 'optimistic_restore', vocId });
     const wasPostponed = postponedInSession.current.delete(vocId);
     setPostponedOverrides((current) => {
       if (!wasPostponed && !current.has(vocId)) return current;
-      return new Map(current).set(vocId, null);
+      const next = new Map(current);
+      if (reason === 'rollback') {
+        // Discard only the failed override; the server row retains its prior marker.
+        next.delete(vocId);
+      } else {
+        next.set(vocId, null);
+      }
+      return next;
     });
   }
 

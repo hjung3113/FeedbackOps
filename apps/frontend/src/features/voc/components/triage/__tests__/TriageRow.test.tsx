@@ -67,6 +67,19 @@ describe('TriageRow', () => {
     }
   });
 
+  it('describes postponed status, missing owner and missing Analytics Area on focus', () => {
+    render(
+      <TriageRow
+        voc={{ ...BASE_VOC, review_postponed_at: '2026-10-09T00:00:00.000Z' }}
+        selected={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'VOC-001 Test VOC title' }),
+    ).toHaveAccessibleDescription('접수됨 보류 Analytics Area 미지정 담당자 없음');
+  });
+
   it('calls onSelect when clicked', () => {
     const onSelect = vi.fn();
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={onSelect} />);

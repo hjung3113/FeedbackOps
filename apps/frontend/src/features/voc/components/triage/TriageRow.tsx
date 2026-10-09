@@ -20,6 +20,7 @@
 import { formatRelativeTime } from '@/lib/format/datetime';
 import type { VocListItem } from '@fops/shared';
 import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fops/ui';
+import { useId } from 'react';
 import type * as React from 'react';
 
 import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
@@ -38,6 +39,7 @@ export interface TriageRowProps {
   selected: boolean;
   onSelect: () => void;
   className?: string;
+  showPostponedMarker?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +51,9 @@ export function TriageRow({
   selected,
   onSelect,
   className,
+  showPostponedMarker = true,
 }: TriageRowProps): React.ReactElement {
+  const metaId = useId();
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
   const areaMissing = voc.analytics_area_id === null;
   const relTime = formatRelativeTime(voc.created_at);
@@ -67,6 +71,7 @@ export function TriageRow({
       role="button"
       aria-selected={selected}
       aria-label={`${voc.display_id} ${voc.title}`}
+      aria-describedby={metaId}
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
@@ -102,10 +107,10 @@ export function TriageRow({
         </div>
 
         {/* Meta row — .row-meta */}
-        <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
+        <div id={metaId} className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
           <ReporterStatusBadge status={voc.reporter_facing_status} />
 
-          {voc.review_postponed_at != null && (
+          {showPostponedMarker && voc.review_postponed_at != null && (
             <>
               <span
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"

@@ -19,6 +19,8 @@ export function useTriagePanelController({
   onOptimisticPostpone,
   onProcessed,
   onOptimisticRestore,
+  onOptimisticRollback,
+  onMutationFailure,
 }: {
   voc: VocListItem;
   onAct?: (
@@ -34,6 +36,8 @@ export function useTriagePanelController({
   onOptimisticRemove?: (vocId: string) => void;
   onOptimisticPostpone?: (vocId: string) => void;
   onProcessed?: (delta: 1 | -1) => void;
+  onMutationFailure?: (vocId: string) => void;
+  onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }) {
   const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
@@ -100,6 +104,8 @@ export function useTriagePanelController({
     voc,
     onProcessed,
     onOptimisticRestore,
+    onOptimisticRollback,
+    onMutationFailure,
   });
 
   // Keep a stable ref to undoLast so the toast closure always sees the latest version.
@@ -187,7 +193,7 @@ export function useTriagePanelController({
   );
 
   const handleSkip = React.useCallback(() => {
-    if (panelLocked) return;
+    if (panelLocked || voc.triage_state !== 'untriaged' || voc.review_postponed_at != null) return;
     const input: TriageInput = {
       kind: 'skip',
       vocId: voc.id,
@@ -228,6 +234,8 @@ export function useTriagePanelController({
     voc.updated_at,
     onOptimisticRemove,
     onOptimisticPostpone,
+    voc.triage_state,
+    voc.review_postponed_at,
     onAct,
     commit,
   ]);

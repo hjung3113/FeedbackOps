@@ -49,6 +49,29 @@ describe('useTriageQueue — exclusion lifetime', () => {
     },
   );
 
+  it('failed repeat-postpone restores the original marker across a settled refetch', async () => {
+    const original: VocListItem = { ...voc, review_postponed_at: '2026-10-09T00:00:00.000Z' };
+    const { result, rerender } = renderHook(
+      ({ items }) => useTriageQueue(items, 'unassigned:ms-1', true),
+      { initialProps: { items: [original] } },
+    );
+    let reject: (error: Error) => void = () => {};
+    const request = new Promise<void>((_resolve, rejectRequest) => {
+      reject = rejectRequest;
+    });
+    act(() => result.current.optimisticPostpone(voc.id));
+    const completion = request.catch(() => result.current.optimisticRestore(voc.id, 'rollback'));
+    await act(async () => {
+      reject(new Error('postpone failed'));
+      await completion;
+    });
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBe(original.review_postponed_at);
+    rerender({ items: [{ ...original }] });
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBe(original.review_postponed_at);
+    rerender({ items: [voc] });
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBeNull();
+  });
+
   it('undo clears a postponed marker after a settled server read acknowledged it', () => {
     const { result, rerender } = renderHook(
       ({ items }) => useTriageQueue(items, 'unassigned:ms-1', true),

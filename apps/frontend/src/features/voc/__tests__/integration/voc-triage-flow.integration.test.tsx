@@ -377,6 +377,10 @@ describe('Triage flow — integration (C6.3)', () => {
       });
       if (activeTab === 'untriaged') {
         expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument();
+      } else if (activeTab === 'waiting') {
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).queryByText('보류'),
+        ).not.toBeInTheDocument();
       } else {
         expect(
           within(screen.getByRole('button', { name: /VOC-I-001/ })).getByText('보류'),
@@ -401,6 +405,84 @@ describe('Triage flow — integration (C6.3)', () => {
       } finally {
         unmountCapturedToast(toastHost);
       }
+    },
+  );
+
+  it.each([
+    ['needs_more_information', null, '미분류 VOC만 보류할 수 있습니다.'],
+    ['untriaged', '2026-10-09T00:00:00.000Z', '이미 보류된 VOC입니다.'],
+  ] as const)(
+    '940: disables postpone for %s / %s with a reason',
+    (triageState, postponedAt, reason) => {
+      const Wrapper = makeWrapper();
+      render(
+        <Wrapper>
+          <VocTriageScreen
+            items={MOCK_VOCS.map((voc) =>
+              voc.id === FIRST_VOC_ID
+                ? { ...voc, triage_state: triageState, review_postponed_at: postponedAt }
+                : voc,
+            )}
+            selectedId={FIRST_VOC_ID}
+            activeTab="unassigned"
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+      expect(screen.getByRole('button', { name: '보류' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '보류' })).toHaveAttribute('title', reason);
+    },
+  );
+
+  it.each(['skip', 'confirm'] as const)(
+    '940: failed %s selects the original VOC again',
+    async (kind) => {
+      let reject: (error: Error) => void = () => {};
+      globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'PATCH'
+          ? new Promise<Response>((_resolve, rejectRequest) => {
+              reject = rejectRequest;
+            })
+          : Promise.resolve(jsonResponse({ items: [] })),
+      ) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      function SelectedScreen() {
+        const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+        return (
+          <VocTriageScreen
+            items={MOCK_VOCS}
+            selectedId={selectedId}
+            activeTab="unassigned"
+            onSelectVoc={setSelectedId}
+            onTabChange={vi.fn()}
+          />
+        );
+      }
+      render(
+        <Wrapper>
+          <SelectedScreen />
+        </Wrapper>,
+      );
+      if (kind === 'confirm') clickAnySeverityChip();
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: kind === 'skip' ? '보류' : 'Triage 확정 & 다음 VOC' }),
+        );
+      });
+      expect(screen.getByRole('button', { name: /VOC-I-002/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await act(async () => {
+        reject(new Error('request failed'));
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /VOC-I-001/ })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        ),
+      );
     },
   );
 

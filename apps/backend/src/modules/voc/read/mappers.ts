@@ -18,6 +18,7 @@ export function mapRowToListItem(
   row: VocReadRow,
   attachmentCount = 0,
   similarCount = 0,
+  view = 'inbox',
 ): VocListItem {
   return {
     id: row.id,
@@ -31,7 +32,8 @@ export function mapRowToListItem(
     severity: row.severity,
     reporter_facing_status: row.reporterFacingStatus as VocListItem['reporter_facing_status'],
     triage_state: row.triageState as VocListItem['triage_state'],
-    review_postponed_at: row.triageStateReviewPostponedAt?.toISOString() ?? null,
+    review_postponed_at:
+      view === 'triage' ? (row.triageStateReviewPostponedAt?.toISOString() ?? null) : null,
     source_context: row.sourceContext as VocListItem['source_context'],
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
