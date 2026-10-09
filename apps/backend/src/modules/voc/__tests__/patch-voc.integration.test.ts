@@ -423,6 +423,72 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
+  it.skipIf(!MIGRATE_URL)(
+    'confirm compensation restores needs_more_information and prior fields without a triage commit audit',
+    async () => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-patch-undo-nmi', 'Undo NMI MS');
+      const aaId = await createAa(app, admin, {
+        managed_system_id: msId,
+        slug: 'aa-undo-nmi',
+        name: 'Undo NMI AA',
+      });
+      const reporter = await loginAs(app, 'mock-user-1');
+      const voc = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'undo confirm',
+          description_rich_content: paragraphDoc('needs more information'),
+        },
+        randomUUID(),
+      );
+      const priorBody = {
+        triage_state: 'needs_more_information',
+        severity: 'low',
+        owner_user_id: adminActorId,
+        owner_team_id: null,
+        analytics_area_id: aaId,
+      };
+      const prior = await patchVoc(app, admin, voc.id, priorBody, {
+        idempotencyKey: randomUUID(),
+        ifMatch: voc.updated_at,
+      });
+      expect(prior.statusCode).toBe(200);
+      const forward = await patchVoc(
+        app,
+        admin,
+        voc.id,
+        {
+          triage_state: 'triaged',
+          severity: 'high',
+          owner_user_id: null,
+          owner_team_id: null,
+          analytics_area_id: null,
+        },
+        { idempotencyKey: randomUUID(), ifMatch: prior.json().updated_at },
+      );
+      expect(forward.statusCode).toBe(200);
+      expect(forward.json().triage_state).toBe('triaged');
+      expect(await getAuditTypes(voc.id)).not.toContain('voc_triage_committed');
+
+      const compensation = await patchVoc(app, admin, voc.id, priorBody, {
+        idempotencyKey: randomUUID(),
+        ifMatch: forward.json().updated_at,
+      });
+      expect(compensation.statusCode).toBe(200);
+      expect(compensation.json()).toMatchObject(priorBody);
+      const row = await dbHandle.pool.query(
+        `select triage_state, severity, owner_user_id, owner_team_id, analytics_area_id
+           from voc.vocs where id = $1`,
+        [voc.id],
+      );
+      expect(row.rows[0]).toEqual(priorBody);
+      expect(await getAuditTypes(voc.id)).not.toContain('voc_triage_committed');
+    },
+  );
+
   // ── 2. If-Match missing → 422 ─────────────────────────────────────────
   // Spec says 400 for missing header; we deviate to 422 to match ADR-0012
   // mapping (all validation errors → 422) per the Idempotency-Key precedent.

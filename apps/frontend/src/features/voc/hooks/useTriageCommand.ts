@@ -123,10 +123,11 @@ export function useTriageCommand({
     // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
     // restore the VOC to), NOT from staged panelState (the new values the
     // user just chose). If we snapshot staged values, the compensating
-    // PATCH writes the new values back with triage_state='untriaged' and
+    // PATCH writes the new values back instead of the prior state and
     // permanently mutates severity/owner/AA.
     snapshot: (input: TriageInput) => ({
       ...buildTriageSnapshot(input, {
+        triageState: voc.triage_state,
         severity: voc.severity,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,

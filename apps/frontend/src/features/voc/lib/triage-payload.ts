@@ -7,13 +7,15 @@
 //   finding:  same body as confirm (triage is committed; navigation is Slice 5)
 //
 // Compensating PATCH bodies:
-//   confirm/finding → { triage_state:'untriaged', ...prior values }
+//   confirm/finding → { triage_state:prior state, ...prior values }
 //   skip            → { postpone_review: false }
 
+import type { VocListItem } from '@fops/shared';
 import type { TriageInput, TriageSnapshot } from './triage-types';
 
 /** Prior (pre-mutation) VOC fields the compensating PATCH must restore. */
 export interface TriagePriorFields {
+  triageState: VocListItem['triage_state'];
   severity: string | null;
   ownerUserId: string | null;
   ownerTeamId: string | null;
@@ -42,12 +44,12 @@ export function buildPayload(input: TriageInput): Record<string, unknown> {
 /**
  * buildCompensatePayload — compensating PATCH body from the SNAPSHOT's prior
  * fields, never the staged input values (REV-1 #3: snapshotting staged values
- * would permanently overwrite severity/owner/AA with triage_state='untriaged').
+ * would permanently overwrite the prior triage state and severity/owner/AA).
  */
 export function buildCompensatePayload(snapshot: TriageSnapshot): Record<string, unknown> {
   return snapshot.wasConfirm
     ? {
-        triage_state: 'untriaged' as const,
+        triage_state: snapshot.triageState,
         severity: snapshot.severity,
         owner_user_id: snapshot.ownerUserId,
         owner_team_id: snapshot.ownerTeamId,
@@ -72,6 +74,8 @@ export function buildTriageSnapshot(input: TriageInput, prior: TriagePriorFields
     ownerUserId: isConfirm ? prior.ownerUserId : null,
     ownerTeamId: isConfirm ? prior.ownerTeamId : null,
     analyticsAreaId: isConfirm ? prior.analyticsAreaId : null,
-    wasConfirm: isConfirm,
+    ...(isConfirm
+      ? { wasConfirm: true as const, triageState: prior.triageState }
+      : { wasConfirm: false as const }),
   };
 }

@@ -2,6 +2,8 @@
 // Moved verbatim from hooks/useVocTriageMutation.ts, which re-exports them so
 // existing import paths keep working.
 
+import type { VocListItem } from '@fops/shared';
+
 export interface TriageConfirmInput {
   kind: 'confirm' | 'finding';
   vocId: string;
@@ -28,7 +30,7 @@ export interface TriageOutput {
 
 // Snapshot type for the undo compensate path — captures the prior field values
 // so the compensating PATCH can restore the VOC to its original state.
-export interface TriageSnapshot {
+interface TriageSnapshotFields {
   vocId: string;
   ifMatch: string;
   // Prior values for compensate payload
@@ -36,6 +38,7 @@ export interface TriageSnapshot {
   ownerUserId: string | null;
   ownerTeamId: string | null;
   analyticsAreaId: string | null;
-  // Whether this was a confirm/finding (only those need compensation by prior-values)
-  wasConfirm: boolean;
 }
+
+export type TriageSnapshot = TriageSnapshotFields &
+  ({ wasConfirm: true; triageState: VocListItem['triage_state'] } | { wasConfirm: false });
