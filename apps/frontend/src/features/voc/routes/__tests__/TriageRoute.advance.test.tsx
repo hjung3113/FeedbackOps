@@ -660,3 +660,139 @@ it.each(['no return', 'row click', 'Back', 'input', 'dialog', 'navigation'])(
     else expect(returnedTarget).toHaveFocus();
   },
 );
+
+it.each([3, 4])(
+  'keeps pointer-selected focus inside the undo restore window: VOC-%s',
+  async (n) => {
+    toast.dismiss();
+    render(<Toaster />);
+    const { router } = mount();
+    await screen.findByRole('heading', { name: second.title });
+    await confirm();
+    await screen.findByText(/1건 처리됨/);
+    const undo = await screen.findByRole('button', { name: '실행 취소' });
+    undo.focus();
+    fireEvent.click(undo);
+    await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+    const other = screen.getByRole('button', { name: new RegExp(`VOC-${n}`) });
+    fireEvent.pointerDown(other);
+    await act(async () => other.focus());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 90));
+    });
+    fireEvent.click(other);
+    await screen.findByRole('heading', { name: `Queue item ${n}` });
+    expect(router.state.location.search.selected).toBe(rows[n - 1]?.id);
+    expect(other).toHaveFocus();
+  },
+);
+
+it('retires restore focus when focus lands somewhere other than the pre-toast element', async () => {
+  toast.dismiss();
+  render(<Toaster />);
+  mount();
+  await screen.findByRole('heading', { name: second.title });
+  await confirm();
+  await screen.findByText(/1건 처리됨/);
+  const undo = await screen.findByRole('button', { name: '실행 취소' });
+  undo.focus();
+  fireEvent.click(undo);
+  await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+  const other = screen.getByRole('button', { name: /VOC-4/ });
+  await act(async () => other.focus());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(other).toHaveFocus();
+  const source = screen.getByRole('button', { name: /VOC-3/ });
+  await act(async () => source.focus());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(source).toHaveFocus();
+});
+
+it('retires restore focus after Back to the action source and Forward without a return', async () => {
+  toast.dismiss();
+  render(<Toaster />);
+  const { router, history } = mount();
+  await screen.findByRole('heading', { name: second.title });
+  fireEvent.click(screen.getByRole('button', { name: /VOC-3/ }));
+  await screen.findByRole('heading', { name: third.title });
+  fireEvent.click(screen.getByRole('button', { name: /VOC-2/ }));
+  await screen.findByRole('heading', { name: second.title });
+  await confirm();
+  await screen.findByText(/1건 처리됨/);
+  const undo = await screen.findByRole('button', { name: '실행 취소' });
+  undo.focus();
+  fireEvent.click(undo);
+  await waitFor(() => expect(screen.getByRole('button', { name: /VOC-2/ })).toHaveFocus());
+  await act(async () => history.back());
+  await screen.findByRole('heading', { name: third.title });
+  expect(document.body).toHaveFocus();
+  await act(async () => history.forward());
+  await screen.findByRole('heading', { name: second.title });
+  expect(router.state.location.search.selected).toBe(second.id);
+  expect(document.body).toHaveFocus();
+  const other = screen.getByRole('button', { name: /VOC-4/ });
+  await act(async () => other.focus());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(other).toHaveFocus();
+});
+
+it('clears populated retained rows on a failed Managed System change in the same tab', async () => {
+  const { router } = mount();
+  await screen.findByRole('heading', { name: second.title });
+  const client = clients[clients.length - 1] as QueryClient;
+  await waitFor(() => expect(client.isFetching({ queryKey: ['vocs', 'triage'] })).toBe(0));
+  const successfulFetch = fetch;
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname === '/vocs' && url.searchParams.get('view') === 'triage') {
+      return Promise.reject(new Error('Queue read failed'));
+    }
+    return successfulFetch(input, init);
+  });
+  // First prove this mount has a retained page over a failed pin-only read.
+  fireEvent.click(screen.getByRole('button', { name: /VOC-3/ }));
+  const pinKey = [
+    'vocs',
+    'triage',
+    undefined,
+    'untriaged',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    third.id,
+  ];
+  await waitFor(
+    () => {
+      expect(client.getQueryState(pinKey)?.status).toBe('error');
+      expect(client.getQueryState(pinKey)?.fetchStatus).toBe('idle');
+    },
+    { timeout: 5000 },
+  );
+  expect(screen.getByRole('button', { name: /VOC-1/ })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: third.title })).toBeInTheDocument();
+  await act(async () => {
+    await router.navigate({
+      to: '/vocs',
+      search: (prev) => ({ ...prev, managedSystem: 'scope-b' }),
+    });
+  });
+  const scopeKey = [...pinKey.slice(0, 2), 'scope-b', ...pinKey.slice(3)];
+  await waitFor(
+    () => {
+      expect(client.getQueryState(scopeKey)?.status).toBe('error');
+      expect(client.getQueryState(scopeKey)?.fetchStatus).toBe('idle');
+    },
+    { timeout: 5000 },
+  );
+  expect(router.state.location.search.tab).toBe('untriaged');
+  expect(screen.getByText('불러오기 실패')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /VOC-1/ })).toBeNull();
+  expect(screen.queryByRole('heading', { name: third.title })).toBeNull();
+});

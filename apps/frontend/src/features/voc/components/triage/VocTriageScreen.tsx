@@ -100,6 +100,7 @@ export function VocTriageScreen({
   onTabChange,
 }: VocTriageScreenProps): React.ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
+  const lastScreenFocus = useRef<Element | null>(null);
   const [pendingFocus, setPendingFocus] = useState<{
     id: string | null;
     sourceId: string | null;
@@ -107,6 +108,8 @@ export function VocTriageScreen({
     restore?: boolean;
     expiresAt?: number;
     undoToast?: Element | null;
+    returnTarget?: Element | null;
+    reachedTarget?: boolean;
   } | null>(null);
   const releaseRestoreFocus = useRef<(() => void) | null>(null);
   function handleAdvanceVoc(id: string | null): void {
@@ -131,6 +134,7 @@ export function VocTriageScreen({
             restore: true,
             expiresAt: Date.now() + 1000,
             undoToast: document.activeElement?.closest('[data-sonner-toast]') ?? null,
+            returnTarget: lastScreenFocus.current,
           }
         : null,
     );
@@ -184,11 +188,13 @@ export function VocTriageScreen({
     if (!pendingFocus) return;
     if (
       pendingFocus.context !== (queueContext ?? activeTab) ||
-      (selectedId !== pendingFocus.sourceId && selectedId !== pendingFocus.id)
+      (selectedId !== pendingFocus.id &&
+        (pendingFocus.reachedTarget || selectedId !== pendingFocus.sourceId))
     ) {
       setPendingFocus(null);
       return;
     }
+    if (pendingFocus.restore && selectedId === pendingFocus.id) pendingFocus.reachedTarget = true;
     if (createFindingTarget) return;
     if (pendingFocus.restore && !canRestoreFocus(rootRef.current)) {
       setPendingFocus(null);
@@ -228,11 +234,9 @@ export function VocTriageScreen({
         return;
       }
       const active = document.activeElement;
-      if (
-        active === target ||
-        !active?.closest('[role="tabpanel"] button[aria-selected], [role="tab"]') ||
-        !rootRef.current?.contains(active)
-      ) {
+      if (active === target) return;
+      if (active !== pendingFocus.returnTarget) {
+        finish();
         return;
       }
       clearTimeout(correction);
@@ -282,7 +286,17 @@ export function VocTriageScreen({
       : `전체 대기열 ${queueTotal} VOC`;
 
   return (
-    <div ref={rootRef} className="flex flex-col h-full">
+    <div
+      ref={rootRef}
+      className="flex flex-col h-full"
+      onFocusCapture={(event) => {
+        lastScreenFocus.current = event.target;
+      }}
+      onPointerDownCapture={() => {
+        releaseRestoreFocus.current?.();
+        setPendingFocus(null);
+      }}
+    >
       {/* Toolbar: kicker (V1 inline identity) + title + tab strip */}
       {/* V1: ShellHeader removed from WorkbenchShell; route identity lives here as a left-edge kicker. */}
       <div

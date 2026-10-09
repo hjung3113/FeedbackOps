@@ -52,10 +52,11 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
     filters,
     sort,
     cursor,
+    ...(limit === undefined ? [] : [limit]),
     pinVocId,
   ] as const;
 
-  const contextKey = view === 'triage' ? hashKey([...queryKey.slice(0, -1), limit]) : '';
+  const contextKey = view === 'triage' ? hashKey(queryKey.slice(0, -1)) : '';
   const retainedPage = useRef<{ contextKey: string; data: VocListPage } | null>(null);
   if (retainedPage.current?.contextKey !== contextKey) retainedPage.current = null;
 
@@ -115,12 +116,15 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
     retainedPage.current = { contextKey, data: query.data };
   }
   if (view === 'triage' && query.isError && !query.data && retainedPage.current) {
-    return {
-      ...query,
-      data: retainedPage.current.data,
-      isLoadingError: false,
-      isRefetchError: true,
-    };
+    const data = retainedPage.current.data;
+    return new Proxy(query, {
+      get(target, property, receiver) {
+        if (property === 'data') return data;
+        if (property === 'isLoadingError') return false;
+        if (property === 'isRefetchError') return true;
+        return Reflect.get(target, property, receiver);
+      },
+    });
   }
   return query;
 }
