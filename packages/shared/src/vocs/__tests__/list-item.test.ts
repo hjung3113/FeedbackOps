@@ -16,6 +16,7 @@ const valid = {
   severity: null,
   reporter_facing_status: 'received' as const,
   triage_state: 'untriaged' as const,
+  review_postponed_at: null,
   source_context: 'direct_use' as const,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -27,6 +28,11 @@ const valid = {
 describe('vocListItemSchema', () => {
   it('accepts a valid list item', () => {
     expect(() => vocListItemSchema.parse(valid)).not.toThrow();
+  });
+
+  it.each([null, '2026-10-09T00:00:00.000Z'])('parses review_postponed_at %s', (value) => {
+    const result = vocListItemSchema.parse({ ...valid, review_postponed_at: value });
+    expect(result).toHaveProperty('review_postponed_at', value);
   });
 
   it('accepts analytics_area_id as a UUID', () => {

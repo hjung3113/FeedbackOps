@@ -16,8 +16,8 @@
 
 import type { VocListItem } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type * as React from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── sonner mock ──────────────────────────────────────────────────────────────
@@ -63,6 +63,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
   {
@@ -81,6 +82,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
   {
@@ -99,6 +101,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 2,
+    review_postponed_at: null,
     attachment_count: 0,
   },
   {
@@ -117,6 +120,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
   {
@@ -135,6 +139,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    review_postponed_at: null,
     attachment_count: 0,
   },
 ];
@@ -309,6 +314,7 @@ const UNDO_TARGET: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 
@@ -337,6 +343,152 @@ describe('Triage flow — integration (C6.3)', () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
+
+  it.each(['unassigned', 'high', 'waiting', 'untriaged'] as const)(
+    '940: postponing on %s advances selection and preserves the server tab membership',
+    async (activeTab) => {
+      globalThis.fetch = vi.fn(async () =>
+        jsonResponse({
+          id: FIRST_VOC_ID,
+          triage_state: 'untriaged',
+          updated_at: '2026-05-02T00:00:00.000Z',
+        }),
+      ) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      function SelectedScreen() {
+        const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+        return (
+          <VocTriageScreen
+            items={MOCK_VOCS}
+            selectedId={selectedId}
+            activeTab={activeTab}
+            onSelectVoc={setSelectedId}
+            onTabChange={vi.fn()}
+          />
+        );
+      }
+      const { baseElement } = render(
+        <Wrapper>
+          <SelectedScreen />
+        </Wrapper>,
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /^보류/ }));
+      });
+      if (activeTab === 'untriaged') {
+        expect(screen.queryByRole('button', { name: /VOC-I-001/ })).not.toBeInTheDocument();
+      } else if (activeTab === 'waiting') {
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).queryByText('보류'),
+        ).not.toBeInTheDocument();
+      } else {
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).getByText('보류'),
+        ).toBeInTheDocument();
+      }
+      expect(screen.getByRole('button', { name: /VOC-I-002/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await waitFor(() => expect(capturedToastRenderer).not.toBeNull());
+      const toastHost = renderCapturedToast(baseElement);
+      try {
+        const undo = toastHost?.querySelector('button');
+        if (!undo) throw new Error('Undo action missing');
+        await act(async () => {
+          fireEvent.click(undo);
+        });
+        await waitFor(() => {
+          const row = screen.getByRole('button', { name: /VOC-I-001/ });
+          expect(within(row).queryByText('보류')).not.toBeInTheDocument();
+        });
+      } finally {
+        unmountCapturedToast(toastHost);
+      }
+    },
+  );
+
+  it.each([
+    ['needs_more_information', null, '미분류 VOC만 보류할 수 있습니다.'],
+    ['untriaged', '2026-10-09T00:00:00.000Z', '이미 보류된 VOC입니다.'],
+  ] as const)(
+    '940: disables postpone for %s / %s with a reason',
+    (triageState, postponedAt, reason) => {
+      const Wrapper = makeWrapper();
+      render(
+        <Wrapper>
+          <VocTriageScreen
+            items={MOCK_VOCS.map((voc) =>
+              voc.id === FIRST_VOC_ID
+                ? { ...voc, triage_state: triageState, review_postponed_at: postponedAt }
+                : voc,
+            )}
+            selectedId={FIRST_VOC_ID}
+            activeTab="unassigned"
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+      expect(screen.getByRole('button', { name: '보류' })).toBeDisabled();
+      // The disabled button gets no pointer events; its wrapper carries the reason tooltip.
+      expect(screen.getByRole('button', { name: '보류' }).parentElement).toHaveAttribute(
+        'title',
+        reason,
+      );
+    },
+  );
+
+  it.each(['skip', 'confirm'] as const)(
+    '940: failed %s selects the original VOC again',
+    async (kind) => {
+      let reject: (error: Error) => void = () => {};
+      globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'PATCH'
+          ? new Promise<Response>((_resolve, rejectRequest) => {
+              reject = rejectRequest;
+            })
+          : Promise.resolve(jsonResponse({ items: [] })),
+      ) as typeof globalThis.fetch;
+      const Wrapper = makeWrapper();
+      function SelectedScreen() {
+        const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+        return (
+          <VocTriageScreen
+            items={MOCK_VOCS}
+            selectedId={selectedId}
+            activeTab="unassigned"
+            onSelectVoc={setSelectedId}
+            onTabChange={vi.fn()}
+          />
+        );
+      }
+      render(
+        <Wrapper>
+          <SelectedScreen />
+        </Wrapper>,
+      );
+      if (kind === 'confirm') clickAnySeverityChip();
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: kind === 'skip' ? '보류' : 'Triage 확정 & 다음 VOC' }),
+        );
+      });
+      expect(screen.getByRole('button', { name: /VOC-I-002/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await act(async () => {
+        reject(new Error('request failed'));
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /VOC-I-001/ })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        ),
+      );
+    },
+  );
 
   // ── Test 1: Full happy-path flow ────────────────────────────────────────────
   it('renders 5 VOCs, confirms triage (optimistic remove), UndoToast fires, undo triggers compensating PATCH with fresh key', async () => {

@@ -16,8 +16,11 @@ export function useTriagePanelController({
   voc,
   onAct,
   onOptimisticRemove,
+  onOptimisticPostpone,
   onProcessed,
   onOptimisticRestore,
+  onOptimisticRollback,
+  onMutationFailure,
 }: {
   voc: VocListItem;
   onAct?: (
@@ -31,7 +34,10 @@ export function useTriagePanelController({
     },
   ) => void;
   onOptimisticRemove?: (vocId: string) => void;
+  onOptimisticPostpone?: (vocId: string) => void;
   onProcessed?: (delta: 1 | -1) => void;
+  onMutationFailure?: (vocId: string) => void;
+  onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }) {
   const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
@@ -98,6 +104,8 @@ export function useTriagePanelController({
     voc,
     onProcessed,
     onOptimisticRestore,
+    onOptimisticRollback,
+    onMutationFailure,
   });
 
   // Keep a stable ref to undoLast so the toast closure always sees the latest version.
@@ -185,15 +193,15 @@ export function useTriagePanelController({
   );
 
   const handleSkip = React.useCallback(() => {
-    if (panelLocked) return;
+    if (panelLocked || voc.triage_state !== 'untriaged' || voc.review_postponed_at != null) return;
     const input: TriageInput = {
       kind: 'skip',
       vocId: voc.id,
       ifMatch: voc.updated_at,
     };
 
-    // Optimistic remove
-    onOptimisticRemove?.(voc.id);
+    // The active tab determines whether postponing removes or marks the row.
+    (onOptimisticPostpone ?? onOptimisticRemove)?.(voc.id);
 
     // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
     const callToken: CallToken = commit(input, () => {
@@ -219,7 +227,18 @@ export function useTriagePanelController({
     );
 
     onAct?.('skip');
-  }, [panelLocked, voc.id, voc.display_id, voc.updated_at, onOptimisticRemove, onAct, commit]);
+  }, [
+    panelLocked,
+    voc.id,
+    voc.display_id,
+    voc.updated_at,
+    onOptimisticRemove,
+    onOptimisticPostpone,
+    voc.triage_state,
+    voc.review_postponed_at,
+    onAct,
+    commit,
+  ]);
 
   return {
     panelState,

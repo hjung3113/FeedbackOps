@@ -55,7 +55,7 @@ const TRIAGE_TABS: { value: TriageTab; label: string }[] = [
   { value: 'unassigned', label: VOC_TRIAGE_TAB_LABELS.unassigned },
   { value: 'untriaged', label: TRIAGE_STATE_LABELS.untriaged },
   { value: 'high', label: VOC_TRIAGE_TAB_LABELS.high },
-  { value: 'waiting', label: '보류' },
+  { value: 'waiting', label: VOC_TRIAGE_TAB_LABELS.waiting },
 ];
 const TRIAGE_QUEUE_PANEL_ID = 'triage-queue-panel';
 
@@ -81,12 +81,16 @@ export function VocTriageScreen({
     createFindingTarget,
     handleAct,
     handleOptimisticRemove,
+    handleOptimisticPostpone,
     handleOptimisticRestore,
+    handleOptimisticRollback,
     handleProcessed,
     closeCreateFinding,
   } = useVocTriageScreenController({
     items,
     selectedId,
+    activeTab,
+    onSelectVoc,
     queueContext: queueContext ?? activeTab,
     queueSettled: queueSettled === true,
   });
@@ -171,6 +175,7 @@ export function VocTriageScreen({
           hidden={isFullscreen}
         >
           <TriageQueue
+            activeTab={activeTab}
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}
             onSelect={onSelectVoc}
@@ -213,6 +218,9 @@ export function VocTriageScreen({
                   voc={selectedVoc}
                   onAct={handleAct}
                   onOptimisticRemove={handleOptimisticRemove}
+                  onOptimisticPostpone={handleOptimisticPostpone}
+                  onMutationFailure={onSelectVoc}
+                  onOptimisticRollback={handleOptimisticRollback}
                   onOptimisticRestore={handleOptimisticRestore}
                   onProcessed={handleProcessed}
                 />

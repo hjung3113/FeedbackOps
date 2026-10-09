@@ -34,6 +34,10 @@ import {
   SEMANTIC_VOC_RECOMMENDATIONS_LABEL,
   VOC_TRIAGE_SUMMARY_SECTION_LABEL,
 } from '@/lib/copy/voc';
+import {
+  VOC_ALREADY_POSTPONED_LABEL,
+  VOC_POSTPONE_INVALID_STATE_LABEL,
+} from '@/lib/copy/voc-views';
 import { formatDate } from '@/lib/format/datetime';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
@@ -65,12 +69,15 @@ export interface TriagePanelProps {
    * so the queue filters this VOC out immediately.
    */
   onOptimisticRemove?: (vocId: string) => void;
+  onOptimisticPostpone?: (vocId: string) => void;
   /** Count only successfully committed actions in the mounted screen session. */
   onProcessed?: (delta: 1 | -1) => void;
   /**
    * C3.2: Optimistic restore — called on error to re-insert the VOC into
    * the queue (stale_write, rate_limited, permission.denied paths).
    */
+  onMutationFailure?: (vocId: string) => void;
+  onOptimisticRollback?: (vocId: string) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }
 
@@ -91,8 +98,11 @@ export function TriagePanel({
   voc,
   onAct,
   onOptimisticRemove,
+  onOptimisticPostpone,
   onProcessed,
   onOptimisticRestore,
+  onOptimisticRollback,
+  onMutationFailure,
 }: TriagePanelProps): React.ReactElement {
   const {
     panelState,
@@ -116,7 +126,10 @@ export function TriagePanel({
     voc,
     ...(onAct !== undefined ? { onAct } : {}),
     ...(onOptimisticRemove !== undefined ? { onOptimisticRemove } : {}),
+    ...(onOptimisticPostpone !== undefined ? { onOptimisticPostpone } : {}),
     ...(onProcessed !== undefined ? { onProcessed } : {}),
+    ...(onMutationFailure !== undefined ? { onMutationFailure } : {}),
+    ...(onOptimisticRollback !== undefined ? { onOptimisticRollback } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });
   const documentTitleRecord =
@@ -264,6 +277,13 @@ export function TriagePanel({
 
       {/* Panel footer */}
       <TriageActions
+        skipDisabledReason={
+          voc.triage_state !== 'untriaged'
+            ? VOC_POSTPONE_INVALID_STATE_LABEL
+            : voc.review_postponed_at != null
+              ? VOC_ALREADY_POSTPONED_LABEL
+              : undefined
+        }
         dirty={dirty && !panelLocked}
         submitting={isSubmitting}
         onConfirm={() => {

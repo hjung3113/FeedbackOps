@@ -80,6 +80,7 @@ function makeVoc(overrides: Partial<VocListItem> = {}): VocListItem {
     updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     similar_count: 0,
     attachment_count: 0,
+    review_postponed_at: null,
     ...overrides,
   };
 }

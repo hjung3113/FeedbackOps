@@ -85,6 +85,70 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     await migrateHandle?.close();
   });
 
+  it('940: unassigned list exposes postponed timestamps and null for active review', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Postponed MS');
+    const postponed = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Postponed',
+    );
+    const active = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Active');
+    await dbHandle.pool.query(
+      'update voc.vocs set triage_state_review_postponed_at = $2 where id = $1',
+      [postponed.id, '2026-10-09T00:00:00.000Z'],
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=triage&tab=unassigned&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const { items } = res.json<{ items: { id: string; review_postponed_at: string | null }[] }>();
+    expect(items.find((item) => item.id === postponed.id)?.review_postponed_at).toBe(
+      '2026-10-09T00:00:00.000Z',
+    );
+    expect(items.find((item) => item.id === active.id)?.review_postponed_at).toBeNull();
+  });
+
+  it.each(['my', 'inbox', 'triage'] as const)(
+    '940: postponed timestamp is redacted outside triage (%s)',
+    async (view) => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Redaction MS');
+      const postponed = await insertVocDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        msId,
+        reporterId,
+        'Postponed',
+      );
+      await dbHandle.pool.query(
+        'update voc.vocs set triage_state_review_postponed_at = $2 where id = $1',
+        [postponed.id, '2026-10-09T00:00:00.000Z'],
+      );
+      let cookie = reporterCookie;
+      if (view !== 'my') {
+        const { id, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('redaction'));
+        await grantCapability(dbHandle, WORKSPACE_ID, id, 'voc.read', msId, adminActorId);
+        if (view === 'triage') {
+          await grantCapability(dbHandle, WORKSPACE_ID, id, 'voc.triage', msId, adminActorId);
+        }
+        cookie = await loginAs(app, externalId);
+      }
+      const res = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=${view}&tab=unassigned&managed_system_id=${msId}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const { items } = res.json<{ items: { id: string; review_postponed_at: string | null }[] }>();
+      expect(items.find((item) => item.id === postponed.id)?.review_postponed_at).toBe(
+        view === 'triage' ? '2026-10-09T00:00:00.000Z' : null,
+      );
+    },
+  );
+
   // ── AC1: view=inbox scope union ───────────────────────────────────────────
 
   it('AC1a: admin view=inbox sees all VOCs across MSs', async () => {

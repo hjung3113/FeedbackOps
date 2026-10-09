@@ -5,7 +5,7 @@
  * Three buttons:
  *   1. "Triage 확정 & 다음 VOC" — primary, disabled when !dirty. Block-width.
  *   2. "Finding 만들기" — secondary, always enabled.
- *   3. "보류" — subtle, always enabled.
+ *   3. "보류" — subtle, enabled only when postponement can apply.
  *
  * Chunk 2: no mutation logic. Buttons emit onConfirm/onFinding/onSkip callbacks.
  * Chunk 3 will wire real mutation into onConfirm.
@@ -20,13 +20,14 @@
  *   bg-accent-primary is only used on the "Triage 확정" CTA. ✓
  */
 
-import * as React from 'react';
-import { Check, BookOpen, ChevronRight } from 'lucide-react';
 import { cn } from '@fops/ui';
+import { BookOpen, Check, ChevronRight } from 'lucide-react';
+import * as React from 'react';
 
 export interface TriageActionsProps {
   dirty: boolean;
   submitting: boolean;
+  skipDisabledReason?: string | undefined;
   onConfirm: () => void;
   onFinding: () => void;
   onSkip: () => void;
@@ -35,6 +36,7 @@ export interface TriageActionsProps {
 export function TriageActions({
   dirty,
   submitting,
+  skipDisabledReason,
   onConfirm,
   onFinding,
   onSkip,
@@ -86,24 +88,27 @@ export function TriageActions({
           Finding 만들기
         </button>
 
-        {/* 보류 */}
-        <button
-          type="button"
-          aria-label="보류"
-          disabled={submitting}
-          onClick={onSkip}
-          className={cn(
-            'flex-1 inline-flex items-center justify-center gap-1.5',
-            'h-7 px-2.5 rounded-md text-sm font-medium',
-            'text-text-secondary',
-            'hover:bg-surface-card hover:text-text-primary',
-            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
-            'disabled:opacity-40 disabled:pointer-events-none',
-          )}
-        >
-          <ChevronRight size={11} aria-hidden="true" />
-          보류
-        </button>
+        {/* 보류 — a disabled button gets no pointer events, so the wrapper carries the
+            reason tooltip. */}
+        <span className="flex-1 inline-flex" title={skipDisabledReason}>
+          <button
+            type="button"
+            aria-label="보류"
+            disabled={submitting || skipDisabledReason !== undefined}
+            onClick={onSkip}
+            className={cn(
+              'w-full inline-flex items-center justify-center gap-1.5',
+              'h-7 px-2.5 rounded-md text-sm font-medium',
+              'text-text-secondary',
+              'hover:bg-surface-card hover:text-text-primary',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring',
+              'disabled:opacity-40 disabled:pointer-events-none',
+            )}
+          >
+            <ChevronRight size={11} aria-hidden="true" />
+            보류
+          </button>
+        </span>
       </div>
     </div>
   );

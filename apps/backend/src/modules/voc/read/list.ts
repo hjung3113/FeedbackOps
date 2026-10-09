@@ -230,7 +230,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
 
     // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
     const items = pinnedRows.map((r) =>
-      mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0, similarCounts.get(r.id) ?? 0),
+      mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0, similarCounts.get(r.id) ?? 0, view),
     );
 
     // ── 10. Encode nextCursor ──────────────────────────────────────────────────
