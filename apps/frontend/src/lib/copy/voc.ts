@@ -9,6 +9,14 @@ export const VOC_DETAIL_BODY_LABEL = '본문';
 // (inbox list empty state and the Evidence VOC picker listbox).
 export const VOC_SEARCH_EMPTY_LABEL = '검색 결과가 없습니다.';
 
+// #935: one set of strings for every "list fetch failed" surface
+// (inbox VocList error state and the Triage queue error state).
+export const VOC_LIST_LOAD_ERROR_LABELS = {
+  title: '불러오기 실패',
+  body: '잠시 후 다시 시도해 주세요.',
+  retry: '다시 시도',
+} as const;
+
 export const VOC_SOURCE_PICKER_COPY = {
   label: 'VOC 선택',
   placeholder: 'VOC 선택',

@@ -36,6 +36,10 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
   queuePending?: boolean;
+  /** #935: true when the queue read failed with no rows; renders the load-error state in the queue column. */
+  queueError?: boolean;
+  /** #935: retry handler for a failed queue read, wired to the load-error state's button. */
+  onRetryQueue?: () => void;
   /** Exclusion context: tab and Managed System scope, independent of selection/pin. */
   queueContext?: string;
   /** True only after a successful queue read, with no fetch in flight. */
@@ -64,6 +68,8 @@ export function VocTriageScreen({
   selectedId,
   activeTab,
   queuePending,
+  queueError,
+  onRetryQueue,
   queueContext,
   queueSettled,
   queueTotal,
@@ -181,6 +187,8 @@ export function VocTriageScreen({
             selectedId={selectedVoc?.id ?? null}
             onSelect={onSelectVoc}
             {...(queuePending === true ? { queuePending } : {})}
+            {...(queueError === true ? { queueError } : {})}
+            {...(onRetryQueue !== undefined ? { onRetryQueue } : {})}
             {...(queueTotal !== undefined ? { queueTotal } : {})}
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
@@ -190,8 +198,9 @@ export function VocTriageScreen({
             swap in another VOC's commit form. #922 FIX1: an uncached deep link
             mounts with queuePending=true and empty items, which is not yet
             evidence the target is missing — suppress the notice until the
-            queue request settles. */}
-        {deepLinkTargetMissing && queuePending !== true && (
+            queue request settles. #935: a failed read is likewise not
+            evidence — suppress while the queue error state is up. */}
+        {deepLinkTargetMissing && queuePending !== true && queueError !== true && (
           <div className="w-detail-panel shrink-0 border-l border-border-subtle p-6">
             <p
               data-testid="triage-deeplink-missing"
