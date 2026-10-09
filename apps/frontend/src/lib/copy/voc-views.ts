@@ -3,6 +3,7 @@ import { GLOSSARY } from './glossary';
 export const VOC_TRIAGE_TAB_LABELS = {
   unassigned: GLOSSARY.unassigned,
   high: GLOSSARY.high,
+  waiting: '보류',
 } as const;
 
 export const VOC_TRIAGE_QUEUE_TOTAL_LABELS = {

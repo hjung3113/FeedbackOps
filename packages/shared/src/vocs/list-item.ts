@@ -47,6 +47,7 @@ export const vocListItemSchema = z.object({
   severity: severityEnumSchema.nullable(),
   reporter_facing_status: reporterFacingStatusEnumSchema,
   triage_state: triageStateEnumSchema,
+  review_postponed_at: z.string().datetime().nullable(),
   source_context: sourceContextEnumSchema,
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),

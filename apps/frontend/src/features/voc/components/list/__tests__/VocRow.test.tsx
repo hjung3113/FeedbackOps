@@ -23,6 +23,7 @@ const BASE_VOC: VocListItem = {
   created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   updated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 

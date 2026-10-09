@@ -23,6 +23,7 @@ import { ReporterStatusBadge, SeverityIndicator, UnassignedBadge, cn } from '@fo
 import type * as React from 'react';
 
 import { formatSameManagedSystemVocCount } from '@/lib/copy/voc';
+import { VOC_TRIAGE_TAB_LABELS } from '@/lib/copy/voc-views';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,6 +104,16 @@ export function TriageRow({
         {/* Meta row — .row-meta */}
         <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
           <ReporterStatusBadge status={voc.reporter_facing_status} />
+
+          {voc.review_postponed_at != null && (
+            <>
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
+              <span className="text-text-muted">{VOC_TRIAGE_TAB_LABELS.waiting}</span>
+            </>
+          )}
 
           {areaMissing && (
             <>

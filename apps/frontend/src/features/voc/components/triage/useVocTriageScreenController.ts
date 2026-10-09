@@ -7,6 +7,8 @@ export interface VocTriageScreenControllerArgs {
   selectedId: string | null;
   queueContext: string;
   queueSettled: boolean;
+  activeTab: string;
+  onSelectVoc: (id: string) => void;
 }
 
 export interface VocTriageScreenController {
@@ -32,6 +34,7 @@ export interface VocTriageScreenController {
     },
   ) => void;
   handleOptimisticRemove: (vocId: string) => void;
+  handleOptimisticPostpone: (vocId: string) => void;
   handleOptimisticRestore: (vocId: string) => void;
   handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
@@ -42,8 +45,10 @@ export function useVocTriageScreenController({
   selectedId,
   queueContext,
   queueSettled,
+  activeTab,
+  onSelectVoc,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
-  const { liveQueue, optimisticRemove, optimisticRestore } = useTriageQueue(
+  const { liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone } = useTriageQueue(
     items,
     queueContext,
     queueSettled,
@@ -113,6 +118,17 @@ export function useVocTriageScreenController({
     });
   }
 
+  function handleOptimisticPostpone(vocId: string): void {
+    if (activeTab === 'untriaged') {
+      handleOptimisticRemove(vocId);
+      return;
+    }
+    optimisticPostpone(vocId);
+    const index = liveQueue.findIndex((voc) => voc.id === vocId);
+    const next = liveQueue[index + 1] ?? liveQueue.find((voc) => voc.id !== vocId);
+    if (next) onSelectVoc(next.id);
+  }
+
   return {
     liveQueue,
     processedCount,
@@ -121,6 +137,7 @@ export function useVocTriageScreenController({
     createFindingTarget,
     handleAct,
     handleOptimisticRemove,
+    handleOptimisticPostpone,
     handleOptimisticRestore: optimisticRestore,
     handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),

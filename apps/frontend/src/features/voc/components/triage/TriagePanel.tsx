@@ -65,6 +65,7 @@ export interface TriagePanelProps {
    * so the queue filters this VOC out immediately.
    */
   onOptimisticRemove?: (vocId: string) => void;
+  onOptimisticPostpone?: (vocId: string) => void;
   /** Count only successfully committed actions in the mounted screen session. */
   onProcessed?: (delta: 1 | -1) => void;
   /**
@@ -91,6 +92,7 @@ export function TriagePanel({
   voc,
   onAct,
   onOptimisticRemove,
+  onOptimisticPostpone,
   onProcessed,
   onOptimisticRestore,
 }: TriagePanelProps): React.ReactElement {
@@ -116,6 +118,7 @@ export function TriagePanel({
     voc,
     ...(onAct !== undefined ? { onAct } : {}),
     ...(onOptimisticRemove !== undefined ? { onOptimisticRemove } : {}),
+    ...(onOptimisticPostpone !== undefined ? { onOptimisticPostpone } : {}),
     ...(onProcessed !== undefined ? { onProcessed } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });

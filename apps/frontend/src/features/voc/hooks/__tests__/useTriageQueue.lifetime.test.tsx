@@ -19,6 +19,7 @@ const voc: VocListItem = {
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   similar_count: 0,
+  review_postponed_at: null,
   attachment_count: 0,
 };
 const priorValues = {
@@ -47,6 +48,22 @@ describe('useTriageQueue — exclusion lifetime', () => {
       expect(result.current.liveQueue).toEqual([voc]);
     },
   );
+
+  it('undo clears a postponed marker after a settled server read acknowledged it', () => {
+    const { result, rerender } = renderHook(
+      ({ items }) => useTriageQueue(items, 'unassigned:ms-1', true),
+      { initialProps: { items: [voc] } },
+    );
+    act(() => result.current.optimisticPostpone(voc.id));
+    rerender({ items: [{ ...voc, review_postponed_at: '2026-10-09T00:00:00.000Z' }] });
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBe('2026-10-09T00:00:00.000Z');
+    act(() => result.current.optimisticRestore(voc.id));
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBeNull();
+    rerender({ items: [voc] });
+    // Once undo is acknowledged, later server postponements must remain visible.
+    rerender({ items: [{ ...voc, review_postponed_at: '2026-10-10T00:00:00.000Z' }] });
+    expect(result.current.liveQueue[0]?.review_postponed_at).toBe('2026-10-10T00:00:00.000Z');
+  });
 
   it('expires an absent VOC only on a successful settled read, allowing later server returns', () => {
     const { result, rerender } = renderHook(

@@ -16,6 +16,7 @@ export function useTriagePanelController({
   voc,
   onAct,
   onOptimisticRemove,
+  onOptimisticPostpone,
   onProcessed,
   onOptimisticRestore,
 }: {
@@ -31,6 +32,7 @@ export function useTriagePanelController({
     },
   ) => void;
   onOptimisticRemove?: (vocId: string) => void;
+  onOptimisticPostpone?: (vocId: string) => void;
   onProcessed?: (delta: 1 | -1) => void;
   onOptimisticRestore?: (vocId: string) => void;
 }) {
@@ -192,8 +194,8 @@ export function useTriagePanelController({
       ifMatch: voc.updated_at,
     };
 
-    // Optimistic remove
-    onOptimisticRemove?.(voc.id);
+    // The active tab determines whether postponing removes or marks the row.
+    (onOptimisticPostpone ?? onOptimisticRemove)?.(voc.id);
 
     // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
     const callToken: CallToken = commit(input, () => {
@@ -219,7 +221,16 @@ export function useTriagePanelController({
     );
 
     onAct?.('skip');
-  }, [panelLocked, voc.id, voc.display_id, voc.updated_at, onOptimisticRemove, onAct, commit]);
+  }, [
+    panelLocked,
+    voc.id,
+    voc.display_id,
+    voc.updated_at,
+    onOptimisticRemove,
+    onOptimisticPostpone,
+    onAct,
+    commit,
+  ]);
 
   return {
     panelState,

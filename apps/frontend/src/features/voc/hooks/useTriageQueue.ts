@@ -10,7 +10,7 @@
 //   - useTriageQueue — hook wiring useReducer + derived liveQueue
 
 import type { VocListItem } from '@fops/shared';
-import { useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 // ── State shape ───────────────────────────────────────────────────────────────
 
@@ -107,6 +107,7 @@ export interface UseTriageQueueResult {
   optimisticRemove: (vocId: string, priorValues: TriagePriorValues) => void;
   /** Restore a previously removed voc (undo path). */
   optimisticRestore: (vocId: string) => void;
+  optimisticPostpone: (vocId: string) => void;
 }
 
 export function useTriageQueue(
@@ -115,6 +116,28 @@ export function useTriageQueue(
   serverSettled = false,
 ): UseTriageQueueResult {
   const [state, dispatch] = useReducer(triageQueueReducer, initialTriageQueueState);
+
+  const [postponedOverrides, setPostponedOverrides] = useState<Map<string, string | null>>(
+    () => new Map(),
+  );
+
+  const postponedInSession = useRef(new Set<string>());
+
+  // Retire local markers once a settled server read acknowledges the state.
+  useEffect(() => {
+    if (!serverSettled) return;
+    setPostponedOverrides((current) => {
+      const acknowledged = serverItems.filter(
+        (voc) =>
+          current.has(voc.id) &&
+          (current.get(voc.id) === null) === (voc.review_postponed_at === null),
+      );
+      if (acknowledged.length === 0) return current;
+      const next = new Map(current);
+      for (const voc of acknowledged) next.delete(voc.id);
+      return next;
+    });
+  }, [serverItems, serverSettled]);
 
   const [exclusionContext, setExclusionContext] = useState(contextKey);
   // Adjust before committing children so old exclusions never hide a new context's rows.
@@ -129,17 +152,35 @@ export function useTriageQueue(
   }
 
   const liveQueue = useMemo(
-    () => serverItems.filter((v) => !state.optimisticallyRemoved.has(v.id)),
-    [serverItems, state.optimisticallyRemoved],
+    () =>
+      serverItems
+        .filter((v) => !state.optimisticallyRemoved.has(v.id))
+        .map((v) =>
+          postponedOverrides.has(v.id)
+            ? { ...v, review_postponed_at: postponedOverrides.get(v.id) ?? null }
+            : v,
+        ),
+    [serverItems, state.optimisticallyRemoved, postponedOverrides],
   );
 
   function optimisticRemove(vocId: string, priorValues: TriagePriorValues): void {
+    postponedInSession.current.delete(vocId);
     dispatch({ type: 'optimistic_remove', vocId, priorValues });
   }
 
   function optimisticRestore(vocId: string): void {
     dispatch({ type: 'optimistic_restore', vocId });
+    const wasPostponed = postponedInSession.current.delete(vocId);
+    setPostponedOverrides((current) => {
+      if (!wasPostponed && !current.has(vocId)) return current;
+      return new Map(current).set(vocId, null);
+    });
   }
 
-  return { state, dispatch, liveQueue, optimisticRemove, optimisticRestore };
+  function optimisticPostpone(vocId: string): void {
+    postponedInSession.current.add(vocId);
+    setPostponedOverrides((current) => new Map(current).set(vocId, new Date().toISOString()));
+  }
+
+  return { state, dispatch, liveQueue, optimisticRemove, optimisticRestore, optimisticPostpone };
 }
