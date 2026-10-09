@@ -307,7 +307,7 @@ draft  ──►  open  ──►  closed
 | **권한 요청** (`/admin/permissions/requests`) | 권한 요청 검토 |
 | **워크스페이스 설정** (`/admin/settings`) | 운영 정책. self-approval 허용 여부 등 |
 
-**기본 담당자를 지정해 두면** VOC와 Finding 생성 시 자동으로 채워집니다. 다만 **기본값이 채워졌다는 것이 트리아지가 끝났다는 뜻은 아닙니다** — 담당자만 정해진 미처리 상태가 만들어질 수 있으니 큐를 계속 보세요.
+**기본 담당자는** Managed System에 기록해 둘 수 있지만, VOC와 Finding을 만들 때는 **아직 자동으로 채워지지 않습니다.** 새 VOC는 담당자 없이 들어오므로 Triage `미배정` 탭과 홈의 `미배정 VOC` 큐를 보세요.
 
 **Managed System을 보관(archive)하면** 그 아래로 새 VOC·Finding·설문을 만들 수 없습니다. 기존 데이터는 남습니다.
 
