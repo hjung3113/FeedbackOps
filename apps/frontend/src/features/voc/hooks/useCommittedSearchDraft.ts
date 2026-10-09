@@ -3,6 +3,22 @@
 // Moved out of useInboxRoute (#821 debounce, #864 immediate commit). `committed`
 // is the value already written (the inbox passes the URL `q`). `write` runs at
 // most once per distinct draft; `base` is what that write moves away from.
+//
+// pendingWriteRef:
+//   idle → pending (base live) → pending (superseded) → acknowledged
+//   idle                  undefined
+//   pending (base live)   { draft, base }            commitDraft sets both
+//   pending (superseded)  { draft, base: undefined } committed was neither;
+//                                                    skipped once base is
+//                                                    already undefined
+//   acknowledged          undefined                  committed === draft
+//
+// draftAheadOfRef holds the pending draft while the box is ahead of it, so the
+// acknowledgement does not copy `committed` over newer text. setDraft sets it
+// when a write is pending and the value is neither that draft nor `committed`,
+// or equals the live base (a cleared base no longer counts by itself). It is
+// cleared on commit and on acknowledgement, except when `committed` equals the
+// flagged draft: then it stays set so a StrictMode replay still refuses.
 
 import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import * as React from 'react';
@@ -21,24 +37,18 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
   // #864: id of the pending debounced write, so an Enter/blur commit can cancel
   // it and the same draft is never written twice.
   const searchDebounceRef = React.useRef<number | undefined>(undefined);
-  // The last draft passed to `write` and not yet acknowledged by `committed`. A
-  // repeat of that draft is skipped, and start/restore uses it instead of the
-  // stale `committed`.
-  const pendingCommitRef = React.useRef<string | undefined>(undefined);
-  // The value that pending write moved away from. Until `committed` catches
-  // up, that base is still the URL, so a draft equal to it is easy to miss.
-  const pendingBaseRef = React.useRef<string | undefined>(undefined);
-  // When the box moves past `pendingCommitRef`, this holds that pending draft
-  // so the acknowledgement must not copy the URL back over the newer text.
+  const pendingWriteRef = React.useRef<{ draft: string; base: string | undefined } | undefined>(
+    undefined,
+  );
   const draftAheadOfRef = React.useRef<string | undefined>(undefined);
 
   const commitDraft = React.useCallback(
     (next: string) => {
-      const base = pendingCommitRef.current !== undefined ? pendingCommitRef.current : committed;
+      const pending = pendingWriteRef.current;
+      const base = pending !== undefined ? pending.draft : committed;
       // Already written (pending or acknowledged) — do not write it again.
       if (next === base) return;
-      pendingCommitRef.current = next;
-      pendingBaseRef.current = base;
+      pendingWriteRef.current = { draft: next, base };
       draftAheadOfRef.current = undefined;
       write(next, base);
     },
@@ -46,16 +56,16 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
   );
 
   function setDraft(value: string): void {
-    const pending = pendingCommitRef.current;
+    const pending = pendingWriteRef.current;
     // #891: moving back to the pending write's base (Escape to '', or typing
     // the previous query again) is ahead of that write, like any newer draft.
-    const returnedToPendingBase = value === pendingBaseRef.current;
+    const returnedToPendingBase = pending !== undefined && value === pending.base;
     if (
       pending !== undefined &&
-      value !== pending &&
+      value !== pending.draft &&
       (value !== committed || returnedToPendingBase)
     ) {
-      draftAheadOfRef.current = pending;
+      draftAheadOfRef.current = pending.draft;
     } else {
       draftAheadOfRef.current = undefined;
     }
@@ -63,16 +73,14 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
   }
 
   React.useEffect(() => {
-    const pending = pendingCommitRef.current;
-    const base = pendingBaseRef.current;
-    if (pending !== undefined && committed === pending) {
-      pendingCommitRef.current = undefined;
-      pendingBaseRef.current = undefined;
-    } else if (pending !== undefined && committed !== base) {
+    const pending = pendingWriteRef.current;
+    if (pending !== undefined && committed === pending.draft) {
+      pendingWriteRef.current = undefined;
+    } else if (pending !== undefined && pending.base !== undefined && committed !== pending.base) {
       // #891: this outside URL is neither the pending write nor its base, so
       // that write has been superseded. Drop the base; a later return to it
       // must not be treated as ahead of the old write.
-      pendingBaseRef.current = undefined;
+      pendingWriteRef.current = { draft: pending.draft, base: undefined };
     }
     // Strict mode runs this effect twice. The ref stays set so the second run
     // still refuses to replace a draft typed ahead of this acknowledgement.
@@ -80,8 +88,8 @@ export function useCommittedSearchDraft({ committed, write }: UseCommittedSearch
       return;
     }
     draftAheadOfRef.current = undefined;
-    if (pending !== undefined && pending !== committed) {
-      setDraftState((current) => (current === pending ? current : committed));
+    if (pending !== undefined && pending.draft !== committed) {
+      setDraftState((current) => (current === pending.draft ? current : committed));
       return;
     }
     setDraftState(committed);
