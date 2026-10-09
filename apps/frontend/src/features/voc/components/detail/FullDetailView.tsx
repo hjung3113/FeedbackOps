@@ -6,7 +6,7 @@ import type * as React from 'react';
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/cross-system/request-task/TaskRequestDraftCard';
 import type { MeResponse } from '@/lib/auth/useMe';
-import { SAME_MANAGED_SYSTEM_VOC_LABEL } from '@/lib/copy/voc';
+import { SAME_MANAGED_SYSTEM_VOC_LABEL, VOC_DETAIL_BODY_LABEL } from '@/lib/copy/voc';
 import { ComposerSection } from './ComposerSection';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
@@ -37,7 +37,7 @@ export interface FullDetailViewProps {
 export const VOC_DETAIL_SECTIONS: PanelSection[] = [
   { id: 'overview', label: '요약' },
   { id: 'triage', label: 'Triage' },
-  { id: 'description', label: '본문', overflow: true },
+  { id: 'description', label: VOC_DETAIL_BODY_LABEL, overflow: true },
   { id: 'trail', label: '이력' },
   { id: 'conversation', label: '대화', overflow: true },
   { id: 'compose', label: '작성' },

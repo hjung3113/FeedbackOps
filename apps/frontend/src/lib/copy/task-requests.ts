@@ -1,0 +1,1 @@
+export const TASK_REQUEST_REVIEW_DECISION_LABEL = '검토 결정';
