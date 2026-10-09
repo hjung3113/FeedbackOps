@@ -490,6 +490,63 @@ describe('Triage flow — integration (C6.3)', () => {
     },
   );
 
+  it('945: a late failed postpone after pending undo preserves the subsequent selection', async () => {
+    let rejectRequest: ((error: Error) => void) | undefined;
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? new Promise<Response>((_resolve, reject) => {
+            rejectRequest = reject;
+          })
+        : Promise.resolve(jsonResponse({ items: [] })),
+    ) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    function SelectedScreen() {
+      const [selectedId, setSelectedId] = React.useState<string | null>(FIRST_VOC_ID);
+      return (
+        <VocTriageScreen
+          items={MOCK_VOCS}
+          selectedId={selectedId}
+          activeTab="unassigned"
+          onSelectVoc={setSelectedId}
+          onTabChange={vi.fn()}
+        />
+      );
+    }
+    const { baseElement } = render(
+      <Wrapper>
+        <SelectedScreen />
+      </Wrapper>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '보류' }));
+    });
+    const toastHost = renderCapturedToast(baseElement);
+    try {
+      const undo = toastHost?.querySelector('button');
+      if (!undo) throw new Error('Undo action missing');
+      await act(async () => {
+        fireEvent.click(undo);
+      });
+      const originalRow = screen.getByRole('button', { name: /VOC-I-001/ });
+      expect(within(originalRow).queryByText('보류')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /VOC-I-003/ }));
+      expect(screen.getByRole('button', { name: /VOC-I-003/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await act(async () => {
+        if (!rejectRequest) throw new Error('Forward PATCH missing');
+        rejectRequest(new Error('late postpone failure'));
+      });
+      expect(screen.getByRole('button', { name: /VOC-I-003/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    } finally {
+      unmountCapturedToast(toastHost);
+    }
+  });
+
   // ── Test 1: Full happy-path flow ────────────────────────────────────────────
   it('renders 5 VOCs, confirms triage (optimistic remove), UndoToast fires, undo triggers compensating PATCH with fresh key', async () => {
     const seenKeys: string[] = [];

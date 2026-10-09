@@ -103,7 +103,6 @@ export function useTriageCommand({
         return output;
       } catch (err) {
         failuresRef.current.get(input)?.();
-        onMutationFailureRef.current?.(input.vocId);
         if (err instanceof ApiError && err.code === 'conflict.stale_write') {
           invalidateTriageLists();
         }
@@ -177,6 +176,7 @@ export function useTriageCommand({
     // never vocIdRef.current — VocTriageScreen auto-advances the selected VOC after
     // optimistic remove, so vocIdRef.current points at the NEXT row, not the failed one.
     onError: (err: unknown, input: TriageInput) => {
+      onMutationFailureRef.current?.(input.vocId);
       const decision = classifyTriageMutationError(err);
       if (decision.restore) {
         (onOptimisticRollbackRef.current ?? onOptimisticRestoreRef.current)?.(input.vocId);
