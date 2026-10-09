@@ -1,5 +1,5 @@
 import type { ErrorCode } from '@fops/shared';
-import { rateLimitedMessage } from '../copy/rate-limit';
+import { ipRateLimitedMessage, rateLimitedMessage } from '../copy/rate-limit';
 import { UnauthenticatedError } from './auth';
 import { ApiError, type ApiErrorEnvelope, type MappedError, type Tone } from './types';
 
@@ -31,12 +31,7 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   },
   'rate_limited.ip': {
     tone: 'warning',
-    message: (detail) => {
-      const wait = formatRetryAfter(detail);
-      return wait
-        ? `동일 IP에서의 요청이 너무 많습니다. ${wait} 후 다시 시도해 주세요.`
-        : '동일 IP에서의 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
-    },
+    message: (detail) => ipRateLimitedMessage(formatRetryAfter(detail)),
   },
 
   // validation.*
@@ -94,8 +89,8 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'reporter_facing_status.gate_blocked':       { tone: 'warning', message: '권한 게이트로 상태를 변경할 수 없습니다.' },
 };
 
-function formatRetryAfter(detail?: Record<string, unknown>): string | undefined {
-  const raw = detail?.['retry_after_seconds'];
+export function formatRetryAfter(detail?: Record<string, unknown>): string | undefined {
+  const raw = detail?.retry_after_seconds;
   const secs = typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
   if (secs === undefined || secs <= 0) return undefined;
   if (secs < 60) return `${secs}초`;
