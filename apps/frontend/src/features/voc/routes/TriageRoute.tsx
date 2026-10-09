@@ -95,7 +95,7 @@ export function TriageRoute(): React.ReactElement {
   // target as `selected`. Already-triaged VOCs are excluded by the queue
   // predicate, so the target must be pinned explicitly or the queue cannot show
   // it. Out-of-scope / unknown ids are dropped server-side.
-  const { data, isLoading, isSuccess, isFetching } = useVocList({
+  const { data, isLoading, isSuccess, isFetching, isError, refetch } = useVocList({
     view: 'triage',
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     tab: activeTab,
@@ -104,6 +104,10 @@ export function TriageRoute(): React.ReactElement {
   });
 
   const items = data?.items ?? [];
+  // #935: a failed queue read shows the load-error state only when there are
+  // no rows to show — a failed background refetch over cached rows keeps
+  // showing them (same rule as VocList).
+  const queueError = isError && items.length === 0;
   const outOfScopeSummary = data?.out_of_scope_summary;
   const navCounts = navCountsQuery.data?.counts;
   const queueTotal = navCounts?.['voc.triage'];
@@ -123,6 +127,11 @@ export function TriageRoute(): React.ReactElement {
 
   function handleSelectVoc(id: string): void {
     void navigate({ to: '/vocs', search: (prev) => ({ ...prev, selected: id }) });
+  }
+
+  // #935: retry a failed queue read in place.
+  function handleRetryQueue(): void {
+    void refetch();
   }
 
   // ── Loading state ────────────────────────────────────────────────────────────
@@ -161,6 +170,8 @@ export function TriageRoute(): React.ReactElement {
       selectedId={search.selected ?? null}
       activeTab={activeTab}
       queuePending={isLoading}
+      {...(queueError ? { queueError } : {})}
+      onRetryQueue={handleRetryQueue}
       queueContext={JSON.stringify([activeTab, search.managedSystem ?? null])}
       queueSettled={isSuccess && !isFetching}
       {...(queueTotal !== undefined ? { queueTotal } : {})}

@@ -6,7 +6,9 @@
 // whole queue is known to be empty (queueTotal === 0), tab-scoped copy
 // otherwise (FIX1: an unknown total claims nothing about the whole queue).
 
+import { VOC_LIST_LOAD_ERROR_LABELS } from '@/lib/copy/voc';
 import type { VocListItem } from '@fops/shared';
+import { Button, EmptyState } from '@fops/ui';
 import type * as React from 'react';
 import { OutOfScopeSummaryBanner } from './OutOfScopeSummaryBanner';
 import { TriageEmpty } from './TriageEmpty';
@@ -19,6 +21,10 @@ export interface TriageQueueProps {
   onSelect: (id: string) => void;
   /** #922: true while the active tab's queue query loads; shows the pending state in place of rows. */
   queuePending?: boolean;
+  /** #935: true when the queue read failed with no rows to show; renders the list load-error state. */
+  queueError?: boolean;
+  /** #935: retry handler wired to the load-error state's button. */
+  onRetryQueue?: () => void;
   /** #922: whole-queue total; a tab can be empty while the queue is not. */
   queueTotal?: number;
   outOfScopeSummary?: {
@@ -33,6 +39,8 @@ export function TriageQueue({
   activeTab,
   onSelect,
   queuePending,
+  queueError,
+  onRetryQueue,
   queueTotal,
   outOfScopeSummary,
 }: TriageQueueProps): React.ReactElement {
@@ -57,6 +65,21 @@ export function TriageQueue({
         <output className="flex items-center justify-center h-full">
           <span className="text-sm text-text-muted">불러오는 중…</span>
         </output>
+      ) : queueError === true ? (
+        // #935: a failed queue read with no rows must not pass for an empty
+        // queue; mirror VocList's error state so the failure is visible and
+        // retryable inside the queue column.
+        <EmptyState
+          title={VOC_LIST_LOAD_ERROR_LABELS.title}
+          body={VOC_LIST_LOAD_ERROR_LABELS.body}
+          action={
+            onRetryQueue !== undefined ? (
+              <Button onClick={onRetryQueue} type="button">
+                {VOC_LIST_LOAD_ERROR_LABELS.retry}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : vocs.length === 0 ? (
         <TriageEmpty {...(tabScopedEmpty ? { tabScoped: true } : {})} />
       ) : (
