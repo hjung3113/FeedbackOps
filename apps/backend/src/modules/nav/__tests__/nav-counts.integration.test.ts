@@ -140,6 +140,47 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     ).not.toContain(triagedUnlinkedVoc.id);
   });
 
+  it('emits exact untriaged and waiting triage tab counts for the fixture', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-tab-counts`, 'Tab counts');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'plain untriaged');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'second plain untriaged');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'waiting untriaged', {
+      postponedAt: true,
+    });
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'needs more', {
+      triageState: 'needs_more_information',
+    });
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'already triaged', {
+      triageState: 'triaged',
+    });
+
+    const badge = await counts(adminCookie, `?managed_system_id=${ms}`);
+    expect(badge.response.statusCode).toBe(200);
+    // Waiting is untriaged plus postponed, so it is inside the untriaged count.
+    expect(badge.body.counts['voc.tab.untriaged']).toBe(3);
+    expect(badge.body.counts['voc.tab.waiting']).toBe(1);
+    for (const [tab, key, expected] of [
+      ['untriaged', 'voc.tab.untriaged', 3],
+      ['waiting', 'voc.tab.waiting', 1],
+    ] as const) {
+      const list = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=triage&tab=${tab}&managed_system_id=${ms}`,
+        headers: headers(adminCookie),
+      });
+      expect(list.statusCode).toBe(200);
+      expect(list.json<{ items: unknown[] }>().items.length).toBe(expected);
+      expect(badge.body.counts[key]).toBe(expected);
+    }
+  });
+
+  it('omits untriaged and waiting tab counts for an actor without VOC read', async () => {
+    const result = await counts(userCookie);
+    expect(result.response.statusCode).toBe(200);
+    expect(Object.hasOwn(result.body.counts, 'voc.tab.untriaged')).toBe(false);
+    expect(Object.hasOwn(result.body.counts, 'voc.tab.waiting')).toBe(false);
+  });
+
   it('filters counts to each actor read scope', async () => {
     const msA = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-scope-a`, 'Scope A');
     const msB = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-scope-b`, 'Scope B');

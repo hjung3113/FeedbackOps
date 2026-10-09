@@ -23,6 +23,7 @@ import { fetchNavCounts } from '@/lib/api/nav';
 import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import type { NavCounts } from '@/lib/layout/AppSidebar';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { PermissionBlockedPanel } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -37,6 +38,25 @@ interface TriageSearch {
   tab?: TriageTab;
   managedSystem?: string;
   selected?: string;
+}
+
+const TRIAGE_TAB_COUNT_KEYS = {
+  unassigned: 'voc.tab.unassigned',
+  untriaged: 'voc.tab.untriaged',
+  high: 'voc.tab.high',
+  waiting: 'voc.tab.waiting',
+} as const satisfies Record<TriageTab, keyof NavCounts>;
+
+function triageTabCounts(
+  navCounts: NavCounts | undefined,
+): Partial<Record<TriageTab, number>> | undefined {
+  if (navCounts === undefined) return undefined;
+  const tabCounts: Partial<Record<TriageTab, number>> = {};
+  for (const tab of Object.keys(TRIAGE_TAB_COUNT_KEYS) as TriageTab[]) {
+    const value = navCounts[TRIAGE_TAB_COUNT_KEYS[tab]];
+    if (value !== undefined) tabCounts[tab] = value;
+  }
+  return tabCounts;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -87,8 +107,7 @@ export function TriageRoute(): React.ReactElement {
   const outOfScopeSummary = data?.out_of_scope_summary;
   const navCounts = navCountsQuery.data?.counts;
   const queueTotal = navCounts?.['voc.triage'];
-  const unassignedTabCount = navCounts?.['voc.tab.unassigned'];
-  const highTabCount = navCounts?.['voc.tab.high'];
+  const tabCounts = triageTabCounts(navCounts);
   const queueTotalUnavailableState = navCountsQuery.isPending ? 'loading' : 'unavailable';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -145,8 +164,7 @@ export function TriageRoute(): React.ReactElement {
       activeTab={activeTab}
       {...(queueTotal !== undefined ? { queueTotal } : {})}
       {...(queueTotal === undefined ? { queueTotalUnavailableState } : {})}
-      {...(unassignedTabCount !== undefined ? { unassignedTabCount } : {})}
-      {...(highTabCount !== undefined ? { highTabCount } : {})}
+      {...(tabCounts !== undefined ? { tabCounts } : {})}
       {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
       onSelectVoc={handleSelectVoc}
       onTabChange={handleTabChange}

@@ -36,8 +36,7 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
-  unassignedTabCount?: number;
-  highTabCount?: number;
+  tabCounts?: Partial<Record<TriageTab, number>>;
   outOfScopeSummary?: {
     count: number;
     severity_distribution: Record<string, number>;
@@ -60,8 +59,7 @@ export function VocTriageScreen({
   activeTab,
   queueTotal,
   queueTotalUnavailableState,
-  unassignedTabCount,
-  highTabCount,
+  tabCounts,
   outOfScopeSummary,
   onSelectVoc,
   onTabChange,
@@ -81,16 +79,16 @@ export function VocTriageScreen({
   useEffect(() => {
     if (selectedVoc === null) close();
   }, [close, selectedVoc]);
-  const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => ({
-    value: tab.value,
-    label: tab.label,
-    id: `triage-tab-${tab.value}`,
-    controlsId: TRIAGE_QUEUE_PANEL_ID,
-    ...(tab.value === 'unassigned' && unassignedTabCount !== undefined
-      ? { badgeCount: unassignedTabCount }
-      : {}),
-    ...(tab.value === 'high' && highTabCount !== undefined ? { badgeCount: highTabCount } : {}),
-  }));
+  const tabs: ListToolbarTab[] = TRIAGE_TABS.map((tab) => {
+    const badgeCount = tabCounts?.[tab.value];
+    return {
+      value: tab.value,
+      label: tab.label,
+      id: `triage-tab-${tab.value}`,
+      controlsId: TRIAGE_QUEUE_PANEL_ID,
+      ...(badgeCount !== undefined ? { badgeCount } : {}),
+    };
+  });
   const queueTotalAccessibleLabel =
     queueTotal === undefined
       ? VOC_TRIAGE_QUEUE_TOTAL_LABELS[queueTotalUnavailableState ?? 'unavailable']
