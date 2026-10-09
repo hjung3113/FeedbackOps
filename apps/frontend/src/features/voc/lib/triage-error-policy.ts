@@ -5,6 +5,7 @@
 // through lib/api/errorMapper (its conflict.stale_write copy differs).
 
 import { ApiError } from '@/lib/api';
+import { formatRetryAfter } from '@/lib/api/errorMapper';
 import { rateLimitedMessage } from '@/lib/copy/rate-limit';
 
 export type TriageToast = { level: 'warning' | 'error'; message: string };
@@ -54,7 +55,7 @@ export function classifyTriageMutationError(err: unknown): TriageMutationDecisio
         return {
           restore: true,
           lockPanel: false,
-          toast: { level: 'warning', message: rateLimitedMessage() },
+          toast: { level: 'warning', message: rateLimitedMessage(formatRetryAfter(err.detail)) },
         };
       case 'conflict.idempotency_key_reuse':
         // Lock the panel — user must switch VOC to unlock
