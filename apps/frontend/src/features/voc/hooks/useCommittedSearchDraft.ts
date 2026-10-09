@@ -13,14 +13,12 @@
 //                                                    already undefined
 //   acknowledged          undefined                  committed === draft
 //
-// draftAheadOfRef holds that pending draft while the box is ahead of the write,
-// so acknowledgement must not copy the URL over the newer text. setDraft sets
-// it when a write is pending, the value is not that draft, and the value
-// differs from `committed` or equals the live base (returning to a live base
-// is ahead; a superseded base is not). Cleared when that is false, when
-// commitDraft writes, and when acknowledgement runs — unless `committed`
-// equals the flagged draft, which returns and leaves the flag set so a
-// StrictMode second run still refuses.
+// draftAheadOfRef holds the pending draft while the box is ahead of it, so the
+// acknowledgement does not copy `committed` over newer text. setDraft sets it
+// when a write is pending and the value is neither that draft nor `committed`,
+// or equals the live base (a cleared base no longer counts by itself). It is
+// cleared on commit and on acknowledgement, except when `committed` equals the
+// flagged draft: then it stays set so a StrictMode replay still refuses.
 
 import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import * as React from 'react';
