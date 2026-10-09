@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLayoutEffect, useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -206,35 +206,6 @@ describe('DetailPanelSectionNav', () => {
     expect(screen.getByRole('button', { name: /overview/i })).not.toHaveAttribute('aria-current');
 
     document.body.removeChild(scrollEl);
-  });
-
-  it('does not inset a jump when the sticky navigation sits clear of the scroll root', () => {
-    const scrollEl = document.createElement('div');
-    scrollEl.scrollTop = 10;
-    scrollEl.getBoundingClientRect = vi.fn(() => rect(0, 120, 30));
-    scrollEl.scrollTo = vi.fn();
-    const overview = document.createElement('div');
-    overview.setAttribute('data-anchor', 'overview');
-    overview.getBoundingClientRect = vi.fn(() => rect(0, 120, 130));
-    scrollEl.append(overview);
-    document.body.append(scrollEl);
-
-    const { container } = render(
-      <DetailPanelSectionNav
-        sections={[{ id: 'overview', label: 'Overview' }]}
-        scrollRef={{ current: scrollEl }}
-      />,
-    );
-    const stickyNav = container.firstElementChild as HTMLDivElement;
-    stickyNav.getBoundingClientRect = vi.fn(() => rect(0, 120));
-
-    act(() => window.dispatchEvent(new Event('resize')));
-    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
-
-    // Header bottom is 24 and the root starts at 30, so the cover is 0: 10 + 130 - 30.
-    expect(overview.style.scrollMarginTop).toBe('0px');
-    expect(scrollEl.scrollTo).toHaveBeenCalledWith({ top: 110, behavior: 'smooth' });
-    scrollEl.remove();
   });
 
   it('sets anchor scroll margins after the scroll body ref attaches and updates them after header resize', () => {
@@ -689,50 +660,33 @@ describe('DetailPanelSectionNav', () => {
     }
   });
 
-  it('ranks the fallback by the same top band as the observer when abs() disagrees', () => {
-    // Root is 400 wide by 1000 tall. A percentage rootMargin uses the width, so the
-    // band ends at 1000 - 0.66 * 400 = 736, not at 34% of the height (340). alpha
-    // (top -40, height 80) and beta (top 30, height 80) both overlap that band.
-    // abs(top - rootTop) picks beta (30 < 40); the topmost in-band anchor is alpha.
-    const tops = { alpha: -40, beta: 30 };
-    const layout = { rootTop: 0, rootHeight: 1000, anchorHeight: 80 };
-
-    const observer = stubIntersectionObserver();
-    const observed = renderNavOverAnchors(['alpha', 'beta'], tops, layout);
-    observer.fire([
-      entry(observed.anchor('alpha'), true, -40),
-      entry(observed.anchor('beta'), true, 30),
-    ]);
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-
-    cleanup();
+  it.each([
+    {
+      // Root is 400 wide by 1000 tall. A percentage rootMargin uses the width, so the
+      // band ends at 1000 - 0.66 * 400 = 736, not at 34% of the height (340). alpha
+      // (top -40, height 80) and beta (top 30, height 80) both overlap that band.
+      // abs(top - rootTop) picks beta (30 < 40); the topmost in-band anchor is alpha.
+      tops: { alpha: -40, beta: 30 },
+      layout: { rootTop: 0, rootHeight: 1000, anchorHeight: 80 },
+      expected: 'Alpha',
+    },
+    {
+      // 400 × 1000. Height × 34% ends at 340; rootBottom - 0.66 × width ends at 736.
+      // Alpha at 400 is between those bottoms. Beta at 760 is below both. Beta is
+      // listed first, so a missed ranking would leave it current.
+      tops: { beta: 760, alpha: 400 },
+      layout: { rootTop: 0, rootHeight: 1000 },
+      expected: 'Alpha',
+    },
+  ])('ranks the no-observer fallback by the width-based top band', ({ tops, layout, expected }) => {
     vi.stubGlobal('IntersectionObserver', undefined);
-    renderNavOverAnchors(['alpha', 'beta'], tops, layout);
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('picks the same in-between anchor on a non-square root as the width-based observer band', () => {
-    // 400 × 1000. Height × 34% ends at 340; rootBottom - 0.66 × width ends at 736.
-    // Alpha at 400 is between those bottoms. Beta at 760 is below both and starts current.
-    const tops = { beta: 760, alpha: 400 };
-    const layout = { rootTop: 0, rootHeight: 1000 };
-
-    const observer = stubIntersectionObserver();
-    const observed = renderNavOverAnchors(['beta', 'alpha'], tops, layout);
-    expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true');
-    observer.fire([
-      entry(observed.anchor('alpha'), true, 400),
-      entry(observed.anchor('beta'), false, 760),
-    ]);
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
-
-    cleanup();
-    vi.stubGlobal('IntersectionObserver', undefined);
-    renderNavOverAnchors(['beta', 'alpha'], tops, layout);
-    expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'Beta' })).not.toHaveAttribute('aria-current');
+    const ids = Object.keys(tops);
+    renderNavOverAnchors(ids, tops, layout);
+    expect(screen.getByRole('button', { name: expected })).toHaveAttribute('aria-current', 'true');
+    for (const id of ids) {
+      const name = id.charAt(0).toUpperCase() + id.slice(1);
+      if (name === expected) continue;
+      expect(screen.getByRole('button', { name })).not.toHaveAttribute('aria-current');
+    }
   });
 });

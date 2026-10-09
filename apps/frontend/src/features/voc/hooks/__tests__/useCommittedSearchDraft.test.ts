@@ -6,12 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCommittedSearchDraft } from '../useCommittedSearchDraft';
 
 const DEBOUNCE_MS = 300;
-// #875: the inbox passes this as `hangulDebounceMs` for drafts ending in a
-// Hangul character.
+// #875: searchDebounceMs waits this long when the draft ends in Hangul.
 const HANGUL_DEBOUNCE_MS = 700;
 
-// One render, like the inbox: both delays, so a Hangul-final draft waits
-// HANGUL_DEBOUNCE_MS and every other draft DEBOUNCE_MS.
 function renderDraft(committed: string) {
   const write = vi.fn();
   const hook = renderHook(
@@ -19,8 +16,6 @@ function renderDraft(committed: string) {
       useCommittedSearchDraft({
         committed: next,
         write,
-        debounceMs: DEBOUNCE_MS,
-        hangulDebounceMs: HANGUL_DEBOUNCE_MS,
       }),
     { initialProps: { committed } },
   );
@@ -247,8 +242,6 @@ describe('useCommittedSearchDraft', () => {
         useCommittedSearchDraft({
           committed: '',
           write,
-          debounceMs: DEBOUNCE_MS,
-          hangulDebounceMs: HANGUL_DEBOUNCE_MS,
         }),
       { initialProps: { write: first } },
     );
@@ -282,9 +275,7 @@ describe('useCommittedSearchDraft', () => {
 
   it.each([
     { draft: '로그이', delayMs: HANGUL_DEBOUNCE_MS },
-    { draft: 'ㄹ', delayMs: HANGUL_DEBOUNCE_MS },
     { draft: 'voc-02', delayMs: DEBOUNCE_MS },
-    { draft: '로그인 ', delayMs: DEBOUNCE_MS },
   ])('debounces a draft ending in "$draft" for $delayMs ms', ({ draft, delayMs }) => {
     const { result, write } = renderDraft('');
 

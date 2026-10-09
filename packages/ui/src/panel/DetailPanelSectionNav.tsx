@@ -55,7 +55,7 @@ export interface DetailPanelSectionNavProps {
 
 /** Bottom rootMargin fraction. Percentage margins resolve against root width, not height. */
 const OBSERVER_BOTTOM_MARGIN = 0.66;
-const OBSERVER_ROOT_MARGIN = '0px 0px -66% 0px';
+const OBSERVER_ROOT_MARGIN = `0px 0px -${OBSERVER_BOTTOM_MARGIN * 100}% 0px`;
 
 function anchorId(anchor: Element): string {
   return anchor.getAttribute('data-anchor') ?? '';

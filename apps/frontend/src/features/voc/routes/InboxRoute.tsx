@@ -8,7 +8,6 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
-import { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS } from '@/lib/forms/search-debounce';
 import {
   Button,
   type FilterCategory,
@@ -146,8 +145,6 @@ const SORT_OPTIONS: SortOption[] = [
 
 const DEFAULT_SORT = 'created_at:desc';
 
-export { SEARCH_DEBOUNCE_MS, SEARCH_HANGUL_DEBOUNCE_MS };
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Parse a comma-list search string into a string array. */
@@ -245,8 +242,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const { draft, setDraft, commit } = useCommittedSearchDraft({
     committed: urlQ,
     write: writeSearchDraft,
-    debounceMs: SEARCH_DEBOUNCE_MS,
-    hangulDebounceMs: SEARCH_HANGUL_DEBOUNCE_MS,
   });
 
   // Parse comma-list filter strings into arrays for ListFilterButton.

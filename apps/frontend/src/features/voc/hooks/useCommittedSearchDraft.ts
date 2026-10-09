@@ -4,26 +4,15 @@
 // is the value already written (the inbox passes the URL `q`). `write` runs at
 // most once per distinct draft; `base` is what that write moves away from.
 
-import { endsWithHangul } from '@/lib/forms/search-debounce';
+import { searchDebounceMs } from '@/lib/forms/search-debounce';
 import * as React from 'react';
 
 export interface UseCommittedSearchDraftOptions {
   committed: string;
   write: (draft: string, base: string) => void;
-  debounceMs: number;
-  /**
-   * #875: debounce to use while the draft ends in a Hangul character (the IME
-   * may still be composing that syllable).
-   */
-  hangulDebounceMs: number;
 }
 
-export function useCommittedSearchDraft({
-  committed,
-  write,
-  debounceMs,
-  hangulDebounceMs,
-}: UseCommittedSearchDraftOptions): {
+export function useCommittedSearchDraft({ committed, write }: UseCommittedSearchDraftOptions): {
   draft: string;
   setDraft: (value: string) => void;
   commit: () => void;
@@ -103,13 +92,10 @@ export function useCommittedSearchDraft({
     // #875: a paused half-typed syllable (로그이 on the way to 로그인) looks
     // like a finished one, and browsers do not report IME composition
     // reliably, so any Hangul-final draft waits longer.
-    searchDebounceRef.current = window.setTimeout(
-      () => {
-        searchDebounceRef.current = undefined;
-        commitDraft(draft);
-      },
-      endsWithHangul(draft) ? hangulDebounceMs : debounceMs,
-    );
+    searchDebounceRef.current = window.setTimeout(() => {
+      searchDebounceRef.current = undefined;
+      commitDraft(draft);
+    }, searchDebounceMs(draft));
     return () => {
       if (searchDebounceRef.current !== undefined) {
         window.clearTimeout(searchDebounceRef.current);
@@ -118,7 +104,7 @@ export function useCommittedSearchDraft({
     };
     // `commitDraft` changes with `write`, so a new `write` identity restarts
     // the timer.
-  }, [draft, committed, commitDraft, debounceMs, hangulDebounceMs]);
+  }, [draft, committed, commitDraft]);
 
   // #864: Enter/blur commit — `write` the current draft at once and
   // cancel any pending debounced write of the same value.

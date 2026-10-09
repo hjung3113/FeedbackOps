@@ -446,22 +446,6 @@ describe('VocSourcePicker', () => {
     expect(searchedFetchUrls(fetchMock.mock.calls)).toEqual([vocsUrl(MANAGED_SYSTEM_ID, '로그이')]);
   });
 
-  it('requests a Latin search at 300 ms', async () => {
-    vi.useFakeTimers();
-    const fetchMock = installFetch();
-    renderPicker();
-    fireEvent.click(screen.getByRole('combobox', { name: 'VOC 선택' }));
-    fireEvent.change(screen.getByPlaceholderText('VOC ID 또는 제목 검색'), {
-      target: { value: 'voc-02' },
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    expect(searchedFetchUrls(fetchMock.mock.calls)).toEqual([vocsUrl(MANAGED_SYSTEM_ID, 'voc-02')]);
-  });
-
   // Non-Hangul on purpose: a Hangul-final draft waits 700 ms (#894).
   it('debounces the q request until the search has settled', async () => {
     vi.useFakeTimers();
