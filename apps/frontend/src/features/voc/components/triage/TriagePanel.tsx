@@ -65,6 +65,8 @@ export interface TriagePanelProps {
    * so the queue filters this VOC out immediately.
    */
   onOptimisticRemove?: (vocId: string) => void;
+  /** Count only successfully committed actions in the mounted screen session. */
+  onProcessed?: (delta: 1 | -1) => void;
   /**
    * C3.2: Optimistic restore — called on error to re-insert the VOC into
    * the queue (stale_write, rate_limited, permission.denied paths).
@@ -89,6 +91,7 @@ export function TriagePanel({
   voc,
   onAct,
   onOptimisticRemove,
+  onProcessed,
   onOptimisticRestore,
 }: TriagePanelProps): React.ReactElement {
   const {
@@ -113,6 +116,7 @@ export function TriagePanel({
     voc,
     ...(onAct !== undefined ? { onAct } : {}),
     ...(onOptimisticRemove !== undefined ? { onOptimisticRemove } : {}),
+    ...(onProcessed !== undefined ? { onProcessed } : {}),
     ...(onOptimisticRestore !== undefined ? { onOptimisticRestore } : {}),
   });
   const documentTitleRecord =

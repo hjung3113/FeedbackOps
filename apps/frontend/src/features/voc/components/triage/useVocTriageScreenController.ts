@@ -5,6 +5,8 @@ import { useTriageQueue } from '../../hooks/useTriageQueue';
 export interface VocTriageScreenControllerArgs {
   items: VocListItem[];
   selectedId: string | null;
+  queueContext: string;
+  queueSettled: boolean;
 }
 
 export interface VocTriageScreenController {
@@ -31,19 +33,21 @@ export interface VocTriageScreenController {
   ) => void;
   handleOptimisticRemove: (vocId: string) => void;
   handleOptimisticRestore: (vocId: string) => void;
+  handleProcessed: (delta: 1 | -1) => void;
   closeCreateFinding: () => void;
 }
 
 export function useVocTriageScreenController({
   items,
   selectedId,
+  queueContext,
+  queueSettled,
 }: VocTriageScreenControllerArgs): VocTriageScreenController {
-  const {
-    state: queueState,
-    liveQueue,
-    optimisticRemove,
-    optimisticRestore,
-  } = useTriageQueue(items);
+  const { liveQueue, optimisticRemove, optimisticRestore } = useTriageQueue(
+    items,
+    queueContext,
+    queueSettled,
+  );
   const [createFindingTarget, setCreateFindingTarget] = useState<{
     vocId: string;
     managedSystemId: string;
@@ -52,7 +56,12 @@ export function useVocTriageScreenController({
     defaultSeverity: FindingSeverity;
   } | null>(null);
 
-  const processedCount = queueState.optimisticallyRemoved.size;
+  const [processedCount, setProcessedCount] = useState(0);
+
+  function handleProcessed(delta: 1 | -1): void {
+    setProcessedCount((count) => count + delta);
+  }
+
   // Keep session history in a ref because a refetch removes the item from both
   // `items` and the live queue before selection can determine whether it was
   // previously present.
@@ -113,6 +122,7 @@ export function useVocTriageScreenController({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticRestore: optimisticRestore,
+    handleProcessed,
     closeCreateFinding: () => setCreateFindingTarget(null),
   };
 }

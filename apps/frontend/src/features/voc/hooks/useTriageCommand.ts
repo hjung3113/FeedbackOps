@@ -15,6 +15,7 @@
 //   - compensation restores the row only after the compensating PATCH
 //     resolves.
 
+import { ApiError } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { VocListItem } from '@fops/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -34,21 +35,29 @@ import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;
+  onProcessed?: ((delta: 1 | -1) => void) | undefined;
   onOptimisticRestore?: ((vocId: string) => void) | undefined;
 }
 
 export interface UseTriageCommandResult {
   panelLocked: boolean;
   isSubmitting: boolean;
-  commit: (input: TriageInput) => CallToken;
+  commit: (input: TriageInput, onFailure?: () => void) => CallToken;
   undoLast: (token?: CallToken) => void;
 }
 
 export function useTriageCommand({
   voc,
   onOptimisticRestore,
+  onProcessed,
 }: UseTriageCommandArgs): UseTriageCommandResult {
   const queryClient = useQueryClient();
+  const countedRef = React.useRef(new WeakSet<TriageInput>());
+  const undoneRef = React.useRef(new WeakSet<TriageInput>());
+  const failuresRef = React.useRef(new WeakMap<TriageInput, () => void>());
+  const invalidateTriageLists = () => {
+    void queryClient.invalidateQueries({ queryKey: ['vocs', 'triage'] });
+  };
 
   // Panel-level lock for idempotency_key_reuse (per spec §5.3 + PLAN-21 §307)
   const [panelLocked, setPanelLocked] = React.useState(false);
@@ -58,6 +67,9 @@ export function useTriageCommand({
   // auto-advances the selected VOC after optimistic remove, so a vocIdRef would
   // point at the NEXT row by the time onError/onAbort fires (REV-1 #5). All
   // queue side-effects must close over the original mutation input instead.
+  const onProcessedRef = React.useRef(onProcessed);
+  onProcessedRef.current = onProcessed;
+
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
 
@@ -65,28 +77,45 @@ export function useTriageCommand({
     mutate: undoableMutate,
     undoLast,
     state: mutationState,
-  } = useUndoableMutation<TriageInput, TriageOutput, TriageSnapshot>({
+  } = useUndoableMutation<TriageInput, TriageOutput, TriageSnapshot & { input: TriageInput }>({
     // No AbortSignal. An abort cannot un-send a forward PATCH the server may
     // already have committed (#857). The refetch and the compensating PATCH
     // are likewise not tied to the forward call's lifetime.
     mutationFn: async (input: TriageInput): Promise<TriageOutput> => {
-      const output = await patchVocTriage(input);
-      invalidateNavCounts(queryClient);
-      return output;
+      try {
+        const output = await patchVocTriage(input);
+        if (!undoneRef.current.has(input)) {
+          countedRef.current.add(input);
+          onProcessedRef.current?.(1);
+        }
+        invalidateNavCounts(queryClient);
+        invalidateTriageLists();
+        return output;
+      } catch (err) {
+        failuresRef.current.get(input)?.();
+        if (err instanceof ApiError && err.code === 'conflict.stale_write') {
+          invalidateTriageLists();
+        }
+        throw err;
+      } finally {
+        failuresRef.current.delete(input);
+      }
     },
     // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
     // restore the VOC to), NOT from staged panelState (the new values the
     // user just chose). If we snapshot staged values, the compensating
     // PATCH writes the new values back with triage_state='untriaged' and
     // permanently mutates severity/owner/AA.
-    snapshot: (input: TriageInput): TriageSnapshot =>
-      buildTriageSnapshot(input, {
+    snapshot: (input: TriageInput) => ({
+      ...buildTriageSnapshot(input, {
         severity: voc.severity,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,
         analyticsAreaId: voc.analytics_area_id,
       }),
-    compensateFn: async (snapshot: TriageSnapshot, output: TriageOutput | null) => {
+      input,
+    }),
+    compensateFn: async (snapshot, output: TriageOutput | null) => {
       try {
         await runTriageCompensation({
           queryClient,
@@ -94,9 +123,13 @@ export function useTriageCommand({
           output,
           restore: (vocId: string) => {
             onOptimisticRestoreRef.current?.(vocId);
+            if (countedRef.current.delete(snapshot.input)) {
+              onProcessedRef.current?.(-1);
+            }
           },
         });
         invalidateNavCounts(queryClient);
+        invalidateTriageLists();
       } catch (err) {
         // REV-4 case 1: the refetch-failure toast fires exactly once, here —
         // BEFORE the rethrow; onCompensateError sees the __refetchFailure tag
@@ -113,7 +146,9 @@ export function useTriageCommand({
     // which may already point at the auto-advanced VOC. Compensation runs
     // later, only if the forward PATCH succeeds.
     onAbort: (input: TriageInput) => {
+      undoneRef.current.add(input);
       onOptimisticRestoreRef.current?.(input.vocId);
+      invalidateTriageLists();
     },
     // REV-4: surface a toast when compensateFn rejects. Two paths land here:
     //   a) Refetch failure — compensateFn already toasted and tagged the
@@ -146,11 +181,12 @@ export function useTriageCommand({
     },
   });
 
-  // Unlock panel when voc changes (per spec: lock until VOC switch)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: voc.id is the reset trigger for switching panels.
-  React.useEffect(() => {
+  // Reset the VOC-specific lock before committing a newly selected panel.
+  const [lockVocId, setLockVocId] = React.useState(voc.id);
+  if (lockVocId !== voc.id) {
+    setLockVocId(voc.id);
     setPanelLocked(false);
-  }, [voc.id]);
+  }
 
   return {
     panelLocked,
@@ -158,7 +194,10 @@ export function useTriageCommand({
     // commit returns the per-call token unchanged so the panel's toast can
     // bind its undo to THIS call only (REV-3 Cluster X). The hook does not
     // perform optimistic remove or own the UndoToast.
-    commit: undoableMutate,
+    commit: (input, onFailure) => {
+      if (onFailure) failuresRef.current.set(input, onFailure);
+      return undoableMutate(input);
+    },
     undoLast,
   };
 }

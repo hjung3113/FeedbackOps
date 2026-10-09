@@ -36,6 +36,10 @@ export interface VocTriageScreenProps {
   activeTab: TriageTab;
   /** #922: true while the active tab's queue query is loading; keeps the tablist mounted. */
   queuePending?: boolean;
+  /** Exclusion context: tab and Managed System scope, independent of selection/pin. */
+  queueContext?: string;
+  /** True only after a successful queue read, with no fetch in flight. */
+  queueSettled?: boolean;
   queueTotal?: number;
   queueTotalUnavailableState?: keyof typeof VOC_TRIAGE_QUEUE_TOTAL_LABELS;
   tabCounts?: Partial<Record<TriageTab, number>>;
@@ -60,6 +64,8 @@ export function VocTriageScreen({
   selectedId,
   activeTab,
   queuePending,
+  queueContext,
+  queueSettled,
   queueTotal,
   queueTotalUnavailableState,
   tabCounts,
@@ -76,8 +82,14 @@ export function VocTriageScreen({
     handleAct,
     handleOptimisticRemove,
     handleOptimisticRestore,
+    handleProcessed,
     closeCreateFinding,
-  } = useVocTriageScreenController({ items, selectedId });
+  } = useVocTriageScreenController({
+    items,
+    selectedId,
+    queueContext: queueContext ?? activeTab,
+    queueSettled: queueSettled === true,
+  });
   const { isFullscreen, toggle, close } = useFullscreenPanel();
   useEffect(() => {
     if (selectedVoc === null) close();
@@ -202,6 +214,7 @@ export function VocTriageScreen({
                   onAct={handleAct}
                   onOptimisticRemove={handleOptimisticRemove}
                   onOptimisticRestore={handleOptimisticRestore}
+                  onProcessed={handleProcessed}
                 />
               </DetailPanelReadingColumn>
             </DetailPanelFullscreenContext.Provider>

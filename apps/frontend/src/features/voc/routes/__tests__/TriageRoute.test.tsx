@@ -317,6 +317,7 @@ describe('TriageRoute', () => {
   ])(
     'shows the $tab badge from nav counts and no badge when $key is absent',
     async ({ label, key, count }) => {
+      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const counts = {
         'voc.triage': 7,
         'voc.tab.unassigned': 2,
@@ -328,7 +329,7 @@ describe('TriageRoute', () => {
       const present = renderWithQc(<TriageRoute />);
       await waitFor(() => {
         expect(
-          screen.getByRole('tab', { name: new RegExp(`${label}\\s*,\\s*${count}`) }),
+          screen.getByRole('tab', { name: new RegExp(`^${escapedLabel}\\s*,\\s*${count}$`) }),
         ).toBeInTheDocument();
       });
       present.unmount();

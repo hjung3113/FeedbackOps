@@ -314,14 +314,15 @@ The shortcut is Ctrl+K on Windows/Linux and ⌘K on macOS.
 Mirrors prototype `screen-voc-create.jsx · TriageScreen.handleAct`.
 
 1. User clicks `Triage 확정 & 다음 VOC` (or `Finding 만들기` / `보류`).
-2. Frontend computes `next` row, selects it, and removes the acted-on VOC from the local visible queue.
+2. Frontend computes `next` row, selects it, and removes the acted-on VOC from the local visible queue. The optimistic exclusion belongs only to that queue context (tab and Managed System scope only; row selection and the deep-link pin do not expire exclusions). It expires when the context changes or a successful, settled queue read no longer includes the VOC; pending/error reads do not expire it. Undo and error restoration still use the original VOC ID. The screen and toolbar remain mounted across tab changes.
 3. Toast (`<UndoToast>`) appears with `실행 취소` action and 4-second auto-dismiss.
 4. Mutation fires: `PATCH /vocs/:id` with the triage payload, `Idempotency-Key: <uuidv4>` header (per ADR-0015).
-5. **On success:** toast remains until timeout; no further action.
-6. **On failure:** rollback local state (re-insert VOC), preserve user-entered values in the panel, toast with `tone: 'danger'`, show retry. Error body parsed per ADR-0012 (`code`, `message`, optional `requestable_permission`).
+5. **On success:** toast remains until timeout; increment the mounted screen session's processed-count independently of exclusions and invalidate `['vocs', 'triage']` list queries alongside navigation counts. Tab, scope, selection, and settled reads do not reset the counter.
+6. **On failure:** dismiss that command's optimistic success toast; on `409 conflict.stale_write`, invalidate the triage list queries to refresh the next command's `If-Match`. Rollback local state (re-insert VOC), preserve user-entered values in the panel, toast with `tone: 'danger'`, show retry. Error body parsed per ADR-0012 (`code`, `message`, optional `requestable_permission`).
 7. **On undo:** the forward PATCH is never aborted, because an abort cannot un-send a request.
    - **Undo while the forward PATCH is in flight:** restore the local optimistic state at once. Never abort the request. Compensate if it succeeds; nothing to compensate if it fails.
    - **Undo after it settled:** send the compensating PATCH first, then restore when it succeeds.
+   Undo invalidates the triage list queries, and successful compensation invalidates them again after restoring the original ID. Successful compensation decrements the session counter once; undo before success is never counted.
    The compensating PATCH keeps the prior values, uses the forward response's `updated_at` as `If-Match`, and uses a fresh `Idempotency-Key`.
 
 **Idempotency key rules** (per ADR-0015 §Idempotency):
