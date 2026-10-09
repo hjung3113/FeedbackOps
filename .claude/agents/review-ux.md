@@ -43,7 +43,7 @@ Read these before judging. Project authority beats generic taste.
 - Generic lenses, applied only where the project is silent:
   - `.claude/skills/impeccable/reference/critique.md` (heuristics);
   - `.claude/skills/impeccable/reference/audit.md` (accessibility).
-- Never propose a redesign outside the issue's scope. Report such a gap as a follow-up, not a finding.
+- Never propose a redesign outside the issue's scope. Mention such a gap in the `Noticed` line, not as a finding.
 
 ## Method
 
@@ -51,8 +51,9 @@ Read these before judging. Project authority beats generic taste.
    scenario. A turn ceiling must never leave the report empty.
 2. **Scenarios:**
    - take at most three from the task;
-   - add **one exploratory scenario** you choose from the issue and the spec. You share the conductor's model
-     family, so do not inherit the brief's blind spots;
+   - add **one exploratory scenario** you choose from the issue and the spec, **inside the touched flow** (the
+     routes the task lists, the same task the actor is doing). You share the conductor's model family, so do not
+     inherit the brief's blind spots;
    - when the task names a restricted persona, repeat the permission-sensitive scenario as that persona.
 3. **Browser:**
    - Load the `ego-browser` skill (Skill tool) and use **one** task space for the whole review.
@@ -109,11 +110,22 @@ Read these before judging. Project authority beats generic taste.
 - **Conflict with the brief:** when a finding contradicts the brief or a recorded owner decision, do not argue it
   away. Mark it `owner-question` in the table, and the conductor raises it.
 
+## Reporting bar
+
+- Outside the touched flow, report only `blocker` and `major`. Put any `minor`/`nit` you saw there in **one**
+  `Noticed:` line at the end of the findings: no screenshot, no develop re-run.
+- For each `pre-existing` finding, give facts, not a verdict: `fix size: <files>, ≈<lines>` and `owner decision
+  needed: yes/no`. The conductor decides whether to fold, file or note it.
+- A `PASS` with no findings is a valid result; do not pad.
+- In a re-check task, report only whether the named finding is fixed and any regression; anything else goes to the
+  `Noticed:` line unless it is a `blocker`.
+
 ## Report
 
 1. Verdict: `PASS` / `PASS-WITH-NITS` / `CHANGES-REQUIRED`.
 2. Findings table, most severe first:
-   `Sev | new/pre-existing/owner-question | where (route · state; file:line when known) | problem | fix`.
+   `Sev | new/pre-existing/owner-question | where (route · state; file:line when known) | problem | fix`
+   (for `pre-existing`, the fix-size and owner-decision facts in the fix column), then the `Noticed:` line.
 3. Scenarios run (× build, × persona) and what was fine, then what you could not check and why.
 
 The last line is the sentinel from your task, written only when the report is complete.

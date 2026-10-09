@@ -53,12 +53,25 @@ option, and record the answers on the issues. In sessions 63–65 five such ques
 (#920, #940, F4, #908, #902) and each paused the wave. A decision that surfaces later still gets asked at once, but
 plan for none.
 
+**Value gate (owner, 2026-10-10).** Before an issue enters a slice, and before any finding is folded or filed, weigh
+the user's gain against the maintenance it adds (new state, timing workarounds, spread ownership, extra tests).
+Prefer not to do work whose maintenance cost outweighs the gain. Proceed anyway when it fixes a critical bug (wrong
+data, data loss, a leak, an actor who cannot finish the task) or the UX gain is clearly larger than the cost. Say
+which applies in the brief's first line; drop or close the rest with the owner's approval.
+
+**Choosing the slice.** The next slice comes from owner priorities and the product backlog, not by default from the
+previous slice's review follow-ups. Review follow-ups wait for a **polish slice**, run when the owner asks or an
+area has collected several. After a polish slice the area is not reopened by review findings alone, only by a
+blocker or an owner request.
+
 ## Loop per issue
 
 1. **Brief** (`$WAVE_BRIEFS/<n>-task.md`): re-verify every fact on current `origin/develop` (paths, line numbers,
    existing helpers, the owning seam) — issue text goes stale. Sections: *Facts (verified on develop)* / *Do* /
    *Acceptance (tests)* / sentinel line. Name the approved surfaces to reuse, the exact error envelopes to keep, what
-   is out of scope, and conductor decisions as "final — do not re-litigate". End the brief with
+   is out of scope, and conductor decisions as "final — do not re-litigate". Search merged PR bodies for earlier
+   notes on the touched area (`gh pr list --state merged --search "\"Noted, not filed\" <component or route>"`) and
+   put the matching ones into *Do* (they fold under 7f's rules); a note seen a second time is filed. End the brief with
    `Sentinel (last line of .review/W-<n>-REPORT.md): <!-- W-<n>-DONE -->` — the launcher registers exactly that. Check
    `ls docs/adr` before a brief assigns an ADR number (parallel issues collide). For "use the shared X" refactors say
    "replace only whole-set declarations; keep literals; never touch `db/schema`".
@@ -236,10 +249,36 @@ plan for none.
      If it is a `blocker` (the actor cannot finish the task), hold the merge until the owner answers.
    - An owner decision marked "final — do not re-litigate" is never reversed in a fix round. Only evidence that it
      causes a blocker goes up.
-   - `pre-existing` findings (also on develop) and anything outside the issue's scope become follow-up issues, not
-     fixes.
+   - **Pre-existing or out-of-scope findings: fold, file, or note** (owner, 2026-10-10: handle simple ones while
+     working). Apply the value gate first.
+     - **Fold** into this issue's fix round when all hold: (1) no owner decision (behaviour, copy meaning, test
+       deletion, scope) and no API, DB, migration or permission change; (2) a defect fix or copy change, not a
+       refactor; (3) touches only files in the issue's diff, the feature folder of a route that diff changes
+       (`apps/frontend/src/features/<f>/`, `apps/backend/src/modules/<m>/`) or `apps/frontend/src/lib/copy/*`, and
+       never `packages/ui`, `packages/shared`, `lib/layout` or another feature; (4) at most 30 changed non-test lines
+       per item and at most 3 items per issue; (5) a behaviour change carries a regression test that fails without
+       it; (6) not state, focus, undo/compensation, lifecycle or concurrency code, unless the file is already in the
+       issue's diff and the issue gets the fix-diff check below. Folds never delete tests. A fold that changes
+       specced behaviour updates the spec in the same PR; if the spec disagrees, it is an owner decision, so file it.
+     - Folds go into the FIX1 brief's *Do*, each with its finding ID, in their own FIX1 commit. Then run
+       `review-plan.py <worktree> --base <pre-fix head>`; if it reports a role the original plan did not run, revert
+       that commit and file the items. A fold that fails host verification or the fix-diff check is reverted and
+       filed, never fixed in another round. The PR body lists them under **Also fixed (pre-existing)** with the
+       finding and its test.
+     - **File** one issue when the finding fails (3) or (4), trips that review-plan check, or needs an owner
+       decision, a contract change or a cross-module refactor. Group related findings into one issue; never one
+       issue per nit.
+     - **Note** (no issue) `minor`/`nit` findings outside the touched area: one line each under **Noted, not
+       filed** in the PR body. The touched area is the routes the conductor lists in the UX task as rendering a
+       changed file.
+   - A re-check or fix-diff check reports only whether the fixed finding is fixed and any regression against the
+     pre-fix head. Pre-existing findings from a re-check are noted, never filed unless `blocker`.
    - Put every kept finding, tagged with its role, into **one** fix brief (`W-<n>-FIX1-TASK.md`). The conductor
-     verifies the fix round and ships. There is no second review.
+     verifies the fix round and ships. There is no second full review.
+   - **Fix-diff check for `impl-complex` issues.** When the issue is routed `impl-complex` (recorded in VERIFY), its
+     FIX1, folds included, gets one `review-check` on the fix diff (in Slice 45 it found a new major in 2 of 2
+     focus/lifecycle fix rounds, #957 and #964). Its findings go into at most one FIX2, which the conductor reviews
+     directly (diff read, mutation check, a real-browser re-check for focus) with no further reviewer and no folds.
    - For a fixed UX or perf `blocker`/`major`:
      - re-run that scenario and its neighbouring flow, or `nav-perf.sh`, on fresh previews, and record the result;
      - run the full visual harness when the fix touched `packages/ui`.
@@ -289,8 +328,9 @@ plan for none.
    final JSON and confirm the pinned head before claiming shipped/merged. Close every finished terminal and
    remove every finished worktree; drop the issue's throwaway verify DB only after merge.
 10. Keep the session handoff current every few merges: one local-only file at the repo root, `HANDOFF.md`, updated
-    in place (no dated copies). File follow-ups (flakes, deferred nits, owner decisions) as issues in the wave's
-    milestone.
+    in place (no dated copies). File only owner decisions and 7f "file" items as issues in the wave's milestone; a
+    flake is filed on its second occurrence; deferred nits are noted, not filed. The handoff's "next candidates"
+    follows "Choosing the slice" above, and so does the memory snapshot of the slice status.
 11. **Slice close (before `release-gate.sh`).** When the slice's last issue has merged:
     - **`review-quality`** (codex; it runs in an Orca terminal, so make the disposable
       worktree with `orca worktree create --base-branch origin/develop`, not `git worktree add`). The task file's
@@ -300,7 +340,9 @@ plan for none.
       Act on its classes:
       - `release-blocker`: a normal issue loop before the release;
       - `fix-in-slice`: one chore PR;
-      - `follow-up`: issues in the next milestone.
+      - `follow-up`: through the 7f triage (fold into the chore, file one grouped issue, or note).
+      Slice-close folds are limited to copy, a11y attributes, dead code and docs. A behaviour `major` from the
+      walkthrough gets its own issue loop, not a fold into the chore.
     - **Slice walkthrough:** previews of `origin/main` and `origin/develop` (throwaway DB, as in 7c). Then:
       - one `review-ux` run over the slice's user flows. Several session-63 defects showed only when the app was
         used, not in any one diff;
