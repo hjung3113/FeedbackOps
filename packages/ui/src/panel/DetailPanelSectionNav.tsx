@@ -53,6 +53,52 @@ export interface DetailPanelSectionNavProps {
   className?: string;
 }
 
+/** Bottom rootMargin fraction. Percentage margins resolve against root width, not height. */
+const OBSERVER_BOTTOM_MARGIN = 0.66;
+const OBSERVER_ROOT_MARGIN = '0px 0px -66% 0px';
+
+function anchorId(anchor: Element): string {
+  return anchor.getAttribute('data-anchor') ?? '';
+}
+
+/** Topmost candidate by its current viewport top. Empty when none qualify. */
+function topmostAnchor(
+  anchors: readonly HTMLElement[],
+  isCandidate: (anchor: HTMLElement) => boolean,
+): string {
+  let bestId = '';
+  let bestTop = Number.POSITIVE_INFINITY;
+  for (const anchor of anchors) {
+    if (!isCandidate(anchor)) continue;
+    const top = anchor.getBoundingClientRect().top;
+    if (top < bestTop) {
+      bestTop = top;
+      bestId = anchorId(anchor);
+    }
+  }
+  return bestId;
+}
+
+function inObserverTopBand(anchor: HTMLElement, rootRect: DOMRect): boolean {
+  // Intersection Observer resolves a percentage rootMargin against the root's width,
+  // so `-66%` ends the band at rootBottom - 0.66 * width, not 34% of the height.
+  // Floor at rootTop so a short, wide root cannot push the band above the root.
+  const bandBottom = Math.max(
+    rootRect.top,
+    rootRect.bottom - OBSERVER_BOTTOM_MARGIN * rootRect.width,
+  );
+  const box = anchor.getBoundingClientRect();
+  return box.bottom > rootRect.top && box.top < bandBottom;
+}
+
+/** Inside the scroll root the whole strip covers content; outside, only the overlap does. */
+function stickyCover(root: HTMLElement, header: HTMLElement | null): number {
+  if (!header) return 0;
+  const headerRect = header.getBoundingClientRect();
+  if (root.contains(header)) return headerRect.height;
+  return Math.max(0, headerRect.bottom - root.getBoundingClientRect().top);
+}
+
 export function DetailPanelSectionNav({
   sections,
   scrollRef,
@@ -63,6 +109,8 @@ export function DetailPanelSectionNav({
   const navRef = React.useRef<HTMLDivElement>(null);
   const stickyHeaderRef = React.useRef<HTMLDivElement>(null);
   const programmaticRef = React.useRef(false);
+  const recomputeOnNextScrollRef = React.useRef(false);
+  const jumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const sectionKey = sections.map((s) => s.id).join('|');
   const activeSectionRef = React.useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -88,14 +136,19 @@ export function DetailPanelSectionNav({
     setActiveSection(firstSection);
   }, [firstSection, sectionKey]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: sectionKey rebinds when the section IDs change.
+  React.useEffect(() => {
+    return () => {
+      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
+    };
+  }, []);
+
   const updateAnchorScrollMargins = React.useCallback(() => {
     const root = scrollRef?.current;
     if (!root) return;
-    const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
+    const cover = stickyCover(root, stickyHeaderRef.current);
     for (const section of sections) {
       const anchor = root.querySelector<HTMLElement>(`[data-anchor="${section.id}"]`);
-      if (anchor) anchor.style.scrollMarginTop = `${stickyHeaderHeight}px`;
+      if (anchor) anchor.style.scrollMarginTop = `${cover}px`;
     }
   }, [scrollRef, sectionKey]);
 
@@ -117,7 +170,7 @@ export function DetailPanelSectionNav({
     revealSection(activeSection);
   }, [activeSection, revealSection]);
 
-  // Observe intersections to track active section during scroll
+  // Observe intersections to track active section during scroll.
   React.useEffect(() => {
     const root = scrollRef?.current;
     if (!root || !sections.length) return;
@@ -129,17 +182,12 @@ export function DetailPanelSectionNav({
     if (!anchors.length) return;
 
     if (typeof IntersectionObserver === 'undefined') {
-      // Fallback: use scroll event + closest top
+      // Same ranking as the observer: topmost anchor inside the top band, not nearest top.
       const updateActiveSection = () => {
         if (programmaticRef.current) return;
         const rootRect = root.getBoundingClientRect();
-        const closest = anchors
-          .map((a) => ({
-            id: a.getAttribute('data-anchor') ?? '',
-            top: Math.abs(a.getBoundingClientRect().top - rootRect.top),
-          }))
-          .sort((a, b) => a.top - b.top)[0];
-        if (closest?.id) setActiveSection(closest.id);
+        const id = topmostAnchor(anchors, (anchor) => inObserverTopBand(anchor, rootRect));
+        if (id) setActiveSection(id);
       };
       root.addEventListener('scroll', updateActiveSection, { passive: true });
       updateActiveSection();
@@ -153,28 +201,35 @@ export function DetailPanelSectionNav({
     // holds flags only; the winner is ranked by each anchor's current box, read at selection time.
     // Declared here so a rebuilt observer (scrollRef/sectionKey change) starts from a clean map.
     const intersectionState = new Map<string, boolean>();
+    const selectTopmostIntersecting = () => {
+      const id = topmostAnchor(
+        anchors,
+        (anchor) => intersectionState.get(anchorId(anchor)) === true,
+      );
+      if (id) setActiveSection(id);
+    };
     const observer = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          intersectionState.set(e.target.getAttribute('data-anchor') ?? '', e.isIntersecting);
+          intersectionState.set(anchorId(e.target), e.isIntersecting);
         }
         if (programmaticRef.current) return;
-        const visible = anchors
-          .filter((a) => intersectionState.get(a.getAttribute('data-anchor') ?? '') === true)
-          .map((a) => ({
-            id: a.getAttribute('data-anchor') ?? '',
-            top: a.getBoundingClientRect().top,
-          }))
-          .sort((a, b) => a.top - b.top);
-        if (visible[0]) setActiveSection(visible[0].id);
+        selectTopmostIntersecting();
       },
-      { root, rootMargin: '0px 0px -66% 0px', threshold: 0 },
+      { root, rootMargin: OBSERVER_ROOT_MARGIN, threshold: 0 },
     );
-    anchors.forEach((a) => {
-      observer.observe(a);
-    });
+    // #876: do not recompute when the jump guard ends — that would drop a just-clicked lower
+    // section. The next user scroll ranks the anchors that are intersecting now.
+    const recomputeAfterJump = () => {
+      if (programmaticRef.current || !recomputeOnNextScrollRef.current) return;
+      recomputeOnNextScrollRef.current = false;
+      selectTopmostIntersecting();
+    };
+    for (const anchor of anchors) observer.observe(anchor);
+    root.addEventListener('scroll', recomputeAfterJump, { passive: true });
     return () => {
       observer.disconnect();
+      root.removeEventListener('scroll', recomputeAfterJump);
     };
   }, [scrollRef, sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -188,13 +243,16 @@ export function DetailPanelSectionNav({
       setActiveSection(id);
       const rootRect = root.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
-      const stickyHeaderHeight = stickyHeaderRef.current?.getBoundingClientRect().height ?? 0;
+      const cover = stickyCover(root, stickyHeaderRef.current);
       root.scrollTo({
-        top: root.scrollTop + elRect.top - rootRect.top - stickyHeaderHeight,
+        top: root.scrollTop + elRect.top - rootRect.top - cover,
         behavior: 'smooth',
       });
-      setTimeout(() => {
+      if (jumpTimeoutRef.current !== null) clearTimeout(jumpTimeoutRef.current);
+      jumpTimeoutRef.current = setTimeout(() => {
+        jumpTimeoutRef.current = null;
         programmaticRef.current = false;
+        recomputeOnNextScrollRef.current = true;
       }, 700);
     },
     [revealSection, scrollRef],
@@ -267,6 +325,7 @@ export function DetailPanelSectionNav({
                   onClick={() => {
                     scrollTo(s.id);
                   }}
+                  {...(isActive ? { 'aria-current': 'true' as const } : {})}
                   className={cn(
                     // .panel-section-nav-button
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5',
@@ -321,21 +380,26 @@ export function DetailPanelSectionNav({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              {overflowed.map((s) => (
-                <DropdownMenuItem
-                  key={s.id}
-                  onSelect={() => {
-                    scrollTo(s.id);
-                  }}
-                >
-                  {s.label}
-                  {s.count !== undefined && (
-                    <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-caption leading-body">
-                      {s.count}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {overflowed.map((s) => {
+                const isCurrent = activeSection === s.id;
+                return (
+                  <DropdownMenuItem
+                    key={s.id}
+                    onSelect={() => {
+                      scrollTo(s.id);
+                    }}
+                    {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
+                    {...(isCurrent ? { className: 'font-medium text-text-primary' } : {})}
+                  >
+                    {s.label}
+                    {s.count !== undefined && (
+                      <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-caption leading-body">
+                        {s.count}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
