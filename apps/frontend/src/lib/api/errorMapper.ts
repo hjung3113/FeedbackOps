@@ -1,4 +1,5 @@
 import type { ErrorCode } from '@fops/shared';
+import { rateLimitedMessage } from '../copy/rate-limit';
 import { UnauthenticatedError } from './auth';
 import { ApiError, type ApiErrorEnvelope, type MappedError, type Tone } from './types';
 
@@ -25,9 +26,7 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
     tone: 'warning',
     message: (detail) => {
       const wait = formatRetryAfter(detail);
-      return wait
-        ? `요청이 너무 많습니다. ${wait} 후 다시 시도해 주세요.`
-        : '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+      return rateLimitedMessage(wait);
     },
   },
   'rate_limited.ip': {
