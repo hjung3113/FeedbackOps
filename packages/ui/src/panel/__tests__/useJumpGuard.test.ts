@@ -307,11 +307,17 @@ describe('useJumpGuard', () => {
 
   it('unmount clears the watchdog and both listeners', () => {
     const root = fakeRoot();
+    const removeListener = vi.spyOn(root, 'removeEventListener');
     const { result, unmount } = renderHook(() => useJumpGuard());
     act(() => {
       result.current.startJump(root, 400);
     });
+    expect(vi.getTimerCount()).toBe(1);
     unmount();
+
+    // External side effects: the watchdog timer and both native listeners are disposed.
+    expect(vi.getTimerCount()).toBe(0);
+    expect(removeListener.mock.calls.map(([type]) => type).sort()).toEqual(['scroll', 'scrollend']);
 
     root.scrollTop = 400;
     act(() => {
