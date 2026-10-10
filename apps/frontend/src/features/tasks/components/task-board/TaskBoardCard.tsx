@@ -29,7 +29,8 @@ export function TaskBoardCard({
       {...draggable.attributes}
       onClick={onSelect}
       aria-label={`${task.display_id}: ${task.title}`}
-      className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
+      // oxlint-disable-next-line shadcn/no-arbitrary-values -- Keep colour/shadow motion but restore source opacity immediately after the drop overlay leaves.
+      className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition-[color,background-color,border-color,box-shadow] ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
     >
       <TaskBoardCardContent
         task={task}
