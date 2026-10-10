@@ -1,17 +1,7 @@
 import { ApiError } from '@/lib/api/types';
-import { tasksSearchSchema } from '@/routes/_authed/tasks';
 import { type TaskRequestDto, listTaskRequestsQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  useSearch,
-} from '@tanstack/react-router';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
@@ -211,82 +201,3 @@ describe('Task Request cursor screens', () => {
     },
   );
 });
-
-it.each(['missing', 'filtered'] as const)(
-  'FIX1 replaces a %s Task Request param without substituting a row or dropping scope and tab',
-  async (state) => {
-    let resolveDetail!: (value: Response) => void;
-    const detail = new Promise<Response>((resolve) => {
-      resolveDetail = resolve;
-    });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(String(input), 'http://localhost');
-        if (url.pathname === `/task-requests/${second.id}`) return detail;
-        if (url.pathname.includes('/actors')) return response({ actors: [], teams: [] });
-        const query = listTaskRequestsQuerySchema.parse(Object.fromEntries(url.searchParams));
-        return response({
-          items: [{ ...first, status: query.status ?? 'pending_review' }],
-          page: {
-            total: 69,
-            has_more: false,
-            ...(query.limit === 1 ? { status_counts: counts } : {}),
-          },
-        });
-      }),
-    );
-    const root = createRootRoute({ component: () => <Outlet /> });
-    const route = createRoute({
-      getParentRoute: () => root,
-      path: '/tasks',
-      validateSearch: (raw) => tasksSearchSchema.parse(raw),
-      component: () => {
-        const search = tasksSearchSchema.parse(useSearch({ strict: false }));
-        return (
-          <TaskRequestsRoute
-            selectedParam={search.param}
-            {...(search.managedSystem === undefined ? {} : { managedSystem: search.managedSystem })}
-          />
-        );
-      },
-    });
-    const router = createRouter({
-      routeTree: root.addChildren([route]),
-      history: createMemoryHistory({
-        initialEntries: [
-          '/tasks?view=backlog',
-          `/tasks?view=requests&managedSystem=${ms}&param=${second.id}`,
-        ],
-      }),
-    });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
-    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^승인됨/ }));
-    await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
-    );
-    await act(async () => {
-      resolveDetail(
-        state === 'missing'
-          ? response({ code: 'not_found.record', message: 'task request not found' }, 404)
-          : response({
-              ...second,
-              primary_managed_system_id: '30000000-0000-0000-0000-000000000099',
-            }),
-      );
-    });
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ view: 'requests', managedSystem: ms }),
-    );
-    expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByRole('button', { name: /REQ-1/ })).toBeInTheDocument();
-    expect(screen.queryByTestId('selected-request')).not.toBeInTheDocument();
-    await act(async () => router.history.back());
-    await waitFor(() => expect(router.state.location.search).toEqual({ view: 'backlog' }));
-  },
-);

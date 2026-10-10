@@ -14,7 +14,6 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
 import * as React from 'react';
 
 import type { NameMaps } from './TaskRequestRow';
@@ -63,8 +62,6 @@ export function useTaskRequestsQueue({
   managedSystem?: string | undefined;
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
-  const router = useRouter({ warn: false });
-  const selectionReconciled = React.useRef(false);
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
@@ -113,19 +110,9 @@ export function useTaskRequestsQueue({
     if (
       (selectedDetail.error instanceof ApiError && selectedDetail.error.status === 404) ||
       filteredOut
-    ) {
-      selectionReconciled.current = true;
+    )
       setSelectedId(null);
-      void router?.navigate({
-        to: '/tasks',
-        replace: true,
-        search: (previous) => {
-          const { param: _param, ...search } = previous;
-          return search;
-        },
-      });
-    }
-  }, [selectedDetail.data, selectedDetail.error, managedSystem, router]);
+  }, [selectedDetail.data, selectedDetail.error, managedSystem]);
   const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
@@ -191,13 +178,7 @@ export function useTaskRequestsQueue({
   const shown = items;
 
   React.useEffect(() => {
-    if (
-      !selectionReconciled.current &&
-      selectedParam === undefined &&
-      selectedId === null &&
-      shown[0]
-    )
-      setSelectedId(shown[0].id);
+    if (selectedParam === undefined && selectedId === null && shown[0]) setSelectedId(shown[0].id);
   }, [selectedId, shown, selectedParam]);
 
   React.useEffect(() => {
