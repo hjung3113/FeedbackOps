@@ -110,6 +110,10 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
   const savedViewsQuery = useQuery({
     queryKey: ['saved-views', savedViewSurface] as const,
     queryFn: ({ signal }) => fetchSavedViews(savedViewSurface, signal),
+    // Saved views are per-surface (#870): a domain without a saved-view surface
+    // (home, surveys, integration, admin) must not fall back to the unscoped
+    // list, which would surface other surfaces' views in its sidebar.
+    enabled: savedViewSurface !== undefined,
     retry: false,
   });
   const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({

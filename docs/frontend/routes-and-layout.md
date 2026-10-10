@@ -89,7 +89,7 @@ VOC route views:
 - `/vocs?view=inbox` is the open-processing workspace for newly submitted, recently updated, waiting reporter, and follow-up-needed VOCs.
 - `/vocs?view=triage` is the structured decision workspace for ownership, severity, Analytics Area, similar VOC, follow-up, and no-follow-up decisions.
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
-- Broader browsing is served by sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a registered route.
+- Broader browsing is served by sidebar saved views (`apps/frontend/src/lib/api/saved-views.ts`, `docs/implementation/api/saved-views.md`); `/vocs?view=list` is not a registered route. Saved views are surface-scoped: the sidebar lists only the active surface's views, and a domain without a saved-view surface (Home, Surveys, Integration, Admin) lists none (#870).
 - `/voc-clusters` owns cluster-specific list/detail behavior.
 - The global VOC rail uses loaded navigation counts for its landing: a `voc.inbox` key, including zero, links to `/vocs?view=inbox`; an omitted key links to `/vocs?view=my`. While counts are loading or unavailable after an error, keep the Inbox destination. This landing hint does not replace route or backend authorization.
 ```
