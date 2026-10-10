@@ -192,9 +192,13 @@ describe('Task Request cursor screens', () => {
         }),
       );
       const client = mount(second.id, ms);
-      await waitFor(() =>
-        expect(client.getQueryState(['task-request', second.id])?.fetchStatus).toBe('idle'),
-      );
+      // A never-fetched (disabled) query is also idle; require the settled status so the
+      // absence below follows the detail response under test.
+      await waitFor(() => {
+        const detail = client.getQueryState(['task-request', second.id]);
+        expect(detail?.status).toBe(state === 'missing' ? 'error' : 'success');
+        expect(detail?.fetchStatus).toBe('idle');
+      });
       if (state === 'missing')
         expect(client.getQueryState(['task-request', second.id])?.error).toBeInstanceOf(ApiError);
       await waitFor(() => expect(screen.queryByTestId('selected-request')).not.toBeInTheDocument());
