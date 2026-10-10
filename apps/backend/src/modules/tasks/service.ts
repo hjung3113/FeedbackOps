@@ -43,7 +43,7 @@ import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import { lockMilestone } from '../milestones/index.js';
 import type { NotificationNotifier } from '../notifications/index.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
 import {
   type TaskRequestRow,
   lockTaskRequestForUpdate,
@@ -1022,9 +1022,10 @@ export function createTasksService(deps: TasksServiceDeps) {
       ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
     });
     const items: TaskDto[] = [];
+    const memo = memoizeCapabilityChecks(deps.checkService);
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        await checkFindingManage(memo, args.actor, row.primary_managed_system_id, {
           requireElevatedRole: true,
         })
       ).allow;

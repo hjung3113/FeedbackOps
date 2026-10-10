@@ -8,6 +8,7 @@ import {
   type ReleasedTaskVocLink,
   selectActiveEntityLink as selectActiveEntityLinkRepo,
   selectActiveLinksForEndpoint as selectActiveLinksForEndpointRepo,
+  selectActiveLinksForEndpoints as selectActiveLinksForEndpointsRepo,
   selectEligibleVocLinksForReleasedTask as selectEligibleVocLinksForReleasedTaskRepo,
 } from './repo.js';
 
@@ -62,6 +63,18 @@ export async function selectActiveLinksForEndpoint(
   },
 ): Promise<EntityLinkRow[]> {
   return selectActiveLinksForEndpointRepo(db, input);
+}
+
+export async function selectActiveLinksForEndpoints(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    endpointType: EntityLinkEntityType;
+    endpointIds: string[];
+    side: 'target';
+  },
+): Promise<EntityLinkRow[]> {
+  return selectActiveLinksForEndpointsRepo(db, input);
 }
 
 export async function selectEligibleVocLinksForReleasedTask(

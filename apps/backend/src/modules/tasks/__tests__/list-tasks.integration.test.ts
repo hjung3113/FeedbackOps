@@ -9,9 +9,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  denyCapability,
+  grantCapability,
+  revokeDeny,
+} from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupReadTestTables,
   insertPublicUpdate,
@@ -144,6 +150,45 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
     const omittedIds = omitted.json<{ items: Array<{ id: string }> }>().items.map((i) => i.id);
     expect(omittedIds).toContain(taskAId);
     expect(omittedIds).toContain(taskBId);
+  });
+
+  it('shows only granted-system Tasks when another system is explicitly denied', async () => {
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('task-list-scope'));
+    for (const managedSystemId of [msAId, msBId]) {
+      await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        developer.id,
+        'finding.manage',
+        managedSystemId,
+        adminActorId,
+      );
+    }
+    const denyId = await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    try {
+      const cookie = await loginAs(app, developer.externalId);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/tasks?managed_system_id=all',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(response.statusCode).toBe(200);
+      const items = response.json<{
+        items: Array<{ id: string; primary_managed_system_id: string }>;
+      }>().items;
+      expect(items.map((item) => item.id)).toContain(taskAId);
+      expect(items.map((item) => item.id)).not.toContain(taskBId);
+      expect(items.every((item) => item.primary_managed_system_id === msAId)).toBe(true);
+    } finally {
+      await revokeDeny(dbHandle, denyId, adminActorId);
+    }
   });
 
   it('AC-395-3: managed_system_id=not-a-uuid fails validation with 422', async () => {

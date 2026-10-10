@@ -7,6 +7,7 @@ import {
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
+import { memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockTaskById } from '../tasks/index.js';
 import {
   findCreatedFindingSourceLink,
@@ -99,9 +100,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
       ...(args.execution !== undefined ? { execution: args.execution } : {}),
     });
+    const memo = memoizeCapabilityChecks(deps.checkService);
     const items: FindingDto[] = [];
     for (const row of rows) {
-      const readable = await canReadFinding(deps, args.actor, row.primary_managed_system_id);
+      const readable = await canReadFinding(
+        { checkService: memo },
+        args.actor,
+        row.primary_managed_system_id,
+      );
       if (!readable) continue;
       items.push(toDto(row));
     }
