@@ -16,9 +16,14 @@ export function validateHomeSearch(raw: unknown) {
   return parseRouteSearch(homeSearchSchema, raw);
 }
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps HomeRoute exported for
+// tests while letting the route component split into its own chunk.
+const HomeRouteSplit = HomeRoute;
+
 export const Route = createFileRoute('/_authed/home')({
   validateSearch: validateHomeSearch,
-  component: HomeRoute,
+  component: HomeRouteSplit,
 });
 
 export function HomeRoute(): React.ReactElement {

@@ -53,9 +53,14 @@ export function validateFindingsSearch(raw: unknown) {
   return parseRouteSearch(findingsSearchSchema, raw);
 }
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps FindingsListPage exported
+// for tests while letting the route component split into its own chunk.
+const FindingsListPageSplit = FindingsListPage;
+
 export const Route = createFileRoute('/_authed/findings/')({
   validateSearch: validateFindingsSearch,
-  component: FindingsListPage,
+  component: FindingsListPageSplit,
 });
 
 export function FindingsListPage(): React.ReactElement {

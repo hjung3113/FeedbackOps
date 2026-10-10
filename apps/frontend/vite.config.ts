@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [TanStackRouterVite(), tailwindcss(), react()],
+  plugins: [TanStackRouterVite({ autoCodeSplitting: true }), tailwindcss(), react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
