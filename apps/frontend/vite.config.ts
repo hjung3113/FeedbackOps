@@ -2,10 +2,22 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { type PluginOption, defineConfig } from 'vite';
+
+// #985: route code splitting only in `vite build`. In the dev server the
+// splitter drops the import of a re-exported route component but keeps the
+// export, so `/vocs` and the admin routes fail to transform (blank app). Dev
+// does not bundle anyway. The config stays a plain object for app-preview.
+const routerPlugins = (apply: 'build' | 'serve', autoCodeSplitting: boolean): PluginOption[] =>
+  [TanStackRouterVite({ autoCodeSplitting })].flat().map((plugin) => ({ ...plugin, apply }));
 
 export default defineConfig({
-  plugins: [TanStackRouterVite({ autoCodeSplitting: true }), tailwindcss(), react()],
+  plugins: [
+    ...routerPlugins('build', true),
+    ...routerPlugins('serve', false),
+    tailwindcss(),
+    react(),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
