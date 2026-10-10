@@ -482,6 +482,20 @@ describe('AppFrame saved-view surface scoping (#870)', () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = fetchMock as typeof globalThis.fetch;
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      // A disabled query still returns cached data: an unscoped list cached
+      // under the no-surface key must not reach the sidebar either.
+      client.setQueryData(['saved-views', undefined], {
+        items: [
+          {
+            id: 'view-cached',
+            surface: 'voc',
+            name: 'cached 검색',
+            filter: { view: 'inbox', q: 'cached' },
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
       const { unmount } = render(
         <QueryClientProvider client={client}>
           <AppFrame activeDomain={domain} sidebarEntries={[]}>

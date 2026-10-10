@@ -141,7 +141,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     onManagedSystemChange?.(managedSystemId);
   }, [onManagedSystemChange]);
   const counts = countsQuery.data?.counts;
-  const savedViews = savedViewsQuery.data?.items ?? [];
+  const savedViews = savedViewSurface === undefined ? [] : (savedViewsQuery.data?.items ?? []);
   const saveCurrentView = React.useCallback((name: string) => {
     if (activeDomain !== 'voc' || savedViewFilter === undefined) return;
     void createSavedView({ surface: 'voc', name, filter: savedViewFilter }).then(() => savedViewsQuery.refetch());
