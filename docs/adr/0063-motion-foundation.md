@@ -28,8 +28,10 @@ consumer contract (ADR-0058) must deliver the foundation to every consumer uncha
   well as `open`. Select receives enter motion only because Radix Select has no exit
   Presence; its lifecycle is unchanged.
 - Use `@formkit/auto-animate` behind a `useListMotion` hook for list continuity, implemented
-  separately in #994. Board drag motion (#995) also consumes the same tokens. Neither is
-  implemented by the overlay foundation issue #993.
+  in #994 for bounded Triage, Task Request, recommendation, and Survey question lists.
+  The exported `readMotionTiming` helper is the JS entry to the shared tokens. Board drag
+  motion (#995) remains separate and also consumes the same tokens.
+  The pinned `@formkit/auto-animate@0.10.0` uses `patches/@formkit__auto-animate@0.10.0.patch` to clear polling startup timers and removed-row observers and prevent detached-element polling after teardown.
 - Ship one global `prefers-reduced-motion: reduce` rule through the existing package CSS
   chain: on `*, ::before, ::after`, animation and transition duration are `0.01ms !important`,
   animation iteration count is `1 !important`, and scroll behavior is `auto !important`.
