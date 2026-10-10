@@ -1,6 +1,4 @@
 // triage-types.ts — triage input/output/snapshot types (issue #481).
-// Moved verbatim from hooks/useVocTriageMutation.ts, which re-exports them so
-// existing import paths keep working.
 
 import type { VocListItem } from '@fops/shared';
 

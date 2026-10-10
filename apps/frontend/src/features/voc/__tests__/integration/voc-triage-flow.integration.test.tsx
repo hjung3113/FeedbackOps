@@ -1290,6 +1290,13 @@ describe('Triage flow — integration (C6.3)', () => {
           expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
         });
 
+        // Freeze the clock for the two sequential 1 s PATCH waits. Date and
+        // microtasks stay real, so the committedAt/resolvedAt ordering below
+        // keeps its meaning and async act still flushes.
+        vi.useFakeTimers({
+          toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+        });
+
         await act(async () => {
           fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
         });
@@ -1331,9 +1338,21 @@ describe('Triage flow — integration (C6.3)', () => {
         expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
         expect(patches[0]?.resolvedAt).toBeNull();
 
+        // Drive the forward PATCH's 1 s timer, then — scheduled in the forward
+        // call's resolution continuation — the compensating PATCH's own 1 s
+        // timer, past IN_FLIGHT_PATCH_DELAY_MS each.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(IN_FLIGHT_PATCH_DELAY_MS);
+          await vi.advanceTimersByTimeAsync(IN_FLIGHT_PATCH_DELAY_MS);
+        });
+
         // The compensating PATCH has its own 1s timer. Wait for that response;
         // its continuation is the second restore. `not.toBeNull()` is not enough:
         // a missing patch's `resolvedAt` is `undefined`.
+        // Both PATCH timers have fired. Back on real timers before waitFor:
+        // RTL's asyncWrapper awaits a setTimeout(0) around every waitFor,
+        // which frozen fake timers would never release.
+        vi.useRealTimers();
         await waitFor(
           () => {
             expect(patches[1]?.resolvedAt).toEqual(expect.any(Number));
@@ -1364,6 +1383,13 @@ describe('Triage flow — integration (C6.3)', () => {
 
         expect(screen.getByRole('button', { name: /VOC-UNDO-TARGET/i })).toBeInTheDocument();
       } finally {
+        // If an assertion above threw mid-flight, still settle any pending
+        // 1 s PATCH timer so the drain below cannot hang on frozen timers.
+        if (vi.isFakeTimers()) {
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(IN_FLIGHT_PATCH_DELAY_MS * 2);
+          });
+        }
         await drainCommittedPatchFlights();
         unmountCapturedToast(toastHost);
         unmount();

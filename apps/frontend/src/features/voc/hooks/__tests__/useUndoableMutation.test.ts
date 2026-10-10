@@ -1,7 +1,8 @@
 // useUndoableMutation.test.ts — RED tests for the generic undo mutation hook.
 // TDD RED: written before the implementation file exists.
-// Covers: undo while pending compensates once the call resolves, settled
-// compensate, error rollback, snapshot, unmount leaves the request alone.
+// Covers: settled compensate, error rollback, snapshot, unmount leaves the
+// request alone. (The "undo while pending" path is pinned by
+// useUndoableMutation.race.test.ts.)
 
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,37 +37,6 @@ function makeSuccessHook(delay = 0) {
 // ---------------------------------------------------------------------------
 
 describe('useUndoableMutation', () => {
-  it('undo while pending compensates once the call resolves', async () => {
-    vi.useFakeTimers();
-    try {
-      const { mutationFn, snapshot, compensateFn } = makeSuccessHook(500);
-
-      const { result } = renderHook(() =>
-        useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
-      );
-
-      act(() => {
-        result.current.mutate('hello');
-      });
-      act(() => {
-        result.current.undoLast();
-      });
-
-      // The forward request is not aborted. Compensation waits until it resolves.
-      expect(compensateFn).not.toHaveBeenCalled();
-      expect(result.current.state).toBe('idle');
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(500);
-      });
-
-      expect(compensateFn).toHaveBeenCalledOnce();
-      expect(compensateFn).toHaveBeenCalledWith('snap:hello', 'ok');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('settled compensate fires with a fresh key after mutation resolves', async () => {
     const { mutationFn, snapshot, compensateFn } = makeSuccessHook(0);
 
