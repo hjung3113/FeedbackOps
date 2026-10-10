@@ -902,6 +902,23 @@ Values live in `packages/ui/src/styles/tokens.css`; `theme.css` exposes their Ta
 | `--motion-ease-enter` | `cubic-bezier(0, 0, 0.2, 1)` |
 | `--motion-ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` |
 
+`readMotionTiming(duration, easing)` exported from `@fops/ui` is the one JS entry to these
+CSS tokens for Web Animations, auto-animate, and dnd-kit. It reads the root computed style
+at call time, parses `ms`/`s`, and returns zero duration for missing/invalid timing, SSR,
+or reduced motion. Never repeat token literals in JS.
+
+`useListMotion()` returns a ref callback for bounded lists (paged or naturally small),
+using auto-animate with base/standard timing. Missing tokens or reduced motion skip
+initialisation entirely; detach/unmount destroys the controller. Screens import only
+this hook. Only in-place insertion, removal, and reorder within the same context animate.
+Key only the animated DOM boundary on tab/filter/scope/resource changes, including
+pending/error/empty/rows phase changes where that boundary renders those states. Keep
+selection, toolbars, controllers, and ancestor scroll owners mounted. Triage keys by
+queue context plus phase; Task Request keys by tab plus Managed System; recommendations
+key by source VOC; Survey questions keep a stable unkeyed inner list. The last
+recommendation/question removal still shows the existing empty/onboarding branch at once.
+Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.
+
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
 animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.
 The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
@@ -926,8 +943,8 @@ stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMoti
 use time and selects `auto` rather than `smooth`, since explicit JS smooth scrolling is not
 controlled by the CSS rule. The helper returns false when `window` or `matchMedia` is absent.
 
-List motion (#994, `@formkit/auto-animate` behind `useListMotion`) and board drag motion (#995)
-will consume the same tokens and reduced-motion policy; their implementations are separate.
+List motion (#994, `@formkit/auto-animate` behind `useListMotion`) consumes the same tokens
+and reduced-motion policy. Board drag motion (#995) remains a separate implementation.
 
 ## Accessibility Rules
 

@@ -27,3 +27,22 @@ export function prefersReducedMotion(): boolean {
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false;
 }
+
+/** The JS entry to motion tokens; missing/invalid timing and reduced motion disable motion. */
+export function readMotionTiming(
+  duration: 'fast' | 'base' | 'slow',
+  easing: 'standard' | 'enter' | 'exit',
+): { durationMs: number; easing: string } {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') {
+    return { durationMs: 0, easing: '' };
+  }
+  const style = getComputedStyle(document.documentElement);
+  const value = style.getPropertyValue(`--motion-duration-${duration}`).trim();
+  const ease = style.getPropertyValue(`--motion-ease-${easing}`).trim();
+  const match = /^(\d+(?:\.\d+)?|\.\d+)(ms|s)$/.exec(value);
+  const durationMs = match ? Number(match[1]) * (match[2] === 's' ? 1000 : 1) : 0;
+  return {
+    durationMs: prefersReducedMotion() || !Number.isFinite(durationMs) ? 0 : durationMs,
+    easing: ease,
+  };
+}

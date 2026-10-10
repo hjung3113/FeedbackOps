@@ -238,6 +238,7 @@ export function VocTriageScreen({
           hidden={isFullscreen}
         >
           <TriageQueue
+            animationContext={queueContext ?? activeTab}
             activeTab={activeTab}
             vocs={liveQueue}
             selectedId={selectedVoc?.id ?? null}

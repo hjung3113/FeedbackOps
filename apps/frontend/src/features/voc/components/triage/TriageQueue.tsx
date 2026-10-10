@@ -8,7 +8,7 @@
 
 import { VOC_LIST_LOAD_ERROR_LABELS } from '@/lib/copy/voc';
 import type { VocListItem } from '@fops/shared';
-import { Button, EmptyState } from '@fops/ui';
+import { Button, EmptyState, useListMotion } from '@fops/ui';
 import type * as React from 'react';
 import { OutOfScopeSummaryBanner } from './OutOfScopeSummaryBanner';
 import { TriageEmpty } from './TriageEmpty';
@@ -18,6 +18,7 @@ export interface TriageQueueProps {
   vocs: VocListItem[];
   selectedId: string | null;
   activeTab?: string;
+  animationContext?: string;
   onSelect: (id: string) => void;
   /** #922: true while the active tab's queue query loads; shows the pending state in place of rows. */
   queuePending?: boolean;
@@ -37,6 +38,7 @@ export function TriageQueue({
   vocs,
   selectedId,
   activeTab,
+  animationContext,
   onSelect,
   queuePending,
   queueError,
@@ -47,9 +49,21 @@ export function TriageQueue({
   // #922 FIX1: an unknown total is not evidence of a truly empty queue — only
   // a known zero earns the whole-queue success copy; an unknown (or positive)
   // total gets the neutral tab-empty copy.
+  const listMotion = useListMotion();
+  const phase = queuePending
+    ? 'pending'
+    : queueError
+      ? 'error'
+      : vocs.length === 0
+        ? 'empty'
+        : 'rows';
   const tabScopedEmpty = queueTotal !== 0;
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div
+      key={JSON.stringify([animationContext ?? activeTab, phase])}
+      ref={listMotion}
+      className="flex flex-col h-full overflow-y-auto"
+    >
       {outOfScopeSummary !== undefined && (
         <OutOfScopeSummaryBanner
           count={outOfScopeSummary.count}

@@ -17,7 +17,9 @@ export {
   SELECT_CONTENT_MOTION,
   SHEET_CONTENT_MOTION,
   prefersReducedMotion,
+  readMotionTiming,
 } from './utils/motion.js';
+export { useListMotion } from './utils/useListMotion.js';
 
 // shadcn primitives (Pack 17, ADR-0021)
 // Note: shadcn/button re-exports Button/buttonVariants already exported above — omitted to avoid collision

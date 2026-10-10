@@ -2,7 +2,7 @@ import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
-import { ListShell, ListToolbar, PermissionBlockedPanel } from '@fops/ui';
+import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
@@ -23,6 +23,7 @@ export function TaskRequestsRoute({
   selectedParam?: string | undefined;
   managedSystem?: string;
 }) {
+  const listMotion = useListMotion();
   const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
   const selectedDocumentTitle =
     !queue.isLoading &&
@@ -80,7 +81,11 @@ export function TaskRequestsRoute({
             activeTab={queue.activeTab}
             onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            key={JSON.stringify([queue.activeTab, managedSystem ?? null])}
+            ref={listMotion}
+            className="min-h-0 flex-1 overflow-y-auto"
+          >
             {queue.shown.map((item) => (
               <TaskRequestRow
                 key={item.id}
