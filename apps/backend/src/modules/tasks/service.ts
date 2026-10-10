@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ListTasksResponse } from '@fops/shared';
 import {
   type AssignTaskMilestoneRequest,
   type ConvertTaskRequestRequest,
@@ -16,6 +17,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
+import { decodeListCursor, encodeListCursor } from './list-cursor.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -57,10 +59,12 @@ import {
 import {
   type TaskCommentRow,
   type TaskRow,
+  countListRows,
   findTaskById,
   findTaskIdByDisplayId,
   insertTask,
   insertTaskComment,
+  listPrimaryManagedSystemIds,
   listTaskComments as listTaskCommentRows,
   listTasksByWorkspace,
   lockTaskById,
@@ -1003,7 +1007,7 @@ export function createTasksService(deps: TasksServiceDeps) {
   async function listTasks(args: {
     actor: TasksActor;
     query: ListTasksQuery;
-  }): Promise<{ items: TaskDto[] }> {
+  }): Promise<ListTasksResponse> {
     if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
@@ -1013,26 +1017,61 @@ export function createTasksService(deps: TasksServiceDeps) {
       args.query.managed_system_id && args.query.managed_system_id !== 'all'
         ? args.query.managed_system_id
         : undefined;
-    const rows = await listTasksByWorkspace(deps.db, {
+    const cursor =
+      args.query.cursor === undefined ? undefined : decodeListCursor(args.query.cursor);
+    const memo = memoizeCapabilityChecks(deps.checkService);
+    const systems =
+      args.actor.role_level === 'admin'
+        ? undefined
+        : await listPrimaryManagedSystemIds(deps.db, {
+            workspaceId: args.actor.workspace_id,
+            ...(managedSystemId === undefined ? {} : { managedSystemId }),
+          });
+    const allowedSystemIds: string[] | undefined = systems === undefined ? undefined : [];
+    for (const systemId of systems ?? []) {
+      if (
+        (await checkFindingManage(memo, args.actor, systemId, { requireElevatedRole: true })).allow
+      )
+        allowedSystemIds?.push(systemId);
+    }
+    const input = {
       workspaceId: args.actor.workspace_id,
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
       ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
       ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
-    });
-    const items: TaskDto[] = [];
-    const memo = memoizeCapabilityChecks(deps.checkService);
-    for (const row of rows) {
-      const canManage = (
-        await checkFindingManage(memo, args.actor, row.primary_managed_system_id, {
-          requireElevatedRole: true,
-        })
-      ).allow;
-      if (!canManage) continue;
-      items.push(taskToDto(row));
-    }
-    return { items };
+      ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
+    };
+    const empty = allowedSystemIds?.length === 0;
+    const rows = empty
+      ? []
+      : await listTasksByWorkspace(deps.db, {
+          ...input,
+          ...(args.query.limit === undefined
+            ? {}
+            : { limit: args.query.limit, ...(cursor === undefined ? {} : { cursor }) }),
+        });
+    const hasMore = args.query.limit !== undefined && rows.length > args.query.limit;
+    const pageRows = args.query.limit === undefined ? rows : rows.slice(0, args.query.limit);
+
+    const items = pageRows.map((row) => taskToDto(row));
+    if (args.query.limit === undefined) return { items };
+    const last = pageRows.at(-1);
+    return {
+      items,
+      page: {
+        has_more: hasMore,
+        ...(hasMore && last
+          ? {
+              cursor: encodeListCursor({ timestamp: last.cursor_timestamp as string, id: last.id }),
+            }
+          : {}),
+        ...(args.query.cursor === undefined
+          ? { total: empty ? 0 : await countListRows(deps.db, input) }
+          : {}),
+      },
+    };
   }
 
   return {

@@ -44,11 +44,27 @@ requirement_id: FOP-TASK-002
 query:
   status optional pending_review|approved|rejected|needs_more_evidence|converted
   managed_system_id optional uuid or all
-response body: { items: TaskRequestDto[] }
+  cursor optional opaque string (used with limit)
+  limit optional integer 1..100; list client sends 50, no server default
+response body without limit: exactly { items: TaskRequestDto[] }
+response body with limit: { items, page: { has_more, cursor?, total?, status_counts? } }
+  page.cursor only when has_more is true
+  total only on the first page (no cursor), visible rows under the same filters
+  status_counts only on the first page without a status filter; keys:
+    pending_review, approved, rejected, needs_more_evidence, converted
+    values count visible rows under the same non-status filters, including zeros
+validation: invalid cursor -> 422 validation.failed,
+  detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]
+  invalid limit -> 422 validation.failed (query-validation envelope)
 auth and permission: Admin or Developer. Admin sees all Task Requests in the
-  workspace. Developer rows are filtered per Task Request by `finding.manage`
-  on `primary_managed_system_id`.
-sort: created_at DESC
+  workspace. Developer visibility checks `finding.manage`
+  once per distinct workspace Primary Managed System with the elevated-role
+  gate, then applies the allowed-system SQL predicate before LIMIT, total and
+  status counts. Explicit denies are preserved. Empty allowed scope returns
+  empty rows, first-page total 0, and zero status counts when applicable.
+  Full-set mode uses the same visibility predicate.
+sort: created_at DESC, id DESC; cursor continues both columns with raw
+  PostgreSQL timestamp precision (including microseconds)
 source projection: when an active `requested_task` link exists, `source`
   includes its type, id, relation, and link id plus the source `display_id`
   and `title`; Finding sources also include `evidence_count`. VOC `display_id`
@@ -56,6 +72,20 @@ source projection: when an active `requested_task` link exists, `source`
   check allows the actor to read that VOC, including for Admins; otherwise those
   summary keys are omitted. A missing active source link omits `source`.
 ```
+
+`GET /task-requests/:id`
+
+```text
+response body: TaskRequestDto, including the same source projection as the list
+auth and permission: same elevated-role gate and checkFindingManage with
+  requireElevatedRole: true as the list
+errors: missing, cross-workspace or not-manageable -> identical
+  404 not_found.record; invalid UUID -> 422 validation.failed
+side effects, audit events, entity links: none (read only)
+```
+
+Task Request saved views reject `cursor` and `limit` on create, update and
+historical-filter reads; paging keys never enter persistence.
 
 Decision endpoints:
 
@@ -163,12 +193,28 @@ query:
   milestone_id optional uuid
   managed_system_id optional uuid or all
   public_update optional: missing
-response body: { items: TaskDto[] }
+  cursor optional opaque string (used with limit)
+  limit optional integer 1..100; list client sends 50, no server default
+response body without limit: exactly { items: TaskDto[] }
+response body with limit: { items, page: { has_more, cursor?, total? } }
+  cursor only when has_more is true; total only on the first page without
+  cursor, counting visible rows under the same filters
+validation: invalid cursor -> 422 validation.failed,
+  detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]
+  invalid limit -> 422 validation.failed (query-validation envelope)
 auth and permission: Admin or Developer. Admin sees all workspace Tasks.
-  Developer rows are filtered by finding.manage on primary_managed_system_id.
-  User is denied.
-sort: updated_at DESC
+  Developer visibility checks finding.manage once per distinct workspace
+  Primary Managed System, with the elevated-role gate, and applies the
+  allowed-system SQL predicate before LIMIT and total. Explicit denies remain
+  effective in paged and full-set mode. Empty allowed scope returns empty rows
+  and first-page total 0. User is denied.
+sort: updated_at DESC, id DESC; cursor continues both columns with raw
+  PostgreSQL timestamp precision (including microseconds)
 ```
+
+Task Board, Home and other full-set Task consumers omit `limit` and keep their
+complete population. Saved Task views reject `cursor` and `limit` at the
+persistence boundary, including historical-filter reads.
 
 `GET /tasks/:id`
 
@@ -235,6 +281,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, source id,
 
 ```text
 GET /task-requests
+GET /task-requests/:id
 POST /task-requests/:id/approve
 POST /task-requests/:id/reject
 POST /task-requests/:id/request-more-evidence

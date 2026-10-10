@@ -164,7 +164,35 @@ const findings = [
 const useFindingsListMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/findings/hooks/useFindingsList', () => ({
-  useFindingsList: useFindingsListMock,
+  useFindingsPages: (...args: unknown[]) => {
+    const result = useFindingsListMock(...args);
+    return {
+      ...result,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      data: result.data
+        ? {
+            pages: [
+              {
+                items: result.data.items,
+                page: { total: result.data.items.length, has_more: false },
+              },
+            ],
+            pageParams: [undefined],
+          }
+        : undefined,
+    };
+  },
+  useFindingsTotal: (managedSystemId: string | undefined, enabled: boolean) => {
+    const result = useFindingsListMock(managedSystemId, undefined, enabled);
+    return {
+      ...result,
+      data: result.data
+        ? { ...result.data, page: { total: result.data.items.length, has_more: false } }
+        : undefined,
+    };
+  },
 }));
 
 vi.mock('@/features/findings/components/FindingDetail', () => ({

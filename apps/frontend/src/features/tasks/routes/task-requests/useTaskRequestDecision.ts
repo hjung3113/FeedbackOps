@@ -102,6 +102,7 @@ export function useTaskRequestDecision({
       setDecisionDialog(null);
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       toast.success('Task Request가 처리되었습니다.');
     },
     onError: (err) => {

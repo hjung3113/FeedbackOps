@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { apiClient, type ApiError } from '@/lib/api';
-import type { CreateTaskRequestFromFindingRequest, TaskRequestDto } from '@fops/shared';
+import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import type { CreateTaskRequestFromFindingRequest, TaskRequestDto } from '@fops/shared';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface UseRequestTaskFromFindingArgs {
   findingId: string;
@@ -27,6 +27,7 @@ export function useRequestTaskFromFinding(
     onSuccess: (data) => {
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({ queryKey: ['entity-links'] });
       onSuccess?.(data);
     },

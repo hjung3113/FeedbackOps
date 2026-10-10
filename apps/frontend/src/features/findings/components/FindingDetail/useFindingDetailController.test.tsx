@@ -212,7 +212,7 @@ describe('useFindingDetailController', () => {
     expect(result.current[openKey]).toBe(false);
   });
 
-  it('mark-not-actionable success sets + invalidates exactly the finding query and toasts', async () => {
+  it('mark-not-actionable success refreshes detail and paged lists and toasts', async () => {
     const { result, invalidateSpy, setDataSpy } = renderController(FINDING_LINKED);
     act(() => {
       result.current.handleMarkNotActionable();
@@ -220,9 +220,9 @@ describe('useFindingDetailController', () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith('Finding이 조치 불필요로 표시되었습니다.'),
     );
-    expect(invalidateSpy).toHaveBeenCalledTimes(2);
-    expect(invalidateSpy).toHaveBeenNthCalledWith(1, { queryKey: ['nav-counts'] });
-    expect(invalidateSpy).toHaveBeenNthCalledWith(2, {
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['nav-counts'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['findings'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['finding', IDS.finding],
     });
     expect(setDataSpy).toHaveBeenCalledWith(

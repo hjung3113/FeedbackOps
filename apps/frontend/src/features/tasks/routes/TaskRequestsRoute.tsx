@@ -1,3 +1,4 @@
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
@@ -89,6 +90,12 @@ export function TaskRequestsRoute({
                 onSelect={queue.setSelectedId}
               />
             ))}
+            <ListLoadMore
+              hasMore={queue.hasMore}
+              loadingMore={queue.loadingMore}
+              failed={queue.loadMoreError}
+              onLoadMore={queue.loadMore}
+            />
             {queue.shown.length === 0 &&
               (isPendingEmpty ? (
                 <ListStateMessage

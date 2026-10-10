@@ -262,6 +262,7 @@ export function useTaskRequestConversion({
     onSuccess: (task) => {
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success(`Task ${task.display_id}로 전환했습니다.`);
       setConvertOpen(false);

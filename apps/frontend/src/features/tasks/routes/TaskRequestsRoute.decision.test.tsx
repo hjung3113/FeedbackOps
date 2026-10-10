@@ -1,3 +1,5 @@
+import { taskRequestPage } from '@/test/task-request-pages';
+import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -79,7 +81,11 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   convertTaskRequest: vi.fn(),
   fetchMe: api.fetchMe,
   fetchPermissionCheck: api.fetchPermissionCheck,
-  fetchTaskRequests: api.fetchTaskRequests,
+  fetchTaskRequests: async (options: ListTaskRequestsQuery) => {
+    const result = await api.fetchTaskRequests(options);
+    return result.page ? result : taskRequestPage(result.items, options);
+  },
+  getTaskRequest: vi.fn(async () => taskRequest),
   linkExistingTask: vi.fn(),
   listTasks: vi.fn(async () => ({ items: [] })),
   rejectTaskRequest: api.rejectTaskRequest,
@@ -244,6 +250,31 @@ describe('TaskRequestsRoute decision dialogs', () => {
     },
   );
 
+  it('AC-981 / AC-681-5 keeps the approved result selected beyond the destination first page', async () => {
+    api.fetchTaskRequests.mockImplementation(async (options: ListTaskRequestsQuery) => {
+      if (options.limit === 1)
+        return taskRequestPage([taskRequest, { ...otherTaskRequest, status: 'approved' }]);
+      if (options.status === 'approved')
+        return {
+          items: [{ ...otherTaskRequest, status: 'approved' }],
+          page: { total: 70, has_more: true, cursor: 'approved-next' },
+        };
+      return { items: [taskRequest], page: { total: 60, has_more: true, cursor: 'pending-next' } };
+    });
+    api.approveTaskRequest.mockResolvedValue({ ...taskRequest, status: 'approved' });
+    await mountRoute();
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 승인' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(await screen.findByRole('button', { name: /REQ-1072/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /REQ-1071/ })).not.toBeInTheDocument();
+    expect(screen.getByText('REQ-1071')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '더 불러오기' })).toBeInTheDocument();
+  });
+
   it('AC-681-1 does not replay an old decision after a converted request is revisited', async () => {
     const approvedItem: TaskRequestDto = {
       ...taskRequest,
@@ -265,12 +296,13 @@ describe('TaskRequestsRoute decision dialogs', () => {
       expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
     });
     await waitFor(() => {
-      expect(queryClient.getQueryState(['task-requests', undefined])?.fetchStatus).toBe('idle');
+      expect(
+        queryClient.getQueryState(['task-requests', undefined, 'pages', 'approved'])?.fetchStatus,
+      ).toBe('idle');
     });
 
-    queryClient.setQueryData(['task-requests', undefined], {
-      items: [convertedItem, otherTaskRequest],
-    });
+    api.fetchTaskRequests.mockResolvedValue({ items: [convertedItem, otherTaskRequest] });
+    queryClient.setQueryData(['task-request', taskRequest.id], convertedItem);
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
     fireEvent.click(await screen.findByRole('button', { name: /REQ-1072/ }));
     fireEvent.click(screen.getByRole('button', { name: /REQ-1071/ }));

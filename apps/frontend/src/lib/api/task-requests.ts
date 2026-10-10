@@ -1,3 +1,7 @@
+import { taskRequestDtoSchema } from '@fops/shared';
+import type { ListTaskRequestsResponse } from '@fops/shared';
+import { apiRequest } from './client';
+export type { ListTaskRequestsResponse } from '@fops/shared';
 import type {
   ApproveTaskRequestRequest,
   RejectTaskRequestRequest,
@@ -8,18 +12,18 @@ import type {
 
 import { apiClient } from './client';
 
-export interface ListTaskRequestsResponse {
-  items: TaskRequestDto[];
-}
-
 export async function fetchTaskRequests(
   options: {
     status?: TaskRequestStatus;
     managed_system_id?: string;
+    limit?: number;
+    cursor?: string;
     signal?: AbortSignal;
   } = {},
 ): Promise<ListTaskRequestsResponse> {
   const qs = new URLSearchParams();
+  if (options.limit !== undefined) qs.set('limit', String(options.limit));
+  if (options.cursor !== undefined) qs.set('cursor', options.cursor);
   if (options.status !== undefined) qs.set('status', options.status);
   if (options.managed_system_id !== undefined) {
     qs.set('managed_system_id', options.managed_system_id);
@@ -69,4 +73,14 @@ export async function requestMoreEvidenceForTaskRequest(
     },
   );
   return res.data;
+}
+
+export async function getTaskRequest(id: string, signal?: AbortSignal): Promise<TaskRequestDto> {
+  const response = await apiRequest(
+    'GET',
+    `/task-requests/${id}`,
+    taskRequestDtoSchema,
+    signal === undefined ? {} : { signal },
+  );
+  return response.data;
 }

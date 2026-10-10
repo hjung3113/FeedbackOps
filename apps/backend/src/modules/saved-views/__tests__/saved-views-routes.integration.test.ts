@@ -61,6 +61,57 @@ describe.skipIf(!runIntegration)('saved view routes (#143)', () => {
     await appHandle?.close();
   });
 
+  it.each(
+    ['tasks', 'task_requests', 'findings'].flatMap((surface) =>
+      ['cursor', 'limit'].map((key) => ({ surface, key })),
+    ),
+  )(
+    'AC-981: rejects $key in saved $surface filters on create, update and historical read',
+    async ({ surface, key }) => {
+      const headers = { cookie: `${SESSION_COOKIE_NAME}=${actorACookie}` };
+      const filter = { [key]: key === 'limit' ? 50 : 'opaque' };
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/saved-views',
+        headers,
+        payload: { surface, name: uid(PREFIX), filter },
+      });
+      expect(rejected.statusCode).toBe(422);
+      const validFilter =
+        surface === 'tasks'
+          ? { assignee: 'me' }
+          : surface === 'task_requests'
+            ? { status: 'pending_review' }
+            : { execution: 'none' };
+      const valid = await app.inject({
+        method: 'POST',
+        url: '/saved-views',
+        headers,
+        payload: { surface, name: uid(PREFIX), filter: validFilter },
+      });
+      expect(valid.statusCode).toBe(201);
+      expect(valid.json().filter).toEqual(validFilter);
+      const id = valid.json<{ id: string }>().id;
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/saved-views/${id}`,
+        headers,
+        payload: { filter },
+      });
+      expect(updated.statusCode).toBe(422);
+      const readable = await app.inject({ method: 'GET', url: `/saved-views/${id}`, headers });
+      expect(readable.statusCode).toBe(200);
+      expect(readable.json().filter).toEqual(validFilter);
+      await migrateHandle.pool.query(
+        'update core.saved_views set filter_payload = $1::jsonb where id = $2',
+        [JSON.stringify(filter), id],
+      );
+      const stored = await app.inject({ method: 'GET', url: `/saved-views/${id}`, headers });
+      expect(stored.statusCode).toBe(422);
+      expect(stored.json().code).toBe('validation.failed');
+    },
+  );
+
   it('keeps actor B unable to list, read, update, or delete actor A private views', async () => {
     const created = await app.inject({
       method: 'POST',

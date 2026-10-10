@@ -15,7 +15,11 @@ import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { createAa, insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  grantCapability,
+  revokeDeny,
+} from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -351,6 +355,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     });
 
     expect(list.statusCode).toBe(200);
+    expect(Object.keys(list.json())).toEqual(['items']);
     const ids = list.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id);
     expect(ids).toContain(createdA.json<{ id: string }>().id);
     expect(ids).not.toContain(createdB.json<{ id: string }>().id);
@@ -422,4 +427,118 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     expect(created.statusCode).toBe(201);
     return created.json<{ id: string }>().id;
   }
+  it('AC-981: visibility precedes limit, cursor walks exact order, and explicit deny applies in both modes', async () => {
+    const { msId: msAId } = await seedSource();
+    const { msId: msBId } = await seedSource();
+    for (let i = 0; i < 4; i += 1) {
+      await createFindingOn(msAId, `Page A ${i}`);
+    }
+    await createFindingOn(msBId, 'Newest B');
+    await migrateHandle.pool.query(
+      "update finding.findings set created_at = '2026-01-01 00:00:00.123456+00' where workspace_id = $1 and primary_managed_system_id = $2",
+      [WORKSPACE_ID, msAId],
+    );
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('page-scope'));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.read',
+      msAId,
+      adminActorId,
+    );
+    const cookie = await loginAs(app, developer.externalId);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const full = await app.inject({ method: 'GET', url: '/findings', headers });
+    expect(full.statusCode).toBe(200);
+    expect(Object.keys(full.json())).toEqual(['items']);
+    const expected = full.json<{
+      items: Array<{ id: string; primary_managed_system_id: string }>;
+    }>().items;
+    expect(expected.length).toBeGreaterThan(2);
+    expect(expected.map((item) => item.id)).toEqual(
+      expected
+        .map((item) => item.id)
+        .sort()
+        .reverse(),
+    );
+    expect(expected.every((item) => item.primary_managed_system_id === msAId)).toBe(true);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ limit: '2' });
+      if (cursor !== undefined) params.set('cursor', cursor);
+      const response = await app.inject({ method: 'GET', url: `/findings?${params}`, headers });
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { has_more: boolean; cursor?: string; total?: number };
+      }>();
+      expect(body.items).toHaveLength(Math.min(2, expected.length - walked.length));
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((item) => item.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      expect(body.page.cursor !== undefined).toBe(body.page.has_more);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(expected.map((item) => item.id));
+    expect(new Set(walked).size).toBe(expected.length);
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.read',
+      msBId,
+      adminActorId,
+    );
+    const denyId = await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.read',
+      msBId,
+      adminActorId,
+    );
+    try {
+      for (const query of ['', '?limit=2']) {
+        const denied = await app.inject({ method: 'GET', url: `/findings${query}`, headers });
+        expect(denied.statusCode).toBe(200);
+        expect(
+          denied
+            .json()
+            .items.every(
+              (item: { primary_managed_system_id: string }) =>
+                item.primary_managed_system_id === msAId,
+            ),
+        ).toBe(true);
+        if (query) expect(denied.json().page.total).toBe(expected.length);
+      }
+    } finally {
+      await revokeDeny(dbHandle, denyId, adminActorId);
+    }
+  });
+
+  it.each(['limit=101', 'limit=2&cursor=bad'])(
+    'AC-981 rejects invalid Finding page %s',
+    async (query) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/findings?${query}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toEqual({
+        code: 'validation.failed',
+        message: query.includes('cursor') ? 'invalid cursor' : 'invalid query parameters',
+        detail: {
+          fields: [
+            {
+              path: [query.includes('cursor') ? 'cursor' : 'limit'],
+              code: query.includes('cursor') ? 'invalid_cursor' : 'too_big',
+            },
+          ],
+        },
+      });
+    },
+  );
 });

@@ -1,9 +1,13 @@
+import { fetchEntityLinksBySource } from '@/lib/api/entity-links';
+import { useQuery } from '@tanstack/react-query';
 // /findings — ADR-0020 ListShell finding list + right detail panel.
 
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
-import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
-import { isPermissionDenied } from '@/lib/api/types';
+import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
+import { useFindingsPages, useFindingsTotal } from '@/features/findings/hooks/useFindingsList';
+import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import {
   FINDING_CONFIDENCE_LABELS,
   FINDING_SEVERITY_LABELS,
@@ -128,22 +132,46 @@ function FindingsListShell({
 }): React.ReactElement {
   const navigate = useNavigate({ from: '/findings/' });
   const safeReturnTo = getSafeVocReturnTo(returnTo);
-  const listQuery = useFindingsList(managedSystemId, execution);
-  const findings = listQuery.data?.items ?? [];
+  const listQuery = useFindingsPages(managedSystemId, execution);
+  const findings = React.useMemo(
+    () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [listQuery.data],
+  );
+  const total = listQuery.data?.pages[0]?.page?.total;
+  const selectedQuery = useFindingDetail(selectedId);
+  const selectedLinks = useQuery({
+    queryKey: ['entity-links', 'finding', selectedId, 'requested_task'],
+    queryFn: ({ signal }) => fetchEntityLinksBySource('finding', selectedId as string, { signal }),
+    enabled:
+      execution === 'none' &&
+      selectedId !== null &&
+      selectedQuery.isSuccess &&
+      !findings.some((item) => item.id === selectedId),
+  });
   const checkUnfiltered = execution === 'none' && listQuery.isSuccess && findings.length === 0;
-  const unfilteredQuery = useFindingsList(managedSystemId, undefined, checkUnfiltered);
-  const stateError = listQuery.isError
-    ? listQuery.error
-    : checkUnfiltered && unfilteredQuery.isError
-      ? unfilteredQuery.error
-      : null;
-  const stateIsError = listQuery.isError || (checkUnfiltered && unfilteredQuery.isError);
+  const unfilteredQuery = useFindingsTotal(managedSystemId, checkUnfiltered);
+  const stateError =
+    listQuery.isError && !listQuery.isFetchNextPageError
+      ? listQuery.error
+      : checkUnfiltered && unfilteredQuery.isError
+        ? unfilteredQuery.error
+        : null;
+  const stateIsError =
+    (listQuery.isError && !listQuery.isFetchNextPageError) ||
+    (checkUnfiltered && unfilteredQuery.isError);
   const stateIsPending = listQuery.isPending || (checkUnfiltered && unfilteredQuery.isPending);
   const isFilteredEmpty =
-    checkUnfiltered && unfilteredQuery.isSuccess && (unfilteredQuery.data?.items.length ?? 0) > 0;
+    checkUnfiltered && unfilteredQuery.isSuccess && (unfilteredQuery.data?.page?.total ?? 0) > 0;
   const retryList = React.useCallback((): void => {
-    void (listQuery.isError ? listQuery.refetch() : unfilteredQuery.refetch());
-  }, [listQuery.isError, listQuery.refetch, unfilteredQuery.refetch]);
+    void (listQuery.isError && !listQuery.isFetchNextPageError
+      ? listQuery.refetch()
+      : unfilteredQuery.refetch());
+  }, [
+    listQuery.isError,
+    listQuery.isFetchNextPageError,
+    listQuery.refetch,
+    unfilteredQuery.refetch,
+  ]);
   const { actors } = useWorkspaceActors();
   const actorsById = React.useMemo(() => {
     const map = new Map<string, AvatarUser>();
@@ -154,11 +182,39 @@ function FindingsListShell({
   }, [actors]);
 
   React.useEffect(() => {
-    if (!listQuery.isSuccess || listQuery.isFetching) return;
-    if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
+    if (!listQuery.isSuccess || listQuery.isFetching || selectedId === null) return;
+    const item = selectedQuery.data;
+    const filteredOut =
+      item !== undefined &&
+      ((managedSystemId !== undefined && item.primary_managed_system_id !== managedSystemId) ||
+        (execution === 'none' &&
+          (item.status !== 'active' ||
+            item.linked_task_id !== null ||
+            selectedLinks.data?.items.some(
+              (link) =>
+                link.source_type === 'finding' &&
+                'source_id' in link &&
+                link.source_id === item.id &&
+                link.target_type === 'task_request' &&
+                link.relation_type === 'requested_task' &&
+                link.status === 'active',
+            ))));
+    if (
+      (selectedQuery.error instanceof ApiError && selectedQuery.error.status === 404) ||
+      filteredOut
+    )
       onSelectionReconciled();
-    }
-  }, [findings, listQuery.isFetching, listQuery.isSuccess, onSelectionReconciled, selectedId]);
+  }, [
+    listQuery.isSuccess,
+    listQuery.isFetching,
+    selectedId,
+    selectedQuery.data,
+    selectedQuery.error,
+    selectedLinks.data,
+    managedSystemId,
+    execution,
+    onSelectionReconciled,
+  ]);
 
   return (
     <ListShell
@@ -167,19 +223,28 @@ function FindingsListShell({
         subtitle: 'VOC Evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
       }}
       list={
-        <FindingsListBody
-          findings={findings}
-          isPending={stateIsPending}
-          isError={stateIsError}
-          isSuccess={listQuery.isSuccess}
-          error={stateError}
-          isFilteredEmpty={isFilteredEmpty}
-          selectedId={selectedId}
-          actorsById={actorsById}
-          onSelect={onSelect}
-          onRetry={retryList}
-          onResetFilters={onResetFilters}
-        />
+        <>
+          <FindingsListBody
+            findings={findings}
+            total={total}
+            isPending={stateIsPending}
+            isError={stateIsError}
+            isSuccess={listQuery.isSuccess}
+            error={stateError}
+            isFilteredEmpty={isFilteredEmpty}
+            selectedId={selectedId}
+            actorsById={actorsById}
+            onSelect={onSelect}
+            onRetry={retryList}
+            onResetFilters={onResetFilters}
+          />
+          <ListLoadMore
+            hasMore={listQuery.hasNextPage}
+            loadingMore={listQuery.isFetchingNextPage}
+            failed={listQuery.isFetchNextPageError}
+            onLoadMore={() => void listQuery.fetchNextPage()}
+          />
+        </>
       }
       detailPanel={
         stateIsError && isPermissionDenied(stateError) ? null : selectedId ? (
@@ -241,6 +306,7 @@ function getSafeVocReturnTo(value: string | undefined): string | null {
 
 function FindingsListBody({
   findings,
+  total,
   isPending,
   isError,
   isSuccess,
@@ -253,6 +319,7 @@ function FindingsListBody({
   onResetFilters,
 }: {
   findings: FindingDto[];
+  total: number | undefined;
   isPending: boolean;
   isError: boolean;
   isSuccess: boolean;
@@ -274,8 +341,8 @@ function FindingsListBody({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
               Finding 목록
             </h3>
-            {isSuccess ? (
-              <span className="text-xs text-text-muted">{formatCount(findings.length)}</span>
+            {isSuccess && total !== undefined ? (
+              <span className="text-xs text-text-muted">{formatCount(total as number)}</span>
             ) : null}
           </div>
         </div>

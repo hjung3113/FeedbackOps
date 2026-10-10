@@ -18,13 +18,13 @@ export const savedViewSurfaceSchema = z.enum(['voc', 'tasks', 'task_requests', '
 export type SavedViewSurface = z.infer<typeof savedViewSurfaceSchema>;
 
 // Keep this next to the persisted-view boundary rather than accepting an
-// untyped JSON object. Every entry is the actual list endpoint schema; adding
-// a surface requires deliberately choosing its list contract.
+// untyped JSON object. Paging keys are transient and excluded from the strict
+// persistence schema even though the corresponding list endpoint accepts them.
 const filterSchemaBySurface: Record<SavedViewSurface, z.ZodTypeAny> = {
   voc: listVocsQuerySchema,
-  tasks: listTasksQuerySchema,
-  task_requests: listTaskRequestsQuerySchema,
-  findings: listFindingsQuerySchema,
+  tasks: listTasksQuerySchema.omit({ cursor: true, limit: true }).strict(),
+  task_requests: listTaskRequestsQuerySchema.omit({ cursor: true, limit: true }).strict(),
+  findings: listFindingsQuerySchema.omit({ cursor: true, limit: true }).strict(),
 };
 
 export interface SavedViewDto {
