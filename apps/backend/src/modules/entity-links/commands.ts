@@ -1,11 +1,11 @@
+import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
-import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
 import {
   type EntityLinkRow,
+  type ReleasedTaskVocLink,
   detachEntityLink as detachEntityLinkRepo,
   insertActiveEntityLink,
-  type ReleasedTaskVocLink,
   selectActiveEntityLink as selectActiveEntityLinkRepo,
   selectActiveLinksForEndpoint as selectActiveLinksForEndpointRepo,
   selectActiveLinksForEndpoints as selectActiveLinksForEndpointsRepo,
