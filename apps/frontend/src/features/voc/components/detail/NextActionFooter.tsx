@@ -73,7 +73,7 @@ export function NextActionFooter({
   }
 
   return (
-    <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-4 py-3 max-h-[var(--panel-footer-max)] flex items-center gap-3">
+    <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-4 py-3 flex items-center gap-3">
       {backendPrimaryAction !== undefined && (
         <span className="text-sm text-text-muted">{backendPrimaryAction.label}</span>
       )}

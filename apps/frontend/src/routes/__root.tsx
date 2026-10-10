@@ -8,9 +8,11 @@ export interface AppRouterContext {
   queryClient: QueryClient;
 }
 
-// Bottom-centred toasts clear the tallest expanded-panel footer (#851); footers
-// cap their height at `--panel-footer-max` (packages/ui tokens) and the offset
-// adds a 16px gap; `mobileOffset` stays sonner's default.
+// Bottom-centred toasts clear the expanded-panel action footer (#851): the
+// offset is `--panel-footer-max` (packages/ui tokens, the fixed TriageActions
+// footer) plus a 16px gap; `mobileOffset` stays sonner's default. Footers are
+// not height-capped (#867): a wrapping footer (an unlinked Finding's actions)
+// can be taller, and a toast may then overlap its top row while it shows.
 export const TOASTER_BOTTOM_OFFSET = 'calc(var(--panel-footer-max) + 16px)';
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({

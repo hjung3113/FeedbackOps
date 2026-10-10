@@ -209,7 +209,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         </div>
 
         {/* CTA Footer */}
-        <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 max-h-[var(--panel-footer-max)] flex flex-col gap-2">
+        <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-col gap-2">
           <FindingExecutionRequestActions controller={executionController} canManage={canManage} />
           <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0">
             <legend className="sr-only">보조 작업</legend>

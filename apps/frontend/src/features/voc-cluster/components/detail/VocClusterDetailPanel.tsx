@@ -450,7 +450,7 @@ export function VocClusterDetailPanel({
 
       {/* CTA footer */}
       <div
-        className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 max-h-[var(--panel-footer-max)] flex flex-wrap items-center gap-2"
+        className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2"
         data-testid="cluster-cta-footer"
       >
         {canMutate ? (

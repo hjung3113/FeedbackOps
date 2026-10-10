@@ -44,7 +44,7 @@ export function TriageActions({
   const confirmDisabled = !dirty || submitting;
 
   return (
-    <div className="border-t border-border-subtle px-5 py-4 max-h-[var(--panel-footer-max)] flex flex-col gap-2 bg-surface-detail shrink-0">
+    <div className="border-t border-border-subtle px-5 py-4 flex flex-col gap-2 bg-surface-detail shrink-0">
       {/* Primary CTA — Triage 확정 */}
       <button
         type="button"
