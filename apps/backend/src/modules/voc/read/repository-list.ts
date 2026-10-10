@@ -2,7 +2,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
-import { entityLinks } from '../../../db/schema/core.js';
+import { entityLinks, managedSystems } from '../../../db/schema/core.js';
 import { vocClusterMembers } from '../../../db/schema/voc-cluster.js';
 import { vocs } from '../../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../../db/sql-arrays.js';
@@ -96,6 +96,15 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     wheres.push(sql`reporter_id = ${actorIdForMyFilter}`);
   } else if (view === 'triage') {
     wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
+    // #951: Triage is the actionable-only queue. Every triage command on a VOC
+    // whose primary Managed System is archived fails with
+    // conflict.parent_archived, so exclude it from the queue. Navigation
+    // counts share this predicate (see buildVocListPredicate docs) and drop
+    // with it.
+    wheres.push(sql`EXISTS (
+      SELECT 1 FROM ${managedSystems} ms
+      WHERE ms.id = ${vocs.primaryManagedSystemId} AND ms.archived_at IS NULL
+    )`);
   }
   if (tab === 'untriaged') {
     // #920: triage 미분류 excludes postponed rows; waiting owns them. Inbox and my
