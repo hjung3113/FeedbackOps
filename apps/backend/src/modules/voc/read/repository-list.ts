@@ -7,7 +7,10 @@ import { vocClusterMembers } from '../../../db/schema/voc-cluster.js';
 import { vocs } from '../../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
-import { allManagedSystemIds, managedSystemIsLiveSql } from '../../managed-systems/read-projections.js';
+import {
+  allManagedSystemIds,
+  managedSystemIsLiveSql,
+} from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from '../cursor.js';
 import type { VocGroupedCountRow } from '../read-contract.js';
