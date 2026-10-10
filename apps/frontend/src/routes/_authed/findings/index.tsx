@@ -229,7 +229,7 @@ function FindingsListShell({
             total={total}
             isPending={stateIsPending}
             isError={stateIsError}
-            isSuccess={listQuery.isSuccess}
+            isSuccess={listQuery.isSuccess || listQuery.isFetchNextPageError}
             error={stateError}
             isFilteredEmpty={isFilteredEmpty}
             selectedId={selectedId}

@@ -245,6 +245,37 @@ describe('/findings URL state', () => {
     expect(screen.getByText('102건')).toBeInTheDocument();
   });
 
+  test('FIX1 keeps the known total and rows after a next-page error, then appends on retry', async () => {
+    renderUrlState({ requested: [] }, '/findings');
+    let failNextPage = true;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/findings') {
+        const query = listFindingsQuerySchema.parse(Object.fromEntries(url.searchParams));
+        if (query.cursor === undefined)
+          return jsonResponse({
+            items: [F1],
+            page: { total: 102, has_more: true, cursor: 'next' },
+          });
+        if (failNextPage) return jsonResponse({ code: 'internal.unexpected' }, 500);
+        return jsonResponse({ items: [FINDINGS[1]], page: { has_more: false } });
+      }
+      if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+      return jsonResponse({ code: 'not_found.record' }, 404);
+    });
+    expect(await screen.findByText('102건')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '더 불러오기' }));
+    const retry = await screen.findByRole('button', { name: '다시 시도' }, { timeout: 4000 });
+    expect(screen.getByText('102건')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /FND-102/ })).not.toBeInTheDocument();
+    failNextPage = false;
+    fireEvent.click(retry);
+    expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(screen.getByText('102건')).toBeInTheDocument();
+  });
+
   test('?selected=<id> opens that finding after load and keeps the list context', async () => {
     const router = renderUrlState({ requested: [] }, `/findings?selected=${F1_ID}`);
     const detail = await screen.findByTestId('finding-detail-panel');
