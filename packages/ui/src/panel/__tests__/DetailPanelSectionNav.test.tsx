@@ -178,6 +178,40 @@ afterEach(() => {
 });
 
 describe('DetailPanelSectionNav', () => {
+  it.each(['reveal', 'left', 'right'] as const)(
+    'uses instant scrolling for the %s path under reduced motion',
+    (path) => {
+      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+      render(<DetailPanelSectionNav sections={SECTIONS} />);
+      const track = screen.getByTestId('detail-panel-section-nav-track');
+      Object.defineProperties(track, {
+        clientWidth: { configurable: true, value: 100 },
+        scrollWidth: { configurable: true, value: 400 },
+        scrollLeft: { configurable: true, writable: true, value: 100 },
+      });
+      track.getBoundingClientRect = vi.fn(() => rect(0, 100));
+      track.scrollBy = vi.fn();
+      act(() => window.dispatchEvent(new Event('resize')));
+      vi.mocked(track.scrollBy).mockClear();
+
+      if (path === 'reveal') {
+        const tab = screen.getByRole('button', { name: 'Body' });
+        tab.getBoundingClientRect = vi.fn(() => rect(200, 260));
+        fireEvent.click(tab);
+        expect(track.scrollBy).toHaveBeenCalledWith({ left: 160, behavior: 'auto' });
+      } else {
+        fireEvent.click(screen.getByRole('button', {
+          name: path === 'left' ? '이전 탭 보기' : '다음 탭 보기',
+        }));
+        expect(track.scrollBy).toHaveBeenCalledWith({
+          left: path === 'left' ? -120 : 120,
+          behavior: 'auto',
+        });
+      }
+    },
+  );
+
+
   it('renders section buttons', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
     expect(screen.getByRole('button', { name: /overview/i })).toBeInTheDocument();

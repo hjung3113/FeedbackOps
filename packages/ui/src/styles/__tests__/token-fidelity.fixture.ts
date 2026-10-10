@@ -166,6 +166,13 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   // #867: the fixed TriageActions footer height; the toast offset sits above
   // it. Not in the frozen prototype.
   { tokenName: '--panel-footer-max', raw: '101px' },
+  // #993: motion tokens (ADR-0063). Not in the frozen prototype.
+  { tokenName: '--motion-duration-fast', raw: '150ms' },
+  { tokenName: '--motion-duration-base', raw: '200ms' },
+  { tokenName: '--motion-duration-slow', raw: '300ms' },
+  { tokenName: '--motion-ease-standard', raw: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+  { tokenName: '--motion-ease-enter', raw: 'cubic-bezier(0, 0, 0.2, 1)' },
+  { tokenName: '--motion-ease-exit', raw: 'cubic-bezier(0.4, 0, 1, 1)' },
   { tokenName: '--entity-link-inventory-min-width', raw: '1040px' },
   { tokenName: '--entity-link-inventory-narrow-col-width', raw: '104px' },
   { tokenName: '--entity-link-inventory-row-height', raw: '52px' },

@@ -3,6 +3,7 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '../../utils/cn.js';
+import { SCRIM_MOTION, SHEET_CONTENT_MOTION } from '../../utils/motion.js';
 
 export const Sheet = SheetPrimitive.Root;
 export const SheetTrigger = SheetPrimitive.Trigger;
@@ -14,7 +15,7 @@ export const SheetOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
-    className={cn('fixed inset-0 z-50 bg-black/80', className)}
+    className={cn('fixed inset-0 z-50 bg-black/80', SCRIM_MOTION, className)}
     {...props}
     ref={ref}
   />
@@ -22,7 +23,7 @@ export const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-surface-card p-6 shadow-xl transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
+  'fixed z-50 gap-4 bg-surface-card p-6 shadow-xl',
   {
     variants: {
       side: {
@@ -50,7 +51,7 @@ export const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), className)}
+      className={cn(sheetVariants({ side }), SHEET_CONTENT_MOTION[side ?? 'right'], className)}
       {...props}
     >
       {children}

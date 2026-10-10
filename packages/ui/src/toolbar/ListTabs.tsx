@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
+import { prefersReducedMotion } from '../utils/motion.js';
 import { Tabs, TabsList, TabsTrigger } from '../components/shadcn/tabs.js';
 import {
   Tooltip,
@@ -82,7 +83,7 @@ export function ListTabs({
     if (left !== 0) {
       const destination = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + left));
       const scrollDelta = destination - viewport.scrollLeft;
-      if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: 'smooth' });
+      if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     }
   }, []);
 
@@ -104,7 +105,7 @@ export function ListTabs({
         direction === 'right'
           ? Math.max(viewport.clientWidth * 0.75, 120)
           : -Math.max(viewport.clientWidth * 0.75, 120),
-      behavior: 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
   };
 

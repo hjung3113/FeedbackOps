@@ -4,6 +4,7 @@
  */
 
 import * as React from 'react';
+import { prefersReducedMotion } from '../utils/motion.js';
 
 /** Stall net. It starts only once the jump's scroll moves, and restarts on each pulse. */
 const JUMP_SAFETY_MS = 700;
@@ -113,7 +114,7 @@ export function useJumpGuard(): JumpGuard {
     releaseRef.current = release;
     root.addEventListener('scroll', release.onScroll, { passive: true });
     root.addEventListener('scrollend', release.onScrollEnd);
-    root.scrollTo({ top: targetTop, behavior: 'smooth' });
+    root.scrollTo({ top: targetTop, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     if (phaseRef.current === 'jumping' && scrollReachedJumpEnd(root, targetTop)) {
       releaseJump(phaseRef, releaseRef, landingTopRef);
     } else if (phaseRef.current === 'jumping' && release.timeoutId === null) {

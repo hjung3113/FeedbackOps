@@ -26,6 +26,7 @@
 
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
+import { prefersReducedMotion } from '../utils/motion.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -137,7 +138,7 @@ export function DetailPanelSectionNav({
         : tabRect.right > navRect.right
           ? tabRect.right - navRect.right
           : 0;
-    if (left !== 0) nav.scrollBy({ left, behavior: 'smooth' });
+    if (left !== 0) nav.scrollBy({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }, []);
 
   // Reset active section when sections list changes
@@ -270,7 +271,7 @@ export function DetailPanelSectionNav({
         direction === 'right'
           ? Math.max(nav.clientWidth * 0.75, 120)
           : -Math.max(nav.clientWidth * 0.75, 120),
-      behavior: 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
   };
 

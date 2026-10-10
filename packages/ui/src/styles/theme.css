@@ -23,7 +23,19 @@
  * Legacy-name compat shims (`leading-*`, `tracking-*`) and the v3 `space-y-*`
  * / Preflight pins live in `./compat.css` — import it right after this file.
  */
+@import "tw-animate-css";
+
 @theme inline {
+  /* Existing transitions retain Tailwind's 150ms / standard defaults. */
+  --default-transition-duration: var(--motion-duration-fast);
+  --default-transition-timing-function: var(--motion-ease-standard);
+  --animation-duration-fast: var(--motion-duration-fast);
+  --animation-duration-base: var(--motion-duration-base);
+  --animation-duration-slow: var(--motion-duration-slow);
+  --ease-standard: var(--motion-ease-standard);
+  --ease-enter: var(--motion-ease-enter);
+  --ease-exit: var(--motion-ease-exit);
+
   /* --- Surface tokens --- */
   --color-surface-canvas: rgb(var(--surface-canvas));
   --color-surface-raised: rgb(var(--surface-raised)); /* compat alias (semantic.css) */
