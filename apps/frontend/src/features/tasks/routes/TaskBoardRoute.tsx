@@ -9,6 +9,9 @@ import { formatCount } from '@/lib/format/count';
 import {
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  type DropAnimation,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -20,13 +23,15 @@ import {
   OutlineBadge,
   PermissionBlockedPanel,
   WorkbenchShell,
+  readMotionTiming,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { toast } from 'sonner';
-import { useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
+import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { TaskBoardCardPreview } from '../components/task-board/TaskBoardCard';
 import { TaskBoardColumn } from '../components/task-board/TaskBoardColumn';
 import {
   type TaskBoardGroupBy,
@@ -53,6 +58,15 @@ function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
 
 export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
   const navigate = useNavigate();
+  const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
+  const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
+  const keyboardTiming = readMotionTiming('fast', 'standard');
+  // dnd-kit supports null at runtime, but its transition type omits it.
+  const overlayTransition = (
+    keyboardTiming.durationMs === 0
+      ? null
+      : `transform ${keyboardTiming.durationMs}ms ${keyboardTiming.easing}`
+  ) as string;
   const [groupBy, setGroupBy] = React.useState<TaskBoardGroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
@@ -115,7 +129,29 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
-  function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
+  function onDragStart(event: DragStartEvent) {
+    setActiveTask((event.active.data.current?.task as TaskDto | undefined) ?? null);
+  }
+  function onDragEnd(event: DragEndEvent) {
+    const task = event.active.data.current?.task as TaskDto | undefined;
+    const target = event.over?.id;
+    const willMove =
+      groupBy === 'status' && task && typeof target === 'string' && task.status !== target;
+    const timing = readMotionTiming('slow', 'enter');
+    // dnd-kit reads this state in its layout effect after the end-event commit.
+    setDropAnimation(
+      willMove || timing.durationMs === 0
+        ? null
+        : { duration: timing.durationMs, easing: timing.easing },
+    );
+    setActiveTask(null);
+    if (groupBy !== 'status') {
+      toast.warning('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.');
+      return;
+    }
+    if (!task || typeof target !== 'string') return;
+    if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus });
+  }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
     const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
@@ -132,6 +168,9 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       />
     );
   }
+  const activeAssignee = activeTask
+    ? resolveTaskAssignee(activeTask.assignee_actor_id, actorNames)
+    : null;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return (
     <WorkbenchShell
@@ -235,7 +274,12 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 </p>
               </output>
             ) : (
-              <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+              <DndContext
+                sensors={sensors}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragCancel={() => setActiveTask(null)}
+              >
                 <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
                   {columns.map((column) => (
                     <TaskBoardColumn
@@ -251,6 +295,20 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                     />
                   ))}
                 </div>
+                <DragOverlay dropAnimation={dropAnimation} transition={overlayTransition}>
+                  {activeTask && (
+                    <TaskBoardCardPreview
+                      task={activeTask}
+                      selected={activeTask.id === selectedId}
+                      managedSystemName={
+                        systemNames.get(activeTask.primary_managed_system_id) ?? 'Managed System'
+                      }
+                      assigneeName={
+                        activeAssignee?.kind === 'resolved' ? activeAssignee.displayName : undefined
+                      }
+                    />
+                  )}
+                </DragOverlay>
               </DndContext>
             )}
           </>

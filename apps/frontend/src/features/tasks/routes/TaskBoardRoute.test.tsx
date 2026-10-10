@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
 import { toast } from 'sonner';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
 
 const task = {
@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({ getTask: vi.fn(), listTasks: vi.fn(), updateTask
 const draggableOptions = vi.hoisted(() => [] as Array<{ id?: string; disabled?: boolean }>);
 const sensorOptions = vi.hoisted(() => [] as Array<{ Sensor: unknown; options?: unknown }>);
 const navigate = vi.hoisted(() => vi.fn());
+const overlayProps = vi.hoisted(() => ({ dropAnimation: undefined as unknown, transition: undefined as unknown }));
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, search, children }: {
@@ -37,7 +38,52 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => () => ({ useSearch: () => ({}) }),
 }));
 vi.mock('@dnd-kit/core', () => ({
-  DndContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (event: unknown) => void }) => <><button type="button" onClick={() => onDragEnd({ active: { data: { current: { task } } }, over: { id: 'doing' } })}>simulate drag to doing</button>{children}</>,
+  DndContext: ({
+    children,
+    onDragStart,
+    onDragEnd,
+    onDragCancel,
+  }: {
+    children: React.ReactNode;
+    onDragStart: (event: unknown) => void;
+    onDragEnd: (event: unknown) => void;
+    onDragCancel: () => void;
+  }) => {
+    const active = { id: task.id, data: { current: { task } } };
+    return (
+      <>
+        <button type="button" onClick={() => onDragStart({ active })}>
+          simulate drag start
+        </button>
+        {['doing', 'backlog', 'none'].map((target) => (
+          <button
+            key={target}
+            type="button"
+            onClick={() => onDragEnd({ active, over: target === 'none' ? null : { id: target } })}
+          >
+            simulate drag to {target}
+          </button>
+        ))}
+        <button type="button" onClick={onDragCancel}>
+          simulate drag cancel
+        </button>
+        {children}
+      </>
+    );
+  },
+  DragOverlay: ({
+    children,
+    dropAnimation,
+    transition,
+  }: {
+    children: React.ReactNode;
+    dropAnimation: unknown;
+    transition: unknown;
+  }) => {
+    overlayProps.dropAnimation = dropAnimation;
+    overlayProps.transition = transition;
+    return <div data-testid="drag-overlay">{children}</div>;
+  },
   KeyboardSensor: class {},
   PointerSensor: class {},
   useDraggable: (options: { id?: string; disabled?: boolean }) => {
@@ -96,6 +142,80 @@ describe('TaskBoardRoute', () => {
     navigate.mockReset();
     vi.mocked(toast.error).mockReset();
     vi.mocked(toast.warning).mockReset();
+  });
+
+  afterEach(() => {
+    for (const token of ['duration-slow', 'duration-fast', 'ease-enter', 'ease-standard']) {
+      document.documentElement.style.removeProperty(`--motion-${token}`);
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['doing', false, false],
+    ['backlog', false, false],
+    ['none', false, false],
+    ['doing', true, false],
+    ['doing', false, true],
+    ['backlog', false, true],
+    ['none', false, true],
+    ['doing', true, true],
+  ] as const)(
+    'uses per-drop motion for target %s, non-status %s, reduced motion %s',
+    async (target, nonStatus, reduced) => {
+      document.documentElement.style.setProperty('--motion-duration-slow', '0.321s');
+      document.documentElement.style.setProperty('--motion-duration-fast', '123ms');
+      document.documentElement.style.setProperty('--motion-ease-enter', 'ease-in');
+      document.documentElement.style.setProperty('--motion-ease-standard', 'ease-out');
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: reduced })),
+      );
+      api.listTasks.mockResolvedValue({ items: [task] });
+      api.updateTaskStatus.mockImplementation(() => new Promise(() => {}));
+      renderBoard();
+      await screen.findByText('TASK-1000');
+      if (nonStatus) {
+        fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
+        fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+      const overlay = screen.getByTestId('drag-overlay');
+      expect(overlay).toHaveTextContent(task.title);
+      expect(overlay.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+      expect(overlay.querySelector('button, [tabindex]')).toBeNull();
+      expect(overlayProps.transition).toBe(reduced ? null : 'transform 123ms ease-out');
+      fireEvent.click(screen.getByRole('button', { name: `simulate drag to ${target}` }));
+      const moves = target === 'doing' && !nonStatus;
+      expect(overlayProps.dropAnimation).toEqual(
+        moves || reduced ? null : { duration: 321, easing: 'ease-in' },
+      );
+      expect(overlay).toBeEmptyDOMElement();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      if (moves) {
+        await waitFor(() =>
+          expect(api.updateTaskStatus).toHaveBeenCalledWith(task.id, 'doing', expect.any(Object)),
+        );
+      } else {
+        expect(api.updateTaskStatus).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('clears the presentation copy on drag cancel without a PATCH', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+    await screen.findByText('TASK-1000');
+    fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+    expect(screen.getByTestId('drag-overlay')).toHaveTextContent(task.title);
+    fireEvent.click(screen.getByRole('button', { name: 'simulate drag cancel' }));
+    expect(screen.getByTestId('drag-overlay')).toBeEmptyDOMElement();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api.updateTaskStatus).not.toHaveBeenCalled();
   });
 
   it('renders all seven status columns and an empty placeholder', async () => {
