@@ -20,13 +20,14 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
+  type EntityLinkRow,
   createEntityLink as insertActiveEntityLink,
-  selectActiveLinksForEndpoint,
+  selectActiveLinksForEndpoints,
 } from '../entity-links/index.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
 import type { NotificationNotifier } from '../notifications/index.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockVocClusterById } from '../voc-clusters/index.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import {
@@ -200,13 +201,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
   async function sourceLinkForTaskRequest(
     row: TaskRequestRow,
     actor: TaskRequestsActor,
+    links: EntityLinkRow[],
+    checkService: CheckService,
   ): Promise<TaskRequestSourceLink | undefined> {
-    const links = await selectActiveLinksForEndpoint(deps.db, {
-      workspaceId: row.workspace_id,
-      endpointType: 'task_request',
-      endpointId: row.id,
-      side: 'target',
-    });
     const link = links.find(
       (candidate) =>
         candidate.relation_type === 'requested_task' &&
@@ -226,7 +223,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       const canRead =
         row.source_voc_reporter_id !== undefined &&
         (await canExposeSourceVocText(
-          deps,
+          { checkService },
           actor,
           row.primary_managed_system_id,
           row.source_voc_reporter_id,
@@ -526,15 +523,38 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       ...(args.status !== undefined ? { status: args.status } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
     });
-    const items: TaskRequestDto[] = [];
+    const memo = memoizeCapabilityChecks(deps.checkService);
+    const allowedRows: TaskRequestRow[] = [];
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        await checkFindingManage(memo, args.actor, row.primary_managed_system_id, {
           requireElevatedRole: true,
         })
       ).allow;
       if (!canManage) continue;
-      items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row, args.actor)));
+      allowedRows.push(row);
+    }
+    const links = await selectActiveLinksForEndpoints(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      endpointType: 'task_request',
+      endpointIds: allowedRows.map((row) => row.id),
+      side: 'target',
+    });
+    const linksByTarget = new Map<string, EntityLinkRow[]>();
+    for (const link of links) {
+      const targetLinks = linksByTarget.get(link.target_id) ?? [];
+      targetLinks.push(link);
+      linksByTarget.set(link.target_id, targetLinks);
+    }
+    const items: TaskRequestDto[] = [];
+    for (const row of allowedRows) {
+      const source = await sourceLinkForTaskRequest(
+        row,
+        args.actor,
+        linksByTarget.get(row.id) ?? [],
+        memo,
+      );
+      items.push(taskRequestToDto(row, source));
     }
     return { items };
   }

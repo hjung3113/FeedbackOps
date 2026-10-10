@@ -291,6 +291,49 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
     expect(unreadableVoc.source).not.toHaveProperty('title');
   });
 
+  it('returns source VOC metadata to its Developer reporter without voc.read', async () => {
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('task-req-reporter'));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msAId,
+      adminActorId,
+    );
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msAId,
+      developer.id,
+      'Developer reporter source VOC',
+    );
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: voc.id,
+      primaryManagedSystemId: msAId,
+      requesterActorId: developer.id,
+    });
+    await insertRequestedTaskLink('voc', voc.id, request.id, msAId);
+    const cookie = await loginAs(app, developer.externalId);
+    const response = await listTaskRequests(msAId, cookie);
+    expect(response.statusCode).toBe(200);
+    const item = taskRequestDtoSchema.parse(
+      response
+        .json<{ items: unknown[] }>()
+        .items.find((row) => (row as { id?: string }).id === request.id),
+    );
+    expect(item.source).toMatchObject({
+      type: 'voc',
+      id: voc.id,
+      relation_type: 'requested_task',
+      link_id: expect.any(String),
+      display_id: expect.any(String),
+      title: 'Developer reporter source VOC',
+    });
+  });
+
   it.each([
     { scope: 'Managed-System-scoped', managedSystemId: () => msAId },
     { scope: 'workspace-wide', managedSystemId: () => null },
