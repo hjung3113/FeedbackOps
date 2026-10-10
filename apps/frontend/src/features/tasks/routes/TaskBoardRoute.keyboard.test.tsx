@@ -1,6 +1,6 @@
 import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
@@ -92,7 +92,11 @@ describe('TaskBoardRoute keyboard dragging', () => {
       const label = this.getAttribute('aria-label');
       if (label === 'Backlog 열') return boardRect(0, 288, 600);
       if (label === 'Doing 열') return boardRect(300, 288, 600);
-      if (label?.startsWith('TASK-1000:')) return boardRect(16, 256, 72);
+      if (
+        label?.startsWith('TASK-1000:') ||
+        (this.getAttribute('aria-hidden') === 'true' && this.textContent?.includes(task.title))
+      )
+        return boardRect(16, 256, 72);
       return boardRect(0, 0, 0);
     });
   });
@@ -110,12 +114,22 @@ describe('TaskBoardRoute keyboard dragging', () => {
       </QueryClientProvider>,
     );
 
-    const card = await screen.findByRole('button', { name: 'TASK-1000: Keyboard draggable Task' });
+    const backlog = await screen.findByLabelText('Backlog 열');
+    const card = within(backlog).getByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
     card.focus();
     fireEvent.keyDown(card, { key: ' ', code: 'Space' });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+
+    expect(
+      screen.getByText(task.title, { selector: '[aria-hidden="true"] *' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Draggable item ${task.id} was moved over droppable area backlog.`,
+    );
 
     for (let step = 0; step < 13; step += 1) {
       fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
@@ -130,5 +144,44 @@ describe('TaskBoardRoute keyboard dragging', () => {
       ),
     );
     expect(screen.getByLabelText('Doing 열')).toHaveTextContent(task.display_id);
+    expect(
+      screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(`Draggable item ${task.id} was dropped`);
+  });
+
+  it('cancels keyboard dragging with Escape, clears the copy, and announces cancellation', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const backlog = await screen.findByLabelText('Backlog 열');
+    const card = within(backlog).getByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(
+      screen.getByText(task.title, { selector: '[aria-hidden="true"] *' }),
+    ).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    expect(
+      within(backlog).getByRole('button', { name: 'TASK-1000: Keyboard draggable Task' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Dragging was cancelled. Draggable item ${task.id}`,
+    );
   });
 });

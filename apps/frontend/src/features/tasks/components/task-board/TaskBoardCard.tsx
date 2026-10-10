@@ -29,8 +29,55 @@ export function TaskBoardCard({
       {...draggable.attributes}
       onClick={onSelect}
       aria-label={`${task.display_id}: ${task.title}`}
-      className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
+      // oxlint-disable-next-line shadcn/no-arbitrary-values -- Keep colour/shadow motion but restore source opacity immediately after the drop overlay leaves.
+      className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition-[color,background-color,border-color,box-shadow] ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
     >
+      <TaskBoardCardContent
+        task={task}
+        managedSystemName={managedSystemName}
+        assigneeName={assigneeName}
+      />
+      {!enabled && <span className="sr-only">상태 그룹화일 때만 드래그로 상태가 변경됩니다.</span>}
+    </button>
+  );
+}
+
+export function TaskBoardCardPreview({
+  task,
+  selected,
+  managedSystemName,
+  assigneeName,
+}: {
+  task: TaskDto;
+  selected: boolean;
+  managedSystemName: string;
+  assigneeName?: string | undefined;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`w-full rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm ${selected ? 'ring-1 ring-border-selected' : ''}`}
+    >
+      <TaskBoardCardContent
+        task={task}
+        managedSystemName={managedSystemName}
+        assigneeName={assigneeName}
+      />
+    </div>
+  );
+}
+
+function TaskBoardCardContent({
+  task,
+  managedSystemName,
+  assigneeName,
+}: {
+  task: TaskDto;
+  managedSystemName: string;
+  assigneeName?: string | undefined;
+}) {
+  return (
+    <>
       <div className="flex items-center gap-1.5">
         <span className="font-mono text-xs text-text-muted">{task.display_id}</span>
         <SeverityBadge
@@ -51,7 +98,6 @@ export function TaskBoardCard({
           <UnassignedBadge />
         )}
       </div>
-      {!enabled && <span className="sr-only">상태 그룹화일 때만 드래그로 상태가 변경됩니다.</span>}
-    </button>
+    </>
   );
 }

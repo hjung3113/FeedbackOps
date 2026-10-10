@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
 import { toast } from 'sonner';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
 
 const task = {
@@ -20,6 +20,15 @@ const api = vi.hoisted(() => ({ getTask: vi.fn(), listTasks: vi.fn(), updateTask
 const draggableOptions = vi.hoisted(() => [] as Array<{ id?: string; disabled?: boolean }>);
 const sensorOptions = vi.hoisted(() => [] as Array<{ Sensor: unknown; options?: unknown }>);
 const navigate = vi.hoisted(() => vi.fn());
+const overlayProps = vi.hoisted(() => ({ dropAnimation: undefined as unknown, transition: undefined as unknown }));
+const scrollProps = vi.hoisted(() => ({
+  collisionDetection: undefined as import('@dnd-kit/core').CollisionDetection | undefined,
+  autoScroll: undefined as { canScroll?: (element: Element) => boolean } | undefined,
+  measuring: undefined as
+    | { droppable?: { measure?: (element: HTMLElement) => unknown } }
+    | undefined,
+}));
+const droppableNodes = vi.hoisted(() => new Map<string, HTMLElement>());
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, search, children }: {
@@ -36,15 +45,97 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
   createFileRoute: () => () => ({ useSearch: () => ({}) }),
 }));
-vi.mock('@dnd-kit/core', () => ({
-  DndContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (event: unknown) => void }) => <><button type="button" onClick={() => onDragEnd({ active: { data: { current: { task } } }, over: { id: 'doing' } })}>simulate drag to doing</button>{children}</>,
+vi.mock('@dnd-kit/core', async () => ({
+  rectIntersection: (await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core'))
+    .rectIntersection,
+  getClientRect: (await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core'))
+    .getClientRect,
+  DndContext: ({
+    children,
+    onDragStart,
+    onDragEnd,
+    onDragCancel,
+    autoScroll,
+    measuring,
+    collisionDetection,
+  }: {
+    children: React.ReactNode;
+    onDragStart: (event: unknown) => void;
+    onDragEnd: (event: unknown) => void;
+    onDragCancel: () => void;
+    autoScroll?: { canScroll?: (element: Element) => boolean };
+    measuring?: { droppable?: { measure?: (element: HTMLElement) => unknown } };
+    collisionDetection?: import('@dnd-kit/core').CollisionDetection;
+  }) => {
+    scrollProps.autoScroll = autoScroll;
+    scrollProps.measuring = measuring;
+    scrollProps.collisionDetection = collisionDetection;
+    const active = { id: task.id, data: { current: { task } } };
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() =>
+            onDragStart({
+              active,
+              activatorEvent: new MouseEvent('pointerdown', { clientX: 600, clientY: 400 }),
+            })
+          }
+        >
+          simulate drag start
+        </button>
+        {[845, 1140, 1430, 300].map((x) => (
+          <button
+            key={x}
+            type="button"
+            onClick={() =>
+              document.dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: 400 }))
+            }
+          >
+            simulate pointer at {x}
+          </button>
+        ))}
+        {['doing', 'backlog', 'none'].map((target) => (
+          <button
+            key={target}
+            type="button"
+            onClick={() => onDragEnd({ active, over: target === 'none' ? null : { id: target } })}
+          >
+            simulate drag to {target}
+          </button>
+        ))}
+        <button type="button" onClick={onDragCancel}>
+          simulate drag cancel
+        </button>
+        {children}
+      </>
+    );
+  },
+  DragOverlay: ({
+    children,
+    dropAnimation,
+    transition,
+  }: {
+    children: React.ReactNode;
+    dropAnimation: unknown;
+    transition: unknown;
+  }) => {
+    overlayProps.dropAnimation = dropAnimation;
+    overlayProps.transition = transition;
+    return <div data-testid="drag-overlay">{children}</div>;
+  },
   KeyboardSensor: class {},
   PointerSensor: class {},
   useDraggable: (options: { id?: string; disabled?: boolean }) => {
     draggableOptions.push(options);
     return { setNodeRef: vi.fn(), listeners: {}, attributes: {}, isDragging: false };
   },
-  useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
+  useDroppable: ({ id }: { id: string }) => ({
+    setNodeRef: (node: HTMLElement | null) => {
+      if (node) droppableNodes.set(id, node);
+    },
+    isOver: false,
+  }),
   useSensor: (Sensor: unknown, options?: unknown) => {
     sensorOptions.push({ Sensor, options });
     return {};
@@ -97,6 +188,179 @@ describe('TaskBoardRoute', () => {
     vi.mocked(toast.error).mockReset();
     vi.mocked(toast.warning).mockReset();
   });
+
+  afterEach(() => {
+    for (const token of ['duration-slow', 'duration-fast', 'ease-enter', 'ease-standard']) {
+      document.documentElement.style.removeProperty(`--motion-${token}`);
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['doing', false, false],
+    ['backlog', false, false],
+    ['none', false, false],
+    ['doing', true, false],
+    ['doing', false, true],
+    ['backlog', false, true],
+    ['none', false, true],
+    ['doing', true, true],
+  ] as const)(
+    'uses per-drop motion for target %s, non-status %s, reduced motion %s',
+    async (target, nonStatus, reduced) => {
+      document.documentElement.style.setProperty('--motion-duration-slow', '0.321s');
+      document.documentElement.style.setProperty('--motion-duration-fast', '123ms');
+      document.documentElement.style.setProperty('--motion-ease-enter', 'ease-in');
+      document.documentElement.style.setProperty('--motion-ease-standard', 'ease-out');
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: reduced })),
+      );
+      api.listTasks.mockResolvedValue({ items: [task] });
+      api.updateTaskStatus.mockImplementation(() => new Promise(() => {}));
+      renderBoard();
+      await screen.findByText('TASK-1000');
+      if (nonStatus) {
+        fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
+        fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+      const overlay = screen.getByTestId('drag-overlay');
+      expect(overlay).toHaveTextContent(task.title);
+      expect(overlay.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+      expect(overlay.querySelector('button, [tabindex]')).toBeNull();
+      expect(overlayProps.transition).toBe(reduced ? null : 'transform 123ms ease-out');
+      fireEvent.click(screen.getByRole('button', { name: `simulate drag to ${target}` }));
+      const moves = target === 'doing' && !nonStatus;
+      expect(overlayProps.dropAnimation).toEqual(
+        moves || reduced ? null : { duration: 321, easing: 'ease-in' },
+      );
+      expect(overlay).toBeEmptyDOMElement();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      if (moves) {
+        await waitFor(() =>
+          expect(api.updateTaskStatus).toHaveBeenCalledWith(task.id, 'doing', expect.any(Object)),
+        );
+      } else {
+        expect(api.updateTaskStatus).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('clears the presentation copy on drag cancel without a PATCH', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+    await screen.findByText('TASK-1000');
+    fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+    expect(screen.getByTestId('drag-overlay')).toHaveTextContent(task.title);
+    fireEvent.click(screen.getByRole('button', { name: 'simulate drag cancel' }));
+    expect(screen.getByTestId('drag-overlay')).toBeEmptyDOMElement();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api.updateTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it('allows board auto-scroll only at its own edges and keeps column scrolling eligible', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+    const column = await screen.findByLabelText('Backlog 열');
+    const board = column.parentElement as HTMLElement;
+    const columnScroller = column.querySelector('.overflow-y-auto') as HTMLElement;
+    vi.spyOn(board, 'getBoundingClientRect').mockReturnValue(new DOMRect(292, 100, 1147, 700));
+    fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+    expect(scrollProps.autoScroll?.canScroll).toEqual(expect.any(Function));
+    for (const [x, eligible] of [
+      [845, false],
+      [1140, false],
+      [1430, true],
+      [300, true],
+    ] as const) {
+      fireEvent.click(screen.getByRole('button', { name: `simulate pointer at ${x}` }));
+      expect(scrollProps.autoScroll?.canScroll?.(board)).toBe(eligible);
+      expect(scrollProps.autoScroll?.canScroll?.(columnScroller)).toBe(true);
+    }
+  });
+
+  it('keeps the hovered column scroller in dnd-kit ancestors with full-column drop bounds', async () => {
+    const { getScrollableAncestors } =
+      await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core');
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+    const column = await screen.findByLabelText('Backlog 열');
+    const board = column.parentElement as HTMLElement;
+    const columnScroller = column.querySelector('.overflow-y-auto') as HTMLElement;
+    columnScroller.style.overflowY = 'auto';
+    board.style.overflowX = 'auto';
+    const dropNode = droppableNodes.get('backlog') as HTMLElement;
+    expect(getScrollableAncestors(dropNode)).toEqual([columnScroller, board]);
+    vi.spyOn(column, 'getBoundingClientRect').mockReturnValue(new DOMRect(292, 100, 288, 700));
+    expect(scrollProps.measuring?.droppable?.measure?.(dropNode)).toMatchObject({
+      left: 292,
+      top: 100,
+      width: 288,
+      height: 700,
+    });
+    // Even after the inner ref scrolls, the column header remains a valid drop target.
+    const collisions = scrollProps.collisionDetection?.({
+      active: {
+        id: task.id,
+        data: { current: { task } },
+        rect: { current: { initial: null, translated: null } },
+      },
+      pointerCoordinates: null,
+      collisionRect: new DOMRect(300, 110, 256, 72),
+      droppableRects: new Map([['backlog', new DOMRect(292, -800, 288, 700)]]),
+      droppableContainers: [
+        {
+          id: 'backlog',
+          key: 'backlog',
+          disabled: false,
+          node: { current: dropNode },
+          rect: { current: null },
+          data: { current: {} },
+        },
+      ],
+    });
+    expect(collisions?.map(({ id }) => id)).toEqual(['backlog']);
+  });
+
+  it.each(['doing', 'backlog'] as const)(
+    'refreshes cancel motion after a previous %s drop in the same route',
+    async (target) => {
+      document.documentElement.style.setProperty('--motion-duration-slow', '321ms');
+      document.documentElement.style.setProperty('--motion-ease-enter', 'ease-in');
+      let reduced = false;
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: reduced })),
+      );
+      api.listTasks.mockResolvedValue({ items: [task] });
+      api.updateTaskStatus.mockImplementation(() => new Promise(() => {}));
+      renderBoard();
+      await screen.findByText('TASK-1000');
+      fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+      fireEvent.click(screen.getByRole('button', { name: `simulate drag to ${target}` }));
+      if (target === 'doing') {
+        await waitFor(() => expect(api.updateTaskStatus).toHaveBeenCalled());
+      } else {
+        reduced = true;
+      }
+      const requestsBeforeCancel = api.updateTaskStatus.mock.calls.length;
+      fireEvent.click(screen.getByRole('button', { name: 'simulate drag start' }));
+      fireEvent.click(screen.getByRole('button', { name: 'simulate drag cancel' }));
+      expect(overlayProps.dropAnimation).toEqual(
+        reduced ? null : { duration: 321, easing: 'ease-in' },
+      );
+      expect(screen.getByTestId('drag-overlay')).toBeEmptyDOMElement();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(api.updateTaskStatus.mock.calls.length).toBe(requestsBeforeCancel);
+    },
+  );
 
   it('renders all seven status columns and an empty placeholder', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });

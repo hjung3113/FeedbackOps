@@ -907,6 +907,18 @@ CSS tokens for Web Animations, auto-animate, and dnd-kit. It reads the root comp
 at call time, parses `ms`/`s`, and returns zero duration for missing/invalid timing, SSR,
 or reduced motion. Never repeat token literals in JS.
 
+Task Board keeps a dimmed source card and an `aria-hidden`, non-interactive `DragOverlay`
+copy that follows the pointer or keyboard drag. A drop requesting a different status skips
+return motion; same-column, no-target, and non-status-group drops return to the source using
+slow/enter timing. Escape cancellation uses return timing freshly read at drag start, including
+the current reduced-motion preference. Zero-duration timing disables that animation. Source
+opacity restores immediately at return completion; colour and shadow transitions remain.
+Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
+auto-scroll remains eligible. Keyboard overlay movement
+uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
+with no return animation. The route owns only the active copy and per-drop animation choice;
+`useTaskStatusTransition` continues to own cache writes and rollback.
+
 `useListMotion()` returns a ref callback for bounded lists (paged or naturally small),
 using auto-animate with base/standard timing. Missing tokens or reduced motion skip
 initialisation entirely; detach/unmount destroys the controller. Screens import only
