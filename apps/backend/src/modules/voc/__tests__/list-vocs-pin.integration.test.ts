@@ -225,6 +225,38 @@ describe.skipIf(!runIntegration)('GET /vocs?view=triage&pin_voc_id (#383)', () =
     expect(idsOf(body).has(archived.id)).toBe(false);
   });
 
+  it('951: ignores a pin pointing at a VOC of an archived Managed System', async () => {
+    const archivedMs = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-archms`,
+      'Pin MS archived parent',
+    );
+    const pinnedParent = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      archivedMs,
+      reporterId,
+      'pin-archived-parent',
+    );
+    const liveMs = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Pin MS live');
+    const queued = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      liveMs,
+      reporterId,
+      'pin-live-queue',
+    );
+    await dbHandle.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+      archivedMs,
+    ]);
+
+    const { status, body } = await listTriage(adminCookie, { pin_voc_id: pinnedParent.id });
+    expect(status).toBe(200);
+    expect(idsOf(body).has(pinnedParent.id)).toBe(false);
+    expect(idsOf(body).has(queued.id)).toBe(true);
+  });
+
   // ── Cross-view validation ─────────────────────────────────────────────────
 
   it('rejects pin_voc_id on view=inbox', async () => {

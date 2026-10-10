@@ -5,6 +5,7 @@ import type { Db } from '../../../db/client.js';
 import { vocPermissionDecisionsSeedFixture, vocs } from '../../../db/schema/voc.js';
 import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
+import { managedSystemIsLiveSql } from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
@@ -66,8 +67,9 @@ export async function selectVocIdByDisplayId(
  * queue.
  *
  * The scope contract is unchanged: workspace + `scopeFilter` are applied here
- * exactly as buildVocListPredicate applies them, and archived rows stay out.
- * A row outside the caller's scope returns null so the caller can drop it
+ * exactly as buildVocListPredicate applies them, and archived rows stay out —
+ * archived VOCs and VOCs of an archived Managed System (#951) alike. A row
+ * outside the caller's scope returns null so the caller can drop it
  * silently — never 403/404, which would turn this into an existence probe.
  */
 export async function selectPinnedVocListRow(
@@ -81,6 +83,9 @@ export async function selectPinnedVocListRow(
     sql`id = ${vocId}`,
     sql`workspace_id = ${workspaceId}`,
     sql`archived_at IS NULL`,
+    // #951: same archived-parent exclusion as buildVocListPredicate's triage
+    // view — the pin only bypasses the triage_state predicate, not this one.
+    managedSystemIsLiveSql(vocs.primaryManagedSystemId),
   ];
   if (scopeFilter.kind === 'scoped') {
     wheres.push(

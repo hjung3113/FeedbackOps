@@ -80,6 +80,8 @@ Anatomy:
 - ToastRegion
 ```
 
+ToastRegion: the desktop bottom offset is `calc(var(--panel-footer-max) + 16px)` (sonner bottom-centred toaster). Footers are not height-capped; one taller than `--panel-footer-max` (a wrapping Finding footer) can be overlapped by a toast while it shows (#867, accepted).
+
 Desktop layout:
 
 ```text

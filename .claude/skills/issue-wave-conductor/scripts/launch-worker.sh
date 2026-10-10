@@ -7,6 +7,10 @@
 # Needs: WAVE_STATE, WAVE_BRIEFS, FOPS_MAIN (main checkout path).
 : "${WAVE_STATE:?}"; : "${WAVE_BRIEFS:?}"; : "${FOPS_MAIN:?}"; set -u
 N=$1; SLUG=$2; BE=${3:-}; SKILL=$FOPS_MAIN/.claude/skills/issue-wave-conductor
+# The script cds into the new worktree, so a relative brief dir would silently resolve there (Slice 46: three
+# workers launched with an empty task). Resolve the dirs first and refuse a missing brief.
+WAVE_BRIEFS=${WAVE_BRIEFS:A}; WAVE_STATE=${WAVE_STATE:A}
+[ -f "$WAVE_BRIEFS/$N-task.md" ] || { echo "Missing brief: $WAVE_BRIEFS/$N-task.md" >&2; exit 2; }
 SHARED_LAUNCH=$HOME/.claude/skills/orca-dispatch-recipes/scripts/worker-launch.sh
 [ -f "$SHARED_LAUNCH" ] || { echo "Missing shared launcher: $SHARED_LAUNCH (install orca-dispatch-recipes worker-ops scripts)" >&2; exit 2; }
 W=$HOME/orca/workspaces/FeedbackOps/$N-$SLUG; export PATH=/opt/homebrew/opt/node@22/bin:$PATH

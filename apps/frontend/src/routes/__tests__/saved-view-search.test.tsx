@@ -2,129 +2,42 @@
 // from the /vocs URL next to the other filter keys, and `applySavedView`
 // restores (or clears) it at the route-search boundary.
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRouteWithContext,
-  createRoute,
-  createRouter,
-} from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ME_QUERY_KEY } from '../../lib/auth/useMe';
-import { parseAppSearch, stringifyAppSearch } from '../../lib/router/search-serialization';
-import type { AppRouterContext } from '../__root';
-import { AuthedLayout, authenticatedBeforeLoad } from '../_authed';
-
-const ME = {
-  actor: {
-    id: 'actor-1',
-    external_id: 'mock-admin-1',
-    email: 'admin@example.test',
-    display_name: 'Mock Admin',
-    role_level: 'admin',
-  },
-  workspace_id: 'workspace-1',
-};
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-interface SavedViewRow {
-  id: string;
-  surface: 'voc';
-  name: string;
-  filter: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-function savedView(id: string, name: string, filter: Record<string, unknown>): SavedViewRow {
-  return {
-    id,
-    surface: 'voc',
-    name,
-    filter,
-    created_at: '2026-10-08T00:00:00.000Z',
-    updated_at: '2026-10-08T00:00:00.000Z',
-  };
-}
+import { stringifyAppSearch } from '../../lib/router/search-serialization';
+import {
+  type AuthedVocsMount,
+  type AuthedVocsRequest,
+  type SavedViewRow,
+  jsonResponse,
+  mountAuthedVocs,
+  savedView,
+} from '../../test/mountAuthedVocs';
 
 interface HarnessOptions {
   initialPath: string;
   savedViews?: SavedViewRow[];
 }
 
+// Last mount's harness; afterEach fails the test when the app made a request
+// no branch answered (React Query would otherwise swallow the 500).
+let mounted: AuthedVocsMount | undefined;
+
 function mountSavedViewHarness({ initialPath, savedViews = [] }: HarnessOptions) {
-  const requests: Array<{ method: string; url: string; body?: unknown }> = [];
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const method = init?.method ?? 'GET';
-    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
-    requests.push({ method, url, ...(body !== undefined ? { body } : {}) });
-    if (method === 'POST' && url === '/saved-views') {
-      const input = body as { name: string; filter: Record<string, unknown> };
-      return jsonResponse(200, savedView('view-new', input.name, input.filter));
-    }
-    if (method === 'GET' && url === '/saved-views?surface=voc') {
-      return jsonResponse(200, { items: savedViews });
-    }
-    if (url === '/me') return jsonResponse(200, ME);
-    if (url === '/managed-systems') return jsonResponse(200, { items: [], total: 0 });
-    if (url.startsWith('/nav/counts')) return jsonResponse(200, { counts: {} });
-    if (url.startsWith('/me/permissions/check')) {
-      return jsonResponse(200, { state: 'approved', decision: { allow: true, via: 'role' } });
-    }
-    if (url.startsWith('/notifications?')) {
-      return jsonResponse(200, { items: [], page: { has_more: false }, unread_count: 0 });
-    }
-    return jsonResponse(200, {});
+  mounted = mountAuthedVocs({
+    initialPath,
+    handle: (request: AuthedVocsRequest): Response | undefined => {
+      if (request.method === 'POST' && request.url === '/saved-views') {
+        const input = request.body as { name: string; filter: Record<string, unknown> };
+        return jsonResponse(200, savedView('view-new', input.name, input.filter));
+      }
+      if (request.method === 'GET' && request.url === '/saved-views?surface=voc') {
+        return jsonResponse(200, { items: savedViews });
+      }
+      return undefined;
+    },
   });
-  vi.stubGlobal('fetch', fetchMock as typeof globalThis.fetch);
-
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData(ME_QUERY_KEY, ME);
-
-  const rootRoute = createRootRouteWithContext<AppRouterContext>()({
-    component: () => <Outlet />,
-  });
-  const authedRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    id: '_authed',
-    beforeLoad: authenticatedBeforeLoad,
-    component: AuthedLayout,
-  });
-  const vocsRoute = createRoute({
-    getParentRoute: () => authedRoute,
-    path: '/vocs',
-    component: () => <p>VOC inbox</p>,
-  });
-  const loginRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/login',
-    component: () => <p>Login destination</p>,
-  });
-  const router = createRouter({
-    routeTree: rootRoute.addChildren([authedRoute.addChildren([vocsRoute]), loginRoute]),
-    context: { queryClient },
-    history: createMemoryHistory({ initialEntries: [initialPath] }),
-    parseSearch: parseAppSearch,
-    stringifySearch: stringifyAppSearch,
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  );
-
-  return { requests, router };
+  return mounted;
 }
 
 function postsToSavedViews(requests: Array<{ method: string; url: string; body?: unknown }>) {
@@ -136,6 +49,7 @@ function postsToSavedViews(requests: Array<{ method: string; url: string; body?:
 
 describe('#849 saved views keep the inbox search', () => {
   afterEach(() => {
+    expect(mounted?.unhandled ?? []).toEqual([]);
     vi.unstubAllGlobals();
   });
 

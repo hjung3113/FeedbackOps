@@ -110,6 +110,10 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
   const savedViewsQuery = useQuery({
     queryKey: ['saved-views', savedViewSurface] as const,
     queryFn: ({ signal }) => fetchSavedViews(savedViewSurface, signal),
+    // Saved views are per-surface (#870): a domain without a saved-view surface
+    // (home, surveys, integration, admin) must not fall back to the unscoped
+    // list, which would surface other surfaces' views in its sidebar.
+    enabled: savedViewSurface !== undefined,
     retry: false,
   });
   const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
@@ -137,7 +141,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     onManagedSystemChange?.(managedSystemId);
   }, [onManagedSystemChange]);
   const counts = countsQuery.data?.counts;
-  const savedViews = savedViewsQuery.data?.items ?? [];
+  const savedViews = savedViewSurface === undefined ? [] : (savedViewsQuery.data?.items ?? []);
   const saveCurrentView = React.useCallback((name: string) => {
     if (activeDomain !== 'voc' || savedViewFilter === undefined) return;
     void createSavedView({ surface: 'voc', name, filter: savedViewFilter }).then(() => savedViewsQuery.refetch());

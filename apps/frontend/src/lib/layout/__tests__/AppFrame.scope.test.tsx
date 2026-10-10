@@ -442,6 +442,82 @@ describe('AppFrame capability navigation', () => {
   });
 });
 
+describe('AppFrame saved-view surface scoping (#870)', () => {
+  it.each(['home', 'surveys', 'integration', 'admin'] as const)(
+    'does not fetch or render saved views on the %s domain',
+    async (domain) => {
+      const requestedUrls: string[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/me')
+          return json({
+            actor: {
+              id: 'actor',
+              external_id: 'actor',
+              email: 'actor@test',
+              display_name: 'Actor',
+              role_level: 'admin',
+            },
+            workspace_id: 'workspace',
+          });
+        if (url === '/managed-systems') return json({ items: [], total: 0 });
+        if (url.startsWith('/nav/counts')) return json({ counts: {} });
+        // A VOC view exists server-side; only the surface-scoped request may see it.
+        if (url === '/saved-views?surface=voc')
+          return json({
+            items: [
+              {
+                id: 'view-voc',
+                surface: 'voc',
+                name: 'received 검색',
+                filter: { view: 'inbox', q: 'received' },
+                created_at: '2026-01-01T00:00:00.000Z',
+                updated_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          });
+        throw new Error(`unexpected request ${url}`);
+      });
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      // A disabled query still returns cached data: an unscoped list cached
+      // under the no-surface key must not reach the sidebar either.
+      client.setQueryData(['saved-views', undefined], {
+        items: [
+          {
+            id: 'view-cached',
+            surface: 'voc',
+            name: 'cached 검색',
+            filter: { view: 'inbox', q: 'cached' },
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+      const { unmount } = render(
+        <QueryClientProvider client={client}>
+          <AppFrame activeDomain={domain} sidebarEntries={[]}>
+            content
+          </AppFrame>
+        </QueryClientProvider>,
+      );
+      try {
+        await waitFor(() => expect(requestedUrls).toContain('/managed-systems'));
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(requestedUrls.filter((url) => url.startsWith('/saved-views'))).toEqual([]);
+        expect(screen.queryByTestId('saved-views-section')).not.toBeInTheDocument();
+      } finally {
+        unmount();
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+});
+
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,

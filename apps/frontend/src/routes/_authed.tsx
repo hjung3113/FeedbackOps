@@ -25,6 +25,10 @@ import {
 } from 'lucide-react';
 import * as React from 'react';
 import { homeSidebarEntries } from '../features/home/homeNavigation';
+import {
+  savedViewFilterToVocSearch,
+  vocSearchToSavedViewFilter,
+} from '../features/voc/lib/saved-view-keys';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
@@ -402,23 +406,7 @@ function AuthedShell() {
   );
   const savedViewFilter = React.useMemo<Record<string, unknown> | undefined>(() => {
     if (activeDomain !== 'voc' || location.pathname !== '/vocs') return undefined;
-    const search = location.search as Record<string, unknown>;
-    const viewValue = search.view;
-    const view = typeof viewValue === 'string' && viewValue !== '' ? viewValue : VOC_DEFAULT_VIEW;
-    const filter: Record<string, unknown> = { view };
-    const managedSystem = search.managedSystem;
-    if (typeof managedSystem === 'string' && managedSystem !== '') {
-      filter.managed_system_id = managedSystem;
-    }
-    for (const key of ['tab', 'sort', 'q', 'filter.severity', 'filter.owner'] as const) {
-      const value = search[key];
-      if (typeof value === 'string' && value !== '') filter[key] = value;
-    }
-    const reporterStatus = search['filter.reporterStatus'];
-    if (typeof reporterStatus === 'string' && reporterStatus !== '') {
-      filter['filter.reporter_facing_status'] = reporterStatus;
-    }
-    return filter;
+    return vocSearchToSavedViewFilter(location.search as Record<string, unknown>, VOC_DEFAULT_VIEW);
   }, [activeDomain, location.pathname, location.search]);
   const applySavedView = React.useCallback(
     (view: SavedView) => {
@@ -428,24 +416,7 @@ function AuthedShell() {
         to: '/vocs',
         // The persisted wire payload uses the backend's list schema. Translate
         // only at the existing route-search boundary; no second filtering path.
-        search: {
-          view: filter.view as 'inbox' | 'my' | 'triage',
-          ...(typeof filter.managed_system_id === 'string'
-            ? { managedSystem: filter.managed_system_id }
-            : {}),
-          ...(typeof filter.tab === 'string' ? { tab: filter.tab as never } : {}),
-          ...(typeof filter.sort === 'string' ? { sort: filter.sort as never } : {}),
-          ...(typeof filter.q === 'string' ? { q: filter.q } : {}),
-          ...(typeof filter['filter.severity'] === 'string'
-            ? { 'filter.severity': filter['filter.severity'] }
-            : {}),
-          ...(typeof filter['filter.reporter_facing_status'] === 'string'
-            ? { 'filter.reporterStatus': filter['filter.reporter_facing_status'] }
-            : {}),
-          ...(typeof filter['filter.owner'] === 'string'
-            ? { 'filter.owner': filter['filter.owner'] }
-            : {}),
-        } as never,
+        search: savedViewFilterToVocSearch(filter) as never,
       });
     },
     [navigate],
