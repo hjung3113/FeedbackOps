@@ -1,13 +1,13 @@
 // /voc-clusters — ADR-0020 ListShell cluster list + right detail panel.
 // CreateClusterModal opens on "Cluster 생성" and navigates to detail on create.
 
-import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
-import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
-import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
-import { type ApiError, errorMapper, fetchManagedSystems } from "@/lib/api";
-import { useMe } from "@/lib/auth/useMe";
+import { VocClusterListShell } from '@/features/voc-cluster/components/detail/VocClusterListShell';
+import { useCreateVocCluster } from '@/features/voc-cluster/hooks/useCreateVocCluster';
+import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
+import { type ApiError, errorMapper, fetchManagedSystems } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
 import { parseRouteSearch } from '@/lib/router/search';
-import type { CreateVocClusterRequest } from "@fops/shared";
+import type { CreateVocClusterRequest } from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -23,14 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-} from "@fops/ui";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
-import * as React from "react";
-import { useState } from "react";
-import { toast } from "sonner";
-import { z } from "zod";
+} from '@fops/ui';
+import { useQuery } from '@tanstack/react-query';
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { Plus } from 'lucide-react';
+import * as React from 'react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
 // §URL State Rules): /voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId.
@@ -40,7 +40,7 @@ import { z } from "zod";
 // Managed System selector UI — the URL param is supported for deep links only.
 export const vocClustersSearchSchema = z
   .object({
-    managedSystem: z.union([z.string().uuid(), z.literal("all")]).optional(),
+    managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
   })
   .strict();
@@ -52,9 +52,14 @@ export function validateVocClustersSearch(raw: unknown) {
   return parseRouteSearch(vocClustersSearchSchema, raw);
 }
 
-export const Route = createFileRoute("/_authed/voc-clusters/")({
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps the page exported for
+// tests while letting the route component split into its own chunk.
+const VocClusterListPageSplit = VocClusterListPage;
+
+export const Route = createFileRoute('/_authed/voc-clusters/')({
   validateSearch: validateVocClustersSearch,
-  component: VocClusterListPage,
+  component: VocClusterListPageSplit,
 });
 
 // ── ListShell page ────────────────────────────────────────────────────────────
@@ -62,18 +67,17 @@ export const Route = createFileRoute("/_authed/voc-clusters/")({
 export function VocClusterListPage(): React.ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
   const search = useSearch({ strict: false }) as VocClustersSearch;
-  const navigate = useNavigate({ from: "/voc-clusters/" });
+  const navigate = useNavigate({ from: '/voc-clusters/' });
   const selectedId = search.selected ?? null;
-  const managedSystemId = search.managedSystem === "all" ? undefined : search.managedSystem;
+  const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
   // Shared with the shell's identical call — react-query dedupes by key.
   const listQuery = useVocClusterList(managedSystemId);
   const { data: me } = useMe();
-  const canCreate =
-    me?.actor.role_level === "admin" || me?.actor.role_level === "developer";
+  const canCreate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   const selectCluster = React.useCallback(
     (id: string): void => {
-      void navigate({ to: "/voc-clusters", search: (prev) => ({ ...prev, selected: id }) });
+      void navigate({ to: '/voc-clusters', search: (prev) => ({ ...prev, selected: id }) });
     },
     [navigate],
   );
@@ -84,7 +88,7 @@ export function VocClusterListPage(): React.ReactElement {
   const closeDetail = React.useCallback(
     (opts?: { reconcile?: boolean }): void => {
       void navigate({
-        to: "/voc-clusters",
+        to: '/voc-clusters',
         replace: opts?.reconcile === true,
         search: ({ selected: _selected, ...rest }) => rest,
       });
@@ -103,7 +107,7 @@ export function VocClusterListPage(): React.ReactElement {
       const first = listQuery.data?.items[0];
       if (first) {
         void navigate({
-          to: "/voc-clusters",
+          to: '/voc-clusters',
           replace: true,
           search: (prev) => ({ ...prev, selected: first.id }),
         });
@@ -131,10 +135,7 @@ export function VocClusterListPage(): React.ReactElement {
               Cluster 생성
             </Button>
           ) : (
-            <span
-              className="text-xs text-text-muted"
-              data-testid="cluster-create-hint"
-            >
+            <span className="text-xs text-text-muted" data-testid="cluster-create-hint">
               관리자 또는 개발자 권한이 필요합니다.
             </span>
           )
@@ -148,7 +149,7 @@ export function VocClusterListPage(): React.ReactElement {
           onCreated={(id) => {
             setCreateOpen(false);
             void navigate({
-              to: "/voc-clusters/$clusterId",
+              to: '/voc-clusters/$clusterId',
               params: { clusterId: id },
             });
           }}
@@ -169,26 +170,25 @@ function CreateClusterModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }): React.ReactElement {
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-  const [managedSystemId, setManagedSystemId] = useState("");
+  const [title, setTitle] = useState('');
+  const [summary, setSummary] = useState('');
+  const [managedSystemId, setManagedSystemId] = useState('');
   const [managedSystemError, setManagedSystemError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const managedSystemTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   const systemsQuery = useQuery({
-    queryKey: ["managed-systems", { includeArchived: false }] as const,
-    queryFn: ({ signal }) =>
-      fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: ['managed-systems', { includeArchived: false }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
     retry: false,
   });
 
   const mutation = useCreateVocCluster();
 
   function closeAndReset() {
-    setTitle("");
-    setSummary("");
-    setManagedSystemId("");
+    setTitle('');
+    setSummary('');
+    setManagedSystemId('');
     setManagedSystemError(null);
     setError(null);
     mutation.reset();
@@ -270,10 +270,7 @@ function CreateClusterModal({
 
           {/* Managed System */}
           <div className="flex flex-col gap-1.5">
-            <FieldLabel
-              htmlFor="cluster-managed-system"
-              tone="secondary"
-            >
+            <FieldLabel htmlFor="cluster-managed-system" tone="secondary">
               Managed System <span aria-hidden>*</span>
             </FieldLabel>
             <Select
@@ -318,10 +315,7 @@ function CreateClusterModal({
           </div>
 
           {error && (
-            <p
-              data-testid="create-cluster-error"
-              className="text-sm text-accent-danger"
-            >
+            <p data-testid="create-cluster-error" className="text-sm text-accent-danger">
               {error}
             </p>
           )}
