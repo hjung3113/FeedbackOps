@@ -48,6 +48,12 @@ describe.skipIf(!runIntegration)('saved view routes (#143)', () => {
     await migrateHandle.pool.query('delete from core.saved_views where workspace_id = $1', [
       WORKSPACE_ID,
     ]);
+    // The parameterized AC-981 cases issue many writes as one actor; reset the
+    // per-actor bucket so each case starts below the write limit.
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
     await cleanupReadTestTables(appHandle, WORKSPACE_ID, PREFIX);
   });
 
