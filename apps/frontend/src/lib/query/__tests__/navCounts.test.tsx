@@ -47,7 +47,6 @@ import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVo
 import { useTriageCommand } from '@/features/voc/hooks/useTriageCommand';
 import { useVocCreateMutation } from '@/features/voc/hooks/useVocCreateMutation';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
-import { useVocTriageMutation } from '@/features/voc/hooks/useVocTriageMutation';
 import { NAV_COUNTS_QUERY_KEY, invalidateNavCounts } from '../navCounts';
 
 type MutationHandle = {
@@ -74,7 +73,6 @@ function mutationCase<TData, TError, TVariables>(
 
 const mutationCases: MutationCase[] = [
   mutationCase('VOC create', () => useVocCreateMutation({ idempotencyKey: 'key' }), {} as never),
-  mutationCase('VOC triage', useVocTriageMutation, {} as never),
   mutationCase('VOC public update and status change', useVocPublicUpdateMutation, {} as never),
   mutationCase(
     'Request Task from VOC',

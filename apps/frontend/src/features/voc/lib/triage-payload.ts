@@ -25,7 +25,7 @@ export interface TriagePriorFields {
 /**
  * buildPayload — forward PATCH body for the triage mutation (issue-named export).
  * Body is identical to the former private buildPayload in
- * hooks/useVocTriageMutation.ts and components/triage/TriagePanel.tsx.
+ * components/triage/TriagePanel.tsx.
  */
 export function buildPayload(input: TriageInput): Record<string, unknown> {
   if (input.kind === 'skip') {
