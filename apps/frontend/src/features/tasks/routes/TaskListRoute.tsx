@@ -212,7 +212,14 @@ export function TaskListRoute({
         </>
       }
       detailPanel={
-        selected ? (
+        isPermissionDenied(detailQuery.error) ? (
+          <PermissionBlockedPanel
+            state="denied"
+            category="Task detail"
+            reason={PERMISSION_BLOCKED_REASONS.taskDetail}
+            className="m-4"
+          />
+        ) : selected ? (
           <TaskDetailPanel
             taskId={selected.id}
             actorNamesById={actorNamesById}
