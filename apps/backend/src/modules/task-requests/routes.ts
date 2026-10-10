@@ -154,7 +154,11 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
           fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
-      const hash = hashRequestBody({ ...rawBody, taskRequestId: id, route: 'task_request.approve' });
+      const hash = hashRequestBody({
+        ...rawBody,
+        taskRequestId: id,
+        route: 'task_request.approve',
+      });
       const result = await taskRequestsService.decideTaskRequest({
         actor: {
           actor_id: sess.actor_id,

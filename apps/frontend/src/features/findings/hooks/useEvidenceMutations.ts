@@ -1,4 +1,4 @@
-import { ApiError, apiClient } from '@/lib/api';
+import { type ApiError, apiClient } from '@/lib/api';
 import type {
   AddEvidenceHighlightRequest,
   EvidenceHighlightDto,
