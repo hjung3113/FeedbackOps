@@ -10,6 +10,14 @@ export {
   type AnalyticsAreaPickerProps,
 } from './components/AnalyticsAreaPicker.js';
 export { cn } from './utils/cn.js';
+export {
+  DIALOG_CONTENT_MOTION,
+  POPPER_CONTENT_MOTION,
+  SCRIM_MOTION,
+  SELECT_CONTENT_MOTION,
+  SHEET_CONTENT_MOTION,
+  prefersReducedMotion,
+} from './utils/motion.js';
 
 // shadcn primitives (Pack 17, ADR-0021)
 // Note: shadcn/button re-exports Button/buttonVariants already exported above — omitted to avoid collision

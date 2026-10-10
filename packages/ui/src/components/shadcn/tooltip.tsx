@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../../utils/cn.js';
+import { POPPER_CONTENT_MOTION } from '../../utils/motion.js';
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 export const Tooltip = TooltipPrimitive.Root;
@@ -20,6 +21,7 @@ export const TooltipContent = React.forwardRef<
     sideOffset={sideOffset}
     className={cn(
       'z-50 overflow-hidden rounded-md border border-border-subtle bg-surface-popover px-3 py-1.5 text-sm text-text-primary shadow-md',
+      POPPER_CONTENT_MOTION,
       size === 'sm' && 'text-xs',
       className,
     )}

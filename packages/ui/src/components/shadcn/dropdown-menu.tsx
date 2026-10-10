@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '../../utils/cn.js';
+import { POPPER_CONTENT_MOTION } from '../../utils/motion.js';
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
@@ -40,6 +41,7 @@ export const DropdownMenuSubContent = React.forwardRef<
     ref={ref}
     className={cn(
       'z-50 min-w-32 overflow-hidden rounded-md border border-border-subtle bg-surface-popover p-1 text-text-primary shadow-lg',
+      POPPER_CONTENT_MOTION,
       className,
     )}
     {...props}
@@ -57,6 +59,7 @@ export const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 min-w-32 overflow-hidden rounded-md border border-border-subtle bg-surface-popover p-1 text-text-primary shadow-md',
+        POPPER_CONTENT_MOTION,
         className,
       )}
       {...props}

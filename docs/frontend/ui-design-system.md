@@ -885,6 +885,50 @@ Workflow: --status-internal-*, --status-reporter-*, --severity-*, --confidence-*
 Layout: see `Layout tokens` in tokens.css
 ```
 
+## Motion
+
+Use motion only to preserve continuity when something appears, leaves, or moves and its
+absence feels broken (ADR-0063). Never add decorative page/tab transitions, staggered rows,
+count-ups, or hover lifts. Sonner toasts keep their existing behavior.
+
+Values live in `packages/ui/src/styles/tokens.css`; `theme.css` exposes their Tailwind aliases:
+
+| Token | Value |
+| --- | --- |
+| `--motion-duration-fast` | `150ms` |
+| `--motion-duration-base` | `200ms` |
+| `--motion-duration-slow` | `300ms` |
+| `--motion-ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` |
+| `--motion-ease-enter` | `cubic-bezier(0, 0, 0.2, 1)` |
+| `--motion-ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` |
+
+Existing transitions use fast/standard through the Tailwind default aliases. Overlay
+animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.
+The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
+wrappers and the command palette compose them without inline motion classes:
+
+- `POPPER_CONTENT_MOTION`: popover, dropdown (including sub-content), hover card, and tooltip;
+  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter; exit is fast/exit.
+  Enter covers `open`, `delayed-open`, and `instant-open` states.
+- `SELECT_CONTENT_MOTION`: the same enter motion only. Radix Select has no exit Presence;
+  closing retains its existing lifecycle.
+- `DIALOG_CONTENT_MOTION`: dialog, alert dialog, and command palette content; fade and zoom 95
+  without slide, entering at base/enter and exiting at fast/exit.
+- `SCRIM_MOTION`: fade only, with the same base/enter and fast/exit timing.
+- `SHEET_CONTENT_MOTION`: slide from/to each sheet side, entering at slow/enter and exiting
+  at base/exit.
+
+The global `prefers-reduced-motion: reduce` rule in `compat.css` applies to `*, ::before,
+::after`: animation and transition duration become `0.01ms !important`, animation iteration
+count becomes `1 !important`, and scroll behavior becomes `auto !important`. The nonzero
+animation duration still lets Radix exit unmounting finish through `animationend`. This also
+stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
+use time and selects `auto` rather than `smooth`, since explicit JS smooth scrolling is not
+controlled by the CSS rule. The helper returns false when `window` or `matchMedia` is absent.
+
+List motion (#994, `@formkit/auto-animate` behind `useListMotion`) and board drag motion (#995)
+will consume the same tokens and reduced-motion policy; their implementations are separate.
+
 ## Accessibility Rules
 
 ```text
@@ -894,7 +938,7 @@ Layout: see `Layout tokens` in tokens.css
 - DetailPanel close, save, and destructive actions must be reachable by keyboard.
 - Icon-only buttons require accessible labels and tooltips.
 - Error messages must be associated with fields.
-- Respect reduced motion settings.
+- Respect reduced motion settings through the global `compat.css` rule and `prefersReducedMotion()` for JS motion.
 - Touch targets should be at least 40px on mobile (target contract; mobile is not built).
 ```
 
