@@ -200,6 +200,33 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     expect(badge.body.counts['voc.tab.waiting']).toBe(waitingIds.length);
   });
 
+  it('951: archived primary Managed System drops triage counts and keeps inbox', async () => {
+    const ms = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${PREFIX}-archived`,
+      'Archived counts',
+    );
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'archived queue voc');
+    const before = await counts(adminCookie, `?managed_system_id=${ms}`);
+    expect(before.response.statusCode).toBe(200);
+    expect(before.body.counts['voc.triage']).toBe(1);
+    expect(before.body.counts['voc.tab.unassigned']).toBe(1);
+    expect(before.body.counts['voc.inbox']).toBe(1);
+
+    await dbHandle.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+      ms,
+    ]);
+
+    const after = await counts(adminCookie, `?managed_system_id=${ms}`);
+    expect(after.response.statusCode).toBe(200);
+    expect(after.body.counts['voc.triage']).toBe(0);
+    expect(after.body.counts['voc.tab.unassigned']).toBe(0);
+    expect(after.body.counts['voc.tab.untriaged']).toBe(0);
+    expect(after.body.counts['voc.tab.waiting']).toBe(0);
+    expect(after.body.counts['voc.inbox']).toBe(1);
+  });
+
   it('omits untriaged and waiting tab counts for an actor without VOC read', async () => {
     const result = await counts(userCookie);
     expect(result.response.statusCode).toBe(200);

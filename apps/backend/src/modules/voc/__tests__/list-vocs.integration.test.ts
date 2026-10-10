@@ -482,6 +482,113 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(ids).not.toContain(triVoc.id);
   });
 
+  // ── #951: archived primary Managed System is excluded from the triage queue ─
+
+  it.each([
+    ['no tab', ''],
+    ['tab=unassigned', '&tab=unassigned'],
+    ['tab=untriaged', '&tab=untriaged'],
+    ['tab=high', '&tab=high'],
+    ['tab=waiting', '&tab=waiting'],
+  ] as const)('951: %s excludes VOCs of an archived Managed System', async (_label, tabQuery) => {
+    const archivedMs = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-archms`,
+      'Archived MS',
+    );
+    const activeMs = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-activems`,
+      'Active MS',
+    );
+
+    const archivedVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      archivedMs,
+      reporterId,
+      'Archived MS untriaged',
+      { severity: 'high' },
+    );
+    const archivedPostponed = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      archivedMs,
+      reporterId,
+      'Archived MS postponed',
+      { postponedAt: true },
+    );
+    const activeVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      activeMs,
+      reporterId,
+      'Active MS untriaged',
+      { severity: 'high' },
+    );
+    const activePostponed = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      activeMs,
+      reporterId,
+      'Active MS postponed',
+      { postponedAt: true },
+    );
+    await dbHandle.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+      archivedMs,
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=triage${tabQuery}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = res.json<{ items: { id: string }[] }>().items.map((item) => item.id);
+    expect(ids).not.toContain(archivedVoc.id);
+    expect(ids).not.toContain(archivedPostponed.id);
+    // Active-MS twins prove the exclusion keys on the archived parent, not the
+    // row shape (same triage_state / severity / postponed / owner shape).
+    // tab=waiting lists postponed rows only, so the not-postponed twin is absent there.
+    if (tabQuery !== '&tab=waiting') expect(ids).toContain(activeVoc.id);
+    if (tabQuery === '&tab=untriaged' || tabQuery === '&tab=high') {
+      // #920: postponed rows live in waiting only; tab=high needs a severity.
+      expect(ids).not.toContain(activePostponed.id);
+    } else {
+      expect(ids).toContain(activePostponed.id);
+    }
+  });
+
+  it('951: inbox still returns VOCs of an archived Managed System', async () => {
+    const archivedMs = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-archms-inbox`,
+      'Archived MS Inbox',
+    );
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      archivedMs,
+      reporterId,
+      'Archived MS inbox VOC',
+    );
+    await dbHandle.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+      archivedMs,
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${archivedMs}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = res.json<{ items: { id: string }[] }>().items.map((item) => item.id);
+    expect(ids).toContain(voc.id);
+  });
+
   // ── AC11: tab=high returns severity high and critical ─────────────────────
 
   it('AC11: tab=high returns severity high and critical (#411, ref #419)', async () => {
