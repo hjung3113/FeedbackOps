@@ -6,7 +6,7 @@ import { apiRequest } from '@/lib/api';
 import { ApiError, ApiParseError } from '@/lib/api/types';
 import { listFindingsResponseSchema } from '@fops/shared';
 import type { ListFindingsResponse } from '@fops/shared';
-import { type UseQueryResult, useQuery } from '@tanstack/react-query';
+import { type UseQueryResult, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 export function useFindingsList(
   managedSystemId?: string,
@@ -35,5 +35,48 @@ export function useFindingsList(
       ) &&
       failureCount < 1,
     enabled,
+  });
+}
+
+const PAGE_SIZE = 50;
+export function useFindingsPages(managedSystemId?: string, execution?: 'none') {
+  return useInfiniteQuery({
+    queryKey: ['findings', 'pages', { managedSystemId, execution }] as const,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ signal, pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (managedSystemId !== undefined) params.set('managed_system_id', managedSystemId);
+      if (execution !== undefined) params.set('execution', execution);
+      if (pageParam !== undefined) params.set('cursor', pageParam);
+      return (
+        await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })
+      ).data;
+    },
+    getNextPageParam: (last) => (last.page?.has_more ? last.page.cursor : undefined),
+    staleTime: 30_000,
+    retry: (count, error) =>
+      !(error instanceof ApiParseError) &&
+      !(
+        error instanceof ApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 429
+      ) &&
+      count < 1,
+  });
+}
+
+export function useFindingsTotal(managedSystemId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['findings', 'total', { managedSystemId }],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({ limit: '1' });
+      if (managedSystemId !== undefined) params.set('managed_system_id', managedSystemId);
+      return (
+        await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })
+      ).data;
+    },
+    enabled,
+    retry: (count, error) => !(error instanceof ApiParseError) && count < 1,
   });
 }

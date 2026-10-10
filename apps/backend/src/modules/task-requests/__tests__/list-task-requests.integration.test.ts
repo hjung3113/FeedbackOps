@@ -193,6 +193,64 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
     return body.items.map((item) => item.id);
   }
 
+  it('AC-981: walks opt-in pages in full-list order with exact first-page total', async () => {
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` };
+    const full = await app.inject({
+      method: 'GET',
+      url: `/task-requests?managed_system_id=${msAId}`,
+      headers,
+    });
+    expect(Object.keys(full.json())).toEqual(['items']);
+    const expected = full.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ managed_system_id: msAId, limit: '2' });
+      if (cursor !== undefined) params.set('cursor', cursor);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/task-requests?${params}`,
+        headers,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { total?: number; has_more: boolean; cursor?: string };
+      }>();
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((row) => row.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      expect(body.page.cursor !== undefined).toBe(body.page.has_more);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(expected);
+    expect(new Set(walked).size).toBe(walked.length);
+  });
+
+  it.each(['limit=101', 'limit=2&cursor=bad'])(
+    'AC-981: rejects invalid paging %s',
+    async (query) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/task-requests?${query}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toEqual({
+        code: 'validation.failed',
+        message: query.includes('cursor') ? 'invalid cursor' : 'invalid query parameters',
+        detail: {
+          fields: [
+            {
+              path: [query.includes('cursor') ? 'cursor' : 'limit'],
+              code: query.includes('cursor') ? 'invalid_cursor' : 'too_big',
+            },
+          ],
+        },
+      });
+    },
+  );
+
   it('AC-395-1: managed_system_id=<ms-a> returns only ms-a task requests', async () => {
     const res = await listTaskRequests(msAId);
     expect(res.statusCode).toBe(200);
@@ -210,6 +268,7 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
 
     const omitted = await listTaskRequests();
     expect(omitted.statusCode).toBe(200);
+    expect(Object.keys(omitted.json())).toEqual(['items']);
     const omittedIds = ids(omitted.json<{ items: Array<{ id: string }> }>());
     expect(omittedIds).toContain(requestAId);
     expect(omittedIds).toContain(requestBId);
@@ -385,4 +444,206 @@ describe.skipIf(!runIntegration)('task-request list managed_system_id filter (#3
       }
     },
   );
+  it('AC-981: visibility precedes limit, cursor walks exact order, and explicit deny applies in both modes', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await insertTaskRequestRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msAId,
+        sourceType: 'voc',
+        sourceId: vocId,
+        evidenceSummary: 'page',
+        requestedOutcome: `Page A ${i}`,
+        requesterActorId: userActorId,
+        status: i === 0 ? 'approved' : 'pending_review',
+      });
+    }
+    await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msBId,
+      sourceType: 'voc',
+      sourceId: vocId,
+      evidenceSummary: 'page',
+      requestedOutcome: 'Newest B',
+      requesterActorId: userActorId,
+      status: 'pending_review',
+    });
+    await migrateHandle.pool.query(
+      "update task_request.task_requests set created_at = '2026-01-01 00:00:00.123456+00' where workspace_id = $1 and primary_managed_system_id = $2",
+      [WORKSPACE_ID, msAId],
+    );
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('page-scope'));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msAId,
+      adminActorId,
+    );
+    const cookie = await loginAs(app, developer.externalId);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const full = await app.inject({ method: 'GET', url: '/task-requests', headers });
+    expect(full.statusCode).toBe(200);
+    expect(Object.keys(full.json())).toEqual(['items']);
+    const expected = full.json<{
+      items: Array<{ id: string; primary_managed_system_id: string }>;
+    }>().items;
+    expect(expected.length).toBeGreaterThan(2);
+    expect(expected.map((item) => item.id)).toEqual(
+      expected
+        .map((item) => item.id)
+        .sort()
+        .reverse(),
+    );
+    expect(expected.every((item) => item.primary_managed_system_id === msAId)).toBe(true);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ limit: '2' });
+      if (cursor !== undefined) params.set('cursor', cursor);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/task-requests?${params}`,
+        headers,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { has_more: boolean; cursor?: string; total?: number };
+      }>();
+      expect(body.items).toHaveLength(Math.min(2, expected.length - walked.length));
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((item) => item.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      expect(body.page.cursor !== undefined).toBe(body.page.has_more);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(expected.map((item) => item.id));
+    expect(new Set(walked).size).toBe(expected.length);
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    const denyId = await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    try {
+      for (const query of ['', '?limit=2']) {
+        const denied = await app.inject({ method: 'GET', url: `/task-requests${query}`, headers });
+        expect(denied.statusCode).toBe(200);
+        expect(
+          denied
+            .json()
+            .items.every(
+              (item: { primary_managed_system_id: string }) =>
+                item.primary_managed_system_id === msAId,
+            ),
+        ).toBe(true);
+        if (query) expect(denied.json().page.total).toBe(expected.length);
+      }
+    } finally {
+      await revokeDeny(dbHandle, denyId, adminActorId);
+    }
+  });
+
+  it('AC-981 detail matches list source and hides missing or unmanageable records with identical 404', async () => {
+    await insertRequestedTaskLink('voc', vocId, requestAId, msAId);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` };
+    const listed = await listTaskRequests(msAId);
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/task-requests/${requestAId}`,
+      headers,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(taskRequestDtoSchema.parse(detail.json())).toEqual(
+      listed.json().items.find((item: { id: string }) => item.id === requestAId),
+    );
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('detail-scope'));
+    const cookie = await loginAs(app, developer.externalId);
+    const deniedHeaders = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const hidden = await app.inject({
+      method: 'GET',
+      url: `/task-requests/${requestAId}`,
+      headers: deniedHeaders,
+    });
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/task-requests/${randomUUID()}`,
+      headers: deniedHeaders,
+    });
+    expect(hidden.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(hidden.json()).toEqual(missing.json());
+    expect(hidden.json().code).toBe('not_found.record');
+  });
+
+  it('AC-981 summary counts visible statuses and filtered pages contain only the requested status', async () => {
+    for (let index = 0; index < 3; index += 1) {
+      await insertTaskRequestRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msAId,
+        sourceType: 'voc',
+        sourceId: vocId,
+        evidenceSummary: 'approved',
+        requestedOutcome: 'approved',
+        requesterActorId: userActorId,
+        status: 'approved',
+      });
+    }
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('status-scope'));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msAId,
+      adminActorId,
+    );
+    const cookie = await loginAs(app, developer.externalId);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const summary = await app.inject({ method: 'GET', url: '/task-requests?limit=1', headers });
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json().page.total).toBe(4);
+    expect(summary.json().page.status_counts).toEqual({
+      pending_review: 1,
+      approved: 3,
+      rejected: 0,
+      needs_more_evidence: 0,
+      converted: 0,
+    });
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const query = new URLSearchParams({ limit: '2', status: 'approved' });
+      if (cursor !== undefined) query.set('cursor', cursor);
+      const filtered = await app.inject({ method: 'GET', url: `/task-requests?${query}`, headers });
+      expect(filtered.statusCode).toBe(200);
+      const body = filtered.json();
+      expect(body.items.every((item: { status: string }) => item.status === 'approved')).toBe(true);
+      expect(body.page.status_counts).toBeUndefined();
+      if (cursor === undefined) {
+        expect(body.page.total).toBe(3);
+        expect(body.items).toHaveLength(2);
+        expect(body.page.has_more).toBe(true);
+      } else {
+        expect(body.page.total).toBeUndefined();
+        expect(body.page.has_more).toBe(false);
+        expect(body.page.cursor).toBeUndefined();
+      }
+      walked.push(...body.items.map((item: { id: string }) => item.id));
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toHaveLength(3);
+    expect(new Set(walked).size).toBe(3);
+  });
 });

@@ -212,6 +212,17 @@ as the other surfaces.
 - In `view=milestones`, desktop selection opens Milestone Detail in RightDetailPanel; the list remains the primary context.
 - Mobile selection uses a drill-in route (target contract, not built); back returns to the previous list filters.
 - Browser refresh on a selected URL restores AppShell, list context, and selected detail when data is accessible.
+- Finding, Task list and Task Request queue screens load cursor pages of 50 rows
+  using the shipped load-more control. Finding and Task counts use the first
+  page's exact total. Task Request badges and global-empty state use a separate
+  unfiltered `limit=1` summary; active-tab pages send the server status filter.
+  Badges stay unknown until that summary succeeds. The Task board stays full-set.
+- A selected ID absent from loaded pages resolves through its detail endpoint;
+  page membership does not prove deletion. Detail 404 or the screen's active
+  scope/filter rule reconciles selection. Task Request explicit selections never
+  fall back to another row while unresolved. Review decisions refresh page and
+  summary caches and retain the returned request across the result-tab switch,
+  including when the destination's first page does not contain it.
 - Finding creation from a selected VOC may carry `returnTo` with the same-origin `/vocs` URL; the selected Finding detail offers an action that restores the VOC view, scope, filters, and selection.
 - The `/findings/$findingId` deep link redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied.
 - Closing a detail panel preserves filters, sort, and scroll position when possible.

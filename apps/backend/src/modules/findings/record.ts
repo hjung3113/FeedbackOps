@@ -1,3 +1,4 @@
+import type { ListFindingsResponse } from '@fops/shared';
 import {
   type FindingDto,
   type FindingStatus,
@@ -9,11 +10,14 @@ import { HttpError } from '../../lib/errors.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
 import { memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockTaskById } from '../tasks/index.js';
+import { decodeListCursor, encodeListCursor } from './list-cursor.js';
 import {
+  countListRows,
   findCreatedFindingSourceLink,
   findFindingById,
   findFindingIdByDisplayId,
   listFindingsByWorkspace,
+  listPrimaryManagedSystemIds,
 } from './repo-read.js';
 import {
   insertFindingComment,
@@ -90,28 +94,64 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     actor: FindingsActor;
     managedSystemId?: string;
     execution?: 'none';
-  }): Promise<{ items: FindingDto[] }> {
+    cursor?: string;
+    limit?: number;
+  }): Promise<ListFindingsResponse> {
     if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
       throw new HttpError('permission.denied', 'finding.read capability required');
     }
 
-    const rows = await listFindingsByWorkspace(deps.db, {
+    const cursor = args.cursor === undefined ? undefined : decodeListCursor(args.cursor);
+    const memo = memoizeCapabilityChecks(deps.checkService);
+    const systems =
+      args.actor.role_level === 'admin'
+        ? undefined
+        : await listPrimaryManagedSystemIds(deps.db, {
+            workspaceId: args.actor.workspace_id,
+            ...(args.managedSystemId === undefined
+              ? {}
+              : { managedSystemId: args.managedSystemId }),
+          });
+    const allowedSystemIds: string[] | undefined = systems === undefined ? undefined : [];
+    for (const systemId of systems ?? []) {
+      if (await canReadFinding({ checkService: memo }, args.actor, systemId))
+        allowedSystemIds?.push(systemId);
+    }
+    const input = {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
       ...(args.execution !== undefined ? { execution: args.execution } : {}),
-    });
-    const memo = memoizeCapabilityChecks(deps.checkService);
-    const items: FindingDto[] = [];
-    for (const row of rows) {
-      const readable = await canReadFinding(
-        { checkService: memo },
-        args.actor,
-        row.primary_managed_system_id,
-      );
-      if (!readable) continue;
-      items.push(toDto(row));
-    }
-    return { items };
+      ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
+    };
+    const empty = allowedSystemIds?.length === 0;
+    const rows = empty
+      ? []
+      : await listFindingsByWorkspace(deps.db, {
+          ...input,
+          ...(args.limit === undefined
+            ? {}
+            : { limit: args.limit, ...(cursor === undefined ? {} : { cursor }) }),
+        });
+    const hasMore = args.limit !== undefined && rows.length > args.limit;
+    const pageRows = args.limit === undefined ? rows : rows.slice(0, args.limit);
+
+    const items = pageRows.map((row) => toDto(row));
+    if (args.limit === undefined) return { items };
+    const last = pageRows.at(-1);
+    return {
+      items,
+      page: {
+        has_more: hasMore,
+        ...(hasMore && last
+          ? {
+              cursor: encodeListCursor({ timestamp: last.cursor_timestamp as string, id: last.id }),
+            }
+          : {}),
+        ...(args.cursor === undefined
+          ? { total: empty ? 0 : await countListRows(deps.db, input) }
+          : {}),
+      },
+    };
   }
 
   async function patchFinding(args: {

@@ -54,6 +54,7 @@ export function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): R
       markConsumed();
       toast.success('Task가 Finding에 연결되었습니다.');
       void queryClient.invalidateQueries({ queryKey: ['finding', finding.id] });
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       onClose();
     },

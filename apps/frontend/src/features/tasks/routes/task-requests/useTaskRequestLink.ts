@@ -77,6 +77,7 @@ export function useTaskRequestLink({
     onSuccess: (task) => {
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success(`Task ${task.display_id}을 연결했습니다.`);
       setLinkOpen(false);
