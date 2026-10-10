@@ -6,6 +6,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stringifyAppSearch } from '../../lib/router/search-serialization';
 import {
+  type AuthedVocsMount,
   type AuthedVocsRequest,
   type SavedViewRow,
   jsonResponse,
@@ -18,8 +19,12 @@ interface HarnessOptions {
   savedViews?: SavedViewRow[];
 }
 
+// Last mount's harness; afterEach fails the test when the app made a request
+// no branch answered (React Query would otherwise swallow the 500).
+let mounted: AuthedVocsMount | undefined;
+
 function mountSavedViewHarness({ initialPath, savedViews = [] }: HarnessOptions) {
-  return mountAuthedVocs({
+  mounted = mountAuthedVocs({
     initialPath,
     handle: (request: AuthedVocsRequest): Response | undefined => {
       if (request.method === 'POST' && request.url === '/saved-views') {
@@ -32,6 +37,7 @@ function mountSavedViewHarness({ initialPath, savedViews = [] }: HarnessOptions)
       return undefined;
     },
   });
+  return mounted;
 }
 
 function postsToSavedViews(requests: Array<{ method: string; url: string; body?: unknown }>) {
@@ -43,6 +49,7 @@ function postsToSavedViews(requests: Array<{ method: string; url: string; body?:
 
 describe('#849 saved views keep the inbox search', () => {
   afterEach(() => {
+    expect(mounted?.unhandled ?? []).toEqual([]);
     vi.unstubAllGlobals();
   });
 
