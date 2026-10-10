@@ -10,6 +10,7 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  type AuthedVocsMount,
   type AuthedVocsRequest,
   jsonResponse,
   mountAuthedVocs,
@@ -21,8 +22,12 @@ interface HarnessOptions {
   onSavedViewPost: (filter: Record<string, unknown>) => void;
 }
 
+// Last mount's harness; afterEach fails the test when the app made a request
+// no branch answered (React Query would otherwise swallow the 500).
+let mounted: AuthedVocsMount | undefined;
+
 function mountInboxHarness({ onSavedViewPost }: HarnessOptions) {
-  return mountAuthedVocs({
+  mounted = mountAuthedVocs({
     initialPath: '/vocs?view=inbox',
     vocsShell: true,
     handle: (request: AuthedVocsRequest): Response | undefined => {
@@ -40,11 +45,13 @@ function mountInboxHarness({ onSavedViewPost }: HarnessOptions) {
       return undefined;
     },
   });
+  return mounted;
 }
 
 describe('#864 saving a view right after typing keeps q', () => {
   afterEach(() => {
     vi.useRealTimers();
+    expect(mounted?.unhandled ?? []).toEqual([]);
     vi.unstubAllGlobals();
   });
 

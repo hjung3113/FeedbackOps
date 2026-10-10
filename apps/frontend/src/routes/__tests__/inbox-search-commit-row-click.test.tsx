@@ -6,7 +6,12 @@
 
 import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type AuthedVocsRequest, jsonResponse, mountAuthedVocs } from '../../test/mountAuthedVocs';
+import {
+  type AuthedVocsMount,
+  type AuthedVocsRequest,
+  jsonResponse,
+  mountAuthedVocs,
+} from '../../test/mountAuthedVocs';
 
 const ROW_ID = '00000000-0000-4000-8000-000000000008';
 
@@ -33,8 +38,12 @@ function hang(): Promise<Response> {
   return new Promise(() => {});
 }
 
+// Last mount's harness; afterEach fails the test when the app made a request
+// no branch answered (React Query would otherwise swallow the 500).
+let mounted: AuthedVocsMount | undefined;
+
 function mountInbox() {
-  return mountAuthedVocs({
+  mounted = mountAuthedVocs({
     initialPath: '/vocs?view=inbox',
     vocsShell: true,
     handle: (request: AuthedVocsRequest): Response | Promise<Response> | undefined => {
@@ -49,11 +58,13 @@ function mountInbox() {
       return undefined;
     },
   });
+  return mounted;
 }
 
 describe('#864 a row click while a search draft is pending still selects the row', () => {
   afterEach(() => {
     vi.useRealTimers();
+    expect(mounted?.unhandled ?? []).toEqual([]);
     vi.unstubAllGlobals();
   });
 

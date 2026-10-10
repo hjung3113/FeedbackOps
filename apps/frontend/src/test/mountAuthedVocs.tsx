@@ -5,6 +5,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type AnyRouter,
   Outlet,
   RouterProvider,
   createMemoryHistory,
@@ -64,6 +65,14 @@ export interface AuthedVocsRequest {
   body?: unknown;
 }
 
+/** What `mountAuthedVocs` hands back to a test. */
+export interface AuthedVocsMount {
+  requests: AuthedVocsRequest[];
+  /** Requests no branch answered; answered with a 500. A test must keep this empty. */
+  unhandled: AuthedVocsRequest[];
+  router: AnyRouter;
+}
+
 export interface MountAuthedVocsOptions {
   initialPath: string;
   /**
@@ -83,8 +92,9 @@ export function mountAuthedVocs({
   initialPath,
   vocsShell = false,
   handle,
-}: MountAuthedVocsOptions) {
+}: MountAuthedVocsOptions): AuthedVocsMount {
   const requests: AuthedVocsRequest[] = [];
+  const unhandled: AuthedVocsRequest[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
@@ -95,18 +105,28 @@ export function mountAuthedVocs({
       const handled = await handle(request);
       if (handled !== undefined) return handled;
     }
-    if (url === '/me') return jsonResponse(200, ME);
-    if (url.startsWith('/managed-systems')) return jsonResponse(200, { items: [], total: 0 });
-    if (url.startsWith('/analytics-areas')) return jsonResponse(200, { items: [] });
-    if (url.startsWith('/actors')) return jsonResponse(200, { items: [] });
-    if (url.startsWith('/nav/counts')) return jsonResponse(200, { counts: {} });
-    if (url.startsWith('/me/permissions/check')) {
-      return jsonResponse(200, { state: 'approved', decision: { allow: true, via: 'role' } });
+    // Shared defaults are read-only and match method + pathname, ignoring the
+    // query string. Anything else is unexpected: record it and fail the app
+    // with a 500 instead of answering `200 {}`, which reads as an empty
+    // success and lets the test pass silently.
+    const pathname = new URL(url, 'http://localhost').pathname;
+    if (method === 'GET') {
+      if (pathname === '/me') return jsonResponse(200, ME);
+      if (pathname.startsWith('/managed-systems')) {
+        return jsonResponse(200, { items: [], total: 0 });
+      }
+      if (pathname.startsWith('/analytics-areas')) return jsonResponse(200, { items: [] });
+      if (pathname.startsWith('/actors')) return jsonResponse(200, { items: [] });
+      if (pathname.startsWith('/nav/counts')) return jsonResponse(200, { counts: {} });
+      if (pathname.startsWith('/me/permissions/check')) {
+        return jsonResponse(200, { state: 'approved', decision: { allow: true, via: 'role' } });
+      }
+      if (pathname.startsWith('/notifications')) {
+        return jsonResponse(200, { items: [], page: { has_more: false }, unread_count: 0 });
+      }
     }
-    if (url.startsWith('/notifications?')) {
-      return jsonResponse(200, { items: [], page: { has_more: false }, unread_count: 0 });
-    }
-    return jsonResponse(200, {});
+    unhandled.push(request);
+    return jsonResponse(500, { error: { code: 'test.unhandled_request' } });
   });
   vi.stubGlobal('fetch', fetchMock as typeof globalThis.fetch);
 
@@ -153,5 +173,5 @@ export function mountAuthedVocs({
     </QueryClientProvider>,
   );
 
-  return { requests, router };
+  return { requests, unhandled, router };
 }
