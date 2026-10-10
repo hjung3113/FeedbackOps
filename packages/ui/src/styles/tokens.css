@@ -164,6 +164,9 @@
   --detail-panel-width: 440px;
   --toolbar-height: 50px;
   --topbar-height: 50px;
+  /* #867: tallest expanded-panel footer (TriageActions); the bottom-centred
+     toast offset sits above it. */
+  --panel-footer-max: 101px;
   --entity-link-inventory-min-width: 1040px;
   --entity-link-inventory-narrow-col-width: 104px;
   --entity-link-inventory-row-height: 52px;

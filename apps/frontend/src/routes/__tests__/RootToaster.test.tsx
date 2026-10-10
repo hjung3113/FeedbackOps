@@ -71,8 +71,6 @@ describe('root Toaster offset (#851)', () => {
     });
     expect(toasterList?.getAttribute('data-y-position')).toBe('bottom');
     expect(toasterList?.getAttribute('data-x-position')).toBe('center');
-    expect(toasterList?.style.getPropertyValue('--offset-bottom')).toBe(
-      `${TOASTER_BOTTOM_OFFSET}px`,
-    );
+    expect(toasterList?.style.getPropertyValue('--offset-bottom')).toBe(TOASTER_BOTTOM_OFFSET);
   });
 });

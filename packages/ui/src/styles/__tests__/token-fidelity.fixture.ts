@@ -163,6 +163,9 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--detail-panel-width', raw: '440px' },
   { tokenName: '--toolbar-height', raw: '50px' },
   { tokenName: '--topbar-height', raw: '50px' },
+  // #867: tallest expanded-panel footer (TriageActions); the toast offset sits
+  // above it. Not in the frozen prototype.
+  { tokenName: '--panel-footer-max', raw: '101px' },
   { tokenName: '--entity-link-inventory-min-width', raw: '1040px' },
   { tokenName: '--entity-link-inventory-narrow-col-width', raw: '104px' },
   { tokenName: '--entity-link-inventory-row-height', raw: '52px' },

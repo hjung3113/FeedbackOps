@@ -80,6 +80,8 @@ Anatomy:
 - ToastRegion
 ```
 
+ToastRegion: the desktop bottom offset is `calc(var(--panel-footer-max) + 16px)` (sonner bottom-centred toaster), and an expanded-panel footer must fit `--panel-footer-max`.
+
 Desktop layout:
 
 ```text

@@ -267,6 +267,7 @@ Icon chips use `--radius-icon-chip` (5px), exposed as `rounded-icon-chip`.
 - **Element gap:** 8px
 - **Row accent stripe:** 3px (`--row-accent-width`, exposed as `w-row-accent`)
 - **Layout tokens:** see `Layout tokens` in `packages/ui/src/styles/tokens.css` (sidebar, rail, topbar, toolbar, detail panel, row heights, badge height, icon sizes, entity link inventory).
+- **Panel footer max height:** 101px (`--panel-footer-max`, applied as `max-h-[var(--panel-footer-max)]`); the tallest expanded-panel footer (TriageActions), and the desktop toast offset adds a 16px gap above it (#867).
 - **Row minimum utilities:** `min-h-row-default` and `min-h-row-expanded` expose the 60px and 96px row-height tokens.
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 
