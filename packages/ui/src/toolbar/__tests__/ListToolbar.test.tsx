@@ -98,7 +98,10 @@ describe('ListToolbar — tabs mode', () => {
   it.each(['reveal', 'left', 'right'] as const)(
     'uses instant scrolling for the %s path under reduced motion',
     (path) => {
-      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: true })),
+      );
       const { container, rerender } = render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
       const track = container.querySelector('[data-list-toolbar-tabs]') as HTMLDivElement;
       Object.defineProperties(track, {
@@ -112,13 +115,17 @@ describe('ListToolbar — tabs mode', () => {
       vi.mocked(track.scrollBy).mockClear();
 
       if (path === 'reveal') {
-        screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() => rect(200, 260));
+        screen.getByRole('tab', { name: /미배정/ }).getBoundingClientRect = vi.fn(() =>
+          rect(200, 260),
+        );
         rerender(<ListToolbar tabs={tabs} activeTab="unassigned" />);
         expect(track.scrollBy).toHaveBeenCalledWith({ left: 176, behavior: 'auto' });
       } else {
-        fireEvent.click(screen.getByRole('button', {
-          name: path === 'left' ? '이전 탭 보기' : '다음 탭 보기',
-        }));
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: path === 'left' ? '이전 탭 보기' : '다음 탭 보기',
+          }),
+        );
         expect(track.scrollBy).toHaveBeenCalledWith({
           left: path === 'left' ? -120 : 120,
           behavior: 'auto',
@@ -126,7 +133,6 @@ describe('ListToolbar — tabs mode', () => {
       }
     },
   );
-
 
   it('locks the toolbar row to the 50px h-toolbar rhythm', () => {
     const { container } = render(<ListToolbar tabs={tabs} activeTab="untriaged" />);

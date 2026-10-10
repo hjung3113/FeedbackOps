@@ -26,7 +26,6 @@
 
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
-import { prefersReducedMotion } from '../utils/motion.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +40,7 @@ import {
 } from '../components/shadcn/tooltip.js';
 import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
+import { prefersReducedMotion } from '../utils/motion.js';
 import { useJumpGuard } from './useJumpGuard.js';
 
 export interface PanelSection {

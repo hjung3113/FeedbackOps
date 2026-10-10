@@ -14,9 +14,11 @@ export const SCRIM_MOTION =
 
 export const SHEET_CONTENT_MOTION = {
   top: 'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-top data-[state=closed]:slide-out-to-top',
-  bottom: 'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
+  bottom:
+    'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
   left: 'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left',
-  right: 'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
+  right:
+    'data-[state=open]:animate-in data-[state=open]:animation-duration-slow data-[state=open]:ease-enter data-[state=closed]:animate-out data-[state=closed]:animation-duration-base data-[state=closed]:ease-exit data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
 } as const;
 
 /** Read at the point of motion so changes to the OS preference take effect immediately. */

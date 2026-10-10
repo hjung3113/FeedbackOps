@@ -85,7 +85,10 @@ afterEach(() => {
 
 describe('useJumpGuard', () => {
   it('jumps instantly under reduced motion and admits scrolling away from the landing', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
     try {
       const root = fakeRoot({ scrollTop: 120, applyScroll: true });
       const scrollTo = vi.spyOn(root, 'scrollTo');

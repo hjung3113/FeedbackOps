@@ -181,7 +181,10 @@ describe('DetailPanelSectionNav', () => {
   it.each(['reveal', 'left', 'right'] as const)(
     'uses instant scrolling for the %s path under reduced motion',
     (path) => {
-      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: true })),
+      );
       render(<DetailPanelSectionNav sections={SECTIONS} />);
       const track = screen.getByTestId('detail-panel-section-nav-track');
       Object.defineProperties(track, {
@@ -200,9 +203,11 @@ describe('DetailPanelSectionNav', () => {
         fireEvent.click(tab);
         expect(track.scrollBy).toHaveBeenCalledWith({ left: 160, behavior: 'auto' });
       } else {
-        fireEvent.click(screen.getByRole('button', {
-          name: path === 'left' ? '이전 탭 보기' : '다음 탭 보기',
-        }));
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: path === 'left' ? '이전 탭 보기' : '다음 탭 보기',
+          }),
+        );
         expect(track.scrollBy).toHaveBeenCalledWith({
           left: path === 'left' ? -120 : 120,
           behavior: 'auto',
@@ -210,7 +215,6 @@ describe('DetailPanelSectionNav', () => {
       }
     },
   );
-
 
   it('renders section buttons', () => {
     render(<DetailPanelSectionNav sections={SECTIONS} />);
