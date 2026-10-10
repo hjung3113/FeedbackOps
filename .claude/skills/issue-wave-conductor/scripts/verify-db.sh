@@ -8,6 +8,9 @@ ROOT=${VERIFY_DB_ROOT:-$SCRIPT_ROOT}
 CONTAINER=fops-verify
 DB_HOST=localhost
 DB_PORT=5439
+# Memory cap for the throwaway Postgres (global rule: cap every container). An uncapped one helped stall the
+# Docker VM during 100k-row previews (2026-10-10).
+DB_MEMORY=${VERIFY_DB_MEMORY:-2g}
 ADMIN_URL=postgres://postgres:postgres@localhost:5439/postgres
 MODE=unknown
 
@@ -201,7 +204,7 @@ up() {
       docker start "$CONTAINER" >/dev/null || fail "could not start existing container $CONTAINER" 1
     fi
   else
-    docker run -d --name "$CONTAINER" -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+    docker run -d --name "$CONTAINER" --memory "$DB_MEMORY" -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
       -p "$DB_PORT:5432" -v "$ROOT/scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
       pgvector/pgvector:pg16 || fail "could not start $CONTAINER" 1
   fi
