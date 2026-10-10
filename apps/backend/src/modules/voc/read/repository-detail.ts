@@ -2,10 +2,10 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
-import { managedSystems } from '../../../db/schema/core.js';
 import { vocPermissionDecisionsSeedFixture, vocs } from '../../../db/schema/voc.js';
 import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
+import { managedSystemIsLiveSql } from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
@@ -85,10 +85,7 @@ export async function selectPinnedVocListRow(
     sql`archived_at IS NULL`,
     // #951: same archived-parent exclusion as buildVocListPredicate's triage
     // view — the pin only bypasses the triage_state predicate, not this one.
-    sql`EXISTS (
-      SELECT 1 FROM ${managedSystems} ms
-      WHERE ms.id = ${vocs.primaryManagedSystemId} AND ms.archived_at IS NULL
-    )`,
+    managedSystemIsLiveSql(vocs.primaryManagedSystemId),
   ];
   if (scopeFilter.kind === 'scoped') {
     wheres.push(

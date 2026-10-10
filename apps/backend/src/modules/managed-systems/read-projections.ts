@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { managedSystems } from '../../db/schema/core.js';
@@ -38,4 +38,16 @@ export async function allManagedSystemWorkspacePairs(
   return (db as Db)
     .select({ id: managedSystems.id, workspace_id: managedSystems.workspaceId })
     .from(managedSystems);
+}
+
+/**
+ * SQL condition: the Managed System referenced by `managedSystemIdColumn` is not
+ * archived. For read predicates in other modules that must leave out rows of an
+ * archived Managed System (#951 Triage queue) without importing this table.
+ */
+export function managedSystemIsLiveSql(managedSystemIdColumn: SQLWrapper): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM ${managedSystems} ms
+    WHERE ms.id = ${managedSystemIdColumn} AND ms.archived_at IS NULL
+  )`;
 }

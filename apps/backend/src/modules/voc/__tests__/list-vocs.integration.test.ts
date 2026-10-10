@@ -551,7 +551,8 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(ids).not.toContain(archivedPostponed.id);
     // Active-MS twins prove the exclusion keys on the archived parent, not the
     // row shape (same triage_state / severity / postponed / owner shape).
-    expect(ids).toContain(activeVoc.id);
+    // tab=waiting lists postponed rows only, so the not-postponed twin is absent there.
+    if (tabQuery !== '&tab=waiting') expect(ids).toContain(activeVoc.id);
     if (tabQuery === '&tab=untriaged' || tabQuery === '&tab=high') {
       // #920: postponed rows live in waiting only; tab=high needs a severity.
       expect(ids).not.toContain(activePostponed.id);

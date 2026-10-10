@@ -2,12 +2,12 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
-import { entityLinks, managedSystems } from '../../../db/schema/core.js';
+import { entityLinks } from '../../../db/schema/core.js';
 import { vocClusterMembers } from '../../../db/schema/voc-cluster.js';
 import { vocs } from '../../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
-import { allManagedSystemIds } from '../../managed-systems/read-projections.js';
+import { allManagedSystemIds, managedSystemIsLiveSql } from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from '../cursor.js';
 import type { VocGroupedCountRow } from '../read-contract.js';
@@ -101,10 +101,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     // conflict.parent_archived, so exclude it from the queue. Navigation
     // counts share this predicate (see buildVocListPredicate docs) and drop
     // with it.
-    wheres.push(sql`EXISTS (
-      SELECT 1 FROM ${managedSystems} ms
-      WHERE ms.id = ${vocs.primaryManagedSystemId} AND ms.archived_at IS NULL
-    )`);
+    wheres.push(managedSystemIsLiveSql(vocs.primaryManagedSystemId));
   }
   if (tab === 'untriaged') {
     // #920: triage 미분류 excludes postponed rows; waiting owns them. Inbox and my
