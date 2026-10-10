@@ -918,6 +918,7 @@ queue context plus phase; Task Request keys by tab plus Managed System; recommen
 key by source VOC; Survey questions keep a stable unkeyed inner list. The last
 recommendation/question removal still shows the existing empty/onboarding branch at once.
 Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.
+Upgrade `@formkit/auto-animate` only together with `patches/@formkit__auto-animate@0.10.0.patch`, preserving its teardown and removed-row polling cleanup.
 
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
 animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.

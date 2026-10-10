@@ -142,3 +142,57 @@ it('animates same-context optimistic removal while retaining queue scroll and se
   expect(screen.getByRole('button', { name: /VOC-3/ }).parentElement).toBe(container);
   expect(container.scrollTop).toBe(123);
 });
+
+it('skips stale cached tab refresh motion, then preserves motion and scroll for settled-context removal', async () => {
+  const { resolve } = mount();
+  const fetch = globalThis.fetch;
+  let cachedTabRequested = false;
+  const processed = new Set<string>();
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), 'http://localhost');
+    if (init?.method === 'PATCH') processed.add(url.pathname.split('/')[2] as string);
+    if (url.pathname === '/vocs' && url.searchParams.get('tab') === 'high') {
+      if (cachedTabRequested) {
+        return json({ items: rows.slice(1).filter((row) => !processed.has(row.id)) });
+      }
+      cachedTabRequested = true;
+    }
+    return fetch(input, init);
+  });
+  await screen.findByRole('heading', { name: 'Queue item 2' });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  client.setQueryData(
+    ['vocs', 'triage', undefined, 'high', undefined, undefined, undefined, undefined, undefined],
+    { items: rows },
+    { updatedAt: Date.now() - 60_000 },
+  );
+  environment.animate.mockClear();
+  fireEvent.mouseDown(screen.getByRole('tab', { name: /높음/ }));
+  await waitFor(() => {
+    expect(screen.getByRole('tab', { name: /높음/ })).toHaveAttribute('aria-selected', 'true');
+    expect(client.isFetching({ queryKey: ['vocs', 'triage'] })).toBeGreaterThan(0);
+  });
+  expect(screen.getByRole('button', { name: /VOC-1/ })).toBeInTheDocument();
+  await act(async () => {});
+  expect(environment.animate).not.toHaveBeenCalled();
+  await act(async () => {
+    resolve(json({ items: rows.slice(1) }));
+  });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  await act(async () => {});
+  expect(environment.animate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: /VOC-1/ })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /VOC-2/ }));
+  await screen.findByRole('heading', { name: 'Queue item 2' });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  const container = screen.getByRole('button', { name: /VOC-2/ }).parentElement as HTMLElement;
+  container.scrollTop = 123;
+  fireEvent.click(screen.getByRole('button', { name: '낮음' }));
+  fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
+  await waitFor(() => expect(environment.animate).toHaveBeenCalled());
+  await screen.findByRole('heading', { name: 'Queue item 3' });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(screen.getByRole('button', { name: /VOC-3/ }).parentElement).toBe(container);
+  expect(container.scrollTop).toBe(123);
+});

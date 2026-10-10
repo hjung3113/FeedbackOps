@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@formkit/auto-animate@0.10.0':
+    hash: goterzy5ngfcns65rnzb2gncwm
+    path: patches/@formkit__auto-animate@0.10.0.patch
+
 importers:
 
   .:
@@ -220,7 +225,7 @@ importers:
         version: link:../shared
       '@formkit/auto-animate':
         specifier: 0.10.0
-        version: 0.10.0
+        version: 0.10.0(patch_hash=goterzy5ngfcns65rnzb2gncwm)
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -5041,7 +5046,7 @@ snapshots:
 
   '@fontsource-variable/jetbrains-mono@5.3.0': {}
 
-  '@formkit/auto-animate@0.10.0': {}
+  '@formkit/auto-animate@0.10.0(patch_hash=goterzy5ngfcns65rnzb2gncwm)': {}
 
   '@hookform/resolvers@3.9.1(react-hook-form@7.54.2(react@19.0.0))':
     dependencies:

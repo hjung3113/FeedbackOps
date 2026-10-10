@@ -1,0 +1,95 @@
+diff --git a/index.mjs b/index.mjs
+index 7ad811ceb4015ab48c02b7f22894afdd823cedb1..ee61dbbd4f8b00f518ebe6bc2636326112987e59 100644
+--- a/index.mjs
++++ b/index.mjs
+@@ -27,6 +27,8 @@ const mutationObservers = new WeakMap();
+  * Intervals for automatically checking the position of elements occasionally.
+  */
+ const intervals = new WeakMap();
++/** Startup timeouts for position polling. */
++const startups = new WeakMap();
+ /**
+  * The configuration options for each group of elements.
+  */
+@@ -136,6 +138,11 @@ function observePosition(el) {
+  */
+ function updatePos(el, debounce = true) {
+     clearTimeout(debounces.get(el));
++    if (!el.isConnected) {
++        clearInterval(intervals.get(el));
++        intervals.delete(el);
++        return;
++    }
+     const optionsOrPlugin = getOptions(el);
+     const delay = debounce
+         ? isPlugin(optionsOrPlugin)
+@@ -143,9 +150,19 @@ function updatePos(el, debounce = true) {
+             : optionsOrPlugin.duration
+         : 0;
+     debounces.set(el, setTimeout(async () => {
++        if (!el.isConnected) {
++            clearInterval(intervals.get(el));
++            intervals.delete(el);
++            return;
++        }
+         const currentAnimation = animations.get(el);
+         try {
+             await (currentAnimation === null || currentAnimation === void 0 ? void 0 : currentAnimation.finished);
++            if (!el.isConnected) {
++                clearInterval(intervals.get(el));
++                intervals.delete(el);
++                return;
++            }
+             coords.set(el, getCoords(el));
+             observePosition(el);
+         }
+@@ -172,9 +189,23 @@ function updateAllPos() {
+  * @param el - Element
+  */
+ function poll(el) {
+-    setTimeout(() => {
+-        intervals.set(el, setInterval(() => lowPriority(updatePos.bind(null, el)), 2000));
+-    }, Math.round(2000 * Math.random()));
++    clearTimeout(startups.get(el));
++    startups.set(el, setTimeout(() => {
++        startups.delete(el);
++        if (!el.isConnected) {
++            clearInterval(intervals.get(el));
++            intervals.delete(el);
++            return;
++        }
++        intervals.set(el, setInterval(() => {
++            if (!el.isConnected) {
++                clearInterval(intervals.get(el));
++                intervals.delete(el);
++                return;
++            }
++            lowPriority(updatePos.bind(null, el));
++        }, 2000));
++    }, Math.round(2000 * Math.random())));
+ }
+ /**
+  * Perform some operation that is non critical at some point.
+@@ -537,6 +568,13 @@ function add(el) {
+ function cleanUp(el, styles) {
+     var _a;
+     el.remove();
++    clearInterval(intervals.get(el));
++    intervals.delete(el);
++    clearTimeout(startups.get(el));
++    startups.delete(el);
++    clearTimeout(debounces.get(el));
++    debounces.delete(el);
++    resize === null || resize === void 0 ? void 0 : resize.unobserve(el);
+     coords.delete(el);
+     siblings.delete(el);
+     animations.delete(el);
+@@ -790,6 +828,8 @@ function autoAnimate(el, config = {}) {
+                 const io = intersections.get(node);
+                 io === null || io === void 0 ? void 0 : io.disconnect();
+                 intersections.delete(node);
++                clearTimeout(startups.get(node));
++                startups.delete(node);
+                 // clear intervals and debounces
+                 const i = intervals.get(node);
+                 if (i)
