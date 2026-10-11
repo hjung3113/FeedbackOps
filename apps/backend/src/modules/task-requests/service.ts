@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import type { ListTaskRequestsResponse } from '@fops/shared';
+import { decodeListCursor, encodeListCursor } from './list-cursor.js';
 
 import {
   type ApproveTaskRequestRequest,
@@ -20,20 +22,24 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
+  type EntityLinkRow,
   createEntityLink as insertActiveEntityLink,
-  selectActiveLinksForEndpoint,
+  selectActiveLinksForEndpoints,
 } from '../entity-links/index.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
 import type { NotificationNotifier } from '../notifications/index.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockVocClusterById } from '../voc-clusters/index.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import {
   type TaskRequestRow,
+  countListRows,
+  countListStatuses,
   findTaskRequestById,
   findTaskRequestIdByDisplayId,
   insertTaskRequest,
+  listPrimaryManagedSystemIds,
   listTaskRequestsByWorkspace,
   lockTaskRequestById,
   updateTaskRequestDecision,
@@ -200,13 +206,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
   async function sourceLinkForTaskRequest(
     row: TaskRequestRow,
     actor: TaskRequestsActor,
+    links: EntityLinkRow[],
+    checkService: CheckService,
   ): Promise<TaskRequestSourceLink | undefined> {
-    const links = await selectActiveLinksForEndpoint(deps.db, {
-      workspaceId: row.workspace_id,
-      endpointType: 'task_request',
-      endpointId: row.id,
-      side: 'target',
-    });
     const link = links.find(
       (candidate) =>
         candidate.relation_type === 'requested_task' &&
@@ -226,7 +228,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       const canRead =
         row.source_voc_reporter_id !== undefined &&
         (await canExposeSourceVocText(
-          deps,
+          { checkService },
           actor,
           row.primary_managed_system_id,
           row.source_voc_reporter_id,
@@ -508,11 +510,68 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     });
   }
 
+  async function projectTaskRequests(
+    actor: TaskRequestsActor,
+    pageRows: TaskRequestRow[],
+    memo: CheckService,
+  ): Promise<TaskRequestDto[]> {
+    const links = await selectActiveLinksForEndpoints(deps.db, {
+      workspaceId: actor.workspace_id,
+      endpointType: 'task_request',
+      endpointIds: pageRows.map((row) => row.id),
+      side: 'target',
+    });
+    const linksByTarget = new Map<string, EntityLinkRow[]>();
+    for (const link of links) {
+      const targetLinks = linksByTarget.get(link.target_id) ?? [];
+      targetLinks.push(link);
+      linksByTarget.set(link.target_id, targetLinks);
+    }
+    const items: TaskRequestDto[] = [];
+    for (const row of pageRows) {
+      const source = await sourceLinkForTaskRequest(
+        row,
+        actor,
+        linksByTarget.get(row.id) ?? [],
+        memo,
+      );
+      items.push(taskRequestToDto(row, source));
+    }
+    return items;
+  }
+
+  async function getTaskRequest(args: {
+    actor: TaskRequestsActor;
+    taskRequestId: string;
+  }): Promise<TaskRequestDto> {
+    const notFound = () => new HttpError('not_found.record', 'task request not found');
+    if (!hasElevatedFindingRole(args.actor)) throw notFound();
+    const rows = await listTaskRequestsByWorkspace(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      taskRequestId: args.taskRequestId,
+    });
+    const row = rows[0];
+    const memo = memoizeCapabilityChecks(deps.checkService);
+    if (
+      !row ||
+      !(
+        await checkFindingManage(memo, args.actor, row.primary_managed_system_id, {
+          requireElevatedRole: true,
+        })
+      ).allow
+    )
+      throw notFound();
+    const items = await projectTaskRequests(args.actor, [row], memo);
+    return items[0] as TaskRequestDto;
+  }
+
   async function listTaskRequests(args: {
     actor: TaskRequestsActor;
     status?: TaskRequestStatus;
     managed_system_id?: string;
-  }): Promise<{ items: TaskRequestDto[] }> {
+    cursor?: string;
+    limit?: number;
+  }): Promise<ListTaskRequestsResponse> {
     if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
@@ -521,28 +580,75 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
       args.managed_system_id && args.managed_system_id !== 'all'
         ? args.managed_system_id
         : undefined;
-    const rows = await listTaskRequestsByWorkspace(deps.db, {
+    const cursor = args.cursor === undefined ? undefined : decodeListCursor(args.cursor);
+    const memo = memoizeCapabilityChecks(deps.checkService);
+    const systems =
+      args.actor.role_level === 'admin'
+        ? undefined
+        : await listPrimaryManagedSystemIds(deps.db, {
+            workspaceId: args.actor.workspace_id,
+            ...(managedSystemId === undefined ? {} : { managedSystemId }),
+          });
+    const allowedSystemIds: string[] | undefined = systems === undefined ? undefined : [];
+    for (const systemId of systems ?? []) {
+      if (
+        (await checkFindingManage(memo, args.actor, systemId, { requireElevatedRole: true })).allow
+      )
+        allowedSystemIds?.push(systemId);
+    }
+    const input = {
       workspaceId: args.actor.workspace_id,
       ...(args.status !== undefined ? { status: args.status } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
-    });
-    const items: TaskRequestDto[] = [];
-    for (const row of rows) {
-      const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
-          requireElevatedRole: true,
-        })
-      ).allow;
-      if (!canManage) continue;
-      items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row, args.actor)));
-    }
-    return { items };
+      ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
+    };
+    const empty = allowedSystemIds?.length === 0;
+    const rows = empty
+      ? []
+      : await listTaskRequestsByWorkspace(deps.db, {
+          ...input,
+          ...(args.limit === undefined
+            ? {}
+            : { limit: args.limit, ...(cursor === undefined ? {} : { cursor }) }),
+        });
+    const hasMore = args.limit !== undefined && rows.length > args.limit;
+    const pageRows = args.limit === undefined ? rows : rows.slice(0, args.limit);
+
+    const items = await projectTaskRequests(args.actor, pageRows, memo);
+    if (args.limit === undefined) return { items };
+    const last = pageRows.at(-1);
+    return {
+      items,
+      page: {
+        has_more: hasMore,
+        ...(hasMore && last
+          ? {
+              cursor: encodeListCursor({ timestamp: last.cursor_timestamp as string, id: last.id }),
+            }
+          : {}),
+        ...(args.cursor === undefined
+          ? { total: empty ? 0 : await countListRows(deps.db, input) }
+          : {}),
+        ...(args.cursor === undefined && args.status === undefined
+          ? {
+              status_counts: empty
+                ? {
+                    pending_review: 0,
+                    approved: 0,
+                    rejected: 0,
+                    needs_more_evidence: 0,
+                    converted: 0,
+                  }
+                : await countListStatuses(deps.db, input),
+            }
+          : {}),
+      },
+    };
   }
 
   // Display id → id for /nav/resolve (#731). Same read authority as
   // listTaskRequests above: elevated Finding role gate, then per-row
-  // checkFindingManage (the module has no single-record detail route; the list
-  // read is its detail authority). Missing and unreadable both map to null so
+  // checkFindingManage (shared with the single-record detail read). Missing and unreadable both map to null so
   // the route answers a single identical 404.
   async function resolveDisplayId(args: {
     actor: TaskRequestsActor;
@@ -722,6 +828,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     createFromVoc,
     createFromVocCluster,
     listTaskRequests,
+    getTaskRequest,
     decideTaskRequest,
     resolveEndpoint,
     resolveDisplayId,

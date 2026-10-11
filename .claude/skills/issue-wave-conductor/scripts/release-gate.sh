@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"  # zsh-invoked runs lost BASH_SOURCE (s61, s70)
 # release-gate.sh <develop-checkout> — verify the develop tip for release, without creating a PR.
 set -uo pipefail
 

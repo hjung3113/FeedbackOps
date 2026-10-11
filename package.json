@@ -27,5 +27,10 @@
     "oxlint": "1.86.0",
     "turbo": "2.3.3",
     "typescript": "5.7.2"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@formkit/auto-animate@0.10.0": "patches/@formkit__auto-animate@0.10.0.patch"
+    }
   }
 }

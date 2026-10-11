@@ -94,7 +94,7 @@ describe('TaskListRoute My Tasks view', () => {
       if (path === '/tasks' || path.startsWith('/tasks?')) {
         return {
           status: 200,
-          data: { items: [task] },
+          data: { items: [task], page: { total: 1, has_more: false } },
           etag: undefined,
           requestId: undefined,
         };
@@ -108,15 +108,15 @@ describe('TaskListRoute My Tasks view', () => {
     {
       routeView: 'my' as const,
       taskView: 'my' as const,
-      expectedQuery: { assignee: 'me' },
+      expectedQuery: { limit: 50, assignee: 'me' },
     },
     {
       routeView: 'backlog' as const,
       taskView: 'backlog' as const,
-      expectedQuery: {},
+      expectedQuery: { limit: 50 },
     },
-    { routeView: 'inbox' as const, taskView: 'backlog' as const, expectedQuery: {} },
-    { routeView: undefined, taskView: 'backlog' as const, expectedQuery: {} },
+    { routeView: 'inbox' as const, taskView: 'backlog' as const, expectedQuery: { limit: 50 } },
+    { routeView: undefined, taskView: 'backlog' as const, expectedQuery: { limit: 50 } },
   ])(
     'sends the correct filter for route view $routeView and uses its cache key',
     async ({ routeView, taskView, expectedQuery }) => {
@@ -128,6 +128,36 @@ describe('TaskListRoute My Tasks view', () => {
       expect(client.getQueryCache().findAll({ queryKey: ['tasks', taskView] })).toHaveLength(1);
     },
   );
+
+  it('AC-981 appends a cursor page and displays the server total', async () => {
+    const queries: Array<{ limit?: number | undefined; cursor?: string | undefined }> = [];
+    apiClientMock.mockImplementation(async (_method, path: string) => {
+      const query = listTasksQuerySchema.parse(
+        Object.fromEntries(new URL(path, 'http://localhost').searchParams),
+      );
+      queries.push(query);
+      return {
+        status: 200,
+        data:
+          query.cursor === undefined
+            ? { items: [task], page: { total: 87, has_more: true, cursor: 'next' } }
+            : {
+                items: [
+                  { ...task, id: '10000000-0000-0000-0000-000000000099', title: 'Next Task' },
+                ],
+                page: { has_more: false },
+              },
+      };
+    });
+    renderWithClient(<TasksRouteView search={{ view: 'my' }} />);
+    expect(await screen.findByText('87건')).toBeInTheDocument();
+    expect(queries[0]?.limit).toBe(50);
+    fireEvent.click(screen.getByRole('button', { name: '더 불러오기' }));
+    expect(await screen.findByText('Next Task')).toBeInTheDocument();
+    expect(screen.getByText(task.title)).toBeInTheDocument();
+    expect(screen.getByText('87건')).toBeInTheDocument();
+    expect(queries.at(-1)?.cursor).toBe('next');
+  });
 
   it('keeps view=my when a Task row is selected', async () => {
     renderWithClient(<TasksRouteView search={{ view: 'my' }} />);
@@ -155,7 +185,7 @@ describe('TaskListRoute My Tasks view', () => {
   it('shows the My Tasks empty state when no Task is assigned to the actor', async () => {
     apiClientMock.mockImplementationOnce(async () => ({
       status: 200,
-      data: { items: [] },
+      data: { items: [], page: { total: 0, has_more: false } },
       etag: undefined,
       requestId: undefined,
     }));

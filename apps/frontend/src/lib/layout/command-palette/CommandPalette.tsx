@@ -7,7 +7,7 @@ import { mapUnknownError } from '@/lib/api/errorMapper';
 import { fetchNavResolve } from '@/lib/api/nav';
 import { ApiError } from '@/lib/api/types';
 import { COMMAND_PALETTE_COPY, normalizeDisplayId } from '@/lib/copy/command-palette';
-import { KeyboardShortcut } from '@fops/ui';
+import { DIALOG_CONTENT_MOTION, KeyboardShortcut, SCRIM_MOTION, cn } from '@fops/ui';
 import { useCommandPalette } from './CommandPaletteContext';
 import {
   type PaletteCommandDescriptor,
@@ -139,11 +139,15 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
       loop
       label={COMMAND_PALETTE_COPY.accessibleName}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      overlayClassName="fixed inset-0 z-60 bg-accent-primary/16 backdrop-blur-xs"
-      contentClassName={
+      overlayClassName={cn(
+        'fixed inset-0 z-60 bg-accent-primary/16 backdrop-blur-xs',
+        SCRIM_MOTION,
+      )}
+      contentClassName={cn(
         // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps the 10px radius of the prototype .cmdk-panel (styles.css:865)
-        'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl'
-      }
+        'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl',
+        DIALOG_CONTENT_MOTION,
+      )}
       data-testid="command-palette-dialog"
     >
       <div className="flex shrink-0 items-center gap-2.5 border-b border-border-subtle px-4 py-3.5">

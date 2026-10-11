@@ -169,7 +169,10 @@ describe('TriageRoute — optimistic exclusion lifetime (#937)', () => {
         resolveWaiting(json({ items: [QUEUED_VOC] }));
       });
 
-      expect(await screen.findByRole('button', { name: /VOC-101/ })).toBeInTheDocument();
+      // #994: the first fresh response remounts the cached list boundary, so re-query.
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /VOC-101/ })).toBeInTheDocument(),
+      );
       expect(screen.getByRole('heading', { name: 'Queued VOC' })).toBeInTheDocument();
       expect(waitingTab).toHaveFocus();
       expect(screen.getByTestId('triage-toolbar')).toBe(toolbar);

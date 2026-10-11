@@ -12,5 +12,6 @@ export {
   detachEntityLink,
   findActiveEntityLink,
   selectActiveLinksForEndpoint,
+  selectActiveLinksForEndpoints,
   selectEligibleVocLinksForReleasedTask,
 } from './commands.js';

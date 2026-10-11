@@ -28,7 +28,7 @@ export function TaskBoardColumn({
   const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
   return (
     <section
-      ref={droppable.setNodeRef}
+      data-task-board-column
       className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`}
       aria-label={`${label} 열`}
     >
@@ -43,25 +43,27 @@ export function TaskBoardColumn({
         <span className="text-xs tabular-nums text-text-muted">{tasks.length}</span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
-        {tasks.map((task) => {
-          const assignee = resolveTaskAssignee(task.assignee_actor_id, names.actors);
-          return (
-            <TaskBoardCard
-              key={task.id}
-              task={task}
-              selected={task.id === selectedId}
-              onSelect={() => selectTask(task.id)}
-              enabled={enabled}
-              managedSystemName={
-                names.systems.get(task.primary_managed_system_id) ?? 'Managed System'
-              }
-              assigneeName={assignee.kind === 'resolved' ? assignee.displayName : undefined}
-            />
-          );
-        })}
-        {tasks.length === 0 && (
-          <div className="p-3 text-center text-xs text-text-muted">비어있음</div>
-        )}
+        <div ref={droppable.setNodeRef} className="flex min-h-full shrink-0 flex-col gap-2">
+          {tasks.map((task) => {
+            const assignee = resolveTaskAssignee(task.assignee_actor_id, names.actors);
+            return (
+              <TaskBoardCard
+                key={task.id}
+                task={task}
+                selected={task.id === selectedId}
+                onSelect={() => selectTask(task.id)}
+                enabled={enabled}
+                managedSystemName={
+                  names.systems.get(task.primary_managed_system_id) ?? 'Managed System'
+                }
+                assigneeName={assignee.kind === 'resolved' ? assignee.displayName : undefined}
+              />
+            );
+          })}
+          {tasks.length === 0 && (
+            <div className="p-3 text-center text-xs text-text-muted">비어있음</div>
+          )}
+        </div>
       </div>
     </section>
   );

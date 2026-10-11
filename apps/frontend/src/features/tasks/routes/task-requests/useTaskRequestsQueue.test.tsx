@@ -1,3 +1,5 @@
+import { taskRequestPage } from '@/test/task-request-pages';
+import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +16,10 @@ const { fetchTaskRequestsMock, resolveActorsMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal()),
-  fetchTaskRequests: fetchTaskRequestsMock,
+  fetchTaskRequests: async (options: ListTaskRequestsQuery) => {
+    const result = await fetchTaskRequestsMock(options);
+    return taskRequestPage(result.items, options);
+  },
   resolveActors: resolveActorsMock,
 }));
 
@@ -126,13 +131,18 @@ describe('useTaskRequestsQueue tab counts (#706)', () => {
   );
 
   it('recovers from a failed read through a no-data refetch to real zero counts', async () => {
-    fetchTaskRequestsMock.mockRejectedValueOnce(new Error('read failed'));
     let releaseRead: (() => void) | undefined;
-    fetchTaskRequestsMock.mockReturnValueOnce(
-      new Promise<{ items: TaskRequestDto[] }>((resolve) => {
+    let failed = false;
+    fetchTaskRequestsMock.mockImplementation((options: ListTaskRequestsQuery) => {
+      if (options.status !== undefined) return Promise.resolve({ items: [] });
+      if (!failed) {
+        failed = true;
+        return Promise.reject(new Error('read failed'));
+      }
+      return new Promise<{ items: TaskRequestDto[] }>((resolve) => {
         releaseRead = () => resolve({ items: [] });
-      }),
-    );
+      });
+    });
 
     const { result } = renderQueue();
     await waitFor(() => expect(result.current.hasError).toBe(true));

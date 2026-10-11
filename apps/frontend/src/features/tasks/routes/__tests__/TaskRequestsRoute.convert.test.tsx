@@ -1,6 +1,8 @@
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { taskRequestPage } from '@/test/task-request-pages';
+import type { ListTaskRequestsQuery } from '@fops/shared';
 import {
   type MilestoneDto,
   convertTaskRequestRequestSchema,
@@ -136,7 +138,10 @@ vi.mock('@/lib/api', () => ({
     actor: { id: '60000000-0000-0000-0000-000000000006', role_level: 'admin' },
   })),
   fetchPermissionCheck: vi.fn(async () => ({ state: 'approved' })),
-  fetchTaskRequests: vi.fn(async () => ({ items: [taskRequest] })),
+  fetchTaskRequests: vi.fn(async (options: ListTaskRequestsQuery) =>
+    taskRequestPage([taskRequest], options),
+  ),
+  getTaskRequest: vi.fn(async () => taskRequest),
   linkExistingTask: vi.fn(),
   listTasks: vi.fn(async () => ({ items: [] })),
   rejectTaskRequest: vi.fn(),
@@ -395,8 +400,9 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
       });
       await chooseOption('Analytics Area', label);
 
-      queryClient.setQueryData(['task-requests', undefined], {
-        items: [{ ...taskRequest, updated_at: '2026-07-10T01:00:00.000Z' }],
+      queryClient.setQueryData(['task-request', taskRequest.id], {
+        ...taskRequest,
+        updated_at: '2026-07-10T01:00:00.000Z',
       });
 
       expect(await screen.findByTestId('task-request-convert-title-input')).toBeInTheDocument();
@@ -415,9 +421,14 @@ describe('TaskRequestsRoute Analytics Area inheritance', () => {
 
   it('AC-681-3 resets conversion when selection moves to a different request', async () => {
     const { queryClient } = await openConvertFormReturnsClient();
-    queryClient.setQueryData(['task-requests', undefined], {
-      items: [taskRequest, otherTaskRequest],
-    });
+    queryClient.setQueryData(
+      ['task-requests', undefined, 'pages', 'approved'],
+      {
+        pages: [taskRequestPage([taskRequest, otherTaskRequest], { status: 'approved' })],
+        pageParams: [undefined],
+      },
+      { updatedAt: Date.now() },
+    );
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^승인됨/ }));
     fireEvent.click(await screen.findByRole('button', { name: /REQ-43/ }));
 

@@ -1,5 +1,5 @@
 import { SURVEY_BUILDER_COPY } from '@/lib/copy/survey-builder';
-import { Button } from '@fops/ui';
+import { Button, useListMotion } from '@fops/ui';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import type { SurveyQuestion } from '../../types';
@@ -21,6 +21,7 @@ export function QuestionList({
   onAdd: () => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
 }) {
+  const listMotion = useListMotion();
   const [dragIndex, setDragIndex] = React.useState<number | null>(null);
   const [overIndex, setOverIndex] = React.useState<number | null>(null);
   return (
@@ -33,7 +34,7 @@ export function QuestionList({
           </Button>
         )}
       </div>
-      <div className="space-y-1">
+      <div ref={listMotion} className="space-y-1">
         {questions.map((question, index) => (
           <div
             key={question.id}

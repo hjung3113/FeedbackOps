@@ -51,9 +51,14 @@ export function validateSurveysSearch(raw: unknown) {
   return parseRouteSearch(surveysSearchSchema, raw);
 }
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps the page exported for
+// tests while letting the route component split into its own chunk.
+const SurveysIndexRouteSplit = SurveysIndexRoute;
+
 export const Route = createFileRoute('/_authed/surveys/')({
   validateSearch: validateSurveysSearch,
-  component: SurveysIndexRoute,
+  component: SurveysIndexRouteSplit,
 });
 
 export function SurveysIndexRoute() {

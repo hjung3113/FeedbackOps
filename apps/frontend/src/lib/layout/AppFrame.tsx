@@ -240,7 +240,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
         </main>
         <aside
           className={cn(
-            'bg-surface-detail overflow-y-auto transition-[width] duration-150',
+            'bg-surface-detail overflow-y-auto',
             // #862: expanded, the aside sits flush after the sidebar's border-r;
             // keep the seam line only while collapsed to avoid a 2px double line.
             !isExpanded && 'border-l border-border-subtle',

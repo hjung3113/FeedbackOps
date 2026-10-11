@@ -1,11 +1,13 @@
 import { fetchTaskRequests } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
+import { taskRequestPage } from '@/test/task-request-pages';
+import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
 
 vi.mock('@fops/ui', async () => {
@@ -85,7 +87,10 @@ vi.mock('@/lib/api', () => ({
     },
   })),
   fetchPermissionCheck: vi.fn(async () => ({ state: 'approved' })),
-  fetchTaskRequests: vi.fn(async () => ({ items: [taskRequest] })),
+  fetchTaskRequests: vi.fn(async (options: ListTaskRequestsQuery) =>
+    taskRequestPage([taskRequest], options),
+  ),
+  getTaskRequest: vi.fn(async () => taskRequest),
   linkExistingTask: vi.fn(),
   listTasks: vi.fn(async () => ({ items: [] })),
   rejectTaskRequest: vi.fn(),
@@ -108,6 +113,11 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('TaskRequestsRoute display ids', () => {
+  beforeEach(() => {
+    vi.mocked(fetchTaskRequests)
+      .mockReset()
+      .mockImplementation(async (options) => taskRequestPage([taskRequest], options));
+  });
   it('uses Korean Task Request statuses on the queue tabs', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
@@ -145,7 +155,9 @@ describe('TaskRequestsRoute display ids', () => {
   });
 
   it('shows the default empty queue without a filter-reset action', async () => {
-    vi.mocked(fetchTaskRequests).mockResolvedValueOnce({ items: [] });
+    vi.mocked(fetchTaskRequests).mockImplementation(async (options) =>
+      taskRequestPage([], options),
+    );
     renderWithClient(<TaskRequestsRoute />);
 
     expect(await screen.findByText('Task Request가 없습니다.')).toBeInTheDocument();
@@ -154,17 +166,20 @@ describe('TaskRequestsRoute display ids', () => {
   });
 
   it('shows pending-specific copy when only other statuses have requests', async () => {
-    vi.mocked(fetchTaskRequests).mockResolvedValueOnce({
-      items: [
-        { ...taskRequest, status: 'approved' },
-        {
-          ...taskRequest,
-          id: '10000000-0000-0000-0000-000000000002',
-          display_id: 'REQ-43',
-          status: 'rejected',
-        },
-      ],
-    });
+    vi.mocked(fetchTaskRequests).mockImplementation(async (options) =>
+      taskRequestPage(
+        [
+          { ...taskRequest, status: 'approved' },
+          {
+            ...taskRequest,
+            id: '10000000-0000-0000-0000-000000000002',
+            display_id: 'REQ-43',
+            status: 'rejected',
+          },
+        ],
+        options,
+      ),
+    );
     renderWithClient(<TaskRequestsRoute />);
 
     expect(await screen.findByText('검토 대기 중인 Task Request가 없습니다')).toBeInTheDocument();

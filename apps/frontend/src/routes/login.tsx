@@ -25,8 +25,13 @@ import { mockLogin } from '../lib/api';
 import { ME_QUERY_KEY } from '../lib/auth/useMe';
 import { sanitizeLoginReturnTo } from '../lib/login-return-to';
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps LoginPage exported for
+// tests while letting the route component split into its own chunk.
+const LoginPageSplit = LoginPage;
+
 export const Route = createFileRoute('/login')({
-  component: LoginPage,
+  component: LoginPageSplit,
 });
 
 const SEED_ACTORS: ReadonlyArray<{

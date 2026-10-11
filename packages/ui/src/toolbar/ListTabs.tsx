@@ -10,6 +10,7 @@ import {
 } from '../components/shadcn/tooltip.js';
 import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
+import { prefersReducedMotion } from '../utils/motion.js';
 
 export interface ListToolbarTab {
   value: string;
@@ -82,7 +83,11 @@ export function ListTabs({
     if (left !== 0) {
       const destination = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + left));
       const scrollDelta = destination - viewport.scrollLeft;
-      if (scrollDelta !== 0) viewport.scrollBy({ left: scrollDelta, behavior: 'smooth' });
+      if (scrollDelta !== 0)
+        viewport.scrollBy({
+          left: scrollDelta,
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        });
     }
   }, []);
 
@@ -104,7 +109,7 @@ export function ListTabs({
         direction === 'right'
           ? Math.max(viewport.clientWidth * 0.75, 120)
           : -Math.max(viewport.clientWidth * 0.75, 120),
-      behavior: 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
   };
 

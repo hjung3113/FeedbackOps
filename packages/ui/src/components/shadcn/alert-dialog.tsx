@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '../../utils/cn.js';
+import { DIALOG_CONTENT_MOTION, SCRIM_MOTION } from '../../utils/motion.js';
 import { buttonVariants } from '../Button.js';
 
 export const AlertDialog = AlertDialogPrimitive.Root;
@@ -12,7 +13,7 @@ export const AlertDialogOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
-    className={cn('fixed inset-0 z-50 bg-black/80', className)}
+    className={cn('fixed inset-0 z-50 bg-black/80', SCRIM_MOTION, className)}
     {...props}
     ref={ref}
   />
@@ -29,7 +30,7 @@ export const AlertDialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-border-subtle bg-surface-card p-6 shadow-lg',
-        'duration-200',
+        DIALOG_CONTENT_MOTION,
         'sm:rounded-lg',
         className,
       )}

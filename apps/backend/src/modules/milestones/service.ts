@@ -20,7 +20,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { findSourceFindingForMilestone } from '../findings/index.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
-import type { CheckService } from '../permissions/check-service.js';
+import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
 import { type MilestoneTaskCounts, countTasksByMilestone } from '../tasks/index.js';
 import {
   type MilestoneRow,
@@ -264,9 +264,10 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
     });
     const visibleRows: MilestoneRow[] = [];
+    const memo = memoizeCapabilityChecks(deps.checkService);
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        await checkFindingManage(memo, args.actor, row.primary_managed_system_id, {
           requireElevatedRole: true,
         })
       ).allow;

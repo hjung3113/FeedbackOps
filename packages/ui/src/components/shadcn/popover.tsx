@@ -1,6 +1,7 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import * as React from 'react';
 import { cn } from '../../utils/cn.js';
+import { POPPER_CONTENT_MOTION } from '../../utils/motion.js';
 
 export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -30,6 +31,7 @@ export const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 w-72 rounded-md border border-border-subtle bg-surface-popover text-text-primary shadow-md outline-hidden',
+        POPPER_CONTENT_MOTION,
         POPOVER_CONTENT_PADDING_CLASSES[padding],
         className,
       )}

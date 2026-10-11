@@ -43,6 +43,33 @@ is a `200` no-op. Side effects are atomic: set `findings.linked_task_id`, create
 the existing `(finding, task, requested_task)` entity link, audit
 `entity_link.created` when inserted, and audit `finding_task_linked`.
 
+## GET /findings — opt-in list pages
+
+Query: `managed_system_id` (UUID), `execution=none`, optional opaque `cursor`,
+and optional integer `limit` (1..100). The list screen sends `limit=50`;
+there is no server default for this list's limit. Without `limit`, the response
+stays exactly `{ items: FindingDto[] }` for full-set consumers, including
+navigation counts and Finding pickers. With `limit`, the response is
+`{ items, page: { has_more, cursor?, total? } }`.
+
+Order is `created_at DESC, id DESC`. The cursor continues both order columns
+using the raw PostgreSQL timestamp (including microseconds) and UUID. It is
+opaque to clients. `page.cursor` appears only when another page exists;
+`total` appears only on the first page (no request cursor) and counts visible
+rows under the same filters. An invalid cursor returns `422 validation.failed`,
+`detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]`. Invalid limits
+also return `422 validation.failed` using the query validation envelope.
+
+Admin sees the workspace population. Developer visibility uses the existing
+point `finding.read` checks once per distinct Primary Managed System, including
+explicit denies, before the SQL page limit and counts. Empty allowed scope
+returns no rows and a first-page total of zero. The same SQL visibility
+predicate applies in full-set mode. `execution=none` keeps the active,
+no-linked-Task, no-active-requested-Task-Request predicate.
+
+Saved Finding views reject both `cursor` and `limit`; paging is transient list
+state and is never persisted as a saved filter.
+
 ## Progress notes
 
 `GET /findings/:id/comments` and `POST /findings/:id/comments` are the Finding

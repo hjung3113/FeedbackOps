@@ -243,6 +243,7 @@ describe('TaskRequestPanel next actions', () => {
     const user = (await import('@testing-library/user-event')).default.setup();
     useDecision.mockImplementation(({ item }: { item: TaskRequestDto }) => {
       const [dialog, setDialog] = React.useState<{
+        requestId: string;
         action: 'reject';
         value: string;
         error: string | null;
@@ -256,7 +257,7 @@ describe('TaskRequestPanel next actions', () => {
         canReject: item.status === 'pending_review',
         canRequestEvidence: item.status === 'pending_review',
         approve: vi.fn(),
-        reject: () => setDialog({ action: 'reject', value: '', error: null }),
+        reject: () => setDialog({ requestId: item.id, action: 'reject', value: '', error: null }),
         requestEvidence: vi.fn(),
         submitDecision: vi.fn(),
         changeValue: vi.fn(),

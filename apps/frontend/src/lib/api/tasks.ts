@@ -1,3 +1,5 @@
+import type { ListTasksResponse } from '@fops/shared';
+export type { ListTasksResponse } from '@fops/shared';
 import type {
   ConvertTaskRequestRequest,
   FindingDto,
@@ -10,10 +12,6 @@ import type {
 
 import { apiClient } from './client';
 
-export interface ListTasksResponse {
-  items: TaskDto[];
-}
-
 export async function listTasks(
   options: {
     status?: TaskStatus;
@@ -21,10 +19,14 @@ export async function listTasks(
     managed_system_id?: string;
     public_update?: 'missing';
     milestone_id?: string;
+    limit?: number;
+    cursor?: string;
     signal?: AbortSignal;
   } = {},
 ): Promise<ListTasksResponse> {
   const qs = new URLSearchParams();
+  if (options.limit !== undefined) qs.set('limit', String(options.limit));
+  if (options.cursor !== undefined) qs.set('cursor', options.cursor);
   if (options.status !== undefined) qs.set('status', options.status);
   if (options.assignee !== undefined) qs.set('assignee', options.assignee);
   if (options.managed_system_id !== undefined) {

@@ -7,8 +7,13 @@ import type * as React from 'react';
 
 import { VocClusterListShell } from '@/features/voc-cluster/components/detail/VocClusterListShell';
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps the page exported for
+// tests while letting the route component split into its own chunk.
+const VocClusterDetailPageSplit = VocClusterDetailPage;
+
 export const Route = createFileRoute('/_authed/voc-clusters/$clusterId')({
-  component: VocClusterDetailPage,
+  component: VocClusterDetailPageSplit,
 });
 
 export function VocClusterDetailPage(): React.ReactElement {

@@ -1,10 +1,10 @@
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { apiClient, ApiError } from '@/lib/api';
+import { type ApiError, apiClient } from '@/lib/api';
 import type {
   AddEvidenceHighlightRequest,
   EvidenceHighlightDto,
   LinkEvidenceRequest,
 } from '@fops/shared';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Add Evidence Highlight ────────────────────────────────────────────────────
 
@@ -32,6 +32,7 @@ export function useAddEvidenceHighlightMutation(
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({
         queryKey: ['finding', findingId, 'evidence-highlights'],
       });
@@ -67,6 +68,7 @@ export function useLinkEvidenceMutation(
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
+      void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({
         queryKey: ['finding', findingId, 'evidence-highlights'],
       });

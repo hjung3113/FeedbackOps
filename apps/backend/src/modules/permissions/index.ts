@@ -3,6 +3,7 @@
 
 export {
   createCheckService,
+  memoizeCapabilityChecks,
   type CheckService,
   type CheckServiceDeps,
   type Decision,

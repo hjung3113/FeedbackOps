@@ -5,9 +5,13 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // `styles/theme.css` must be registered here too, or `cn` misreads it: an
 // unknown `text-caption` counts as a text color and is dropped next to
 // `text-text-muted` (#782).
-const twMerge = extendTailwindMerge({
+const twMerge = extendTailwindMerge<'animation-duration'>({
   extend: {
+    classGroups: {
+      'animation-duration': [{ 'animation-duration': ['fast', 'base', 'slow'] }],
+    },
     theme: {
+      ease: ['standard', 'enter', 'exit'],
       text: ['caption', 'tiny', 'micro', 'md'],
       leading: ['body', 'relaxed-ui', 'note'],
       tracking: ['kicker', 'kind-label'],

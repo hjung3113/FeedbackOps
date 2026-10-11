@@ -6,6 +6,14 @@
  * Components MUST NOT reference --color-* directly; consume semantic tokens below.
  */
 :root {
+  /* --- Motion (ADR-0063): raw values; theme.css exposes utility aliases. --- */
+  --motion-duration-fast: 150ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
   /* --- Raw color tokens (R G B triple format per ADR-0021) --- */
   --color-pitch-black: 243 247 254;   /* #f3f7fe — canvas / lightest bg */
   --color-graphite: 251 253 255;      /* #fbfdff — detail / card surface */

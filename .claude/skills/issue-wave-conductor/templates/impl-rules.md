@@ -9,8 +9,11 @@ in your report.
    `pnpm gate:fe-typecheck` (run `node scripts/generate-routes.mjs` first if the route tree is missing); backend —
    `pnpm --filter @fops/backend exec tsc --noEmit`. Fix what fails. Put the commands and results in your report.
    Still **never** run git (commit, stash, reset, checkout, restore), DB commands, integration suites, the visual
-   harness, or anything that needs the network; leave all changes uncommitted — the conductor commits and runs the
-   full gates.
+   harness, or anything that needs the network; never run `pnpm install`/`add`/`patch`/`update` (an offline install
+   emptied a worktree's node_modules in s70 — the conductor pre-installs dependencies); leave all changes
+   uncommitted — the conductor commits and runs the full gates.
+   In React lifecycle code, never write refs or read the DOM during render; use event handlers, effects, or
+   render-phase state adjustment.
 2. **Formatting: biome only** (`biome.json`: lineWidth 100, 2-space indent, single quotes). Never run Prettier
    and never reformat a whole file — touch only the lines you change.
 3. TypeScript uses `exactOptionalPropertyTypes`: omit an optional prop rather than passing `undefined`.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { listPageSchema } from '../list-page.js';
 
 import { taskStatusSchema } from './status.js';
 
@@ -129,8 +130,18 @@ export const listTasksQuerySchema = z
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     public_update: z.literal('missing').optional(),
     milestone_id: z.string().uuid().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict();
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
 
 export * from './comments.js';
+
+export const listTasksResponseSchema = z
+  .object({
+    items: z.array(taskDtoSchema),
+    page: listPageSchema.optional(),
+  })
+  .strict();
+export type ListTasksResponse = z.infer<typeof listTasksResponseSchema>;

@@ -239,3 +239,13 @@ Rich content constraints:
 - Loading and optimistic states must not erase user input.
 - Permission-limited states must show PermissionBlockedPanel or summary-visible content.
 ```
+
+### ListLoadMore (application list composition)
+
+`apps/frontend/src/components/ListLoadMore.tsx` composes the existing ghost,
+small Button with the Entity Link inventory's centred footer placement. Finding,
+Task list and Task Request queue consume it. It is absent without another page,
+disabled while loading, and offers retry after a next-page failure without
+replacing loaded rows or counts. Copy reuses `HOME_INBOX_COPY`'s load-more,
+loading and retry strings. Ordinary Button keyboard focus remains available;
+permission-blocked and initial-error screens do not render the control.

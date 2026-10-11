@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { ListCursor } from './list-cursor.js';
 
 import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
@@ -6,6 +7,7 @@ import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 
 export interface TaskRow {
+  cursor_timestamp?: string;
   id: string;
   workspace_id: string;
   display_id: string;
@@ -29,6 +31,7 @@ function toDate(value: Date | string): Date {
 
 function mapTaskRow(row: Record<string, unknown>): TaskRow {
   return {
+    ...(row.cursor_timestamp == null ? {} : { cursor_timestamp: String(row.cursor_timestamp) }),
     id: row.id as string,
     workspace_id: row.workspace_id as string,
     display_id: row.display_id as string,
@@ -274,17 +277,19 @@ export async function findTaskIdByDisplayId(
   };
 }
 
-export async function listTasksByWorkspace(
-  db: Db | Tx,
-  input: {
-    workspaceId: string;
-    status?: TaskStatus;
-    assigneeActorId?: string;
-    managedSystemId?: string;
-    publicUpdate?: 'missing';
-    milestoneId?: string;
-  },
-): Promise<TaskRow[]> {
+interface ListInput {
+  workspaceId: string;
+  status?: TaskStatus;
+  assigneeActorId?: string;
+  managedSystemId?: string;
+  publicUpdate?: 'missing';
+  milestoneId?: string;
+  allowedSystemIds?: string[];
+  limit?: number;
+  cursor?: ListCursor;
+}
+
+function listPredicates(input: ListInput) {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
   if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
   if (input.assigneeActorId !== undefined) {
@@ -334,14 +339,48 @@ export async function listTasksByWorkspace(
   if (input.milestoneId !== undefined) {
     predicates.push(sql`milestone_id = ${input.milestoneId}`);
   }
+  if (input.allowedSystemIds !== undefined)
+    predicates.push(
+      sql`primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
+    );
+  return predicates;
+}
+
+export async function listTasksByWorkspace(db: Db | Tx, input: ListInput): Promise<TaskRow[]> {
+  const predicates = listPredicates(input);
+  if (input.cursor !== undefined)
+    predicates.push(
+      sql`(updated_at, id) < (${input.cursor.timestamp}::timestamptz, ${input.cursor.id}::uuid)`,
+    );
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT ${TASK_SELECT}
+    SELECT ${TASK_SELECT}, updated_at::text AS cursor_timestamp
       FROM task.tasks
      WHERE ${sql.join(predicates, sql` AND `)}
      ORDER BY updated_at DESC, id DESC
+    ${input.limit === undefined ? sql`` : sql`LIMIT ${input.limit + 1}`}
   `);
   return result.rows.map(mapTaskRow);
 }
+export async function countListRows(db: Db | Tx, input: ListInput): Promise<number> {
+  const result = await (db as Db).execute<{ total: number }>(sql`
+    SELECT count(*)::int AS total FROM task.tasks 
+    WHERE ${sql.join(listPredicates(input), sql` AND `)}
+  `);
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+export async function listPrimaryManagedSystemIds(
+  db: Db | Tx,
+  input: { workspaceId: string; managedSystemId?: string },
+): Promise<string[]> {
+  const result = await (db as Db).execute<{ id: string }>(sql`
+    SELECT DISTINCT primary_managed_system_id AS id FROM task.tasks
+    WHERE workspace_id = ${input.workspaceId}
+    ${input.managedSystemId === undefined ? sql`` : sql`AND primary_managed_system_id = ${input.managedSystemId}`}
+  `);
+  return result.rows.map((row) => row.id);
+}
+
 export interface MilestoneTaskCounts {
   released_done: number;
   in_flight: number;

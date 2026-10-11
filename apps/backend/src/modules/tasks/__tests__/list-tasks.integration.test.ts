@@ -9,9 +9,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  denyCapability,
+  grantCapability,
+  revokeDeny,
+} from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupReadTestTables,
   insertPublicUpdate,
@@ -124,6 +130,60 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
     });
   }
 
+  it('AC-981: walks opt-in pages in full-list order with exact first-page total', async () => {
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` };
+    const full = await app.inject({
+      method: 'GET',
+      url: `/tasks?managed_system_id=${msAId}`,
+      headers,
+    });
+    expect(Object.keys(full.json())).toEqual(['items']);
+    const expected = full.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ managed_system_id: msAId, limit: '2' });
+      if (cursor !== undefined) params.set('cursor', cursor);
+      const response = await app.inject({ method: 'GET', url: `/tasks?${params}`, headers });
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { total?: number; has_more: boolean; cursor?: string };
+      }>();
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((row) => row.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      expect(body.page.cursor !== undefined).toBe(body.page.has_more);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(expected);
+    expect(new Set(walked).size).toBe(walked.length);
+  });
+
+  it.each(['limit=101', 'limit=2&cursor=bad'])(
+    'AC-981: rejects invalid paging %s',
+    async (query) => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/tasks?${query}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toEqual({
+        code: 'validation.failed',
+        message: query.includes('cursor') ? 'invalid cursor' : 'invalid query parameters',
+        detail: {
+          fields: [
+            {
+              path: [query.includes('cursor') ? 'cursor' : 'limit'],
+              code: query.includes('cursor') ? 'invalid_cursor' : 'too_big',
+            },
+          ],
+        },
+      });
+    },
+  );
+
   it('AC-395-1: managed_system_id=<ms-a> returns only ms-a tasks', async () => {
     const res = await listTasks(msAId);
     expect(res.statusCode).toBe(200);
@@ -141,9 +201,49 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
 
     const omitted = await listTasks();
     expect(omitted.statusCode).toBe(200);
+    expect(Object.keys(omitted.json())).toEqual(['items']);
     const omittedIds = omitted.json<{ items: Array<{ id: string }> }>().items.map((i) => i.id);
     expect(omittedIds).toContain(taskAId);
     expect(omittedIds).toContain(taskBId);
+  });
+
+  it('shows only granted-system Tasks when another system is explicitly denied', async () => {
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('task-list-scope'));
+    for (const managedSystemId of [msAId, msBId]) {
+      await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        developer.id,
+        'finding.manage',
+        managedSystemId,
+        adminActorId,
+      );
+    }
+    const denyId = await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    try {
+      const cookie = await loginAs(app, developer.externalId);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/tasks?managed_system_id=all',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(response.statusCode).toBe(200);
+      const items = response.json<{
+        items: Array<{ id: string; primary_managed_system_id: string }>;
+      }>().items;
+      expect(items.map((item) => item.id)).toContain(taskAId);
+      expect(items.map((item) => item.id)).not.toContain(taskBId);
+      expect(items.every((item) => item.primary_managed_system_id === msAId)).toBe(true);
+    } finally {
+      await revokeDeny(dbHandle, denyId, adminActorId);
+    }
   });
 
   it('AC-395-3: managed_system_id=not-a-uuid fails validation with 422', async () => {
@@ -207,4 +307,102 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
       [WORKSPACE_ID, vocId, taskId, msAId, adminActorId],
     );
   }
+  it('AC-981: visibility precedes limit, cursor walks exact order, and explicit deny applies in both modes', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msAId,
+        title: `Page A ${i}`,
+        createdBy: adminActorId,
+      });
+    }
+    await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msBId,
+      title: 'Newest B',
+      createdBy: adminActorId,
+    });
+    await migrateHandle.pool.query(
+      "update task.tasks set updated_at = '2026-01-01 00:00:00.123456+00' where workspace_id = $1 and primary_managed_system_id = $2",
+      [WORKSPACE_ID, msAId],
+    );
+    const developer = await insertDevActor(dbHandle, WORKSPACE_ID, uid('page-scope'));
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msAId,
+      adminActorId,
+    );
+    const cookie = await loginAs(app, developer.externalId);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const full = await app.inject({ method: 'GET', url: '/tasks', headers });
+    expect(full.statusCode).toBe(200);
+    expect(Object.keys(full.json())).toEqual(['items']);
+    const expected = full.json<{
+      items: Array<{ id: string; primary_managed_system_id: string }>;
+    }>().items;
+    expect(expected.length).toBeGreaterThan(2);
+    expect(expected.map((item) => item.id)).toEqual(
+      expected
+        .map((item) => item.id)
+        .sort()
+        .reverse(),
+    );
+    expect(expected.every((item) => item.primary_managed_system_id === msAId)).toBe(true);
+    const walked: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ limit: '2' });
+      if (cursor !== undefined) params.set('cursor', cursor);
+      const response = await app.inject({ method: 'GET', url: `/tasks?${params}`, headers });
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        items: Array<{ id: string }>;
+        page: { has_more: boolean; cursor?: string; total?: number };
+      }>();
+      expect(body.items).toHaveLength(Math.min(2, expected.length - walked.length));
+      expect(body.page.total).toBe(cursor === undefined ? expected.length : undefined);
+      walked.push(...body.items.map((item) => item.id));
+      expect(body.page.has_more).toBe(walked.length < expected.length);
+      expect(body.page.cursor !== undefined).toBe(body.page.has_more);
+      cursor = body.page.cursor;
+    } while (cursor !== undefined);
+    expect(walked).toEqual(expected.map((item) => item.id));
+    expect(new Set(walked).size).toBe(expected.length);
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    const denyId = await denyCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      developer.id,
+      'finding.manage',
+      msBId,
+      adminActorId,
+    );
+    try {
+      for (const query of ['', '?limit=2']) {
+        const denied = await app.inject({ method: 'GET', url: `/tasks${query}`, headers });
+        expect(denied.statusCode).toBe(200);
+        expect(
+          denied
+            .json()
+            .items.every(
+              (item: { primary_managed_system_id: string }) =>
+                item.primary_managed_system_id === msAId,
+            ),
+        ).toBe(true);
+        if (query) expect(denied.json().page.total).toBe(expected.length);
+      }
+    } finally {
+      await revokeDeny(dbHandle, denyId, adminActorId);
+    }
+  });
 });

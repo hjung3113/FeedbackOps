@@ -37,3 +37,5 @@ export * from './surveys/follow-up.js';
 export * from './dashboard.js';
 export * from './notifications.js';
 export * from './nav.js';
+
+export * from './list-page.js';

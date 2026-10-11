@@ -40,6 +40,7 @@ import {
 } from '../components/shadcn/tooltip.js';
 import { useHorizontalOverflow } from '../internal/useHorizontalOverflow.js';
 import { cn } from '../utils/cn.js';
+import { prefersReducedMotion } from '../utils/motion.js';
 import { useJumpGuard } from './useJumpGuard.js';
 
 export interface PanelSection {
@@ -137,7 +138,7 @@ export function DetailPanelSectionNav({
         : tabRect.right > navRect.right
           ? tabRect.right - navRect.right
           : 0;
-    if (left !== 0) nav.scrollBy({ left, behavior: 'smooth' });
+    if (left !== 0) nav.scrollBy({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }, []);
 
   // Reset active section when sections list changes
@@ -270,7 +271,7 @@ export function DetailPanelSectionNav({
         direction === 'right'
           ? Math.max(nav.clientWidth * 0.75, 120)
           : -Math.max(nav.clientWidth * 0.75, 120),
-      behavior: 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
   };
 

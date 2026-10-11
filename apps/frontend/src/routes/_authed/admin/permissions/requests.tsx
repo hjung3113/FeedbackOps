@@ -9,9 +9,14 @@ import {
 
 export { permissionRequestsSearchSchema };
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps the page exported for
+// tests while letting the route component split into its own chunk.
+const PermissionRequestsConsolePageSplit = PermissionRequestsConsolePage;
+
 export const Route = createFileRoute('/_authed/admin/permissions/requests')({
   validateSearch: validatePermissionRequestsSearch,
-  component: PermissionRequestsConsolePage,
+  component: PermissionRequestsConsolePageSplit,
 });
 
 export function PermissionRequestsConsolePage() {

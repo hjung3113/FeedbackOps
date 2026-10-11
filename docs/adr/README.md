@@ -2,7 +2,7 @@
 
 ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1, currently `0062`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1, currently `0063`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -52,6 +52,8 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0058](0058-tailwind-v4-css-first-theme.md) Tailwind v4 CSS-first theme — `@theme inline` in `@fops/ui` replaces the JS preset; no visual change. *Accepted, amended 2026-10-06 (#782)*
 - [0060](0060-shipped-ui-replaces-prototype-as-ui-authority.md) Shipped UI replaces the prototype as UI authority — existing screens, `lib/copy` and visual baselines decide; the prototype is a reference for unbuilt surfaces. *Accepted*
 - [0062](0062-design-system-lint-with-shadcn-lint-on-oxlint.md) Design-system lint — `@shadcn/lint` rules run on Oxlint beside Biome; every rule `error`, single-use exceptions marked with a reason. *Accepted, amended 2026-10-06 (#797)*
+
+- [0063](0063-motion-foundation.md) Shared motion foundation — shared tokens, `tw-animate-css` overlays, auto-animate lists behind `useListMotion` (#994), and global reduced motion; reverses #785. *Accepted*
 
 ## VOC intake and triage
 

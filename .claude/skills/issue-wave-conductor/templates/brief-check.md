@@ -30,9 +30,17 @@ defects that would cost a review or fix round; style and wording preferences are
    it (`grep -r "getByRole('<role>'"` and the test ids under `src/`), and the worker runs those files (#798).
 9. **Capped searches keep exact hits.** Replacing an exact lookup with a capped prefix or contains search keeps the
    exact hit reachable under the cap (#821).
-10. **Same-slice overlap.** If an issue merged earlier in this slice touched the same component, hook or endpoint
-    (`git log origin/develop --since=<slice start> -- <paths>`), the brief names that change and keeps its
-    behaviour.
+10. **Same-slice overlap.** If an issue merged earlier in this slice touched the same component, hook, endpoint or
+    doc section (`git log origin/develop --since=<slice start> -- <paths>`), the brief names that change and keeps
+    its behaviour.
+11. **Commands and flags exist.** Every CLI command and flag the brief tells the worker (or the conductor) to run is
+    confirmed with `--help` or the tool's docs (s70: `pnpm patch --offline` does not exist). Dependency changes are
+    pre-installed by the conductor (`PRE_ADD`); a brief never asks a worker to install, add or patch packages.
+12. **Lifecycle code facts.** For focus, mount, animation or async-ordering behaviour: library timing comes from the
+    installed source (`node_modules/...`, file:line), not memory; the design writes no refs and reads no DOM during
+    render, and does not rely on TanStack per-call `mutate(vars, { onSettled })` for cleanup (it does not run for
+    superseded mutations — use `mutateAsync` or the hook). s70: both #995 first designs and #997's first fix broke
+    on these.
 
 ## Report
 

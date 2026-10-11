@@ -164,6 +164,46 @@ describe('/admin/analytics-areas URL state', () => {
     expect(router.state.location.search).toEqual({ selected: AA_PM_ID });
   });
 
+  test.each(['Escape', 'close icon', 'history'])(
+    'returns focus to the area detail button after URL-opened detail closes by %s',
+    async (dismissal) => {
+      const router = renderUrlState(
+        { managedSystems: [TABLEAU], analyticsAreas: [AA_PM] },
+        `/admin/analytics-areas?selected=${AA_PM_ID}`,
+      );
+      const drawer = await screen.findByTestId('aa-slide-over');
+      const button = screen.getByTestId('aa-detail-permission-management');
+      if (dismissal === 'Escape') fireEvent.keyDown(drawer, { key: 'Escape' });
+      else if (dismissal === 'close icon') {
+        fireEvent.click(within(drawer).getByRole('button', { name: '닫기' }));
+      } else {
+        await router.navigate({ to: '/admin/analytics-areas', search: {} });
+        router.history.back();
+        await screen.findByTestId('aa-slide-over');
+        router.history.forward();
+      }
+      await waitFor(() => expect(screen.queryByTestId('aa-slide-over')).not.toBeInTheDocument());
+      await waitFor(() => expect(button).toHaveFocus());
+      expect(router.state.location.search).toEqual({});
+    },
+  );
+
+  test('does not focus another area when the selected row disappears', async () => {
+    const POWERBI = { ...TABLEAU, id: GHOST_MS_ID, slug: 'power-bi', name: 'Power BI' };
+    const AA_SALES = { ...AA_PM, id: GHOST_AA_ID, managed_system_id: GHOST_MS_ID, slug: 'sales' };
+    const router = renderUrlState(
+      { managedSystems: [TABLEAU, POWERBI], analyticsAreas: [AA_PM, AA_SALES] },
+      `/admin/analytics-areas?selected=${AA_PM_ID}`,
+    );
+    await screen.findByTestId('aa-slide-over');
+    await router.navigate({ to: '/admin/analytics-areas', search: { managedSystem: GHOST_MS_ID } });
+    await waitFor(() =>
+      expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(screen.queryByTestId('aa-slide-over')).not.toBeInTheDocument());
+    expect(screen.getByTestId('aa-detail-sales')).not.toHaveFocus();
+  });
+
   test('row click pushes selected and Back returns to no selection', async () => {
     const router = renderUrlState(
       { managedSystems: [TABLEAU], analyticsAreas: [AA_PM] },

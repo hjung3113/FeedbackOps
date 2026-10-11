@@ -327,6 +327,65 @@ describe('/admin/analytics-areas route', () => {
     expect(within(drawer).getByTestId('aa-findings-defer')).toBeInTheDocument();
   });
 
+  test.each(['detail', 'row click', 'row Enter'])(
+    'Escape returns focus to the same area detail button after opening by %s',
+    async (opening) => {
+      renderPage({
+        permissionState: 'approved',
+        managedSystems: [TABLEAU, POWERBI],
+        analyticsAreas: [AA_TAB_PM, AA_PBI_SALES],
+      });
+      const detailButton = await screen.findByTestId('aa-detail-sales');
+      const row = screen.getByTestId('aa-row-sales');
+      const opener = opening === 'detail' ? detailButton : row;
+      opener.focus();
+      if (opening === 'row Enter') fireEvent.keyDown(row, { key: 'Enter' });
+      else fireEvent.click(opener);
+      const drawer = await screen.findByTestId('aa-slide-over');
+      fireEvent.keyDown(drawer, { key: 'Escape' });
+      await waitFor(() => expect(detailButton).toHaveFocus());
+      expect(drawer).not.toBeInTheDocument();
+    },
+  );
+
+  test('Escape returns to the second detail button when two Managed Systems share an area slug', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, POWERBI],
+      analyticsAreas: [AA_TAB_PM, { ...AA_PBI_SALES, slug: AA_TAB_PM.slug, name: 'PM Power BI' }],
+    });
+    const buttons = await screen.findAllByTestId('aa-detail-permission-management');
+    expect(buttons).toHaveLength(2);
+    const detailButton = within(screen.getByTestId('aa-group-ms-pbi')).getByTestId(
+      'aa-detail-permission-management',
+    );
+    expect(buttons[1]).toBe(detailButton);
+    detailButton.focus();
+    fireEvent.click(detailButton);
+    const drawer = await screen.findByTestId('aa-slide-over');
+    expect(drawer).toHaveTextContent('PM Power BI');
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    await waitFor(() => expect(detailButton).toHaveFocus());
+    expect(drawer).not.toBeInTheDocument();
+  });
+
+  test('keeps focus in the edit form during the sheet-to-edit handoff', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    const detailButton = await screen.findByTestId('aa-detail-permission-management');
+    detailButton.focus();
+    fireEvent.click(detailButton);
+    const drawer = await screen.findByTestId('aa-slide-over');
+    fireEvent.click(within(drawer).getByTestId('aa-edit-button'));
+    const input = await screen.findByTestId('aa-name-input-permission-management');
+    await waitFor(() => expect(drawer).not.toBeInTheDocument());
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(detailButton).not.toHaveFocus();
+  });
+
   test('clicking Edit in the slide-over opens the edit form', async () => {
     renderPage({
       permissionState: 'approved',

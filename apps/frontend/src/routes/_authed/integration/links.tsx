@@ -16,9 +16,14 @@ export function validateIntegrationLinksSearch(raw: unknown) {
   return parseRouteSearch(integrationLinksSearchSchema, raw);
 }
 
+// #982: the router plugin skips code-splitting when the route component is an
+// exported local (hasExport check). The alias keeps the shell exported for
+// tests while letting the route component split into its own chunk.
+const IntegrationLinksRouteShellSplit = IntegrationLinksRouteShell;
+
 export const Route = createFileRoute('/_authed/integration/links')({
   validateSearch: validateIntegrationLinksSearch,
-  component: IntegrationLinksRouteShell,
+  component: IntegrationLinksRouteShellSplit,
 });
 
 export function IntegrationLinksRouteShell() {

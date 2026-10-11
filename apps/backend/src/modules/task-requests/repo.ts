@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
+import type { ListCursor } from './list-cursor.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 
 export interface TaskRequestRow {
+  cursor_timestamp?: string;
   id: string;
   workspace_id: string;
   display_id: string;
@@ -31,6 +33,7 @@ function toDate(value: Date | string): Date {
 
 function mapTaskRequestRow(row: Record<string, unknown>): TaskRequestRow {
   return {
+    ...(row.cursor_timestamp == null ? {} : { cursor_timestamp: String(row.cursor_timestamp) }),
     id: row.id as string,
     workspace_id: row.workspace_id as string,
     display_id: row.display_id as string,
@@ -164,21 +167,42 @@ export async function lockTaskRequestById(
   return row ? mapTaskRequestRow(row) : null;
 }
 
-export async function listTaskRequestsByWorkspace(
-  db: Db | Tx,
-  input: {
-    workspaceId: string;
-    status?: TaskRequestRow['status'];
-    managedSystemId?: string;
-  },
-): Promise<TaskRequestRow[]> {
+interface ListInput {
+  workspaceId: string;
+  status?: TaskRequestRow['status'];
+  managedSystemId?: string;
+  allowedSystemIds?: string[];
+  limit?: number;
+  cursor?: ListCursor;
+  taskRequestId?: string;
+}
+
+function listPredicates(input: ListInput) {
   const predicates = [sql`tr.workspace_id = ${input.workspaceId}`];
   if (input.status !== undefined) predicates.push(sql`tr.status = ${input.status}`);
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`tr.primary_managed_system_id = ${input.managedSystemId}`);
   }
+  if (input.allowedSystemIds !== undefined)
+    predicates.push(
+      sql`tr.primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
+    );
+  if (input.taskRequestId !== undefined) predicates.push(sql`tr.id = ${input.taskRequestId}`);
+  return predicates;
+}
+
+export async function listTaskRequestsByWorkspace(
+  db: Db | Tx,
+  input: ListInput,
+): Promise<TaskRequestRow[]> {
+  const predicates = listPredicates(input);
+  if (input.cursor !== undefined)
+    predicates.push(
+      sql`(tr.created_at, tr.id) < (${input.cursor.timestamp}::timestamptz, ${input.cursor.id}::uuid)`,
+    );
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
+      tr.created_at::text AS cursor_timestamp,
       tr.id, tr.workspace_id, tr.display_id, tr.source_type, tr.source_id,
       tr.primary_managed_system_id, tr.evidence_summary, tr.requested_outcome,
       tr.requester_actor_id, tr.status, tr.reviewer_actor_id, tr.decision_reason,
@@ -206,8 +230,47 @@ export async function listTaskRequestsByWorkspace(
      AND c.primary_managed_system_id = tr.primary_managed_system_id
     WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY tr.created_at DESC, tr.id DESC
+    ${input.limit === undefined ? sql`` : sql`LIMIT ${input.limit + 1}`}
   `);
   return result.rows.map(mapTaskRequestRow);
+}
+export async function countListRows(db: Db | Tx, input: ListInput): Promise<number> {
+  const result = await (db as Db).execute<{ total: number }>(sql`
+    SELECT count(*)::int AS total FROM task_request.task_requests tr
+    WHERE ${sql.join(listPredicates(input), sql` AND `)}
+  `);
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+export async function listPrimaryManagedSystemIds(
+  db: Db | Tx,
+  input: { workspaceId: string; managedSystemId?: string },
+): Promise<string[]> {
+  const result = await (db as Db).execute<{ id: string }>(sql`
+    SELECT DISTINCT primary_managed_system_id AS id FROM task_request.task_requests
+    WHERE workspace_id = ${input.workspaceId}
+    ${input.managedSystemId === undefined ? sql`` : sql`AND primary_managed_system_id = ${input.managedSystemId}`}
+  `);
+  return result.rows.map((row) => row.id);
+}
+
+export async function countListStatuses(
+  db: Db | Tx,
+  input: ListInput,
+): Promise<Record<TaskRequestRow['status'], number>> {
+  const counts = {
+    pending_review: 0,
+    approved: 0,
+    rejected: 0,
+    needs_more_evidence: 0,
+    converted: 0,
+  };
+  const result = await (db as Db).execute<{ status: TaskRequestRow['status']; total: number }>(sql`
+    SELECT tr.status, count(*)::int AS total FROM task_request.task_requests tr
+    WHERE ${sql.join(listPredicates(input), sql` AND `)} GROUP BY tr.status
+  `);
+  for (const row of result.rows) counts[row.status] = Number(row.total);
+  return counts;
 }
 
 export async function updateTaskRequestDecision(

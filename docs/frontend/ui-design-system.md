@@ -885,6 +885,101 @@ Workflow: --status-internal-*, --status-reporter-*, --severity-*, --confidence-*
 Layout: see `Layout tokens` in tokens.css
 ```
 
+## Motion
+
+Use motion only to preserve continuity when something appears, leaves, or moves and its
+absence feels broken (ADR-0063). Never add decorative page/tab transitions, staggered rows,
+count-ups, or hover lifts. Sonner toasts keep their existing behavior.
+
+Values live in `packages/ui/src/styles/tokens.css`; `theme.css` exposes their Tailwind aliases:
+
+| Token | Value |
+| --- | --- |
+| `--motion-duration-fast` | `150ms` |
+| `--motion-duration-base` | `200ms` |
+| `--motion-duration-slow` | `300ms` |
+| `--motion-ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` |
+| `--motion-ease-enter` | `cubic-bezier(0, 0, 0.2, 1)` |
+| `--motion-ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` |
+
+`readMotionTiming(duration, easing)` exported from `@fops/ui` is the one JS entry to these
+CSS tokens for Web Animations, auto-animate, and dnd-kit. It reads the root computed style
+at call time, parses `ms`/`s`, and returns zero duration for missing/invalid timing, SSR,
+or reduced motion. Never repeat token literals in JS.
+
+Task Board keeps a dimmed source card and an `aria-hidden`, non-interactive `DragOverlay`
+copy that follows the pointer or keyboard drag. A drop requesting a different status skips
+return motion; same-column, no-target, and non-status-group drops return to the source using
+slow/enter timing. Escape cancellation uses return timing freshly read at drag start, including
+the current reduced-motion preference. Zero-duration timing disables that animation. Source
+opacity restores immediately at return completion; colour and shadow transitions remain.
+Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
+auto-scroll remains eligible. Keyboard overlay movement
+uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
+with no return animation. Screen-reader instructions and pickup, over, drop, and cancel
+announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` column names
+(English workflow statuses); unknown Tasks fall back to their raw ID. After a keyboard move,
+the route waits for the optimistic destination card to render, then focuses it only if focus
+is on the body or still inside the board. Focus moved outside the board is respected;
+same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
+The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
+active copy, and per-drop animation choice. A failed move abandons its pending focus request;
+an older move's failure cannot clear a newer drag's request.
+`useTaskStatusTransition` continues to own cache writes and rollback.
+
+Layout regions open and close without width transitions (#996): the detail panel, its
+fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition
+re-lays out the list behind it every frame (about 15 ms per frame at 1,000 loaded rows),
+and here it only produced a two-step jump, a blank closing strip, or squished sidebar labels.
+Attach `useListMotion` only to lists whose growth the user drives page by page or that
+are naturally small. The Task Request queue animates its user-driven load-more pages by
+the #994 decision; never attach it to infinite or auto-loading lists.
+
+`useListMotion()` returns a ref callback for user-paged or naturally small lists,
+using auto-animate with base/standard timing. Missing tokens or reduced motion skip
+initialisation entirely; detach/unmount destroys the controller. Screens import only
+this hook. Only in-place insertion, removal, and reorder within the same context animate.
+Key only the animated DOM boundary on tab/filter/scope/resource changes, including
+pending/error/empty/rows phase changes where that boundary renders those states. Keep
+selection, toolbars, controllers, and ancestor scroll owners mounted. Triage keys by
+queue context plus phase; Task Request keys by tab plus Managed System plus rendered phase
+(`cached` for both cached rows and cached empty results until that context first settles,
+then `empty`/`rows`). Reset this settlement latch only on a context change, including
+returning to a visited context; same-context invalidation and load-more preserve the
+boundary and scroll while rows remain. Async arrivals after a context switch do not animate;
+the last-row removal shows the empty phase immediately. Recommendations
+key by source VOC; Survey questions keep a stable unkeyed inner list. The last
+recommendation/question removal still shows the existing empty/onboarding branch at once.
+Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.
+Upgrade `@formkit/auto-animate` only together with `patches/@formkit__auto-animate@0.10.0.patch`, preserving its teardown and removed-row polling cleanup.
+
+Existing transitions use fast/standard through the Tailwind default aliases. Overlay
+animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.
+The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
+wrappers and the command palette compose them without inline motion classes:
+
+- `POPPER_CONTENT_MOTION`: popover, dropdown (including sub-content), hover card, and tooltip;
+  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter; exit is fast/exit.
+  Enter covers `open`, `delayed-open`, and `instant-open` states.
+- `SELECT_CONTENT_MOTION`: the same enter motion only. Radix Select has no exit Presence;
+  closing retains its existing lifecycle.
+- `DIALOG_CONTENT_MOTION`: dialog, alert dialog, and command palette content; fade and zoom 95
+  without slide, entering at base/enter and exiting at fast/exit.
+- `SCRIM_MOTION`: fade only, with the same base/enter and fast/exit timing.
+- `SHEET_CONTENT_MOTION`: slide from/to each sheet side, entering at slow/enter and exiting
+  at base/exit.
+
+The global `prefers-reduced-motion: reduce` rule in `compat.css` applies to `*, ::before,
+::after`: animation and transition duration become `0.01ms !important`, animation iteration
+count becomes `1 !important`, and scroll behavior becomes `auto !important`. The nonzero
+animation duration still lets Radix exit unmounting finish through `animationend`. This also
+stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
+use time and selects `auto` rather than `smooth`, since explicit JS smooth scrolling is not
+controlled by the CSS rule. The helper returns false when `window` or `matchMedia` is absent.
+
+List motion (#994, `@formkit/auto-animate` behind `useListMotion`) consumes the same tokens
+and reduced-motion policy. Board drag motion (#995) remains a separate implementation.
+
 ## Accessibility Rules
 
 ```text
@@ -894,7 +989,7 @@ Layout: see `Layout tokens` in tokens.css
 - DetailPanel close, save, and destructive actions must be reachable by keyboard.
 - Icon-only buttons require accessible labels and tooltips.
 - Error messages must be associated with fields.
-- Respect reduced motion settings.
+- Respect reduced motion settings through the global `compat.css` rule and `prefersReducedMotion()` for JS motion.
 - Touch targets should be at least 40px on mobile (target contract; mobile is not built).
 ```
 

@@ -8,7 +8,7 @@ import type {
 
 import type { Db } from '../../db/client.js';
 import { vocs } from '../../db/schema/voc.js';
-import { sqlTextArray } from '../../db/sql-arrays.js';
+import { sqlTextArray, sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 
 export interface LinkEndpointRow {
@@ -247,6 +247,31 @@ export async function selectActiveLinksForEndpoint(
     WHERE workspace_id = ${input.workspaceId}
       AND status = 'active'
       AND ${sidePredicate}
+    ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapEntityLinkRow);
+}
+
+export async function selectActiveLinksForEndpoints(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    endpointType: EntityLinkEntityType;
+    endpointIds: string[];
+    side: 'target';
+  },
+): Promise<EntityLinkRow[]> {
+  if (input.endpointIds.length === 0) return [];
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, source_type, source_id, target_type, target_id,
+      relation_type, visibility, status, managed_system_id, created_by,
+      created_at, updated_at, detached_by, detach_reason, detached_at
+    FROM core.entity_links
+    WHERE workspace_id = ${input.workspaceId}
+      AND status = 'active'
+      AND target_type = ${input.endpointType}
+      AND target_id = ANY(${sqlUuidArray(input.endpointIds)})
     ORDER BY created_at DESC, id DESC
   `);
   return result.rows.map(mapEntityLinkRow);

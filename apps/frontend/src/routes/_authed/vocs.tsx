@@ -1,125 +1,24 @@
 // /vocs — per-view shell selection route. Auth gate is inherited from
-// the /_authed pathless layout route. Shell selection follows ADR-0020
-// §taxonomy lock: inbox/my → ListShell, triage → WorkbenchShell,
-// action=create → PageShell. Feature content (list rows, detail panel,
+// the /_authed pathless layout route. Feature content (list rows, detail panel,
 // create form, triage queue) lands in #19 / #20 / #21.
+//
+// #982: the search schema and the shell live in features/voc/routes so the
+// router plugin can code-split the route component (it refuses when the
+// component is an exported local of the route file). The route file re-exports
+// them for existing consumers (findings route schema reuse, test harnesses).
 
-import { vocTabEnumSchema } from '@fops/shared';
-import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
-import { createFileRoute, Link, useSearch } from '@tanstack/react-router';
-import { ChevronLeft } from 'lucide-react';
-import { CreateRoute } from '@/features/voc/routes/CreateRoute';
-import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
-import { TriageRoute } from '@/features/voc/routes/TriageRoute';
-import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
-import { parseRouteSearch } from '@/lib/router/search';
-import { z } from 'zod';
+import { VocRouteShell } from '@/features/voc/routes/VocRouteShell';
+import {
+  VOC_DEFAULT_VIEW,
+  validateVocSearch,
+  vocSearchSchema,
+} from '@/features/voc/routes/voc-search';
+import { createFileRoute } from '@tanstack/react-router';
 
-export const vocSearchSchema = z
-  .object({
-    view: z.enum(['inbox', 'my', 'triage']).optional(),
-    action: z.enum(['create']).optional(),
-    selected: z.string().uuid().optional(),
-    managedSystem: z.string().optional(),
-    // D-1.1: shared VOC list-query schema owns every supported tab value.
-    tab: vocTabEnumSchema.optional(),
-    // #821 server-side text search — inbox and my views only. Mirrors the
-    // backend's 100-character cap; the list endpoint owns trimming/validation.
-    q: z.string().max(100).optional(),
-    sort: z.enum([
-      'created_at:desc',
-      'created_at:asc',
-      'severity:desc',
-      'severity:asc',
-      'reporter_facing_status:asc',
-    ]).optional(),
-    // filter.* keys reserved for #20 per-view filters. Declared as explicit
-    // dot-keys here to keep .strict() — no open-ended passthrough.
-    'filter.severity': z.string().optional(),
-    'filter.reporterStatus': z.string().optional(),
-    'filter.owner': z.string().optional(),
-    'filter.analytics_area': z.literal('unset').optional(),
-  })
-  .strict(); // reject unknown query keys — prevents link-poisoning as #20 grows
-
-type VocSearch = z.infer<typeof vocSearchSchema>;
-
-export const VOC_DEFAULT_VIEW = 'inbox' as const;
-
-export function validateVocSearch(raw: unknown) {
-  return parseRouteSearch(vocSearchSchema, raw);
-}
+export { validateVocSearch, vocSearchSchema, VOC_DEFAULT_VIEW };
+export { VocRouteShell };
 
 export const Route = createFileRoute('/_authed/vocs')({
   validateSearch: validateVocSearch,
   component: VocRouteShell,
 });
-
-// Exported for testing — tests mount this component directly in a createRoute harness.
-export function VocRouteShell() {
-  // useSearch() (without route arg) reads from the nearest matched route context.
-  // This works in both the file-route context and test harnesses that mount
-  // this component as the route component.
-  const search = useSearch({ strict: false }) as VocSearch;
-
-  // Per-view shell selection. spec voc.md §2 + ADR-0020 §taxonomy lock.
-  if (search.action === 'create') {
-    return (
-      <PageShell
-        header={{
-          title: '새 VOC 작성',
-          subtitle: (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/vocs"
-                search={{ view: 'inbox' }}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                <span>{GLOSSARY.inbox}</span>
-              </Link>
-              <span className="inline-flex items-center gap-1 rounded-md bg-accent-primary/10 px-2 py-1 text-xs font-medium text-accent-primary">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden />
-                {createLabel('VOC')}
-              </span>
-            </div>
-          ),
-        }}
-      >
-        <CreateRoute />
-      </PageShell>
-    );
-  }
-  if (search.view === 'triage') {
-    // V1 inline kicker: toolbar prop removed — VocTriageScreen absorbs route
-    // identity as a left-edge kicker ("Console · Triage") in its own toolbar.
-    // ShellHeader is intentionally absent for this route only (ADR-0020 §optional header).
-    return (
-      <WorkbenchShell>
-        <TriageRoute />
-      </WorkbenchShell>
-    );
-  }
-  // inbox / my / default
-  const view = search.view ?? VOC_DEFAULT_VIEW;
-  return <InboxShell view={view} />;
-}
-
-// ── InboxShell ────────────────────────────────────────────────────────────────
-//
-// Composition decision: useInboxRoute() returns three render slots
-// (toolbar, list, detailPanel) that are composed here inside ListShell.
-// This keeps ListShell as the ADR-0020-locked wrapper in the route file while
-// giving InboxRoute full ownership of URL state + data logic.
-// Returning an object from a hook avoids the anti-pattern of rendering
-// an object from a component function.
-
-function InboxShell({ view }: { view: 'inbox' | 'my' }) {
-  const { list, detailPanel } = useInboxRoute(view);
-  return (
-    <ListShell
-      list={list}
-      {...(detailPanel !== undefined ? { detailPanel } : {})}
-    />
-  );
-}

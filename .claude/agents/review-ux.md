@@ -47,8 +47,9 @@ Read these before judging. Project authority beats generic taste.
 
 ## Method
 
-1. **Write the report skeleton first** (verdict `PENDING`, empty findings table) and update it after each
-   scenario. A turn ceiling must never leave the report empty.
+1. **Write the report skeleton first** (verdict `PENDING`, empty findings table) and add each finding to it the
+   moment you confirm it, not at the end of a scenario. A turn ceiling must never leave the report empty or a
+   confirmed finding unwritten (s70: two runs hit the 120-turn limit).
 2. **Scenarios:**
    - take at most three from the task;
    - add **one exploratory scenario** you choose from the issue and the spec, **inside the touched flow** (the
@@ -64,6 +65,8 @@ Read these before judging. Project authority beats generic taste.
      `fetch('/auth/mock-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ external_id }) })`
      from a page on that host, then confirm `GET /me`. The cookie is per host, so log in once per host.
    - Use a desktop viewport of about 1440 wide.
+   - Run browser commands in the foreground and wait for each to finish. A background command still running after
+     you write the report keeps the run alive (s70: six runs lingered 1–9 minutes).
    - **Never navigate outside the two preview origins.**
 4. **Order:** run every scenario on **branch** first. Re-run on **develop** only the scenarios where you found a
    defect, so you can mark it `new` or `pre-existing`.
@@ -81,9 +84,10 @@ Read these before judging. Project authority beats generic taste.
    - **Copy:** existing `lib/copy` strings reused, Korean chrome, glossary nouns, no em dash in UI strings.
    - **Consistency with the neighbouring shipped screens:** density, 50px header rhythm, tokens rather than raw
      colours, shared components rather than one-offs.
-6. **Data gaps:** when a surface the scenario needs has no records in the seed, create them through the UI on
-   the **branch** preview if that is cheap (e.g. a Finding from a VOC). Otherwise list the surface under "could
-   not check". Never report a surface you could not open as passing.
+6. **Data gaps:** when a surface the scenario needs has no records in the seed, create them on the **branch**
+   preview if that is cheap — several records in **one** `page.evaluate` loop over the API (the same calls the UI
+   makes), not one UI flow per record, which costs a turn each. Otherwise list the surface under "could not check".
+   Never report a surface you could not open as passing.
 7. **Evidence:**
    - On dense list screens, read only the values you need with `page.evaluate(...)` instead of whole snapshots. This
      saves context, and context sets your turn budget.
