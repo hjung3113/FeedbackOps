@@ -916,7 +916,14 @@ opacity restores immediately at return completion; colour and shadow transitions
 Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
 auto-scroll remains eligible. Keyboard overlay movement
 uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
-with no return animation. The route owns only the active copy and per-drop animation choice;
+with no return animation. Screen-reader instructions and pickup, over, drop, and cancel
+announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` column names
+(English workflow statuses); unknown Tasks fall back to their raw ID. After a keyboard move,
+the route waits for the optimistic destination card to render, then focuses it only if focus
+is on the body or still inside the board. Focus moved outside the board is respected;
+same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
+The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
+active copy, and per-drop animation choice;
 `useTaskStatusTransition` continues to own cache writes and rollback.
 
 Layout regions open and close without width transitions (#996): the detail panel, its

@@ -1,7 +1,7 @@
 import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type * as React from 'react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
 
@@ -107,10 +107,19 @@ describe('TaskBoardRoute keyboard dragging', () => {
   });
 
   it('moves a rendered Task from Backlog to Doing with the keyboard sensor', async () => {
+    const liveMessages: string[] = [];
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <TaskBoardRoute />
+        <React.Profiler
+          id="keyboard-announcements"
+          onRender={() => {
+            const liveRegion = document.querySelector('[role="status"]');
+            if (liveRegion) liveMessages.push(liveRegion.textContent ?? '');
+          }}
+        >
+          <TaskBoardRoute />
+        </React.Profiler>
       </QueryClientProvider>,
     );
 
@@ -120,6 +129,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
     });
     card.focus();
     fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    expect(liveMessages).toContain('TASK-1000 Task를 집었습니다. 현재 열: Backlog.');
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -127,13 +137,14 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(
       screen.getByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      `Draggable item ${task.id} was moved over droppable area backlog.`,
+    expect(screen.getByRole('status').textContent).toBe(
+      'TASK-1000 Task가 Backlog 열 위에 있습니다.',
     );
 
     for (let step = 0; step < 13; step += 1) {
       fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
     }
+    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 Doing 열 위에 있습니다.');
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
 
     await waitFor(() =>
@@ -145,9 +156,14 @@ describe('TaskBoardRoute keyboard dragging', () => {
     );
     expect(screen.getByLabelText('Doing 열')).toHaveTextContent(task.display_id);
     expect(
+      within(screen.getByLabelText('Doing 열')).getByRole('button', {
+        name: 'TASK-1000: Keyboard draggable Task',
+      }),
+    ).toHaveFocus();
+    expect(
       screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(`Draggable item ${task.id} was dropped`);
+    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task를 Doing 열에 놓았습니다.');
   });
 
   it('cancels keyboard dragging with Escape, clears the copy, and announces cancellation', async () => {
@@ -180,8 +196,119 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(
       screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      `Dragging was cancelled. Draggable item ${task.id}`,
+    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task 이동을 취소했습니다.');
+    expect(card).toHaveFocus();
+  });
+
+  it.each(['body', 'board', 'outside'] as const)(
+    'waits for the optimistic destination render and respects focus on %s',
+    async (focusLocation) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      let releaseCancellation!: () => void;
+      const cancellation = new Promise<void>((resolve) => {
+        releaseCancellation = resolve;
+      });
+      vi.spyOn(client, 'cancelQueries').mockReturnValue(cancellation);
+      render(
+        <QueryClientProvider client={client}>
+          <button type="button">Outside board</button>
+          <TaskBoardRoute />
+        </QueryClientProvider>,
+      );
+      const card = await screen.findByRole('button', {
+        name: 'TASK-1000: Keyboard draggable Task',
+      });
+      card.focus();
+      fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      for (let step = 0; step < 13; step += 1) {
+        fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+      }
+      const outside = screen.getByRole('button', { name: 'Outside board' });
+      if (focusLocation === 'outside') outside.focus();
+      fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+      await act(async () => {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+      expect(
+        within(screen.getByLabelText('Backlog 열')).getByRole('button', {
+          name: 'TASK-1000: Keyboard draggable Task',
+        }),
+      ).toBe(card);
+      expect(screen.getByLabelText('Doing 열')).not.toHaveTextContent(task.display_id);
+      expect(updateTaskStatus).not.toHaveBeenCalled();
+      if (focusLocation === 'outside') expect(outside).toHaveFocus();
+      if (focusLocation === 'body') card.blur();
+      await act(async () => {
+        releaseCancellation();
+      });
+      const destination = await within(screen.getByLabelText('Doing 열')).findByRole('button', {
+        name: 'TASK-1000: Keyboard draggable Task',
+      });
+      await waitFor(() => expect(updateTaskStatus).toHaveBeenCalled());
+      if (focusLocation === 'outside') expect(outside).toHaveFocus();
+      else expect(destination).toHaveFocus();
+    },
+  );
+
+  it('keeps focus on the card after a same-column keyboard drop', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
     );
+    const card = await screen.findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('status').textContent).toBe(
+      'TASK-1000 Task를 Backlog 열에 놓았습니다.',
+    );
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    expect(card).toHaveFocus();
+  });
+
+  it('announces leaving all columns and a no-target keyboard drop', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    expect(document.getElementById(card.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      'Task를 집으려면 스페이스나 엔터를 누르세요. 화살표 키로 열을 옮기고, 스페이스나 엔터로 놓거나 Escape로 취소합니다.',
+    );
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    for (let step = 0; step < 15; step += 1) {
+      fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
+    }
+    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 열 밖에 있습니다.');
+    fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('status').textContent).toBe(
+      'TASK-1000 Task를 놓았습니다. 상태는 바뀌지 않습니다.',
+    );
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    expect(card).toHaveFocus();
   });
 });

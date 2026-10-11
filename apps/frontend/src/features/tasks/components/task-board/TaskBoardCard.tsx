@@ -24,6 +24,7 @@ export function TaskBoardCard({
   return (
     <button
       ref={draggable.setNodeRef}
+      data-task-board-card-id={task.id}
       type="button"
       {...draggable.listeners}
       {...draggable.attributes}
