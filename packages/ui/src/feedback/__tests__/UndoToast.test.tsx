@@ -180,16 +180,14 @@ describe('UndoToast pause host covers the sonner toast <li> (#960)', () => {
     ({ pause, resume }) => {
       vi.useFakeTimers();
       const onDismiss = vi.fn();
+      // sonner's real wrapper is <li data-sonner-toast tabindex=0>; build it as the render container.
+      const host = document.createElement('li');
+      host.setAttribute('data-sonner-toast', '');
+      host.tabIndex = 0;
+      document.body.appendChild(host);
       render(
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: sonner's real wrapper is <li tabindex=0>
-        <li data-sonner-toast tabIndex={0}>
-          <UndoToast
-            message="Triage 확정됨"
-            onAction={vi.fn()}
-            onDismiss={onDismiss}
-            duration={4000}
-          />
-        </li>,
+        <UndoToast message="Triage 확정됨" onAction={vi.fn()} onDismiss={onDismiss} duration={4000} />,
+        { container: host },
       );
       const wrapper = screen.getByRole('status').closest('[data-sonner-toast]') as HTMLElement;
 
