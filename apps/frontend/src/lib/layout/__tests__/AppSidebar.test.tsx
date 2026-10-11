@@ -737,6 +737,96 @@ describe('AppSidebar', () => {
     expect(outsideInput).toHaveFocus();
   });
 
+  it.each(['body', 'VOC apply button'] as const)(
+    'a late delete after navigation preserves destination focus on %s',
+    async (destinationFocus) => {
+      let resolveDelete!: () => void;
+      const remove = () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        });
+      const { rerender } = render(
+        <AppSidebar
+          entries={entries}
+          savedViews={['task-1', 'task-2'].map(savedView)}
+          savedViewSurface="tasks"
+          onDeleteSavedView={remove}
+        />,
+      );
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('saved-view-delete-task-1'));
+
+      rerender(
+        <AppSidebar
+          entries={entries}
+          savedViews={['voc-1', 'voc-2'].map(savedView)}
+          canSaveView
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />,
+      );
+      const destination =
+        destinationFocus === 'body' ? document.body : screen.getByTestId('saved-view-apply-voc-1');
+      if (destination === document.body) {
+        (document.activeElement as HTMLElement | null)?.blur();
+      } else {
+        destination.focus();
+      }
+      expect(destination).toHaveFocus();
+
+      await act(async () => {
+        resolveDelete();
+      });
+      expect(destination).toHaveFocus();
+    },
+  );
+
+  it('discards a late delete after navigating away and back to the same surface', async () => {
+    let resolveDelete!: () => void;
+    const remove = () =>
+      new Promise<void>((resolve) => {
+        resolveDelete = resolve;
+      });
+    const tasks = (
+      <AppSidebar
+        entries={entries}
+        savedViews={['task-1', 'task-2'].map(savedView)}
+        savedViewSurface="tasks"
+        onDeleteSavedView={remove}
+      />
+    );
+    const { rerender } = render(tasks);
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-task-1'));
+
+    rerender(
+      <AppSidebar
+        entries={entries}
+        savedViews={['voc-1', 'voc-2'].map(savedView)}
+        canSaveView
+        savedViewSurface="voc"
+        onDeleteSavedView={remove}
+      />,
+    );
+    rerender(tasks);
+    screen.getByTestId('saved-view-apply-task-2').focus();
+    screen.getByTestId('saved-view-apply-task-2').blur();
+    expect(document.body).toHaveFocus();
+
+    await act(async () => {
+      resolveDelete();
+    });
+    rerender(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('task-2')]}
+        savedViewSurface="tasks"
+        onDeleteSavedView={remove}
+      />,
+    );
+    expect(document.body).toHaveFocus();
+  });
+
   // #972 FIX2: with a single delete, focus the user moved outside the section
   // while the refetch was in flight survives the recovery pass.
   it('#972 FIX2 same-surface delete leaves focus the user moved outside the section', async () => {

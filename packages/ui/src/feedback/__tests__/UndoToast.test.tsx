@@ -4,9 +4,15 @@
 // Prototype ref: docs/design-prototype/screen-voc-create.jsx:699-730
 
 import * as React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UndoToast } from '../UndoToast.js';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 describe('UndoToast', () => {
   it('renders message and 실행 취소 button', () => {
@@ -48,7 +54,6 @@ describe('UndoToast', () => {
     expect(onDismiss).not.toHaveBeenCalled();
     act(() => { vi.advanceTimersByTime(200); });
     expect(onDismiss).toHaveBeenCalledOnce();
-    vi.useRealTimers();
   });
 
   it('calls onAction when Enter is pressed on the button', () => {
@@ -122,7 +127,6 @@ describe('UndoToast auto-dismiss pause (#960)', () => {
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => { vi.advanceTimersByTime(1); });
       expect(onDismiss).toHaveBeenCalledOnce();
-      vi.useRealTimers();
     },
   );
 
@@ -157,7 +161,6 @@ describe('UndoToast auto-dismiss pause (#960)', () => {
     expect(onDismiss).not.toHaveBeenCalled();
     act(() => { vi.advanceTimersByTime(1); });
     expect(onDismiss).toHaveBeenCalledOnce();
-    vi.useRealTimers();
   });
 });
 
@@ -206,7 +209,6 @@ describe('UndoToast pause host covers the sonner toast <li> (#960)', () => {
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => { vi.advanceTimersByTime(1); });
       expect(onDismiss).toHaveBeenCalledOnce();
-      vi.useRealTimers();
     },
   );
 });
@@ -243,7 +245,6 @@ describe('UndoToast duration change resets the budget (#960)', () => {
       expect(onDismiss).not.toHaveBeenCalled();
       act(() => { vi.advanceTimersByTime(1); });
       expect(onDismiss).toHaveBeenCalledOnce();
-      vi.useRealTimers();
     },
   );
 });
@@ -284,6 +285,5 @@ describe('UndoToast expiry is one-shot (#960)', () => {
     act(() => { vi.advanceTimersByTime(5000); });
     expect(onDismissNext).not.toHaveBeenCalled();
     expect(onDismiss).toHaveBeenCalledOnce();
-    vi.useRealTimers();
   });
 });
