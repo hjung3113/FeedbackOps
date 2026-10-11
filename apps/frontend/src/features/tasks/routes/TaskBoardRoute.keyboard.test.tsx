@@ -1,5 +1,5 @@
 import { getTask, listTasks, updateTaskStatus } from '@/lib/api/tasks';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -90,8 +90,16 @@ describe('TaskBoardRoute keyboard dragging', () => {
       this: HTMLElement,
     ) {
       const label = this.getAttribute('aria-label');
-      if (label === 'Backlog 열') return boardRect(0, 288, 600);
-      if (label === 'Doing 열') return boardRect(300, 288, 600);
+      const index = [
+        'Backlog',
+        'Todo',
+        'Doing',
+        'Review',
+        'Done',
+        'Released',
+        'Reopened',
+      ].findIndex((status) => label === `${status} 열`);
+      if (index >= 0) return boardRect(index * 300, 288, 600);
       if (
         label?.startsWith('TASK-1000:') ||
         (this.getAttribute('aria-hidden') === 'true' && this.textContent?.includes(task.title))
@@ -118,7 +126,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
       );
       const statusCard = await screen.findByRole('button', { name: /TASK-1000:/ });
       expect(statusCard).toHaveAttribute('aria-disabled', 'false');
-      expect(statusCard).toHaveAttribute('aria-roledescription', 'draggable');
+      expect(statusCard).toHaveAttribute('aria-roledescription', '끌 수 있는 Task');
       expect(statusCard).toHaveAttribute('aria-describedby');
       fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
       fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
@@ -174,12 +182,12 @@ describe('TaskBoardRoute keyboard dragging', () => {
       screen.getByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task가 Backlog 열 위에 있습니다.',
+      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
     );
 
-    for (let step = 0; step < 13; step += 1) {
-      fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
-    }
+    fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 Todo 열 위에 있습니다.');
+    fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
     expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 Doing 열 위에 있습니다.');
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
 
@@ -200,6 +208,30 @@ describe('TaskBoardRoute keyboard dragging', () => {
       screen.queryByText(task.title, { selector: '[aria-hidden="true"] *' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task를 Doing 열에 놓았습니다.');
+  });
+
+  it('keeps pickup live until leaving the origin and announces returning to it', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('button', { name: /TASK-1000:/ });
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+    );
+    fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task가 Todo 열 위에 있습니다.');
+    fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'TASK-1000 Task가 Backlog 열 위에 있습니다.',
+    );
   });
 
   it('cancels keyboard dragging with Escape, clears the copy, and announces cancellation', async () => {
@@ -259,7 +291,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      for (let step = 0; step < 13; step += 1) {
+      for (let step = 0; step < 2; step += 1) {
         fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
       }
       const outside = screen.getByRole('button', { name: 'Outside board' });
@@ -289,6 +321,65 @@ describe('TaskBoardRoute keyboard dragging', () => {
     },
   );
 
+  it.each(['ordinary rejection', 'rollback committed before rejection', 'outside focus'] as const)(
+    'returns focus after a rejected committed move: %s',
+    async (order) => {
+      let rejectUpdate!: (error: Error) => void;
+      let releaseSettled!: () => void;
+      const settled = new Promise<void>((resolve) => {
+        releaseSettled = resolve;
+      });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+        mutationCache: new MutationCache({
+          onSettled: () => (order === 'rollback committed before rejection' ? settled : undefined),
+        }),
+      });
+      vi.mocked(updateTaskStatus).mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectUpdate = reject;
+        }),
+      );
+      render(
+        <QueryClientProvider client={client}>
+          <button type="button">Outside board</button>
+          <TaskBoardRoute />
+        </QueryClientProvider>,
+      );
+      const card = await screen.findByRole('button', { name: /TASK-1000:/ });
+      card.focus();
+      fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+      fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+      fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+      const destination = await within(screen.getByLabelText('Doing 열')).findByRole('button', {
+        name: /TASK-1000:/,
+      });
+      await waitFor(() => expect(destination).toHaveFocus());
+      const outside = screen.getByRole('button', { name: 'Outside board' });
+      if (order === 'outside focus') outside.focus();
+      await act(async () => {
+        rejectUpdate(new Error('Move rejected'));
+      });
+      const origin = await within(screen.getByLabelText('Backlog 열')).findByRole('button', {
+        name: /TASK-1000:/,
+      });
+      if (order === 'rollback committed before rejection') {
+        expect(client.isMutating()).toBe(1);
+        expect(document.body).toHaveFocus();
+        await act(async () => {
+          releaseSettled();
+        });
+      }
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      if (order === 'outside focus') expect(outside).toHaveFocus();
+      else await waitFor(() => expect(origin).toHaveFocus());
+    },
+  );
+
   it('abandons destination focus after rejection before the destination commits', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     let releaseCancellation!: () => void;
@@ -311,7 +402,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    for (let step = 0; step < 13; step += 1) {
+    for (let step = 0; step < 2; step += 1) {
       fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
     }
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
@@ -342,20 +433,6 @@ describe('TaskBoardRoute keyboard dragging', () => {
 
   it('preserves a newer keyboard destination request when an older move fails', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      const label = this.getAttribute('aria-label');
-      if (label === 'Backlog 열') return boardRect(0, 288, 600);
-      if (label === 'Doing 열') return boardRect(300, 288, 600);
-      if (label === 'Todo 열') return boardRect(-300, 288, 600);
-      if (
-        label?.startsWith('TASK-1000:') ||
-        (this.getAttribute('aria-hidden') === 'true' && this.textContent?.includes(task.title))
-      )
-        return boardRect(16, 256, 72);
-      return boardRect(0, 0, 0);
-    });
     let releaseOlder!: () => void;
     let releaseNewer!: () => void;
     vi.spyOn(client, 'cancelQueries')
@@ -384,8 +461,8 @@ describe('TaskBoardRoute keyboard dragging', () => {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      for (let step = 0; step < 13; step += 1) {
-        const direction = move === 0 ? 'ArrowRight' : 'ArrowLeft';
+      for (let step = 0; step < (move === 0 ? 2 : 1); step += 1) {
+        const direction = 'ArrowRight';
         fireEvent.keyDown(document, { key: direction, code: direction });
       }
       expect(screen.getByRole('status').textContent).toBe(
@@ -441,7 +518,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
     expect(card).toHaveFocus();
   });
 
-  it('announces leaving all columns and a no-target keyboard drop', async () => {
+  it('clamps keyboard movement at the first column', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -459,16 +536,16 @@ describe('TaskBoardRoute keyboard dragging', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    for (let step = 0; step < 15; step += 1) {
-      fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
-    }
-    expect(screen.getByRole('status').textContent).toBe('TASK-1000 Task가 열 밖에 있습니다.');
+    fireEvent.keyDown(document, { key: 'ArrowLeft', code: 'ArrowLeft' });
+    expect(screen.getByRole('status').textContent).toBe(
+      'TASK-1000 Task를 집었습니다. 현재 열: Backlog.',
+    );
     fireEvent.keyDown(document, { key: ' ', code: 'Space' });
     await act(async () => {
       await Promise.resolve();
     });
     expect(screen.getByRole('status').textContent).toBe(
-      'TASK-1000 Task를 놓았습니다. 상태는 바뀌지 않습니다.',
+      'TASK-1000 Task를 Backlog 열에 놓았습니다.',
     );
     expect(updateTaskStatus).not.toHaveBeenCalled();
     expect(card).toHaveFocus();

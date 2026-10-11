@@ -65,6 +65,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const geometry = useTaskBoardDragGeometry();
   const { boardScroller } = geometry;
   const dragGeneration = React.useRef(0);
+  const [focusRetry, retryKeyboardFocus] = React.useReducer((retry: number) => retry + 1, 0);
   const pendingKeyboardFocus = React.useRef<{
     taskId: string;
     destinationStatus: TaskStatus;
@@ -85,7 +86,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
   const systemNames = useTaskManagedSystemNames();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: geometry.coordinateGetter }),
+  );
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
   const items = tasksQuery.data?.items ?? [];
   React.useEffect(() => { if (selectedParam !== undefined) setSelectedId(selectedParam); }, [selectedParam]);
@@ -96,10 +100,12 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const focusScope = React.useRef({ groupBy, managedSystem, publicUpdate });
   React.useLayoutEffect(
     () => () => {
+      dragGeneration.current += 1;
       pendingKeyboardFocus.current = null;
     },
     [],
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focusRetry explicitly schedules a rollback focus attempt even when task data already committed.
   React.useLayoutEffect(() => {
     const previousScope = focusScope.current;
     if (
@@ -107,6 +113,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       previousScope.managedSystem !== managedSystem ||
       previousScope.publicUpdate !== publicUpdate
     ) {
+      dragGeneration.current += 1;
       pendingKeyboardFocus.current = null;
     }
     focusScope.current = { groupBy, managedSystem, publicUpdate };
@@ -130,7 +137,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     if (document.activeElement === document.body || board.contains(document.activeElement)) {
       card.focus();
     }
-  }, [filtered, groupBy, managedSystem, publicUpdate, boardScroller]);
+  }, [filtered, groupBy, managedSystem, publicUpdate, focusRetry, boardScroller]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -177,6 +184,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
+  const pickupColumn = React.useRef<TaskStatus | null>(null);
   const announcements = React.useMemo<Announcements>(() => {
     const taskFor = (active: Parameters<Announcements['onDragStart']>[0]['active']) =>
       active.data.current?.task as TaskDto | undefined;
@@ -187,12 +195,17 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return {
       onDragStart: ({ active }) => {
         const task = taskFor(active);
+        pickupColumn.current = task?.status ?? null;
         return TASK_BOARD_COPY.pickup(
           displayId(active),
           task ? TASK_STATUS_LABELS[task.status] : String(active.id),
         );
       },
-      onDragOver: ({ active, over }) => TASK_BOARD_COPY.over(displayId(active), columnLabel(over)),
+      onDragOver: ({ active, over }) => {
+        if (pickupColumn.current !== null && over?.id === pickupColumn.current) return undefined;
+        if (over && over.id !== pickupColumn.current) pickupColumn.current = null;
+        return TASK_BOARD_COPY.over(displayId(active), columnLabel(over));
+      },
       onDragEnd: ({ active, over }) => TASK_BOARD_COPY.drop(displayId(active), columnLabel(over)),
       onDragCancel: ({ active }) => TASK_BOARD_COPY.cancel(displayId(active)),
     };
@@ -223,7 +236,8 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     setActiveTask(null);
     if (willMove) {
       const generation = dragGeneration.current;
-      if (event.activatorEvent instanceof KeyboardEvent) {
+      const keyboardMove = event.activatorEvent instanceof KeyboardEvent;
+      if (keyboardMove) {
         pendingKeyboardFocus.current = {
           taskId: task.id,
           destinationStatus: target as TaskStatus,
@@ -232,9 +246,15 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       }
       // Per-invocation promises also settle when a newer mutation supersedes this one.
       void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
-        if (pendingKeyboardFocus.current?.generation === generation) {
-          pendingKeyboardFocus.current = null;
-        }
+        if (!keyboardMove || dragGeneration.current !== generation) return;
+        pendingKeyboardFocus.current = {
+          taskId: task.id,
+          destinationStatus: task.status,
+          generation,
+        };
+        // Rollback may have committed before this rejection. Explicitly retry the layout effect;
+        // if it commits later, filtered changing retries the same guarded request again.
+        retryKeyboardFocus();
       });
     }
   }

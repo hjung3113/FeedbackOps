@@ -1,3 +1,4 @@
+import type { KeyboardCoordinateGetter } from '@dnd-kit/core';
 import { act, cleanup, fireEvent, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useTaskBoardDragGeometry } from './useTaskBoardDragGeometry';
@@ -14,15 +15,58 @@ function boardNodes() {
   return { board, column, columnScroller, dropNode };
 }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('Task board drag geometry', () => {
+  function coordinates(code: string, left: number) {
+    const { result } = renderHook(useTaskBoardDragGeometry);
+    const columns = [600, 0, 300, 900].map((x, index) => {
+      const { column, dropNode } = boardNodes();
+      vi.spyOn(column, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(x, 100, index === 3 ? 0 : 288, 700),
+      );
+      return { id: String(x), node: { current: dropNode }, disabled: false };
+    });
+    return result.current.coordinateGetter(new KeyboardEvent('keydown', { code }), {
+      active: 'task',
+      currentCoordinates: { x: left, y: 110 },
+      context: {
+        collisionRect: new DOMRect(left, 110, 256, 72),
+        droppableContainers: { getEnabled: () => columns },
+      },
+    } as unknown as Parameters<KeyboardCoordinateGetter>[1]);
+  }
+
+  it.each([
+    ['ArrowLeft', 16],
+    ['ArrowRight', 616],
+    ['ArrowUp', 16],
+    ['ArrowDown', 16],
+  ])('does not move for %s at x=%s', (code, left) => {
+    expect(coordinates(String(code), Number(left))).toBeUndefined();
+  });
+
+  it('centres the active rect in the next live column in visual order', () => {
+    expect(coordinates('ArrowRight', 16)).toEqual({ x: 316, y: 110 });
+  });
+
+  it('snaps from outside every column using the nearest column', () => {
+    expect(coordinates('ArrowRight', -500)).toEqual({ x: 16, y: 110 });
+  });
+
   it('allows board auto-scroll only at its own edges and keeps column scrolling eligible', async () => {
     const { result } = renderHook(useTaskBoardDragGeometry);
     const { board, columnScroller } = boardNodes();
     result.current.boardScroller.current = board;
     vi.spyOn(board, 'getBoundingClientRect').mockReturnValue(new DOMRect(292, 100, 1147, 700));
-    act(() => result.current.onDragStart({ activatorEvent: new MouseEvent('pointerdown', { clientX: 600, clientY: 400 }) }));
+    act(() =>
+      result.current.onDragStart({
+        activatorEvent: new MouseEvent('pointerdown', { clientX: 600, clientY: 400 }),
+      }),
+    );
     expect(result.current.autoScroll?.canScroll).toEqual(expect.any(Function));
     for (const [x, eligible] of [
       [845, false],
@@ -75,5 +119,4 @@ describe('Task board drag geometry', () => {
     });
     expect(collisions?.map(({ id }) => id)).toEqual(['backlog']);
   });
-
 });

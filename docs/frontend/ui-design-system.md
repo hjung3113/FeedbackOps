@@ -914,16 +914,23 @@ slow/enter timing. Escape cancellation uses return timing freshly read at drag s
 the current reduced-motion preference. Zero-duration timing disables that animation. Source
 opacity restores immediately at return completion; colour and shadow transitions remain.
 Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
-auto-scroll remains eligible. Keyboard overlay movement
+auto-scroll remains eligible. Keyboard Left/Right moves one column per press in live visual
+left-to-right order, centring the card horizontally and clamping at the first/last column.
+Up/Down does nothing because card order is not persisted. Keyboard overlay movement
 uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
 with no return animation. Screen-reader instructions and pickup, over, drop, and cancel
 announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` column names
-(English workflow statuses); unknown Tasks fall back to their raw ID. After a keyboard move,
-the route waits for the optimistic destination card to render, then focuses it only if focus
+(English workflow statuses); unknown Tasks fall back to their raw ID. Enabled cards use the
+role description `끌 수 있는 Task`; disabled cards have no role description. Initial over
+announcements for the pickup column do not overwrite pickup; after reaching a different
+column, returning to the origin is announced normally. After a keyboard move, the route waits
+for the optimistic destination card to render, then focuses it only if focus
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
 The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
-active copy, and per-drop animation choice. A failed move abandons its pending focus request;
+active copy, and per-drop animation choice. A rejected keyboard move refocuses the card in its
+rolled-back column once it renders, only if focus is on the body or inside the board and no
+newer drag has started. Scope changes and unmount clear pending focus;
 an older move's failure cannot clear a newer drag's request.
 `useTaskStatusTransition` continues to own cache writes and rollback.
 

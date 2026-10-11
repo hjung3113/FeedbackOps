@@ -1,6 +1,7 @@
 import {
   type CollisionDetection,
   type DragStartEvent,
+  type KeyboardCoordinateGetter,
   getClientRect,
   rectIntersection,
 } from '@dnd-kit/core';
@@ -42,6 +43,36 @@ export function useTaskBoardDragGeometry() {
         ),
       ),
     });
+  const coordinateGetter: KeyboardCoordinateGetter = (event, { context, currentCoordinates }) => {
+    if (event.code !== 'ArrowRight' && event.code !== 'ArrowLeft') return undefined;
+    const activeRect = context.collisionRect;
+    if (!activeRect) return undefined;
+    const columns = context.droppableContainers
+      .getEnabled()
+      .flatMap(({ node }) => (node.current ? [outerColumnRect(node.current)] : []))
+      .filter((rect) => rect.width > 0)
+      .sort((a, b) => a.left - b.left);
+    if (!columns.length) return undefined;
+    const centre = activeRect.left + activeRect.width / 2;
+    let current = columns.findIndex((rect) => centre >= rect.left && centre <= rect.right);
+    const outsideColumns = current === -1;
+    if (outsideColumns) {
+      const distance = (rect: (typeof columns)[number]) =>
+        Math.min(Math.abs(centre - rect.left), Math.abs(centre - rect.right));
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      columns.forEach((rect, index) => {
+        if (distance(rect) < nearestDistance) {
+          current = index;
+          nearestDistance = distance(rect);
+        }
+      });
+    }
+    const target =
+      columns[outsideColumns ? current : current + (event.code === 'ArrowRight' ? 1 : -1)];
+    if (!target) return undefined;
+    // KeyboardSensor coordinates are the active rect's top-left, not its centre.
+    return { x: target.left + target.width / 2 - activeRect.width / 2, y: currentCoordinates.y };
+  };
   function onDragStart(event: Pick<DragStartEvent, 'activatorEvent'>) {
     const activator = event.activatorEvent;
     pointer.current =
@@ -63,6 +94,7 @@ export function useTaskBoardDragGeometry() {
       },
     },
     collisionDetection,
+    coordinateGetter,
     onDragStart,
     onDragEnd,
   };
