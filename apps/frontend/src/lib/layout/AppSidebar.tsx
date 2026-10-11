@@ -1,3 +1,4 @@
+import type { SavedViewSurface } from '@/lib/api/saved-views';
 import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { cn } from '@fops/ui';
@@ -87,10 +88,16 @@ export interface AppSidebarProps {
   canAccessWorkspaceAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
+  /**
+   * Surface of the passed `savedViews` (#972 FIX1). A change means the sidebar
+   * now shows another surface's list, so any pending delete focus recovery is
+   * dropped instead of firing into the new surface's section.
+   */
+  savedViewSurface?: SavedViewSurface;
   canSaveView?: boolean;
   onSaveView?: (name: string) => void;
   onApplySavedView?: (id: string) => void;
-  onDeleteSavedView?: (id: string) => void;
+  onDeleteSavedView?: (id: string) => undefined | Promise<unknown>;
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
@@ -123,6 +130,7 @@ export function AppSidebar({
   canAccessWorkspaceAdmin = false,
   onManagedSystemChange,
   savedViews = [],
+  savedViewSurface,
   canSaveView = false,
   onSaveView,
   onApplySavedView,
@@ -286,6 +294,7 @@ export function AppSidebar({
           {!collapsed && (savedViews.length > 0 || canSaveView) && (
             <SavedViewsSection
               views={savedViews}
+              surface={savedViewSurface}
               canSave={canSaveView}
               {...(onSaveView !== undefined ? { onSave: onSaveView } : {})}
               {...(onApplySavedView !== undefined ? { onApply: onApplySavedView } : {})}
@@ -309,27 +318,110 @@ export function AppSidebar({
 
 function SavedViewsSection({
   views,
+  surface,
   canSave,
   onSave,
   onApply,
   onDelete,
 }: {
   views: Array<{ id: string; name: string }>;
+  surface: SavedViewSurface | undefined;
   canSave: boolean;
   onSave?: (name: string) => void;
   onApply?: (id: string) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string) => undefined | Promise<unknown>;
 }) {
   const [name, setName] = React.useState('');
+  // #972 FIX1: a delete arms focus recovery only once its promise fulfils — a
+  // rejected delete keeps focus on its × and row, and never moves focus later.
+  // Each armed delete remembers the view order captured at click time; when
+  // the deleted row leaves the list, the target is chosen from the survivors
+  // at that moment, skipping views that are themselves awaiting their own
+  // delete refetch. If no neighbour row and no save input exists, focus stays
+  // where the browser leaves it.
+  const [pendingRecovery, setPendingRecovery] = React.useState(
+    () => new Map<string, { order: string[]; deletedIndex: number }>(),
+  );
+  const sectionRef = React.useRef<HTMLElement | null>(null);
+
+  // A surface change means the section now shows another surface's list; any
+  // recovery armed for the previous surface must not fire into it. Reset in
+  // the render phase so the effect below sees the cleared map in the same pass.
+  const [prevSurface, setPrevSurface] = React.useState(surface);
+  if (surface !== prevSurface) {
+    setPrevSurface(surface);
+    if (pendingRecovery.size > 0) setPendingRecovery(() => new Map());
+  }
+
+  React.useEffect(() => {
+    if (pendingRecovery.size === 0) return;
+    const survivors = new Set(views.map((view) => view.id));
+    const inFlight = new Set(pendingRecovery.keys());
+    const section = sectionRef.current;
+    let next: typeof pendingRecovery | null = null;
+    let rowTarget: HTMLElement | null = null;
+    let allowSaveInputFallback = false;
+    for (const [deletedId, capture] of pendingRecovery) {
+      if (survivors.has(deletedId)) continue; // refetch has not landed yet
+      inFlight.delete(deletedId);
+      next ??= new Map(pendingRecovery);
+      next.delete(deletedId);
+      if (rowTarget !== null) continue; // one focus move per pass
+      const pick = (ids: string[]) => ids.find((id) => survivors.has(id) && !inFlight.has(id));
+      const targetId =
+        pick(capture.order.slice(capture.deletedIndex + 1)) ??
+        pick([...capture.order.slice(0, capture.deletedIndex)].reverse()) ??
+        null;
+      if (targetId !== null) {
+        rowTarget = section?.querySelector<HTMLElement>(`[data-testid="saved-view-apply-${targetId}"]`) ?? null;
+      }
+      if (rowTarget === null) allowSaveInputFallback = true;
+    }
+    let target = rowTarget;
+    if (target === null && allowSaveInputFallback && canSave) {
+      target = section?.querySelector<HTMLElement>('input[aria-label="저장된 보기 이름"]') ?? null;
+    }
+    if (next !== null) setPendingRecovery(next);
+    // #972 FIX2: move focus only when the user has not put focus elsewhere —
+    // an activeElement outside this section (main content, other UI) keeps it.
+    const active = document.activeElement;
+    const focusIsFree =
+      active === null || active === document.body || (section?.contains(active) ?? false);
+    if (target !== null && focusIsFree) target.focus();
+  }, [pendingRecovery, views, canSave]);
+
+  const requestDelete = (id: string) => {
+    const order = views.map((view) => view.id);
+    const capture = { order, deletedIndex: order.indexOf(id) };
+    Promise.resolve(onDelete?.(id)).then(
+      () => {
+        setPendingRecovery((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.set(id, capture);
+          return next;
+        });
+      },
+      () => {
+        // Rejected delete: the row stays and no recovery is armed.
+      },
+    );
+  };
+
   return (
-    <section className="mt-3.5" aria-label="저장된 보기" data-testid="saved-views-section">
+    <section
+      ref={sectionRef}
+      className="mt-3.5"
+      aria-label="저장된 보기"
+      data-testid="saved-views-section"
+    >
       <div className="mx-2 mb-1 text-caption font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
       {views.map((view) => (
         <div key={view.id} className="group flex items-center gap-1">
-          <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
-            <span className="truncate">{view.name}</span>
+          <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} title={view.name} data-testid={`saved-view-apply-${view.id}`}>
+            <span className="block truncate">{view.name}</span>
           </button>
-          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
+          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => requestDelete(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
         </div>
       ))}
       {canSave && (

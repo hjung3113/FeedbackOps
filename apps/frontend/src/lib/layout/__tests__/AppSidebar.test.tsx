@@ -1,5 +1,6 @@
 import { NAV_TREE } from '@/routes/_authed';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
@@ -467,5 +468,320 @@ describe('AppSidebar', () => {
     rerender(<AppSidebar entries={NAV_TREE.tasks} />);
     expect(screen.queryByTestId('sidebar-nav-inbox')).not.toBeInTheDocument();
     expect(screen.getByTestId('sidebar-nav-tasks-board')).toBeInTheDocument();
+  });
+
+  const savedView = (id: string) => ({ id, name: `보기 ${id}` });
+
+  // #972: jsdom has no layout engine, so the clip itself can only be pinned by
+  // class; the title attribute is the observable discoverability guarantee.
+  it('truncates a long saved-view name in the apply button and keeps it discoverable', () => {
+    const name = '가'.repeat(200);
+    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name }]} />);
+
+    const button = screen.getByTestId('saved-view-apply-view-1');
+    expect(button).toHaveAttribute('title', name);
+    expect(button.querySelector('span')).toHaveClass('block', 'truncate');
+    expect(button).toHaveClass('min-w-0', 'flex-1');
+  });
+
+  it.each([
+    {
+      scenario: 'first of three → next view',
+      initial: ['view-1', 'view-2', 'view-3'],
+      deleteId: 'view-1',
+      remaining: ['view-2', 'view-3'],
+      targetTestId: 'saved-view-apply-view-2',
+      canSave: false,
+    },
+    {
+      scenario: 'last of three → previous view',
+      initial: ['view-1', 'view-2', 'view-3'],
+      deleteId: 'view-3',
+      remaining: ['view-1', 'view-2'],
+      targetTestId: 'saved-view-apply-view-2',
+      canSave: false,
+    },
+    {
+      scenario: 'only view → save-name input',
+      initial: ['view-1'],
+      deleteId: 'view-1',
+      remaining: [],
+      targetTestId: null,
+      canSave: true,
+    },
+  ])(
+    '#972 delete focus: $scenario',
+    async ({ initial, deleteId, remaining, targetTestId, canSave }) => {
+      const remove = vi.fn();
+      const { rerender } = render(
+        <AppSidebar
+          entries={entries}
+          savedViews={initial.map(savedView)}
+          canSaveView={canSave}
+          onDeleteSavedView={remove}
+        />,
+      );
+
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId(`saved-view-delete-${deleteId}`));
+      expect(remove).toHaveBeenCalledWith(deleteId);
+      // AppFrame refetches and passes the reduced list back down as a new prop.
+      rerender(
+        <AppSidebar
+          entries={entries}
+          savedViews={remaining.map(savedView)}
+          canSaveView={canSave}
+          onDeleteSavedView={remove}
+        />,
+      );
+
+      const target =
+        targetTestId === null
+          ? screen.getByLabelText('저장된 보기 이름')
+          : screen.getByTestId(targetTestId);
+      await waitFor(() => expect(target).toHaveFocus());
+    },
+  );
+
+  it('#972 keeps focus on the delete button when a delete fails and the list is unchanged', async () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('view-1'), savedView('view-2')]}
+        onDeleteSavedView={vi.fn()}
+      />,
+    );
+
+    const user = userEvent.setup();
+    const deleteButton = screen.getByTestId('saved-view-delete-view-1');
+    await user.click(deleteButton);
+    expect(deleteButton).toHaveFocus();
+  });
+
+  // #972 FIX1: a delete whose promise rejects must never arm focus recovery —
+  // neither a later list from another surface nor an unrelated refresh on the
+  // same surface may steal focus while the user works elsewhere.
+  it('#972 FIX1 a rejected delete leaves focus where the test put it', async () => {
+    const remove = vi.fn(() => Promise.reject(new Error('delete rejected')));
+    const { rerender } = render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('view-1'), savedView('view-2')]}
+        canSaveView
+        savedViewSurface="voc"
+        onDeleteSavedView={remove}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-view-1'));
+    expect(screen.getByTestId('saved-view-delete-view-1')).toHaveFocus();
+
+    // Park focus outside the section; recovery must not move it.
+    screen.getByTestId('sidebar-nav-my').focus();
+
+    // Unrelated refresh on the same surface omits the id — no focus move.
+    rerender(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('view-2')]}
+        canSaveView
+        savedViewSurface="voc"
+        onDeleteSavedView={remove}
+      />,
+    );
+    expect(screen.getByTestId('sidebar-nav-my')).toHaveFocus();
+
+    // Another surface's list arrives (save form shown) — no focus move.
+    rerender(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('other-surface-view')]}
+        canSaveView
+        savedViewSurface="tasks"
+        onDeleteSavedView={remove}
+      />,
+    );
+    expect(screen.getByTestId('sidebar-nav-my')).toHaveFocus();
+  });
+
+  // #972 FIX1: recovery is armed only once the delete promise fulfils, and the
+  // target is chosen then, skipping views that are themselves being deleted —
+  // so [A, B, C] minus C and B always ends on A, whichever settles first.
+  it.each([
+    { scenario: 'C settles before B', settle: ['c', 'b'], afterFirstRefetch: ['a', 'b'] },
+    { scenario: 'B settles before C', settle: ['b', 'c'], afterFirstRefetch: ['a', 'c'] },
+  ])(
+    '#972 FIX1 concurrent deletes ($scenario) end focus on the surviving neighbour',
+    async ({ settle, afterFirstRefetch }) => {
+      const resolvers = new Map<string, () => void>();
+      const remove = vi.fn(
+        (id: string) =>
+          new Promise<void>((resolve) => {
+            resolvers.set(id, resolve);
+          }),
+      );
+      const { rerender } = render(
+        <AppSidebar
+          entries={entries}
+          savedViews={['a', 'b', 'c'].map(savedView)}
+          onDeleteSavedView={remove}
+        />,
+      );
+
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('saved-view-delete-c'));
+      await user.click(screen.getByTestId('saved-view-delete-b'));
+      expect(remove).toHaveBeenNthCalledWith(1, 'c');
+      expect(remove).toHaveBeenNthCalledWith(2, 'b');
+
+      // Both delete promises fulfil (in the parameterised order); the refetches
+      // then land one at a time.
+      await act(async () => {
+        for (const id of settle) resolvers.get(id)?.();
+      });
+
+      rerender(
+        <AppSidebar
+          entries={entries}
+          savedViews={afterFirstRefetch.map(savedView)}
+          onDeleteSavedView={remove}
+        />,
+      );
+      await waitFor(() => expect(screen.getByTestId('saved-view-apply-a')).toHaveFocus());
+
+      rerender(
+        <AppSidebar entries={entries} savedViews={[savedView('a')]} onDeleteSavedView={remove} />,
+      );
+      await waitFor(() => expect(screen.getByTestId('saved-view-apply-a')).toHaveFocus());
+    },
+  );
+
+  // #972 FIX1: a fulfilled delete whose row has not left the list yet must not
+  // follow the user across a surface change — pending recovery is dropped.
+  it('#972 FIX1 navigating to another surface drops pending recovery from a fulfilled delete', async () => {
+    const remove = vi.fn();
+    const { rerender } = render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('view-1')]}
+        canSaveView
+        savedViewSurface="voc"
+        onDeleteSavedView={remove}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-view-1'));
+    screen.getByTestId('sidebar-nav-my').focus();
+
+    rerender(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('other-surface-view')]}
+        canSaveView
+        savedViewSurface="tasks"
+        onDeleteSavedView={remove}
+      />,
+    );
+    expect(screen.getByTestId('sidebar-nav-my')).toHaveFocus();
+  });
+
+  // #972 FIX2: a delete still pending across a surface switch must not steal
+  // focus from main content the user has already focused when its promise
+  // fulfils on the destination surface.
+  it('#972 FIX2 a late delete fulfilment after a surface switch leaves outside focus alone', async () => {
+    const resolvers = new Map<string, () => void>();
+    const remove = vi.fn(
+      (id: string) =>
+        new Promise<void>((resolve) => {
+          resolvers.set(id, resolve);
+        }),
+    );
+    const { rerender } = render(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={['task-1', 'task-2'].map(savedView)}
+          savedViewSurface="tasks"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-task-1'));
+
+    // Navigate to VOC: cached [voc-1, voc-2], save form shown.
+    rerender(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={['voc-1', 'voc-2'].map(savedView)}
+          canSaveView
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+    const outsideInput = screen.getByTestId('main-content-input');
+    outsideInput.focus();
+    expect(outsideInput).toHaveFocus();
+
+    // The old Task delete promise fulfils after the user focused the input.
+    await act(async () => {
+      resolvers.get('task-1')?.();
+    });
+    expect(outsideInput).toHaveFocus();
+  });
+
+  // #972 FIX2: with a single delete, focus the user moved outside the section
+  // while the refetch was in flight survives the recovery pass.
+  it('#972 FIX2 same-surface delete leaves focus the user moved outside the section', async () => {
+    const resolvers = new Map<string, () => void>();
+    const remove = vi.fn(
+      (id: string) =>
+        new Promise<void>((resolve) => {
+          resolvers.set(id, resolve);
+        }),
+    );
+    const { rerender } = render(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={[savedView('view-1'), savedView('view-2')]}
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-view-1'));
+    const outsideInput = screen.getByTestId('main-content-input');
+    outsideInput.focus();
+    expect(outsideInput).toHaveFocus();
+
+    // Refetch lands with the reduced list while the delete promise is pending.
+    rerender(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={[savedView('view-2')]}
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+    expect(outsideInput).toHaveFocus();
+
+    await act(async () => {
+      resolvers.get('view-1')?.();
+    });
+    expect(outsideInput).toHaveFocus();
   });
 });

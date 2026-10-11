@@ -147,7 +147,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     void createSavedView({ surface: 'voc', name, filter: savedViewFilter }).then(() => savedViewsQuery.refetch());
   }, [activeDomain, savedViewFilter, savedViewsQuery]);
   const deleteCurrentView = React.useCallback((id: string) => {
-    void deleteSavedView(id).then(() => savedViewsQuery.refetch());
+    return deleteSavedView(id).then(() => savedViewsQuery.refetch());
   }, [savedViewsQuery]);
   const sidebarProps = {
     entries: visibleSidebarEntries,
@@ -160,6 +160,7 @@ export function AppFrame({ sidebarEntries, activeDomain, paletteNavTree, managed
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),
     ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
+    ...(savedViewSurface !== undefined ? { savedViewSurface } : {}),
     savedViews,
     canSaveView: activeDomain === 'voc' && savedViewFilter !== undefined,
     onSaveView: saveCurrentView,
