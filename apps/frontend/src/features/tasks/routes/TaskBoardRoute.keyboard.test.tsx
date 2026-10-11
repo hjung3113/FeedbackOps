@@ -125,7 +125,7 @@ describe('TaskBoardRoute keyboard dragging', () => {
       const card = screen.getByRole('button', { name: /TASK-1000:/ });
       expect(card).not.toHaveAttribute('aria-disabled');
       expect(card).not.toHaveAttribute('aria-roledescription');
-      expect(card).not.toHaveAttribute('aria-describedby');
+      expect(card).toHaveAccessibleDescription('상태 그룹화일 때만 드래그로 상태가 변경됩니다.');
       expect(card).toHaveTextContent('상태 그룹화일 때만 드래그로 상태가 변경됩니다.');
       card.focus();
       if (activation === 'Enter') {
