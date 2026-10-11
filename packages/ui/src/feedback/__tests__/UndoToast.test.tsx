@@ -287,3 +287,59 @@ describe('UndoToast expiry is one-shot (#960)', () => {
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 });
+
+describe('UndoToast Escape dismisses (#1025)', () => {
+  // #1025 owner decision: Escape pressed while keyboard focus is inside the
+  // toast (the 실행 취소 button, or the sonner <li> wrapper the first Tab can
+  // land on) dismisses it by calling onDismiss once, spending the same
+  // one-shot budget as the auto-dismiss timer.
+  it.each([
+    { target: '실행 취소 button', sonnerWrapper: false },
+    { target: 'sonner toast <li> wrapper', sonnerWrapper: true },
+  ] as const)(
+    'dismisses exactly once when Escape is pressed with focus on $target',
+    ({ sonnerWrapper }) => {
+      vi.useFakeTimers();
+      const onDismiss = vi.fn();
+      let container: HTMLElement | undefined;
+      if (sonnerWrapper) {
+        // Same harness as the pause-host tests: sonner wraps toast.custom()
+        // content in <li data-sonner-toast tabindex=0>.
+        container = document.createElement('li');
+        container.setAttribute('data-sonner-toast', '');
+        container.tabIndex = 0;
+        document.body.appendChild(container);
+      }
+      const ui = (
+        <UndoToast message="Triage 확정됨" onAction={vi.fn()} onDismiss={onDismiss} duration={4000} />
+      );
+      if (container) render(ui, { container });
+      else render(ui);
+
+      const focusTarget = sonnerWrapper
+        ? (screen.getByRole('status').closest('[data-sonner-toast]') as HTMLElement)
+        : screen.getByRole('button', { name: '실행 취소' });
+
+      fireEvent.focus(focusTarget);
+      fireEvent.keyDown(focusTarget, { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalledOnce();
+
+      // Escape spends the one-shot budget: after focus leaves and the
+      // remaining duration elapses, the timer must not call onDismiss again.
+      fireEvent.blur(focusTarget, { relatedTarget: document.body });
+      act(() => { vi.advanceTimersByTime(4000); });
+      expect(onDismiss).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('does not dismiss when Escape is pressed outside the toast', () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    render(
+      <UndoToast message="Triage 확정됨" onAction={vi.fn()} onDismiss={onDismiss} duration={4000} />,
+    );
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+});
