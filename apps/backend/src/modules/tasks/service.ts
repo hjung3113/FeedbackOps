@@ -17,7 +17,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
-import { decodeListCursor, encodeListCursor } from './list-cursor.js';
+import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
