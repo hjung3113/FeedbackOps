@@ -627,7 +627,7 @@ describe('TaskBoardRoute', () => {
     expect(api.listTasks.mock.calls.some((call) => call[0]?.public_update === 'missing')).toBe(false);
   });
 
-  it('disables status drag outside status grouping and uses the toast backstop', async () => {
+  it('disables status drag outside status grouping without a PATCH or toast', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
     renderBoard();
     await screen.findByText('TASK-1000');
@@ -639,7 +639,11 @@ describe('TaskBoardRoute', () => {
     await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: true })));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     expect(api.updateTaskStatus).not.toHaveBeenCalled();
-    expect(toast.warning).toHaveBeenCalledWith('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('restores the board selected detail from the URL parameter', async () => {

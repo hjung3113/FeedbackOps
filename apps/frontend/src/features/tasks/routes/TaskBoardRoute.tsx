@@ -4,9 +4,11 @@ import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import {
+  type Announcements,
   DndContext,
   type DragEndEvent,
   DragOverlay,
@@ -30,7 +32,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
-import { toast } from 'sonner';
 import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
 import { TaskBoardCardPreview } from '../components/task-board/TaskBoardCard';
@@ -64,6 +65,12 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
   const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
   const boardScroller = React.useRef<HTMLDivElement>(null);
+  const dragGeneration = React.useRef(0);
+  const pendingKeyboardFocus = React.useRef<{
+    taskId: string;
+    destinationStatus: TaskStatus;
+    generation: number;
+  } | null>(null);
   const pointer = React.useRef<{ x: number; y: number } | null>(null);
   React.useEffect(() => {
     if (!activeTask || !pointer.current) return;
@@ -106,6 +113,44 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const priority = filters.priority; const milestone = filters.milestone; const assignee = filters.assignee;
     return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || (task.assignee_actor_id === null ? assignee.includes('__unassigned') : assignee.includes(task.assignee_actor_id)));
   }), [items, filters]);
+  const focusScope = React.useRef({ groupBy, managedSystem, publicUpdate });
+  React.useLayoutEffect(
+    () => () => {
+      pendingKeyboardFocus.current = null;
+    },
+    [],
+  );
+  React.useLayoutEffect(() => {
+    const previousScope = focusScope.current;
+    if (
+      previousScope.groupBy !== groupBy ||
+      previousScope.managedSystem !== managedSystem ||
+      previousScope.publicUpdate !== publicUpdate
+    ) {
+      pendingKeyboardFocus.current = null;
+    }
+    focusScope.current = { groupBy, managedSystem, publicUpdate };
+    const pending = pendingKeyboardFocus.current;
+    if (
+      !pending ||
+      !filtered.some(
+        (task) => task.id === pending.taskId && task.status === pending.destinationStatus,
+      )
+    )
+      return;
+    const board = boardScroller.current;
+    const card =
+      board &&
+      [...board.querySelectorAll<HTMLButtonElement>('[data-task-board-card-id]')].find(
+        (node) => node.dataset.taskBoardCardId === pending.taskId,
+      );
+    if (!card) return;
+    pendingKeyboardFocus.current = null;
+    // Optimistic cache writes can commit after drag end. Respect focus moved elsewhere meanwhile.
+    if (document.activeElement === document.body || board.contains(document.activeElement)) {
+      card.focus();
+    }
+  }, [filtered, groupBy, managedSystem, publicUpdate]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -152,7 +197,29 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
+  const announcements = React.useMemo<Announcements>(() => {
+    const taskFor = (active: Parameters<Announcements['onDragStart']>[0]['active']) =>
+      active.data.current?.task as TaskDto | undefined;
+    const displayId = (active: Parameters<Announcements['onDragStart']>[0]['active']) =>
+      taskFor(active)?.display_id ?? String(active.id);
+    const columnLabel = (over: Parameters<Announcements['onDragOver']>[0]['over']) =>
+      over ? TASK_STATUS_LABELS[over.id as TaskStatus] : null;
+    return {
+      onDragStart: ({ active }) => {
+        const task = taskFor(active);
+        return TASK_BOARD_COPY.pickup(
+          displayId(active),
+          task ? TASK_STATUS_LABELS[task.status] : String(active.id),
+        );
+      },
+      onDragOver: ({ active, over }) => TASK_BOARD_COPY.over(displayId(active), columnLabel(over)),
+      onDragEnd: ({ active, over }) => TASK_BOARD_COPY.drop(displayId(active), columnLabel(over)),
+      onDragCancel: ({ active }) => TASK_BOARD_COPY.cancel(displayId(active)),
+    };
+  }, []);
   function onDragStart(event: DragStartEvent) {
+    dragGeneration.current += 1;
+    pendingKeyboardFocus.current = null;
     const activator = event.activatorEvent;
     pointer.current =
       'clientX' in activator && 'clientY' in activator
@@ -177,12 +244,22 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
         : { duration: timing.durationMs, easing: timing.easing },
     );
     setActiveTask(null);
-    if (groupBy !== 'status') {
-      toast.warning('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.');
-      return;
+    if (willMove) {
+      const generation = dragGeneration.current;
+      if (event.activatorEvent instanceof KeyboardEvent) {
+        pendingKeyboardFocus.current = {
+          taskId: task.id,
+          destinationStatus: target as TaskStatus,
+          generation,
+        };
+      }
+      // Per-invocation promises also settle when a newer mutation supersedes this one.
+      void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
+        if (pendingKeyboardFocus.current?.generation === generation) {
+          pendingKeyboardFocus.current = null;
+        }
+      });
     }
-    if (!task || typeof target !== 'string') return;
-    if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus });
   }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
@@ -308,6 +385,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
             ) : (
               <DndContext
                 sensors={sensors}
+                accessibility={{
+                  announcements,
+                  restoreFocus: false,
+                  screenReaderInstructions: TASK_BOARD_COPY.screenReaderInstructions,
+                }}
                 autoScroll={{ canScroll, threshold: BOARD_SCROLL_THRESHOLD }}
                 measuring={{
                   droppable: {
@@ -338,7 +420,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 }
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
-                onDragCancel={() => setActiveTask(null)}
+                onDragCancel={() => {
+                  pendingKeyboardFocus.current = null;
+                  setActiveTask(null);
+                }}
               >
                 <div ref={boardScroller} className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
                   {columns.map((column) => (
