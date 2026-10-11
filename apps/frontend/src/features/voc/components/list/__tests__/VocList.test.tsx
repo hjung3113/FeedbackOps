@@ -1,7 +1,8 @@
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { VocListItem } from '@fops/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VocList } from '../VocList';
@@ -287,5 +288,67 @@ describe('<VocList>', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '선택 해제' }));
     expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
+  });
+});
+
+function RetryQueryHarness({ load }: { load: () => Promise<VocListItem[]> }) {
+  const query = useQuery({ queryKey: ['retry-focus'], queryFn: load });
+  return (
+    <VocList
+      items={query.data ?? []}
+      loading={query.isLoading}
+      error={query.error}
+      onSelect={vi.fn()}
+      onRetry={() => void query.refetch()}
+    />
+  );
+}
+
+describe('Inbox retry accessibility (#953)', () => {
+  function renderQuery(load: () => Promise<VocListItem[]>) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <RetryQueryHarness load={load} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it.each(['error', 'success'] as const)(
+    'keeps retry focus through pending → %s',
+    async (outcome) => {
+      const user = userEvent.setup();
+      let resolveRetry!: (items: VocListItem[]) => void;
+      let rejectRetry!: (error: Error) => void;
+      const retry = new Promise<VocListItem[]>((resolve, reject) => {
+        resolveRetry = resolve;
+        rejectRetry = reject;
+      });
+      const load = vi
+        .fn<() => Promise<VocListItem[]>>()
+        .mockRejectedValueOnce(new Error('initial failure'))
+        .mockReturnValueOnce(retry);
+      renderQuery(load);
+      await user.click(await screen.findByRole('button', { name: '다시 시도' }));
+      const target = screen.getByRole('region', { name: 'VOC 목록' });
+      await screen.findByRole('rowgroup', { name: 'VOC 목록 로딩 중' });
+      await waitFor(() => expect(document.activeElement).toBe(target));
+      if (outcome === 'error') {
+        rejectRetry(new Error('retry failure'));
+        await screen.findByRole('button', { name: '다시 시도' });
+        expect(screen.getByRole('alert')).toHaveTextContent('불러오기 실패');
+      } else {
+        resolveRetry([makeVoc()]);
+        await screen.findByText('Test VOC');
+      }
+      await waitFor(() => expect(document.activeElement).toBe(target));
+    },
+  );
+
+  it('announces a first-load failure without moving focus', async () => {
+    renderQuery(() => Promise.reject(new Error('initial failure')));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('불러오기 실패');
+    await waitFor(() => expect(document.activeElement).toBe(document.body));
   });
 });
