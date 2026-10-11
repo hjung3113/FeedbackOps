@@ -20,12 +20,14 @@ export {
 export function TaskRequestsRoute({
   selectedParam,
   managedSystem,
+  onSelectionChange,
 }: {
   selectedParam?: string | undefined;
   managedSystem?: string;
+  onSelectionChange?: (id: string | null, replace: boolean) => void;
 }) {
   const listMotion = useListMotion();
-  const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const queue = useTaskRequestsQueue({ selectedParam, managedSystem, onSelectionChange });
   const context = JSON.stringify([queue.activeTab, managedSystem ?? null]);
   const [settlement, setSettlement] = useState({ context, settled: queue.queueSettled });
   const settledOnce = queue.queueSettled || (settlement.context === context && settlement.settled);

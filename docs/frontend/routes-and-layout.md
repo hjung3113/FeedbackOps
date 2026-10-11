@@ -223,6 +223,11 @@ as the other surfaces.
   fall back to another row while unresolved. Review decisions refresh page and
   summary caches and retain the returned request across the result-tab switch,
   including when the destination's first page does not contain it.
+- Task Request row selection pushes `param` while preserving the current search
+  context. Panel close and detail 404/out-of-scope cleanup remove `param` with
+  replace; only the current selection's detail can trigger cleanup. First-row
+  auto-selection stays local. Review decisions replace `param` with the returned
+  request so refreshing restores that request.
 - Finding creation from a selected VOC may carry `returnTo` with the same-origin `/vocs` URL; the selected Finding detail offers an action that restores the VOC view, scope, filters, and selection.
 - The `/findings/$findingId` deep link redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied.
 - Closing a detail panel preserves filters, sort, and scroll position when possible.
