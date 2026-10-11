@@ -15,6 +15,7 @@ import type { OwnerCandidate } from './OwnerPicker';
 
 export function useTriagePanelController({
   voc,
+  serverReviewPostponedAt = null,
   onAct,
   onOptimisticRemove,
   onOptimisticPostpone,
@@ -25,6 +26,7 @@ export function useTriagePanelController({
   onMutationFailure,
 }: {
   voc: VocListItem;
+  serverReviewPostponedAt?: string | null;
   onAct?: (
     kind: 'confirm' | 'finding' | 'skip',
     context?: {
@@ -105,6 +107,7 @@ export function useTriagePanelController({
   // input assembly, and the toast UI.
   const { panelLocked, isSubmitting, commit, undoLast } = useTriageCommand({
     voc,
+    serverReviewPostponedAt,
     onProcessed,
     onOptimisticRestore,
     onOptimisticRollback,

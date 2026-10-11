@@ -16,6 +16,7 @@ import type { TriageInput, TriageSnapshot } from './triage-types';
 /** Prior (pre-mutation) VOC fields the compensating PATCH must restore. */
 export interface TriagePriorFields {
   triageState: VocListItem['triage_state'];
+  reviewPostponedAt: string | null;
   severity: string | null;
   ownerUserId: string | null;
   ownerTeamId: string | null;
@@ -54,6 +55,9 @@ export function buildCompensatePayload(snapshot: TriageSnapshot): Record<string,
         owner_user_id: snapshot.ownerUserId,
         owner_team_id: snapshot.ownerTeamId,
         analytics_area_id: snapshot.analyticsAreaId,
+        ...(snapshot.triageState === 'untriaged' && snapshot.reviewPostponedAt !== null
+          ? { restore_review_postponed_at: snapshot.reviewPostponedAt }
+          : {}),
       }
     : { postpone_review: false };
 }
@@ -75,7 +79,11 @@ export function buildTriageSnapshot(input: TriageInput, prior: TriagePriorFields
     ownerTeamId: isConfirm ? prior.ownerTeamId : null,
     analyticsAreaId: isConfirm ? prior.analyticsAreaId : null,
     ...(isConfirm
-      ? { wasConfirm: true as const, triageState: prior.triageState }
+      ? {
+          wasConfirm: true as const,
+          triageState: prior.triageState,
+          reviewPostponedAt: prior.reviewPostponedAt,
+        }
       : { wasConfirm: false as const }),
   };
 }

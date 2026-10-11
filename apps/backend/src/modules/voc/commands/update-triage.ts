@@ -124,6 +124,48 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       );
     }
 
+    if (input.restore_review_postponed_at !== undefined) {
+      if (input.triage_state !== 'untriaged') {
+        throw new HttpError(
+          'validation.failed',
+          'restore_review_postponed_at requires triage_state untriaged',
+          {
+            fields: [{ path: ['restore_review_postponed_at'], code: 'invalid' }],
+          },
+        );
+      }
+      if (input.postpone_review !== undefined) {
+        throw new HttpError(
+          'validation.failed',
+          'restore_review_postponed_at and postpone_review cannot be set together',
+          {
+            fields: [{ path: ['restore_review_postponed_at'], code: 'invalid' }],
+          },
+        );
+      }
+      if (row.triageState === 'untriaged') {
+        throw new HttpError(
+          'validation.failed',
+          'restore_review_postponed_at requires a previously triaged VOC',
+          {
+            fields: [{ path: ['restore_review_postponed_at'], code: 'invalid_state' }],
+          },
+        );
+      }
+      const future = await tx.execute<{ is_future: boolean }>(sql`
+        SELECT ${input.restore_review_postponed_at}::timestamptz > NOW() AS is_future
+      `);
+      if (future.rows[0]?.is_future) {
+        throw new HttpError(
+          'validation.failed',
+          'restore_review_postponed_at cannot be in the future',
+          {
+            fields: [{ path: ['restore_review_postponed_at'], code: 'invalid' }],
+          },
+        );
+      }
+    }
+
     // Preserve validation precedence: invalid postpone state precedes the
     // resolved-owner mutex, just as it did in the separate postpone path.
     if (input.postpone_review === true && row.triageState !== 'untriaged') {
@@ -191,20 +233,29 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       input.postpone_review === false &&
       row.triageState === 'untriaged' &&
       row.triageStateReviewPostponedAt !== null;
-    type PostponeOutcome = 'set' | 'explicit_clear' | 'clear_on_transition' | 'unchanged';
+    type PostponeOutcome =
+      | 'restore'
+      | 'set'
+      | 'explicit_clear'
+      | 'clear_on_transition'
+      | 'unchanged';
     const postponeOutcome: PostponeOutcome =
-      input.postpone_review === true
-        ? 'set'
-        : clearingPostpone
-          ? 'explicit_clear'
-          : triageStateChanged && input.triage_state !== 'untriaged'
-            ? 'clear_on_transition'
-            : 'unchanged';
+      input.restore_review_postponed_at !== undefined
+        ? 'restore'
+        : input.postpone_review === true
+          ? 'set'
+          : clearingPostpone
+            ? 'explicit_clear'
+            : triageStateChanged && input.triage_state !== 'untriaged'
+              ? 'clear_on_transition'
+              : 'unchanged';
 
     // Complete the shared UPDATE patch. Transition clears have no postpone
     // audit; explicit clears do. Every set is a fresh deferral event (F14).
-    if (postponeOutcome === 'set') {
-      patch.triageStateReviewPostponedAt = sql`NOW()`;
+    if (postponeOutcome === 'restore') {
+      patch.triageStateReviewPostponedAt = sql`${input.restore_review_postponed_at}::timestamptz`;
+    } else if (postponeOutcome === 'set') {
+      patch.triageStateReviewPostponedAt = sql`date_trunc('milliseconds', NOW())`;
     } else if (postponeOutcome !== 'unchanged') {
       patch.triageStateReviewPostponedAt = null;
     }

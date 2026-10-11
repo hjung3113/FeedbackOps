@@ -15,6 +15,7 @@ export interface VocTriageScreenControllerArgs {
 export interface VocTriageScreenController {
   liveQueue: VocListItem[];
   selectedVoc: VocListItem | null;
+  serverReviewPostponedAt: string | null;
   deepLinkTargetMissing: boolean;
   createFindingTarget: {
     vocId: string;
@@ -131,6 +132,8 @@ export function useVocTriageScreenController({
   return {
     liveQueue,
     selectedVoc,
+    serverReviewPostponedAt:
+      items.find((voc) => voc.id === selectedVoc?.id)?.review_postponed_at ?? null,
     deepLinkTargetMissing,
     createFindingTarget,
     handleAct,

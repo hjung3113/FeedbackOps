@@ -14,7 +14,7 @@
 // Test framework: Vitest + @testing-library/react (O-6 in PLAN-21).
 // Playwright is used only for pixel-diff baselines, not here.
 
-import type { VocListItem } from '@fops/shared';
+import { type VocListItem, patchVocRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
@@ -1047,6 +1047,65 @@ describe('Triage flow — integration (C6.3)', () => {
   });
 
   // ── Test 1: Full happy-path flow ────────────────────────────────────────────
+  it.each(['2026-05-01T09:00:00.123+09:00', null])(
+    '955: confirm undo uses server postponed timestamp %s, never an optimistic marker',
+    async (serverTimestamp) => {
+      const patches: Record<string, unknown>[] = [];
+      globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'PATCH') patches.push(JSON.parse(String(init.body)));
+        return jsonResponse({
+          id: FIRST_VOC_ID,
+          triage_state: 'triaged',
+          updated_at: '2026-05-02T00:00:00.000Z',
+        });
+      }) as typeof globalThis.fetch;
+      const items = MOCK_VOCS.map((voc) =>
+        voc.id === FIRST_VOC_ID ? { ...voc, review_postponed_at: serverTimestamp } : voc,
+      );
+      const Wrapper = makeWrapper();
+      const { baseElement } = render(
+        <Wrapper>
+          <VocTriageScreen
+            items={items}
+            selectedId={FIRST_VOC_ID}
+            activeTab="unassigned"
+            onSelectVoc={vi.fn()}
+            onTabChange={vi.fn()}
+          />
+        </Wrapper>,
+      );
+      if (serverTimestamp === null) {
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: /^보류/ })));
+        await waitFor(() => expect(patches).toHaveLength(1));
+        expect(
+          within(screen.getByRole('button', { name: /VOC-I-001/ })).getByText('보류'),
+        ).toBeInTheDocument();
+      }
+      clickAnySeverityChip();
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /triage 확정/i })));
+      const forwardCount = serverTimestamp === null ? 2 : 1;
+      await waitFor(() => expect(patches).toHaveLength(forwardCount));
+      const host = renderCapturedToast(baseElement);
+      try {
+        const undo = host?.querySelector('button');
+        if (!undo) throw new Error('Undo action missing');
+        await act(async () => fireEvent.click(undo));
+        await waitFor(() => expect(patches).toHaveLength(forwardCount + 1));
+        const compensation = patchVocRequestSchema.parse(patches[forwardCount]);
+        expect(compensation).toEqual({
+          triage_state: 'untriaged',
+          severity: null,
+          owner_user_id: null,
+          owner_team_id: null,
+          analytics_area_id: null,
+          ...(serverTimestamp !== null ? { restore_review_postponed_at: serverTimestamp } : {}),
+        });
+      } finally {
+        unmountCapturedToast(host);
+      }
+    },
+  );
+
   it('renders 5 VOCs, confirms triage (optimistic remove), UndoToast fires, undo triggers compensating PATCH with fresh key', async () => {
     const seenKeys: string[] = [];
     let callCount = 0;

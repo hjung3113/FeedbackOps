@@ -52,6 +52,7 @@ import { useTriagePanelController } from './useTriagePanelController';
 
 export interface TriagePanelProps {
   voc: VocListItem;
+  serverReviewPostponedAt?: string | null;
   /**
    * Called when a triage action is triggered. For non-mutation side-effects.
    */
@@ -99,6 +100,7 @@ function buildTriageSections() {
 
 export function TriagePanel({
   voc,
+  serverReviewPostponedAt = null,
   onAct,
   onOptimisticRemove,
   onOptimisticPostpone,
@@ -128,6 +130,7 @@ export function TriagePanel({
     handleSkip,
   } = useTriagePanelController({
     voc,
+    serverReviewPostponedAt,
     ...(onAct !== undefined ? { onAct } : {}),
     ...(onOptimisticRemove !== undefined ? { onOptimisticRemove } : {}),
     ...(onOptimisticPostpone !== undefined ? { onOptimisticPostpone } : {}),
