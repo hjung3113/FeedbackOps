@@ -76,7 +76,7 @@ export function AnalyticsAreaSlideOver({
           event.preventDefault();
           if (editingRef.current) return;
           const detailButton = document.querySelector<HTMLButtonElement>(
-            `[data-testid="aa-detail-${CSS.escape(area.slug)}"]`,
+            `button[data-area-id="${CSS.escape(area.id)}"]`,
           );
           if (detailButton?.isConnected) detailButton.focus();
         }}

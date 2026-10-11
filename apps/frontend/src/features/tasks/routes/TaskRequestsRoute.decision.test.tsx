@@ -446,6 +446,25 @@ describe('TaskRequestsRoute decision dialogs', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it('returns to the approve opener when rejection cleanup settles after approval opens', async () => {
+    await mountRoute();
+    const rejectOpener = screen.getByRole('button', { name: '반려' });
+    const approveOpener = screen.getByRole('button', { name: '승인' });
+    rejectOpener.focus();
+    fireEvent.click(rejectOpener);
+    const rejection = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.click(within(rejection).getByTestId('task-request-decision-cancel'));
+    // Open synchronously, before Radix's deferred unmount autofocus can run.
+    approveOpener.focus();
+    fireEvent.click(approveOpener);
+    const approval = screen.getByRole('dialog', { name: 'Task Request 승인' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.click(within(approval).getByTestId('task-request-decision-cancel'));
+    await waitFor(() => expect(approveOpener).toHaveFocus());
+  });
+
   it('keeps pending-close guards and does not restore the opener after a successful decision', async () => {
     let resolveDecision: (value: TaskRequestDto) => void = () => undefined;
     api.rejectTaskRequest.mockImplementationOnce(

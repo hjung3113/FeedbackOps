@@ -41,13 +41,20 @@ export function TaskRequestDecisionDialog({
   const liveDialog = dialog?.requestId === request.id ? dialog : null;
   const [previousDialog, setPreviousDialog] = React.useState(liveDialog);
   const [retained, setRetained] = React.useState(liveDialog);
+  const [opening, setOpening] = React.useState<{
+    key: number;
+    opener: HTMLElement | null;
+    dismissed: boolean;
+  }>({ key: 0, opener: null, dismissed: false });
   if (previousDialog !== liveDialog) {
     setPreviousDialog(liveDialog);
     if (liveDialog) setRetained(liveDialog);
+    if (liveDialog && (!previousDialog || previousDialog.action !== liveDialog.action)) {
+      setOpening({ key: opening.key + 1, opener: null, dismissed: false });
+    }
   }
   const content = liveDialog ?? retained;
-  const opener = React.useRef<HTMLElement | null>(null);
-  const dismissed = React.useRef(false);
+  const activeOpening = React.useRef<typeof opening | null>(null);
   const mounted = React.useRef(false);
   React.useLayoutEffect(() => {
     mounted.current = true;
@@ -58,7 +65,7 @@ export function TaskRequestDecisionDialog({
 
   function dismiss() {
     if (isSubmitting) return;
-    dismissed.current = true;
+    opening.dismissed = true;
     onClose();
   }
 
@@ -92,20 +99,26 @@ export function TaskRequestDecisionDialog({
     <Dialog open={liveDialog !== null} onOpenChange={(open) => !open && dismiss()}>
       {content && (
         <DialogContent
-          key={content.action}
+          key={opening.key}
           onOpenAutoFocus={() => {
-            opener.current =
+            activeOpening.current = opening;
+            opening.opener =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            dismissed.current = false;
+            opening.dismissed = false;
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             // A request-key unmount must not restore an old request's opener.
-            if (mounted.current && dismissed.current && opener.current?.isConnected) {
-              opener.current.focus();
+            if (
+              mounted.current &&
+              activeOpening.current === opening &&
+              opening.dismissed &&
+              opening.opener?.isConnected
+            ) {
+              opening.opener.focus();
             }
-            opener.current = null;
-            dismissed.current = false;
+            opening.opener = null;
+            opening.dismissed = false;
           }}
         >
           <DialogHeader>

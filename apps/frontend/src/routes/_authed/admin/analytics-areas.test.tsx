@@ -348,6 +348,27 @@ describe('/admin/analytics-areas route', () => {
     },
   );
 
+  test('Escape returns to the second detail button when two Managed Systems share an area slug', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, POWERBI],
+      analyticsAreas: [AA_TAB_PM, { ...AA_PBI_SALES, slug: AA_TAB_PM.slug, name: 'PM Power BI' }],
+    });
+    const buttons = await screen.findAllByTestId('aa-detail-permission-management');
+    expect(buttons).toHaveLength(2);
+    const detailButton = within(screen.getByTestId('aa-group-ms-pbi')).getByTestId(
+      'aa-detail-permission-management',
+    );
+    expect(buttons[1]).toBe(detailButton);
+    detailButton.focus();
+    fireEvent.click(detailButton);
+    const drawer = await screen.findByTestId('aa-slide-over');
+    expect(drawer).toHaveTextContent('PM Power BI');
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    await waitFor(() => expect(detailButton).toHaveFocus());
+    expect(drawer).not.toBeInTheDocument();
+  });
+
   test('keeps focus in the edit form during the sheet-to-edit handoff', async () => {
     renderPage({
       permissionState: 'approved',
