@@ -7,10 +7,10 @@ import {
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
+import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
 import { memoizeCapabilityChecks } from '../permissions/index.js';
 import { lockTaskById } from '../tasks/index.js';
-import { decodeListCursor, encodeListCursor } from './list-cursor.js';
 import {
   countListRows,
   findCreatedFindingSourceLink,

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ListTaskRequestsResponse } from '@fops/shared';
-import { decodeListCursor, encodeListCursor } from './list-cursor.js';
+import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 
 import {
   type ApproveTaskRequestRequest,
