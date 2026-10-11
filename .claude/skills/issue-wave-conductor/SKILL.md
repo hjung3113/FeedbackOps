@@ -52,7 +52,9 @@ Before the first brief, read every candidate issue for the slice and collect eac
 (product behaviour, copy, test deletion, scope). Ask them in one `AskUserQuestion` round, each with a recommended
 option, and record the answers on the issues. In sessions 63–65 five such questions arrived one by one mid-slice
 (#920, #940, F4, #908, #902) and each paused the wave. A decision that surfaces later still gets asked at once, but
-plan for none.
+plan for none. **Mid-wave, ask in plain text, never `AskUserQuestion`:** it blocks the conductor until the owner
+answers (s70: 5.5 h with finished results unread and independent issues idle). Keep every issue the question does not
+gate moving, and fold the answer in when it arrives.
 
 **Value gate (owner, 2026-10-10).** Before an issue enters a slice, and before any finding is folded or filed, weigh
 the user's gain against the maintenance it adds (new state, timing workarounds, spread ownership, extra tests).
@@ -76,24 +78,9 @@ blocker or an owner request.
    `Sentinel (last line of .review/W-<n>-REPORT.md): <!-- W-<n>-DONE -->` — the launcher registers exactly that. Check
    `ls docs/adr` before a brief assigns an ADR number (parallel issues collide). For "use the shared X" refactors say
    "replace only whole-set declarations; keep literals; never touch `db/schema`".
-   **Self-check before launch.** Each of these cost a review round in sessions 63–65:
-   - Name only helpers and schemas that exist; `grep` each one. "Parse with the shared schema" made a worker invent one
-     (#813).
-   - Copy cardinality and validation rules (one parent vs many children, required fields) from the backend
-     validator, not from memory (#827).
-   - When a lifecycle event drives behaviour ("closing collapses"), `grep` every representation the call sites use,
-     e.g. an absent prop vs `detailPanel={null}` (#838).
-   - Before replacing an exact lookup with a capped prefix or contains search, check that the exact hit stays
-     reachable under the cap (#821: `VOC-1` was lost among 100+ newer `VOC-1…`).
-   - Trace every regression-test sequence the brief prescribes: it must reach the buggy branch, so removing the fix
-     turns it red (#891's sequence could not hit the race).
-   - Integration tests for a client-driven contract send the exact body the frontend sends (#921 never tested
-     `{ postpone_review: false }`).
-   - A change that keeps a component mounted across a context change lists the component's local state and decides
-     each one's lifetime (#922 kept the Triage screen mounted, so exclusions leaked across tabs: #937).
-   - A guard that waits for an event needs a bounded release for the no-event path, tested from a non-zero origin
-     (#901).
-   - A brief that removes a role, test id or label lists every test that queries it (#798).
+   **Self-check before launch:** walk `templates/brief-check.md` items yourself (named things exist, copied rules,
+   reachable regression tests, exact client bodies, lifecycle representations, mount lifetime, bounded waits, removed
+   markup, capped searches, same-slice overlap, CLI flags, lifecycle code). Every item there cost a review round.
    **Brief check.** Before launching an `impl-complex` or `impl-mid` brief, have it checked against
    `templates/brief-check.md`: a task `$WAVE_BRIEFS/<n>-BRIEFCHECK-TASK.md` that names the brief, the template, the
    report path and the sentinel `<!-- W-<n>-BRIEFCHECK-DONE -->`, launched with `worker-launch.sh --role
@@ -103,7 +90,9 @@ blocker or an owner request.
 2. **Launch**: `scripts/launch-worker.sh <n> <slug> [be]` (≈5–7 in flight is the sustainable ceiling
    for one conductor; 2–3 when the conductor also runs every harness). It delegates to shared `worker-launch.sh`
    with role `impl`; set `WORKER_ROLE=impl-fallback` when the session selects the fallback, and optionally
-   `WORKER_MODEL` / `WORKER_EFFORT` for overrides. Parallelise only issues that touch disjoint files.
+   `WORKER_MODEL` / `WORKER_EFFORT` for overrides. Parallelise only issues that touch disjoint files. Workers have no
+   network: when a brief adds a dependency, set `PRE_ADD='<pnpm filter> <pkg@exact> [...]'` so the launcher installs it
+   (lockfile included) before the worker starts, and say so in the brief.
    **Complex issues go to `WORKER_ROLE=impl-complex`** (model in `routing.tsv`; user decisions 2026-10-08), and so do
    their fix rounds: pass `--role impl-complex` instead of `fix`. An issue is complex when any of these hold:
    - it changes a backend contract and its frontend consumer together, or touches three or more modules;
@@ -282,6 +271,8 @@ blocker or an owner request.
      directly (diff read, mutation check, a real-browser re-check for focus) with no further reviewer and no folds.
    - For a fixed UX or perf `blocker`/`major`:
      - re-run that scenario and its neighbouring flow, or `nav-perf.sh`, on fresh previews, and record the result;
+       when the defect has a known gesture sequence (focus return, a drag), a conductor Playwright script against
+       the branch preview replaces a full UX run (s70 #997: one minute against 20);
      - run the full visual harness when the fix touched `packages/ui`.
      - When a `blocker` fix spreads past the files the reviewer saw, `review-check` (medium) reviews just that fix
        diff before the ship (owner decision 2026-10-08). It is the one exception to "no second review".
@@ -289,7 +280,8 @@ blocker or an owner request.
    **Mock wave (2026-10-08).** #838 and #821 were replayed at their pre-review commits.
    - **Code reviewer (Sol xhigh, background):** 3.7–5 min per issue. It caught 6 of the 8 planted code-level
      defects.
-   - **UX reviewer (Opus high):** 6–10 min, 50–66 turns and $1.9–2.6 per issue.
+   - **UX reviewer (Opus high):** 6–10 min, 50–66 turns and $1.9–2.6 per issue in the mock wave; in Slice 48 real
+     runs took 15–37 min and $2.8–5.6, and two hit the 120-turn limit.
      - It caught 1 of the 3 planted UI defects. It missed the #838 null-close because the seed has no
        Task/Finding/Survey records (#853), and missed #821's tab-scoped search because it was brief-consistent
        (now an expectation check in the agent).
@@ -304,8 +296,9 @@ blocker or an owner request.
    - For a refactor of a hardened invariant (e.g. the #678 Survey denial barrier), tell the code reviewer the history
      and to trace every branch against `origin/develop`.
    - Intermediate checks use role `review-check` with distinct CHECK task, report and state names.
-   - When an issue merged earlier in the same slice touched the same component, hook or endpoint, the code
-     reviewer's task names that PR and asks for the combined behaviour (#922 → #937 was a same-slice regression).
+   - When an issue merged earlier in the same slice touched the same component, hook, endpoint or doc section, the
+     code reviewer's task names that PR and asks for the combined behaviour (#922 → #937 was a same-slice
+     regression; s70 #996 rewrote a `## Motion` rule #994 had decided).
 8. **Visual baselines**: sub-threshold changes pass against stale baselines — regenerate deliberately with
    `scripts/visual.sh update <filter...>`. This runs `baseline-keep.py` in read-only report mode and writes
    before/after crops under `.review/baseline-keep-crops/`; inspect the changed PNG list and crops before acting.
@@ -345,8 +338,9 @@ blocker or an owner request.
       Slice-close folds are limited to copy, a11y attributes, dead code and docs. A behaviour `major` from the
       walkthrough gets its own issue loop, not a fold into the chore.
     - **Slice walkthrough:** previews of `origin/main` and `origin/develop` (throwaway DB, as in 7c). Then:
-      - one `review-ux` run over the slice's user flows. Several session-63 defects showed only when the app was
-        used, not in any one diff;
+      - `review-ux` over the slice's user flows, at most three issue-sized flows per run (split into more runs if
+        needed; s70's three-flow run hit the turn limit after one and a half). Several session-63 defects showed
+        only when the app was used, not in any one diff;
       - one `nav-perf.sh` comparison over the rail targets, as a safety net for perf triggers the plan missed.
     - **Delta quality review:** when review findings added issues to the slice after the quality review (#937 and
       #940 in Slice 44), run one short `review-quality` on those files before the release gate.

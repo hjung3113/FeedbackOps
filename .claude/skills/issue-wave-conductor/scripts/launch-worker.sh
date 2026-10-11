@@ -4,6 +4,8 @@
 # shells, generate the route tree, then delegate launch and worker state to the shared worker-ops script.
 # WORKER_ROLE defaults to impl; impl-mid, impl-complex and impl-fallback select the routing table rows of those names.
 # Optional WORKER_MODEL / WORKER_EFFORT override the shared routing.tsv for this session.
+# Optional PRE_ADD='<pnpm filter> <pkg@exact> [...]' installs dependencies before the worker starts (workers have no
+# network; s70). pnpm may reformat package.json arrays: check the diff before committing.
 # Needs: WAVE_STATE, WAVE_BRIEFS, FOPS_MAIN (main checkout path).
 : "${WAVE_STATE:?}"; : "${WAVE_BRIEFS:?}"; : "${FOPS_MAIN:?}"; set -u
 N=$1; SLUG=$2; BE=${3:-}; SKILL=$FOPS_MAIN/.claude/skills/issue-wave-conductor
@@ -27,6 +29,11 @@ RULES=".review/00-IMPL-RULES.md"; [ -n "$BE" ] && RULES="$RULES and .review/00-I
 for i in {1..120}; do [ -f node_modules/.modules.yaml ] && [ -d apps/frontend/node_modules ] && break; sleep 5; done
 [ -f node_modules/.modules.yaml ] || { echo "node_modules incomplete: pnpm install --frozen-lockfile (Node 22)"; exit 1; }
 for h in $(orca terminal list --worktree path:"$W" --json 2>/dev/null | grep -o 'term_[a-z0-9-]*' | sort -u); do orca terminal close --terminal "$h" >/dev/null 2>&1; done
+if [ -n "${PRE_ADD:-}" ]; then
+  pa=(${=PRE_ADD})
+  pnpm --filter "${pa[1]}" add --save-exact --config.confirmModulesPurge=false "${(@)pa[2,-1]}" < /dev/null > .review/pre-add.log 2>&1 \
+    || { echo "PRE_ADD failed (see $W/.review/pre-add.log)"; exit 1; }
+fi
 # A fresh worktree has no gitignored routeTree.gen.ts; without it typecheck/route tests fail with setup noise.
 pnpm --filter @fops/frontend build > .review/route-tree-build.log 2>&1 || { echo "frontend build failed (see .review/route-tree-build.log)"; exit 1; }
 args=(--role "${WORKER_ROLE:-impl}" --cwd "$W" --task "$W/.review/W-$N-TASK.md"

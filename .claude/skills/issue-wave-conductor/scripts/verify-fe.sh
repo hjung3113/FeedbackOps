@@ -1,4 +1,5 @@
 #!/bin/bash
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"  # zsh-invoked runs lost BASH_SOURCE (s61, s70)
 # verify-fe.sh <worktree> — FE host checks (Node 22): full vitest (+packages/ui if touched), FE typecheck gate, root typecheck,
 # boundaries + fixture test, design-system lint cap, backend tsc, worker hygiene (no new biome-ignore). Logs in $WAVE_STATE/verify-<basename>/. Prints a summary.
 here=$(cd "$(dirname "$0")" && pwd)

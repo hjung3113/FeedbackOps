@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"  # zsh-invoked runs lost BASH_SOURCE (s61, s70)
 # nav-perf.sh --base <label>=<url> [--base <label>=<url>] --targets <href,href,...> --out <file.json>
 #             [--runs 3] [--start /home] [--personas mock-admin-1,mock-admin-2]
 # Measures in-app navigation in the ego-browser runtime (nav-perf.mjs). Each base gets one warm-up pass, then the
