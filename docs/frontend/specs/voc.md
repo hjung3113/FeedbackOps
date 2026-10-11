@@ -522,6 +522,8 @@ Endpoint contracts (request and response bodies, error codes, permissions, audit
 
 ### 8.2 Headers, rate limit, error rendering
 
+- **List read failure accessibility (#953).** Inbox `VocList` and `TriageQueue` announce their no-row load failure through a call-site `role="alert"` around `EmptyState`, reusing `VOC_LIST_LOAD_ERROR_LABELS`. Activating `다시 시도` moves focus before refetch to the stable labelled list container (`VOC 목록` / `Triage 대기열`, `tabIndex={-1}`), retained through pending → error and pending → rows. First load and background refetch do not move focus. Triage's phase-keyed scroll boundary and #922 settlement behavior remain unchanged.
+
 - A `429` envelope's `detail.retry_after_seconds` is what the toast renders, via `formatRetryAfter` in `apps/frontend/src/lib/copy/rate-limit.ts`. A finite number greater than 0 and below 60 is shown as `{n}초`; 60 or above is rounded up to whole minutes (`{ceil(n / 60)}분`). The actor message is `요청이 너무 많습니다. {wait} 후 다시 시도해 주세요.` with that wait, or `요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.` when the value is missing, not a finite number, or not positive. The `Retry-After` header is parsed in `apps/frontend/src/lib/api/client.ts` and is not an input to this copy.
 - `apps/frontend/src/lib/api/errorMapper.ts`'s `CATALOG` owns user-facing copy for most codes, keyed on `code`. The Triage mutation policy (`apps/frontend/src/features/voc/lib/triage-error-policy.ts`) classifies its own errors and uses the same rate-limit copy. The frontend **never** displays the raw English `message` field.
 - `requestable_permission` (present on `permission.*` codes when safe) is forwarded into `<PermissionBlockedPanel state="request_access">` props automatically.
