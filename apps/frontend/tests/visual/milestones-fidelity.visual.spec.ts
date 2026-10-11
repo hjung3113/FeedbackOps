@@ -293,6 +293,32 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     await expect(row).toContainText('Reporting Performance');
     await page.evaluate(() => document.fonts.ready);
 
+    // The pill dot's colour resolves through the ['managed-systems'] lookup
+    // (MilestonesRoute managedSystemNamesById): until that response lands the
+    // row renders the --managed-system-default fallback. Poll for the resolved
+    // Tableau token colour before the single capture; the pill cannot be found
+    // by its final text during the fallback window, so locate the dot through
+    // the inline custom property the pill root carries.
+    const tableauRgb = await row.evaluate((root) => {
+      const raw = getComputedStyle(root).getPropertyValue('--managed-system-tableau').trim();
+      if (!/^\d+ \d+ \d+$/.test(raw)) {
+        throw new Error(`Expected --managed-system-tableau to be an R G B triplet, got "${raw}"`);
+      }
+      return `rgb(${raw.split(' ').join(', ')})`;
+    });
+    await expect
+      .poll(() =>
+        row.evaluate((root) => {
+          const pill = root.querySelector<HTMLElement>(
+            '[style*="--milestone-managed-system-color"]',
+          );
+          const dot = pill?.querySelector<HTMLElement>('span[aria-hidden="true"]');
+          if (dot === null || dot === undefined) return '';
+          return getComputedStyle(dot).backgroundColor;
+        }),
+      )
+      .toBe(tableauRgb);
+
     const captured = await row.evaluate((root) => {
       const ownText = (element: Element): string =>
         Array.from(element.childNodes)
