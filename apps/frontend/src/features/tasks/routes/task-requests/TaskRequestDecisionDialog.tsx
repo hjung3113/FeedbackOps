@@ -15,6 +15,7 @@ import * as React from 'react';
 export type DecisionAction = 'approve' | 'request-more-evidence' | 'reject';
 
 export interface DecisionDialogState {
+  requestId: string;
   action: DecisionAction;
   value: string;
   error: string | null;
@@ -37,44 +38,27 @@ export function TaskRequestDecisionDialog({
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
-  const lifetime = React.useRef({
-    request,
-    ignoredDialog: null as DecisionDialogState | null,
-    lastDialog: null as DecisionDialogState | null,
-    opener: null as HTMLElement | null,
-    dismissed: false,
-    wasOpen: false,
-  });
-  if (lifetime.current.request !== request) {
-    // The decision hook closes on item changes in an effect. Ignore that old
-    // payload immediately so a new request cannot inherit its closing content.
-    lifetime.current = {
-      request,
-      ignoredDialog: dialog,
-      lastDialog: null,
-      opener: null,
-      dismissed: false,
-      wasOpen: false,
+  const liveDialog = dialog?.requestId === request.id ? dialog : null;
+  const [previousDialog, setPreviousDialog] = React.useState(liveDialog);
+  const [retained, setRetained] = React.useState(liveDialog);
+  if (previousDialog !== liveDialog) {
+    setPreviousDialog(liveDialog);
+    if (liveDialog) setRetained(liveDialog);
+  }
+  const content = liveDialog ?? retained;
+  const opener = React.useRef<HTMLElement | null>(null);
+  const dismissed = React.useRef(false);
+  const mounted = React.useRef(false);
+  React.useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
     };
-  }
-  const liveDialog = dialog === lifetime.current.ignoredDialog ? null : dialog;
-  if (liveDialog) {
-    if (!lifetime.current.wasOpen || lifetime.current.lastDialog?.action !== liveDialog.action) {
-      lifetime.current = {
-        ...lifetime.current,
-        opener: document.activeElement instanceof HTMLElement ? document.activeElement : null,
-        dismissed: false,
-      };
-    }
-    lifetime.current.lastDialog = liveDialog;
-  }
-  lifetime.current.wasOpen = liveDialog !== null;
-  const closingLifetime = lifetime.current;
-  const content = liveDialog ?? closingLifetime.lastDialog;
+  }, []);
 
   function dismiss() {
     if (isSubmitting) return;
-    lifetime.current.dismissed = true;
+    dismissed.current = true;
     onClose();
   }
 
@@ -108,20 +92,20 @@ export function TaskRequestDecisionDialog({
     <Dialog open={liveDialog !== null} onOpenChange={(open) => !open && dismiss()}>
       {content && (
         <DialogContent
+          key={content.action}
           onOpenAutoFocus={() => {
-            lifetime.current.opener =
+            opener.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            lifetime.current.dismissed = false;
+            dismissed.current = false;
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            // An old FocusScope cleanup must not clear or focus a newer action.
-            if (lifetime.current !== closingLifetime) return;
-            const { dismissed, opener } = closingLifetime;
-            if (dismissed && opener?.isConnected) opener.focus();
-            closingLifetime.lastDialog = null;
-            closingLifetime.opener = null;
-            closingLifetime.dismissed = false;
+            // A request-key unmount must not restore an old request's opener.
+            if (mounted.current && dismissed.current && opener.current?.isConnected) {
+              opener.current.focus();
+            }
+            opener.current = null;
+            dismissed.current = false;
           }}
         >
           <DialogHeader>

@@ -3,9 +3,13 @@ import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type * as React from 'react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
+import {
+  type DecisionDialogState,
+  TaskRequestDecisionDialog,
+} from './task-requests/TaskRequestDecisionDialog';
 
 const api = vi.hoisted(() => ({
   approveTaskRequest: vi.fn(),
@@ -551,4 +555,93 @@ describe('TaskRequestsRoute decision dialogs', () => {
     );
     expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
   });
+});
+
+it('preserves the committed decision value and focus when a request transition is aborted', async () => {
+  const neverResolves = new Promise<void>(() => {});
+  let signalSuspended: () => void = () => {};
+  const suspended = new Promise<void>((resolve) => {
+    signalSuspended = resolve;
+  });
+
+  function SuspendingSibling({ request }: { request: TaskRequestDto }) {
+    if (request === otherTaskRequest) {
+      signalSuspended();
+      throw neverResolves;
+    }
+    return <span data-testid="committed-request">{request.display_id}</span>;
+  }
+
+  function Driver() {
+    const [selection, setSelection] = React.useState({ request: taskRequest, revision: 0 });
+    const [dialog, setDialog] = React.useState<DecisionDialogState | null>(null);
+    return (
+      <>
+        <button
+          type="button"
+          data-testid="open-decision"
+          onClick={() =>
+            setDialog({ requestId: taskRequest.id, action: 'reject', value: '', error: null })
+          }
+        >
+          반려
+        </button>
+        <button
+          type="button"
+          data-testid="transition-request"
+          onClick={() =>
+            React.startTransition(() => setSelection({ request: otherTaskRequest, revision: 1 }))
+          }
+        >
+          다른 요청
+        </button>
+        <button
+          type="button"
+          data-testid="urgent-request"
+          onClick={() => setSelection({ request: taskRequest, revision: 2 })}
+        >
+          현재 요청 유지
+        </button>
+        <React.Suspense fallback={<span>request fallback</span>}>
+          <TaskRequestDecisionDialog
+            dialog={dialog}
+            request={selection.request}
+            isSelfApproval={false}
+            isSubmitting={false}
+            onChange={(value) => setDialog((current) => (current ? { ...current, value } : null))}
+            onClose={() => setDialog(null)}
+            onSubmit={(event) => event.preventDefault()}
+          />
+          <SuspendingSibling request={selection.request} />
+        </React.Suspense>
+      </>
+    );
+  }
+
+  render(
+    <React.StrictMode>
+      <Driver />
+    </React.StrictMode>,
+  );
+  const opener = screen.getByTestId('open-decision');
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+  const textbox = within(dialog).getByRole('textbox');
+  fireEvent.change(textbox, { target: { value: 'committed reason' } });
+  expect(textbox).toHaveFocus();
+
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('transition-request'));
+  });
+  await suspended;
+  expect(screen.queryByText('request fallback')).not.toBeInTheDocument();
+  expect(screen.getByTestId('committed-request')).toHaveTextContent('REQ-1071');
+  expect(dialog).toHaveAttribute('data-state', 'open');
+
+  fireEvent.click(screen.getByTestId('urgent-request'));
+  expect(dialog).toBeInTheDocument();
+  expect(dialog).toHaveAttribute('data-state', 'open');
+  expect(textbox).toHaveValue('committed reason');
+  expect(textbox).toHaveFocus();
 });
