@@ -1,10 +1,12 @@
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { TASK_REQUEST_LINK_MISSING_MESSAGE } from '@/lib/copy/task-requests';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
 import { useState } from 'react';
 
+import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
 import { type TaskRequestTab, useTaskRequestsQueue } from './task-requests/useTaskRequestsQueue';
@@ -140,7 +142,9 @@ export function TaskRequestsRoute({
         </>
       }
       detailPanel={
-        queue.selected ? (
+        queue.linkMissing ? (
+          <LinkTargetMissingNotice message={TASK_REQUEST_LINK_MISSING_MESSAGE} />
+        ) : queue.selected ? (
           <TaskRequestPanel
             item={queue.selected}
             names={queue.names}
