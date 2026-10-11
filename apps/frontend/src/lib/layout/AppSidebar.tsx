@@ -321,15 +321,52 @@ function SavedViewsSection({
   onDelete?: (id: string) => void;
 }) {
   const [name, setName] = React.useState('');
+  // #972: remember where focus should land after a delete, but move it only
+  // once the deleted row has actually left the list — never onto a node that
+  // is about to unmount with the refetch. If neither a neighbour row nor the
+  // save input exists, focus stays where the browser leaves it.
+  const [pendingFocus, setPendingFocus] = React.useState<{
+    deletedId: string;
+    targetId: string | null;
+  } | null>(null);
+  const sectionRef = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (pendingFocus === null) return;
+    if (views.some((view) => view.id === pendingFocus.deletedId)) return;
+    const section = sectionRef.current;
+    let target: HTMLElement | null = null;
+    if (pendingFocus.targetId !== null) {
+      const selector = `[data-testid="saved-view-apply-${pendingFocus.targetId}"]`;
+      target = section?.querySelector<HTMLElement>(selector) ?? null;
+    }
+    if (target === null && canSave) {
+      target = section?.querySelector<HTMLElement>('input[aria-label="저장된 보기 이름"]') ?? null;
+    }
+    target?.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, views, canSave]);
+
+  const requestDelete = (id: string, index: number) => {
+    const neighbor = views[index + 1] ?? views[index - 1];
+    setPendingFocus({ deletedId: id, targetId: neighbor?.id ?? null });
+    onDelete?.(id);
+  };
+
   return (
-    <section className="mt-3.5" aria-label="저장된 보기" data-testid="saved-views-section">
+    <section
+      ref={sectionRef}
+      className="mt-3.5"
+      aria-label="저장된 보기"
+      data-testid="saved-views-section"
+    >
       <div className="mx-2 mb-1 text-caption font-semibold uppercase tracking-wide text-text-disabled">저장된 보기</div>
-      {views.map((view) => (
+      {views.map((view, index) => (
         <div key={view.id} className="group flex items-center gap-1">
-          <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
-            <span className="truncate">{view.name}</span>
+          <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} title={view.name} data-testid={`saved-view-apply-${view.id}`}>
+            <span className="block truncate">{view.name}</span>
           </button>
-          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
+          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`저장된 보기 ${view.name} 삭제`} onClick={() => requestDelete(view.id, index)} data-testid={`saved-view-delete-${view.id}`}>×</button>
         </div>
       ))}
       {canSave && (

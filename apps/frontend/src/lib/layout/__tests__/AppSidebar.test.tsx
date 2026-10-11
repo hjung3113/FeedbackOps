@@ -1,5 +1,6 @@
 import { NAV_TREE } from '@/routes/_authed';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
@@ -467,5 +468,93 @@ describe('AppSidebar', () => {
     rerender(<AppSidebar entries={NAV_TREE.tasks} />);
     expect(screen.queryByTestId('sidebar-nav-inbox')).not.toBeInTheDocument();
     expect(screen.getByTestId('sidebar-nav-tasks-board')).toBeInTheDocument();
+  });
+
+  const savedView = (id: string) => ({ id, name: `보기 ${id}` });
+
+  // #972: jsdom has no layout engine, so the clip itself can only be pinned by
+  // class; the title attribute is the observable discoverability guarantee.
+  it('truncates a long saved-view name in the apply button and keeps it discoverable', () => {
+    const name = '가'.repeat(200);
+    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name }]} />);
+
+    const button = screen.getByTestId('saved-view-apply-view-1');
+    expect(button).toHaveAttribute('title', name);
+    expect(button.querySelector('span')).toHaveClass('block', 'truncate');
+    expect(button).toHaveClass('min-w-0', 'flex-1');
+  });
+
+  it.each([
+    {
+      scenario: 'first of three → next view',
+      initial: ['view-1', 'view-2', 'view-3'],
+      deleteId: 'view-1',
+      remaining: ['view-2', 'view-3'],
+      targetTestId: 'saved-view-apply-view-2',
+      canSave: false,
+    },
+    {
+      scenario: 'last of three → previous view',
+      initial: ['view-1', 'view-2', 'view-3'],
+      deleteId: 'view-3',
+      remaining: ['view-1', 'view-2'],
+      targetTestId: 'saved-view-apply-view-2',
+      canSave: false,
+    },
+    {
+      scenario: 'only view → save-name input',
+      initial: ['view-1'],
+      deleteId: 'view-1',
+      remaining: [],
+      targetTestId: null,
+      canSave: true,
+    },
+  ])(
+    '#972 delete focus: $scenario',
+    async ({ initial, deleteId, remaining, targetTestId, canSave }) => {
+      const remove = vi.fn();
+      const { rerender } = render(
+        <AppSidebar
+          entries={entries}
+          savedViews={initial.map(savedView)}
+          canSaveView={canSave}
+          onDeleteSavedView={remove}
+        />,
+      );
+
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId(`saved-view-delete-${deleteId}`));
+      expect(remove).toHaveBeenCalledWith(deleteId);
+      // AppFrame refetches and passes the reduced list back down as a new prop.
+      rerender(
+        <AppSidebar
+          entries={entries}
+          savedViews={remaining.map(savedView)}
+          canSaveView={canSave}
+          onDeleteSavedView={remove}
+        />,
+      );
+
+      const target =
+        targetTestId === null
+          ? screen.getByLabelText('저장된 보기 이름')
+          : screen.getByTestId(targetTestId);
+      await waitFor(() => expect(target).toHaveFocus());
+    },
+  );
+
+  it('#972 keeps focus on the delete button when a delete fails and the list is unchanged', async () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[savedView('view-1'), savedView('view-2')]}
+        onDeleteSavedView={vi.fn()}
+      />,
+    );
+
+    const user = userEvent.setup();
+    const deleteButton = screen.getByTestId('saved-view-delete-view-1');
+    await user.click(deleteButton);
+    expect(deleteButton).toHaveFocus();
   });
 });
