@@ -382,7 +382,12 @@ function SavedViewsSection({
       target = section?.querySelector<HTMLElement>('input[aria-label="저장된 보기 이름"]') ?? null;
     }
     if (next !== null) setPendingRecovery(next);
-    target?.focus();
+    // #972 FIX2: move focus only when the user has not put focus elsewhere —
+    // an activeElement outside this section (main content, other UI) keeps it.
+    const active = document.activeElement;
+    const focusIsFree =
+      active === null || active === document.body || (section?.contains(active) ?? false);
+    if (target !== null && focusIsFree) target.focus();
   }, [pendingRecovery, views, canSave]);
 
   const requestDelete = (id: string) => {

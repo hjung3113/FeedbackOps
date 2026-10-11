@@ -686,4 +686,102 @@ describe('AppSidebar', () => {
     );
     expect(screen.getByTestId('sidebar-nav-my')).toHaveFocus();
   });
+
+  // #972 FIX2: a delete still pending across a surface switch must not steal
+  // focus from main content the user has already focused when its promise
+  // fulfils on the destination surface.
+  it('#972 FIX2 a late delete fulfilment after a surface switch leaves outside focus alone', async () => {
+    const resolvers = new Map<string, () => void>();
+    const remove = vi.fn(
+      (id: string) =>
+        new Promise<void>((resolve) => {
+          resolvers.set(id, resolve);
+        }),
+    );
+    const { rerender } = render(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={['task-1', 'task-2'].map(savedView)}
+          savedViewSurface="tasks"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-task-1'));
+
+    // Navigate to VOC: cached [voc-1, voc-2], save form shown.
+    rerender(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={['voc-1', 'voc-2'].map(savedView)}
+          canSaveView
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+    const outsideInput = screen.getByTestId('main-content-input');
+    outsideInput.focus();
+    expect(outsideInput).toHaveFocus();
+
+    // The old Task delete promise fulfils after the user focused the input.
+    await act(async () => {
+      resolvers.get('task-1')?.();
+    });
+    expect(outsideInput).toHaveFocus();
+  });
+
+  // #972 FIX2: with a single delete, focus the user moved outside the section
+  // while the refetch was in flight survives the recovery pass.
+  it('#972 FIX2 same-surface delete leaves focus the user moved outside the section', async () => {
+    const resolvers = new Map<string, () => void>();
+    const remove = vi.fn(
+      (id: string) =>
+        new Promise<void>((resolve) => {
+          resolvers.set(id, resolve);
+        }),
+    );
+    const { rerender } = render(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={[savedView('view-1'), savedView('view-2')]}
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('saved-view-delete-view-1'));
+    const outsideInput = screen.getByTestId('main-content-input');
+    outsideInput.focus();
+    expect(outsideInput).toHaveFocus();
+
+    // Refetch lands with the reduced list while the delete promise is pending.
+    rerender(
+      <>
+        <AppSidebar
+          entries={entries}
+          savedViews={[savedView('view-2')]}
+          savedViewSurface="voc"
+          onDeleteSavedView={remove}
+        />
+        <input data-testid="main-content-input" aria-label="메인 콘텐츠 입력" />
+      </>,
+    );
+    expect(outsideInput).toHaveFocus();
+
+    await act(async () => {
+      resolvers.get('view-1')?.();
+    });
+    expect(outsideInput).toHaveFocus();
+  });
 });
