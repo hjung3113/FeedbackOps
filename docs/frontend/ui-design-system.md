@@ -931,16 +931,23 @@ Layout regions open and close without width transitions (#996): the detail panel
 fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition
 re-lays out the list behind it every frame (about 15 ms per frame at 1,000 loaded rows),
 and here it only produced a two-step jump, a blank closing strip, or squished sidebar labels.
-Do not attach `useListMotion` to unbounded "더 불러오기" appends.
+Attach `useListMotion` only to lists whose growth the user drives page by page or that
+are naturally small. The Task Request queue animates its user-driven load-more pages by
+the #994 decision; never attach it to infinite or auto-loading lists.
 
-`useListMotion()` returns a ref callback for bounded lists (paged or naturally small),
+`useListMotion()` returns a ref callback for user-paged or naturally small lists,
 using auto-animate with base/standard timing. Missing tokens or reduced motion skip
 initialisation entirely; detach/unmount destroys the controller. Screens import only
 this hook. Only in-place insertion, removal, and reorder within the same context animate.
 Key only the animated DOM boundary on tab/filter/scope/resource changes, including
 pending/error/empty/rows phase changes where that boundary renders those states. Keep
 selection, toolbars, controllers, and ancestor scroll owners mounted. Triage keys by
-queue context plus phase; Task Request keys by tab plus Managed System; recommendations
+queue context plus phase; Task Request keys by tab plus Managed System plus rendered phase
+(`cached` for both cached rows and cached empty results until that context first settles,
+then `empty`/`rows`). Reset this settlement latch only on a context change, including
+returning to a visited context; same-context invalidation and load-more preserve the
+boundary and scroll while rows remain. Async arrivals after a context switch do not animate;
+the last-row removal shows the empty phase immediately. Recommendations
 key by source VOC; Survey questions keep a stable unkeyed inner list. The last
 recommendation/question removal still shows the existing empty/onboarding branch at once.
 Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.

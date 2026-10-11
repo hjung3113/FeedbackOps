@@ -59,3 +59,17 @@ rules compile from those imports alone. Per-component motion hard-coding is proh
 Finite overlay animations should preserve visual harness end states when animations are
 disabled; the conductor verifies the rendered change and visual baselines. List and drag
 work remain separate issues under the same policy.
+
+## Amended 2026-10-11 — list motion clarification (#1009)
+
+The #994 list-motion decision includes the Task Request queue's user-driven load-more
+pages. Eligible lists grow only when the user requests each page or are naturally small;
+infinite and auto-loading lists are excluded. Tab, scope, source changes and their async
+arrivals do not animate; same-context inserts, removals and moves retain continuity.
+
+Task Request keys its animated boundary by tab + Managed System + rendered phase. Both
+cached rows and cached empty results use `cached` until that context's active page query
+first settles, then use `empty`/`rows`. Reset the settlement latch only when context changes,
+including revisits, never for same-context fetching, invalidation or load-more. Removals
+with rows remaining and load-more preserve the boundary and scroll; the last-row removal
+renders the empty phase immediately.

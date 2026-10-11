@@ -44,6 +44,7 @@ export interface UseTaskRequestsQueueResult {
   currentActorId: string | null;
   currentRole: string | null;
   isLoading: boolean;
+  queueSettled: boolean;
   permissionDeniedError: { message: string } | null;
   hasError: boolean;
   refetch: () => void;
@@ -221,6 +222,10 @@ export function useTaskRequestsQueue({
     currentActorId: meQuery.data?.actor.id ?? null,
     currentRole: meQuery.data?.actor.role_level ?? null,
     isLoading: taskRequestsQuery.isLoading || summaryQuery.isLoading,
+    queueSettled:
+      taskRequestsQuery.isSuccess &&
+      !taskRequestsQuery.isFetching &&
+      !taskRequestsQuery.isPlaceholderData,
     permissionDeniedError: isPermissionDenied(taskRequestsQuery.error ?? summaryQuery.error)
       ? { message: mapUnknownError(taskRequestsQuery.error ?? summaryQuery.error).message }
       : null,

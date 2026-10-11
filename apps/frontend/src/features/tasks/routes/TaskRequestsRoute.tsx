@@ -3,6 +3,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
+import { useState } from 'react';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
@@ -25,6 +26,14 @@ export function TaskRequestsRoute({
 }) {
   const listMotion = useListMotion();
   const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const context = JSON.stringify([queue.activeTab, managedSystem ?? null]);
+  const [settlement, setSettlement] = useState({ context, settled: queue.queueSettled });
+  const settledOnce = queue.queueSettled || (settlement.context === context && settlement.settled);
+  // First fresh data replaces the cached boundary; later fetches keep its motion and scroll.
+  if (settlement.context !== context || settlement.settled !== settledOnce) {
+    setSettlement({ context, settled: settledOnce });
+  }
+  const phase = !settledOnce ? 'cached' : queue.shown.length === 0 ? 'empty' : 'rows';
   const selectedDocumentTitle =
     !queue.isLoading &&
     !queue.hasError &&
@@ -82,7 +91,7 @@ export function TaskRequestsRoute({
             onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
           />
           <div
-            key={JSON.stringify([queue.activeTab, managedSystem ?? null])}
+            key={JSON.stringify([context, phase])}
             ref={listMotion}
             className="min-h-0 flex-1 overflow-y-auto"
           >
