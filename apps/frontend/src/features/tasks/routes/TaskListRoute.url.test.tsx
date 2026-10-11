@@ -237,7 +237,7 @@ it.each(['404', 'scope', 'assignee'] as const)(
     expect(screen.getByTestId('tasks-link-missing')).toHaveTextContent(
       '요청한 Task를 찾을 수 없습니다. 삭제되었거나 현재 권한·범위 밖일 수 있습니다.',
     );
-    expect(screen.getByTestId('tasks-link-missing')).toHaveAttribute('role', 'status');
+    expect(screen.getByTestId('tasks-link-missing')).toHaveRole('status');
     expectNoSelectedRow();
     expect(vi.mocked(getTask).mock.calls.map(([id]) => id)).not.toContain(first.id);
     expect(mounted.history.length).toBe(1);

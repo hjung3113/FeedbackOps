@@ -326,7 +326,7 @@ function expectMissingQueue(mounted: ReturnType<typeof mount>) {
   expect(screen.getByTestId('tasks-link-missing')).toHaveTextContent(
     '요청한 Task Request를 찾을 수 없습니다. 삭제되었거나 현재 권한·범위 밖일 수 있습니다.',
   );
-  expect(screen.getByTestId('tasks-link-missing')).toHaveAttribute('role', 'status');
+  expect(screen.getByTestId('tasks-link-missing')).toHaveRole('status');
   expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
   expect(document.querySelector('[aria-selected="true"]:not([role="tab"])')).toBeNull();
   expect(screen.queryByTestId('object-row-selected-bar')).not.toBeInTheDocument();
