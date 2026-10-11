@@ -1226,22 +1226,24 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
         state,
       ]);
       const before = await dbHandle.pool.query(
-        'select to_jsonb(v) as row from voc.vocs v where id = $1',
+        'select to_jsonb(v) as row, v.updated_at from voc.vocs v where id = $1',
         [voc.id],
       );
       const audits = await getAuditTypes(voc.id);
+      // The direct UPDATE above bumps updated_at; send the current value.
       const res = await patchVoc(app, admin, voc.id, body, {
         idempotencyKey: randomUUID(),
-        ifMatch: voc.updated_at,
+        ifMatch: (before.rows[0].updated_at as Date).toISOString(),
       });
       expect(res.statusCode).toBe(422);
       expect(res.json().code).toBe('validation.failed');
       expect(res.json().detail.fields[0]).toEqual({ path: [path], code });
       expect(
         (
-          await dbHandle.pool.query('select to_jsonb(v) as row from voc.vocs v where id = $1', [
-            voc.id,
-          ])
+          await dbHandle.pool.query(
+            'select to_jsonb(v) as row, v.updated_at from voc.vocs v where id = $1',
+            [voc.id],
+          )
         ).rows,
       ).toEqual(before.rows);
       expect(await getAuditTypes(voc.id)).toEqual(audits);
