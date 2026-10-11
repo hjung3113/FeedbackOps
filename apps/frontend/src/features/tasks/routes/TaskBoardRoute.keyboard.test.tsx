@@ -253,6 +253,132 @@ describe('TaskBoardRoute keyboard dragging', () => {
     },
   );
 
+  it('abandons destination focus after rejection before the destination commits', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let releaseCancellation!: () => void;
+    vi.spyOn(client, 'cancelQueries').mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseCancellation = resolve;
+      }),
+    );
+    vi.mocked(updateTaskStatus).mockRejectedValueOnce(new Error('Move rejected'));
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    for (let step = 0; step < 13; step += 1) {
+      fireEvent.keyDown(document, { key: 'ArrowRight', code: 'ArrowRight' });
+    }
+    fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+    expect(screen.getByLabelText('Doing 열')).not.toHaveTextContent(task.display_id);
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    await act(async () => {
+      releaseCancellation();
+    });
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(
+      within(screen.getByLabelText('Backlog 열')).getByRole('button', {
+        name: 'TASK-1000: Keyboard draggable Task',
+      }),
+    ).toBe(card);
+    card.blur();
+    expect(document.body).toHaveFocus();
+
+    vi.mocked(listTasks).mockResolvedValue({ items: [{ ...task, status: 'doing' }] });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['tasks'] });
+    });
+    const destination = await within(screen.getByLabelText('Doing 열')).findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    expect(destination).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('preserves a newer keyboard destination request when an older move fails', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const label = this.getAttribute('aria-label');
+      if (label === 'Backlog 열') return boardRect(0, 288, 600);
+      if (label === 'Doing 열') return boardRect(300, 288, 600);
+      if (label === 'Todo 열') return boardRect(-300, 288, 600);
+      if (
+        label?.startsWith('TASK-1000:') ||
+        (this.getAttribute('aria-hidden') === 'true' && this.textContent?.includes(task.title))
+      )
+        return boardRect(16, 256, 72);
+      return boardRect(0, 0, 0);
+    });
+    let releaseOlder!: () => void;
+    let releaseNewer!: () => void;
+    vi.spyOn(client, 'cancelQueries')
+      .mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          releaseOlder = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          releaseNewer = resolve;
+        }),
+      );
+    vi.mocked(updateTaskStatus).mockRejectedValueOnce(new Error('Older move rejected'));
+    render(
+      <QueryClientProvider client={client}>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    for (let move = 0; move < 2; move += 1) {
+      card.focus();
+      fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      for (let step = 0; step < 13; step += 1) {
+        const direction = move === 0 ? 'ArrowRight' : 'ArrowLeft';
+        fireEvent.keyDown(document, { key: direction, code: direction });
+      }
+      expect(screen.getByRole('status').textContent).toBe(
+        move === 0
+          ? 'TASK-1000 Task가 Doing 열 위에 있습니다.'
+          : 'TASK-1000 Task가 Todo 열 위에 있습니다.',
+      );
+      fireEvent.keyDown(document, { key: ' ', code: 'Space' });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(screen.getByLabelText('Doing 열')).not.toHaveTextContent(task.display_id);
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+    await act(async () => {
+      releaseOlder();
+    });
+    await waitFor(() => expect(client.isMutating()).toBe(1));
+    expect(screen.getByLabelText('Todo 열')).not.toHaveTextContent(task.display_id);
+    expect(document.body).toHaveFocus();
+    await act(async () => {
+      releaseNewer();
+    });
+    const destination = await within(screen.getByLabelText('Todo 열')).findByRole('button', {
+      name: 'TASK-1000: Keyboard draggable Task',
+    });
+    expect(destination).toHaveFocus();
+  });
+
   it('keeps focus on the card after a same-column keyboard drop', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(

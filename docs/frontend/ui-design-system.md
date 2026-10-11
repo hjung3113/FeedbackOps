@@ -923,7 +923,8 @@ the route waits for the optimistic destination card to render, then focuses it o
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
 The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
-active copy, and per-drop animation choice;
+active copy, and per-drop animation choice. A failed move abandons its pending focus request;
+an older move's failure cannot clear a newer drag's request.
 `useTaskStatusTransition` continues to own cache writes and rollback.
 
 Layout regions open and close without width transitions (#996): the detail panel, its

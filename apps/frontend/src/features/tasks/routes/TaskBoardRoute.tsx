@@ -65,9 +65,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
   const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
   const boardScroller = React.useRef<HTMLDivElement>(null);
+  const dragGeneration = React.useRef(0);
   const pendingKeyboardFocus = React.useRef<{
     taskId: string;
     destinationStatus: TaskStatus;
+    generation: number;
   } | null>(null);
   const pointer = React.useRef<{ x: number; y: number } | null>(null);
   React.useEffect(() => {
@@ -216,6 +218,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     };
   }, []);
   function onDragStart(event: DragStartEvent) {
+    dragGeneration.current += 1;
     pendingKeyboardFocus.current = null;
     const activator = event.activatorEvent;
     pointer.current =
@@ -242,10 +245,20 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     );
     setActiveTask(null);
     if (willMove) {
+      const generation = dragGeneration.current;
       if (event.activatorEvent instanceof KeyboardEvent) {
-        pendingKeyboardFocus.current = { taskId: task.id, destinationStatus: target as TaskStatus };
+        pendingKeyboardFocus.current = {
+          taskId: task.id,
+          destinationStatus: target as TaskStatus,
+          generation,
+        };
       }
-      mutation.mutate({ task, status: target as TaskStatus });
+      // Per-invocation promises also settle when a newer mutation supersedes this one.
+      void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
+        if (pendingKeyboardFocus.current?.generation === generation) {
+          pendingKeyboardFocus.current = null;
+        }
+      });
     }
   }
   function moveToNextStatus(taskId: string) {
