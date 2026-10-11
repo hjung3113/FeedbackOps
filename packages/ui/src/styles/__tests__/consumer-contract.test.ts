@@ -2,6 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from '@tailwindcss/node';
 import { expect, it } from 'vitest';
+import { POPPER_CONTENT_MOTION } from '../../utils/motion.js';
 
 /**
  * Consumer contract for the documented @fops/ui imports (ADR-0058).
@@ -153,6 +154,42 @@ it(
     expect(mediaStart).toBeGreaterThan(-1);
     expect(mdRule).toBeGreaterThan(mediaStart);
     expect(css.slice(mdRule)).toContain('border-radius: var(--radius-md);');
+  },
+  COMPILE_TIMEOUT,
+);
+
+it(
+  'documented imports ship overlay motion, timing tokens and global reduced motion',
+  async () => {
+    const css = await compileConsumerCss(POPPER_CONTENT_MOTION.split(' '));
+
+    expect(css).toContain('@keyframes enter');
+    expect(css).toContain('@keyframes exit');
+    expect(css).toContain('animation: enter');
+    expect(css).toContain('animation: exit');
+    expect(css).toContain('--tw-enter-opacity: 0;');
+    expect(css).toContain('zoom-out-95');
+    expect(css).toContain('--tw-exit-scale:');
+    expect(css).toContain('slide-in-from-top-2');
+    expect(css).toContain('--tw-enter-translate-y:');
+    expect(css).toContain('--tw-animation-duration: var(--motion-duration-base);');
+    expect(css).toContain('--tw-animation-duration: var(--motion-duration-fast);');
+    expect(css).toContain('--tw-ease: var(--motion-ease-enter);');
+    expect(css).toContain('--tw-ease: var(--motion-ease-exit);');
+    expect(css).toContain('[data-state="delayed-open"]');
+    expect(css).toContain('[data-state="instant-open"]');
+    expect(css).toContain('--motion-duration-fast: 150ms;');
+    expect(css).toContain('--motion-duration-base: 200ms;');
+    expect(css).toContain('--motion-duration-slow: 300ms;');
+    expect(css).toContain('--motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);');
+    expect(css).toContain('--motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);');
+    expect(css).toContain('--motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toContain('*, ::before, ::after {');
+    expect(css).toContain('animation-duration: 0.01ms !important;');
+    expect(css).toContain('animation-iteration-count: 1 !important;');
+    expect(css).toContain('transition-duration: 0.01ms !important;');
+    expect(css).toContain('scroll-behavior: auto !important;');
   },
   COMPILE_TIMEOUT,
 );

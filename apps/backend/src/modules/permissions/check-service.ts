@@ -83,6 +83,35 @@ export interface CheckServiceDeps {
 
 export type CheckService = ReturnType<typeof createCheckService>;
 
+/** Scope to one read call; never hold this wrapper across requests or mutations. */
+export function memoizeCapabilityChecks(checkService: CheckService): CheckService {
+  const decisions = new Map<string, Promise<Decision>>();
+  return {
+    ...checkService,
+    checkCapability(actor, capability, scope, options) {
+      if (options?.tx) return checkService.checkCapability(actor, capability, scope, options);
+      const key = JSON.stringify([
+        actor.actor_id,
+        actor.workspace_id,
+        actor.role_level,
+        capability,
+        scope.workspace_id,
+        scope.managed_system_id ?? '',
+      ]);
+      const cached = decisions.get(key);
+      if (cached) return cached;
+      const decision = checkService
+        .checkCapability(actor, capability, scope, options)
+        .catch((error) => {
+          decisions.delete(key);
+          throw error;
+        });
+      decisions.set(key, decision);
+      return decision;
+    },
+  };
+}
+
 export function createCheckService(deps: CheckServiceDeps) {
   const now = deps.now ?? (() => new Date());
 

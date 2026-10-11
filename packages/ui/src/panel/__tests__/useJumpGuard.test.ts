@@ -84,6 +84,27 @@ afterEach(() => {
 });
 
 describe('useJumpGuard', () => {
+  it('jumps instantly under reduced motion and admits scrolling away from the landing', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
+    try {
+      const root = fakeRoot({ scrollTop: 120, applyScroll: true });
+      const scrollTo = vi.spyOn(root, 'scrollTo');
+      const { result } = renderHook(() => useJumpGuard());
+      act(() => result.current.startJump(root, 400));
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 400, behavior: 'auto' });
+      expect(root.scrollTop).toBe(400);
+      root.scrollTop = 340;
+      expect(result.current.admitUserScroll(root)).toBe(true);
+      expect(result.current.isSuppressed()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('admits a scroll while no jump is in progress', () => {
     const root = fakeRoot();
     const { result } = renderHook(() => useJumpGuard());

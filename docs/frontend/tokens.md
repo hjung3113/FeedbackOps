@@ -367,6 +367,28 @@ Badge with a 'Gunmetal' background (#94a3b8), 'Storm Cloud' text (#667083), 4px 
 | 2 | Deep Slate Elevated Card | `#edf3fb` | More prominent card surface, used for focused content sections or lists. |
 | 3 | Charcoal Grey Overlay | `#cbd6e6` | Accent surface for borders, shadows, and subtle overlays, providing clear separation. |
 
+## Tokens — Motion
+
+Raw values ship in `packages/ui/src/styles/tokens.css` (ADR-0063). Tailwind aliases in
+`theme.css` reference these variables; components consume the shared overlay constants in
+`packages/ui/src/utils/motion.ts`, never independent motion classes. See the Motion section
+in `ui-design-system.md` for surface behavior and reduced motion.
+
+| Token | Value | Utility / role |
+| --- | --- | --- |
+| `--motion-duration-fast` | `150ms` | `animation-duration-fast`; popper/dialog/scrim exit, default transitions |
+| `--motion-duration-base` | `200ms` | `animation-duration-base`; popper/dialog/scrim enter, sheet exit |
+| `--motion-duration-slow` | `300ms` | `animation-duration-slow`; sheet enter |
+| `--motion-ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | `ease-standard`; default transition easing |
+| `--motion-ease-enter` | `cubic-bezier(0, 0, 0.2, 1)` | `ease-enter` |
+| `--motion-ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` | `ease-exit` |
+
+`--default-transition-duration` and `--default-transition-timing-function` alias fast and
+standard, preserving Tailwind's existing defaults. Animation duration has its own
+`--animation-duration-*` namespace; `duration-base` is not an animation timing utility.
+The global reduced-motion rule makes animations/transitions effectively instant (`0.01ms`)
+and scroll behavior automatic; JS motion also reads the shared preference helper.
+
 ## Elevation
 
 - **Default Card:** `rgba(16, 24, 40, 0.06) 0px 2px 4px 0px`

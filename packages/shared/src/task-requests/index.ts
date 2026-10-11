@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { listPageSchema } from '../list-page.js';
 
 export const taskRequestStatusSchema = z.enum([
   'pending_review',
@@ -32,6 +33,8 @@ export const listTaskRequestsQuerySchema = z
   .object({
     status: taskRequestStatusSchema.optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict();
 export type ListTaskRequestsQuery = z.infer<typeof listTaskRequestsQuerySchema>;
@@ -91,3 +94,24 @@ export const taskRequestDtoSchema = z
   })
   .strict();
 export type TaskRequestDto = z.infer<typeof taskRequestDtoSchema>;
+
+export const listTaskRequestsResponseSchema = z
+  .object({
+    items: z.array(taskRequestDtoSchema),
+    page: listPageSchema
+      .extend({
+        status_counts: z
+          .object({
+            pending_review: z.number().int().nonnegative(),
+            approved: z.number().int().nonnegative(),
+            rejected: z.number().int().nonnegative(),
+            needs_more_evidence: z.number().int().nonnegative(),
+            converted: z.number().int().nonnegative(),
+          })
+          .strict()
+          .optional(),
+      })
+      .optional(),
+  })
+  .strict();
+export type ListTaskRequestsResponse = z.infer<typeof listTaskRequestsResponseSchema>;

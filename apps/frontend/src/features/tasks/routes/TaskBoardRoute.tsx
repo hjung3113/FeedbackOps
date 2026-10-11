@@ -4,13 +4,20 @@ import { listTasks } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import {
+  type Announcements,
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  type DropAnimation,
   KeyboardSensor,
   PointerSensor,
+  getClientRect,
+  rectIntersection,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -20,13 +27,14 @@ import {
   OutlineBadge,
   PermissionBlockedPanel,
   WorkbenchShell,
+  readMotionTiming,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
-import { toast } from 'sonner';
-import { useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
+import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { TaskBoardCardPreview } from '../components/task-board/TaskBoardCard';
 import { TaskBoardColumn } from '../components/task-board/TaskBoardColumn';
 import {
   type TaskBoardGroupBy,
@@ -44,6 +52,7 @@ const STATUS_COLUMNS: TaskStatus[] = [
   'reopened',
 ];
 type Filters = Record<string, string[]>;
+const BOARD_SCROLL_THRESHOLD = { x: 0.2, y: 0.2 };
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
   if (groupBy === 'managedSystem') return task.primary_managed_system_id;
@@ -53,6 +62,41 @@ function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
 
 export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
   const navigate = useNavigate();
+  const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
+  const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
+  const boardScroller = React.useRef<HTMLDivElement>(null);
+  const dragGeneration = React.useRef(0);
+  const pendingKeyboardFocus = React.useRef<{
+    taskId: string;
+    destinationStatus: TaskStatus;
+    generation: number;
+  } | null>(null);
+  const pointer = React.useRef<{ x: number; y: number } | null>(null);
+  React.useEffect(() => {
+    if (!activeTask || !pointer.current) return;
+    const trackPointer = (event: PointerEvent) => {
+      pointer.current = { x: event.clientX, y: event.clientY };
+    };
+    // Read actual client coordinates; dnd-kit's drag delta also includes scroll offsets.
+    document.addEventListener('pointermove', trackPointer, true);
+    return () => document.removeEventListener('pointermove', trackPointer, true);
+  }, [activeTask]);
+  const canScroll = React.useCallback((element: Element) => {
+    if (element !== boardScroller.current || !pointer.current) return true;
+    // Ancestor lists and their measured rects update separately when the over node changes.
+    // Gate horizontal scrolling against the board's live rect, never a column's stale rect.
+    const rect = element.getBoundingClientRect();
+    const edge = rect.width * BOARD_SCROLL_THRESHOLD.x;
+    const { x, y } = pointer.current;
+    return y >= rect.top && y <= rect.bottom && (x <= rect.left + edge || x >= rect.right - edge);
+  }, []);
+  const keyboardTiming = readMotionTiming('fast', 'standard');
+  // dnd-kit supports null at runtime, but its transition type omits it.
+  const overlayTransition = (
+    keyboardTiming.durationMs === 0
+      ? null
+      : `transform ${keyboardTiming.durationMs}ms ${keyboardTiming.easing}`
+  ) as string;
   const [groupBy, setGroupBy] = React.useState<TaskBoardGroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
@@ -69,6 +113,44 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const priority = filters.priority; const milestone = filters.milestone; const assignee = filters.assignee;
     return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || (task.assignee_actor_id === null ? assignee.includes('__unassigned') : assignee.includes(task.assignee_actor_id)));
   }), [items, filters]);
+  const focusScope = React.useRef({ groupBy, managedSystem, publicUpdate });
+  React.useLayoutEffect(
+    () => () => {
+      pendingKeyboardFocus.current = null;
+    },
+    [],
+  );
+  React.useLayoutEffect(() => {
+    const previousScope = focusScope.current;
+    if (
+      previousScope.groupBy !== groupBy ||
+      previousScope.managedSystem !== managedSystem ||
+      previousScope.publicUpdate !== publicUpdate
+    ) {
+      pendingKeyboardFocus.current = null;
+    }
+    focusScope.current = { groupBy, managedSystem, publicUpdate };
+    const pending = pendingKeyboardFocus.current;
+    if (
+      !pending ||
+      !filtered.some(
+        (task) => task.id === pending.taskId && task.status === pending.destinationStatus,
+      )
+    )
+      return;
+    const board = boardScroller.current;
+    const card =
+      board &&
+      [...board.querySelectorAll<HTMLButtonElement>('[data-task-board-card-id]')].find(
+        (node) => node.dataset.taskBoardCardId === pending.taskId,
+      );
+    if (!card) return;
+    pendingKeyboardFocus.current = null;
+    // Optimistic cache writes can commit after drag end. Respect focus moved elsewhere meanwhile.
+    if (document.activeElement === document.body || board.contains(document.activeElement)) {
+      card.focus();
+    }
+  }, [filtered, groupBy, managedSystem, publicUpdate]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -115,7 +197,70 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
-  function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
+  const announcements = React.useMemo<Announcements>(() => {
+    const taskFor = (active: Parameters<Announcements['onDragStart']>[0]['active']) =>
+      active.data.current?.task as TaskDto | undefined;
+    const displayId = (active: Parameters<Announcements['onDragStart']>[0]['active']) =>
+      taskFor(active)?.display_id ?? String(active.id);
+    const columnLabel = (over: Parameters<Announcements['onDragOver']>[0]['over']) =>
+      over ? TASK_STATUS_LABELS[over.id as TaskStatus] : null;
+    return {
+      onDragStart: ({ active }) => {
+        const task = taskFor(active);
+        return TASK_BOARD_COPY.pickup(
+          displayId(active),
+          task ? TASK_STATUS_LABELS[task.status] : String(active.id),
+        );
+      },
+      onDragOver: ({ active, over }) => TASK_BOARD_COPY.over(displayId(active), columnLabel(over)),
+      onDragEnd: ({ active, over }) => TASK_BOARD_COPY.drop(displayId(active), columnLabel(over)),
+      onDragCancel: ({ active }) => TASK_BOARD_COPY.cancel(displayId(active)),
+    };
+  }, []);
+  function onDragStart(event: DragStartEvent) {
+    dragGeneration.current += 1;
+    pendingKeyboardFocus.current = null;
+    const activator = event.activatorEvent;
+    pointer.current =
+      'clientX' in activator && 'clientY' in activator
+        ? { x: Number(activator.clientX), y: Number(activator.clientY) }
+        : null;
+    const timing = readMotionTiming('slow', 'enter');
+    setDropAnimation(
+      timing.durationMs === 0 ? null : { duration: timing.durationMs, easing: timing.easing },
+    );
+    setActiveTask((event.active.data.current?.task as TaskDto | undefined) ?? null);
+  }
+  function onDragEnd(event: DragEndEvent) {
+    const task = event.active.data.current?.task as TaskDto | undefined;
+    const target = event.over?.id;
+    const willMove =
+      groupBy === 'status' && task && typeof target === 'string' && task.status !== target;
+    const timing = readMotionTiming('slow', 'enter');
+    // dnd-kit reads this state in its layout effect after the end-event commit.
+    setDropAnimation(
+      willMove || timing.durationMs === 0
+        ? null
+        : { duration: timing.durationMs, easing: timing.easing },
+    );
+    setActiveTask(null);
+    if (willMove) {
+      const generation = dragGeneration.current;
+      if (event.activatorEvent instanceof KeyboardEvent) {
+        pendingKeyboardFocus.current = {
+          taskId: task.id,
+          destinationStatus: target as TaskStatus,
+          generation,
+        };
+      }
+      // Per-invocation promises also settle when a newer mutation supersedes this one.
+      void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
+        if (pendingKeyboardFocus.current?.generation === generation) {
+          pendingKeyboardFocus.current = null;
+        }
+      });
+    }
+  }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
     const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
@@ -132,6 +277,9 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       />
     );
   }
+  const activeAssignee = activeTask
+    ? resolveTaskAssignee(activeTask.assignee_actor_id, actorNames)
+    : null;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return (
     <WorkbenchShell
@@ -235,8 +383,49 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 </p>
               </output>
             ) : (
-              <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-                <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+              <DndContext
+                sensors={sensors}
+                accessibility={{
+                  announcements,
+                  restoreFocus: false,
+                  screenReaderInstructions: TASK_BOARD_COPY.screenReaderInstructions,
+                }}
+                autoScroll={{ canScroll, threshold: BOARD_SCROLL_THRESHOLD }}
+                measuring={{
+                  droppable: {
+                    // The ref lives inside the column scroller so both scroll axes stay reachable.
+                    measure: (node) =>
+                      getClientRect(node.closest('[data-task-board-column]') ?? node),
+                  },
+                }}
+                collisionDetection={(args) =>
+                  rectIntersection({
+                    ...args,
+                    // The inner ref scrolls; collision bounds remain the live outer column.
+                    droppableRects: new Map(
+                      args.droppableContainers.flatMap(({ id, node }) =>
+                        node.current
+                          ? [
+                              [
+                                id,
+                                getClientRect(
+                                  node.current.closest('[data-task-board-column]') ?? node.current,
+                                ),
+                              ],
+                            ]
+                          : [],
+                      ),
+                    ),
+                  })
+                }
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragCancel={() => {
+                  pendingKeyboardFocus.current = null;
+                  setActiveTask(null);
+                }}
+              >
+                <div ref={boardScroller} className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
                   {columns.map((column) => (
                     <TaskBoardColumn
                       key={column.key}
@@ -251,6 +440,20 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                     />
                   ))}
                 </div>
+                <DragOverlay dropAnimation={dropAnimation} transition={overlayTransition}>
+                  {activeTask && (
+                    <TaskBoardCardPreview
+                      task={activeTask}
+                      selected={activeTask.id === selectedId}
+                      managedSystemName={
+                        systemNames.get(activeTask.primary_managed_system_id) ?? 'Managed System'
+                      }
+                      assigneeName={
+                        activeAssignee?.kind === 'resolved' ? activeAssignee.displayName : undefined
+                      }
+                    />
+                  )}
+                </DragOverlay>
               </DndContext>
             )}
           </>

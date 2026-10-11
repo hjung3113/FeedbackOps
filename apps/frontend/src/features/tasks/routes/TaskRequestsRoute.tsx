@@ -1,7 +1,9 @@
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
-import { ListShell, ListToolbar, PermissionBlockedPanel } from '@fops/ui';
+import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
+import { useState } from 'react';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
@@ -22,7 +24,16 @@ export function TaskRequestsRoute({
   selectedParam?: string | undefined;
   managedSystem?: string;
 }) {
+  const listMotion = useListMotion();
   const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const context = JSON.stringify([queue.activeTab, managedSystem ?? null]);
+  const [settlement, setSettlement] = useState({ context, settled: queue.queueSettled });
+  const settledOnce = queue.queueSettled || (settlement.context === context && settlement.settled);
+  // First fresh data replaces the cached boundary; later fetches keep its motion and scroll.
+  if (settlement.context !== context || settlement.settled !== settledOnce) {
+    setSettlement({ context, settled: settledOnce });
+  }
+  const phase = !settledOnce ? 'cached' : queue.shown.length === 0 ? 'empty' : 'rows';
   const selectedDocumentTitle =
     !queue.isLoading &&
     !queue.hasError &&
@@ -79,7 +90,11 @@ export function TaskRequestsRoute({
             activeTab={queue.activeTab}
             onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            key={JSON.stringify([context, phase])}
+            ref={listMotion}
+            className="min-h-0 flex-1 overflow-y-auto"
+          >
             {queue.shown.map((item) => (
               <TaskRequestRow
                 key={item.id}
@@ -89,6 +104,12 @@ export function TaskRequestsRoute({
                 onSelect={queue.setSelectedId}
               />
             ))}
+            <ListLoadMore
+              hasMore={queue.hasMore}
+              loadingMore={queue.loadingMore}
+              failed={queue.loadMoreError}
+              onLoadMore={queue.loadMore}
+            />
             {queue.shown.length === 0 &&
               (isPendingEmpty ? (
                 <ListStateMessage

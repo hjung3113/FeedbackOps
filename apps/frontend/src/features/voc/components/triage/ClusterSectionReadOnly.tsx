@@ -17,7 +17,7 @@
  */
 
 import type { VocRecommendationItem } from '@fops/shared';
-import { Button, PanelSectionTitle, ReporterStatusBadge } from '@fops/ui';
+import { Button, PanelSectionTitle, ReporterStatusBadge, useListMotion } from '@fops/ui';
 import { Check, Layers } from 'lucide-react';
 import * as React from 'react';
 
@@ -60,6 +60,7 @@ export function ClusterSectionReadOnly({
   vocId,
   similarCount,
 }: ClusterSectionReadOnlyProps): React.ReactElement {
+  const listMotion = useListMotion();
   const { data, isPending, isError } = useVocRecommendations(vocId);
   const [feedback, setFeedback] = React.useState<{ tone: 'ok' | 'error'; text: string } | null>(
     null,
@@ -164,6 +165,8 @@ export function ClusterSectionReadOnly({
         {data?.available === true && data.items.length > 0 && (
           <>
             <ul
+              key={vocId}
+              ref={listMotion}
               data-testid="cluster-recommendation-list"
               className="flex flex-col gap-2 list-none p-0 m-0"
             >

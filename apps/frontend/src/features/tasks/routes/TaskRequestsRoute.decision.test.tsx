@@ -1,9 +1,15 @@
+import { taskRequestPage } from '@/test/task-request-pages';
+import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type * as React from 'react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
+import {
+  type DecisionDialogState,
+  TaskRequestDecisionDialog,
+} from './task-requests/TaskRequestDecisionDialog';
 
 const api = vi.hoisted(() => ({
   approveTaskRequest: vi.fn(),
@@ -79,7 +85,11 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   convertTaskRequest: vi.fn(),
   fetchMe: api.fetchMe,
   fetchPermissionCheck: api.fetchPermissionCheck,
-  fetchTaskRequests: api.fetchTaskRequests,
+  fetchTaskRequests: async (options: ListTaskRequestsQuery) => {
+    const result = await api.fetchTaskRequests(options);
+    return result.page ? result : taskRequestPage(result.items, options);
+  },
+  getTaskRequest: vi.fn(async () => taskRequest),
   linkExistingTask: vi.fn(),
   listTasks: vi.fn(async () => ({ items: [] })),
   rejectTaskRequest: api.rejectTaskRequest,
@@ -244,6 +254,31 @@ describe('TaskRequestsRoute decision dialogs', () => {
     },
   );
 
+  it('AC-981 / AC-681-5 keeps the approved result selected beyond the destination first page', async () => {
+    api.fetchTaskRequests.mockImplementation(async (options: ListTaskRequestsQuery) => {
+      if (options.limit === 1)
+        return taskRequestPage([taskRequest, { ...otherTaskRequest, status: 'approved' }]);
+      if (options.status === 'approved')
+        return {
+          items: [{ ...otherTaskRequest, status: 'approved' }],
+          page: { total: 70, has_more: true, cursor: 'approved-next' },
+        };
+      return { items: [taskRequest], page: { total: 60, has_more: true, cursor: 'pending-next' } };
+    });
+    api.approveTaskRequest.mockResolvedValue({ ...taskRequest, status: 'approved' });
+    await mountRoute();
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 승인' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(await screen.findByRole('button', { name: /REQ-1072/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /REQ-1071/ })).not.toBeInTheDocument();
+    expect(screen.getByText('REQ-1071')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '더 불러오기' })).toBeInTheDocument();
+  });
+
   it('AC-681-1 does not replay an old decision after a converted request is revisited', async () => {
     const approvedItem: TaskRequestDto = {
       ...taskRequest,
@@ -265,12 +300,13 @@ describe('TaskRequestsRoute decision dialogs', () => {
       expect(screen.getByRole('tab', { name: /^승인됨/ })).toHaveAttribute('aria-selected', 'true');
     });
     await waitFor(() => {
-      expect(queryClient.getQueryState(['task-requests', undefined])?.fetchStatus).toBe('idle');
+      expect(
+        queryClient.getQueryState(['task-requests', undefined, 'pages', 'approved'])?.fetchStatus,
+      ).toBe('idle');
     });
 
-    queryClient.setQueryData(['task-requests', undefined], {
-      items: [convertedItem, otherTaskRequest],
-    });
+    api.fetchTaskRequests.mockResolvedValue({ items: [convertedItem, otherTaskRequest] });
+    queryClient.setQueryData(['task-request', taskRequest.id], convertedItem);
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
     fireEvent.click(await screen.findByRole('button', { name: /REQ-1072/ }));
     fireEvent.click(screen.getByRole('button', { name: /REQ-1071/ }));
@@ -384,6 +420,149 @@ describe('TaskRequestsRoute decision dialogs', () => {
     resolveApproval(taskRequest);
   });
 
+  it('closes on a request change and gives a new action fresh content and focus ownership', async () => {
+    api.fetchTaskRequests.mockResolvedValue({ items: [taskRequest, otherTaskRequest] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (id: string) => (
+      <QueryClientProvider client={queryClient}>
+        <TaskRequestsRoute selectedParam={id} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(taskRequest.id));
+    const oldOpener = await screen.findByRole('button', { name: '반려' });
+    oldOpener.focus();
+    fireEvent.click(oldOpener);
+    const oldDialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.change(within(oldDialog).getByRole('textbox'), { target: { value: 'old reason' } });
+    rerender(view(otherTaskRequest.id));
+    await waitFor(() => expect(oldDialog).not.toBeInTheDocument());
+    const opener = screen.getByRole('button', { name: '근거 추가 요청' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: '근거 추가 요청' });
+    expect(within(dialog).getByRole('textbox')).toHaveValue('');
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('returns to the approve opener when rejection cleanup settles after approval opens', async () => {
+    await mountRoute();
+    const rejectOpener = screen.getByRole('button', { name: '반려' });
+    const approveOpener = screen.getByRole('button', { name: '승인' });
+    rejectOpener.focus();
+    fireEvent.click(rejectOpener);
+    const rejection = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.click(within(rejection).getByTestId('task-request-decision-cancel'));
+    // Open synchronously, before Radix's deferred unmount autofocus can run.
+    approveOpener.focus();
+    fireEvent.click(approveOpener);
+    const approval = screen.getByRole('dialog', { name: 'Task Request 승인' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.click(within(approval).getByTestId('task-request-decision-cancel'));
+    await waitFor(() => expect(approveOpener).toHaveFocus());
+  });
+
+  it('keeps pending-close guards and does not restore the opener after a successful decision', async () => {
+    let resolveDecision: (value: TaskRequestDto) => void = () => undefined;
+    api.rejectTaskRequest.mockImplementationOnce(
+      () =>
+        new Promise<TaskRequestDto>((resolve) => {
+          resolveDecision = resolve;
+        }),
+    );
+    await mountRoute();
+    const opener = screen.getByRole('button', { name: '반려' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'reason' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '반려' }));
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('task-request-decision-cancel')).toBeDisabled(),
+    );
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(dialog).toHaveAttribute('data-state', 'open');
+    await act(async () => resolveDecision(taskRequest));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(opener).not.toHaveFocus();
+  });
+
+  it.each(['Escape', 'Cancel', 'close icon', 'outside'])(
+    'returns focus to the decision opener after %s',
+    async (dismissal) => {
+      await mountRoute();
+      const opener = screen.getByRole('button', { name: '반려' });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+      if (dismissal === 'Escape') fireEvent.keyDown(dialog, { key: 'Escape' });
+      else if (dismissal === 'Cancel') {
+        fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+      } else if (dismissal === 'close icon') {
+        fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+      } else {
+        fireEvent.pointerDown(document.body, { button: 0 });
+      }
+      await waitFor(() => expect(opener).toHaveFocus());
+    },
+  );
+
+  it.each(['Escape', 'Cancel'])(
+    'retains the same decision content through the %s exit animation',
+    async (dismissal) => {
+      const getStyles = window.getComputedStyle.bind(window);
+      // Presence stores styles at mount: a live name models compiled CSS for real Content.
+      const fixture = vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+        const styles = getStyles(element, pseudo);
+        if (
+          element.getAttribute('role') === 'dialog' &&
+          element.querySelector('textarea[id^="task-request-"]')
+        ) {
+          Object.defineProperty(styles, 'animationName', {
+            get: () =>
+              element.getAttribute('data-state') === 'open' ? 'decision-enter' : 'decision-exit',
+          });
+        }
+        return styles;
+      });
+      try {
+        api.rejectTaskRequest.mockRejectedValueOnce(new Error('server failure'));
+        await mountRoute();
+        const opener = screen.getByRole('button', { name: '반려' });
+        opener.focus();
+        fireEvent.click(opener);
+        const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+        fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '반려 메모' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: '반려' }));
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+          '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+        if (dismissal === 'Escape') fireEvent.keyDown(dialog, { key: 'Escape' });
+        else fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+        expect(dialog).toBeInTheDocument();
+        expect(dialog).toHaveAttribute('data-state', 'closed');
+        expect(
+          within(dialog).getByRole('heading', { name: 'Task Request 반려' }),
+        ).toBeInTheDocument();
+        expect(within(dialog).getByRole('textbox')).toHaveValue('반려 메모');
+        expect(within(dialog).getByRole('alert')).toHaveTextContent(
+          '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+        const end = new Event('animationend', { bubbles: true });
+        Object.defineProperty(end, 'animationName', { value: 'decision-exit' });
+        fireEvent(dialog, end);
+        await waitFor(() => expect(dialog).not.toBeInTheDocument());
+        await waitFor(() => expect(opener).toHaveFocus());
+      } finally {
+        fixture.mockRestore();
+      }
+    },
+  );
+
   it('keeps a dialog open and reports a server mutation failure', async () => {
     api.approveTaskRequest.mockRejectedValueOnce({
       envelope: { message: 'Approval was rejected by the server.' },
@@ -395,4 +574,93 @@ describe('TaskRequestsRoute decision dialogs', () => {
     );
     expect(screen.getByRole('dialog', { name: 'Task Request 승인' })).toBeInTheDocument();
   });
+});
+
+it('preserves the committed decision value and focus when a request transition is aborted', async () => {
+  const neverResolves = new Promise<void>(() => {});
+  let signalSuspended: () => void = () => {};
+  const suspended = new Promise<void>((resolve) => {
+    signalSuspended = resolve;
+  });
+
+  function SuspendingSibling({ request }: { request: TaskRequestDto }) {
+    if (request === otherTaskRequest) {
+      signalSuspended();
+      throw neverResolves;
+    }
+    return <span data-testid="committed-request">{request.display_id}</span>;
+  }
+
+  function Driver() {
+    const [selection, setSelection] = React.useState({ request: taskRequest, revision: 0 });
+    const [dialog, setDialog] = React.useState<DecisionDialogState | null>(null);
+    return (
+      <>
+        <button
+          type="button"
+          data-testid="open-decision"
+          onClick={() =>
+            setDialog({ requestId: taskRequest.id, action: 'reject', value: '', error: null })
+          }
+        >
+          반려
+        </button>
+        <button
+          type="button"
+          data-testid="transition-request"
+          onClick={() =>
+            React.startTransition(() => setSelection({ request: otherTaskRequest, revision: 1 }))
+          }
+        >
+          다른 요청
+        </button>
+        <button
+          type="button"
+          data-testid="urgent-request"
+          onClick={() => setSelection({ request: taskRequest, revision: 2 })}
+        >
+          현재 요청 유지
+        </button>
+        <React.Suspense fallback={<span>request fallback</span>}>
+          <TaskRequestDecisionDialog
+            dialog={dialog}
+            request={selection.request}
+            isSelfApproval={false}
+            isSubmitting={false}
+            onChange={(value) => setDialog((current) => (current ? { ...current, value } : null))}
+            onClose={() => setDialog(null)}
+            onSubmit={(event) => event.preventDefault()}
+          />
+          <SuspendingSibling request={selection.request} />
+        </React.Suspense>
+      </>
+    );
+  }
+
+  render(
+    <React.StrictMode>
+      <Driver />
+    </React.StrictMode>,
+  );
+  const opener = screen.getByTestId('open-decision');
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+  const textbox = within(dialog).getByRole('textbox');
+  fireEvent.change(textbox, { target: { value: 'committed reason' } });
+  expect(textbox).toHaveFocus();
+
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('transition-request'));
+  });
+  await suspended;
+  expect(screen.queryByText('request fallback')).not.toBeInTheDocument();
+  expect(screen.getByTestId('committed-request')).toHaveTextContent('REQ-1071');
+  expect(dialog).toHaveAttribute('data-state', 'open');
+
+  fireEvent.click(screen.getByTestId('urgent-request'));
+  expect(dialog).toBeInTheDocument();
+  expect(dialog).toHaveAttribute('data-state', 'open');
+  expect(textbox).toHaveValue('committed reason');
+  expect(textbox).toHaveFocus();
 });

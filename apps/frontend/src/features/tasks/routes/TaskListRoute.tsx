@@ -1,12 +1,15 @@
+import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { listTasks } from '@/lib/api';
-import { isPermissionDenied } from '@/lib/api/types';
+import { getTask, listTasks } from '@/lib/api';
+import { ApiError, isPermissionDenied } from '@/lib/api/types';
+import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
+import type { ListTasksResponse } from '@fops/shared';
 import {
   InternalTaskBadge,
   ListShell,
@@ -15,7 +18,7 @@ import {
   PermissionBlockedPanel,
   UnassignedBadge,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import {
@@ -24,6 +27,8 @@ import {
   useTaskManagedSystemNames,
 } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+
+const PAGE_SIZE = 50;
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
@@ -40,11 +45,16 @@ export function TaskListRoute({
 }) {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
-  const tasksQuery = useQuery({
-    queryKey: ['tasks', view, managedSystem] as const,
-    queryFn: ({ signal }) =>
+  const tasksQuery = useInfiniteQuery({
+    queryKey: ['tasks', view, managedSystem, 'pages'] as const,
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: ListTasksResponse) =>
+      last.page?.has_more ? last.page.cursor : undefined,
+    queryFn: ({ signal, pageParam }) =>
       listTasks({
         signal,
+        limit: PAGE_SIZE,
+        ...(pageParam === undefined ? {} : { cursor: pageParam }),
         ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
@@ -52,7 +62,19 @@ export function TaskListRoute({
   });
   const { actors } = useWorkspaceActors();
   const managedSystemNamesById = useTaskManagedSystemNames();
-  const items = tasksQuery.data?.items ?? [];
+  const items = React.useMemo(
+    () => tasksQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [tasksQuery.data],
+  );
+  const total = tasksQuery.data?.pages[0]?.page?.total;
+  const me = useMe();
+  const detailQuery = useQuery({
+    queryKey: ['task', selectedId],
+    queryFn: ({ signal }) => getTask(selectedId as string, signal),
+    enabled: selectedId !== null,
+    staleTime: 30_000,
+    retry: false,
+  });
   const actorNamesById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
     [actors],
@@ -66,7 +88,29 @@ export function TaskListRoute({
     if (selectedId === null && items[0]) setSelectedId(items[0].id);
   }, [items, selectedId]);
 
-  const selected = selectedId ? (items.find((item) => item.id === selectedId) ?? null) : null;
+  const selected = selectedId
+    ? (items.find((item) => item.id === selectedId) ?? detailQuery.data ?? null)
+    : null;
+  React.useEffect(() => {
+    const item = detailQuery.data;
+    const filteredOut =
+      item !== undefined &&
+      ((managedSystem !== undefined &&
+        managedSystem !== 'all' &&
+        item.primary_managed_system_id !== managedSystem) ||
+        (view === 'my' && me.data !== undefined && item.assignee_actor_id !== me.data.actor.id));
+    if (
+      (detailQuery.error instanceof ApiError && detailQuery.error.status === 404) ||
+      filteredOut
+    ) {
+      setSelectedId(null);
+      void navigate({
+        to: '/tasks',
+        replace: true,
+        search: { view, ...(managedSystem === undefined ? {} : { managedSystem }) },
+      });
+    }
+  }, [detailQuery.data, detailQuery.error, managedSystem, view, me.data, navigate]);
 
   function selectTask(id: string): void {
     setSelectedId(id);
@@ -86,7 +130,7 @@ export function TaskListRoute({
       />
     );
   }
-  if (tasksQuery.error) {
+  if (tasksQuery.error && !tasksQuery.isFetchNextPageError) {
     return (
       <ListStateMessage
         variant="error"
@@ -104,7 +148,7 @@ export function TaskListRoute({
         title: (
           <span className="flex items-center gap-2">
             {view === 'my' ? '내 Task' : 'Tasks'}
-            <OutlineBadge>{formatCount(items.length)}</OutlineBadge>
+            {total !== undefined ? <OutlineBadge>{formatCount(total)}</OutlineBadge> : null}
           </span>
         ),
       }}
@@ -149,6 +193,12 @@ export function TaskListRoute({
               />
             );
           })}
+          <ListLoadMore
+            hasMore={tasksQuery.hasNextPage}
+            loadingMore={tasksQuery.isFetchingNextPage}
+            failed={tasksQuery.isFetchNextPageError}
+            onLoadMore={() => void tasksQuery.fetchNextPage()}
+          />
           {items.length === 0 &&
             (view === 'my' ? (
               <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
@@ -162,7 +212,14 @@ export function TaskListRoute({
         </>
       }
       detailPanel={
-        selected ? (
+        isPermissionDenied(detailQuery.error) ? (
+          <PermissionBlockedPanel
+            state="denied"
+            category="Task detail"
+            reason={PERMISSION_BLOCKED_REASONS.taskDetail}
+            className="m-4"
+          />
+        ) : selected ? (
           <TaskDetailPanel
             taskId={selected.id}
             actorNamesById={actorNamesById}

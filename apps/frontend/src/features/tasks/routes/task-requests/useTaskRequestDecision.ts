@@ -102,6 +102,7 @@ export function useTaskRequestDecision({
       setDecisionDialog(null);
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       toast.success('Task Request가 처리되었습니다.');
     },
     onError: (err) => {
@@ -123,15 +124,20 @@ export function useTaskRequestDecision({
       toast.error('본인 승인에는 범위가 지정된 권한이 필요합니다.');
       return;
     }
-    setDecisionDialog({ action: 'approve', value: '', error: null });
+    setDecisionDialog({ requestId: item.id, action: 'approve', value: '', error: null });
   }
 
   function requestEvidence(): void {
-    setDecisionDialog({ action: 'request-more-evidence', value: '', error: null });
+    setDecisionDialog({
+      requestId: item.id,
+      action: 'request-more-evidence',
+      value: '',
+      error: null,
+    });
   }
 
   function reject(): void {
-    setDecisionDialog({ action: 'reject', value: '', error: null });
+    setDecisionDialog({ requestId: item.id, action: 'reject', value: '', error: null });
   }
 
   function submitDecision(event: React.FormEvent<HTMLFormElement>): void {

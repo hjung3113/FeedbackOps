@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { listPageSchema } from '../list-page.js';
 
 import { findingStatusSchema } from './status.js';
 
@@ -126,6 +127,7 @@ export type FindingDto = z.infer<typeof findingDtoSchema>;
 export const listFindingsResponseSchema = z
   .object({
     items: z.array(findingDtoSchema),
+    page: listPageSchema.optional(),
   })
   .strict();
 export type ListFindingsResponse = z.infer<typeof listFindingsResponseSchema>;
@@ -214,6 +216,8 @@ export const listFindingsQuerySchema = z
   .object({
     managed_system_id: z.string().uuid().optional(),
     execution: z.literal('none').optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict();
 export type ListFindingsQuery = z.infer<typeof listFindingsQuerySchema>;

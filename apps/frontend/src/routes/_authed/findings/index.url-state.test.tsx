@@ -11,6 +11,7 @@
 // component-mocked (it owns its own /findings/:id fetch, out of scope here); the
 // list fetch is a real mocked global fetch.
 
+import { listFindingsQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -153,15 +154,19 @@ function installFetch(c: FetchCase): void {
         c.failuresRemaining -= 1;
         return jsonResponse({ code: 'internal.unexpected' }, 500);
       }
-      if (c.emptyList) return jsonResponse({ items: [] });
+      if (c.emptyList) return jsonResponse({ items: [], page: { total: 0, has_more: false } });
       if (c.emptyExecutionNone && path.searchParams.get('execution') === 'none') {
-        return jsonResponse({ items: [] });
+        return jsonResponse({ items: [], page: { total: 0, has_more: false } });
       }
       const msFilter = path.searchParams.get('managed_system_id');
       const items = msFilter
         ? FINDINGS.filter((finding) => finding.primary_managed_system_id === msFilter)
         : FINDINGS;
-      return jsonResponse({ items });
+      return jsonResponse({ items, page: { total: items.length, has_more: false } });
+    }
+    if (path.pathname.startsWith('/findings/')) {
+      const item = FINDINGS.find((finding) => path.pathname === `/findings/${finding.id}`);
+      return item ? jsonResponse(item) : jsonResponse({ code: 'not_found.record' }, 404);
     }
     if (path.pathname === '/actors') return jsonResponse({ actors: [] });
     return jsonResponse({ code: 'not_mocked' }, 500);
@@ -201,6 +206,74 @@ function renderUrlState(
 describe('/findings URL state', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  test('AC-981 loads 50 rows, appends cursor page and keeps page-two selected detail with returnTo', async () => {
+    const requested: string[] = [];
+    const router = renderUrlState(
+      { requested },
+      `/findings?selected=${F2_ID}&returnTo=${encodeURIComponent('/vocs?view=my')}`,
+    );
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      requested.push(String(input));
+      if (url.pathname === '/findings') {
+        const query = listFindingsQuerySchema.parse(Object.fromEntries(url.searchParams));
+        expect(query.limit).toBe(50);
+        return jsonResponse(
+          query.cursor === undefined
+            ? { items: [F1], page: { total: 102, has_more: true, cursor: 'next' } }
+            : { items: [FINDINGS[1]], page: { has_more: false } },
+        );
+      }
+      if (url.pathname === `/findings/${F2_ID}`) return jsonResponse(FINDINGS[1]);
+      if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+      return jsonResponse({ code: 'not_found.record' }, 404);
+    });
+    expect(await screen.findByText('102건')).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.search.selected).toBe(F2_ID));
+    expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(`finding:${F2_ID}`);
+    fireEvent.click(screen.getByRole('button', { name: '더 불러오기' }));
+    expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(
+      requested.some(
+        (url) => new URL(url, 'http://localhost').searchParams.get('cursor') === 'next',
+      ),
+    ).toBe(true);
+    expect(router.state.location.search.returnTo).toBe('/vocs?view=my');
+    expect(screen.getByText('102건')).toBeInTheDocument();
+  });
+
+  test('FIX1 keeps the known total and rows after a next-page error, then appends on retry', async () => {
+    renderUrlState({ requested: [] }, '/findings');
+    let failNextPage = true;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/findings') {
+        const query = listFindingsQuerySchema.parse(Object.fromEntries(url.searchParams));
+        if (query.cursor === undefined)
+          return jsonResponse({
+            items: [F1],
+            page: { total: 102, has_more: true, cursor: 'next' },
+          });
+        if (failNextPage) return jsonResponse({ code: 'internal.unexpected' }, 500);
+        return jsonResponse({ items: [FINDINGS[1]], page: { has_more: false } });
+      }
+      if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+      return jsonResponse({ code: 'not_found.record' }, 404);
+    });
+    expect(await screen.findByText('102건')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '더 불러오기' }));
+    const retry = await screen.findByRole('button', { name: '다시 시도' }, { timeout: 4000 });
+    expect(screen.getByText('102건')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /FND-102/ })).not.toBeInTheDocument();
+    failNextPage = false;
+    fireEvent.click(retry);
+    expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(screen.getByText('102건')).toBeInTheDocument();
   });
 
   test('?selected=<id> opens that finding after load and keeps the list context', async () => {
@@ -397,6 +470,20 @@ describe('/findings URL state', () => {
     expect(screen.getByRole('button', { name: /FND-102/ })).toBeInTheDocument();
     expect(screen.queryByTestId('finding-detail-panel')).not.toBeInTheDocument();
   });
+
+  test.each([
+    { filter: `managedSystem=${MS_1}`, name: 'Managed System' },
+    { filter: 'execution=none', name: 'execution' },
+  ])(
+    'AC-981 reconciles accessible selected detail outside the $name filter',
+    async ({ filter }) => {
+      const c: FetchCase = { requested: [], emptyExecutionNone: true };
+      const router = renderUrlState(c, `/findings?${filter}&selected=${F2_ID}`);
+      await waitFor(() => expect(router.state.location.search.selected).toBeUndefined());
+      expect(c.requested.some((path) => path === `/findings/${F2_ID}`)).toBe(true);
+      expect(screen.queryByTestId('finding-detail-panel')).not.toBeInTheDocument();
+    },
+  );
 
   test('stale selected uuid not in the list is replaced away after load', async () => {
     const router = renderUrlState({ requested: [] }, `/findings?selected=${STALE_ID}`);

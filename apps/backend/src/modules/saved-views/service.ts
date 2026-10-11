@@ -18,13 +18,13 @@ export const savedViewSurfaceSchema = z.enum(['voc', 'tasks', 'task_requests', '
 export type SavedViewSurface = z.infer<typeof savedViewSurfaceSchema>;
 
 // Keep this next to the persisted-view boundary rather than accepting an
-// untyped JSON object. Every entry is the actual list endpoint schema; adding
-// a surface requires deliberately choosing its list contract.
+// untyped JSON object. Paging keys are transient and excluded from the strict
+// persistence schema even though the corresponding list endpoint accepts them.
 const filterSchemaBySurface: Record<SavedViewSurface, z.ZodTypeAny> = {
   voc: listVocsQuerySchema,
-  tasks: listTasksQuerySchema,
-  task_requests: listTaskRequestsQuerySchema,
-  findings: listFindingsQuerySchema,
+  tasks: listTasksQuerySchema.omit({ cursor: true, limit: true }).strict(),
+  task_requests: listTaskRequestsQuerySchema.omit({ cursor: true, limit: true }).strict(),
+  findings: listFindingsQuerySchema.omit({ cursor: true, limit: true }).strict(),
 };
 
 export interface SavedViewDto {
@@ -76,11 +76,12 @@ function toDto(row: typeof savedViews.$inferSelect): SavedViewDto {
 }
 
 export function createSavedViewsService({ db }: { db: Db }) {
-  const ownWhere = (actor: ActorContext, id?: string) => and(
-    eq(savedViews.workspaceId, actor.workspace_id),
-    eq(savedViews.actorId, actor.actor_id),
-    ...(id === undefined ? [] : [eq(savedViews.id, id)]),
-  );
+  const ownWhere = (actor: ActorContext, id?: string) =>
+    and(
+      eq(savedViews.workspaceId, actor.workspace_id),
+      eq(savedViews.actorId, actor.actor_id),
+      ...(id === undefined ? [] : [eq(savedViews.id, id)]),
+    );
 
   async function getOwnedRow(actor: ActorContext, id: string) {
     const row = await db.select().from(savedViews).where(ownWhere(actor, id)).limit(1);
@@ -89,10 +90,14 @@ export function createSavedViewsService({ db }: { db: Db }) {
   }
 
   return {
-    async list(actor: ActorContext, surface?: SavedViewSurface): Promise<{ items: SavedViewDto[] }> {
-      const where = surface === undefined
-        ? ownWhere(actor)
-        : and(ownWhere(actor), eq(savedViews.surface, surface));
+    async list(
+      actor: ActorContext,
+      surface?: SavedViewSurface,
+    ): Promise<{ items: SavedViewDto[] }> {
+      const where =
+        surface === undefined
+          ? ownWhere(actor)
+          : and(ownWhere(actor), eq(savedViews.surface, surface));
       const rows = await db.select().from(savedViews).where(where).orderBy(asc(savedViews.name));
       return { items: rows.map(toDto) };
     },
@@ -103,17 +108,22 @@ export function createSavedViewsService({ db }: { db: Db }) {
 
     async create(actor: ActorContext, input: CreateSavedViewInput): Promise<SavedViewDto> {
       const name = input.name.trim();
-      if (name.length === 0) throw new HttpError('validation.failed', 'saved view name is required');
+      if (name.length === 0)
+        throw new HttpError('validation.failed', 'saved view name is required');
       const filter = validateFilter(input.surface, input.filter);
       try {
-        const rows = await db.insert(savedViews).values({
-          workspaceId: actor.workspace_id,
-          actorId: actor.actor_id,
-          surface: input.surface,
-          name,
-          filterPayload: filter,
-        }).returning();
-        if (!rows[0]) throw new HttpError('internal.unexpected', 'saved view insert returned no row');
+        const rows = await db
+          .insert(savedViews)
+          .values({
+            workspaceId: actor.workspace_id,
+            actorId: actor.actor_id,
+            surface: input.surface,
+            name,
+            filterPayload: filter,
+          })
+          .returning();
+        if (!rows[0])
+          throw new HttpError('internal.unexpected', 'saved view insert returned no row');
         return toDto(rows[0]);
       } catch (error) {
         if ((error as DatabaseError).code === '23505') {
@@ -123,16 +133,25 @@ export function createSavedViewsService({ db }: { db: Db }) {
       }
     },
 
-    async update(actor: ActorContext, id: string, input: UpdateSavedViewInput): Promise<SavedViewDto> {
+    async update(
+      actor: ActorContext,
+      id: string,
+      input: UpdateSavedViewInput,
+    ): Promise<SavedViewDto> {
       const current = await getOwnedRow(actor, id);
       const name = input.name === undefined ? current.name : input.name.trim();
-      if (name.length === 0) throw new HttpError('validation.failed', 'saved view name is required');
-      const filter = input.filter === undefined
-        ? validateFilter(savedViewSurfaceSchema.parse(current.surface), current.filterPayload)
-        : validateFilter(savedViewSurfaceSchema.parse(current.surface), input.filter);
+      if (name.length === 0)
+        throw new HttpError('validation.failed', 'saved view name is required');
+      const filter =
+        input.filter === undefined
+          ? validateFilter(savedViewSurfaceSchema.parse(current.surface), current.filterPayload)
+          : validateFilter(savedViewSurfaceSchema.parse(current.surface), input.filter);
       try {
-        const rows = await db.update(savedViews).set({ name, filterPayload: filter, updatedAt: new Date() })
-          .where(ownWhere(actor, id)).returning();
+        const rows = await db
+          .update(savedViews)
+          .set({ name, filterPayload: filter, updatedAt: new Date() })
+          .where(ownWhere(actor, id))
+          .returning();
         if (!rows[0]) throw new HttpError('not_found.record', 'saved view not found');
         return toDto(rows[0]);
       } catch (error) {
@@ -144,7 +163,10 @@ export function createSavedViewsService({ db }: { db: Db }) {
     },
 
     async remove(actor: ActorContext, id: string): Promise<void> {
-      const rows = await db.delete(savedViews).where(ownWhere(actor, id)).returning({ id: savedViews.id });
+      const rows = await db
+        .delete(savedViews)
+        .where(ownWhere(actor, id))
+        .returning({ id: savedViews.id });
       if (!rows[0]) throw new HttpError('not_found.record', 'saved view not found');
     },
   };

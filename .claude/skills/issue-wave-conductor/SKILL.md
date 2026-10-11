@@ -39,7 +39,8 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
   Pass `--state-dir "$WAVE_STATE"` on each launch and wait; use distinct names and reports for every round.
 - `WAVE_BRIEFS` — brief dir, e.g. `.review/wave/` (gitignored). `FOPS_MAIN` — the main checkout.
 - Throwaway Postgres for BE integration (never the dev DB on 5434): a `pgvector/pgvector:pg16` container on **5439**
-  with `scripts/db/init.sql`. `verify-db.sh up` runs `db:migrate` on the template. Drizzle applies only migrations
+  with `scripts/db/init.sql`, capped at 2 GB (`VERIFY_DB_MEMORY` overrides; the cap applies when `up` creates the
+  container, so `down` then `up` to change it). `verify-db.sh up` runs `db:migrate` on the template. Drizzle applies only migrations
   newer than the latest ledger timestamp; after each issue migration, `create` checks the checkout journal's SQL
   hashes against the cloned DB ledger and fails on any missing or extra entry. Each issue DB clones the template and
   then runs that checkout's migrations with its `env.verify.<n>` exported. Drop the DB and env file after the issue
