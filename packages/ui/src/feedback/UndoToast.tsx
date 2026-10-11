@@ -4,6 +4,10 @@
 // Translated to Pack 17 / ADR-0021 tokens (no raw hex, no raw px outside spacing scale).
 //
 // Usage: render via sonner's toast.custom() so position is inherited from <Toaster>.
+// UndoToast owns the only auto-dismiss timer (#960): it pauses while keyboard
+// focus is inside the toast or the pointer is over it, and resumes with the
+// remaining time when both leave. Disable sonner's own timer with Infinity so
+// it never dismisses the toast behind UndoToast's back.
 //   toast.custom((id) => (
 //     <UndoToast
 //       message="Triage 확정됨"
@@ -11,7 +15,7 @@
 //       onDismiss={() => toast.dismiss(id)}
 //       duration={4000}
 //     />
-//   ), { duration: 4000 });
+//   ), { duration: Infinity });
 
 import * as React from 'react';
 import { CircleCheck } from 'lucide-react';
@@ -25,7 +29,7 @@ export interface UndoToastProps {
   onAction: () => void;
   /** Called when the auto-dismiss timer fires. Optional. */
   onDismiss?: () => void;
-  /** Auto-dismiss delay in ms. 0 disables the timer. Default: 4000. */
+  /** Auto-dismiss delay in ms. 0 disables the timer. Default: 4000. Paused while focus/pointer is inside. */
   duration?: number;
   className?: string;
 }
@@ -37,11 +41,82 @@ export function UndoToast({
   duration = 4000,
   className,
 }: UndoToastProps) {
+  // #960 pause sources: keyboard focus inside the sonner toast, pointer over
+  // the card.
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const [focusWithin, setFocusWithin] = React.useState(false);
+  const [pointerWithin, setPointerWithin] = React.useState(false);
+  const paused = focusWithin || pointerWithin;
+
+  // The timer always restarts with what is left — after a pause and when an
+  // unrelated re-render re-arms this effect. Bookkeeping lives in the effect,
+  // never in render.
+  const remainingRef = React.useRef(duration);
+  const startedAtRef = React.useRef<number | null>(null);
+  // One-shot expiry: set when the budget is spent, reset only by a duration
+  // change, so a new onDismiss identity or pause/resume cycling cannot call
+  // onDismiss again.
+  const expiredRef = React.useRef(false);
+
+  // A duration change is a new budget: reset the remaining time and the
+  // expiry flag. Declared before the timer effect so its cleanup (which
+  // books the time spent under the old budget) runs first.
   React.useEffect(() => {
-    if (!duration || !onDismiss) return;
-    const id = setTimeout(onDismiss, duration);
-    return () => clearTimeout(id);
-  }, [duration, onDismiss]);
+    remainingRef.current = duration;
+    expiredRef.current = false;
+  }, [duration]);
+
+  // Pause host (#960): sonner wraps toast.custom() content in
+  // <li data-sonner-toast tabindex=0>, which the first Tab can land on, so
+  // focus anywhere inside that element pauses — not only focus inside the
+  // card. focusin/focusout cover real browsers; capture-phase focus/blur
+  // also cover the non-bubbling events fireEvent.focus/blur dispatch (as in
+  // this file's tests).
+  React.useEffect(() => {
+    const host = rootRef.current?.closest('[data-sonner-toast]') ?? rootRef.current;
+    if (!host) return;
+    if (host.contains(document.activeElement as Node | null)) setFocusWithin(true);
+    const pause = () => setFocusWithin(true);
+    const resume = (e: Event) => {
+      // Keep pausing when focus moves between children (relatedTarget stays
+      // inside the host); only leave-pause when it moves outside or away.
+      const related = (e as FocusEvent).relatedTarget as Node | null;
+      if (!host.contains(related)) setFocusWithin(false);
+    };
+    host.addEventListener('focusin', pause);
+    host.addEventListener('focus', pause, true);
+    host.addEventListener('focusout', resume);
+    host.addEventListener('blur', resume, true);
+    return () => {
+      host.removeEventListener('focusin', pause);
+      host.removeEventListener('focus', pause, true);
+      host.removeEventListener('focusout', resume);
+      host.removeEventListener('blur', resume, true);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!duration || !onDismiss || paused || expiredRef.current) return;
+    if (remainingRef.current <= 0) {
+      expiredRef.current = true;
+      onDismiss();
+      return;
+    }
+    startedAtRef.current = Date.now();
+    const timerId = setTimeout(() => {
+      expiredRef.current = true;
+      remainingRef.current = 0;
+      startedAtRef.current = null;
+      onDismiss();
+    }, remainingRef.current);
+    return () => {
+      clearTimeout(timerId);
+      if (startedAtRef.current !== null) {
+        remainingRef.current -= Date.now() - startedAtRef.current;
+        startedAtRef.current = null;
+      }
+    };
+  }, [duration, onDismiss, paused]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter') {
@@ -62,8 +137,11 @@ export function UndoToast({
     // min-w-[360px]       → minWidth: 360px
     // gap-3               → gap: 12px
     <div
+      ref={rootRef}
       role="status"
       aria-live="polite"
+      onPointerEnter={() => setPointerWithin(true)}
+      onPointerLeave={() => setPointerWithin(false)}
       className={cn(
         'flex items-center gap-3 min-w-[360px]',
         'bg-surface-popover border border-border-subtle rounded-lg px-3.5 py-2.5 shadow-xl',

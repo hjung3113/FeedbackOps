@@ -170,7 +170,9 @@ export function useTriagePanelController({
             duration={4000}
           />
         ),
-        { duration: 4000 },
+        // #960: UndoToast owns the focus/pointer-pausable timer; Infinity
+        // disables sonner's own timer so it never dismisses the toast first.
+        { duration: Number.POSITIVE_INFINITY },
       );
 
       onAct?.(kind, {
@@ -228,7 +230,9 @@ export function useTriagePanelController({
           duration={4000}
         />
       ),
-      { duration: 4000 },
+      // #960: UndoToast owns the focus/pointer-pausable timer; Infinity
+      // disables sonner's own timer so it never dismisses the toast first.
+      { duration: Number.POSITIVE_INFINITY },
     );
 
     onAct?.('skip');

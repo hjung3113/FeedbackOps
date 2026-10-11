@@ -4,11 +4,12 @@
 // TriageActions. Each test mounts the minimal provider tree needed.
 //
 // C3.2 of slice3 #21.
-// Test count: 4
+// Test count: 5
 //   1. optimistic remove fires synchronously on confirm click
 //   2. compensating PATCH (settled undo) carries a FRESH Idempotency-Key
 //   3. 409 conflict.stale_write → onOptimisticRestore called
 //   4. 409 conflict.idempotency_key_reuse → confirm button becomes disabled
+//   5. #960 both sonner toast.custom calls (confirm, 보류) get duration Infinity
 //
 // Pattern: mock sonner so toast.custom is captured without needing a live Toaster.
 // The compensating PATCH test triggers undo via the captured onAction callback.
@@ -16,6 +17,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
+import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api/analytics-areas', () => ({
@@ -304,5 +306,46 @@ describe('TriageActions mutation wire-up', () => {
       () => expect(screen.getByRole('button', { name: /triage 확정/i })).toBeDisabled(),
       { timeout: 3000 },
     );
+  });
+
+  // 5. #960 — sonner's own timer is disabled; UndoToast owns dismissal ──────
+
+  it.each([
+    {
+      kind: 'confirm',
+      trigger: async () => {
+        clickSeverity();
+        await waitFor(() => {
+          expect(screen.getByRole('button', { name: /triage 확정/i })).not.toBeDisabled();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /triage 확정/i }));
+      },
+    },
+    {
+      kind: '보류',
+      trigger: async () => {
+        fireEvent.click(screen.getByRole('button', { name: '보류' }));
+      },
+    },
+  ] as const)('passes duration Infinity to sonner toast.custom ($kind)', async ({ trigger }) => {
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        id: MOCK_VOC.id,
+        triage_state: 'triaged',
+        updated_at: '2026-05-01T12:01:00.000Z',
+      }),
+    ) as typeof globalThis.fetch;
+
+    const Wrapper = makeWrapper();
+    render(
+      <Wrapper>
+        <TriagePanel voc={MOCK_VOC} onAct={vi.fn()} onOptimisticRemove={vi.fn()} />
+      </Wrapper>,
+    );
+
+    await trigger();
+
+    const lastCall = vi.mocked(toast.custom).mock.calls.at(-1);
+    expect(lastCall?.[1]).toEqual({ duration: Number.POSITIVE_INFINITY });
   });
 });
