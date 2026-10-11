@@ -36,6 +36,7 @@ export interface UseTaskRequestsQueueResult {
   setActiveTab: (tab: TaskRequestTab) => void;
   hasItems: boolean;
   selectedId: string | null;
+  linkMissing: boolean;
   setSelectedId: (id: string | null) => void;
   tabs: ListToolbarTab[];
   shown: TaskRequestDto[];
@@ -66,14 +67,19 @@ export function useTaskRequestsQueue({
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
+  const [linkMissing, setLinkMissing] = React.useState(false);
   const [panelClosed, setPanelClosed] = React.useState(false);
   const [panelContext, setPanelContext] = React.useState({ activeTab, managedSystem });
   if (panelContext.activeTab !== activeTab || panelContext.managedSystem !== managedSystem) {
     setPanelContext({ activeTab, managedSystem });
     setPanelClosed(false);
+    setLinkMissing(false);
   }
   React.useEffect(() => {
-    if (selectedParam !== undefined) setPanelClosed(false);
+    if (selectedParam !== undefined) {
+      setPanelClosed(false);
+      setLinkMissing(false);
+    }
   }, [selectedParam]);
   const [selection, setSelection] = React.useState({
     param: selectedParam,
@@ -89,6 +95,7 @@ export function useTaskRequestsQueue({
   const setSelectedId = React.useCallback(
     (id: string | null) => {
       setPanelClosed(id === null);
+      setLinkMissing(false);
       setLocalSelectedId(id);
       onSelectionChange?.(id, id === null);
     },
@@ -128,9 +135,10 @@ export function useTaskRequestsQueue({
     staleTime: 30_000,
     retry: false,
   });
-  const selected = selectedId
-    ? (items.find((item) => item.id === selectedId) ?? selectedDetail.data ?? null)
-    : null;
+  const selected =
+    !linkMissing && selectedId
+      ? (items.find((item) => item.id === selectedId) ?? selectedDetail.data ?? null)
+      : null;
   React.useEffect(() => {
     const filteredOut =
       selectedDetail.data?.id === selectedId &&
@@ -142,6 +150,7 @@ export function useTaskRequestsQueue({
       (selectedDetail.error instanceof ApiError && selectedDetail.error.status === 404) ||
       filteredOut
     ) {
+      setLinkMissing(true);
       setLocalSelectedId(null);
       onSelectionChange?.(null, true);
     }
@@ -153,6 +162,34 @@ export function useTaskRequestsQueue({
     setLocalSelectedId,
     onSelectionChange,
   ]);
+  const restoredDetail =
+    selected?.id === selectedParam
+      ? selectedDetail.data?.id === selectedParam
+        ? selectedDetail.data
+        : selected
+      : null;
+  const followedParam = React.useRef({ param: selectedParam, consumed: false });
+  React.useEffect(() => {
+    followedParam.current = { param: selectedParam, consumed: false };
+  }, [selectedParam]);
+  React.useEffect(() => {
+    if (
+      selectedParam === undefined ||
+      (followedParam.current.param === selectedParam && followedParam.current.consumed) ||
+      selectedId !== selectedParam ||
+      restoredDetail == null ||
+      (managedSystem !== undefined &&
+        managedSystem !== 'all' &&
+        restoredDetail.primary_managed_system_id !== managedSystem)
+    )
+      return;
+    // Consume even matching statuses and the all tab, so manual tab changes persist.
+    followedParam.current = { param: selectedParam, consumed: true };
+    const destination =
+      TAB_ORDER.find((tab) => tab.value === restoredDetail.status)?.value ?? 'all';
+    if (activeTab !== 'all' && activeTab !== destination) setActiveTab(destination);
+  }, [selectedParam, selectedId, restoredDetail, managedSystem, activeTab]);
+
   const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
@@ -218,9 +255,15 @@ export function useTaskRequestsQueue({
   const shown = items;
 
   React.useEffect(() => {
-    if (!panelClosed && selectedParam === undefined && selectedId === null && shown[0])
+    if (
+      !panelClosed &&
+      !linkMissing &&
+      selectedParam === undefined &&
+      selectedId === null &&
+      shown[0]
+    )
       setLocalSelectedId(shown[0].id);
-  }, [panelClosed, selectedId, shown, selectedParam, setLocalSelectedId]);
+  }, [panelClosed, linkMissing, selectedId, shown, selectedParam, setLocalSelectedId]);
 
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
@@ -251,6 +294,7 @@ export function useTaskRequestsQueue({
     setActiveTab,
     hasItems: summaryQuery.isSuccess && (summaryQuery.data.page?.total ?? 0) > 0,
     selectedId,
+    linkMissing,
     setSelectedId,
     tabs,
     shown,

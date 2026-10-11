@@ -6,6 +6,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { TASK_LINK_MISSING_MESSAGE } from '@/lib/copy/tasks';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
@@ -26,6 +27,7 @@ import {
   taskPriorityToSeverity,
   useTaskManagedSystemNames,
 } from '../adapters/taskDisplayAdapters';
+import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
 
 const PAGE_SIZE = 50;
@@ -44,7 +46,25 @@ export function TaskListRoute({
   managedSystem?: string;
 }) {
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
+  const [linkMissing, setLinkMissing] = React.useState(false);
+  const [panelClosed, setPanelClosed] = React.useState(false);
+  const [panelContext, setPanelContext] = React.useState({ view, managedSystem });
+  if (panelContext.view !== view || panelContext.managedSystem !== managedSystem) {
+    setPanelContext({ view, managedSystem });
+    setPanelClosed(false);
+    setLinkMissing(false);
+  }
+  const [selection, setSelection] = React.useState({
+    param: selectedParam,
+    id: selectedParam ?? null,
+  });
+  // A URL/scope transition must query its new ID before cleanup effects run.
+  const selectedId = selection.param === selectedParam ? selection.id : (selectedParam ?? null);
+  if (selection.param !== selectedParam) setSelection({ param: selectedParam, id: selectedId });
+  const setLocalSelectedId = React.useCallback(
+    (id: string | null) => setSelection({ param: selectedParam, id }),
+    [selectedParam],
+  );
   const tasksQuery = useInfiniteQuery({
     queryKey: ['tasks', view, managedSystem, 'pages'] as const,
     initialPageParam: undefined as string | undefined,
@@ -81,20 +101,32 @@ export function TaskListRoute({
   );
 
   React.useEffect(() => {
-    if (selectedParam !== undefined) setSelectedId(selectedParam);
+    if (selectedParam !== undefined) {
+      setPanelClosed(false);
+      setLinkMissing(false);
+    }
   }, [selectedParam]);
 
   React.useEffect(() => {
-    if (selectedId === null && items[0]) setSelectedId(items[0].id);
-  }, [items, selectedId]);
+    if (
+      !panelClosed &&
+      !linkMissing &&
+      selectedParam === undefined &&
+      selectedId === null &&
+      items[0]
+    )
+      setLocalSelectedId(items[0].id);
+  }, [items, selectedId, selectedParam, panelClosed, linkMissing, setLocalSelectedId]);
 
-  const selected = selectedId
-    ? (items.find((item) => item.id === selectedId) ?? detailQuery.data ?? null)
-    : null;
+  const selected =
+    !linkMissing && selectedId
+      ? (items.find((item) => item.id === selectedId) ?? detailQuery.data ?? null)
+      : null;
   React.useEffect(() => {
     const item = detailQuery.data;
     const filteredOut =
       item !== undefined &&
+      item.id === selectedId &&
       ((managedSystem !== undefined &&
         managedSystem !== 'all' &&
         item.primary_managed_system_id !== managedSystem) ||
@@ -103,18 +135,33 @@ export function TaskListRoute({
       (detailQuery.error instanceof ApiError && detailQuery.error.status === 404) ||
       filteredOut
     ) {
-      setSelectedId(null);
+      setLinkMissing(true);
+      setLocalSelectedId(null);
       void navigate({
         to: '/tasks',
         replace: true,
-        search: { view, ...(managedSystem === undefined ? {} : { managedSystem }) },
+        search: (previous) => {
+          const { param: _param, ...rest } = previous;
+          return rest;
+        },
       });
     }
-  }, [detailQuery.data, detailQuery.error, managedSystem, view, me.data, navigate]);
+  }, [
+    detailQuery.data,
+    detailQuery.error,
+    selectedId,
+    managedSystem,
+    view,
+    me.data,
+    navigate,
+    setLocalSelectedId,
+  ]);
 
   function selectTask(id: string): void {
-    setSelectedId(id);
-    void navigate({ to: '/tasks', search: { view, param: id } });
+    setPanelClosed(false);
+    setLinkMissing(false);
+    setLocalSelectedId(id);
+    void navigate({ to: '/tasks', search: (previous) => ({ ...previous, view, param: id }) });
   }
 
   if (tasksQuery.isLoading) {
@@ -212,7 +259,9 @@ export function TaskListRoute({
         </>
       }
       detailPanel={
-        isPermissionDenied(detailQuery.error) ? (
+        linkMissing ? (
+          <LinkTargetMissingNotice message={TASK_LINK_MISSING_MESSAGE} />
+        ) : isPermissionDenied(detailQuery.error) ? (
           <PermissionBlockedPanel
             state="denied"
             category="Task detail"
@@ -226,8 +275,16 @@ export function TaskListRoute({
             managedSystemNamesById={managedSystemNamesById}
             view={view}
             onClose={() => {
-              setSelectedId(null);
-              void navigate({ to: '/tasks', search: { view } });
+              setPanelClosed(true);
+              setLocalSelectedId(null);
+              void navigate({
+                to: '/tasks',
+                replace: true,
+                search: (previous) => {
+                  const { param: _param, ...rest } = previous;
+                  return rest;
+                },
+              });
             }}
           />
         ) : null

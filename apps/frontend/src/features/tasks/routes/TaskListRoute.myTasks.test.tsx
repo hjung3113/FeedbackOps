@@ -166,8 +166,17 @@ describe('TaskListRoute My Tasks view', () => {
 
     expect(navigateMock).toHaveBeenCalledWith({
       to: '/tasks',
-      search: { view: 'my', param: task.id },
+      search: expect.any(Function),
     });
+    const selectionSearch = navigateMock.mock.calls.at(-1)?.[0].search;
+    expect(selectionSearch({ view: 'my', managedSystem: 'all', public_update: 'missing' })).toEqual(
+      {
+        view: 'my',
+        managedSystem: 'all',
+        public_update: 'missing',
+        param: task.id,
+      },
+    );
   });
 
   it.each([
