@@ -919,6 +919,12 @@ uses fast/standard timing. Server rejection uses the existing optimistic rollbac
 with no return animation. The route owns only the active copy and per-drop animation choice;
 `useTaskStatusTransition` continues to own cache writes and rollback.
 
+Layout regions open and close without width transitions (#996): the detail panel, its
+fullscreen toggle, and the sidebar collapse switch width in one frame. A width transition
+re-lays out the list behind it every frame (about 15 ms per frame at 1,000 loaded rows),
+and here it only produced a two-step jump, a blank closing strip, or squished sidebar labels.
+Do not attach `useListMotion` to unbounded "더 불러오기" appends.
+
 `useListMotion()` returns a ref callback for bounded lists (paged or naturally small),
 using auto-animate with base/standard timing. Missing tokens or reduced motion skip
 initialisation entirely; detach/unmount destroys the controller. Screens import only
