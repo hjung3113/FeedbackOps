@@ -914,16 +914,27 @@ slow/enter timing. Escape cancellation uses return timing freshly read at drag s
 the current reduced-motion preference. Zero-duration timing disables that animation. Source
 opacity restores immediately at return completion; colour and shadow transitions remain.
 Horizontal auto-scroll is gated by the board scroller's live edges, while column vertical
-auto-scroll remains eligible. Keyboard overlay movement
-uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
+auto-scroll remains eligible. Keyboard Left/Right moves one column per press in live visual
+left-to-right order, centring the card horizontally and clamping at the first/last column.
+Up/Down does nothing because card order is not persisted. Keyboard sensor ancestor scrolling
+is instant (`auto`); during an active keyboard drag only, all four arrow keys prevent their
+native default so browser scrolling cannot compete. The listener is removed on end, cancel,
+and unmount. Keyboard overlay movement uses fast/standard timing. Server rejection uses the existing optimistic rollback and toast,
 with no return animation. Screen-reader instructions and pickup, over, drop, and cancel
 announcements use Korean chrome, the Task display ID, and `TASK_STATUS_LABELS` column names
-(English workflow statuses); unknown Tasks fall back to their raw ID. After a keyboard move,
-the route waits for the optimistic destination card to render, then focuses it only if focus
+(English workflow statuses); unknown Tasks fall back to their raw ID. Enabled cards use the
+role description `끌 수 있는 Task`; disabled cards have no role description. Initial over
+announcements for the pickup column do not overwrite pickup; after reaching a different
+column, returning to the origin is announced normally. After a keyboard move, the route waits
+for the optimistic destination card to render, then focuses it only if focus
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
 The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
-active copy, and per-drop animation choice. A failed move abandons its pending focus request;
+active copy, and per-drop animation choice. A rejected keyboard move follows that Task's
+rendered card through rollback and the following refetch, in any status column, only if focus
+is on the body or inside the board and no newer drag has started. Recovery retires when the post-rejection tasks refetch settles, after the
+focus attempt or outside-focus guard declines. Newer drags, scope changes, unmount, and another
+route status mutation of the same Task clear keyboard focus ownership and pending recovery;
 an older move's failure cannot clear a newer drag's request.
 `useTaskStatusTransition` continues to own cache writes and rollback.
 
@@ -992,6 +1003,19 @@ and reduced-motion policy. Board drag motion (#995) remains a separate implement
 - Respect reduced motion settings through the global `compat.css` rule and `prefersReducedMotion()` for JS motion.
 - Touch targets should be at least 40px on mobile (target contract; mobile is not built).
 ```
+
+Input baseline (owner decision, 2026-10-11):
+
+- Users are on Windows. Design and verify keyboard behaviour, shortcut labels, and
+  screen-reader claims for Windows first. Visible shortcut hints use `shortcutLabel()`
+  (`Ctrl K`, `⌘K` on macOS only), never a hard-coded `⌘`. A macOS check does not prove
+  Windows screen-reader behaviour.
+- The default actor has both a keyboard and a mouse. The ADR-0016 WCAG 2.2 AA keyboard
+  baseline still applies: every control is reachable and operable with Tab, Enter, Space,
+  and Escape, and a pointer gesture such as drag keeps a non-drag path.
+- Add a keyboard shortcut only when it makes a frequent task faster for that default actor.
+  Do not add shortcuts, keyboard-only modes, or on-screen keyboard hints only for
+  keyboard-only use when the baseline path already completes the task.
 
 ## Screen Mapping
 

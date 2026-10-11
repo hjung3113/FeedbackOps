@@ -1,4 +1,5 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
 import { useDraggable } from '@dnd-kit/core';
 import type { TaskDto } from '@fops/shared';
 import { SeverityBadge, UnassignedBadge, UserAvatar } from '@fops/ui';
@@ -21,7 +22,12 @@ export function TaskBoardCard({
   assigneeName?: string | undefined;
   enabled: boolean;
 }) {
-  const draggable = useDraggable({ id: task.id, data: { task }, disabled: !enabled });
+  const draggable = useDraggable({
+    id: task.id,
+    data: { task },
+    disabled: !enabled,
+    attributes: { roleDescription: TASK_BOARD_COPY.roleDescription },
+  });
   const disabledHintId = useId();
   return (
     <button

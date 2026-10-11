@@ -79,7 +79,9 @@ Read these before judging. Project authority beats generic taste.
    - **Feedback:** pending, success, failure, undo. Is anything silent?
    - **States:** loading, empty, error, permission-limited, dirty or leave, long text, many rows.
    - **Keyboard:** reachable controls, a visible focus ring, Escape and Enter. Check that Escape does not fight
-     dialogs.
+     dialogs. Judge against the input baseline in `docs/frontend/ui-design-system.md` → Accessibility Rules:
+     Windows users with both keyboard and mouse. Do not ask for a new shortcut or keyboard-only hint when the
+     baseline path completes the task.
    - **Accessible names and roles** for new controls.
    - **Copy:** existing `lib/copy` strings reused, Korean chrome, glossary nouns, no em dash in UI strings.
    - **Consistency with the neighbouring shipped screens:** density, 50px header rhythm, tokens rather than raw

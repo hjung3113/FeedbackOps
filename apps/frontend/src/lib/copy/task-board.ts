@@ -1,4 +1,5 @@
 export const TASK_BOARD_COPY = {
+  roleDescription: '끌 수 있는 Task',
   screenReaderInstructions: {
     draggable:
       'Task를 집으려면 스페이스나 엔터를 누르세요. 화살표 키로 열을 옮기고, 스페이스나 엔터로 놓거나 Escape로 취소합니다.',
