@@ -343,6 +343,15 @@ function SavedViewsSection({
     () => new Map<string, { order: string[]; deletedIndex: number }>(),
   );
   const sectionRef = React.useRef<HTMLElement | null>(null);
+  const surfaceGeneration = React.useRef(0);
+  const committedSurface = React.useRef(surface);
+
+  React.useEffect(() => {
+    if (surface !== committedSurface.current) {
+      committedSurface.current = surface;
+      surfaceGeneration.current += 1;
+    }
+  }, [surface]);
 
   // A surface change means the section now shows another surface's list; any
   // recovery armed for the previous surface must not fire into it. Reset in
@@ -391,10 +400,12 @@ function SavedViewsSection({
   }, [pendingRecovery, views, canSave]);
 
   const requestDelete = (id: string) => {
+    const generation = surfaceGeneration.current;
     const order = views.map((view) => view.id);
     const capture = { order, deletedIndex: order.indexOf(id) };
     Promise.resolve(onDelete?.(id)).then(
       () => {
+        if (surfaceGeneration.current !== generation) return;
         setPendingRecovery((prev) => {
           if (prev.has(id)) return prev;
           const next = new Map(prev);
