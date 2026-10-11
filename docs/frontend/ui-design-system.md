@@ -1004,6 +1004,19 @@ and reduced-motion policy. Board drag motion (#995) remains a separate implement
 - Touch targets should be at least 40px on mobile (target contract; mobile is not built).
 ```
 
+Input baseline (owner decision, 2026-10-11):
+
+- Users are on Windows. Design and verify keyboard behaviour, shortcut labels, and
+  screen-reader claims for Windows first. Visible shortcut hints use `shortcutLabel()`
+  (`Ctrl K`, `⌘K` on macOS only), never a hard-coded `⌘`. A macOS check does not prove
+  Windows screen-reader behaviour.
+- The default actor has both a keyboard and a mouse. The ADR-0016 WCAG 2.2 AA keyboard
+  baseline still applies: every control is reachable and operable with Tab, Enter, Space,
+  and Escape, and a pointer gesture such as drag keeps a non-drag path.
+- Add a keyboard shortcut only when it makes a frequent task faster for that default actor.
+  Do not add shortcuts, keyboard-only modes, or on-screen keyboard hints only for
+  keyboard-only use when the baseline path already completes the task.
+
 ## Screen Mapping
 
 VOC Inbox:
