@@ -8,6 +8,7 @@
 // focus is inside the toast or the pointer is over it, and resumes with the
 // remaining time when both leave. Disable sonner's own timer with Infinity so
 // it never dismisses the toast behind UndoToast's back.
+// Escape pressed while keyboard focus is inside the toast dismisses it (#1025).
 //   toast.custom((id) => (
 //     <UndoToast
 //       message="Triage 확정됨"
@@ -57,6 +58,13 @@ export function UndoToast({
   // change, so a new onDismiss identity or pause/resume cycling cannot call
   // onDismiss again.
   const expiredRef = React.useRef(false);
+  // #1025: the pause-host effect below registers its listeners once ([] deps),
+  // so its Escape handler reads onDismiss through this ref instead of the
+  // effect depending on the prop identity.
+  const onDismissRef = React.useRef(onDismiss);
+  React.useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   // A duration change is a new budget: reset the remaining time and the
   // expiry flag. Declared before the timer effect so its cleanup (which
@@ -87,11 +95,21 @@ export function UndoToast({
     host.addEventListener('focus', pause, true);
     host.addEventListener('focusout', resume);
     host.addEventListener('blur', resume, true);
+    // #1025: Escape with focus anywhere inside the host dismisses the toast
+    // through the same one-shot flag as the timer.
+    const onKeyDown = (e: Event) => {
+      if ((e as KeyboardEvent).key !== 'Escape') return;
+      if (expiredRef.current || !onDismissRef.current) return;
+      expiredRef.current = true;
+      onDismissRef.current();
+    };
+    host.addEventListener('keydown', onKeyDown);
     return () => {
       host.removeEventListener('focusin', pause);
       host.removeEventListener('focus', pause, true);
       host.removeEventListener('focusout', resume);
       host.removeEventListener('blur', resume, true);
+      host.removeEventListener('keydown', onKeyDown);
     };
   }, []);
 
