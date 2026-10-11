@@ -27,7 +27,7 @@ import {
   WorkbenchShell,
   readMotionTiming,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
@@ -50,6 +50,12 @@ const STATUS_COLUMNS: TaskStatus[] = [
   'released',
   'reopened',
 ];
+function preventKeyboardArrowDefault(event: KeyboardEvent) {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
+    event.preventDefault();
+  }
+}
+
 type Filters = Record<string, string[]>;
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
@@ -65,10 +71,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const geometry = useTaskBoardDragGeometry();
   const { boardScroller } = geometry;
   const dragGeneration = React.useRef(0);
-  const [focusRetry, retryKeyboardFocus] = React.useReducer((retry: number) => retry + 1, 0);
-  const pendingKeyboardFocus = React.useRef<{
+  const queryClient = useQueryClient();
+  const keyboardFocusTask = React.useRef<string | null>(null);
+  const [pendingKeyboardFocus, setPendingKeyboardFocus] = React.useState<{
     taskId: string;
-    destinationStatus: TaskStatus;
+    destinationStatus: TaskStatus | null;
     generation: number;
   } | null>(null);
   const keyboardTiming = readMotionTiming('fast', 'standard');
@@ -88,7 +95,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const systemNames = useTaskManagedSystemNames();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: geometry.coordinateGetter }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: geometry.coordinateGetter,
+      scrollBehavior: 'auto',
+    }),
   );
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
   const items = tasksQuery.data?.items ?? [];
@@ -101,11 +111,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   React.useLayoutEffect(
     () => () => {
       dragGeneration.current += 1;
-      pendingKeyboardFocus.current = null;
+      document.removeEventListener('keydown', preventKeyboardArrowDefault);
+      keyboardFocusTask.current = null;
     },
     [],
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: focusRetry explicitly schedules a rollback focus attempt even when task data already committed.
   React.useLayoutEffect(() => {
     const previousScope = focusScope.current;
     if (
@@ -114,30 +124,53 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       previousScope.publicUpdate !== publicUpdate
     ) {
       dragGeneration.current += 1;
-      pendingKeyboardFocus.current = null;
+      keyboardFocusTask.current = null;
+      setPendingKeyboardFocus(null);
     }
     focusScope.current = { groupBy, managedSystem, publicUpdate };
-    const pending = pendingKeyboardFocus.current;
+    const pending = pendingKeyboardFocus;
+    if (!pending || pending.generation !== dragGeneration.current) return;
+    const refetchSettled =
+      !tasksQuery.isFetching && queryClient.getQueryState(tasksKey)?.fetchStatus !== 'fetching';
     if (
-      !pending ||
       !filtered.some(
-        (task) => task.id === pending.taskId && task.status === pending.destinationStatus,
+        (task) =>
+          task.id === pending.taskId &&
+          (pending.destinationStatus === null || task.status === pending.destinationStatus),
       )
-    )
+    ) {
+      if (pending.destinationStatus === null && refetchSettled) setPendingKeyboardFocus(null);
       return;
+    }
     const board = boardScroller.current;
     const card =
       board &&
       [...board.querySelectorAll<HTMLButtonElement>('[data-task-board-card-id]')].find(
         (node) => node.dataset.taskBoardCardId === pending.taskId,
       );
-    if (!card) return;
-    pendingKeyboardFocus.current = null;
+    if (!card) {
+      if (pending.destinationStatus === null && refetchSettled) setPendingKeyboardFocus(null);
+      return;
+    }
+    // Recovery follows remounts until the invalidation refetch settles; success owns one render.
+    if (pending.destinationStatus !== null || refetchSettled) {
+      setPendingKeyboardFocus(null);
+    }
     // Optimistic cache writes can commit after drag end. Respect focus moved elsewhere meanwhile.
     if (document.activeElement === document.body || board.contains(document.activeElement)) {
       card.focus();
     }
-  }, [filtered, groupBy, managedSystem, publicUpdate, focusRetry, boardScroller]);
+  }, [
+    filtered,
+    groupBy,
+    managedSystem,
+    publicUpdate,
+    pendingKeyboardFocus,
+    boardScroller,
+    tasksQuery.isFetching,
+    queryClient,
+    tasksKey,
+  ]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -212,7 +245,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   }, []);
   function onDragStart(event: DragStartEvent) {
     dragGeneration.current += 1;
-    pendingKeyboardFocus.current = null;
+    setPendingKeyboardFocus(null);
+    if (event.activatorEvent instanceof KeyboardEvent) {
+      document.addEventListener('keydown', preventKeyboardArrowDefault);
+    }
+    keyboardFocusTask.current = null;
     geometry.onDragStart(event);
     const timing = readMotionTiming('slow', 'enter');
     setDropAnimation(
@@ -221,6 +258,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     setActiveTask((event.active.data.current?.task as TaskDto | undefined) ?? null);
   }
   function onDragEnd(event: DragEndEvent) {
+    document.removeEventListener('keydown', preventKeyboardArrowDefault);
     geometry.onDragEnd();
     const task = event.active.data.current?.task as TaskDto | undefined;
     const target = event.over?.id;
@@ -238,23 +276,21 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       const generation = dragGeneration.current;
       const keyboardMove = event.activatorEvent instanceof KeyboardEvent;
       if (keyboardMove) {
-        pendingKeyboardFocus.current = {
+        keyboardFocusTask.current = task.id;
+        setPendingKeyboardFocus({
           taskId: task.id,
           destinationStatus: target as TaskStatus,
           generation,
-        };
+        });
       }
       // Per-invocation promises also settle when a newer mutation supersedes this one.
       void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
         if (!keyboardMove || dragGeneration.current !== generation) return;
-        pendingKeyboardFocus.current = {
+        setPendingKeyboardFocus({
           taskId: task.id,
-          destinationStatus: task.status,
+          destinationStatus: null,
           generation,
-        };
-        // Rollback may have committed before this rejection. Explicitly retry the layout effect;
-        // if it commits later, filtered changing retries the same guarded request again.
-        retryKeyboardFocus();
+        });
       });
     }
   }
@@ -262,7 +298,14 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const task = items.find((item) => item.id === taskId);
     const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
     const next = task && nextStatus[task.status];
-    if (task && next) mutation.mutate({ task, status: next });
+    if (task && next) {
+      if (keyboardFocusTask.current === taskId) {
+        dragGeneration.current += 1;
+        keyboardFocusTask.current = null;
+        setPendingKeyboardFocus(null);
+      }
+      mutation.mutate({ task, status: next });
+    }
   }
   if (isPermissionDenied(tasksQuery.error)) {
     return (
@@ -393,8 +436,9 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDragCancel={() => {
+                  document.removeEventListener('keydown', preventKeyboardArrowDefault);
                   geometry.onDragEnd();
-                  pendingKeyboardFocus.current = null;
+                  setPendingKeyboardFocus(null);
                   setActiveTask(null);
                 }}
               >
