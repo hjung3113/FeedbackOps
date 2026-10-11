@@ -105,6 +105,7 @@ export function VocTriageScreen({
   const {
     liveQueue,
     selectedVoc,
+    serverReviewPostponedAt,
     deepLinkTargetMissing,
     createFindingTarget,
     handleAct,
@@ -284,6 +285,7 @@ export function VocTriageScreen({
               <DetailPanelReadingColumn data-testid="triage-panel-column">
                 <TriagePanel
                   voc={selectedVoc}
+                  serverReviewPostponedAt={serverReviewPostponedAt}
                   onAct={handleAct}
                   onOptimisticRemove={(id, input) => {
                     setPendingFocus(null);

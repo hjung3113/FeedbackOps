@@ -50,6 +50,8 @@ export const patchVocRequestSchema = z
     // true postpones an untriaged review (sets triage_state_review_postponed_at).
     // false clears that timestamp when the VOC is untriaged and it is set.
     postpone_review: z.boolean().optional(),
+    // Compensation only: restore the server timestamp captured before confirm/finding.
+    restore_review_postponed_at: z.string().datetime({ offset: true }).optional(),
   })
   // Unknown keys are rejected so mistyped or unsupported fields surface
   // as `unrecognized_keys` rather than being silently stripped.
@@ -63,6 +65,14 @@ export const patchVocRequestSchema = z
   .refine((d) => !(d.postpone_review !== undefined && d.triage_state !== undefined), {
     message: 'postpone_review and triage_state cannot be set in the same request',
     path: ['postpone_review'],
+  })
+  .refine((d) => d.restore_review_postponed_at === undefined || d.triage_state === 'untriaged', {
+    message: 'restore_review_postponed_at requires triage_state untriaged',
+    path: ['restore_review_postponed_at'],
+  })
+  .refine((d) => d.restore_review_postponed_at === undefined || d.postpone_review === undefined, {
+    message: 'restore_review_postponed_at and postpone_review cannot be set together',
+    path: ['restore_review_postponed_at'],
   });
 
 export type PatchVocRequest = z.infer<typeof patchVocRequestSchema>;
