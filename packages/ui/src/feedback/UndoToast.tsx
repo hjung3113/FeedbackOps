@@ -4,6 +4,10 @@
 // Translated to Pack 17 / ADR-0021 tokens (no raw hex, no raw px outside spacing scale).
 //
 // Usage: render via sonner's toast.custom() so position is inherited from <Toaster>.
+// UndoToast owns the only auto-dismiss timer (#960): it pauses while keyboard
+// focus is inside the toast or the pointer is over it, and resumes with the
+// remaining time when both leave. Disable sonner's own timer with Infinity so
+// it never dismisses the toast behind UndoToast's back.
 //   toast.custom((id) => (
 //     <UndoToast
 //       message="Triage 확정됨"
@@ -11,7 +15,7 @@
 //       onDismiss={() => toast.dismiss(id)}
 //       duration={4000}
 //     />
-//   ), { duration: 4000 });
+//   ), { duration: Infinity });
 
 import * as React from 'react';
 import { CircleCheck } from 'lucide-react';
@@ -25,7 +29,7 @@ export interface UndoToastProps {
   onAction: () => void;
   /** Called when the auto-dismiss timer fires. Optional. */
   onDismiss?: () => void;
-  /** Auto-dismiss delay in ms. 0 disables the timer. Default: 4000. */
+  /** Auto-dismiss delay in ms. 0 disables the timer. Default: 4000. Paused while focus/pointer is inside. */
   duration?: number;
   className?: string;
 }
@@ -37,11 +41,33 @@ export function UndoToast({
   duration = 4000,
   className,
 }: UndoToastProps) {
+  // #960 pause sources: keyboard focus inside the toast root, pointer over it.
+  const [focusWithin, setFocusWithin] = React.useState(false);
+  const [pointerWithin, setPointerWithin] = React.useState(false);
+  const paused = focusWithin || pointerWithin;
+
+  // The timer always restarts with what is left — after a pause and when an
+  // unrelated re-render re-arms this effect. Bookkeeping lives in the effect,
+  // never in render.
+  const remainingRef = React.useRef(duration);
+  const startedAtRef = React.useRef<number | null>(null);
+
   React.useEffect(() => {
-    if (!duration || !onDismiss) return;
-    const id = setTimeout(onDismiss, duration);
-    return () => clearTimeout(id);
-  }, [duration, onDismiss]);
+    if (!duration || !onDismiss || paused) return;
+    if (remainingRef.current <= 0) {
+      onDismiss();
+      return;
+    }
+    startedAtRef.current = Date.now();
+    const timerId = setTimeout(onDismiss, remainingRef.current);
+    return () => {
+      clearTimeout(timerId);
+      if (startedAtRef.current !== null) {
+        remainingRef.current -= Date.now() - startedAtRef.current;
+        startedAtRef.current = null;
+      }
+    };
+  }, [duration, onDismiss, paused]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter') {
@@ -64,6 +90,16 @@ export function UndoToast({
     <div
       role="status"
       aria-live="polite"
+      onFocus={() => setFocusWithin(true)}
+      onBlur={(e) => {
+        // Keep pausing when focus moves between children (relatedTarget stays
+        // inside the toast); only leave-pause when it moves outside or away.
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setFocusWithin(false);
+        }
+      }}
+      onPointerEnter={() => setPointerWithin(true)}
+      onPointerLeave={() => setPointerWithin(false)}
       className={cn(
         'flex items-center gap-3 min-w-[360px]',
         'bg-surface-popover border border-border-subtle rounded-lg px-3.5 py-2.5 shadow-xl',
