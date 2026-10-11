@@ -41,7 +41,9 @@ export function UndoToast({
   duration = 4000,
   className,
 }: UndoToastProps) {
-  // #960 pause sources: keyboard focus inside the toast root, pointer over it.
+  // #960 pause sources: keyboard focus inside the sonner toast, pointer over
+  // the card.
+  const rootRef = React.useRef<HTMLDivElement>(null);
   const [focusWithin, setFocusWithin] = React.useState(false);
   const [pointerWithin, setPointerWithin] = React.useState(false);
   const paused = focusWithin || pointerWithin;
@@ -51,15 +53,62 @@ export function UndoToast({
   // never in render.
   const remainingRef = React.useRef(duration);
   const startedAtRef = React.useRef<number | null>(null);
+  // One-shot expiry: set when the budget is spent, reset only by a duration
+  // change, so a new onDismiss identity or pause/resume cycling cannot call
+  // onDismiss again.
+  const expiredRef = React.useRef(false);
+
+  // A duration change is a new budget: reset the remaining time and the
+  // expiry flag. Declared before the timer effect so its cleanup (which
+  // books the time spent under the old budget) runs first.
+  React.useEffect(() => {
+    remainingRef.current = duration;
+    expiredRef.current = false;
+  }, [duration]);
+
+  // Pause host (#960): sonner wraps toast.custom() content in
+  // <li data-sonner-toast tabindex=0>, which the first Tab can land on, so
+  // focus anywhere inside that element pauses — not only focus inside the
+  // card. focusin/focusout cover real browsers; capture-phase focus/blur
+  // also cover the non-bubbling events fireEvent.focus/blur dispatch (as in
+  // this file's tests).
+  React.useEffect(() => {
+    const host = rootRef.current?.closest('[data-sonner-toast]') ?? rootRef.current;
+    if (!host) return;
+    if (host.contains(document.activeElement as Node | null)) setFocusWithin(true);
+    const pause = () => setFocusWithin(true);
+    const resume = (e: Event) => {
+      // Keep pausing when focus moves between children (relatedTarget stays
+      // inside the host); only leave-pause when it moves outside or away.
+      const related = (e as FocusEvent).relatedTarget as Node | null;
+      if (!host.contains(related)) setFocusWithin(false);
+    };
+    host.addEventListener('focusin', pause);
+    host.addEventListener('focus', pause, true);
+    host.addEventListener('focusout', resume);
+    host.addEventListener('blur', resume, true);
+    return () => {
+      host.removeEventListener('focusin', pause);
+      host.removeEventListener('focus', pause, true);
+      host.removeEventListener('focusout', resume);
+      host.removeEventListener('blur', resume, true);
+    };
+  }, []);
 
   React.useEffect(() => {
-    if (!duration || !onDismiss || paused) return;
+    if (!duration || !onDismiss || paused || expiredRef.current) return;
     if (remainingRef.current <= 0) {
+      expiredRef.current = true;
       onDismiss();
       return;
     }
     startedAtRef.current = Date.now();
-    const timerId = setTimeout(onDismiss, remainingRef.current);
+    const timerId = setTimeout(() => {
+      expiredRef.current = true;
+      remainingRef.current = 0;
+      startedAtRef.current = null;
+      onDismiss();
+    }, remainingRef.current);
     return () => {
       clearTimeout(timerId);
       if (startedAtRef.current !== null) {
@@ -88,16 +137,9 @@ export function UndoToast({
     // min-w-[360px]       → minWidth: 360px
     // gap-3               → gap: 12px
     <div
+      ref={rootRef}
       role="status"
       aria-live="polite"
-      onFocus={() => setFocusWithin(true)}
-      onBlur={(e) => {
-        // Keep pausing when focus moves between children (relatedTarget stays
-        // inside the toast); only leave-pause when it moves outside or away.
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-          setFocusWithin(false);
-        }
-      }}
       onPointerEnter={() => setPointerWithin(true)}
       onPointerLeave={() => setPointerWithin(false)}
       className={cn(
