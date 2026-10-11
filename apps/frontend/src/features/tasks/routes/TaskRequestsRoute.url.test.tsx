@@ -116,37 +116,105 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it('pushes row selection with scope and other search keys, restores detail, and replaces on close', async () => {
-  vi.mocked(fetchTaskRequests).mockResolvedValue({
-    items: [first, { ...second, primary_managed_system_id: A }],
-    page: { total: 2, has_more: false },
-  });
+it.each(['click', 'URL entry'] as const)(
+  'pushes row selection with scope and other search keys, restores detail, and stays closed after %s selection',
+  async (entry) => {
+    vi.mocked(fetchTaskRequests).mockResolvedValue({
+      items: [first, { ...second, primary_managed_system_id: A }],
+      page: { total: 2, has_more: false },
+    });
+    const mounted = mount(initial);
+    expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
+    expect(mounted.router.state.location.search.param).toBeUndefined();
+    fireEvent.click(await screen.findByRole('button', { name: /REQ-B/ }));
+    await waitFor(() =>
+      expect(mounted.router.state.location.search).toEqual({
+        view: 'requests',
+        managedSystem: A,
+        public_update: 'missing',
+        param: 'b1',
+      }),
+    );
+    expect(mounted.history.length).toBe(2);
+    const url = mounted.router.state.location.href;
+    mounted.unmount();
+    const restored = mount(url);
+    expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-B');
+    let closing = restored;
+    if (entry === 'click') {
+      restored.unmount();
+      closing = mount(initial);
+      expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
+      fireEvent.click(screen.getByRole('button', { name: /REQ-B/ }));
+      await waitFor(() => expect(closing.router.state.location.search.param).toBe('b1'));
+    }
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /REQ-A/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /REQ-B/ })).toBeInTheDocument();
+      expect(closing.router.state.location.search).toEqual({
+        view: 'requests',
+        managedSystem: A,
+        public_update: 'missing',
+      });
+    });
+    expect(closing.history.length).toBe(entry === 'URL entry' ? 1 : 2);
+    fireEvent.click(screen.getByRole('button', { name: /REQ-B/ }));
+    await waitFor(() => expect(closing.router.state.location.search.param).toBe('b1'));
+    expect(screen.getByTestId('detail')).toHaveTextContent('REQ-B');
+    expect(closing.history.length).toBe(entry === 'URL entry' ? 2 : 3);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    });
+    await waitFor(() => {
+      expect(closing.router.state.location.search.param).toBeUndefined();
+      expect(screen.queryByTestId('detail')).not.toBeInTheDocument();
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^전체/ }));
+    expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
+    expect(closing.router.state.location.search.param).toBeUndefined();
+  },
+);
+
+it.each(['scope', 'URL param'] as const)('resets a closed panel on a new %s', async (context) => {
+  vi.mocked(fetchTaskRequests).mockImplementation(async (query) => ({
+    items: query?.managed_system_id === B ? [second] : [first],
+    page: { total: 1, has_more: false },
+  }));
+  vi.mocked(getTaskRequest).mockResolvedValue(first);
   const mounted = mount(initial);
   expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  });
+  await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
+  await act(async () => {
+    await mounted.router.navigate({
+      to: '/tasks',
+      search: {
+        view: 'requests',
+        managedSystem: context === 'scope' ? B : A,
+        ...(context === 'URL param' ? { param: 'a1' } : {}),
+        public_update: 'missing',
+      },
+    });
+  });
+  expect(await screen.findByTestId('detail')).toHaveTextContent(
+    context === 'scope' ? 'REQ-B' : 'REQ-A',
+  );
+  if (context === 'URL param') {
+    await act(async () => {
+      await mounted.router.navigate({
+        to: '/tasks',
+        search: { view: 'requests', managedSystem: A, public_update: 'missing' },
+      });
+    });
+    expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-A');
+  }
   expect(mounted.router.state.location.search.param).toBeUndefined();
-  fireEvent.click(await screen.findByRole('button', { name: /REQ-B/ }));
-  await waitFor(() =>
-    expect(mounted.router.state.location.search).toEqual({
-      view: 'requests',
-      managedSystem: A,
-      public_update: 'missing',
-      param: 'b1',
-    }),
-  );
-  expect(mounted.history.length).toBe(2);
-  const url = mounted.router.state.location.href;
-  mounted.unmount();
-  const restored = mount(url);
-  expect(await screen.findByTestId('detail')).toHaveTextContent('REQ-B');
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-  await waitFor(() =>
-    expect(restored.router.state.location.search).toEqual({
-      view: 'requests',
-      managedSystem: A,
-      public_update: 'missing',
-    }),
-  );
-  expect(restored.history.length).toBe(1);
 });
 
 it.each(['404', 'out-of-scope'] as const)(

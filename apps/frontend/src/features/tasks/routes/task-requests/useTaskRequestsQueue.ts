@@ -66,6 +66,15 @@ export function useTaskRequestsQueue({
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
+  const [panelClosed, setPanelClosed] = React.useState(false);
+  const [panelContext, setPanelContext] = React.useState({ activeTab, managedSystem });
+  if (panelContext.activeTab !== activeTab || panelContext.managedSystem !== managedSystem) {
+    setPanelContext({ activeTab, managedSystem });
+    setPanelClosed(false);
+  }
+  React.useEffect(() => {
+    if (selectedParam !== undefined) setPanelClosed(false);
+  }, [selectedParam]);
   const [selection, setSelection] = React.useState({
     param: selectedParam,
     id: selectedParam ?? null,
@@ -79,6 +88,7 @@ export function useTaskRequestsQueue({
   );
   const setSelectedId = React.useCallback(
     (id: string | null) => {
+      setPanelClosed(id === null);
       setLocalSelectedId(id);
       onSelectionChange?.(id, id === null);
     },
@@ -208,9 +218,9 @@ export function useTaskRequestsQueue({
   const shown = items;
 
   React.useEffect(() => {
-    if (selectedParam === undefined && selectedId === null && shown[0])
+    if (!panelClosed && selectedParam === undefined && selectedId === null && shown[0])
       setLocalSelectedId(shown[0].id);
-  }, [selectedId, shown, selectedParam, setLocalSelectedId]);
+  }, [panelClosed, selectedId, shown, selectedParam, setLocalSelectedId]);
 
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
