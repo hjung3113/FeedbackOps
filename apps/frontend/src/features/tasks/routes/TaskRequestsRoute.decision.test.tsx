@@ -416,6 +416,130 @@ describe('TaskRequestsRoute decision dialogs', () => {
     resolveApproval(taskRequest);
   });
 
+  it('closes on a request change and gives a new action fresh content and focus ownership', async () => {
+    api.fetchTaskRequests.mockResolvedValue({ items: [taskRequest, otherTaskRequest] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (id: string) => (
+      <QueryClientProvider client={queryClient}>
+        <TaskRequestsRoute selectedParam={id} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(taskRequest.id));
+    const oldOpener = await screen.findByRole('button', { name: '반려' });
+    oldOpener.focus();
+    fireEvent.click(oldOpener);
+    const oldDialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.change(within(oldDialog).getByRole('textbox'), { target: { value: 'old reason' } });
+    rerender(view(otherTaskRequest.id));
+    await waitFor(() => expect(oldDialog).not.toBeInTheDocument());
+    const opener = screen.getByRole('button', { name: '근거 추가 요청' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: '근거 추가 요청' });
+    expect(within(dialog).getByRole('textbox')).toHaveValue('');
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('keeps pending-close guards and does not restore the opener after a successful decision', async () => {
+    let resolveDecision: (value: TaskRequestDto) => void = () => undefined;
+    api.rejectTaskRequest.mockImplementationOnce(
+      () =>
+        new Promise<TaskRequestDto>((resolve) => {
+          resolveDecision = resolve;
+        }),
+    );
+    await mountRoute();
+    const opener = screen.getByRole('button', { name: '반려' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'reason' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '반려' }));
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('task-request-decision-cancel')).toBeDisabled(),
+    );
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(dialog).toHaveAttribute('data-state', 'open');
+    await act(async () => resolveDecision(taskRequest));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(opener).not.toHaveFocus();
+  });
+
+  it.each(['Escape', 'Cancel', 'close icon', 'outside'])(
+    'returns focus to the decision opener after %s',
+    async (dismissal) => {
+      await mountRoute();
+      const opener = screen.getByRole('button', { name: '반려' });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+      if (dismissal === 'Escape') fireEvent.keyDown(dialog, { key: 'Escape' });
+      else if (dismissal === 'Cancel') {
+        fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+      } else if (dismissal === 'close icon') {
+        fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+      } else {
+        fireEvent.pointerDown(document.body, { button: 0 });
+      }
+      await waitFor(() => expect(opener).toHaveFocus());
+    },
+  );
+
+  it.each(['Escape', 'Cancel'])(
+    'retains the same decision content through the %s exit animation',
+    async (dismissal) => {
+      const getStyles = window.getComputedStyle.bind(window);
+      // Presence stores styles at mount: a live name models compiled CSS for real Content.
+      const fixture = vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+        const styles = getStyles(element, pseudo);
+        if (
+          element.getAttribute('role') === 'dialog' &&
+          element.querySelector('textarea[id^="task-request-"]')
+        ) {
+          Object.defineProperty(styles, 'animationName', {
+            get: () =>
+              element.getAttribute('data-state') === 'open' ? 'decision-enter' : 'decision-exit',
+          });
+        }
+        return styles;
+      });
+      try {
+        api.rejectTaskRequest.mockRejectedValueOnce(new Error('server failure'));
+        await mountRoute();
+        const opener = screen.getByRole('button', { name: '반려' });
+        opener.focus();
+        fireEvent.click(opener);
+        const dialog = await screen.findByRole('dialog', { name: 'Task Request 반려' });
+        fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '반려 메모' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: '반려' }));
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+          '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+        if (dismissal === 'Escape') fireEvent.keyDown(dialog, { key: 'Escape' });
+        else fireEvent.click(within(dialog).getByTestId('task-request-decision-cancel'));
+        expect(dialog).toBeInTheDocument();
+        expect(dialog).toHaveAttribute('data-state', 'closed');
+        expect(
+          within(dialog).getByRole('heading', { name: 'Task Request 반려' }),
+        ).toBeInTheDocument();
+        expect(within(dialog).getByRole('textbox')).toHaveValue('반려 메모');
+        expect(within(dialog).getByRole('alert')).toHaveTextContent(
+          '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+        const end = new Event('animationend', { bubbles: true });
+        Object.defineProperty(end, 'animationName', { value: 'decision-exit' });
+        fireEvent(dialog, end);
+        await waitFor(() => expect(dialog).not.toBeInTheDocument());
+        await waitFor(() => expect(opener).toHaveFocus());
+      } finally {
+        fixture.mockRestore();
+      }
+    },
+  );
+
   it('keeps a dialog open and reports a server mutation failure', async () => {
     api.approveTaskRequest.mockRejectedValueOnce({
       envelope: { message: 'Approval was rejected by the server.' },

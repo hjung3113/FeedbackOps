@@ -158,6 +158,7 @@ export function TaskRequestPanel({
       </div>
       <TaskRequestDecisionDialog
         dialog={decision.dialog}
+        request={item}
         isSelfApproval={decision.isSelfApproval}
         isSubmitting={decision.isSubmitting}
         onChange={decision.changeValue}

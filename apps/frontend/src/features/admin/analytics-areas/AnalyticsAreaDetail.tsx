@@ -48,6 +48,7 @@ export function AnalyticsAreaSlideOver({
   onEdit: (area: AnalyticsAreaDto) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const editingRef = useRef(false);
   if (!area) return null;
 
   const mark = ms ? scopeMark(ms.slug, ms.name) : null;
@@ -68,6 +69,17 @@ export function AnalyticsAreaSlideOver({
   return (
     <Sheet open={true} onOpenChange={onOpenChange}>
       <SheetContent
+        onOpenAutoFocus={() => {
+          editingRef.current = false;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (editingRef.current) return;
+          const detailButton = document.querySelector<HTMLButtonElement>(
+            `[data-testid="aa-detail-${CSS.escape(area.slug)}"]`,
+          );
+          if (detailButton?.isConnected) detailButton.focus();
+        }}
         side="right"
         className="flex w-[460px] flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
         data-testid="aa-slide-over"
@@ -192,7 +204,10 @@ export function AnalyticsAreaSlideOver({
           <Button
             variant="secondary"
             className="w-full"
-            onClick={() => onEdit(area)}
+            onClick={() => {
+              editingRef.current = true;
+              onEdit(area);
+            }}
             data-testid="aa-edit-button"
           >
             <Settings className="h-3 w-3" />
