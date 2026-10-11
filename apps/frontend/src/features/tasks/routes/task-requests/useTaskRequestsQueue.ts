@@ -58,13 +58,42 @@ export interface UseTaskRequestsQueueResult {
 export function useTaskRequestsQueue({
   selectedParam,
   managedSystem,
+  onSelectionChange,
 }: {
   selectedParam?: string | undefined;
   managedSystem?: string | undefined;
+  onSelectionChange?: ((id: string | null, replace: boolean) => void) | undefined;
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [panelClosed, setPanelClosed] = React.useState(false);
+  const [panelContext, setPanelContext] = React.useState({ activeTab, managedSystem });
+  if (panelContext.activeTab !== activeTab || panelContext.managedSystem !== managedSystem) {
+    setPanelContext({ activeTab, managedSystem });
+    setPanelClosed(false);
+  }
+  React.useEffect(() => {
+    if (selectedParam !== undefined) setPanelClosed(false);
+  }, [selectedParam]);
+  const [selection, setSelection] = React.useState({
+    param: selectedParam,
+    id: selectedParam ?? null,
+  });
+  // Reconcile URL changes during render so a new scope never sees the previous detail query.
+  const selectedId = selection.param === selectedParam ? selection.id : (selectedParam ?? null);
+  if (selection.param !== selectedParam) setSelection({ param: selectedParam, id: selectedId });
+  const setLocalSelectedId = React.useCallback(
+    (id: string | null) => setSelection({ param: selectedParam, id }),
+    [selectedParam],
+  );
+  const setSelectedId = React.useCallback(
+    (id: string | null) => {
+      setPanelClosed(id === null);
+      setLocalSelectedId(id);
+      onSelectionChange?.(id, id === null);
+    },
+    [onSelectionChange, setLocalSelectedId],
+  );
 
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
   const summaryQuery = useQuery({
@@ -104,6 +133,7 @@ export function useTaskRequestsQueue({
     : null;
   React.useEffect(() => {
     const filteredOut =
+      selectedDetail.data?.id === selectedId &&
       selectedDetail.data !== undefined &&
       managedSystem !== undefined &&
       managedSystem !== 'all' &&
@@ -111,9 +141,18 @@ export function useTaskRequestsQueue({
     if (
       (selectedDetail.error instanceof ApiError && selectedDetail.error.status === 404) ||
       filteredOut
-    )
-      setSelectedId(null);
-  }, [selectedDetail.data, selectedDetail.error, managedSystem]);
+    ) {
+      setLocalSelectedId(null);
+      onSelectionChange?.(null, true);
+    }
+  }, [
+    selectedDetail.data,
+    selectedDetail.error,
+    managedSystem,
+    selectedId,
+    setLocalSelectedId,
+    onSelectionChange,
+  ]);
   const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
@@ -179,12 +218,9 @@ export function useTaskRequestsQueue({
   const shown = items;
 
   React.useEffect(() => {
-    if (selectedParam === undefined && selectedId === null && shown[0]) setSelectedId(shown[0].id);
-  }, [selectedId, shown, selectedParam]);
-
-  React.useEffect(() => {
-    if (selectedParam !== undefined) setSelectedId(selectedParam);
-  }, [selectedParam]);
+    if (!panelClosed && selectedParam === undefined && selectedId === null && shown[0])
+      setLocalSelectedId(shown[0].id);
+  }, [panelClosed, selectedId, shown, selectedParam, setLocalSelectedId]);
 
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
@@ -204,9 +240,10 @@ export function useTaskRequestsQueue({
       );
       void queryClient.invalidateQueries({ queryKey: ['task-requests', managedSystem] });
       setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
-      setSelectedId(updatedItem.id);
+      setLocalSelectedId(updatedItem.id);
+      onSelectionChange?.(updatedItem.id, true);
     },
-    [managedSystem, queryClient],
+    [managedSystem, queryClient, setLocalSelectedId, onSelectionChange],
   );
 
   return {
