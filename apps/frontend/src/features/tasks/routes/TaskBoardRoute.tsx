@@ -16,8 +16,6 @@ import {
   type DropAnimation,
   KeyboardSensor,
   PointerSensor,
-  getClientRect,
-  rectIntersection,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -40,6 +38,7 @@ import {
   type TaskBoardGroupBy,
   TaskBoardGroupByButton,
 } from '../components/task-board/TaskBoardGroupByButton';
+import { useTaskBoardDragGeometry } from '../components/task-board/useTaskBoardDragGeometry';
 import { useTaskStatusTransition } from '../hooks/useTaskStatusTransition';
 
 const STATUS_COLUMNS: TaskStatus[] = [
@@ -52,7 +51,6 @@ const STATUS_COLUMNS: TaskStatus[] = [
   'reopened',
 ];
 type Filters = Record<string, string[]>;
-const BOARD_SCROLL_THRESHOLD = { x: 0.2, y: 0.2 };
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
   if (groupBy === 'managedSystem') return task.primary_managed_system_id;
@@ -64,32 +62,14 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const navigate = useNavigate();
   const [activeTask, setActiveTask] = React.useState<TaskDto | null>(null);
   const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
-  const boardScroller = React.useRef<HTMLDivElement>(null);
+  const geometry = useTaskBoardDragGeometry();
+  const { boardScroller } = geometry;
   const dragGeneration = React.useRef(0);
   const pendingKeyboardFocus = React.useRef<{
     taskId: string;
     destinationStatus: TaskStatus;
     generation: number;
   } | null>(null);
-  const pointer = React.useRef<{ x: number; y: number } | null>(null);
-  React.useEffect(() => {
-    if (!activeTask || !pointer.current) return;
-    const trackPointer = (event: PointerEvent) => {
-      pointer.current = { x: event.clientX, y: event.clientY };
-    };
-    // Read actual client coordinates; dnd-kit's drag delta also includes scroll offsets.
-    document.addEventListener('pointermove', trackPointer, true);
-    return () => document.removeEventListener('pointermove', trackPointer, true);
-  }, [activeTask]);
-  const canScroll = React.useCallback((element: Element) => {
-    if (element !== boardScroller.current || !pointer.current) return true;
-    // Ancestor lists and their measured rects update separately when the over node changes.
-    // Gate horizontal scrolling against the board's live rect, never a column's stale rect.
-    const rect = element.getBoundingClientRect();
-    const edge = rect.width * BOARD_SCROLL_THRESHOLD.x;
-    const { x, y } = pointer.current;
-    return y >= rect.top && y <= rect.bottom && (x <= rect.left + edge || x >= rect.right - edge);
-  }, []);
   const keyboardTiming = readMotionTiming('fast', 'standard');
   // dnd-kit supports null at runtime, but its transition type omits it.
   const overlayTransition = (
@@ -150,7 +130,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     if (document.activeElement === document.body || board.contains(document.activeElement)) {
       card.focus();
     }
-  }, [filtered, groupBy, managedSystem, publicUpdate]);
+  }, [filtered, groupBy, managedSystem, publicUpdate, boardScroller]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -220,11 +200,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   function onDragStart(event: DragStartEvent) {
     dragGeneration.current += 1;
     pendingKeyboardFocus.current = null;
-    const activator = event.activatorEvent;
-    pointer.current =
-      'clientX' in activator && 'clientY' in activator
-        ? { x: Number(activator.clientX), y: Number(activator.clientY) }
-        : null;
+    geometry.onDragStart(event);
     const timing = readMotionTiming('slow', 'enter');
     setDropAnimation(
       timing.durationMs === 0 ? null : { duration: timing.durationMs, easing: timing.easing },
@@ -232,6 +208,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     setActiveTask((event.active.data.current?.task as TaskDto | undefined) ?? null);
   }
   function onDragEnd(event: DragEndEvent) {
+    geometry.onDragEnd();
     const task = event.active.data.current?.task as TaskDto | undefined;
     const target = event.over?.id;
     const willMove =
@@ -390,37 +367,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                   restoreFocus: false,
                   screenReaderInstructions: TASK_BOARD_COPY.screenReaderInstructions,
                 }}
-                autoScroll={{ canScroll, threshold: BOARD_SCROLL_THRESHOLD }}
-                measuring={{
-                  droppable: {
-                    // The ref lives inside the column scroller so both scroll axes stay reachable.
-                    measure: (node) =>
-                      getClientRect(node.closest('[data-task-board-column]') ?? node),
-                  },
-                }}
-                collisionDetection={(args) =>
-                  rectIntersection({
-                    ...args,
-                    // The inner ref scrolls; collision bounds remain the live outer column.
-                    droppableRects: new Map(
-                      args.droppableContainers.flatMap(({ id, node }) =>
-                        node.current
-                          ? [
-                              [
-                                id,
-                                getClientRect(
-                                  node.current.closest('[data-task-board-column]') ?? node.current,
-                                ),
-                              ],
-                            ]
-                          : [],
-                      ),
-                    ),
-                  })
-                }
+                autoScroll={geometry.autoScroll}
+                measuring={geometry.measuring}
+                collisionDetection={geometry.collisionDetection}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDragCancel={() => {
+                  geometry.onDragEnd();
                   pendingKeyboardFocus.current = null;
                   setActiveTask(null);
                 }}
