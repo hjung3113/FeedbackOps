@@ -24,6 +24,7 @@ import * as React from 'react';
 import type { ApiError } from '@/lib/api';
 import {
   SEMANTIC_VOC_RECOMMENDATIONS_LABEL,
+  SEMANTIC_VOC_RECOMMENDATIONS_NOTICE,
   formatSameManagedSystemVocCount,
 } from '@/lib/copy/voc';
 
@@ -152,7 +153,7 @@ export function ClusterSectionReadOnly({
 
       <div className="bg-surface-canvas rounded-md p-3 mt-3.5 flex flex-col gap-2.5">
         <p className="text-sm text-text-secondary leading-relaxed">
-          자동 클러스터링은 추천만 합니다 — 확정이 필요합니다.
+          {SEMANTIC_VOC_RECOMMENDATIONS_NOTICE}
         </p>
 
         <div
