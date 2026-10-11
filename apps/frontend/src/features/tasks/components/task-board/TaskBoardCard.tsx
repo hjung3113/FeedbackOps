@@ -1,8 +1,8 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { useDraggable } from '@dnd-kit/core';
-import { useId } from 'react';
 import type { TaskDto } from '@fops/shared';
 import { SeverityBadge, UnassignedBadge, UserAvatar } from '@fops/ui';
+import { useId } from 'react';
 
 import { taskPriorityToSeverity } from '../../adapters/taskDisplayAdapters';
 
