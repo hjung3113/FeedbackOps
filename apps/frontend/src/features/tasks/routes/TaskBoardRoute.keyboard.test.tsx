@@ -151,6 +151,75 @@ describe('TaskBoardRoute keyboard dragging', () => {
     },
   );
 
+  it('releases native arrows when the board unmounts and restores prevention for a fresh keyboard drag', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <button type="button">Outside board</button>
+        <TaskBoardRoute />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('button', { name: /TASK-1000:/ });
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.');
+    vi.mocked(listTasks).mockRejectedValueOnce(new Error('Refetch failed'));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['tasks'] });
+    });
+    expect(await screen.findByText('Task 보드를 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Backlog 열')).not.toBeInTheDocument();
+    const outside = screen.getByRole('button', { name: 'Outside board' });
+    outside.focus();
+    const afterTeardown = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      code: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(outside, afterTeardown);
+    expect(afterTeardown.defaultPrevented).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    const recovered = await screen.findByRole('button', { name: /TASK-1000:/ });
+    const afterRecovery = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      code: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(outside, afterRecovery);
+    expect(afterRecovery.defaultPrevented).toBe(false);
+    recovered.focus();
+    fireEvent.keyDown(recovered, { key: ' ', code: 'Space' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('TASK-1000 Task를 집었습니다.');
+    for (const code of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+      const duringDrag = new KeyboardEvent('keydown', {
+        key: code,
+        code,
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(outside, duringDrag);
+      expect(duringDrag.defaultPrevented).toBe(true);
+    }
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    const afterCancel = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      code: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(outside, afterCancel);
+    expect(afterCancel.defaultPrevented).toBe(false);
+  });
+
   it('moves a rendered Task from Backlog to Doing with the keyboard sensor', async () => {
     const liveMessages: string[] = [];
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

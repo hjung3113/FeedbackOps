@@ -56,6 +56,37 @@ function preventKeyboardArrowDefault(event: KeyboardEvent) {
   }
 }
 
+function TaskBoardDndContext({
+  onDragStart,
+  onDragEnd,
+  onDragCancel,
+  ...props
+}: React.ComponentProps<typeof DndContext>) {
+  const [keyboardDragActive, setKeyboardDragActive] = React.useState(false);
+  React.useEffect(() => {
+    if (!keyboardDragActive) return;
+    document.addEventListener('keydown', preventKeyboardArrowDefault);
+    return () => document.removeEventListener('keydown', preventKeyboardArrowDefault);
+  }, [keyboardDragActive]);
+  return (
+    <DndContext
+      {...props}
+      onDragStart={(event) => {
+        setKeyboardDragActive(event.activatorEvent instanceof KeyboardEvent);
+        onDragStart?.(event);
+      }}
+      onDragEnd={(event) => {
+        setKeyboardDragActive(false);
+        onDragEnd?.(event);
+      }}
+      onDragCancel={(event) => {
+        setKeyboardDragActive(false);
+        onDragCancel?.(event);
+      }}
+    />
+  );
+}
+
 type Filters = Record<string, string[]>;
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
@@ -111,7 +142,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   React.useLayoutEffect(
     () => () => {
       dragGeneration.current += 1;
-      document.removeEventListener('keydown', preventKeyboardArrowDefault);
       keyboardFocusTask.current = null;
     },
     [],
@@ -246,9 +276,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   function onDragStart(event: DragStartEvent) {
     dragGeneration.current += 1;
     setPendingKeyboardFocus(null);
-    if (event.activatorEvent instanceof KeyboardEvent) {
-      document.addEventListener('keydown', preventKeyboardArrowDefault);
-    }
     keyboardFocusTask.current = null;
     geometry.onDragStart(event);
     const timing = readMotionTiming('slow', 'enter');
@@ -258,7 +285,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     setActiveTask((event.active.data.current?.task as TaskDto | undefined) ?? null);
   }
   function onDragEnd(event: DragEndEvent) {
-    document.removeEventListener('keydown', preventKeyboardArrowDefault);
     geometry.onDragEnd();
     const task = event.active.data.current?.task as TaskDto | undefined;
     const target = event.over?.id;
@@ -423,7 +449,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 </p>
               </output>
             ) : (
-              <DndContext
+              <TaskBoardDndContext
                 sensors={sensors}
                 accessibility={{
                   announcements,
@@ -436,7 +462,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDragCancel={() => {
-                  document.removeEventListener('keydown', preventKeyboardArrowDefault);
                   geometry.onDragEnd();
                   setPendingKeyboardFocus(null);
                   setActiveTask(null);
@@ -471,7 +496,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                     />
                   )}
                 </DragOverlay>
-              </DndContext>
+              </TaskBoardDndContext>
             )}
           </>
         )}
