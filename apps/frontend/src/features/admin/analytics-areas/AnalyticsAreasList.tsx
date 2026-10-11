@@ -262,6 +262,7 @@ function GroupCard({
                     onRowClick(a);
                   }}
                   data-testid={`aa-detail-${a.slug}`}
+                  data-area-id={a.id}
                 >
                   상세
                 </Button>
