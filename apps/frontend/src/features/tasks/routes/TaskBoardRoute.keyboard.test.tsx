@@ -1,4 +1,4 @@
-import { listTasks, updateTaskStatus } from '@/lib/api/tasks';
+import { getTask, listTasks, updateTaskStatus } from '@/lib/api/tasks';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
@@ -105,6 +105,42 @@ describe('TaskBoardRoute keyboard dragging', () => {
     cleanup();
     vi.restoreAllMocks();
   });
+
+  it.each(['click', 'Enter'] as const)(
+    'exposes a plain priority-group button and opens detail with %s activation',
+    async (activation) => {
+      vi.mocked(getTask).mockReturnValue(new Promise(() => {}));
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <TaskBoardRoute />
+        </QueryClientProvider>,
+      );
+      const statusCard = await screen.findByRole('button', { name: /TASK-1000:/ });
+      expect(statusCard).toHaveAttribute('aria-disabled', 'false');
+      expect(statusCard).toHaveAttribute('aria-roledescription', 'draggable');
+      expect(statusCard).toHaveAttribute('aria-describedby');
+      fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
+      fireEvent.click(await screen.findByRole('radio', { name: '우선순위' }));
+      const card = screen.getByRole('button', { name: /TASK-1000:/ });
+      expect(card).not.toHaveAttribute('aria-disabled');
+      expect(card).not.toHaveAttribute('aria-roledescription');
+      expect(card).not.toHaveAttribute('aria-describedby');
+      expect(card).toHaveTextContent('상태 그룹화일 때만 드래그로 상태가 변경됩니다.');
+      card.focus();
+      if (activation === 'Enter') {
+        fireEvent.keyDown(card, { key: 'Enter', code: 'Enter' });
+        // jsdom does not synthesize the native button click for Enter.
+        card.click();
+      } else fireEvent.click(card);
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/tasks',
+        search: { view: 'board', param: task.id },
+      });
+      expect(await screen.findByLabelText('Task 상세 불러오는 중')).toBeInTheDocument();
+      expect(updateTaskStatus).not.toHaveBeenCalled();
+    },
+  );
 
   it('moves a rendered Task from Backlog to Doing with the keyboard sensor', async () => {
     const liveMessages: string[] = [];

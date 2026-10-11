@@ -26,8 +26,8 @@ export function TaskBoardCard({
       ref={draggable.setNodeRef}
       data-task-board-card-id={task.id}
       type="button"
-      {...draggable.listeners}
-      {...draggable.attributes}
+      {...(enabled ? draggable.listeners : {})}
+      {...(enabled ? draggable.attributes : {})}
       onClick={onSelect}
       aria-label={`${task.display_id}: ${task.title}`}
       // oxlint-disable-next-line shadcn/no-arbitrary-values -- Keep colour/shadow motion but restore source opacity immediately after the drop overlay leaves.
