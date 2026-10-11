@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"  # zsh-invoked runs lost BASH_SOURCE (s61, s70)
 # verify-db.sh — provision isolated throwaway databases for wave integration checks.
 set -uo pipefail
 
@@ -204,6 +205,7 @@ up() {
       docker start "$CONTAINER" >/dev/null || fail "could not start existing container $CONTAINER" 1
     fi
   else
+    [[ -f "$ROOT/scripts/db/init.sql" ]] || fail "missing $ROOT/scripts/db/init.sql (wrong ROOT?)" 1
     docker run -d --name "$CONTAINER" --memory "$DB_MEMORY" -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
       -p "$DB_PORT:5432" -v "$ROOT/scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
       pgvector/pgvector:pg16 || fail "could not start $CONTAINER" 1
