@@ -94,7 +94,7 @@ Acceptance Criteria:
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
 - Survey can be created from template. (Deferred, ADR-0059 D2.)
-- Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links are ADR-0035/0036, unscheduled per ADR-0059 D4.)
+- Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links (ADR-0035/0036) were rejected on 2026-10-13, ADR-0059 D4.)
 ```
 
 ### FR-SURVEY-002: Basic Builder

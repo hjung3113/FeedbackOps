@@ -28,6 +28,35 @@ This document groups release scope and includes short shipped/open notes for par
 - Executive Report
 ```
 
+## MVP Close-Out
+
+Decided by the owner on 2026-10-13. MVP closes when every item below ships and the Release Value Gate passes; after that release, new work comes from real use. Progress is the GitHub milestones Slice 53 to Slice 63.
+
+Scope:
+
+```text
+- Open issues and filed follow-ups, including the ones deferred by the value gate (#739, #740, #816, #340, #1015, #1012)
+- Phase 1 remainder: Evidence route, unattended VOC Cluster writes (ADR-0054 choice c), requester cancel / pending edit, direct grant, risk indicators, editable coverage thresholds, Analytics Area report
+- ADR-0059 D1-D3: default owner and reviewer resolution, Survey templates, Dashboard recovery-item model
+- A whole-system review (architecture, docs, UI/UX, performance, Impeccable audit and critique), then hardening from its findings
+- Production images (backend, frontend, migration job) per ADR-0013, and a login check against an OIDC provider
+- Release docs: keep the docs that explain the project (design and decision records, the doc index, a code index, the glossary) and remove plan, review, and stale docs; the development environment stays intact because development continues after release
+```
+
+Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
+
+### Release Value Gate
+
+The release ships only when an adversarial product review finds no blocker. Product value comes first; code quality alone does not pass the gate.
+
+- Setup: the production images, seeded at the target scale (about 5k VOCs and 5k Tasks), driven in a real browser with keyboard and mouse at Windows conventions.
+- Personas: a buyer deciding whether to pay for it, a Developer who works the queues daily, an Admin, and an internal reporter.
+- Each persona runs the MVP Success Flow and the core job of every system it uses, and answers:
+  1. Would a team pay for this? What would make them refuse?
+  2. Can a first-time user finish the job without guidance, and with the least friction?
+  3. Is the tool good at the job it targets, not just able to do it?
+- Blocker: any reason to refuse to pay, any step a user cannot finish or would abandon, or friction on a daily path. Fix every blocker and rerun the gate before release.
+
 ## MVP Success Flow
 
 Recommended first success path:
