@@ -218,12 +218,25 @@ See `09-permission-access.md`.
 - Advanced taxonomy governance
 ```
 
-## Responsibility inputs (ADR-0067; proposed/new)
+## Responsibility inputs (ADR-0067; registry/storage implemented by #1089)
 
-Managed System adds a nullable Actor/team reviewer pair independent of its owner pair;
+Managed System has a nullable Actor/team reviewer pair independent of its owner pair;
 Admin edits/audits it beside the owner. Task Request first uses reviewer, then eligible
 owner. Destination services resolve/write assignments; Core exposes transaction-aware
 inputs only. Team defaults work without member selection or permission grants; no team
 CRUD/membership/candidate-list surface is introduced. Automatic invalid defaults fall
 through to a visible scoped fallback with Admin warning; explicit invalid targets reject.
 Default edits leave existing assignments intact. Survey's dedicated operator rule is unchanged.
+
+
+Admin Registry edits owner/reviewer independently and refetches the safe, server-authorized
+configuration diagnostics after save. The endpoint and transaction failure-input contract
+are in `docs/implementation/api/core.md`. #1090/#1091 own creation-time routing and failure
+production; the nullable source columns added by #1089 do not backfill responsibility.
+
+Registry configuration diagnostics follow the effective Task Request chain: an empty
+reviewer with an owner eligible for `finding.manage` does not warn. Configured invalid
+defaults still warn; an empty/broken chain warns. Admin sees a marked registry row and a
+settings action per warning. Actor choices come from the authorized server candidate read;
+currently configured ineligible Actors remain visible and marked, and field errors explain
+save-time eligibility failures. See `docs/implementation/api/core.md` for the read contract.

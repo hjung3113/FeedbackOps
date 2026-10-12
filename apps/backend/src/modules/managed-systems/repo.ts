@@ -8,6 +8,10 @@ export interface LockedManagedSystem {
   workspace_id: string;
   archived_at: Date | null;
   default_survey_operator_actor_id: string | null;
+  default_owner_actor_id: string | null;
+  default_owner_team_id: string | null;
+  default_reviewer_actor_id: string | null;
+  default_reviewer_team_id: string | null;
 }
 
 export async function lockManagedSystem(
@@ -20,8 +24,13 @@ export async function lockManagedSystem(
     workspace_id: string;
     archived_at: Date | null;
     default_survey_operator_actor_id: string | null;
+    default_owner_actor_id: string | null;
+    default_owner_team_id: string | null;
+    default_reviewer_actor_id: string | null;
+    default_reviewer_team_id: string | null;
   }>(sql`
-    select id, workspace_id, archived_at, default_survey_operator_actor_id
+    select id, workspace_id, archived_at, default_survey_operator_actor_id,
+      default_owner_actor_id, default_owner_team_id, default_reviewer_actor_id, default_reviewer_team_id
     from ${managedSystems}
     where id = ${managedSystemId}
       and workspace_id = ${workspaceId}
@@ -34,6 +43,10 @@ export async function lockManagedSystem(
         workspace_id: row.workspace_id,
         archived_at: row.archived_at,
         default_survey_operator_actor_id: row.default_survey_operator_actor_id,
+        default_owner_actor_id: row.default_owner_actor_id,
+        default_owner_team_id: row.default_owner_team_id,
+        default_reviewer_actor_id: row.default_reviewer_actor_id,
+        default_reviewer_team_id: row.default_reviewer_team_id,
       }
     : null;
 }

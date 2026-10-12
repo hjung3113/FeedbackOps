@@ -299,3 +299,13 @@ Frontend `features/voc-cluster/` owns suggestion review on `/voc-clusters`,
 `features/voc/` owns optional preview on the create screen and Admin owns the
 opt-in on `/admin/settings`. No new shell, top-level feature or domain route is
 needed. Shared response/detail/audit schemas have no runtime permission logic.
+
+## Responsibility diagnostic seam (#1089)
+
+Core's Managed System module exports `recordResponsibilityDefaultFailure` from
+`managed-systems/index.ts` and extends `lockManagedSystem` with owner/reviewer defaults.
+Source commands may consume these transaction-aware inputs and append safe failed-rule
+observations through the explicit seam; they own eligibility, routing, permissions and
+assignment writes. No runtime Core-to-source or Dashboard import is introduced. The
+Admin-authorized diagnostic read is specified in `api/core.md`; creation-time callers
+remain #1090/#1091. Diagnostic inputs carry no private candidate or source identity.

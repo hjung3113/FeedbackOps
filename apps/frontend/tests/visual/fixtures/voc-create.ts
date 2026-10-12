@@ -12,7 +12,9 @@ export const VOC_CREATE_IDS = {
 const managedSystemSchema = z.object({
   id: z.string().uuid(), workspace_id: z.string().uuid(), slug: z.string(), name: z.string(),
   external_key: z.string().nullable(), default_owner_actor_id: z.string().uuid().nullable(),
-  default_owner_team_id: z.string().uuid().nullable(), archived_at: z.string().datetime().nullable(),
+  default_owner_team_id: z.string().uuid().nullable(),
+    default_reviewer_actor_id: z.string().uuid().nullable(),
+    default_reviewer_team_id: z.string().uuid().nullable(), archived_at: z.string().datetime().nullable(),
   archived_by_actor_id: z.string().uuid().nullable(), created_at: z.string().datetime(), updated_at: z.string().datetime(),
 }).strict();
 const analyticsAreaSchema = z.object({
@@ -22,7 +24,9 @@ const analyticsAreaSchema = z.object({
 const peerSchema = z.object({ id: z.string().uuid(), display_id: z.string(), title: z.string(), created_at: z.string().datetime() }).strict();
 
 export const vocCreateManagedSystems = z.object({ items: z.array(managedSystemSchema), total: z.number().int() }).strict().parse({
-  items: [{ id: VOC_CREATE_IDS.managedSystem, workspace_id: VOC_CREATE_IDS.workspace, slug: 'tableau', name: 'Tableau', external_key: null, default_owner_actor_id: null, default_owner_team_id: null, archived_at: null, archived_by_actor_id: null, created_at: '2026-07-18T00:00:00.000Z', updated_at: '2026-07-18T00:00:00.000Z' }],
+  items: [{ id: VOC_CREATE_IDS.managedSystem, workspace_id: VOC_CREATE_IDS.workspace, slug: 'tableau', name: 'Tableau', external_key: null, default_owner_actor_id: null, default_owner_team_id: null,
+      default_reviewer_actor_id: null,
+      default_reviewer_team_id: null, archived_at: null, archived_by_actor_id: null, created_at: '2026-07-18T00:00:00.000Z', updated_at: '2026-07-18T00:00:00.000Z' }],
   total: 1,
 });
 

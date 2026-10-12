@@ -12,7 +12,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
+import { actors, analyticsAreas, managedSystems, teams, workspaces } from './core.js';
 import { surveyResponseExcerptApprovals } from './survey.js';
 import { milestones } from './task.js';
 
@@ -30,6 +30,8 @@ export const findings = findingSchema.table(
       .notNull()
       .references(() => managedSystems.id),
     title: text('title').notNull(),
+    ownerActorId: uuid('owner_actor_id').references(() => actors.id),
+    ownerTeamId: uuid('owner_team_id').references(() => teams.id),
     summary: text('summary').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
@@ -50,6 +52,10 @@ export const findings = findingSchema.table(
   },
   (t) => ({
     workspaceIdUq: unique('findings_workspace_id_uq').on(t.workspaceId, t.id),
+    responsibilityXorCheck: check(
+      'findings_responsibility_xor_check',
+      sql`${t.ownerActorId} IS NULL OR ${t.ownerTeamId} IS NULL`,
+    ),
     workspaceDisplayUq: uniqueIndex('findings_workspace_display_id_uq').on(
       t.workspaceId,
       t.displayId,

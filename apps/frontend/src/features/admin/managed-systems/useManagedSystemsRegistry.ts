@@ -6,11 +6,12 @@ import {
   type ManagedSystemDto,
   type ResolveActorsResponse,
   fetchAnalyticsAreas,
+  fetchManagedSystemDefaultCandidates,
+  fetchManagedSystemDefaultDiagnostics,
   fetchManagedSystems,
   fetchPermissionRequestsAll,
   resolveActors,
 } from '../../../lib/api';
-import { useWorkspaceActors } from '../../../lib/cross-system/useWorkspaceActors';
 import { groupAreasByMs } from '../lib/groupAreasByMs.js';
 
 // Shared by string with other screens' ['managed-systems', …] queries; the
@@ -23,6 +24,7 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
   renderedAreaCount: number;
   resolved: ResolveActorsResponse | undefined;
   listQuery: { isPending: boolean; isError: boolean; error: unknown };
+  diagnosticsQuery: ReturnType<typeof useDefaultDiagnostics>;
   requestsCount: number;
   invalidate: () => Promise<void>;
 } {
@@ -44,6 +46,8 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
     retry: false,
   });
 
+  const diagnosticsQuery = useDefaultDiagnostics();
+
   const systems = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const areas = useMemo(() => areasQuery.data?.items ?? [], [areasQuery.data]);
   const areasByMs = useMemo(() => groupAreasByMs(areas, includeArchived), [areas, includeArchived]);
@@ -54,12 +58,22 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
 
   const ownerActorIds = useMemo(
     () => [
-      ...new Set(systems.map((m) => m.default_owner_actor_id).filter((v): v is string => !!v)),
+      ...new Set(
+        systems
+          .flatMap((m) => [m.default_owner_actor_id, m.default_reviewer_actor_id])
+          .filter((v): v is string => !!v),
+      ),
     ],
     [systems],
   );
   const ownerTeamIds = useMemo(
-    () => [...new Set(systems.map((m) => m.default_owner_team_id).filter((v): v is string => !!v))],
+    () => [
+      ...new Set(
+        systems
+          .flatMap((m) => [m.default_owner_team_id, m.default_reviewer_team_id])
+          .filter((v): v is string => !!v),
+      ),
+    ],
     [systems],
   );
   const resolveQuery = useQuery({
@@ -71,7 +85,11 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
   });
 
   async function invalidate() {
-    await queryClient.invalidateQueries({ queryKey: managedSystemsQueryKey });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: managedSystemsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: ['managed-system-default-diagnostics'] }),
+      queryClient.invalidateQueries({ queryKey: ['managed-system-default-candidates'] }),
+    ]);
   }
 
   return {
@@ -84,14 +102,20 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
       isError: listQuery.isError,
       error: listQuery.error,
     },
+    diagnosticsQuery,
     requestsCount: requestsQuery.data?.count ?? 0,
     invalidate,
   };
 }
 
-export function useRegistryActorOptions(): { id: string; display_name: string }[] | undefined {
-  const { actors } = useWorkspaceActors({ retry: false, staleTime: 0 });
-  return actors?.map(({ id, display_name }) => ({ id, display_name }));
+export function useRegistryActorOptions(managedSystemId: string | undefined, reviewer: boolean) {
+  const query = useQuery({
+    queryKey: ['managed-system-default-candidates', managedSystemId],
+    queryFn: ({ signal }) => fetchManagedSystemDefaultCandidates(managedSystemId, signal),
+    retry: false,
+    staleTime: 0,
+  });
+  return { ...query, data: reviewer ? query.data?.reviewers : query.data?.owners };
 }
 
 export function useKnownOwnerTeam(
@@ -104,4 +128,12 @@ export function useKnownOwnerTeam(
     queryFn: ({ signal }) => resolveActors({ teamIds: knownTeamId ? [knownTeamId] : [] }, signal),
   });
   return teamQuery.data?.teams[0];
+}
+
+function useDefaultDiagnostics() {
+  return useQuery({
+    queryKey: ['managed-system-default-diagnostics'],
+    queryFn: ({ signal }) => fetchManagedSystemDefaultDiagnostics(signal),
+    retry: false,
+  });
 }

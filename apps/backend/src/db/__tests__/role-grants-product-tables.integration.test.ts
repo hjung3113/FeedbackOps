@@ -77,6 +77,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Migration 0000 makes the audit log append-only so application writes retain
   // an immutable history.
   'core.audit_log': ['SELECT', 'INSERT'],
+  // 0058: safe routing failures are append-only runtime diagnostic inputs.
+  'core.responsibility_default_failures': ['SELECT', 'INSERT'],
   // Migration 0054 keeps inbox rows durable; only read/archive/email claim
   // state has column-scoped UPDATE grants.
   'core.notifications': ['SELECT', 'INSERT'],

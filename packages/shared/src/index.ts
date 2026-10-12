@@ -42,3 +42,5 @@ export * from './notifications.js';
 export * from './nav.js';
 
 export * from './list-page.js';
+
+export * from './managed-system-diagnostics.js';

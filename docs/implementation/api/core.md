@@ -9,6 +9,8 @@ GET /health
 GET /health/live
 GET /health/ready
 GET /managed-systems
+GET /managed-systems/default-diagnostics
+GET /managed-systems/default-candidates
 POST /managed-systems
 PATCH /managed-systems/:id
 POST /managed-systems/:id/archive
@@ -74,13 +76,88 @@ Bands only change presentation; ratios, queues, links, severity and anonymity ar
 The Admin editor at `/admin/settings` validates/save/discard/error/retry and invalidates
 all `dashboard-summary` scopes on save; failed refetch must show stale/error state.
 
-Managed System create/PATCH/read adds proposed/new nullable `default_reviewer_actor_id` /
-`default_reviewer_team_id`, XOR-or-both-null, independent of general owner and Survey
-operator. Validate workspace/eligible Actor or active team, audit create snapshots/update
-diffs (ADR-0017 amendment), preserve existing assignments, and expose safe Admin diagnostics
-for skipped automatic defaults. Registry supplies transaction-aware inputs; destination
-services resolve assignments. Existing known-team display is supported; no team CRUD,
-membership, or workspace team-candidate endpoint is introduced.
+Managed System POST/PATCH/read includes nullable `default_reviewer_actor_id` /
+`default_reviewer_team_id`, independent of owner and Survey operator. Each pair is
+XOR-or-both-null. POST omission persists null; PATCH omission preserves the field;
+clear-and-replace sends both keys together. Mutations require server-side `workspace.admin`,
+including explicit-deny rejection. Effective no-op writes no audit; create snapshots
+include both reviewer keys and updates include only effective changes. Older audit
+snapshots without reviewer fields remain readable. `GET /managed-systems` stays session-only.
+
+Registry Actor defaults require a same-workspace internal Admin/Developer eligible for
+at least one intended owner workflow (`voc.triage` or `finding.manage`), or `finding.manage`
+for reviewer, using current capability decisions and the declared Finding Admin bypass.
+New-system registration has no existing Managed System scope, so Actor eligibility uses
+workspace scope; PATCH checks the target system. Teams must exist in the workspace and
+be active; neither assignment nor default grants permissions or selects members. Invalid
+explicit targets reject `422 validation.failed` with the affected snake_case field path;
+XOR uses `mutually_exclusive`, other codes are `foreign_workspace`, `archived_team`, or
+`ineligible_actor`. PATCH validates the effective pair under the registry row lock.
+Unrelated metadata edits preserve invalid old defaults so configuration can be repaired.
+
+### Admin default Actor candidates (#1089)
+
+`GET /managed-systems/default-candidates?managed_system_id=:uuid` requires the same
+session/workspace and current `workspace.admin` authorization as diagnostics. The optional
+system must belong to the workspace (`404 not_found.record` otherwise); omission uses
+workspace eligibility for registration. The strict response is
+`{ owners: [{ id, display_name, eligible }], reviewers: [{ id, display_name, eligible }] }`.
+The server applies the same destination capability checks as POST/PATCH. Only eligible
+Actors are offered, plus the currently configured same-workspace internal Actor when no
+longer eligible (`eligible: false`). No emails, teams or membership are returned. GET writes
+nothing. Registry pickers mark retained ineligible values, disable their selection, and
+associate server `fields[].path`/category errors with the matching owner/reviewer field.
+Mutation validation remains authoritative and rechecks eligibility at save time.
+
+### Admin automatic-default diagnostics (#1089, ADR-0067 56-D)
+
+`GET /managed-systems/default-diagnostics` requires session/workspace and a current
+server-side `workspace.admin` check, including explicit denies (`403 permission.denied`).
+It reads active systems in the caller's workspace and writes no rows/audits. Response:
+
+```text
+{ items: [{ managed_system_id, workflow: voc|finding|task_request|task,
+  responsibility: owner|reviewer,
+  rule: managed_system_owner|managed_system_reviewer|analytics_area_owner,
+  category: missing|invalid_pair|foreign_workspace|archived_team|ineligible_actor,
+  origin: configuration|creation_failure, count, last_failed_at: ISO timestamp|null }] }
+```
+
+Current registry owner/reviewer checks emit configuration warnings (representative VOC /
+Task Request workflow respectively, count 1, timestamp null). An empty reviewer is not a
+warning when the owner fallback is eligible for review (`finding.manage`, not merely
+`voc.triage`). Warn when that chain is empty/broken, and always warn for a configured
+ineligible/archived/foreign default even when a fallback is valid. Creation failures aggregate
+by system/workflow/responsibility/rule/category. They are historical observations, not
+source assignment or recovery state. No candidate/source IDs, email, title, body, Survey
+response identity, or team membership is stored or returned. Only the already workspace-
+visible Managed System ID is exposed. A later effective edit to the matching responsibility
+pair supersedes earlier failure observations; name/external-key edits do not clear them.
+Ordering uses DB `clock_timestamp()` under the registry lock: failure `created_at` is
+written after the share lock, and update audit detail carries `configuration_changed_at`
+(UTC with microseconds) while holding the exclusive lock. Transaction-start timestamps do
+not order these operations. Historical audits without this optional marker retain their
+`created_at` comparison; no schema migration or audit rewrite is required.
+Current configuration is always rechecked, so a revoked Actor or archived team remains
+visible. Admin Registry invalidates/refetches diagnostics after successful configuration
+edits; a failed read shows a red shared Callout and retry, never an empty healthy result.
+Each warning explains the skipped automatic assignment, opens that system's settings, and
+marks the affected registry row. Reviewer field help explains the owner fallback; owner
+and reviewer pairs render side by side to preserve registry density.
+
+`recordResponsibilityDefaultFailure(tx, input)` is the Core-owned append seam in
+`managed-systems/default-diagnostics.ts`, exported through `managed-systems/index.ts`.
+Its strict shared input schema accepts only workspace/system, workflow/responsibility,
+rule and category above. It validates system workspace and uses the caller transaction;
+rollback removes the input. Runtime has SELECT/INSERT only on the new diagnostic table,
+without UPDATE/DELETE or any new bootstrap role. #1090/#1091 supply successful automatic-
+resolution failures in their source transaction, once per skipped rule, and own replay/
+fallback/creation end-to-end evidence. They must recheck destination eligibility, keep
+explicit-null versus omitted semantics, and never call this seam on replay or rejected
+creation. #1089 supplies and tests the seam/read/UI with real fixtures; it does not install
+creation-time producers. Defaults never reassign historical rows; Survey's dedicated
+operator routing remains unchanged. Known teams display without new CRUD, membership,
+or a workspace team-candidate endpoint.
 
 ## Cluster suggestion opt-in (ADR-0068; proposed/new)
 
