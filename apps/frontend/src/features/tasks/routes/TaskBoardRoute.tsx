@@ -27,7 +27,7 @@ import {
   WorkbenchShell,
   readMotionTiming,
 } from '@fops/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
@@ -39,7 +39,10 @@ import {
   TaskBoardGroupByButton,
 } from '../components/task-board/TaskBoardGroupByButton';
 import { useTaskBoardDragGeometry } from '../components/task-board/useTaskBoardDragGeometry';
+import { useTaskBoardKeyboardFocus } from '../hooks/useTaskBoardKeyboardFocus';
 import { useTaskStatusTransition } from '../hooks/useTaskStatusTransition';
+
+const EMPTY_TASKS: TaskDto[] = [];
 
 const STATUS_COLUMNS: TaskStatus[] = [
   'backlog',
@@ -101,14 +104,6 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const [dropAnimation, setDropAnimation] = React.useState<DropAnimation | null>(null);
   const geometry = useTaskBoardDragGeometry();
   const { boardScroller } = geometry;
-  const dragGeneration = React.useRef(0);
-  const queryClient = useQueryClient();
-  const keyboardFocusTask = React.useRef<string | null>(null);
-  const [pendingKeyboardFocus, setPendingKeyboardFocus] = React.useState<{
-    taskId: string;
-    destinationStatus: TaskStatus | null;
-    generation: number;
-  } | null>(null);
   const keyboardTiming = readMotionTiming('fast', 'standard');
   // dnd-kit supports null at runtime, but its transition type omits it.
   const overlayTransition = (
@@ -119,7 +114,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   const [groupBy, setGroupBy] = React.useState<TaskBoardGroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
-  const tasksKey = publicUpdate === 'missing' ? (['tasks', managedSystem, 'public_update:missing'] as const) : (['tasks', managedSystem] as const);
+  const tasksKey = React.useMemo(
+    () =>
+      publicUpdate === 'missing'
+        ? (['tasks', managedSystem, 'public_update:missing'] as const)
+        : (['tasks', managedSystem] as const),
+    [managedSystem, publicUpdate],
+  );
   const mutation = useTaskStatusTransition(tasksKey);
   const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
@@ -132,75 +133,23 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     }),
   );
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
-  const items = tasksQuery.data?.items ?? [];
+  const items = tasksQuery.data?.items ?? EMPTY_TASKS;
   React.useEffect(() => { if (selectedParam !== undefined) setSelectedId(selectedParam); }, [selectedParam]);
   const filtered = React.useMemo(() => items.filter((task) => {
     const priority = filters.priority; const milestone = filters.milestone; const assignee = filters.assignee;
     return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || (task.assignee_actor_id === null ? assignee.includes('__unassigned') : assignee.includes(task.assignee_actor_id)));
   }), [items, filters]);
-  const focusScope = React.useRef({ groupBy, managedSystem, publicUpdate });
-  React.useLayoutEffect(
-    () => () => {
-      dragGeneration.current += 1;
-      keyboardFocusTask.current = null;
-    },
-    [],
+  const focusScope = React.useMemo(
+    () => ({ groupBy, managedSystem, publicUpdate }),
+    [groupBy, managedSystem, publicUpdate],
   );
-  React.useLayoutEffect(() => {
-    const previousScope = focusScope.current;
-    if (
-      previousScope.groupBy !== groupBy ||
-      previousScope.managedSystem !== managedSystem ||
-      previousScope.publicUpdate !== publicUpdate
-    ) {
-      dragGeneration.current += 1;
-      keyboardFocusTask.current = null;
-      setPendingKeyboardFocus(null);
-    }
-    focusScope.current = { groupBy, managedSystem, publicUpdate };
-    const pending = pendingKeyboardFocus;
-    if (!pending || pending.generation !== dragGeneration.current) return;
-    const refetchSettled =
-      !tasksQuery.isFetching && queryClient.getQueryState(tasksKey)?.fetchStatus !== 'fetching';
-    if (
-      !filtered.some(
-        (task) =>
-          task.id === pending.taskId &&
-          (pending.destinationStatus === null || task.status === pending.destinationStatus),
-      )
-    ) {
-      if (pending.destinationStatus === null && refetchSettled) setPendingKeyboardFocus(null);
-      return;
-    }
-    const board = boardScroller.current;
-    const card =
-      board &&
-      [...board.querySelectorAll<HTMLButtonElement>('[data-task-board-card-id]')].find(
-        (node) => node.dataset.taskBoardCardId === pending.taskId,
-      );
-    if (!card) {
-      if (pending.destinationStatus === null && refetchSettled) setPendingKeyboardFocus(null);
-      return;
-    }
-    // Recovery follows remounts until the invalidation refetch settles; success owns one render.
-    if (pending.destinationStatus !== null || refetchSettled) {
-      setPendingKeyboardFocus(null);
-    }
-    // Optimistic cache writes can commit after drag end. Respect focus moved elsewhere meanwhile.
-    if (document.activeElement === document.body || board.contains(document.activeElement)) {
-      card.focus();
-    }
-  }, [
+  const keyboardFocus = useTaskBoardKeyboardFocus({
+    scope: focusScope,
     filtered,
-    groupBy,
-    managedSystem,
-    publicUpdate,
-    pendingKeyboardFocus,
     boardScroller,
-    tasksQuery.isFetching,
-    queryClient,
+    isFetching: tasksQuery.isFetching,
     tasksKey,
-  ]);
+  });
   const columns = React.useMemo(() => {
     if (groupBy === 'status') {
       return STATUS_COLUMNS.map((key) => ({ key, label: TASK_STATUS_LABELS[key] }));
@@ -274,9 +223,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     };
   }, []);
   function onDragStart(event: DragStartEvent) {
-    dragGeneration.current += 1;
-    setPendingKeyboardFocus(null);
-    keyboardFocusTask.current = null;
+    keyboardFocus.startDrag();
     geometry.onDragStart(event);
     const timing = readMotionTiming('slow', 'enter');
     setDropAnimation(
@@ -299,24 +246,13 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     );
     setActiveTask(null);
     if (willMove) {
-      const generation = dragGeneration.current;
-      const keyboardMove = event.activatorEvent instanceof KeyboardEvent;
-      if (keyboardMove) {
-        keyboardFocusTask.current = task.id;
-        setPendingKeyboardFocus({
-          taskId: task.id,
-          destinationStatus: target as TaskStatus,
-          generation,
-        });
-      }
+      const recoverRejection =
+        event.activatorEvent instanceof KeyboardEvent
+          ? keyboardFocus.requestMove(task.id, target as TaskStatus)
+          : null;
       // Per-invocation promises also settle when a newer mutation supersedes this one.
       void mutation.mutateAsync({ task, status: target as TaskStatus }).catch(() => {
-        if (!keyboardMove || dragGeneration.current !== generation) return;
-        setPendingKeyboardFocus({
-          taskId: task.id,
-          destinationStatus: null,
-          generation,
-        });
+        recoverRejection?.();
       });
     }
   }
@@ -325,11 +261,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
     const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
     const next = task && nextStatus[task.status];
     if (task && next) {
-      if (keyboardFocusTask.current === taskId) {
-        dragGeneration.current += 1;
-        keyboardFocusTask.current = null;
-        setPendingKeyboardFocus(null);
-      }
+      keyboardFocus.replaceTask(taskId);
       mutation.mutate({ task, status: next });
     }
   }
@@ -463,7 +395,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                 onDragEnd={onDragEnd}
                 onDragCancel={() => {
                   geometry.onDragEnd();
-                  setPendingKeyboardFocus(null);
+                  keyboardFocus.cancelDrag();
                   setActiveTask(null);
                 }}
               >

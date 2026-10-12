@@ -929,8 +929,10 @@ column, returning to the origin is announced normally. After a keyboard move, th
 for the optimistic destination card to render, then focuses it only if focus
 is on the body or still inside the board. Focus moved outside the board is respected;
 same-column drops and Escape keep focus on the card. Pointer drops do not change focus.
-The route disables dnd-kit's scheduled focus restoration and owns the pending keyboard focus,
-active copy, and per-drop animation choice. A rejected keyboard move follows that Task's
+The route disables dnd-kit's scheduled focus restoration and owns the active copy and per-drop
+animation choice. Its route-lifetime `useTaskBoardKeyboardFocus` hook owns pending keyboard
+focus recovery, with scope and tasks query key memoized on their primitive inputs separately
+from filtered-card availability. A rejected keyboard move follows that Task's
 rendered card through rollback and the following refetch, in any status column, only if focus
 is on the body or inside the board and no newer drag has started. Recovery retires when the post-rejection tasks refetch settles, after the
 focus attempt or outside-focus guard declines. Newer drags, scope changes, unmount, and another
