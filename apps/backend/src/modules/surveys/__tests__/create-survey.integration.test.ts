@@ -1036,8 +1036,8 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
     const rows = await appHandle.pool.query(
       `select
        (select count(*)::int from survey.surveys where primary_managed_system_id=$1) as surveys,
-       (select count(*)::int from survey.survey_questions where survey_id=$2) as questions,
-       (select count(*)::int from core.audit_log where detail->>'survey_id'=$2) as audits`,
+       (select count(*)::int from survey.survey_questions where survey_id=$2::uuid) as questions,
+       (select count(*)::int from core.audit_log where detail->>'survey_id'=$2::text) as audits`,
       [systemId, firstId],
     );
     expect(rows.rows).toEqual([{ surveys: 1, questions: 2, audits: 3 }]);
