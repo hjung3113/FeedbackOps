@@ -47,10 +47,32 @@ describe('Survey built-in preview contract (#1073)', () => {
     {
       kind: 'existing_survey',
       survey_id: '01919b8c-0000-7000-8000-000000000001',
-      definition_token: 'x',
+      definition_token: '',
     },
     { kind: 'builtin', template_id: 'validation-basic', version: '1' },
-  ])('rejects raw question bodies and undelivered starting-point arms %j', (input) => {
+    {
+      kind: 'existing_survey',
+      survey_id: '01919b8c-0000-7000-8000-000000000001',
+      definition_token: 'token',
+      questions: [],
+    },
+  ])('rejects raw question bodies and invalid starting-point fields %j', (input) => {
     expect(() => surveyStartingPointSchema.parse(input)).toThrow();
   });
+});
+
+it('accepts a saved-source ID and required token', () => {
+  const input = {
+    kind: 'existing_survey',
+    survey_id: '01919b8c-0000-7000-8000-000000000001',
+    definition_token: 'opaque-token',
+  };
+  expect(surveyStartingPointSchema.parse(input)).toEqual(input);
+});
+it.each([
+  { kind: 'existing_survey', definition_token: 'token' },
+  { kind: 'existing_survey', survey_id: 'bad', definition_token: 'token' },
+  { kind: 'existing_survey', survey_id: '01919b8c-0000-7000-8000-000000000001' },
+])('rejects missing or invalid source credentials %j', (input) => {
+  expect(() => surveyStartingPointSchema.parse(input)).toThrow();
 });

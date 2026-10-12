@@ -368,3 +368,22 @@ describe('Survey starting-point audit provenance (#1073)', () => {
     });
   });
 });
+
+describe('Existing Survey provenance (#1074)', () => {
+  const starting_point = { kind: 'existing_survey', survey_id: U };
+  it('accepts ID-only provenance through the registered schema', () => {
+    const detail = { ...surveyCreated, starting_point, question_count: 4 };
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse(detail)).toEqual(detail);
+  });
+  it.each(['definition_token', 'questions', 'prompt', 'title', 'options'])(
+    'rejects %s in provenance',
+    (field) => {
+      expect(() =>
+        AUDIT_EVENT_DETAIL_SCHEMAS.survey_created.parse({
+          ...surveyCreated,
+          starting_point: { ...starting_point, [field]: 'private' },
+        }),
+      ).toThrow();
+    },
+  );
+});

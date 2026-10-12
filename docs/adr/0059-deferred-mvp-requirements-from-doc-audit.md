@@ -69,9 +69,9 @@ its delivery does not wait on snooze/history UI.
 
 [ADR-0070](0070-survey-starting-templates-and-definition-reuse.md) narrows D2 to
 delivered behavior: #1073 supplies three built-in starting templates through
-the backend/shared creation contract. Existing-definition reuse (#1074) and
-visible dialog selection (#1075) remain pending until their delivery. The
-historical D2 statement above describes the 2026-10-05 audit baseline; #1073
-does not complete #1047's user-visible FR-SURVEY-001 acceptance. An editable
+the backend/shared creation contract; #1074 adds existing-definition reuse.
+Visible dialog selection (#1075) remains pending. The
+historical D2 statement above describes the 2026-10-05 audit baseline; these
+backend contracts do not complete #1047's user-visible FR-SURVEY-001 acceptance. An editable
 saved-template library remains outside the agreed MVP scope. Explicit Managed
 System/privacy and persisted-ID requirements from ADR-0039 stay in force.

@@ -7,8 +7,8 @@ Amends [ADR-0039](0039-survey-creation-requires-a-dialog.md) and narrows
 [ADR-0059 D2](0059-deferred-mvp-requirements-from-doc-audit.md).
 
 Delivery is split: #1073 supplies the built-in backend/shared contract;
-existing-definition reuse (#1074) and visible dialog selection (#1075) remain
-pending until their delivery. #1073 alone does not complete #1047's
+#1074 supplies existing-definition reuse; visible dialog selection (#1075)
+remains pending. #1073 alone does not complete #1047's
 user-visible acceptance.
 
 ## Context
@@ -37,9 +37,8 @@ rating; 1–2 is the low band under ADR-0055. It measures post-release usefulnes
 not automatic before/after causality or Task completion.
 
 `POST /surveys` adds an optional strict discriminated `starting_point`:
-`{ kind: 'builtin', template_id, version }` now; the
-`{ kind: 'existing_survey', survey_id, definition_token }` arm is accepted only
-when #1074 delivers it. Omission preserves blank creation. The explicit type
+`{ kind: 'builtin', template_id, version }` (#1073) or
+`{ kind: 'existing_survey', survey_id, definition_token }` (#1074). Omission preserves blank creation. The explicit type
 must match the chosen source, otherwise `422 validation.failed`. Client
 question bodies are never accepted at this route.
 
@@ -57,7 +56,7 @@ schemas and existing read/mutation rate tiers. Source reads are private/no-cache
 The built-in catalog is `GET /surveys/templates?managed_system_id=<uuid>` after
 active-system and `survey.manage` validation.
 
-The pending source discovery endpoint is
+The source discovery endpoint is
 `GET /surveys/copy-sources?managed_system_id=<uuid>&q=...&limit=...&cursor=...`:
 metadata only (ID, Display ID, title, type, status, question count), newest
 first, stable `(created_at,id)` cursor, default limit 20, maximum 50. It must
@@ -107,8 +106,7 @@ the miss path so a completed replay does not reread a changed source.
 
 Keep `survey_created` and one structural `survey_question_created` per question
 in the transaction. Extend the strict registered creation detail with optional
-`starting_point` (built-in kind + ID/version, or source kind + Survey ID when
-#1074 ships) and `question_count`. Never audit prompts, labels, title, answers
+`starting_point` (built-in kind + ID/version, or source kind + Survey ID) and `question_count`. Never audit prompts, labels, title, answers
 or excerpts. Authoring provenance stays in this audit: create no Entity Link
 or relation type.
 
@@ -136,7 +134,8 @@ context and navigate only with the returned persisted server ID.
 ## Consequences
 
 ADR-0059 D2 is narrowed only as each delivered slice lands. The built-in backend
-contract is #1073; #1074/#1075 remain pending. An editable template library and
+contract is #1073; existing-source backend/shared reuse is #1074 and the dialog
+(#1075) remains pending. An editable template library and
 advanced logic stay outside this scope. ADR-0039's explicit system/privacy,
 persisted-ID navigation, focused dialog and keyboard reorder requirements remain
 in force. ADR-0033 anonymity and ADR-0055 Finding-first follow-up stay unchanged.
