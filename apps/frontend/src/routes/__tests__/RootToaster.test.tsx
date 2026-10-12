@@ -69,6 +69,7 @@ describe('root Toaster offset (#851)', () => {
       expect(list).not.toBeNull();
       return list;
     });
+    expect(toasterList?.style.pointerEvents).toBe('auto');
     expect(toasterList?.getAttribute('data-y-position')).toBe('bottom');
     expect(toasterList?.getAttribute('data-x-position')).toBe('center');
     expect(toasterList?.style.getPropertyValue('--offset-bottom')).toBe(TOASTER_BOTTOM_OFFSET);

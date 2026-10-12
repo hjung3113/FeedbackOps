@@ -1,7 +1,8 @@
-import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-dialog';
+import * as React from 'react';
 import { cn } from '../../utils/cn.js';
 import { DIALOG_CONTENT_MOTION, SCRIM_MOTION } from '../../utils/motion.js';
+import { isToastTarget } from '../../utils/toast-target.js';
 import { buttonVariants } from '../Button.js';
 
 export const AlertDialog = AlertDialogPrimitive.Root;
@@ -23,7 +24,7 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 export const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
+>(({ className, onInteractOutside, ...props }, ref) => (
   <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
@@ -35,6 +36,10 @@ export const AlertDialogContent = React.forwardRef<
         className,
       )}
       {...props}
+      onInteractOutside={(event) => {
+        if (isToastTarget(event.target)) event.preventDefault();
+        onInteractOutside?.(event);
+      }}
     />
   </AlertDialogPortal>
 ));
@@ -50,10 +55,7 @@ AlertDialogHeader.displayName = 'AlertDialogHeader';
 export function AlertDialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2',
-        className,
-      )}
+      className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', className)}
       {...props}
     />
   );

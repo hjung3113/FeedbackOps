@@ -1,8 +1,9 @@
-import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
+import * as React from 'react';
 import { cn } from '../../utils/cn.js';
 import { DIALOG_CONTENT_MOTION, SCRIM_MOTION } from '../../utils/motion.js';
+import { isToastTarget } from '../../utils/toast-target.js';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -29,7 +30,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, closeLabel = '닫기', ...props }, ref) => (
+>(({ className, children, closeLabel = '닫기', onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -41,6 +42,10 @@ export const DialogContent = React.forwardRef<
         className,
       )}
       {...props}
+      onInteractOutside={(event) => {
+        if (isToastTarget(event.target)) event.preventDefault();
+        onInteractOutside?.(event);
+      }}
     >
       {children}
       <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-surface-canvas transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-focus-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-surface-card data-[state=open]:text-text-muted">
