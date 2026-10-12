@@ -385,6 +385,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     expect(audit.rows[0]?.detail).toEqual({
       managed_system_id: id,
       changes: { name: { from: 'before', to: 'after' } },
+      configuration_changed_at: expect.stringMatching(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/,
+      ),
     });
   });
 
@@ -1214,10 +1217,6 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
 
   it('FIX1 an edit transaction begun before a failure supersedes it when it locks later', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
-    const admin = await dbHandle.pool.query<{ id: string }>(
-      "select id from core.actors where workspace_id = $1 and external_id = 'mock-admin-1'",
-      [WORKSPACE_ID],
-    );
     const key = randomUUID();
     const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
     const created = await app.inject({
@@ -1239,11 +1238,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       const pid = (await blocker.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]
         ?.pid;
       if (!pid) throw new Error('Blocker PID missing');
-      await blocker.query('select pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
-        admin.rows[0]?.id,
-        key,
-      ]);
-      // Idempotency wait is inside the real route transaction, before its registry lock.
+      // KEY SHARE blocks the edit's registry FOR UPDATE inside its already-begun route
+      // transaction, while the failure seam's FOR SHARE is compatible and proceeds.
+      await blocker.query('select 1 from core.managed_systems where id = $1 for key share', [id]);
       edit = app
         .inject({
           method: 'PATCH',
@@ -1267,6 +1264,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       }
       expect(waiting).toBe(true);
       await dbHandle.db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '2s'`);
         await recordResponsibilityDefaultFailure(tx, {
           workspace_id: WORKSPACE_ID,
           managed_system_id: id,
