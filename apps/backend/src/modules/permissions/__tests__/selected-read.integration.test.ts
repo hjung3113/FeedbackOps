@@ -133,7 +133,7 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
       externalId,
       roleLevel,
       displayName: '검토 대상',
-      email: 'private@example.test',
+      email: `private-${externalId}@example.test`,
     });
     actorIds.push(id);
     const cookie = randomUUID();
