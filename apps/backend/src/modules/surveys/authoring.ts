@@ -16,6 +16,11 @@ import {
   isSurveyInReadScope,
 } from './authorization.js';
 import {
+  type CopySourcesQuery,
+  decodeCopySourceCursor,
+  listCopySources,
+} from './repo-copy-sources.js';
+import {
   type QuestionKind,
   type QuestionRow,
   type SurveyRow,
@@ -36,11 +41,6 @@ import {
   updateQuestionSortOrders,
   updateSurvey,
 } from './repo.js';
-import {
-  type CopySourcesQuery,
-  decodeCopySourceCursor,
-  listCopySources,
-} from './repo-copy-sources.js';
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
 import { builtinSurveyTemplates, findBuiltinSurveyTemplate } from './templates.js';
 
