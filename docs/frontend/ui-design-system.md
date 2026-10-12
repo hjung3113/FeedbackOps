@@ -162,7 +162,7 @@ These opt-in props encode repeated caller treatments. Their default values prese
 | DatePicker | `appearance=detail` | Detail-surface background |
 | DialogFooter | `spacing=compact` | Compact action spacing |
 | PanelTitleBlock | `inset=none` | Remove title-block inset |
-| PanelSectionTitle | `inset=panel`; `size=tiny` | Align section heading with panel content or render milestone-sized typography |
+| PanelSectionTitle | `inset=panel`; `size=tiny`; heading DOM props and ref | Align section heading with panel content or render milestone-sized typography; `tabIndex=-1` supports programmatic focus |
 | RichContentRenderer | `size=sm` | Small rich-text rendering |
 | Skeleton | `shape=rounded` | Smaller-radius placeholder (`rounded`, 4px instead of the default `rounded-md` 6px) |
 | TooltipContent | `size=sm` | Small tooltip text |
@@ -965,6 +965,10 @@ key by source VOC; Survey questions keep a stable unkeyed inner list. The last
 recommendation/question removal still shows the existing empty/onboarding branch at once.
 Stock auto-animate insert/remove easings and native Survey drag reorder remain unchanged.
 Upgrade `@formkit/auto-animate` only together with `patches/@formkit__auto-animate@0.10.0.patch`, preserving its teardown and removed-row polling cleanup.
+
+The shared `DialogContent` forwards `forceMount` to its portal as well as its content,
+so a caller can preserve focused content until a successful-close focus handoff completes.
+Without `forceMount`, existing open/close presence and animation behavior is unchanged.
 
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
 animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.

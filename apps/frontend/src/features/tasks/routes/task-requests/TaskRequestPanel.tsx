@@ -55,6 +55,7 @@ export function TaskRequestPanel({
   onClose,
   onDecisionComplete,
 }: TaskRequestPanelProps) {
+  const decisionHeadingRef = React.useRef<HTMLHeadingElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
@@ -112,12 +113,14 @@ export function TaskRequestPanel({
 
         {showDecisionSummary ? (
           <TaskRequestOutcomeSection
+            headingRef={decisionHeadingRef}
             item={item}
             reviewerName={reviewer?.display_name}
             taskForOutcome={taskForOutcome}
           />
         ) : (
           <TaskRequestDecisionSection
+            headingRef={decisionHeadingRef}
             names={names}
             resultingTask={resultingTask}
             decision={decision}
@@ -159,6 +162,16 @@ export function TaskRequestPanel({
       <TaskRequestDecisionDialog
         key={item.id}
         dialog={decision.dialog}
+        completedResult={decision.result}
+        getCompletedFocusTarget={(result) =>
+          result.id === item.id &&
+          result.status === item.status &&
+          (result.status === 'approved' ||
+            result.status === 'rejected' ||
+            result.status === 'needs_more_evidence')
+            ? decisionHeadingRef.current
+            : null
+        }
         request={item}
         isSelfApproval={decision.isSelfApproval}
         isSubmitting={decision.isSubmitting}

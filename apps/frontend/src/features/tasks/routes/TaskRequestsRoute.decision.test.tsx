@@ -3,6 +3,7 @@ import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
@@ -160,6 +161,142 @@ describe('TaskRequestsRoute decision dialogs', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('keeps the clicked status tab focused through a cold fetch and cached arrow navigation', async () => {
+    const user = userEvent.setup();
+    let resolvePage!: (value: { items: TaskRequestDto[] }) => void;
+    api.fetchTaskRequests.mockImplementation((options: ListTaskRequestsQuery) =>
+      options.status === 'approved'
+        ? new Promise((resolve) => {
+            resolvePage = resolve;
+          })
+        : Promise.resolve({ items: [taskRequest] }),
+    );
+    await mountRoute();
+    const tab = screen.getByRole('tab', { name: /^승인됨/ });
+    await user.click(tab);
+    expect(document.activeElement).toBe(tab);
+    expect(tab.isConnected).toBe(true);
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    await act(async () => resolvePage({ items: [] }));
+    expect(document.activeElement).toBe(tab);
+    await user.keyboard('{ArrowLeft}');
+    await waitFor(() => {
+      const previousTab = screen.getByRole('tab', { name: /^근거 추가 필요/ });
+      expect(document.activeElement).toBe(previousTab);
+      expect(previousTab).toHaveAttribute('aria-selected', 'true');
+    });
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(tab);
+      expect(tab).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  it.each([
+    ['approved', false, false],
+    ['rejected', false, false],
+    ['approved', true, false],
+    ['rejected', true, false],
+    ['approved', false, true],
+    ['rejected', false, true],
+  ] as const)(
+    'hands %s focus off before removal (cached=%s, animated=%s)',
+    async (status, cached, animated) => {
+      const user = userEvent.setup();
+      const result: TaskRequestDto = { ...taskRequest, status, decision_reason: '검토 완료' };
+      let resolvePage!: (value: { items: TaskRequestDto[] }) => void;
+      api.fetchTaskRequests.mockImplementation((options: ListTaskRequestsQuery) =>
+        options.status === status
+          ? new Promise((resolve) => {
+              resolvePage = resolve;
+            })
+          : Promise.resolve({ items: [taskRequest] }),
+      );
+      const client = renderRoute();
+      if (cached)
+        client.setQueryData(['task-requests', undefined, 'pages', status], {
+          pages: [taskRequestPage([result])],
+          pageParams: [undefined],
+        });
+      await screen.findByRole('heading', { name: '검토 결정' });
+      if (animated) {
+        const getStyles = window.getComputedStyle.bind(window);
+        vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+          const styles = getStyles(element, pseudo);
+          if (element.getAttribute('role') === 'dialog')
+            Object.defineProperty(styles, 'animationName', {
+              get: () =>
+                element.getAttribute('data-state') === 'open' ? 'decision-enter' : 'decision-exit',
+            });
+          return styles;
+        });
+      }
+      const action = status === 'approved' ? '승인' : '반려';
+      const mutation = status === 'approved' ? api.approveTaskRequest : api.rejectTaskRequest;
+      let resolveDecision!: (value: TaskRequestDto) => void;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDecision = resolve;
+          }),
+      );
+      await user.click(screen.getByRole('button', { name: action }));
+      const dialog = await screen.findByRole('dialog');
+      if (status === 'rejected') await user.type(within(dialog).getByRole('textbox'), '반려 사유');
+      const focused: EventTarget[] = [];
+      const handoffConnected: boolean[] = [];
+      const removedFocus: Element[] = [];
+      const record = (event: FocusEvent) => {
+        if (event.target) focused.push(event.target);
+        if (event.target instanceof HTMLHeadingElement) handoffConnected.push(dialog.isConnected);
+      };
+      document.addEventListener('focusin', record);
+      const observer = new MutationObserver(() => {
+        if (!dialog.isConnected && document.activeElement)
+          removedFocus.push(document.activeElement);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      try {
+        await user.click(within(dialog).getByRole('button', { name: action }));
+        await act(async () => resolveDecision(result));
+        const heading = await screen.findByRole('heading', {
+          name: status === 'approved' ? '검토 결정' : '결정 요약',
+          hidden: animated,
+        });
+        expect(document.activeElement).toBe(heading);
+        if (!cached) expect(screen.getByText('Task Request을 불러오는 중…')).toBeInTheDocument();
+        if (animated) {
+          // The closed content must be retained until its exit animation ends.
+          expect(dialog).toBeInTheDocument();
+          expect(dialog).toHaveAttribute('data-state', 'closed');
+          const end = new Event('animationend', { bubbles: true });
+          Object.defineProperty(end, 'animationName', { value: 'decision-exit' });
+          fireEvent(dialog, end);
+          expect(document.activeElement).toBe(heading);
+        }
+        await waitFor(() => expect(dialog).not.toBeInTheDocument());
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        expect(document.activeElement).toBe(heading);
+        expect(handoffConnected[0]).toBe(true);
+        expect(removedFocus.length).toBeGreaterThan(0);
+        expect(removedFocus).not.toContain(document.body);
+        expect(focused).not.toContain(document.body);
+        await act(async () => resolvePage({ items: [result] }));
+        expect(document.activeElement).toBe(heading);
+        if (status === 'approved') {
+          expect(screen.getByRole('button', { name: 'Task로 전환' })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: '기존 Task 연결' })).toBeInTheDocument();
+        }
+      } finally {
+        observer.disconnect();
+        document.removeEventListener('focusin', record);
+        client.clear();
+      }
+    },
+  );
+
   it('opens approval without invoking window.prompt', async () => {
     const prompt = vi.spyOn(window, 'prompt');
     await openDialog('승인', 'Task Request 승인');
@@ -251,6 +388,91 @@ describe('TaskRequestsRoute decision dialogs', () => {
             .querySelector('[data-testid="object-row-selected-bar"]'),
         ).toBeInTheDocument();
       });
+    },
+  );
+
+  it('hands additional-evidence success to the retained decision heading before removal', async () => {
+    const user = userEvent.setup();
+    const result: TaskRequestDto = { ...taskRequest, status: 'needs_more_evidence' };
+    let resolveDecision!: (value: TaskRequestDto) => void;
+    api.requestMoreEvidenceForTaskRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDecision = resolve;
+        }),
+    );
+    const dialog = await openDialog('근거 추가 요청', '근거 추가 요청');
+    api.fetchTaskRequests.mockResolvedValue({ items: [result] });
+    await user.type(within(dialog).getByRole('textbox'), '추가 지표를 확인해 주세요.');
+    const focused: EventTarget[] = [];
+    const handoffConnected: boolean[] = [];
+    const removedFocus: Element[] = [];
+    const record = (event: FocusEvent) => {
+      if (event.target) focused.push(event.target);
+      if (event.target instanceof HTMLHeadingElement) handoffConnected.push(dialog.isConnected);
+    };
+    const observer = new MutationObserver(() => {
+      if (!dialog.isConnected && document.activeElement) removedFocus.push(document.activeElement);
+    });
+    document.addEventListener('focusin', record);
+    observer.observe(document.body, { childList: true, subtree: true });
+    try {
+      await user.click(within(dialog).getByRole('button', { name: '요청' }));
+      await act(async () => resolveDecision(result));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      const heading = screen.getByRole('heading', { name: '검토 결정' });
+      expect(heading).toHaveFocus();
+      expect(handoffConnected[0]).toBe(true);
+      expect(removedFocus.length).toBeGreaterThan(0);
+      expect(removedFocus).not.toContain(document.body);
+      expect(focused).not.toContain(document.body);
+      expect(screen.getByRole('button', { name: '승인' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '반려' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '근거 추가 요청' })).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('focusin', record);
+      observer.disconnect();
+    }
+  });
+
+  it.each([
+    ['승인', 'Task Request 승인', '승인', 'approved'],
+    ['반려', 'Task Request 반려', '반려', 'rejected'],
+    ['근거 추가 요청', '근거 추가 요청', '요청', 'needs_more_evidence'],
+  ] as const)(
+    'keeps %s submit focused while pending and ignores a second Enter',
+    async (action, title, label, status) => {
+      const user = userEvent.setup();
+      const mutation =
+        status === 'approved'
+          ? api.approveTaskRequest
+          : status === 'rejected'
+            ? api.rejectTaskRequest
+            : api.requestMoreEvidenceForTaskRequest;
+      let resolveDecision!: (value: TaskRequestDto) => void;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDecision = resolve;
+          }),
+      );
+      const dialog = await openDialog(action, title);
+      if (status !== 'approved') await user.type(within(dialog).getByRole('textbox'), '검토 메모');
+      const submit = within(dialog).getByRole('button', { name: label });
+      submit.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(submit).toHaveAttribute('aria-busy', 'true'));
+      // jsdom does not blur a newly disabled button as Chromium does; pin focusability too.
+      expect(submit).not.toBeDisabled();
+      expect(submit).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(submit).toHaveFocus();
+      await act(async () => resolveDecision({ ...taskRequest, status }));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
     },
   );
 
@@ -664,3 +886,75 @@ it('preserves the committed decision value and focus when a request transition i
   expect(textbox).toHaveValue('committed reason');
   expect(textbox).toHaveFocus();
 });
+
+it.each(['new opening', 'new request'] as const)(
+  'does not let a successful close timer steal focus from a %s',
+  async (next) => {
+    const user = userEvent.setup();
+    const result: TaskRequestDto = { ...taskRequest, status: 'approved' };
+    function Driver() {
+      const [request, setRequest] = React.useState(taskRequest);
+      const [completed, setCompleted] = React.useState<TaskRequestDto | null>(null);
+      const [dialog, setDialog] = React.useState<DecisionDialogState | null>(null);
+      const heading = React.useRef<HTMLHeadingElement>(null);
+      return (
+        <>
+          <h3 ref={heading} tabIndex={-1}>
+            검토 결정
+          </h3>
+          <button
+            type="button"
+            onClick={() =>
+              setDialog({ requestId: request.id, action: 'approve', value: '', error: null })
+            }
+          >
+            열기
+          </button>
+          <button type="button" onClick={() => setRequest(otherTaskRequest)}>
+            다른 요청
+          </button>
+          <TaskRequestDecisionDialog
+            key={request.id}
+            request={request}
+            completedResult={completed}
+            getCompletedFocusTarget={() => heading.current}
+            dialog={dialog}
+            isSelfApproval={false}
+            isSubmitting={false}
+            onChange={() => {}}
+            onClose={() => setDialog(null)}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setCompleted(result);
+              setDialog(null);
+            }}
+          />
+        </>
+      );
+    }
+    render(<Driver />);
+    await user.click(screen.getByRole('button', { name: '열기' }));
+    const dialog = await screen.findByRole('dialog');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(within(dialog).getByRole('button', { name: '승인' }));
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: '검토 결정' }));
+      expect(dialog.isConnected).toBe(false);
+      if (next === 'new request')
+        fireEvent.click(screen.getByRole('button', { name: '다른 요청' }));
+      const opener = screen.getByRole('button', { name: '열기' });
+      opener.focus();
+      fireEvent.click(opener);
+      const newDialog = screen.getByRole('dialog');
+      const focused = within(newDialog).getByRole('textbox');
+      expect(document.activeElement).toBe(focused);
+      await act(async () => vi.runOnlyPendingTimers());
+      expect(document.activeElement).toBe(focused);
+      fireEvent.keyDown(newDialog, { key: 'Escape' });
+      await act(async () => vi.runOnlyPendingTimers());
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
