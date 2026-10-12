@@ -372,7 +372,8 @@ blocker or an owner request.
   - There is one warm-up pass, then the bases alternate for `--runs` passes, and per-target medians are compared.
   - Samples that saw a 429 are excluded (`rateLimitedSamples`).
   - Failures are recorded per target, and the JSON (with `fs`) is always written. The ego-browser output goes to
-    `<out>.log`; a missing result or a recorded error exits 1.
+    `<out>.log`; a missing result, a recorded error, or a target with no usable sample on a compared base
+    (`inconclusive`, e.g. every sample rate-limited) exits 1: reset the rate limits and rerun.
   - Noise floor, develop vs develop: ≤4 ms. A reload-heavy build can hit the `/me` rate limit and drop a sample.
 - `scripts/app-preview.py start <checkout> [--backend --env <throwaway env> [--seed]] [--name <label>]` / `stop <label>|--all` / `status`:
   - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not

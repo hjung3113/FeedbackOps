@@ -235,7 +235,6 @@ it.each([
     await settleQueries(mounted.client);
     const row = listRow(view === 'requests' ? 'REQ-1071' : 'TASK-1000');
     const focusInTargets: Array<Element | null> = [];
-    const focusOutActive: Array<Element | null> = [];
     let closeButton: HTMLElement | null = null;
     let rowFocusCloseConnected: boolean | null = null;
     const onFocusIn = (event: FocusEvent) => {
@@ -244,9 +243,7 @@ it.each([
         rowFocusCloseConnected = closeButton.isConnected;
       }
     };
-    const onFocusOut = () => focusOutActive.push(document.activeElement);
     document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
     try {
       const close = await screen.findByRole('button', { name: '패널 닫기' });
       closeButton = close;
@@ -280,7 +277,6 @@ it.each([
       expect(rowFocusCloseConnected).toBe(true);
     } finally {
       document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
     }
   },
 );
