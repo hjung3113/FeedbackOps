@@ -12,7 +12,7 @@ This document groups release scope and includes short shipped/open notes for par
 ```text
 - VOC Cluster Candidate 자동 생성 (shadow measurement shipped; unattended cluster writes remain open per ADR-0054)
 - 권한 요청 고도화 (needs_more_info supplement shipped in #511; requester withdrawal / pending edit, revision-safe narrowed approval, governed direct grant and four explained server risk indicators are accepted close-out work, not built (ADR-0066); active grant revoke and deny lifting shipped in #762 per ADR-0061; single-object authorization is post-MVP)
-- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; editable thresholds deferred)
+- Dashboard coverage / unlinked data 고도화 (coverage fixes + page shipped in #513; five editable bands/neutral empty state accepted by ADR-0067, implementation pending)
 - Analytics Area별 리포트
 ```
 
@@ -37,7 +37,7 @@ Scope:
 ```text
 - Open issues and filed follow-ups, including the ones deferred by the value gate (#739, #740, #816, #340, #1015, #1012)
 - Phase 1 remainder: Evidence route, unattended VOC Cluster writes (ADR-0054 choice c), requester cancel / pending edit, direct grant, risk indicators, editable coverage thresholds, Analytics Area report
-- ADR-0059 D1-D3: default owner and reviewer resolution, Survey templates, Dashboard recovery-item model
+- ADR-0059 D2: Survey templates; ADR-0067 supersedes D1/D3 deferrals with accepted responsibility defaults and bounded Dashboard recovery, implementation pending
 - A whole-system review (architecture, docs, UI/UX, performance, Impeccable audit and critique), then hardening from its findings
 - Production images (backend, frontend, migration job) per ADR-0013, and a login check against an OIDC provider
 - Release docs: keep the docs that explain the project (design and decision records, the doc index, a code index, the glossary) and remove plan, review, and stale docs; the development environment stays intact because development continues after release

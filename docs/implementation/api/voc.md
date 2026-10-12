@@ -371,3 +371,14 @@ inside one transaction. It returns `200`:
   the cluster commands' own audit events (`voc_cluster_created`,
   `voc_cluster_member_added`) as applicable, committed in the same
   transaction.
+
+## Close-out responsibility (ADR-0067; implementation pending)
+
+VOC create keeps ordinary Reporter owner fields forbidden. Proposed/new privileged owner
+Actor/team override requires server `voc.triage`; authorized explicit null opts out and
+omission requests defaults. Persist existing owner fields while remaining untriaged;
+invalid explicit assignment rejects `validation.failed`, absent/invalid automatic defaults
+fall through to existing scoped unassigned queue with Admin warning. Creation DTO/audit
+returns safe routing metadata, with no private skipped-candidate IDs for Reporter.
+VOC-origin Finding/request transitions use the destination resolver, retain source
+visibility and atomic links/audit/replay. Optional later triage assignment remains valid.

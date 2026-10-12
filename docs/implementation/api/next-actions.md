@@ -59,8 +59,8 @@ automatically reopen the VOC or change reporter_facing_status. If communication
 may be needed, the response should include `review_reporter_status` or
 `write_public_update` as follow-up `next_actions`.
 Survey evidence attachment to an existing VOC must not resolve poor Outcome
-Survey follow-up recovery by itself; resolution requires Finding, Task Request,
-linked execution work, or an explicit no-follow-up-needed decision.
+Survey follow-up recovery by itself; ADR-0055 resolution requires a qualifying current `generated_finding` link or current
+`no_follow_up`, not Task Request/execution links alone.
 No-follow-up-needed actions require Admin or same Managed System Developer
 workflow capability, a non-empty reason, managed_system_id, source object,
 previous recovery state, and affected recovery item ids. Reversal uses a
@@ -132,3 +132,15 @@ Resolved recovery item responses should include resolution metadata such as
 `resolved_by_action_id`, `resolved_at`, `resolution_source_type`,
 `resolution_source_id`, and `resolved_by_actor_id` when actor visibility allows.
 When actor identity is not visible, return a safe actor label or omit the actor.
+
+## Recovery consumers (ADR-0067; proposed/new)
+
+Dashboard queue/detail consumes source-owned action eligibility, never derives it from
+assignment, personal hiding, or link presence. Source visibility and gap visibility are
+independent; hidden source routes/actions stay hidden. Generic recovery presentation offers
+only own snooze/mute/restore, not resolution or owner writes. Readable resolved details
+retain safe resolution metadata and remove stale repair actions; failures keep the structured
+`action_no_longer_available` / `recovery_item_resolved` contract above.
+Outcome response actions and presentation/history retain the Survey-owned ADR-0055
+personal seam and required disclosure audits; a generic opaque response ID is not safe
+for non-holders. Source repairs refresh shared identity/detail/summary queries everywhere.

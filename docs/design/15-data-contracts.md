@@ -30,6 +30,8 @@ core.managed_systems
 - external_key: text, nullable
 - default_owner_actor_id: uuid, nullable
 - default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
+- default_reviewer_actor_id: uuid, nullable (proposed/new, ADR-0067)
+- default_reviewer_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with reviewer Actor
 - default_survey_operator_actor_id: uuid, nullable
 - archived_at: timestamp, nullable
 - archived_by_actor_id: uuid, nullable
@@ -200,6 +202,8 @@ findings
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
+- owner_actor_id: uuid, nullable (proposed/new, ADR-0067)
+- owner_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with owner Actor
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
@@ -346,7 +350,9 @@ task_requests
 - requested_outcome: text, required
 - requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- reviewer_actor_id: uuid, nullable
+- assigned_reviewer_actor_id: uuid, nullable (proposed/new, ADR-0067)
+- assigned_reviewer_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null
+- reviewer_actor_id: uuid, nullable; actual deciding Actor, never a routing default
 - decision_reason: text, nullable
 - decided_at: timestamp, nullable
 - created_at: timestamp, required
@@ -367,7 +373,7 @@ Rules:
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
-- Managed System default resolution for `reviewer_actor_id` is not implemented.
+- ADR-0067 accepts default resolution into the proposed assigned-reviewer pair, implementation pending. `reviewer_actor_id` remains actual decision attribution.
 ```
 
 ## Task
@@ -384,6 +390,7 @@ tasks
 - status: enum(backlog, todo, doing, review, done, released, reopened), required
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
+- assignee_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with assignee Actor
 - due_date: date, nullable
 - milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable
@@ -627,3 +634,39 @@ expiry, grantor/time and revoke metadata. No in-place renewal or fake revoke.
 Checks, scope resolution, active lists, revoke validation and seed existence checks
 exclude superseded rows. An old/expired grant ID remains non-revocable (409).
 See `docs/implementation/04-database-and-migrations.md` for rollout and rollback limits.
+
+## Coverage settings and recovery projections (ADR-0067; proposed/new)
+
+`core.workspace_settings.coverage_thresholds`: JSON object with exactly `voc-task`,
+`finding-execution`, `high-followup`, `released-update`, `analytics-area`; each pair has
+integer `good_min_percent`/`warn_min_percent`, 75/40 defaults, `0 <= warn < good <= 100`.
+Resolved missing row/keys default; PATCH accepts partial maps of complete pairs.
+Coverage DTO status adds `no_data` only for total zero; unreadable keys remain absent.
+Summary DTO adds server `computed_at`; it is not an atomic database snapshot time.
+
+Dashboard-owned proposed/new storage (logical contracts; physical table names are new
+implementation assets, not existing tables):
+
+- Stable identity: opaque `recovery_item_id`, workspace, category, source key; unique
+  workspace/category/source, current occurrence and active/resolved/withdrawn projection.
+- Occurrence/history: identity + occurrence unique, resolution time/action/audit references
+  and safe metadata, separate withdrawal/observation metadata; no raw body/private comment.
+  Reopen increments occurrence, preserves earlier resolutions, resets personal hiding.
+- Personal presentation: workspace/session Actor/identity/occurrence unique, snooze until
+  (one or seven days), current-occurrence mute and restore. It cannot store resolution.
+
+Index active scope/category, history `(workspace_id, resolved_at, id)`, source identity,
+and Actor presentation keys. History reads are limited to three calendar months by
+resolution time and recheck current permissions; pruning preserves stable identities,
+current occurrence and indefinite `core.audit_log`. Initialize active identities without
+fabricating prior history. Source predicates remain authoritative and transition recording
+commits with source/link repairs; reconciliation marks observation time when exact evidence
+is unavailable. Survey-owned response presentation/history uses a gated adapter, not a
+second decision store or response identity disclosure to non-personal holders.
+
+Responsibility pairs above and existing VOC owner fields validate workspace, active team,
+and destination Actor eligibility. No backfill from `created_by`/`reviewer_actor_id`, no
+automatic reassignment, team membership, or permission grant. Safe proposed/new creation
+metadata `default_resolved`, `source_rule`, `managed_system_id`, persisted responsibility,
+and skipped-rule categories lives in responses/creation audits, not a second assignment
+truth; private candidate IDs stay out of Reporter responses.

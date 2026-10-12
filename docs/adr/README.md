@@ -2,7 +2,7 @@
 
 ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1; close-out slices reserve 0064, 0065, and 0067–0069, with 0066 assigned to Permission), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1; close-out slices reserved 0064–0070 for their ADRs), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -114,7 +114,9 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 ## Scope decisions
 
-- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links rejected (2026-10-13). *Accepted*
+- [0067](0067-responsibility-defaults-and-recovery-items.md) Responsibility defaults and Dashboard recovery items — five Coverage bands/no-data, source-owned Actor/team routing with fallback, bounded recovery presentation/history and Survey exception. *Accepted 2026-10-13, implementation pending*
+
+- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links rejected (2026-10-13). *Accepted, D1/D3 deferrals superseded by 0067*
 
 ## Status legend
 

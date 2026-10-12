@@ -278,3 +278,14 @@ POST /survey-responses/:id/create-voc
 ```
 
 If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response. Issue #185 pins the unregistered route to Fastify's `404` behavior with an integration test.
+
+## Close-out responsibility (ADR-0067; implementation pending)
+
+Survey operator resolution/validation is unchanged. Survey-response-derived Finding
+creation gains permitted proposed/new owner Actor/team input and safe default-resolution
+metadata through the Finding command, using the destination system and its `finding.manage`
+gate only after the Survey personal source seam. No target-owner disclosure bypasses source
+visibility. Outcome Dashboard integration preserves ADR-0055's aggregate count/safe Survey
+navigation and personal-response audits. Proposed/new response presentation/history adapter
+is Survey-owned, personal-gated with no Admin bypass, and does not duplicate decisions or
+expose response-derived identities/counts to non-holders.

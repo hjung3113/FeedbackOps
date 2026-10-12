@@ -123,18 +123,35 @@ List-filter meaning of managed_system_id=all: docs/implementation/05-permission-
 
 ## Default Owner / Reviewer Resolution
 
-Deferred except the Survey operator default (ADR-0059 D1). The rules below are the target design.
+Accepted close-out contract, implementation pending: ADR-0067 supersedes ADR-0059 D1
+and the earlier rule rejecting creation when automatic defaults cannot resolve.
 
-When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed System, the application service resolves default owner or reviewer from:
+VOC, Finding, Task Request, and converted Task destination application services resolve:
 
-```text
-1. explicit request field when permitted
-2. Managed System default owner / reviewer
-3. Analytics Area owner team
-4. workspace fallback queue
-```
+1. Permitted explicit Actor/team value; authorized explicit null opts out, omission requests defaults.
+2. Managed System owner; for Task Request, reviewer pair first, then eligible general owner.
+3. Active same-system Analytics Area owner team.
+4. Existing scoped authorized operational queue with null responsibility and Admin-visible warning.
 
-The resolved owner or reviewer is written to the actual owner/reviewer field and must be visible in list filters and audit-relevant creation responses. Default owner does not mean the record is triaged, and default reviewer does not mean the record is reviewed. Analytics Area owner team is a routing/defaulting hint only and does not grant Managed System scope. If a resolved owner or reviewer lacks required Managed System scope, the service returns validation.failed or directs the actor to the permission request flow instead of silently granting access. Default resolution should record creation metadata such as default_resolved, source rule, and managed_system_id. Failure to resolve a required reviewer returns validation.failed instead of creating unowned review work.
+Invalid explicit assignments return `validation.failed`. Absent/invalid automatic candidates
+fall through; they never block intake or grant permissions. Actor eligibility reuses the
+owning gate (`voc.triage`, `finding.manage`, or Admin/scoped-Developer `finding.manage`
+for Task Request/Task), including its Admin bypass/explicit-deny semantics. Active
+same-workspace teams can be persisted without selecting a member or granting access.
+Ordinary VOC reporters cannot supply owner fields; privileged overrides require `voc.triage`.
+
+Persist actual fields, not a suggestion: VOC owner pair, proposed/new Finding owner pair,
+proposed/new Task Request assigned-reviewer pair, and Task assignee Actor/proposed team pair.
+`reviewer_actor_id` remains the actual decision Actor. Untriaged/pending-review/Backlog
+states and optional VOC owner (ADR-0045) remain valid. Assignment grants neither exclusive
+review nor self-approval. Creation responses/audits include safe `default_resolved`,
+`source_rule`, `managed_system_id`, persisted responsibility and skipped-rule categories;
+never disclose private candidate IDs to a Reporter. Successful automatic assignment sets
+`default_resolved=true`; explicit/null/fallback sets false. Admin warnings and source filters
+must leave fallback work discoverable. Defaults do not retroactively reassign records.
+
+Survey keeps its separate explicit operator → dedicated Managed System Survey default →
+creator resolver and its existing validation/audit; it does not use team/fallback routing.
 
 ## Permission Request Data Model
 

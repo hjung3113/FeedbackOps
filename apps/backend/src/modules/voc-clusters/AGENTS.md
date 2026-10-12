@@ -22,3 +22,9 @@ Recommendations and pre-submit peers live under `../voc/`. The autogen shadow jo
 ## Verification
 
 - Test member visibility for a reporter-only and an out-of-scope actor, cross-Managed-System link rejection, the missing-grant error shape on link/unlink, idempotent replay of create/link/unlink, and the audit and `entity_links` side effects when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 responsibility writes belong to destination Finding/Task Request commands;
+  wire Cluster sources through those seams, preserving same-system links and replay/audit.
+  Cluster routing never grants permissions or writes target assignment tables.

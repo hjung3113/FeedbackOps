@@ -460,3 +460,24 @@ Slice 6. It is created only through source transition routes:
 | Audit event | `task_milestone_assigned` with strict detail `{ from_milestone_id: uuid \| null, to_milestone_id: uuid \| null }`, written in the same transaction as the UPDATE. |
 | Idempotency hash | Includes `taskId`, `ifMatch`, route identity `task.milestone_assign`, and request body. |
 | Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
+
+## Close-out responsibility (ADR-0067; implementation pending)
+
+Task Request creation from Finding/VOC/Cluster gains proposed/new nullable
+`assigned_reviewer_actor_id` / `assigned_reviewer_team_id`, never prefilling actual
+`reviewer_actor_id`. Reviewer MS default → eligible general owner → same-system AA team →
+shared authorized queue, with explicit/null precedence and automatic-failure fallback.
+Request stays pending; other authorized reviewers/self-approval rules remain unchanged.
+Add proposed/new `reviewer` (Actor UUID or `me`) and `reviewer_team_id` filters for assigned
+routing without narrowing the unfiltered operational queue; Home requests `reviewer=me`.
+Source Analytics Area is read through its owner seam for routing; no new Task Request
+Analytics Area column is required.
+
+Conversion adds proposed/new nullable `assignee_team_id`; XOR with existing Actor field,
+authorized explicit null skips defaults, omission requests owner defaults. Invalid explicit
+responsibility now rejects `validation.failed` (superseding the older assignee-only 404
+validation above); automatic invalid targets skip. Keep Backlog, provenance/links, audits
+and replay notification deduplication; team targets send no arbitrary-member notification.
+Typed DTOs/source-owned edits and Actor/team filters must ship with fields; `assignee=me`
+remains personal Actor assignment, never implicit team membership. No standalone create
+endpoint is introduced by this ADR.

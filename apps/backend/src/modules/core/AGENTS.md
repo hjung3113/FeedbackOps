@@ -27,3 +27,11 @@ Core supplies the approved workspace/request-scoped latest Admin-question audit
 projection for Permission requester detail. Keep storage reads inside Core and
 return only the allowed question metadata. Permission supplies authorization and
 owns requester lifecycle/risk; Core must not import Permission or decide access.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 accepts proposed/new Managed System reviewer Actor/team inputs alongside owner.
+  Core-owned registry/Analytics Area seams provide transaction-aware inputs, not destination
+  eligibility or assignment writes. No runtime import of Dashboard/source commands.
+- Teams can be responsibility targets without new CRUD/membership or permission grants;
+  defaults do not retroactively reassign records. Survey operator routing is independent.

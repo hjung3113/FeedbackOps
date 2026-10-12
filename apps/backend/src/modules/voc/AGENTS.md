@@ -29,3 +29,12 @@ Provider, ingestion, threshold, and the recommendation HTTP surface are ADR-0034
 ## Verification
 
 - Test reporter-facing status transitions, public update behavior, VOC-to-Finding creation, cluster-to-Finding creation, and forbidden Survey Response-to-VOC paths when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 accepts real creation-time owner routing (implementation pending). Ordinary
+  reporters cannot supply owner fields; privileged overrides require server `voc.triage`.
+- Explicit invalid values reject; absent/invalid automatic defaults fall through to visible
+  scoped unassigned queue with Admin warning. Authorized null opts out; omission requests defaults.
+- Persist Actor/team ownership while staying untriaged; safe response/audit metadata excludes
+  private candidate IDs for Reporter. Source/link repairs use the injected Dashboard recorder.

@@ -4,6 +4,9 @@ Date: 2026-10-05
 
 ## Status
 
+D1/D3 deferrals superseded by [ADR-0067](0067-responsibility-defaults-and-recovery-items.md)
+on 2026-10-13; the text below records the earlier shipped scope. D2/D4 are unchanged.
+
 Accepted 2026-10-05 by the owner (recommendation approved in session).
 
 Amended 2026-10-13: the MVP close-out (`docs/design/13-mvp-roadmap.md`) schedules D1-D3 as their own issues; D4 is closed by rejecting ADR-0035/0036.
