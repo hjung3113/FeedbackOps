@@ -40,9 +40,10 @@ Scope:
 - ADR-0059 D1-D3: default owner and reviewer resolution, Survey templates, Dashboard recovery-item model
 - A whole-system review (architecture, docs, UI/UX, performance, Impeccable audit and critique), then hardening from its findings
 - Production images (backend, frontend, migration job) per ADR-0013, and a login check against an OIDC provider
+- Release docs: keep the docs that explain the project (design and decision records, the doc index, a code index, the glossary) and remove plan, review, and stale docs; the development environment stays intact because development continues after release
 ```
 
-Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected).
+Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
 
 ### Release Value Gate
 
