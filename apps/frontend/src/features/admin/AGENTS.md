@@ -54,3 +54,11 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Clear decision drafts on request ID/revision changes; stale errors require refetch and fresh review, never auto-submit. Preserve tab/selected and Back restoration; cancelled history has no decision controls.
 - Direct workspace.admin grants require explicit governance mode/confirmation; self grants follow permission_self_approval. Server scope candidates, required reason, open-ask review and explicit deny-lift guidance are authoritative. Capability grants never imply Role Level promotion.
 - No client scores, email or restricted source text. Zero risk signals are shown only after successful calculation.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 adds proposed/new five Coverage pair settings (75/40 defaults) and distinct
+  Managed System reviewer Actor/team defaults. Respect server gates, audit and no-op semantics.
+- Invalidate all Dashboard summary scopes after save; failed refetch must not show stale bands
+  as current. Surface safe automatic-default configuration warnings. Known teams may render;
+  no team CRUD/candidate listing or automatic reassignment is introduced.

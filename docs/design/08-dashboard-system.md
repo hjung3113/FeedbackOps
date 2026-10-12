@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model in this section (shared id, detail panel, snooze/mute, history, `computed_at`) is deferred target design (ADR-0059 D3); `GET /dashboard/summary` is what ships.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; implementation is pending. `GET /dashboard/summary` is currently shipped. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
@@ -145,9 +145,9 @@ Finding or Task is not a gap unless one of the expected-link conditions applies.
 ```
 
 Attaching Survey evidence to an existing VOC is context enrichment, not follow-up
-completion. A poor Outcome Survey recovery item is resolved only by an allowed
-follow-up decision such as Finding, Task Request, linked execution work, or an
-explicit no-follow-up-needed decision.
+completion. ADR-0055 clears a poor Outcome Survey response gap only through a qualifying current
+`generated_finding` link or a current `no_follow_up` decision. Task Request/execution
+links and evidence attachment alone do not clear it.
 
 No-follow-up-needed is an operational decision, not a passive absence of work.
 It requires an authorized Admin or same Managed System Developer with the
@@ -314,3 +314,34 @@ Acceptance Criteria:
 - Custom dashboard builder
 - Export-heavy analytics
 ```
+
+## Close-out bounded recovery contract (ADR-0067; implementation pending)
+
+The six emitted queue IDs/grains are `unassigned-voc` (VOC), `high-severity-unlinked`
+(VOC), `actionable-finding-no-execution` (Finding), `released-task-unresolved-voc`
+(Task, not one row per VOC), `permission-requests-pending` (workspace Admin Permission
+Request), and `bad-outcome-no-followup` (aggregate count with Survey-owned adapter).
+The broader example queue wishlist above is not added by this slice.
+
+Stable opaque identity is workspace/category/source; reopening increments occurrence.
+One-day/seven-day snooze and current-occurrence mute affect only the session Actor;
+provide hidden-items/restore, reset hiding on reopen, never reduce operational counts.
+Detail is compact and backend-driven, independently gates affected summaries/source jumps,
+and keeps readable resolved selections open. Responsibility hints derive from source
+assignment, including safe team/unassigned/multiple-responsible labels, never email or
+independent ownership. Integration owns the shared UI/public seam used by Home.
+
+History is three calendar months by resolution time, safe under current permissions.
+Source/link commands atomically record real transitions through a Dashboard recorder;
+pg-boss discovers/reconciles drift with truthful observation time. No generic resolve or
+GET projection writes, fabricated historical repairs, or audit deletion. Survey response
+presentation/history stays Survey-owned behind personal access; non-holders only receive
+aggregate count and Survey-level safe navigation/booleans, never response-derived identities.
+
+Coverage has five Admin-editable 75/40 default pairs; empty denominator is neutral
+`집계 대상 없음` (`no_data`, proposed/new), whereas unreadable metrics stay omitted.
+Changing colors does not change ratios, queues or anonymity. Show last successful server
+`computed_at` (proposed/new) on Home/Coverage/Integration, including failed refresh states.
+Warm summary/list/detail p95 <=500ms and summary p95 <=develop ×1.2+50ms on the same
+5k-VOC/5k-Task throwaway dataset; UI criteria and mutation-fanout measurements are locked
+in ADR-0067. No performance check has run as part of this docs decision.

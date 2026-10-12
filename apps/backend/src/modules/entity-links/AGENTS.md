@@ -21,3 +21,10 @@ Each linkable module must provide `entity_type`, `assertExists`, `getPermissionS
 ## Verification
 
 - Test source and target existence, workspace match, permissions, visibility, relation type validation, and Dashboard missing-link support when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 adds an injected transaction-aware Dashboard transition recorder for successful
+  link mutations affecting recovery predicates. Keep links canonical, record projection
+  transitions in the same transaction, deduplicate/no-op/replay, and avoid command-barrel cycles.
+  Dashboard must not write link/domain resolution decisions.

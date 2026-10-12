@@ -135,7 +135,7 @@ VOC ownership state:
 - Assigned to Team
 ```
 
-New VOC starts Untriaged. It is Unassigned only when no explicit owner or default owner rule resolves ownership. (Default owner resolution is deferred, ADR-0059 D1; VOC create leaves the owner empty today.) When a default owner rule applies, the actual owner field is prefilled and the VOC is assigned but still Untriaged. Triage, owner assignment, reporter-facing status, Finding creation, and Task Request creation are separate decisions.
+New VOC starts Untriaged. It is Unassigned only when no explicit owner or default owner rule resolves ownership. (ADR-0067 accepts real Actor/team defaults and fallback for close-out; implementation pending, VOC create leaves the owner empty today.) When a default owner rule applies, the actual owner field is prefilled and the VOC is assigned but still Untriaged. Triage, owner assignment, reporter-facing status, Finding creation, and Task Request creation are separate decisions.
 
 Every VOC must have exactly one Primary Managed System. Analytics Area is optional and can only be selected from the chosen Primary Managed System.
 

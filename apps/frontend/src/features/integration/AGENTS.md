@@ -51,3 +51,12 @@ Code ownership and URL mount are not the same thing here:
 ## Verification
 
 - Test missing-link queue behavior, coverage labels, link visibility states, and deep-link action restore when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 accepts proposed/new shared compact recovery UI/public seam for Home. Integration
+  owns recovery composition, source routes own full workflows. Existing three shells remain.
+- Scope/category/selection/hidden/history/return intent restores via URL; readable resolved
+  selection stays open. Render backend actions/visibility/hints without response identity leaks.
+- Offer personal snooze (1/7 days), current-occurrence mute, hidden view/restore; refresh shared
+  queries after source repairs. Coverage uses server bands/no-data/computation time, not local rules.

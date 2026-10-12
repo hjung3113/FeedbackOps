@@ -113,10 +113,14 @@ Developer grants must include managed_system_id for scoped VOC triage,
 Findings, Task Requests, Tasks, Surveys, Dashboard queues, Public Updates, and
 Internal Comments. Analytics Area filters may narrow a list query but must not be
 used as the source of authorization.
-Assignment to an owner or reviewer that lacks the
-required Managed System permission must fail validation or enter the permission
-request flow. Resolution order: docs/design/09-permission-access.md,
-Default Owner / Reviewer Resolution.
+ADR-0067 supersedes the earlier unconditional assignment-failure rule. An invalid
+explicit responsibility target returns `validation.failed`; an absent/invalid automatic
+candidate falls through to the next rule and ultimately the existing scoped queue with
+null fields and an Admin warning. Concrete Actors must pass the destination gate with
+its current Admin-bypass/explicit-deny semantics inside the transaction. Active same-workspace
+team responsibility grants no permission or self-approval and chooses no member.
+Resolution order: docs/design/09-permission-access.md, Default Owner / Reviewer Resolution.
+Survey operator validation remains separate and unchanged.
 
 For list filters, managed_system_id=all means the actor's effective Managed
 System scope union. Workspace Admin can receive true workspace-wide results.

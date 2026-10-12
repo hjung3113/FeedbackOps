@@ -15,7 +15,7 @@ Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains 
 | [`api/navigation.md`](api/navigation.md) | Navigation Count Contract; Route Resolution Contract |
 | [`api/auth.md`](api/auth.md) | Authentication |
 | [`api/attachments.md`](api/attachments.md) | Attachments |
-| [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract |
+| [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract; Coverage settings; Recovery queue/detail/presentation/history (proposed/new) |
 | [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC List And Triage Fields; VOC Similarity Projection; Task release side effect (Issue #165); POST /vocs/:id/create-finding; VOC Recommendations |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes |
@@ -41,7 +41,7 @@ Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains 
 - APIs must not expose Survey Response -> Create VOC.
 - APIs must not expose generated_voc relation_type.
 - List endpoints for Tasks, Task Requests, Findings, VOC triage, Surveys, and Dashboard queues must accept managed_system_id filters where scoped data can appear.
-- Target state — not implemented, deferred by ADR-0059 D3 (applies to the next eight bullets, through the `computed_at` and history rule). Today only `GET /dashboard/summary` ships; no recovery queue or recovery item detail endpoint, `recovery_item_id`, or `computed_at` field exists.
+- Accepted close-out target, implementation pending (ADR-0067 supersedes ADR-0059 D3; applies to the next eight bullets). Today only `GET /dashboard/summary` ships. Recovery additions follow `api/dashboard.md`, including the ADR-0055 Survey adapter exception; no generic response identity is exposed to non-personal holders.
 - Dashboard, Home, and Integration recovery queue endpoints that expose the same workflow gap must return a stable `recovery_item_id` or equivalent source/action identity.
 - Recovery queue inclusion and resolution are backend/domain-service decisions. Frontend clients must not infer that a recovery item is resolved from linked-object presence alone.
 - Dashboard recovery queue endpoints may expose user-level snooze or mute state, but that state must not change the recovery item's domain resolution state.
@@ -107,22 +107,32 @@ the idempotent run, and mismatch returns authorized current_revision only. See
 
 ## Default Owner / Reviewer Resolution
 
-Target state — not implemented, deferred by ADR-0059 D1. Today only Managed System default-owner storage ships (`default_owner_actor_id` / `default_owner_team_id` are stored and editable); no VOC, Finding, Task Request, Task, or Survey create path reads them, and no `default_resolved` field exists.
+Accepted, implementation pending: ADR-0067 supersedes ADR-0059 D1 and the former
+required-reviewer/automatic-default creation rejection. Use the destination service to
+persist actual responsibility for VOC, all three Finding sources, all three Task Request
+sources, and approved-request Task conversion.
 
-When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed System, application services resolve default owner or reviewer from:
+Order: permitted explicit Actor/team → Managed System target → active same-system
+Analytics Area owner team → existing scoped fallback queue. Task Request tries the
+proposed/new Managed System reviewer pair before eligible general owner. Authorized explicit
+null skips defaults; omission requests them. Reject invalid explicit values with
+`validation.failed`; skip invalid automatic candidates and create unassigned with an
+Admin configuration warning. Preserve owning capability, Admin-bypass and explicit-deny
+semantics inside the transaction; responsibility grants no scope or self-approval.
+Ordinary VOC reporters cannot override owner; privileged overrides require `voc.triage`.
 
-```text
-1. explicit request field when permitted
-2. Managed System default owner / reviewer
-3. Analytics Area owner team or routing hint within the same Managed System
-4. workspace fallback queue
-```
+Field names and XOR/null rules are in `docs/design/15-data-contracts.md`. Task Request
+assigned reviewer is separate from actual `reviewer_actor_id`. No provenance backfill or
+retroactive reassignment. Return/audit safe proposed/new `default_resolved`, `source_rule`,
+`managed_system_id`, persisted responsibility and skipped-rule categories. Automatic valid
+Actor/team resolves true; explicit/null/fallback false. Reporter responses omit private
+candidate IDs. Domain assignments stay current truth; lifecycle, links, audit and replay
+remain atomic. Survey's explicit operator → dedicated Survey default → creator rule is
+independent and unchanged. Detailed access rules: `docs/design/09-permission-access.md`.
 
-Resolved defaults are written to actual owner/reviewer fields and must be returned in creation responses when they affect routing, triage, review, or audit behavior. Default owner does not mark VOC triage complete, and default reviewer does not mark Task Request review complete. Analytics Area owner team is a routing/defaulting hint only and must not grant authorization. If a resolved owner or reviewer lacks required Managed System scope, the API returns validation.failed or a permission-requestable response instead of silently granting access. Creation responses and audit metadata should indicate default_resolved, the source rule, and managed_system_id. Failure to resolve a required reviewer returns validation.failed rather than creating unowned review work.
-
-If a request includes analytics_area_id, the API must validate that the
-Analytics Area belongs to the same managed_system_id. Analytics Area ownership must not
-broaden or narrow the caller's Managed System Permission Scope.
+If a request includes `analytics_area_id`, validate that it belongs to the same
+Managed System. Analytics Area ownership cannot broaden or narrow the caller's
+Managed System Permission Scope.
 
 ## Scoped Create Requirements
 

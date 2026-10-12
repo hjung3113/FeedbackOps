@@ -229,3 +229,19 @@ or mutate Role Level. Source-owner summary authorization remains mandatory.
 Home owns requester UI composition; Admin owns review/direct-grant composition.
 Shared typed contracts carry server scope options/revisions/risk; neither frontend
 nor packages/ui owns permission truth or computes risk scores.
+
+## Responsibility and recovery seams (ADR-0067; implementation pending)
+
+Core-owned Managed Systems/Analytics Areas export locked transaction-aware routing inputs;
+destination VOC/Finding/Task Request/Task application services decide eligibility and write
+only owned assignments. Extend `lockManagedSystem`/approved readers; shared contains DTOs,
+not runtime resolution. Survey's independent operator rule stays intact.
+
+Dashboard owns proposed/new identity/occurrence/history/personal presentation projections.
+Inject its transaction-aware recorder into relevant source/link commands; approved reads
+reevaluate authoritative predicates and same-transaction transitions are deduplicated.
+Avoid runtime cycles through command barrels; Core never imports domain/Dashboard commands.
+Generic GETs write no projection/source state. Existing pg-boss handles discovery/reconciliation.
+Survey owns response decisions and personal-gated presentation/history adapter; Dashboard
+may reference it without bypassing privacy or duplicating decision state. Integration owns
+proposed/new shared recovery UI/public seam consumed by Home; full workflows remain on sources.

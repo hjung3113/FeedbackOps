@@ -21,3 +21,15 @@ Dashboard is not a passive reporting helper.
 ## Verification
 
 - Test missing-link queues, permission-aware rows, refresh after repair, and next-action routing when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 accepts proposed/new stable recovery identity/occurrences, bounded detail,
+  personal presentation, three-calendar-month history, computation time and derived hints;
+  implementation is pending. Reuse summary predicates/grains; GETs write no projections.
+- Dashboard's injected transaction-aware recorder captures committed source/link transitions;
+  pg-boss discovers/reconciles drift without invented action time. No source resolution writes.
+- Personal 1-day/7-day snooze/current-occurrence mute never changes counts; reopen resets hiding.
+- Outcome response presentation/history remains Survey-owned/personal-gated under ADR-0055.
+- Coverage reads resolved five metric pairs once; proposed `no_data` differs from absent keys.
+  Measure bounded API/UI and recorder fanout against ADR-0067's budget.

@@ -45,3 +45,9 @@ It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Tas
 ## Verification
 
 - Test cluster list/detail route restore, member add/remove invalidation, confirm-cluster status transition, and cluster-to-Finding/Task creation flows when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067's proposed/new Finding owner/Task Request assigned-reviewer creation inputs and
+  results follow destination commands; Cluster never invents target ownership/permissions.
+  Preserve same-system/source visibility, pending/error states and atomic provenance.

@@ -175,3 +175,16 @@ If it does, implement:
 - audit log event when needed
 - dashboard recovery signal when the next step is missing
 ```
+
+## Close-out routing and recovery (ADR-0067; implementation pending)
+
+VOC, every Finding source, all three Task Request sources, and approved-request Task
+conversion resolve source-owned responsibility atomically with links/audit/idempotency.
+Automatic routing failure preserves intake in the existing scoped unassigned queue;
+assignment does not complete triage/review or grant access.
+
+Source/link repairs notify the injected Dashboard transition recorder in the same
+transaction; shared identity/history remains a projection of source predicates. Personal
+hiding cannot repair a gap. Outcome response decisions/presentation/history remain
+Survey-owned under ADR-0055's personal seam. Home uses only currently actionable items,
+Integration owns the compact shared UI, and source actions retain their owning routes.

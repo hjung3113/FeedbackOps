@@ -183,3 +183,15 @@ idempotency behavior: Idempotency-Key required. Replay of the same key and
   is 409 conflict.idempotency_key_reuse. Overload on the configured mutation
   bucket is 429 rate_limited.actor.
 ```
+
+## Close-out responsibility (ADR-0067; implementation pending)
+
+All VOC/Cluster/Survey-response create paths write proposed/new nullable
+`owner_actor_id` / `owner_team_id` through the Finding destination command. Resolve target
+Managed System owner → active same-system Analytics Area team → scoped fallback; permitted
+explicit value/null takes precedence, omission requests defaults. Validate target eligibility
+with `finding.manage`; invalid explicit assignments reject `validation.failed`, invalid
+automatic candidates skip with safe audit metadata/Admin warning. Preserve source gate,
+entity links, creation state, rollback/idempotent replay, and no provenance backfill.
+Proposed/new owner fields must appear in typed list/detail/create DTOs and source-owned
+assignment display/edit/filter; assignment changes validate/audit in the owning mutation.

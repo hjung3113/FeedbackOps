@@ -402,3 +402,30 @@ workspace Actor display names, never email; retain input/focus on errors.
 Canonical copy owners are `apps/frontend/src/lib/copy/home.ts` and
 `apps/frontend/src/lib/copy/admin-permissions.ts`; update them in implementation.
 Verify desktop 1440, keyboard focus and existing visual fixtures before delivery.
+
+## Close-out recovery and responsibility URL contract (ADR-0067; proposed/new)
+
+Extend existing `/integration` and `/home` search validation with `category`, `selected`
+(stable recovery ID), `presentation` (`visible` default/`hidden`), `history` (boolean,
+false default), and validated same-origin `returnTo`, preserving existing `managedSystem`
+and Home `tab`. Recovery selection opens the Integration-owned compact shared detail via
+a proposed/new public seam, even on Home; no new shell or duplicate source workflow.
+Coverage may jump to `/integration` carrying category/scope/selected/return intent; only
+an authorized Admin gets a Settings link for bands.
+
+Omit optional default search values; category is one of the six emitted IDs. Invalid/
+unrecognized values follow the existing cleanup rule. Selection/Escape/back/refresh
+preserves list scope/category/view and restores readable detail; close clears selection
+and returns focus. Resolved readable selection stays open with metadata; unknown/unreadable
+identity shows the standard not-found state. Source jumps preserve queue context in history.
+Personal hiding offers 1-day/7-day snooze, current-occurrence mute, hidden-items and restore
+with Korean labels explaining `내 화면`; reopen returns the occurrence automatically.
+History is three calendar months, currently permission-filtered.
+
+Survey response selection/actions/history remain on `/surveys/:surveyId/follow-up` under
+ADR-0055's personal seam, never generic response-derived URL identities for non-holders.
+Home item queues require current action capability; operational summary counts stay scope-wide.
+Proposed/new Task Request URL `reviewer` (Actor UUID/`me`) and `reviewerTeam` (team UUID)
+map to backend assigned-reviewer filters in `view=requests`; omitted means full authorized
+review queue. Home's personal request panel sends `reviewer=me`; team membership is not
+inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.

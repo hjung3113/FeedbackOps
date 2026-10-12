@@ -42,3 +42,9 @@ It does not own source object lifecycles or backend authorization truth.
 ## Verification
 
 - Test Finding action CTAs, evidence summaries, and deep-link action restore when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 adds proposed/new source-owned owner display/edit/filter across all creation
+  sources. Show Actor/team/null assignment from the server, never infer it from provenance
+  or grant permissions. Preserve personal Survey source visibility before target disclosure.

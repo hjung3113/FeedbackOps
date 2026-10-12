@@ -424,3 +424,22 @@ together with stale-client refresh. After cancelled/superseded rows exist, resto
 the old CHECK/unique predicate blindly is unsafe. Rollback requires explicit data
 handling preserving history or a forward fix; document irreversible state in the
 implementation migration plan and test audit-failure rollback of reissue.
+
+## Close-out storage (ADR-0067; proposed/new, not applied)
+
+The new responsibility fields/settings and logical Dashboard projection shapes are in
+`docs/design/15-data-contracts.md`. Add nullable Finding owner, Task Request assigned-reviewer,
+Task team-assignee, Managed System reviewer pairs and Coverage thresholds with registered
+SQL/generated metadata/grants in implementation chunks. Preserve existing null assignments,
+completed reviewer attribution and Survey operator behavior; no provenance/assignment backfill.
+XOR-or-both-null constraints and service workspace/active-team/Actor eligibility apply.
+
+Dashboard-owned stable identity/occurrence/history and Actor/occurrence presentation storage
+is proposed/new, not part of the current namespace list. Index workspace/scope/category,
+history `(workspace_id, resolved_at, id)`, source/Actor identity. Exact transitions commit
+with source/link mutations via an injected recorder; pg-boss discovery/reconciliation is
+idempotent and marks observation-only evidence honestly. Seed current identities without
+inventing past repairs. Read history for three calendar months; pruning never deletes
+`core.audit_log` or stable/current-occurrence identity needed to prevent preference drift.
+Survey response presentation/history remains a personal-gated Survey-owned adapter and
+retains ADR-0055 state/definer/grant protections, not duplicated Dashboard resolution state.

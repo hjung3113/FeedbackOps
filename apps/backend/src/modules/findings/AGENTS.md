@@ -19,3 +19,11 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
 ## Verification
 
 - Test evidence preservation, link creation, permission-limited summaries, and execution handoff errors when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067's proposed/new owner Actor/team pair is Finding-owned; wire VOC, Cluster and
+  Survey-response creation without deriving assignment from `created_by`.
+- Target-system `finding.manage` eligibility follows source visibility (Survey personal gate
+  first); explicit/null/default/fallback semantics keep audit/links/replay atomic.
+- Source mutations use the injected Dashboard recorder; it writes only Dashboard projections.

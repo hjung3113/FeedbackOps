@@ -52,3 +52,10 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 ## Verification
 
 - Test builder route state, result summary CTAs, forbidden create-VOC affordances, hidden response summaries, and linked action pending/error states when touched.
+
+## Close-out contract (ADR-0067; implementation pending)
+
+- ADR-0067 preserves Survey-owned follow-up and personal disclosure boundaries (ADR-0055).
+  Proposed/new per-response hiding/history is Survey-owned/personal-gated; non-holders get
+  safe Survey-level navigation/booleans, no opaque response-derived identity enumeration.
+  Derived Finding ownership comes from the destination command after source authorization.

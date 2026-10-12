@@ -135,8 +135,20 @@ The single **Managed System** that owns the scope, permissions, defaults, and da
 _Avoid_: Multi-system ownership
 
 **Default Owner**:
-The **Actor** or team prefilled as responsible for a **Managed System** when a new **VOC** is created. Stored on the Managed System; the prefill itself is deferred (ADR-0059 D1).
+The **Actor** or team used as the creation-time responsibility default for **VOC**, **Finding**, or **Task** in a **Managed System**. Assignment does not complete triage or start execution. ADR-0067 accepts this close-out behavior; implementation is pending.
 _Avoid_: Final assignee, triage decision
+
+**Default Reviewer**:
+The **Actor** or team used as the creation-time review routing default for a **Task Request**; it is distinct from the **Actor** who actually decides the request. Assignment does not grant review authority or self-approval.
+_Avoid_: Decision Actor, exclusive approver
+
+**Fallback Queue**:
+The existing authorized operational queue for unassigned work within its **Managed System Permission Scope**, used when automatic responsibility cannot resolve. It preserves actionable intake without granting access.
+_Avoid_: Assigned team, new permission scope
+
+**Recovery Item**:
+A shared identity for one category of workflow gap on a source record. Source-owned repairs determine resolution; personal hiding changes only the current **Actor**'s presentation of the current occurrence. A reopened gap is a new occurrence of the same item.
+_Avoid_: Independent work object, dismiss decision, duplicate assignment
 
 **VOC Source Context**:
 The situation in which a VOC was submitted, such as direct use, proxy registration from a user report, or operational discovery.
@@ -239,7 +251,7 @@ An action-queue surface that groups outstanding **VOC**, **Task Request**, **Tas
 _Avoid_: Chart page, BI report, analytics view, KPI tile board
 
 **Coverage**:
-The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage`, so partial integration is not mistaken for total system truth.
+The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage` (ADR-0067 adds configurable per-metric bands and neutral `집계 대상 없음` for an empty denominator; unavailable data remains distinct), so partial integration is not mistaken for total system truth.
 _Avoid_: Test coverage, BI metric
 
 **VOC Cluster**:
