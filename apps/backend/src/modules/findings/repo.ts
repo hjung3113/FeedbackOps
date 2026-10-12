@@ -14,7 +14,7 @@ export interface InsertFindingInput {
   title: string;
   summary: string;
   sourceType: 'voc' | 'voc_cluster' | 'survey_response';
-  sourceId: string;
+  sourceId: string | null;
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high' | null;
   analyticsAreaId: string | null;
@@ -59,7 +59,7 @@ export interface EvidenceHighlightRow {
   source_type: 'voc' | 'survey_response' | 'note';
   source_id: string | null;
   approved_excerpt_id: string | null;
-  quote_or_summary: string;
+  quote_or_summary: string | null;
   analytics_area_id: string | null;
   sentiment: 'negative' | 'neutral' | 'positive' | null;
   importance: 'low' | 'medium' | 'high' | null;
@@ -109,7 +109,7 @@ export function mapEvidenceHighlightRow(row: Record<string, unknown>): EvidenceH
     source_type: row.source_type as EvidenceHighlightRow['source_type'],
     source_id: (row.source_id as string | null) ?? null,
     approved_excerpt_id: (row.approved_excerpt_id as string | null) ?? null,
-    quote_or_summary: row.quote_or_summary as string,
+    quote_or_summary: (row.quote_or_summary as string | null) ?? null,
     analytics_area_id: (row.analytics_area_id as string | null) ?? null,
     sentiment: (row.sentiment as EvidenceHighlightRow['sentiment']) ?? null,
     importance: (row.importance as EvidenceHighlightRow['importance']) ?? null,
@@ -145,7 +145,7 @@ export async function insertEvidenceHighlight(
     sourceType: 'voc' | 'survey_response' | 'note';
     sourceId: string | null;
     approvedExcerptId: string | null;
-    quoteOrSummary: string;
+    quoteOrSummary: string | null;
     analyticsAreaId: string | null;
     sentiment: 'negative' | 'neutral' | 'positive' | null;
     importance: 'low' | 'medium' | 'high' | null;

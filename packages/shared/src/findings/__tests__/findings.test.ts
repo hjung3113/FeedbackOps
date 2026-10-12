@@ -209,6 +209,19 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
     ).toThrow();
   });
 
+  it('accepts an unavailable Survey highlight with omitted text and rejects public NULL bindings (#739)', () => {
+    const { quote_or_summary: _quote, ...localMetadata } = highlightBase;
+    const unavailable = {
+      ...localMetadata,
+      source_type: 'survey_response',
+      source_title: 'Survey response',
+      source_meta: 'Survey response · Unknown · Identity protected',
+    };
+    expect(evidenceHighlightDtoSchema.parse(unavailable)).toEqual(unavailable);
+    for (const binding of ['source_id', 'approved_excerpt_id', 'quote_or_summary']) {
+      expect(() => evidenceHighlightDtoSchema.parse({ ...unavailable, [binding]: null })).toThrow();
+    }
+  });
   it('omits the response UUID from survey-response evidence DTOs', () => {
     const safeHighlight = {
       ...highlightBase,

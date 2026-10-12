@@ -72,6 +72,8 @@ const SURVEY_AGGREGATE_FUNCTIONS = [
 // silence: the entry is the design record, and adding one is a decision, not
 // paperwork (#207).
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  'survey.finding_response_bindings': [],
+  'survey.highlight_response_bindings': [],
   // Migration 0000 makes the audit log append-only so application writes retain
   // an immutable history.
   'core.audit_log': ['SELECT', 'INSERT'],

@@ -10,6 +10,8 @@ import { createEntityLink as insertActiveEntityLink } from '../entity-links/inde
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import {
+  recordSurveyFindingBinding,
+  recordSurveyHighlightBinding,
   resolveApprovedSurveyResponseExcerpts,
   resolveSurveyResponseEvidenceAccess,
 } from '../surveys/evidence-access.js';
@@ -211,20 +213,20 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             input.approved_excerpt_ids,
           );
           const label = safeExcerpts[0]?.question_label ?? 'Survey response';
-          const excerpt = safeExcerpts[0]?.redacted_excerpt;
           const safeMeta = `${subject.survey_type} · ${subject.survey_display_id}`;
           const finding = await insertFinding(tx, {
             workspaceId: actor.workspace_id,
             primaryManagedSystemId: targetManagedSystemId,
             title: `${label} · ${safeMeta}`,
-            summary: excerpt ? `Approved excerpt: ${excerpt}` : `Survey response from ${safeMeta}`,
+            summary: `Survey response from ${safeMeta}`,
             sourceType: 'survey_response',
-            sourceId: subject.response_id,
+            sourceId: null,
             severity: input.severity,
             confidence: input.confidence ?? null,
             analyticsAreaId: input.analytics_area_id ?? null,
             createdBy: actor.actor_id,
           });
+          await recordSurveyFindingBinding(tx, actor, finding.id, subject.response_id);
           const generated = registeredEntityLinkPairSchema.parse({
             source_type: 'survey_response',
             target_type: 'finding',
@@ -279,14 +281,21 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               findingId: finding.id,
               primaryManagedSystemId: targetManagedSystemId,
               sourceType: 'survey_response',
-              sourceId: subject.response_id,
-              approvedExcerptId: approved.approved_excerpt_id,
-              quoteOrSummary: approved.redacted_excerpt,
+              sourceId: null,
+              approvedExcerptId: null,
+              quoteOrSummary: null,
               analyticsAreaId: input.analytics_area_id ?? null,
               sentiment: null,
               importance: null,
               createdBy: actor.actor_id,
             });
+            await recordSurveyHighlightBinding(
+              tx,
+              actor,
+              evidence.id,
+              subject.response_id,
+              approved.approved_excerpt_id,
+            );
             await incrementFindingEvidenceCount(tx, {
               workspaceId: actor.workspace_id,
               findingId: finding.id,
@@ -334,7 +343,7 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
                 finding_id: finding.id,
                 evidence_highlight_id: evidence.id,
                 source_type: evidence.source_type,
-                source_id: evidence.source_id,
+                source_id: subject.response_id,
                 primary_managed_system_id: targetManagedSystemId,
               },
             });

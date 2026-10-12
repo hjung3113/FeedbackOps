@@ -1,3 +1,4 @@
+import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 // #510 part B (ADR-0055): DB-level verification of the outcome follow-up
 // classifier and the replaced gap predicate.
 //
@@ -157,12 +158,12 @@ describe.skipIf(!runIntegration)('Outcome follow-up gap predicate (0052, ADR-005
     };
 
     const seedFinding = async (msId: string, status: string, responseId: string) => {
-      const finding = await migrateHandle.pool.query<{ id: string }>(
+      const finding = await insertSurveyFindingFixture<{ id: string }>(migrateHandle, responseId, 
         `insert into finding.findings (
            workspace_id, display_id, primary_managed_system_id, title, summary,
            source_type, source_id, severity, status, created_by
          ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Gap finding', 'Gap finding summary',
-           'survey_response', $3, 'medium', $4, $5) returning id`,
+           'survey_response', nullif($3::uuid,$3::uuid), 'medium', $4, $5) returning id`,
         [workspaceId, msId, responseId, status, expectValue(respondentIds[0], 'first respondent')],
       );
       const findingId = requiredId(finding.rows[0], `${status} finding`);

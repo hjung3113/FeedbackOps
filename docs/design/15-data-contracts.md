@@ -688,15 +688,16 @@ Canonical active `requested_task` links define Finding handoff, not `linked_task
 Survey report totals count Surveys and use Survey-grain `follow_up_needed`; the response-grain
 ADR-0055 decision state remains Survey-owned and is never copied into report storage.
 
-## Survey protected provenance (ADR-0064; proposed/new storage)
+## Survey protected provenance (ADR-0064; migration 0059)
 
-These extensions are accepted for #739 and not present in the shipped schema yet;
-exact table/function names are chosen by the implementation issue.
+Migration 0059 models these Survey-owned protected extensions. Deployment and
+combined #739/#740 acceptance remain pending; names and application seams are in
+`docs/implementation/survey-provenance-cutover-739.md`.
 
 | Survey-owned extension | Private fields | Consistency |
 | --- | --- | --- |
-| Finding provenance | workspace_id, finding_id, response_id, historical_generated_summary | Exactly one binding per Survey-derived Finding, including zero highlights |
-| Highlight provenance | workspace_id, highlight_id, response_id, approved_excerpt_id, approved_excerpt_snapshot | Exactly one binding per Survey highlight; approval belongs to exact response |
+| `survey.finding_response_bindings` | workspace_id, finding_id, response_id, historical_generated_title, historical_generated_summary | Exactly one binding per Survey-derived Finding, including zero highlights |
+| `survey.highlight_response_bindings` | workspace_id, highlight_id, response_id, approved_excerpt_id, approved_excerpt_snapshot | Exactly one binding per Survey highlight; approval belongs to exact response |
 
 Workspace-qualified composite keys/constraints and transactional validation
 must enforce parent/Survey/response/approval consistency. `fops_app` has no
