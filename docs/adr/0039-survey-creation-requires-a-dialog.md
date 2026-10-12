@@ -4,6 +4,8 @@
 
 Accepted 2026-08-02. Deviates from `docs/design-prototype/screen-surveys.jsx:123-129` and adds an accessibility affordance beyond `docs/design-prototype/screen-survey-builder.jsx:108-140`. References issues #273 and #234 and root `AGENTS.md` → Prototype Is The Spec.
 
+Amended 2026-10-13 by [ADR-0070](0070-survey-starting-templates-and-definition-reuse.md).
+
 ## Context
 
 The Surveys prototype sends `New survey` directly to a builder with a synthetic ID. The production `POST /surveys` contract cannot create that empty record: it requires `type`, `title`, `primary_managed_system_id`, and `responses_identity_protected` before it returns a real Survey ID.
@@ -28,3 +30,14 @@ Question rows also expose explicit move-up and move-down buttons. These are an i
 - The API receives explicit permission-scope and respondent-privacy decisions, and the builder always opens with a persisted server ID.
 - Populated and empty Survey lists expose the same creation action in the prototype's toolbar row.
 - Builder question rows add visible keyboard-operable reorder controls beyond the prototype.
+
+## Amended 2026-10-13
+
+[ADR-0070](0070-survey-starting-templates-and-definition-reuse.md) extends the
+focused creation dialog with built-in starters and existing Survey question
+reuse. Explicit Managed System and privacy choices and navigation using the
+persisted server ID remain required; selecting a source never fills these
+choices silently. #1073 delivers the built-in backend/shared contract only.
+Existing-definition reuse (#1074) and visible dialog selection (#1075) remain
+pending until their delivery; #1047's user-visible acceptance is not complete
+in #1073. Blank creation remains the initial dialog mode.

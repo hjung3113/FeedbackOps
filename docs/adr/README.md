@@ -109,7 +109,7 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 - [0037](0037-link-finding-deferred-out-of-mvp.md) Survey result Link Finding out of MVP — `next_actions` ship `create_finding` and `request_task` only. *Accepted*
 - [0038](0038-entity-link-management-surface-out-of-mvp.md) Entity-link management and My Work out of MVP — per-record projections only; no detach UI. *Accepted*
-- [0039](0039-survey-creation-requires-a-dialog.md) Survey creation dialog — `New survey` collects the four required fields; keyboard reorder added. *Accepted*
+- [0039](0039-survey-creation-requires-a-dialog.md) Survey creation dialog — explicit system/privacy and persisted-ID navigation; keyboard reorder added; source selection amended by 0070 (2026-10-13), visible selection pending #1075. *Accepted, amended by 0070*
 - [0040](0040-ux-voc-home-navigation-deviations.md) VOC and Home navigation deviations — dead My Work entries removed; sixth Inbox tab `high-no-link`. *Accepted*
 - [0041](0041-admin-permission-request-ux-deviations.md) Admin Permission Request UX deviations — setting relabelled for Permission Requests; own detail header. *Accepted*
 - [0057](0057-approved-ux-deviations-from-prototype-579.md) Approved UX deviations (#579) — enum display labels, Korean-first copy, layout items B1-B10. *Accepted, amended by 0060*
@@ -121,6 +121,10 @@ These record where the product deliberately differs from `docs/design-prototype/
 - [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links rejected (2026-10-13). *Accepted, D1/D3 deferrals superseded by 0067*
 
 - [0069](0069-analytics-area-report.md) Analytics Area report attribution and safe metric grain — Coverage tab, own current classification, Survey-level output and exact source links. *Accepted, implementation pending*
+
+- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator) and Dashboard recovery items deferred; Survey D2 narrowed by 0070 (2026-10-13): built-in backend #1073, reuse/dialog pending #1074/#1075; public links rejected. *Accepted, amended by 0070*
+
+- [0070](0070-survey-starting-templates-and-definition-reuse.md) Survey starting templates and definition reuse — three built-in backend starters (#1073); same-system snapshot reuse and visible dialog selection pending #1074/#1075; amends 0039 and narrows 0059 D2. *Accepted 2026-10-13*
 
 ## Status legend
 

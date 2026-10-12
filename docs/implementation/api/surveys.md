@@ -7,6 +7,7 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 ```text
 POST /surveys
 GET /surveys
+GET /surveys/templates
 GET /surveys/:id
 PATCH /surveys/:id
 POST /surveys/:id/questions
@@ -37,11 +38,109 @@ Current reachable Finding task paths are in the `/findings/:id` family.
 `POST /surveys` requires `survey.manage`, an `Idempotency-Key`, and mutation
 rate limiting. Its strict request body is `{ type: 'discovery' | 'validation' |
 'outcome', title, description?, primary_managed_system_id, analytics_area_id?,
-operator_actor_id?, responses_identity_protected }`. It returns `201` with the
+operator_actor_id?, responses_identity_protected, starting_point? }`. It returns `201` with the
 Survey DTO: `{ id, workspace_id, display_id, type, status, title, description,
 primary_managed_system_id, analytics_area_id, operator_actor_id,
 responses_identity_protected, created_by, opened_at, closed_at, created_at,
 updated_at }`.
+
+### Built-in starting-point creation (#1073, ADR-0070)
+
+Requirement: FR-SURVEY-001. Session and matching Workspace guards remain in
+force. `starting_point` is optional and strict:
+`{ kind: 'builtin', template_id: nonempty string, version: positive integer }`.
+The shared `surveyStartingPointSchema` is a discriminated union with only the
+`builtin` arm accepted now. Unknown template/version and source type mismatch
+return `422 validation.failed` (field path `starting_point` or `type`, code
+`invalid`). Raw question bodies and unknown fields at either body level are
+rejected by strict parsing. The `existing_survey` arm is pending #1074 and is
+currently rejected. Omission keeps today's blank creation and audit unchanged.
+
+Keep all existing required fields, including explicit Managed System and
+privacy. A missing/foreign-workspace system returns `404 not_found.record`, an
+archived system `409 conflict.parent_archived`, and missing manage capability
+`403 permission.denied`, including an explicit Admin deny. Optional Analytics
+Area must be active and belong to the selected system; otherwise
+`422 validation.failed` with `fields: [{ path: ['analytics_area_id'], code:
+'out_of_scope' }]`. Operator resolution remains explicit → Managed System
+default → creator, with workspace membership and `survey.manage` validated.
+Title and description come only from the current request; catalog title and
+description are preview suggestions/guidance, never silent persisted defaults.
+
+On an idempotency miss, create one draft and the complete server-owned question
+graph inside the existing transaction. Each inserted question receives a fresh
+DB-generated UUID; dense `sort_order` and the full graph are validated before
+success. There are no branch questions in version 1. Write one
+`survey_question_created` structural audit per question and `survey_created`
+with optional `{ starting_point: { kind, template_id, version }, question_count }`
+in addition to its existing detail. The registered strict shared audit schema
+permits these metadata fields and rejects prompt/label/title/answer content.
+No Entity Link or response, approval, result, follow-up, Finding or distribution
+state is created/copied. The draft has current creator/operator, fresh times,
+null opened/closed times and independently chosen privacy/system/area.
+
+A failure in any question insertion, complete-graph validation or audit rolls
+back the Survey, questions, audits, Display ID counter and idempotency success.
+The compact `201` Survey DTO above stays unchanged, without `questions`; read
+persisted detail when entering the builder. UUIDv4 Idempotency-Key is required.
+Same Actor/key/body returns the same graph/metadata and one audit set; changed
+body/template/version with the same key returns
+`409 conflict.idempotency_key_reuse`. Do not reread/recreate on completed replay.
+
+### GET /surveys/templates — built-in preview catalog
+
+Requirement: FR-SURVEY-001. This route uses session and matching Workspace
+guards, the read rate tier, and `Cache-Control: private, no-cache`. Strict query
+`{ managed_system_id: uuid }` is required: omission, invalid UUID, `all`, repeated
+values and unknown keys return `422 validation.failed`. Validate same-Workspace
+active system and `survey.manage`, preserving Admin explicit-deny precedence;
+system/access failures use the same 404/409/403 codes as creation. This read
+writes no product objects or audits and grants no personal-response access.
+
+Response `200` is exactly `{ items: SurveyTemplate[] }`, parsed by exported
+`surveyTemplatesResponseSchema` in `packages/shared/src/surveys/templates.ts`.
+Items appear in Discovery, Validation, Outcome order. No pagination is needed
+for this three-item server-owned catalog. Each item has:
+
+| Field | Contract |
+| --- | --- |
+| `template_id` | `discovery-basic` / `validation-basic` / `outcome-basic`; immutable identity |
+| `version` | positive integer, currently 1; changing definition content requires a new version |
+| `type` | `discovery` / `validation` / `outcome` matching the built-in |
+| `title` | preview title suggestion: `Discovery 기본 템플릿`, `Validation 기본 템플릿`, `Outcome 기본 템플릿` |
+| `description` | preview guidance: `Managed System 사용 현황과 불편을 확인하세요.`, `제안된 개선 내용을 Survey 설명에 입력하세요.`, `출시된 개선 내용을 Survey 설명에 입력하세요.` respectively |
+| `questions` | nonempty array in visible order; no Survey/question UUIDs |
+
+Each strict question contains `key` (nonempty symbolic string), `kind`, `prompt`
+(nonempty), `is_required` (boolean), `sort_order` (dense integers from 0).
+`single_choice`/`multiple_choice` add `options: [{ key, label }]` (2–50
+nonempty-key/label choices, in visible order). `rating` adds integer
+`rating_min`/`rating_max` (0–10, min below max) and nonempty
+`rating_low_label`/`rating_high_label`. `text` has no extra fields. Fields for
+other kinds are absent, not null. Version 1 has no branches; preview keys never
+stand in for persisted UUIDs. The exact definitions below are the server-owned
+content contract, independent of the current Actor's target Survey fields.
+
+### Built-in definitions (version 1)
+
+| ID/type | Visible questions |
+| --- | --- |
+| `discovery-basic` / `discovery` | 0: `usage-frequency`, required `single_choice`: “이 Managed System을 얼마나 자주 사용하나요?” Options in order: `daily` “매일”, `weekly` “매주”, `monthly-or-less` “월 1회 이하”, `never` “사용한 적 없음”. 1: `pain-point`, optional `text`: “업무에서 가장 불편한 점은 무엇인가요?” |
+| `validation-basic` / `validation` | 0: `expected-usefulness`, required `rating`: “제안된 개선이 업무에 얼마나 도움이 될 것으로 예상하나요?” 1–5, low label “전혀 도움이 되지 않음”, high label “매우 도움이 됨”. 1: `improvement-feedback`, optional `text`: “개선안에서 보완할 점은 무엇인가요?” |
+| `outcome-basic` / `outcome` | 0: `released-usefulness`, required `rating`: “개선 후 이 Managed System이 업무에 얼마나 도움이 되나요?” 1–5, low label “전혀 도움이 되지 않음”, high label “매우 도움이 됨”. 1: `remaining-pain-point`, optional `text`: “개선 후에도 남아 있는 불편은 무엇인가요?” |
+
+Validation's proposal context and Outcome's released improvement belong in the
+operator's independently entered Survey description. Outcome remains positively
+oriented (1–2 poor low band, ADR-0055); this starter makes no automatic
+before/after causality or Task-completion claim.
+
+#1073 delivers this backend/shared contract only. Existing-definition reuse
+(#1074) and visible dialog selection (#1075) remain pending until their
+delivery; #1047's user-visible acceptance is not complete. Their accepted
+source/read/token/snapshot/retry decisions are in
+[ADR-0070](../../adr/0070-survey-starting-templates-and-definition-reuse.md).
+
+### Existing Survey list and mutation commands
 
 `GET /surveys` accepts the optional query
 `managed_system_id=<uuid>|all` and returns a permission-filtered array of the

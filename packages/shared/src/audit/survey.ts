@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { surveyQuestionKindSchema, surveyTypeSchema } from '../surveys/dto.js';
+import { surveyStartingPointSchema } from '../surveys/starting-point.js';
 
 const uuid = () => z.string().uuid();
 const branchDepthSchema = z.union([z.literal(0), z.literal(1)]);
@@ -39,6 +40,8 @@ export const surveyCreatedDetailSchema = z
     operator_actor_id: uuid(),
     operator_resolution: z.enum(['explicit', 'managed_system_default', 'creator']),
     responses_identity_protected: z.boolean(),
+    starting_point: surveyStartingPointSchema.optional(),
+    question_count: z.number().int().nonnegative().optional(),
   })
   .strict();
 export type SurveyCreatedDetail = z.infer<typeof surveyCreatedDetailSchema>;
