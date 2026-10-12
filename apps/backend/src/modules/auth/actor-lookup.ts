@@ -72,3 +72,21 @@ export async function lockWorkspaceActor(
   }
   return { id: row.id, role_level: row.role_level };
 }
+
+/** Selected review identity projection. Never exposes the Actor email. */
+export async function findWorkspaceActorDisplay(
+  db: Db | Tx,
+  input: { workspaceId: string; actorId: string },
+): Promise<(WorkspaceActor & { display_name: string }) | null> {
+  const rows = await db
+    .select({ id: actors.id, role_level: actors.roleLevel, display_name: actors.displayName })
+    .from(actors)
+    .where(and(eq(actors.workspaceId, input.workspaceId), eq(actors.id, input.actorId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
+    throw new Error('unexpected requester Role Level');
+  }
+  return { id: row.id, role_level: row.role_level, display_name: row.display_name };
+}

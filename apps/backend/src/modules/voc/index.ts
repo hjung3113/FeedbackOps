@@ -38,3 +38,4 @@ export {
 } from './embedding/enqueue.js';
 export { registerVocJobs, type VocJobDeps } from './jobs/index.js';
 export { selectVocForUpdate } from './repo.js';
+export { permissionVocSourceSummary } from './permission-source-projection.js';

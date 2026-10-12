@@ -218,7 +218,7 @@ Entity Linking uses providers to enforce:
 `src/routes/_authed/voc-clusters/` doing URL/shell wiring only), not a new
 top-level product domain.
 
-## Permission close-out seams (ADR-0066; proposed/new)
+## Permission close-out seams (ADR-0066; #1080 / #1081, direct grant pending)
 
 Permission writes only its requests/grants/denies. Approval and direct grant share
 a Permission-owned grant command. Auth extends its workspace Actor lookup with
@@ -229,6 +229,15 @@ or mutate Role Level. Source-owner summary authorization remains mandatory.
 Home owns requester UI composition; Admin owns review/direct-grant composition.
 Shared typed contracts carry server scope options/revisions/risk; neither frontend
 nor packages/ui owns permission truth or computes risk scores.
+
+Selected Permission context (#1081) uses Auth's public
+`findWorkspaceActorDisplay` projection and Core's
+`latestPermissionRequestQuestion` audit projection after authorization.
+VOC and Task export `permissionVocSourceSummary` and
+`permissionTaskSourceSummary` through their public barrels; source-owner gates
+and explicit metadata allowlists stay inside those owners. Opaque Survey sources
+have no summary and cause no response reads. Permission owns active-deny overlap
+and selected risk calculation; collection reads do not invoke selected projections.
 
 ## Responsibility and recovery seams (ADR-0067; implementation pending)
 

@@ -418,8 +418,9 @@ The backend decides which state applies.
 
 The rules above incorporating revision, withdrawal and narrowing replace older
 scope-copy/default-expiration text. #1080 implements versioned requester
-mutations, supported-scope validation and narrowed Admin decisions; selected reads,
-risk and direct grants remain pending. `api/permissions.md` owns exact bodies, reads, responses and errors.
+mutations, supported-scope validation and narrowed Admin decisions; #1081 adds
+selected owner/Admin reads and explained risk. Direct grants remain pending.
+`api/permissions.md` owns exact bodies, reads, responses and errors.
 
 One Permission capability/scope policy supplies server candidates and validates
 create/edit/supplement/approval/direct grants inside transactions. Developer-scoped
@@ -451,7 +452,7 @@ seed existence checks exclude superseded grants. Audit failure restores both row
 expired/old-ID revoke stays conflict.permission_not_active.
 
 Permission computes four explained codes only for selected Admin detail:
-sensitive_capability, workspace_scope, no_expiration, active_deny (proposed/new).
+sensitive_capability, workspace_scope, no_expiration, active_deny (#1081).
 Effective access and Role Level are facts, not a role-jump score. Unknown/failure
 is retryable, not zero risk. Owner detail/mine omit risk and deny internals. Core
 owns the latest-question audit projection; source-owner gates/allowlists control

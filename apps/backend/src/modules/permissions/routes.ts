@@ -33,6 +33,7 @@ import type { ActorContext, CheckService, Decision } from './check-service.js';
 import type { DecisionService } from './decision-service.js';
 import type { GrantAdminService } from './grant-admin-service.js';
 import type { RequestService } from './request-service.js';
+import type { SelectedReadService } from './selected-read-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
 // Export the exact parser used by the approve route so its shared-contract
@@ -43,6 +44,7 @@ export interface PermissionsRoutesOptions {
   sessionService: SessionService;
   checkService: CheckService;
   requestService: RequestService;
+  selectedReadService: SelectedReadService;
   decisionService: DecisionService;
   grantAdminService: GrantAdminService;
   workspaceId: string;
@@ -75,6 +77,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     sessionService,
     checkService,
     requestService,
+    selectedReadService,
     decisionService,
     grantAdminService,
     workspaceId,
@@ -389,6 +392,30 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       return reply.code(result.status).send(result.body);
     },
   });
+
+  for (const route of [
+    { url: '/permission-requests/:id', read: selectedReadService.ownerDetail },
+    { url: '/permissions/requests/:id', read: selectedReadService.adminDetail },
+  ]) {
+    app.route({
+      method: 'GET',
+      url: route.url,
+      preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+      schema: { params: z.object({ id: z.string().uuid() }) },
+      handler: async (req) => {
+        const sess = req.session;
+        if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+        return route.read(
+          {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
+          (req.params as { id: string }).id,
+        );
+      },
+    });
+  }
 
   // ── GET /permission-requests/mine ───────────────────────────────────────
   // Returns the caller's open (pending|needs_more_info) permission requests.
