@@ -6,8 +6,9 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 
 ADR-0066 (accepted 2026-10-13) amends this contract. #1080 implements requester
 edit/cancel/supplement revisions, required revisions for all Admin decisions,
-supported-scope narrowing, and corresponding audits. Selected detail/risk,
-direct-grant options/writes and superseded-grant filtering remain pending.
+supported-scope narrowing, and corresponding audits. #1081 implements selected
+owner/Admin detail and explained risk; direct-grant options/writes and
+superseded-grant filtering remain pending.
 Deploy migration 0058 before these writers and roll out the #1083 revision
 consumers together, refreshing old clients. DB verification and the migration
 snapshot refresh remain conductor release checks.
@@ -432,7 +433,7 @@ No partial writes; status/revision rules match cancel. New strict request-subjec
 editable reason/scope/expiry and revisions. No grant/deny/link/notification/domain
 action or queue write; derived status lists reflect current request. No owner resolution.
 
-### Requester mine and `GET /permission-requests/:id` (detail proposed/new)
+### Requester mine and `GET /permission-requests/:id` (#1080 / #1081)
 
 Mine stays session-only and owner/open scoped; add revision, requested_expiration,
 updated_at and return_route_intent to existing items. Selected owner detail returns
@@ -444,7 +445,7 @@ audit projection, not a Permission query into audit storage. No risk, deny inter
 email, raw Survey text or unsafe source summaries. Item ownership 404 as above.
 No writes, audits, links, notifications, queue or default-owner effects for these reads.
 
-### `GET /permissions/requests/:id` (proposed/new)
+### `GET /permissions/requests/:id` (#1081)
 
 Admin selected read, 200 current request/revision and requested/source context,
 requester display name/Role Level, effective access/scope/expiry, administrative
@@ -461,6 +462,49 @@ Permission computes only selected-row context, no per-list-row risk/large source
 collection scan. Source-owner gates/allowlists apply; Admin without personal Survey
 capability receives no restricted response text. No email or deny-reason leakage
 into requester detail. Read has no writes/audits/links/notification/queue/default effects.
+
+Selected response contracts are exported as `permissionRequestOwnerDetailSchema`
+and `permissionRequestAdminDetailSchema` from
+`packages/shared/src/permissions/selected-detail.ts`. Both responses carry the
+request fields at the top level, preserving the mine names, plus
+`requester_actor_id` and nullable `source_summary`. Owner detail adds
+`latest_admin_question`, `editable_scope_candidates`, and `allowed_actions`
+(`edit`, `supplement`, `withdraw`). Admin detail adds `requester`
+(`id`, `display_name`, `role_level`), `effective_access`,
+`administrative_authority`, `approval_scope_candidates`, `matching_denies`,
+`risk_indicators`, and decision `allowed_actions`
+(`approve`, `reject`, `need_more_info`, `deny`).
+
+`effective_access` contains the existing capability `decision`, effective `scope`,
+and the selected decision grant's nullable `expires_at` and
+`granted_managed_system_id`; role-derived access has no grant expiry.
+`administrative_authority` records the reviewer's `workspace.admin` authority,
+`is_requester`, resolved `permission_self_approval`, and
+`self_approval_required`. Forbidden self-approval omits `approve` from actions.
+Scope candidates never broaden or move a system request to a sibling. If the
+original requested scope is unsupported by the command's shared scope policy
+(including legacy workspace-scoped Developer capabilities and object requests),
+Admin detail returns no approval candidates or `approve` action. Supported
+workspace `survey.export` requests retain workspace approval and system narrowing;
+non-approving decisions and requester withdrawal remain available for open requests.
+
+Risk evidence is a strict union: `sensitive_capability` has `{ capability }`,
+`workspace_scope` has `{ managed_system_id: null }`, `no_expiration` has
+`{ requested_expiration: null }`, and `active_deny` has
+`{ denies: [{ id, managed_system_id }] }`. Matching denies expose only ID and
+scope, with no deny reason. Historical unknown capability data fails selected
+context calculation with `internal.unexpected`; collection reads stay minimal.
+
+VOC and Task owner projections return only authorized
+`{ type, id, display_id, status }` navigation metadata by workspace and source ID.
+Their existing source-owner read gates apply, independently of review authority:
+VOC uses scope-or-reporter visibility; Task requires an elevated Role Level and
+`finding.manage`, matching its shipped detail route.
+Survey, Survey Response and other unavailable sources remain opaque with
+`source_summary: null`; selected reads do not query raw Survey candidate or
+response readers. Selected context uses a repeatable-read, read-only transaction
+without recipient/request mutation locks. The Core question projection is called
+only after owner authorization; Auth owns the email-free display-name projection.
 
 ## Proposed direct-grant contracts (ADR-0066)
 

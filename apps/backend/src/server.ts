@@ -66,6 +66,7 @@ import {
   createDecisionService,
   createGrantAdminService,
   createRequestService,
+  createSelectedReadService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
 import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
@@ -405,6 +406,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     checkService,
     requestService,
+    selectedReadService: createSelectedReadService({ db: dbHandle.db, checkService }),
     decisionService,
     grantAdminService,
     workspaceId,

@@ -108,3 +108,53 @@ export async function insertPermissionRequestRow(
   if (!id) throw new Error('insertPermissionRequestRow failed');
   return { id };
 }
+
+/** Target-scale selected-read fixture; seed canonical rows first, then populate their shape. */
+export async function seedPermissionSelectedReadScale(
+  dbHandle: DbHandle,
+  input: { workspaceId: string; managedSystemId: string; actorId: string; prefix: string },
+): Promise<{ vocId: string; taskId: string; vocCount: number; taskCount: number }> {
+  const { insertVocDirectly } = await import('./voc-fixtures.js');
+  const { insertTaskRow } = await import('./task-fixtures.js');
+  const voc = await insertVocDirectly(
+    dbHandle,
+    input.workspaceId,
+    input.managedSystemId,
+    input.actorId,
+    'Scale VOC',
+  );
+  const task = await insertTaskRow(dbHandle, {
+    workspaceId: input.workspaceId,
+    primaryManagedSystemId: input.managedSystemId,
+    title: 'Scale Task',
+    createdBy: input.actorId,
+  });
+  await dbHandle.pool.query(
+    `insert into voc.vocs (workspace_id, primary_managed_system_id, reporter_id, display_id,
+      title, description_rich_content, source_context, reporter_facing_status, triage_state)
+     select v.workspace_id, v.primary_managed_system_id, v.reporter_id, $2 || '-VOC-' || n,
+       v.title, v.description_rich_content, v.source_context, v.reporter_facing_status, v.triage_state
+     from voc.vocs v cross join generate_series(1, 4999) n where v.id = $1`,
+    [voc.id, input.prefix],
+  );
+  await dbHandle.pool.query(
+    `insert into task.tasks (workspace_id, primary_managed_system_id, display_id, title, status, priority, created_by)
+     select t.workspace_id, t.primary_managed_system_id, $2 || '-Task-' || n,
+       t.title, t.status, t.priority, t.created_by
+     from task.tasks t cross join generate_series(1, 4999) n where t.id = $1`,
+    [task.id, input.prefix],
+  );
+  const populations = await dbHandle.pool.query<{ voc_count: number; task_count: number }>(
+    `select (select count(*)::int from voc.vocs where primary_managed_system_id = $1) as voc_count,
+      (select count(*)::int from task.tasks where primary_managed_system_id = $1) as task_count`,
+    [input.managedSystemId],
+  );
+  const population = populations.rows[0];
+  if (!population) throw new Error('selected-read population count missing');
+  return {
+    vocId: voc.id,
+    taskId: task.id,
+    vocCount: population.voc_count,
+    taskCount: population.task_count,
+  };
+}

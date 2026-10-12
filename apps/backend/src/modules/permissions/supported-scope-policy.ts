@@ -19,6 +19,19 @@ export async function supportedScopeCandidates(
   ];
 }
 
+export function isSupportedScope(
+  candidates: readonly PermissionScopeCandidate[],
+  managedSystemId: string | null,
+  objectType: string | null,
+  objectId: string | null,
+): boolean {
+  return (
+    objectType === null &&
+    objectId === null &&
+    candidates.some((candidate) => candidate.managed_system_id === managedSystemId)
+  );
+}
+
 export async function validateSupportedScope(
   tx: Tx,
   workspaceId: string,
@@ -44,7 +57,7 @@ export async function validateSupportedScope(
     });
   }
   const candidates = await supportedScopeCandidates(tx, workspaceId, capability);
-  if (!candidates.some((candidate) => candidate.managed_system_id === managedSystemId)) {
+  if (!isSupportedScope(candidates, managedSystemId, objectType, objectId)) {
     throw new HttpError('validation.failed', 'unsupported or inactive Managed System scope', {
       fields: [{ path: [options.field ?? 'requested_managed_system_id'], code: 'custom' }],
     });

@@ -44,3 +44,5 @@ export type PermissionDecision = z.infer<typeof permissionDecisionSchema>;
 // Values must match permissionDecisionSchema; unknown-shaped values are rejected.
 export const permissionDecisionsEnvelopeSchema = z.record(z.string(), permissionDecisionSchema);
 export type PermissionDecisionsEnvelope = Record<string, PermissionDecision>;
+
+export * from './selected-detail.js';
