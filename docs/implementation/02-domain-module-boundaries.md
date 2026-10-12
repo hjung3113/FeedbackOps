@@ -76,6 +76,8 @@ Permission owns:
 - Permission Request
 - permission decisions
 - explicit deny handling
+- governed direct capability grants and supported scope policy; no Role Level promotion (ADR-0066, proposed/new)
+- selected request detail and explained risk, using authorized source projections
 
 Entity Linking owns:
 - relation registry
@@ -215,3 +217,15 @@ Entity Linking uses providers to enforce:
 (screens under `src/features/voc-cluster/`, with route files under
 `src/routes/_authed/voc-clusters/` doing URL/shell wiring only), not a new
 top-level product domain.
+
+## Permission close-out seams (ADR-0066; proposed/new)
+
+Permission writes only its requests/grants/denies. Approval and direct grant share
+a Permission-owned grant command. Auth extends its workspace Actor lookup with
+an approved recipient lock, exported through its public API; Core owns the latest
+Admin-question audit projection, and Workspace Settings supplies the locked policy.
+Permission may compose those projections but does not copy foreign-table queries
+or mutate Role Level. Source-owner summary authorization remains mandatory.
+Home owns requester UI composition; Admin owns review/direct-grant composition.
+Shared typed contracts carry server scope options/revisions/risk; neither frontend
+nor packages/ui owns permission truth or computes risk scores.

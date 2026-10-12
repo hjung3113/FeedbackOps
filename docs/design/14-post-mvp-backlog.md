@@ -16,4 +16,6 @@ Add an entry whenever a close-out slice defers or drops something. Remove an ent
 
 ## Deferred during the close-out slices
 
-None yet. Slices 53–63 add rows here.
+| Item | Reason | Reopen when |
+| --- | --- | --- |
+| Single-object permission enforcement and approval narrowing (Slice 55, ADR-0066; owner #1041, 2026-10-13) | Current checks enforce workspace/Managed System only. End-to-end object gates across consuming routes would expand this close-out slice and its privacy tests; an object-scope warning cannot enforce a restriction. MVP rejects object-scoped writes/approval rather than silently broadening access, preserving historical rows. | A demonstrated job needs one-object access and an ADR defines object identity, every consuming-route/check/list gate, privacy tests, and explicit legacy-data disposition. Legacy unsuperseded object grants must be inventoried and resolved explicitly before MVP release. |

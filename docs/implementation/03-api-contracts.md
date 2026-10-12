@@ -98,7 +98,12 @@ requested reporter-facing status transition against the current status
 return `422 validation.failed` for a disallowed transition and a `200` no-op
 when the Task Request is already in the target status, and Permission decisions
 return `409 conflict.stale_write` when the request is no longer decidable.
-Survey evidence attachment to VOC has no route.
+Survey evidence attachment to VOC has no route. The preceding token coverage is
+the shipped snapshot; ADR-0066 supersedes the Permission state-only contract with
+proposed required expected_revision on requester edit/withdraw/supplement and all
+Admin decisions. Authorization precedes replay; lock/revision checks occur inside
+the idempotent run, and mismatch returns authorized current_revision only. See
+`api/permissions.md` for the accepted, not-yet-implemented wire changes.
 
 ## Default Owner / Reviewer Resolution
 

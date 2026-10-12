@@ -4,6 +4,8 @@ Date: 2026-10-05
 
 ## Status
 
+Amended by ADR-0066 for governed direct grants and expired-grant reissue; expired/old-ID revoke still returns `conflict.permission_not_active`.
+
 Accepted 2026-10-05 by the owner (issue #762). Amends ADR-0006 only by naming the write path that its "permission
 revocations take effect immediately" rule relies on. Adds one code to the ADR-0012 closed enum and one event to the
 ADR-0014 notification catalogue. Extends the `permission_self_approval` setting (ADR-0041) to an Admin lifting a
@@ -99,3 +101,7 @@ Two existing behaviours shape the design:
 - Docs to update with the implementation: `docs/implementation/api/permissions.md`, `05-permission-policy.md`
   (events and lifecycle), `docs/design/09-permission-access.md` FR-PERM-002 status, `docs/design/13-mvp-roadmap.md`
   Phase 1, `docs/frontend/routes-and-layout.md`, and the notification catalogue doc, if one lists events.
+
+## Amended 2026-10-13 — ADR-0066
+
+Amended by ADR-0066 for governed direct grants and expired-grant reissue; expired/old-ID revoke still returns `conflict.permission_not_active`. New behavior is accepted implementation work, not evidence of shipment. See [ADR-0066](0066-permission-request-lifecycle-and-direct-grant.md).

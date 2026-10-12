@@ -59,8 +59,16 @@ A **Sensitive Permission** allowing a **Developer** to approve a **Task Request*
 _Avoid_: default developer approval, unaudited shortcut
 
 **Permission Request**:
-A request to grant or modify an **Actor**'s **Managed System Permission Scope** or **Role Level**. Decided by an **Admin**; all decisions are audited.
+An **Actor**'s ask for capability access within supported workspace or **Managed System Permission Scope**, reviewed through administrative authority. Requested and granted scope may differ by supported narrowing. It does not promote **Role Level**; decisions and requester changes are audited (ADR-0066).
 _Avoid_: Access ticket, permission grant, role change request
+
+**Permission Grant**:
+Capability authority granted to an **Actor** for a supported scope, optionally expiring. It can follow an approved **Permission Request** or a governed direct grant; it does not change **Role Level**.
+_Avoid_: Promotion, request approval record
+
+**Request Withdrawal**:
+The requester closes an open **Permission Request** as `cancelled`, retaining history. It neither revokes a **Permission Grant** nor denies access (ADR-0066).
+_Avoid_: Rejection, grant revocation, deletion
 
 **Sensitive Permission**:
 A permission whose grant or use requires a written reason and explicit audit metadata, not granted by default. Includes **Task Request Self-Approval**.
@@ -349,7 +357,8 @@ _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate"
 - A record may appear in both an assigned-work view (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
 - Assigned-work views never widen beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
 - A **Permission Request** is created by the requesting **Actor** and decided by an **Admin** within the same **Workspace**.
-- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission.
+- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission. The requester may edit a pending ask or withdraw an open ask to `cancelled`, retaining identity and history (ADR-0066; accepted, implementation pending).
+- A governed direct **Permission Grant** uses the same supported scope and self-approval policy as approval; an overlapping Explicit Deny must be lifted explicitly, and a matching open ask goes through review. Neither path changes **Role Level** (ADR-0066).
 - **Sensitive Permission** grants and uses require a reason and are audited.
 - Rejected **Permission Requests** must not be immediately resubmitted for the same scope without new justification.
 

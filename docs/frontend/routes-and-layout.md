@@ -378,3 +378,27 @@ Mobile < 768px:
 - Modal: use for confirmation, destructive actions, or short focused tasks.
 - Full page: use for complex builders such as Survey Builder.
 ```
+
+## Permission close-out composition (ADR-0066; proposed/new)
+
+No new frontend route is required. `/home` own open-request rows open owner-scoped
+detail/dialog with edit, withdrawal or supplementation as permitted by the server.
+Do not send requesters to an Admin-only console. Preserve Home context on close;
+withdrawal confirmation is distinct from unsaved-form close.
+
+`/admin/permissions/requests` keeps `tab`/`selected` and Back/Forward restoration,
+but fetches selected detail rather than relying only on list rows. `cancelled`
+belongs in all-history with label `철회` and no decisions. Selection or revision
+changes clear decision/risk drafts; stale conflicts refetch and require fresh
+review. No client-side risk computation and no source/privacy bypass.
+
+`/admin/permissions/grants` stays `ListShell` with its existing grants/denies tabs.
+Its `권한 부여` primary action opens a feature-local form; direct-grant success
+selects the actual returned grant in the grants tab while preserving URL/history
+semantics. Server options, explicit workspace administrative governance,
+`permission_self_approval`, reason and optional expiry govern submission. Use
+workspace Actor display names, never email; retain input/focus on errors.
+
+Canonical copy owners are `apps/frontend/src/lib/copy/home.ts` and
+`apps/frontend/src/lib/copy/admin-permissions.ts`; update them in implementation.
+Verify desktop 1440, keyboard focus and existing visual fixtures before delivery.

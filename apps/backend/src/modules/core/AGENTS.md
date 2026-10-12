@@ -20,3 +20,10 @@ Analytics Areas, the Managed System Registry, and attachment governance are impl
 - Expose stable interfaces for workspace checks, actor context, Analytics Area lookup, and audit appends.
 - Expose stable interfaces for Managed System lookup and default owner/reviewer resolution inputs.
 - Audit APIs must preserve actor, workspace, target, action, timestamp, and safe metadata.
+
+## Permission audit projection (ADR-0066; proposed/new)
+
+Core supplies the approved workspace/request-scoped latest Admin-question audit
+projection for Permission requester detail. Keep storage reads inside Core and
+return only the allowed question metadata. Permission supplies authorization and
+owns requester lifecycle/risk; Core must not import Permission or decide access.

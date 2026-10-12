@@ -2,7 +2,7 @@
 
 ADRs record decisions that are hard to reverse, surprising without context, and the result of a real trade-off. On the decision it made, an ADR supersedes any other document (`docs/design/*`, `docs/implementation/*`, `CONTEXT.md`, the prototype, `AGENTS.md`); see root `AGENTS.md`, Source Of Truth. ADRs are immutable history: to change a decision, write a new ADR and add a `Superseded by` / `Amended by` line at the top of the old one. Other edits to an accepted ADR are limited to its `## Status` line, back-links, and dated `## Amended YYYY-MM-DD` sections or notes that record what changed.
 
-**To add an ADR:** take the next number (highest below + 1, currently `0063`), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
+**To add an ADR:** take the next number (highest below + 1; close-out slices reserve 0064, 0065, and 0067–0069, with 0066 assigned to Permission), name the file `NNNN-kebab-slug.md`, start with `# ADR-NNNN: Title`, and make `## Status` the first section (`Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`, with the date). The `## Status` section is required in this repo, which is stricter than the vendored `.agents/skills/domain-modeling/ADR-FORMAT.md` (there it is optional). Then add one line to the matching topic below, in the form `- [NNNN](file.md) Title — decision. *Status*`. Read the ADRs for the topic you are about to touch before you start (`docs/agents/domain.md`).
 
 ## Product scope and domain model
 
@@ -26,6 +26,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0048](0048-role-level-extension.md) Role Level extension — checklist for adding a role across enum, DB CHECK, local unions and domain gates. *Accepted*
 - [0056](0056-capability-based-admin-navigation.md) Capability-based Admin navigation — Admin entries appear only when `workspace.admin` is approved; direct links stay gated. *Accepted*
 - [0061](0061-admin-revoke-permission-grants-and-denies.md) Admin revokes active Permission grants and denies — revocation audit, notification, and re-request behavior. *Accepted*
+- [0066](0066-permission-request-lifecycle-and-direct-grant.md) Permission Request lifecycle and governed direct grants — requester withdrawal/edit, revision-safe narrowed approval, explained risk and direct-grant governance; single-object enforcement deferred. *Accepted (not implemented)*
 
 ## Managed System registry, teams and display IDs
 

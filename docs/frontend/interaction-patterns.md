@@ -270,7 +270,7 @@ blocked
 -> request_opened
 -> pending
 -> needs_more_info -> pending
--> approved | rejected | expired | revoked
+-> approved | rejected | expired | revoked | cancelled
 ```
 
 UX rules:
@@ -280,10 +280,14 @@ UX rules:
 - Permission requests start from the blocked object or blocked action when the backend marks it requestable.
 - Request creation captures target object or action, requested scope, reason, and return route intent when available.
 - Sensitive permission requests require reason before submission.
-- Pending requests show who can approve when available.
+- Pending requests show who can approve when available; Home requester detail offers same-ID reason/supported-scope/duration edit.
+- Requester-only withdrawal from pending or needs_more_info is `요청 철회`; it preserves history and is distinct from closing a form or `권한 취소`. Both requester actions are proposed/new under ADR-0066.
 - Needs More Info requests show the Admin question and let the requester update reason, scope, or duration before resubmitting.
 - Rejected requests show safe rejection copy and may allow a new request. Revoked and expired grants keep their state copy and expose the request-access action when the backend marks the decision requestable (ADR-0061, #767).
-- Approved requests return the user to the blocked object or action when possible.
+- Approved requests return the user to the blocked object or action when possible, without automatically executing it.
+- Send expected_revision on every requester mutation and Admin decision. Refetch on stale conflict, retain requester input for reconciliation, reset Admin draft on request ID/revision changes, and require fresh review.
+- Admin selected detail shows requested versus granted scope/expiry and server-supported narrowing choices. Four explained server signals use `검토 시 확인할 사항`; no score. Zero signals, failure/retry, loading, and terminal no-actions are distinct.
+- `활성 권한` offers `권한 부여` with governed workspace Admin/self-grant controls, required reason, optional expiry, and server scope choices. Matching asks and overlapping denies lead to review or explicit lift. Errors retain input; success selects the returned grant and never claims Role Level promotion (ADR-0066; proposed/new).
 - Explicit Deny overrides allow and should show a non-requestable blocked state unless policy allows appeal.
 ```
 

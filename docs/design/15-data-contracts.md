@@ -478,7 +478,8 @@ permission_requests
 - source_object_id: uuid, nullable
 - source_action_id: text, nullable
 - return_route_intent: text, nullable
-- status: enum(pending, needs_more_info, approved, rejected, expired, revoked), required
+- status: text + CHECK(pending, needs_more_info, approved, rejected, expired, revoked, cancelled), required; cancelled is proposed/new (ADR-0066)
+- revision: positive integer, required, default 1; proposed/new (ADR-0066)
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -487,7 +488,9 @@ Rules:
 
 ```text
 - Sensitive permissions require reason.
-- requested_managed_system_id carries the scope for scoped Developer grants in MVP; requested_object_type and requested_object_id scope a single-object request.
+- requested_managed_system_id carries supported Managed System scope; nullable workspace scope is capability-policy controlled. Single-object authorization is post-MVP (ADR-0066). Preserve historical requested_object_type/id, reject non-null object scope in new create/edit/supplement and legacy approval, and never silently widen it. source_object_* remain provenance.
+- Requester pending edit and needs_more_info supplement retain identity; withdrawal to cancelled frees the open slot and preserves history. Every successful request mutation advances revision and updated_at (proposed/new).
+- Approval retains requested scope/expiration and records actual granted scope/expiration separately in response and audit; no requested-field overwrite.
 - analytics_area_id is not an MVP permission boundary.
 - Expiry and revocation must be enforceable.
 - Decisions are audited. The deciding Admin, decision time, reason, and an Admin's more-info note are recorded on the audit event, not on this table; approval inserts a permission_grants row and deny inserts a permission_denies row.
@@ -612,3 +615,15 @@ Detail additionally includes `similar.items`, capped at three and ordered by
 
 Peer visibility is `voc.read` scope or reporter ownership of that peer. A
 triage-only summary envelope includes neither field. See ADR-0031.
+
+## Permission Grant reissue (ADR-0066; proposed/new)
+
+`permission.permission_grants` remains the existing Permission-owned table.
+Add nullable timestamp `superseded_at`, set only on an expired, unrevoked exact-scope
+predecessor during atomic reissue. Insert a fresh grant ID; retain all predecessor
+expiry, grantor/time and revoke metadata. No in-place renewal or fake revoke.
+`permission_grants_active_uq` retains its complete COALESCE scope tuple and uses
+`revoked_at IS NULL AND superseded_at IS NULL`; expiry remains a runtime predicate.
+Checks, scope resolution, active lists, revoke validation and seed existence checks
+exclude superseded rows. An old/expired grant ID remains non-revocable (409).
+See `docs/implementation/04-database-and-migrations.md` for rollout and rollback limits.

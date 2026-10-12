@@ -2,6 +2,8 @@
 
 ## Status
 
+Requester cancellation/edit exclusion partially superseded by ADR-0066; optional expiration, return intent, and owner selection remain in force.
+
 Accepted 2026-08-03 for issues #274 and #278.
 
 ## Context
@@ -27,3 +29,7 @@ The owner picker renders Actor display names from `GET /actors?workspace=current
 Permission requests become attributable and reviewable without a backend or shared-schema change, and approval workflows retain a route intent back to the originating surface.
 
 Managed Systems can be registered with an Actor default owner, systems with an unknown owner can be repaired through editing, and unassigned systems are labeled explicitly. Supporting selection of a new team beyond an already-known team ID requires a future, authorized team-candidate read contract.
+
+## Amended 2026-10-13 — ADR-0066
+
+Requester cancellation/edit exclusion partially superseded by ADR-0066; optional expiration, return intent, and owner selection remain in force. New behavior is accepted implementation work, not evidence of shipment. See [ADR-0066](0066-permission-request-lifecycle-and-direct-grant.md).

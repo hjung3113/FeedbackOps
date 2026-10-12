@@ -30,3 +30,9 @@ Home is not a chart-only dashboard and must not duplicate source-system workflow
 ## Verification
 
 - Test Role Level-specific Home content, Managed System filtering, permission-limited summaries, and deep links when touched.
+
+## Permission close-out contract
+
+- ADR-0066 accepts owner-scoped Permission Request detail from Home open-request rows (implementation pending): same-ID pending edit, needs_more_info supplementation with the latest Admin question, and requester-only `요청 철회`.
+- Render server allowed actions/scope candidates and send expected_revision. Preserve unsaved input and focus on stale/error responses; form closing is not withdrawal.
+- Withdrawal removes only the affected open row; refresh relevant mine/check/scope queries. Requester detail must not expose Admin risk/deny internals or email.
