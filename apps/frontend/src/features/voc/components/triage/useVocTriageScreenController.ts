@@ -142,8 +142,12 @@ export function useVocTriageScreenController({
     handleQueueOutcome: (input, outcome) => commandEnded(input, outcome),
     handleOptimisticRollback: (vocId, input) => optimisticRestore(vocId, 'rollback', input),
     // Undo does not reselect or refocus the restored VOC (owner, 2026-10-10: cost > gain).
+    // Restore closes the Finding creation dialog only when it targets this VOC (#1030).
     // To reinstate, see #957 (reselection) and #964 (focus correction after sonner's focus return).
-    handleOptimisticRestore: (vocId, input) => optimisticRestore(vocId, undefined, input),
+    handleOptimisticRestore: (vocId, input) => {
+      setCreateFindingTarget((current) => (current?.vocId === vocId ? null : current));
+      optimisticRestore(vocId, undefined, input);
+    },
     closeCreateFinding: () => setCreateFindingTarget(null),
   };
 }

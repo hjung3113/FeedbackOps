@@ -28,6 +28,8 @@ export function RootLayout() {
       <Toaster
         position="bottom-center"
         offset={TOASTER_BOTTOM_OFFSET}
+        // oxlint-disable-next-line shadcn/no-inline-styles -- Radix modals disable body pointer events; sonner needs style on its toaster ol (#1030).
+        style={{ pointerEvents: 'auto' }}
         richColors
         closeButton
         icons={{
