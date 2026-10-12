@@ -220,14 +220,11 @@ function listRow(displayId: string) {
   return row as HTMLElement;
 }
 afterEach(cleanup);
-it.each([
-  ['requests', 'click'],
-  ['requests', 'keyboard'],
-  ['backlog', 'click'],
-  ['backlog', 'keyboard'],
-] as const)(
-  'returns focus to the selected %s row after closing the panel via %s',
-  async (view, interaction) => {
+// Keyboard rows removed (owner decision 60-2): fireEvent.keyDown + click does not
+// prove native keyboard activation in jsdom.
+it.each(['requests', 'backlog'] as const)(
+  'returns focus to the selected %s row after closing the panel',
+  async (view) => {
     const mounted = mount(view);
     await screen.findByRole('heading', {
       name: view === 'requests' ? request.requested_outcome : task.title,
@@ -251,10 +248,6 @@ it.each([
         close.focus();
       });
       expect(document.activeElement).toBe(close);
-      if (interaction === 'keyboard') {
-        // jsdom does not synthesize button activation from keyDown.
-        fireEvent.keyDown(close, { key: 'Enter' });
-      }
       fireEvent.click(close);
       await waitFor(() => {
         expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
