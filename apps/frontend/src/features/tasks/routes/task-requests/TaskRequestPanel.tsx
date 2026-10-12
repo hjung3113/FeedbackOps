@@ -166,7 +166,9 @@ export function TaskRequestPanel({
         getCompletedFocusTarget={(result) =>
           result.id === item.id &&
           result.status === item.status &&
-          (result.status === 'approved' || result.status === 'rejected')
+          (result.status === 'approved' ||
+            result.status === 'rejected' ||
+            result.status === 'needs_more_evidence')
             ? decisionHeadingRef.current
             : null
         }

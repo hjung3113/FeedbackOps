@@ -391,6 +391,91 @@ describe('TaskRequestsRoute decision dialogs', () => {
     },
   );
 
+  it('hands additional-evidence success to the retained decision heading before removal', async () => {
+    const user = userEvent.setup();
+    const result: TaskRequestDto = { ...taskRequest, status: 'needs_more_evidence' };
+    let resolveDecision!: (value: TaskRequestDto) => void;
+    api.requestMoreEvidenceForTaskRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDecision = resolve;
+        }),
+    );
+    const dialog = await openDialog('근거 추가 요청', '근거 추가 요청');
+    api.fetchTaskRequests.mockResolvedValue({ items: [result] });
+    await user.type(within(dialog).getByRole('textbox'), '추가 지표를 확인해 주세요.');
+    const focused: EventTarget[] = [];
+    const handoffConnected: boolean[] = [];
+    const removedFocus: Element[] = [];
+    const record = (event: FocusEvent) => {
+      if (event.target) focused.push(event.target);
+      if (event.target instanceof HTMLHeadingElement) handoffConnected.push(dialog.isConnected);
+    };
+    const observer = new MutationObserver(() => {
+      if (!dialog.isConnected && document.activeElement) removedFocus.push(document.activeElement);
+    });
+    document.addEventListener('focusin', record);
+    observer.observe(document.body, { childList: true, subtree: true });
+    try {
+      await user.click(within(dialog).getByRole('button', { name: '요청' }));
+      await act(async () => resolveDecision(result));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      const heading = screen.getByRole('heading', { name: '검토 결정' });
+      expect(heading).toHaveFocus();
+      expect(handoffConnected[0]).toBe(true);
+      expect(removedFocus.length).toBeGreaterThan(0);
+      expect(removedFocus).not.toContain(document.body);
+      expect(focused).not.toContain(document.body);
+      expect(screen.getByRole('button', { name: '승인' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '반려' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '근거 추가 요청' })).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('focusin', record);
+      observer.disconnect();
+    }
+  });
+
+  it.each([
+    ['승인', 'Task Request 승인', '승인', 'approved'],
+    ['반려', 'Task Request 반려', '반려', 'rejected'],
+    ['근거 추가 요청', '근거 추가 요청', '요청', 'needs_more_evidence'],
+  ] as const)(
+    'keeps %s submit focused while pending and ignores a second Enter',
+    async (action, title, label, status) => {
+      const user = userEvent.setup();
+      const mutation =
+        status === 'approved'
+          ? api.approveTaskRequest
+          : status === 'rejected'
+            ? api.rejectTaskRequest
+            : api.requestMoreEvidenceForTaskRequest;
+      let resolveDecision!: (value: TaskRequestDto) => void;
+      mutation.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDecision = resolve;
+          }),
+      );
+      const dialog = await openDialog(action, title);
+      if (status !== 'approved') await user.type(within(dialog).getByRole('textbox'), '검토 메모');
+      const submit = within(dialog).getByRole('button', { name: label });
+      submit.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(submit).toHaveAttribute('aria-busy', 'true'));
+      // jsdom does not blur a newly disabled button as Chromium does; pin focusability too.
+      expect(submit).not.toBeDisabled();
+      expect(submit).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(submit).toHaveFocus();
+      await act(async () => resolveDecision({ ...taskRequest, status }));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    },
+  );
+
   it('AC-981 / AC-681-5 keeps the approved result selected beyond the destination first page', async () => {
     api.fetchTaskRequests.mockImplementation(async (options: ListTaskRequestsQuery) => {
       if (options.limit === 1)

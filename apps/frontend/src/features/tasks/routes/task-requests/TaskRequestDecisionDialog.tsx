@@ -10,6 +10,7 @@ import {
   Label,
   Textarea,
 } from '@fops/ui';
+import { Loader2 } from 'lucide-react';
 import * as React from 'react';
 
 export type DecisionAction = 'approve' | 'request-more-evidence' | 'reject';
@@ -87,6 +88,8 @@ export function TaskRequestDecisionDialog({
     completedResult.id === request.id &&
     completedResult !== opening.resultAtOpen &&
     ((content?.action === 'approve' && completedResult.status === 'approved') ||
+      (content?.action === 'request-more-evidence' &&
+        completedResult.status === 'needs_more_evidence') ||
       (content?.action === 'reject' && completedResult.status === 'rejected'));
   // Keep focused content connected until the same-request target is available.
   // Child FocusScope effects first release the closed dialog's focus trap.
@@ -179,7 +182,13 @@ export function TaskRequestDecisionDialog({
             <DialogTitle>{details.title}</DialogTitle>
             <DialogDescription>{details.description}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <form
+            onSubmit={(event) => {
+              if (isSubmitting) event.preventDefault();
+              else onSubmit(event);
+            }}
+            className="flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={inputId}>{details.label}</Label>
               <Textarea
@@ -209,7 +218,8 @@ export function TaskRequestDecisionDialog({
               >
                 취소
               </Button>
-              <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
+              <Button type="submit" aria-busy={isSubmitting} aria-disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {details.submitLabel}
               </Button>
             </DialogFooter>
