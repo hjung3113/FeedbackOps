@@ -149,23 +149,27 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       [WORKSPACE_ID, `${SLUG}%`],
     );
     const links = `select id from core.entity_links where source_id in (${responses})`;
-    await migrateHandle.pool.query(
-      `delete from core.audit_log where subject_id in (${links})`, [WORKSPACE_ID, `${SLUG}%`],
-    );
+    await migrateHandle.pool.query(`delete from core.audit_log where subject_id in (${links})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
     const parents = `select finding_id from survey.finding_response_bindings where response_id in (${responses})`;
     await migrateHandle.pool.query(
       `delete from core.entity_links where source_id in (${responses}) or target_id in (${parents})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
+    await migrateHandle.pool.query(`delete from core.audit_log where subject_id in (${parents})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
     await migrateHandle.pool.query(
-      `delete from core.audit_log where subject_id in (${parents})`, [WORKSPACE_ID, `${SLUG}%`],
+      `delete from finding.evidence_highlights where finding_id in (${parents})`,
+      [WORKSPACE_ID, `${SLUG}%`],
     );
-    await migrateHandle.pool.query(
-      `delete from finding.evidence_highlights where finding_id in (${parents})`, [WORKSPACE_ID, `${SLUG}%`],
-    );
-    await migrateHandle.pool.query(
-      `delete from finding.findings where id in (${parents})`, [WORKSPACE_ID, `${SLUG}%`],
-    );
+    await migrateHandle.pool.query(`delete from finding.findings where id in (${parents})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
     await migrateHandle.pool.query(
       `delete from survey.survey_response_excerpt_approvals where survey_id in (${surveys})`,
       [WORKSPACE_ID, `${SLUG}%`],

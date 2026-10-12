@@ -12,15 +12,15 @@ import {
   checkSurveyRead,
 } from './authorization.js';
 import {
-  type SurveyResponseEvidenceSubject,
   type FindingHighlightEvidence,
+  type SurveyResponseEvidenceSubject,
   bindFindingResponse,
   bindHighlightResponse,
-  readFindingHighlightEvidence,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
+  readFindingHighlightEvidence,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
   revokeApprovedExcerpt,
@@ -307,7 +307,6 @@ export function createSurveyEvidenceAccess(deps: SurveysServiceDeps) {
   }
   return { readEvidenceExcerptCandidate, approveEvidenceExcerpt, revokeEvidenceExcerpt };
 }
-
 
 /** Called only inside the authorized Finding command transaction. */
 export async function recordSurveyFindingBinding(

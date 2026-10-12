@@ -1,4 +1,3 @@
-import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 // #510 part B (ADR-0055): DB-level verification of the outcome follow-up
 // classifier and the replaced gap predicate.
 //
@@ -15,6 +14,7 @@ import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fi
 // under test are called through the app handle so EXECUTE for fops_app is
 // itself part of the proof.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { getRatingBandForValue } from '@fops/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -158,7 +158,9 @@ describe.skipIf(!runIntegration)('Outcome follow-up gap predicate (0052, ADR-005
     };
 
     const seedFinding = async (msId: string, status: string, responseId: string) => {
-      const finding = await insertSurveyFindingFixture<{ id: string }>(migrateHandle, responseId, 
+      const finding = await insertSurveyFindingFixture<{ id: string }>(
+        migrateHandle,
+        responseId,
         `insert into finding.findings (
            workspace_id, display_id, primary_managed_system_id, title, summary,
            source_type, source_id, severity, status, created_by

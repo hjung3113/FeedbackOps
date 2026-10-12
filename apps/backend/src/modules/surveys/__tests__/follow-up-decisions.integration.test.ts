@@ -1,4 +1,3 @@
-import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 // #510 part B (ADR-0055): route-level contracts for the outcome follow-up
 // commands. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -8,6 +7,7 @@ import { insertSurveyFindingFixture } from '../../../test-support/survey-finding
 // Rejected commands additionally assert that no state row and no audit row
 // were written, so a regression cannot silently mutate on denial.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -260,7 +260,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
   /** Poor subject already resolved by an active generated_finding link. */
   async function seedResolvedSubject(): Promise<Subject> {
     const subject = await seedSubject();
-    const finding = await insertSurveyFindingFixture<{ id: string }>(migrateDb, subject.responseId, 
+    const finding = await insertSurveyFindingFixture<{ id: string }>(
+      migrateDb,
+      subject.responseId,
       `insert into finding.findings (
          workspace_id, display_id, primary_managed_system_id, title, summary,
          source_type, source_id, severity, status, created_by
@@ -629,7 +631,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
 
   it('rejects with recovery_item_resolved when a generated_finding link to an active Finding exists', async () => {
     const subject = await seedSubject();
-    const finding = await insertSurveyFindingFixture<{ id: string }>(migrateDb, subject.responseId, 
+    const finding = await insertSurveyFindingFixture<{ id: string }>(
+      migrateDb,
+      subject.responseId,
       `insert into finding.findings (
          workspace_id, display_id, primary_managed_system_id, title, summary,
          source_type, source_id, severity, status, created_by

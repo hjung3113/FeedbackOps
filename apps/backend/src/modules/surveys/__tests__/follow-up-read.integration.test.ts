@@ -1,4 +1,3 @@
-import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 // #510 part C (ADR-0055): route-level contracts for the outcome follow-up
 // READ endpoint. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -10,6 +9,7 @@ import { insertSurveyFindingFixture } from '../../../test-support/survey-finding
 // survey_response_personal_read row per exposed (response, low-answer
 // question) pair, exactly like a holder result read.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -350,7 +350,9 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         // decision to pin the Finding precedence.
         const liveLinks = resolution === 'finding' ? 2 : 1;
         for (let number = 0; number < liveLinks; number += 1) {
-          const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(migrateDb, responseId, 
+          const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(
+            migrateDb,
+            responseId,
             `insert into finding.findings (
                workspace_id, display_id, primary_managed_system_id, title, summary,
                source_type, source_id, severity, status, created_by, created_at
@@ -374,7 +376,9 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         if (resolution === 'finding_and_no_follow_up')
           await insertDecision('no_follow_up', 'Handled outside the tool.');
       } else if (resolution === 'archived_finding') {
-        const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(migrateDb, responseId, 
+        const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(
+          migrateDb,
+          responseId,
           `insert into finding.findings (
              workspace_id, display_id, primary_managed_system_id, title, summary,
              source_type, source_id, severity, status, created_by

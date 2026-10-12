@@ -1,5 +1,5 @@
-import type { Tx } from '../../db/tx.js';
 import type { FindingDto } from '@fops/shared';
+import type { Tx } from '../../db/tx.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { checkFindingManage, checkFindingRead } from './authorization.js';
 import type { FindingReadRow, findCreatedFindingSourceLink } from './repo-read.js';

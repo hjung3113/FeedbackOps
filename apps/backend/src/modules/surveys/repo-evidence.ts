@@ -247,7 +247,6 @@ export async function hasActiveApprovedResponseExcerpt(
   return rows.length > 0;
 }
 
-
 export async function bindFindingResponse(
   tx: Tx,
   workspaceId: string,

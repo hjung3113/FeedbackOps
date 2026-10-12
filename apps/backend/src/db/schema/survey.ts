@@ -210,7 +210,9 @@ export const surveyResponseExcerptApprovals = surveySchema.table(
   },
   (t) => ({
     workspaceResponseIdUq: unique('excerpt_approvals_workspace_response_id_uq').on(
-      t.workspaceId, t.responseId, t.id,
+      t.workspaceId,
+      t.responseId,
+      t.id,
     ),
     workspaceSurveyActiveIdx: index('survey_response_excerpt_approvals_workspace_survey_active_idx')
       .on(t.workspaceId, t.surveyId, t.approvedAt.desc())
@@ -282,7 +284,10 @@ export const findingResponseBindings = surveySchema.table(
     historicalGeneratedSummary: text('historical_generated_summary').notNull(),
   },
   (t) => ({
-    workspaceParentUq: unique('finding_bindings_workspace_parent_uq').on(t.workspaceId, t.findingId),
+    workspaceParentUq: unique('finding_bindings_workspace_parent_uq').on(
+      t.workspaceId,
+      t.findingId,
+    ),
     workspaceResponseIdx: index('finding_bindings_workspace_response_idx').on(
       t.workspaceId,
       t.responseId,
@@ -311,7 +316,10 @@ export const highlightResponseBindings = surveySchema.table(
     approvedExcerptSnapshot: text('approved_excerpt_snapshot').notNull(),
   },
   (t) => ({
-    workspaceParentUq: unique('highlight_bindings_workspace_parent_uq').on(t.workspaceId, t.highlightId),
+    workspaceParentUq: unique('highlight_bindings_workspace_parent_uq').on(
+      t.workspaceId,
+      t.highlightId,
+    ),
     workspaceResponseIdx: index('highlight_bindings_workspace_response_idx').on(
       t.workspaceId,
       t.responseId,

@@ -1,5 +1,5 @@
-import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -139,8 +139,13 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
       [workspaceId],
     );
     expect(Number(seeded?.rows[0]?.count ?? 0)).toBeGreaterThan(0);
-    await migrateHandle?.pool.query('delete from finding.evidence_highlights where workspace_id=$1', [workspaceId]);
-    await migrateHandle?.pool.query('delete from finding.findings where workspace_id=$1', [workspaceId]);
+    await migrateHandle?.pool.query(
+      'delete from finding.evidence_highlights where workspace_id=$1',
+      [workspaceId],
+    );
+    await migrateHandle?.pool.query('delete from finding.findings where workspace_id=$1', [
+      workspaceId,
+    ]);
     await migrateHandle?.pool.query(
       'delete from survey.survey_response_excerpt_approvals where workspace_id = $1',
       [workspaceId],
