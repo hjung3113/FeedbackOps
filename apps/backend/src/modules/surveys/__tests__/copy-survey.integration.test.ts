@@ -85,17 +85,6 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
         detail->>'survey_id' in (select id::text from survey.surveys where primary_managed_system_id=any($2::uuid[])))`,
       [WORKSPACE_ID, systemIds],
     );
-    for (const table of [
-      'survey_response_excerpt_approvals',
-      'outcome_follow_up_decisions',
-      'survey_response_answers',
-      'survey_responses',
-    ]) {
-      await migrateHandle.pool.query(
-        `delete from survey.${table} where survey_id in (select id from survey.surveys where primary_managed_system_id=any($1::uuid[]))`,
-        [systemIds],
-      );
-    }
     await migrateHandle.pool.query(
       'delete from core.entity_links where managed_system_id=any($1::uuid[])',
       [systemIds],
@@ -108,6 +97,17 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       'delete from finding.findings where primary_managed_system_id=any($1::uuid[])',
       [systemIds],
     );
+    for (const table of [
+      'survey_response_excerpt_approvals',
+      'outcome_follow_up_decisions',
+      'survey_response_answers',
+      'survey_responses',
+    ]) {
+      await migrateHandle.pool.query(
+        `delete from survey.${table} where survey_id in (select id from survey.surveys where primary_managed_system_id=any($1::uuid[]))`,
+        [systemIds],
+      );
+    }
     await migrateHandle.pool.query(
       'delete from survey.survey_questions where survey_id in (select id from survey.surveys where primary_managed_system_id=any($1::uuid[]))',
       [systemIds],
