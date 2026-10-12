@@ -236,12 +236,20 @@ it.each([
     const row = listRow(view === 'requests' ? 'REQ-1071' : 'TASK-1000');
     const focusInTargets: Array<Element | null> = [];
     const focusOutActive: Array<Element | null> = [];
-    const onFocusIn = (event: FocusEvent) => focusInTargets.push(event.target as Element | null);
+    let closeButton: HTMLElement | null = null;
+    let rowFocusCloseConnected: boolean | null = null;
+    const onFocusIn = (event: FocusEvent) => {
+      focusInTargets.push(event.target as Element | null);
+      if (event.target === row && closeButton !== null) {
+        rowFocusCloseConnected = closeButton.isConnected;
+      }
+    };
     const onFocusOut = () => focusOutActive.push(document.activeElement);
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
     try {
       const close = await screen.findByRole('button', { name: '패널 닫기' });
+      closeButton = close;
       await act(async () => {
         close.focus();
       });
@@ -266,6 +274,10 @@ it.each([
       // of the close button always samples body even when focus lands directly on
       // the row; and the broken no-op close fires no focusout at all.)
       expect(focusInTargets).not.toContain(document.body);
+      // Focus reached the row while the close button was still connected: the
+      // close handler focuses the row synchronously, before the panel unmounts
+      // the button, so focus never rests on `body` in between.
+      expect(rowFocusCloseConnected).toBe(true);
     } finally {
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
@@ -304,14 +316,28 @@ it('returns focus to the row after closing a fullscreen panel in the real AppFra
   await screen.findByRole('heading', { name: task.title });
   await settleQueries(mounted.client);
   const row = listRow('TASK-1000');
-  fireEvent.click(await screen.findByRole('button', { name: '전체 화면 전환' }));
-  expect(screen.getByTestId('app-main')).toHaveProperty('hidden', true);
-  fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
-  await waitFor(() => {
-    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('app-main')).toHaveProperty('hidden', false);
-  });
-  await waitFor(() => expect(document.activeElement).toBe(row));
+  // jsdom 25 lets focus land inside [hidden], so the final identity alone cannot
+  // tell a synchronous focus of the hidden row from the real rAF retry. The row
+  // must receive focus only after the retry saw it visible: pin the hidden state
+  // of AppFrame's main at the moment the row is focused.
+  let rowFocusMainHidden: boolean | null = null;
+  const onFocusIn = (event: FocusEvent) => {
+    if (event.target === row) rowFocusMainHidden = screen.getByTestId('app-main').hidden;
+  };
+  document.addEventListener('focusin', onFocusIn);
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: '전체 화면 전환' }));
+    expect(screen.getByTestId('app-main')).toHaveProperty('hidden', true);
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
+      expect(screen.getByTestId('app-main')).toHaveProperty('hidden', false);
+    });
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    expect(rowFocusMainHidden).toBe(false);
+  } finally {
+    document.removeEventListener('focusin', onFocusIn);
+  }
 });
 it('cancels the pending focus return when another row is selected before a frame runs', async () => {
   const mounted = mountWithFrame('backlog');

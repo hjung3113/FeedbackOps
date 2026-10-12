@@ -53,13 +53,22 @@ export function useCloseFocusReturn(context: string) {
   React.useEffect(() => cancel, [cancel]);
 
   const rowRef = React.useCallback((id: string) => {
-    const existing = refCallbacksRef.current.get(id);
-    if (existing !== undefined) return existing;
+    const cached = refCallbacksRef.current.get(id);
+    if (cached !== undefined) return cached;
+    // No ref writes during render: the candidate below is not stored here. It
+    // caches itself on its first non-null attach (commit time), and the cache
+    // keeps it across detaches — detach removes only the live element — so the
+    // per-id callback identity stays stable once attached.
     const attach = (element: HTMLElement | null) => {
-      if (element === null) rowsRef.current.delete(id);
-      else rowsRef.current.set(id, element);
+      if (element === null) {
+        rowsRef.current.delete(id);
+        return;
+      }
+      if (refCallbacksRef.current.get(id) === undefined) {
+        refCallbacksRef.current.set(id, attach);
+      }
+      rowsRef.current.set(id, element);
     };
-    refCallbacksRef.current.set(id, attach);
     return attach;
   }, []);
 
