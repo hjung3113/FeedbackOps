@@ -89,14 +89,26 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       'delete from core.entity_links where managed_system_id=any($1::uuid[])',
       [systemIds],
     );
-    await migrateHandle.pool.query(
-      'delete from survey.finding_response_bindings where finding_id in (select id from finding.findings where primary_managed_system_id=any($1::uuid[]))',
-      [systemIds],
-    );
-    await migrateHandle.pool.query(
-      'delete from finding.findings where primary_managed_system_id=any($1::uuid[])',
-      [systemIds],
-    );
+    // #739: the binding check is deferred, so a Survey Finding and its private binding
+    // must leave in one transaction.
+    const findingClient = await migrateHandle.pool.connect();
+    try {
+      await findingClient.query('begin');
+      await findingClient.query(
+        'delete from survey.finding_response_bindings where finding_id in (select id from finding.findings where primary_managed_system_id=any($1::uuid[]))',
+        [systemIds],
+      );
+      await findingClient.query(
+        'delete from finding.findings where primary_managed_system_id=any($1::uuid[])',
+        [systemIds],
+      );
+      await findingClient.query('commit');
+    } catch (error) {
+      await findingClient.query('rollback');
+      throw error;
+    } finally {
+      findingClient.release();
+    }
     for (const table of [
       'survey_response_excerpt_approvals',
       'outcome_follow_up_decisions',
