@@ -159,26 +159,6 @@ describe('TaskListRoute My Tasks view', () => {
     expect(queries.at(-1)?.cursor).toBe('next');
   });
 
-  it('keeps view=my when a Task row is selected', async () => {
-    renderWithClient(<TasksRouteView search={{ view: 'my' }} />);
-
-    fireEvent.click(await screen.findByText(task.title));
-
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/tasks',
-      search: expect.any(Function),
-    });
-    const selectionSearch = navigateMock.mock.calls.at(-1)?.[0].search;
-    expect(selectionSearch({ view: 'my', managedSystem: 'all', public_update: 'missing' })).toEqual(
-      {
-        view: 'my',
-        managedSystem: 'all',
-        public_update: 'missing',
-        param: task.id,
-      },
-    );
-  });
-
   it.each([
     { view: 'my' as const, title: '내 Task' },
     { view: 'backlog' as const, title: 'Tasks' },

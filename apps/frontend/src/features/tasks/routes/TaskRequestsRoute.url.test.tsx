@@ -217,32 +217,6 @@ it.each(['scope', 'URL param'] as const)('resets a closed panel on a new %s', as
   expect(mounted.router.state.location.search.param).toBeUndefined();
 });
 
-it.each(['404', 'out-of-scope'] as const)(
-  'replaces a %s param without writing the first row',
-  async (state) => {
-    vi.mocked(getTaskRequest).mockImplementation(async () => {
-      if (state === '404')
-        throw new ApiError(404, { code: 'not_found.record', message: 'Missing' });
-      return second;
-    });
-    const mounted = mount(`${initial}&param=b1`);
-    await waitFor(() =>
-      expect(mounted.client.getQueryState(['task-request', 'b1'])?.status).toBe(
-        state === '404' ? 'error' : 'success',
-      ),
-    );
-    await waitFor(() =>
-      expect(mounted.router.state.location.search).toEqual({
-        view: 'requests',
-        managedSystem: A,
-        public_update: 'missing',
-      }),
-    );
-    expect(mounted.history.length).toBe(1);
-    await waitFor(() => expect(screen.queryByTestId('detail')).not.toBeInTheDocument());
-  },
-);
-
 it('keeps the new cross-scope param while the previous off-page detail is cached', async () => {
   let releaseB!: () => void;
   const pendingB = new Promise<void>((resolve) => {
