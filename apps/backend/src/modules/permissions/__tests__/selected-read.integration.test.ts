@@ -6,7 +6,7 @@ import {
 } from '@fops/shared';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import * as coreSchema from '../../../db/schema/core.js';
@@ -45,6 +45,18 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
   let admin: { id: string; cookie: string };
   let ms: string;
   let sibling: string;
+
+  // Limiter keys are `<workspace>:<actor>`; the shared Admin's decision bursts would
+  // otherwise trip the sensitive tier across cases.
+  const resetRateLimits = () =>
+    migrate.pool.query(
+      "delete from core.rate_limits where split_part(key, ':', 2) = any($1::text[])",
+      [actorIds],
+    );
+
+  beforeEach(async () => {
+    await resetRateLimits();
+  });
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -109,9 +121,7 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
       await migrate.pool.query('delete from core.sessions where actor_id = any($1::uuid[])', [
         actorIds,
       ]);
-      await migrate.pool.query('delete from core.rate_limits where key = any($1::text[])', [
-        actorIds,
-      ]);
+      await resetRateLimits();
       await migrate.pool.query('delete from core.actors where id = any($1::uuid[])', [actorIds]);
       await migrate.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
         msIds,
