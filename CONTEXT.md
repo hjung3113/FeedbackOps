@@ -250,8 +250,14 @@ _Avoid_: Visibility, permission, frontend filter
 An action-queue surface that groups outstanding **VOC**, **Task Request**, **Task**, **Survey**, and **Finding** work needing an **Actor**'s attention within their **Managed System Permission Scope**. Not a chart-only reporting page.
 _Avoid_: Chart page, BI report, analytics view, KPI tile board
 
+**Analytics Area operational report**:
+A current operational snapshot of readable **VOC**, **Finding**, **Task**, and **Survey** work grouped by each object's own current **Analytics Area** within its **Managed System**, used by **Admin** and same-scope **Developer** to open the work needing attention. Unclassified work remains valid; linked objects do not inherit attribution, **Task Request** has no Area total, and Survey follow-up counts Surveys rather than responses (ADR-0069).
+_Avoid_: Funnel, improvement score, historical Area snapshot
+
 **Coverage**:
 The ratio of records that have an expected follow-up to all records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage` (ADR-0067 adds configurable per-metric bands and neutral `집계 대상 없음` for an empty denominator; unavailable data remains distinct), so partial integration is not mistaken for total system truth.
+
+The ratio of records with the defined connection to eligible records of that kind (for example **VOC** records linked to a **Task**, active **Findings** with execution work, released **Tasks** with a **Public Update**), shown as value, total, percent, and a good/warn/bad status on the **Dashboard** and `/integration/coverage`, so partial integration is not mistaken for total system truth.
 _Avoid_: Test coverage, BI metric
 
 **VOC Cluster**:

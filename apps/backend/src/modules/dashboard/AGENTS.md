@@ -33,3 +33,12 @@ Dashboard is not a passive reporting helper.
 - Outcome response presentation/history remains Survey-owned/personal-gated under ADR-0055.
 - Coverage reads resolved five metric pairs once; proposed `no_data` differs from absent keys.
   Measure bounded API/UI and recorder fanout against ADR-0067's budget.
+
+## Analytics Area report (ADR-0069; accepted, implementation pending)
+
+- Compose authorized grouped owner reads and batch catalog metadata, not foreign repositories or per-Area service calls.
+- Attribute each VOC/Finding/Task/Survey to its own current nullable Area UUID; keep null/archived context.
+- Survey output counts Surveys and safe Survey-level follow-up signals, never responses or personal fields.
+- Omit unavailable metrics; authorized empty is zero. Hidden linked facts are not missing follow-up.
+- Keep Home summary intact; consume canonical recovery resolution without report-owned lifecycle writes.
+- Emit exact source-list filters only after both API and strict browser support exist; contract: `docs/implementation/api/dashboard.md`.

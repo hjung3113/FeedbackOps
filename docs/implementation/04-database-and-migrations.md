@@ -443,3 +443,13 @@ inventing past repairs. Read history for three calendar months; pruning never de
 `core.audit_log` or stable/current-occurrence identity needed to prevent preference drift.
 Survey response presentation/history remains a personal-gated Survey-owned adapter and
 retains ADR-0055 state/definer/grant protections, not duplicated Dashboard resolution state.
+
+## Analytics Area report storage boundary (ADR-0069; implementation pending)
+
+No report tables, lifecycle storage, Area backfill, mandatory classification or Task Request Area
+column are introduced. Grouped owner reads and metadata batching produce the proposed/new API projection.
+Survey classification remains behind protected owner readers; `fops_app` gains no direct response/answer
+read grant. If batching requires a new protected reader, its name/migration is proposed/new until
+implemented: register it in `apps/backend/migrations/meta/_journal.json`, narrowly grant the owner's
+needed columns, fix `search_path = pg_catalog`, revoke PUBLIC and preserve existing capability gates.
+Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; no preemptive materialized cache.

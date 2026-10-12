@@ -9,6 +9,8 @@ on 2026-10-13; the text below records the earlier shipped scope. D2/D4 are uncha
 
 Accepted 2026-10-05 by the owner (recommendation approved in session).
 
+Amended by ADR-0069 for the new Analytics Area report's required snapshot time only.
+
 Amended 2026-10-13: the MVP close-out (`docs/design/13-mvp-roadmap.md`) schedules D1-D3 as their own issues; D4 is closed by rejecting ADR-0035/0036.
 
 ## Context
@@ -50,3 +52,12 @@ The owner rejected ADR-0035 and ADR-0036 on 2026-10-13. MVP survey distribution 
 
 - The design docs keep the requirement text and point here where they state D1-D4 behavior, so a reader does not mistake them for shipped behavior.
 - Building any of D1-D4 later needs its own issue and, where the design is incomplete, its own ADR. This ADR is not a backlog.
+
+## Amended 2026-10-13 — Area report snapshot time (ADR-0069)
+
+D3's deferred `computed_at` refers to the shipped Dashboard summary/recovery-model work.
+The separately accepted, proposed/new Area report requires `computed_at` and UTC `as_of_date`
+for truthful snapshot and overdue context. This exception does not deliver or fork the deferred
+recovery identity, resolution storage, detail, snooze/mute or history. The report consumes the
+canonical expected-follow-up/no-follow-up interface from the scheduled D3 close-out work;
+its delivery does not wait on snooze/history UI.

@@ -245,3 +245,13 @@ Generic GETs write no projection/source state. Existing pg-boss handles discover
 Survey owns response decisions and personal-gated presentation/history adapter; Dashboard
 may reference it without bypassing privacy or duplicating decision state. Integration owns
 proposed/new shared recovery UI/public seam consumed by Home; full workflows remain on sources.
+
+## Analytics Area report composition (ADR-0069; implementation pending)
+
+Dashboard owns the proposed/new Area report read composition. VOC/Finding/Task/Survey own authorized
+source-list and grouped count predicates; Survey owns its safe Survey-level follow-up batch projection.
+Analytics Areas and Managed Systems own batch metadata lookup for authorized referenced UUIDs including
+archives. New read exports are proposed/new owner seams, not foreign repository/table bypasses.
+Integration owns the Coverage Area tab; Admin owns catalog maintenance only. Source repair commands,
+entity-link visibility and canonical recovery resolution keep their existing owners. Report reads never
+mutate sources or create report-specific assignment/resolution state.

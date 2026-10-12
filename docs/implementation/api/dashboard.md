@@ -129,3 +129,68 @@ summary p95 also <=develop p95 ×1.2+50ms. Record median/p95 across multiple sco
 counts, query plans and recorder multi-VOC fanout latency. Batch labels/readability and
 avoid per-item queries/unbounded rows. UI median `readyMs` threshold and visual checks
 follow ADR-0067. These are adopted requirements, not measured PASS evidence.
+
+## Analytics Area Report Contract — accepted, proposed/new (ADR-0069)
+
+Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
+Not implemented by #1071. This is a sibling read, not a replacement for the summary's VOC-only
+`analytics_areas` projection. Metric definitions and destinations: FR-DASH-002 in
+`docs/design/08-dashboard-system.md`.
+
+`GET /dashboard/analytics-areas` requires the authenticated workspace session and Admin/Developer
+role; User returns the standard `403 permission.denied` response even with a direct URL.
+Then apply each owning read seam and its module-specific Admin/explicit-deny rules independently.
+Catalog administration permission is not required. Missing backing capability or
+`permission.denied` / `permission.scope_required` omits only the unavailable metric; permitted empty
+is zero. No hidden object/label/count/endpoint is returned. Cross-source metrics are omitted when
+needed linked facts are unavailable; never subtract visible facts from hidden totals.
+Unexpected backing-read failures fail the request rather than converting failure to zero/absence.
+Use the configured read rate tier and `Cache-Control: private, no-cache`. No source mutation or
+report-read domain audit event; personal source navigation retains its existing audit contract.
+
+Proposed strict query:
+
+| Key | Accepted value / default |
+| --- | --- |
+| `managed_system_id` | Optional UUID or `all`; omitted/all means each metric's effective source scope, never a workspace bypass. |
+| `analytics_area_id` | Optional UUID or `unset`; omitted means all classifications in scope, unset means null. |
+| `limit` | Integer 1..100, default 50. |
+| `cursor` | Optional opaque continuation bound to session workspace, effective scopes and filters. |
+
+Malformed query/cursor returns `422 validation.failed` in the existing query-validation envelope.
+Scope is checked before catalog/object resolution; unknown, foreign-workspace and incompatible
+Area/System selections must not disclose existence. Source list contract extensions below specify
+empty results for syntactically valid nonmatching selections. Stable report row order is ascending
+Managed System UUID, then Area UUID, with null after assigned Areas. A scope/filter change starts
+paging again; an invalid or incompatible continuation is rejected as `invalid_cursor`.
+
+Proposed response contract (new wire keys; shared schema to be added to
+`packages/shared/src/dashboard.ts`):
+
+- `computed_at`: ISO timestamp for this authorized snapshot; `as_of_date`: UTC ISO date used by overdue predicates.
+- `items`: bounded array of rows with `managed_system_id`, `managed_system_name`,
+  `managed_system_archived`, nullable `analytics_area_id`, nullable `analytics_area_name`,
+  and `analytics_area_archived` (false for the unset row), plus independently optional metric groups.
+  Names/archive flags come from owner batch lookup of authorized referenced UUIDs, including archived
+  rows; no first-100 catalog page, slug/name join or guessed UUID label.
+- `page`: `{ has_more, cursor? }`; cursor is present only when another row page exists.
+- `classification_context`: per-Managed-System entries with independently available VOC/Finding/Task/Survey
+  `{ classified, total }` counts before Area filter and paging, under the same source eligibility/read
+  predicates as report rows. Across all Area pages including unset, domain totals reconcile exactly.
+- Row domain groups are proposed `voc`, `finding`, `task`, `survey`; keys are independently omitted,
+  including cross-source metrics within a readable group. Counts are nonnegative integers counting
+  distinct source objects. Each actionable positive count carries a typed internal next-action link
+  with source route and exact scope/Area/filter search; zero has no repair CTA. Ratios expose
+  `value` and `total`; percent/status are absent for total zero. No cross-domain ratio or composite score.
+  Concrete metric inventory is the FR-DASH-002 table; do not reuse closed summary IDs as new DTO keys.
+
+Rows are the union of readable source classifications (including null and non-VOC-only Areas),
+not all catalog Areas fabricated as zeros. A readable Area in one domain allows another authorized
+empty domain's zero, but never an unavailable domain's zero. Return no row when no readable data exists.
+Survey groups contain only Survey counts and Survey-grain signals: no response count/ID, score,
+answer text, respondent metadata, timestamp, response-derived bucket or personal action. Thresholding
+happens inside the Survey-owned classifier; personal-read grants never enlarge this response.
+
+Use a fixed set of authorized grouped owner reads plus batch catalog metadata. No loop of personal
+Survey reads or per-Area source-service fanout. New grouped read interfaces are proposed/new owner
+exports, not permission to import foreign repositories or grant raw Survey-table access.

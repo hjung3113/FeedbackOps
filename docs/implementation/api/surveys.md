@@ -289,3 +289,32 @@ visibility. Outcome Dashboard integration preserves ADR-0055's aggregate count/s
 navigation and personal-response audits. Proposed/new response presentation/history adapter
 is Survey-owned, personal-gated with no Admin bypass, and does not duplicate decisions or
 expose response-derived identities/counts to non-holders.
+
+## Analytics Area report destination extension (ADR-0069)
+
+These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+legacy and paging behavior. Apply workspace and source authorization before Area filtering,
+counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+`GET /surveys` gains wire `analytics_area_id=<uuid|unset>`, `status=open`, and `follow_up=needed`.
+The existing Survey list response remains an authorized Survey DTO array.
+`follow_up=needed` uses the Survey-owned boolean from the ADR-0055 threshold-gated closed Outcome
+classifier: at least one currently poor response has resolution `open`. Count/list each Survey once,
+regardless of the number of poor responses. Open/draft, below-threshold and no-poor-answer Surveys
+never match; a qualifying current Finding or no-follow-up decision clears the corresponding response,
+and a Survey clears only when no unresolved poor response remains. Do not compute the filter by
+calling personal readers in a loop or exposing a response count/ID or answer-derived filter.
+The Survey owner provides a proposed/new grouped safe batch projection for Dashboard composition.
+
+`survey.read` and explicit denies apply, including an explicit deny for an Admin. The report and
+ordinary filtered list add no personal-read fields or audits. Survey detail's existing
+`/surveys/:surveyId/follow-up` route calls `GET /surveys/:id/outcome-follow-up`; per-response
+commands retain fresh personal capability checks and the source's existing read/mutation audits.
+A personal-read holder still receives only Survey-grain report metrics.
