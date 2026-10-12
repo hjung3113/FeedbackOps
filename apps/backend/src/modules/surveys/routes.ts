@@ -171,6 +171,41 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       .header('cache-control', 'private, no-cache')
       .send(await opts.surveysService.getSurveyTemplates(actor(req), query.data.managed_system_id));
   });
+  app.get('/surveys/copy-sources', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = z
+      .object({
+        managed_system_id: uuid,
+        q: z.string().trim().max(200).optional(),
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+        cursor: z.string().min(1).max(1024).optional(),
+      })
+      .strict()
+      .safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply.header('cache-control', 'private, no-cache').send(
+      await opts.surveysService.getSurveyCopySources(actor(req), {
+        managed_system_id: query.data.managed_system_id,
+        limit: query.data.limit,
+        ...(query.data.q !== undefined ? { q: query.data.q } : {}),
+        ...(query.data.cursor !== undefined ? { cursor: query.data.cursor } : {}),
+      }),
+    );
+  });
+  app.get('/surveys/:id/copy-source', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+    const query = z.object({}).strict().safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply
+      .header('cache-control', 'private, no-cache')
+      .send(await opts.surveysService.getSurveyCopySource(actor(req), id));
+  });
   app.get('/surveys/:id', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');

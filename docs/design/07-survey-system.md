@@ -15,7 +15,7 @@ Owns:
 - Survey Response
 - Survey Result
 - Server-owned starting templates (ADR-0070; backend contract #1073)
-- Existing definition reuse (ADR-0070; pending #1074)
+- Existing definition reuse (ADR-0070; backend/shared contract #1074)
 ```
 
 Does not own:
@@ -95,7 +95,7 @@ Acceptance Criteria:
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
 - Survey can be created atomically from one of three built-in starters through the backend contract (#1073, ADR-0070).
-- Existing Survey definition reuse (#1074) and visible dialog source selection (#1075) remain pending until delivery; #1073 alone does not complete #1047's user-visible acceptance.
+- Existing Survey definition reuse is delivered through the backend/shared contract (#1074); visible dialog source selection (#1075) remains pending, so #1047's user-visible acceptance is not complete.
 - Managed System and respondent privacy remain explicit choices, and builder navigation uses only the persisted server ID (ADR-0039, amended by ADR-0070).
 - Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links (ADR-0035/0036) were rejected on 2026-10-13, ADR-0059 D4.)
 ```

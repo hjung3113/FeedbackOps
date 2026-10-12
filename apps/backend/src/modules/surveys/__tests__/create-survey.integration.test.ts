@@ -930,12 +930,11 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
       },
     ],
     [
-      'pending existing source',
+      'existing source missing token',
       {
         starting_point: {
           kind: 'existing_survey',
           survey_id: randomUUID(),
-          definition_token: 'token',
         },
       },
     ],

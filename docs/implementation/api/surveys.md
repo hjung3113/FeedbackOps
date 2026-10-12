@@ -8,6 +8,8 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 POST /surveys
 GET /surveys
 GET /surveys/templates
+GET /surveys/copy-sources
+GET /surveys/:id/copy-source
 GET /surveys/:id
 PATCH /surveys/:id
 POST /surveys/:id/questions
@@ -49,12 +51,11 @@ updated_at }`.
 Requirement: FR-SURVEY-001. Session and matching Workspace guards remain in
 force. `starting_point` is optional and strict:
 `{ kind: 'builtin', template_id: nonempty string, version: positive integer }`.
-The shared `surveyStartingPointSchema` is a discriminated union with only the
-`builtin` arm accepted now. Unknown template/version and source type mismatch
+The shared `surveyStartingPointSchema` also accepts the delivered existing-source
+arm described below (#1074). Unknown template/version and source type mismatch
 return `422 validation.failed` (field path `starting_point` or `type`, code
 `invalid`). Raw question bodies and unknown fields at either body level are
-rejected by strict parsing. The `existing_survey` arm is pending #1074 and is
-currently rejected. Omission keeps today's blank creation and audit unchanged.
+rejected by strict parsing. Omission keeps today's blank creation and audit unchanged.
 
 Keep all existing required fields, including explicit Managed System and
 privacy. A missing/foreign-workspace system returns `404 not_found.record`, an
@@ -134,11 +135,110 @@ operator's independently entered Survey description. Outcome remains positively
 oriented (1–2 poor low band, ADR-0055); this starter makes no automatic
 before/after causality or Task-completion claim.
 
-#1073 delivers this backend/shared contract only. Existing-definition reuse
-(#1074) and visible dialog selection (#1075) remain pending until their
-delivery; #1047's user-visible acceptance is not complete. Their accepted
-source/read/token/snapshot/retry decisions are in
+#1073 supplies built-in creation and #1074 supplies existing-definition reuse.
+Visible dialog selection (#1075) remains pending; #1047's user-visible acceptance
+is not complete. Source/read/token/snapshot/retry decisions are in
 [ADR-0070](../../adr/0070-survey-starting-templates-and-definition-reuse.md).
+
+### Existing Survey starting-point creation (#1074, ADR-0070)
+
+The additional strict request arm is exactly
+`{ kind: 'existing_survey', survey_id: uuid, definition_token: nonempty string }`
+(token maximum 256 characters). Source means the saved definition, never unsaved
+builder edits. All ordinary target validation above still applies, including
+archived target system → `409 conflict.parent_archived`.
+
+On the idempotency miss path, lock the source Survey before the target Managed
+System (matching source authoring lock order), and lock its ordered questions.
+Recheck current source read/manage and eligibility before comparing the token:
+
+| Source condition | Error |
+| --- | --- |
+| Missing, foreign Workspace, unreadable, or read revoked | `404 not_found.record` |
+| Readable but no manage, including manage revoked | `403 permission.denied` |
+| Authorized system/type mismatch, empty/invalid definition | `422 validation.failed` |
+| Authorized, eligible definition differs from preview token | `409 conflict.stale_write` |
+
+Eligible sources are same Workspace, same selected active Primary Managed
+System, saved draft/open/closed, with a nonempty valid complete graph and dense
+visible order. Explicit denies override Admin fallback. Personal-response read
+permission is neither required nor granted.
+
+The token covers type, Primary Managed System, ordered persisted question IDs,
+and every copied question field. Survey `updated_at` alone is insufficient.
+Create an independent draft through the same atomic graph command as built-ins:
+fresh Survey/Display ID and question UUIDs, parents inserted before children,
+branch parents remapped to new IDs, option/trigger keys retained, and dense
+visible order preserved even when a child visually precedes its parent.
+Copy no responses, answers, excerpts/approvals, results, follow-up decisions,
+Entity Links, Findings or distribution state. Title, description, privacy,
+Analytics Area, creator and operator use the current request/resolution only.
+
+Audit exactly `{ starting_point: { kind: 'existing_survey', survey_id },
+question_count }` in `survey_created`, plus one structural
+`survey_question_created` per copied question (including the new branch parent
+ID when present). Audit provenance is a separate strict allowlist from the
+request: never record the definition token or definition content. Any insertion,
+validation or audit failure rolls back target/questions/audits/counter/idempotency
+success together. The compact `201` response is unchanged. Same Actor/key/body
+replays the completed graph without rechecking a subsequently changed/revoked
+source; changed body/source/token with that key conflicts.
+
+### GET /surveys/copy-sources — eligible saved-source metadata
+
+Session and matching Workspace guards, read rate tier, and
+`Cache-Control: private, no-cache` apply. Strict query:
+`{ managed_system_id: uuid, q?: string, limit?: integer, cursor?: string }`.
+The system is required and must be active in the current Workspace. Missing or
+foreign system → 404, archived system → 409 `conflict.parent_archived`.
+Require current `survey.read` (denial → 404) and `survey.manage` (denial → 403),
+including explicit Admin denies. Unknown/repeated keys, invalid system/cursor,
+or limits outside 1–50 return `422 validation.failed`. `q` is trimmed, at most
+200 characters, and performs case-insensitive literal substring search over
+title and Display ID (wildcards are escaped). Default limit is 20, maximum 50.
+
+Response `200`, exported `surveyCopySourcesResponseSchema`, is exactly:
+`{ items: [{ survey_id, display_id, title, type, status, question_count }],
+page: { has_more: boolean, cursor?: string } }`. No other metadata is returned.
+Only eligible nonempty valid saved definitions appear. Newest first, ordered by
+`(created_at DESC, id DESC)`. The cursor is standard base64-encoded strict JSON
+`{ created_at: ISO timestamp, id: uuid }`, preserving PostgreSQL microseconds;
+the next page is strictly below that tuple. It represents the last emitted item
+and is present only when another page exists. Fetch at most `limit + 1` metadata
+rows, emit at most `limit`. No response/answer/VOC/Task joins or definition arrays
+are loaded by discovery; SQL checks definition validity and computes counts.
+This is live cursor pagination, not a frozen catalog across requests.
+
+### GET /surveys/:id/copy-source — selected definition snapshot
+
+Same guards, read tier and private/no-cache header. Path ID must be a UUID;
+query is strictly empty (unknown parameters → 422). In a short repeatable-read
+transaction, read same-Workspace source metadata and saved questions from one
+snapshot, require current read/manage, active source system and a nonempty valid
+definition. Missing/foreign/unreadable → 404, readable without manage → 403,
+archived system → 409, empty/invalid definition → 422.
+
+Response `200`, exported `surveyCopySourceResponseSchema`, is exactly
+`{ survey_id, display_id, title, type, definition_token, questions }`.
+Each ordered question is a strict allowlist:
+
+| Field | Contract |
+| --- | --- |
+| `id` | persisted question UUID; never a symbolic built-in key |
+| `kind` | `single_choice`, `multiple_choice`, `rating`, `text` |
+| `prompt`, `is_required`, `sort_order` | saved nonempty prompt, boolean, dense visible integer order from 0 |
+| `options` | choice array of 2–50 strict `{ key, label }` entries with nonempty unique keys/labels; null for other kinds |
+| `rating_min`, `rating_max` | integers 0–10, min below max for rating; null for other kinds |
+| `rating_low_label`, `rating_high_label` | saved nullable strings for rating; null for other kinds |
+| `branch_depth` | 0 or 1 |
+| `branch_parent_question_id` | persisted top-level single-choice parent UUID for a child; null otherwise |
+| `branch_trigger_option_key` | existing parent option key for a child; null otherwise |
+
+No Workspace/system/operator/creator/privacy/area/lifecycle/runtime fields or
+question timestamps/survey ID/parent-depth storage fields are returned. The
+source type is informational until the create request explicitly matches it;
+the frontend must use these dedicated schemas, not the symbolic built-in preview
+schema. #1075's dialog remains pending.
 
 ### Existing Survey list and mutation commands
 

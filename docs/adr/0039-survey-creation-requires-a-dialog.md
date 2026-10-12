@@ -37,7 +37,6 @@ Question rows also expose explicit move-up and move-down buttons. These are an i
 focused creation dialog with built-in starters and existing Survey question
 reuse. Explicit Managed System and privacy choices and navigation using the
 persisted server ID remain required; selecting a source never fills these
-choices silently. #1073 delivers the built-in backend/shared contract only.
-Existing-definition reuse (#1074) and visible dialog selection (#1075) remain
-pending until their delivery; #1047's user-visible acceptance is not complete
-in #1073. Blank creation remains the initial dialog mode.
+choices silently. #1073 delivers the built-in backend/shared contract and
+#1074 adds existing-definition reuse. Visible dialog selection (#1075) remains
+pending; these backend contracts do not complete #1047's user-visible acceptance. Blank creation remains the initial dialog mode.
