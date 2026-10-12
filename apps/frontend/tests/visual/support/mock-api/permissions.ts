@@ -49,7 +49,11 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
         await json(
           route,
           200,
-          permissionDecisionResultSchema.parse({ ...template, id: requestId, revision: target.revision }),
+          permissionDecisionResultSchema.parse({
+            ...template,
+            id: requestId,
+            revision: target.revision,
+          }),
         );
       },
     },
