@@ -33,7 +33,10 @@ import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { ActorContext, CheckService } from '../permissions/check-service.js';
 import { readDefaultDiagnostics } from './default-diagnostics.js';
-import { responsibilityTargetFailure, validateResponsibilityDefault } from './responsibility-target.js';
+import {
+  responsibilityTargetFailure,
+  validateResponsibilityDefault,
+} from './responsibility-target.js';
 
 // ADR-0017 slug shape: lower-kebab, must start with a letter.
 export const MS_SLUG_REGEX = /^[a-z][a-z0-9-]*$/;

@@ -30,8 +30,11 @@ export const registerManagedSystemVisualBodySchema = z
   .refine(
     (body) => !(body.default_owner_actor_id && body.default_owner_team_id),
     'default owner actor and team are mutually exclusive',
-  ).refine((body) => !(body.default_reviewer_actor_id && body.default_reviewer_team_id),
-    'default reviewer actor and team are mutually exclusive');
+  )
+  .refine(
+    (body) => !(body.default_reviewer_actor_id && body.default_reviewer_team_id),
+    'default reviewer actor and team are mutually exclusive',
+  );
 
 export const managedSystemVisualSchema = z
   .object({

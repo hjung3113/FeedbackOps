@@ -144,7 +144,9 @@ function ManagedSystemsBody({
                 areas={areasByMs.get(m.id) ?? []}
                 resolved={resolved}
                 last={i === systems.length - 1}
-                warning={Boolean(diagnosticsQuery.data?.items.some((item) => item.managed_system_id === m.id))}
+                warning={Boolean(
+                  diagnosticsQuery.data?.items.some((item) => item.managed_system_id === m.id),
+                )}
                 onConfigure={() => setEditTarget(m)}
               />
             ))}

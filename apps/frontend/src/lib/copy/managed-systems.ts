@@ -6,7 +6,8 @@ export const MANAGED_SYSTEM_COPY = {
   currentActor: '현재 배정 대상',
   candidatesError: '배정 후보를 불러오지 못했습니다.',
   candidatesErrorHint: '다시 시도해 후보를 확인하세요.',
-  diagnosticsHint: '해당 기본값으로는 자동 배정되지 않습니다. 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+  diagnosticsHint:
+    '해당 기본값으로는 자동 배정되지 않습니다. 설정에서 기본 담당자/검토자를 다시 지정하세요.',
   rowWarning: '자동 배정 경고',
   diagnostics: '자동 배정 설정 경고',
   diagnosticsLoading: '설정 경고를 불러오는 중…',
