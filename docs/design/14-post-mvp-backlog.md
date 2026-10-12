@@ -62,3 +62,13 @@ is MVP close-out scope, not a post-MVP deferral or a requirement to wait for sno
 Calibration, bounded incremental scanning, 5k-corpus value/performance evidence
 and two-week preview allowance review are required MVP implementation/activation
 work, not deferred items. Generation remains off pending that evidence.
+
+### Slice 54 — ADR-0065 (2026-10-13)
+
+| Deferred item | Product reason | Reopen when |
+| --- | --- | --- |
+| Standalone pre-Finding Evidence capture/inbox/lifecycle, bulk promotion and taxonomy | Saved-fragment retrieval reaches the owning Finding without introducing another synthesis model or duplicate editor. | Observed daily work needs evidence before a Finding; decide ownership/lifecycle/migration in a new ADR. |
+| Evidence execution coverage KPI, exact inventory totals/facets, export and automatic summaries | Every stored highlight already has a Finding; execution absence is not automatically a gap. Bounded retrieval solves the accepted job without BI or extra disclosure. | A demonstrated operational job and explicit metric/disclosure contract justify it. |
+| Picker excerpt-text search and additional cohort filters | Question/excerpt paging reuses the accepted result privacy boundary without new inference paths. | Real selection workload requires richer search; decide eligibility and inference tests before implementing. |
+
+#739/#740 and #1040/#816 remain scheduled MVP implementation dependencies, not deferrals.

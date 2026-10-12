@@ -63,7 +63,7 @@ Route naming rules:
 ```text
 - Home is the user-facing navigation label for `/home`; `/` is an entry-only redirect.
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
-- The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
+- The Evidence route `/integration/evidence` is accepted, implementation pending (ADR-0065). Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas, Permission Requests, and active grants/denies are Admin routes,
   not top-level work routes.
@@ -478,3 +478,28 @@ Cluster URL/search restoration. `/vocs` create owns the optional explicit-click
 semantic preview alongside its recent-peer panel; candidate UUID navigation
 retains the unsaved-change blocker and never creates a relationship.
 `/admin/settings` owns the default-off suggestion-generation opt-in.
+
+## Evidence inventory (ADR-0065; accepted, implementation pending)
+
+Proposed/new `/integration/evidence` uses ListShell/ListToolbar, compact rows and
+RightDetailPanel. It is absent from the shipped route/search inventory above.
+Strict proposed/new URL keys: `managedSystem` (UUID or `all`), `source`
+(`voc|survey_response|note`), `q` (trimmed max 200 characters), `selected` (local
+highlight UUID), `cursor` (opaque). Omit unfiltered defaults; drop invalid keys
+independently. Clients map scope/source to `managed_system_id`/`source_type`.
+
+Refresh/Back/Forward restores filters, page and selected safe detail. Scope/source/
+search changes clear cursor and reconcile selection against safe detail/current
+filters. Resolve explicit selection directly via `GET /evidence-highlights/:id`;
+page absence alone never clears it. Missing/unreadable selection shows not-found
+and opens no substitute row. Close removes selection with replace, preserves list
+context and returns row focus where possible. Session/scope/permission changes
+clear stale content. Primary `Finding 보기` opens `/findings?selected=<findingId>`;
+Back restores Evidence context. Add sidebar/dashboard entry during implementation.
+
+Render loading, permission block, genuinely empty, filtered-empty, withheld,
+selected-not-found, first-page failure and load-more failure distinctly; retry
+load-more without discarding successful rows. Explain `Finding에 저장된 Evidence를 찾습니다.`
+No editing, standalone creation, Unlinked tab, count/coverage KPI or execution
+control. Use ADR-0060's prototype reference only for this new surface and shipped
+Integration patterns for density/copy/scroll; verify desktop 1440 and keyboard focus.

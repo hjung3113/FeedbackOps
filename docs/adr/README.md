@@ -100,6 +100,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 - [0055](0055-outcome-survey-follow-up-decisions.md) Outcome Survey follow-up — low-band poor-response classifier; Finding or no-follow-up decision clears the gap. *Accepted*
 
 - [0064](0064-survey-provenance-read-boundary.md) Survey provenance read boundary and safe approved-excerpt reuse — trusted application authorization, protected bindings, metadata-only Finding summaries, filtered link/audit access and suppression-aware reuse. *Accepted 2026-10-13; implementation pending #739/#740/#816*
+- [0065](0065-evidence-inventory-and-approved-excerpt-reuse.md) Evidence inventory and approved Survey excerpt reuse — Findings-owned safe search inventory, Integration ListShell and Finding-local approved-excerpt picker. *Accepted 2026-10-13; implementation pending #739/#740/#1040/#816*
 
 ## Notifications
 

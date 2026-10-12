@@ -426,6 +426,17 @@ A personal-read holder still receives only Survey-grain report metrics.
 
 ## GET /surveys/:id/evidence-candidates — proposed/new (#816, ADR-0064)
 
+ADR-0065 selects this endpoint for Finding's approved-excerpt picker; no separate
+`evidence-excerpts` endpoint is added. The picker uses a separately authorized
+Survey catalog, then these safe pages; it never fetches personal results to
+filter client-side. Preserve source/Survey-change reset, distinct response-state/
+no-approved-excerpt/error states and fresh submit revalidation. Attachment remains
+Finding-owned `POST /findings/:id/survey-evidence` with existing classification
+fields, target-first validation/error ordering and metadata-only replay as defined
+in `findings.md`. Inventory uses the linked-highlight audience, not this picker
+suppression. Neither this selection read nor safe attachment fabricates personal
+read audits; actual personal source reads keep existing audits.
+
 Accepted target contract; no route/schema implementation is claimed here.
 
 - **Auth:** authenticated session Actor/workspace; lookup Survey in workspace,

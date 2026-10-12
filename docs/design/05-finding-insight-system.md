@@ -303,3 +303,23 @@ previews, including empty/suppressed/denied/error/revoked states and submit-time
 revalidation. Response-addressed create-Finding keeps its explicit personal gate.
 Source/target Managed Systems may differ with independent authorization in one
 workspace. UI ownership and endpoint contracts stay in their existing modules.
+
+## Evidence retrieval and picker (ADR-0065; accepted, implementation pending)
+
+Proposed/new Integration Evidence is a read-only search inventory of highlights
+already stored on readable Findings, not a standalone research inbox. One row
+per highlight shows safe source/content state and parent Finding identity; its
+primary action opens that Finding. Findings owns the bounded inventory/detail
+APIs in `docs/implementation/api/findings.md`. Eligibility precedes search and
+pagination; unavailable text and generated summaries never act as hidden matches.
+No Unlinked tab, Evidence lifecycle/display ID, execution KPI or duplicate editor.
+
+Finding's Add Evidence Survey branch uses the ADR-0064 candidate/attachment APIs:
+select authorized Survey, then approved question/excerpt, then attach server-side.
+No raw UUID or editable Survey quote; source changes clear selection, pending
+submit disables, retry preserves draft, stale approval allows reselection. Distinguish
+no responses, suppressed cohort, no approved excerpts, denied/error/revoked states.
+Survey catalog titles stay on that independently authorized surface, not evidence
+DTOs. Source/target scope is independent; invalidate Finding and inventory caches
+on success and reread fresh content. VOC/note behavior is unchanged. Retrieval
+has no mutation or gap-resolution action; execution stays on Finding detail.
