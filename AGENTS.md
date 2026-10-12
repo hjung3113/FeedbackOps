@@ -18,7 +18,7 @@
 The shipped UI is the authority for existing surfaces (ADR-0060): the components in `apps/frontend` and `packages/ui`, the copy modules in `apps/frontend/src/lib/copy/*`, and the committed visual baselines in `apps/frontend/tests/visual/`. Behavior and acceptance criteria come from the specs and ADRs.
 
 - **Changing an existing screen:** extend its current pattern. Reuse the shared components and match neighbouring screens in layout, density, and copy. No prototype comparison is required.
-- **Building a new surface:** if `docs/design-prototype/` drew it (e.g. the planned Evidence route), use that screen as a starting reference, not a contract. Otherwise mirror the closest shipped screen.
+- **Building a new surface:** if `docs/design-prototype/` drew it (e.g. the accepted, implementation-pending Evidence route), use that screen as a starting reference, not a contract. Otherwise mirror the closest shipped screen.
 - **Copy:** UI chrome (labels, buttons, headers, microcopy) is Korean; domain nouns (`VOC`, `Finding`, `Task`, `Task Request`, `Survey`, `Cluster`, `Managed System`, `Analytics Area`, `Milestone`, `Evidence`, `Triage`) and Task workflow statuses stay English (ADR-0057 A2, amended by #675). Reuse existing strings in `lib/copy` before writing new ones.
 - **Three-shell taxonomy (ADR-0020).** Every screen is `PageShell`, `ListShell`, or `WorkbenchShell`. Special pages extend the three — never a new shell.
 - **Do NOT port from the prototype:** hash routing, `window` globals, `document.execCommand`, synthetic local data, draft-only API intent panels. Production routing is TanStack Router; rich text is TipTap (ADR-0002 / ADR-0011).
@@ -92,7 +92,7 @@ Shipped user-facing strings are implemented in `apps/frontend/src/lib/copy/*`; u
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
 - Frontend feature folders follow these ownership boundaries: `home`, `my-work`, `voc`, `findings`, `voc-cluster`, `surveys`, `tasks`, `cross-system`, `integration`, `admin`.
-- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration owns the Evidence, Coverage, and Links UI boundaries. Coverage and Links routes stay under `/integration/*`; the Evidence route is planned, not built. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
+- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration owns the Evidence, Coverage, and Links UI boundaries. Coverage and Links routes stay under `/integration/*`; the Evidence route is accepted, implementation pending (ADR-0065). VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 

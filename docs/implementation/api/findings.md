@@ -281,13 +281,66 @@ Accepted target contract; the existing generic raw Survey attachment stays rejec
   Use existing mutation rate limiting. Concurrent revoke/attach follows the
   shared response-lock ordering; preview eligibility never authorizes later submit.
 
-## Integration Evidence consumer contract (proposed/new, Slice 54)
+## Evidence inventory — ADR-0065 (accepted, implementation pending)
 
-The Integration-owned `/integration/evidence` UI consumes a backend-composed
-projection from owning source modules, using the same authorized Survey batch
-projection and #816 candidate/attachment APIs where attachment is offered.
-Expose local evidence/Finding IDs, safe metadata and currently authorized excerpts;
-never private response bindings, raw links, audit JSON or response URLs. VOC
-source/reporter rules and note text remain unchanged. Backend endpoint/composition
-owner is assigned in the Slice 54 brief before implementation, not inferred from
-UI ownership. Bound pages and batch hydration; preserve existing Links/Coverage.
+All endpoints/DTO extensions below are **proposed/new**, Findings-owned reads of
+stored highlights, not a standalone Evidence resource. ADR-0064 owns the Survey
+projection/read boundary; do not restore raw binding/link/audit access.
+
+### GET /evidence-highlights
+
+Strict query: optional `managed_system_id` (UUID or `all`),
+`source_type=voc|survey_response|note`, `q` (trimmed case-insensitive literal text,
+max 200 characters; empty means no search), opaque `cursor`, integer `limit`
+(1..100, default 50). Omitted/`all` means effective authorized scope union.
+Response: `200 { items, page: { has_more, cursor? } }`; cursor only when another
+eligible page exists. No total/facet counts. Order highlight `created_at DESC,
+id DESC`, preserving stored timestamp precision. Cursor is bound to session
+workspace/Actor and normalized scope/source/search; malformed or mismatched
+cursor uses `422 validation.failed` with cursor field code `invalid_cursor`.
+
+Session/workspace and elevated Finding read are mandatory: Admin or Developer
+with canonical `finding.read` on each parent scope, including existing deny
+semantics. User remains `403 permission.denied` even with a grant. Exclude
+unreadable parent Findings. A valid unauthorized requested scope yields an empty
+list, not a workspace bypass. Recheck rights/approval on each page.
+
+Within the authorized parent set, project source content through the owning
+module before text matching, ordering and pagination. Match only currently
+readable quotes, safe source labels and parent title/display ID; never Finding
+summary, hidden quote or denied source metadata. Withheld content may appear
+under a matching safe parent label but cannot itself affect membership/order/
+continuation. Survey attached highlights retain ADR-0064's linked audience;
+picker suppression does not retroactively tighten it. Batch hydration must
+preserve the same transaction snapshot/response-lock authorization as ADR-0064.
+No one-Survey-transaction-per-row or nested-endpoint fan-out.
+
+### GET /evidence-highlights/:id
+
+Strict local highlight UUID, no query filters. Return `200` with the same item
+projection, resolving independently of loaded pages. Missing/foreign/unreadable
+parent/item returns `404 not_found.record`; invalid ID/query returns
+`422 validation.failed`. Elevated role denial is `403 permission.denied`.
+Frontend reconciles readable detail against current safe scope/source/search,
+never treats page absence as a detail 404. Both inventory reads use existing
+read rate limiting (`rate_limited.actor`) and have no link/mutation/personal-read
+side effects.
+
+### Proposed/new strict inventory item
+
+- Local `id`, `finding_id`, target `primary_managed_system_id`, `source_type`,
+  `analytics_area_id`, `sentiment`, `importance`, highlight `created_at`.
+- Readable `finding: { id, display_id, title }`; Survey-generated title is
+  ADR-0064 metadata-only. No `Finding.summary`.
+- `content_state: available|withheld`; `quote_or_summary` is present only when
+  available. Withheld local classification stays safe; omit denied source context.
+- Optional strict `source` object selected by `source_type`: readable VOC
+  `{ id, display_id, title, route }`; permitted Survey `{ survey_type,
+  survey_display_id, question_label, identity_protected }`; note omits `source`.
+  Withheld items omit denied context. Never a Survey response jump, even for holders.
+
+Never include response IDs/ordinals, response/approval bindings, candidate
+approval IDs, respondent identity, Survey title, exact submission time, raw
+answers, raw Entity Links or audit JSON. Note authored text and ordinary VOC
+source/reporter gates remain unchanged. Integration owns the read-only
+`/integration/evidence` ListShell; adding/editing/execution stays in Finding.

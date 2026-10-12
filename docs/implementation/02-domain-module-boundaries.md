@@ -266,8 +266,8 @@ Links owns canonical link mutation, including the narrow Survey definer; Core
 keeps append-only audit APIs, with raw app audit reads revoked at cutover.
 
 Integration's proposed/new Evidence route consumes backend-composed authorized
-DTOs, never private provenance/link/audit joins. The Slice 54 brief must name its
-backend composition owner/endpoint before implementation. UI ownership grants
+DTOs, never private provenance/link/audit joins. ADR-0065 assigns Findings as composition owner for proposed/new
+`GET /evidence-highlights` and `GET /evidence-highlights/:id`. UI ownership grants
 no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
 and Finding-owned attachment command rather than granting personal-response
 access to safe result readers.

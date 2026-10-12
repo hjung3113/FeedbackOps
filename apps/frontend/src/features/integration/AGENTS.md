@@ -15,7 +15,7 @@ Code ownership and URL mount are not the same thing here:
 - Owns both code and URL for Links, at `/integration/links`.
 - Owns both code and URL for Coverage, at `/integration/coverage` (route file `apps/frontend/src/routes/_authed/integration/coverage.tsx`, screen `features/integration/routes/CoverageRoute.tsx`).
 - Owns the Integration Action Dashboard at `/integration` (route file `apps/frontend/src/routes/_authed/integration/index.tsx`, screen `features/integration/routes/IntegrationDashboardRoute.tsx`).
-- `/integration/evidence` is planned, not yet built.
+- `/integration/evidence` is accepted, implementation pending (ADR-0065); no route is registered yet.
 - Findings is mounted at top-level `/findings` and owned by `apps/frontend/src/features/findings/`
   (route files live in `apps/frontend/src/routes/_authed/findings/`). The direct
   `/findings/$findingId` URL redirects to `/findings?selected=:findingId`.
@@ -69,12 +69,20 @@ Code ownership and URL mount are not the same thing here:
 - Operational positive counts link to exact typed source filters; repairs remain on owning source routes.
 - Add the secondary Area-tab link to the existing Integration Coverage card; no new Admin/rail surface.
 
-## Evidence read contract (ADR-0064; proposed/new Slice 54 surface)
+## Evidence inventory (ADR-0064/0065; accepted, implementation pending)
 
-`/integration/evidence` consumes backend-composed authorized DTOs and the shared
-Survey safe projection/#816 candidate/attachment APIs where actions are offered.
-Show local evidence/Finding IDs and safe metadata/authorized excerpts, never raw
-canonical links, response bindings, audit JSON or reconstructed response URLs.
-VOC source/reporter rules and authored notes remain intact. Backend composition
-owner/endpoint is named in the Slice 54 brief; Integration UI ownership gives no
-Survey/Finding mutation ownership. Preserve ordinary Links/Coverage behavior.
+Proposed/new `/integration/evidence` is a read-only ListShell inventory of stored
+highlights across readable Findings. Findings owns proposed/new
+`GET /evidence-highlights` and `GET /evidence-highlights/:id`; Survey owns the
+ADR-0064 safe projection. Integration renders only authorized DTOs, never raw
+links/private bindings/audit JSON or response URLs. See
+`docs/frontend/routes-and-layout.md` for URL keys, detail restoration and states;
+`docs/implementation/api/findings.md` for eligibility-before-search/pagination.
+
+Rows/panel identify the owning Finding; primary `Finding 보기` opens its detail
+and Back preserves Evidence context. Editing/attachment/execution remains in
+Finding detail, using #816's candidate/attach APIs. No standalone model, Unlinked
+tab or coverage KPI. Reuse Korean chrome/source labels and shipped shell density;
+prototype is a reference under ADR-0060. Verify desktop 1440, keyboard/focus,
+withheld/denied/empty/error and later-page selected detail during implementation.
+Preserve ordinary Links/Coverage, VOC source/reporter rules and authored notes.
