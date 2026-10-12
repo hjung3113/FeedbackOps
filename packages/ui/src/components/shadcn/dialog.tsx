@@ -57,6 +57,23 @@ export const DialogContent = React.forwardRef<
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+/**
+ * Bare dialog content: portal + Radix content with no default chrome and no
+ * close button, for dialog surfaces that own their styling and their
+ * outside-interaction policy (command palette, #1050).
+ */
+export const DialogContentBare = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogPrimitive.Content ref={ref} {...props}>
+      {children}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContentBare.displayName = 'DialogContentBare';
+
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div

@@ -556,3 +556,51 @@ describe('CommandPalette sidebar row', () => {
     expect(row).toHaveFocus();
   });
 });
+
+describe('CommandPalette toast interaction (#1050)', () => {
+  function ToasterHarness(): React.ReactElement {
+    return (
+      <ol data-sonner-toaster>
+        <li>
+          <button type="button" data-testid="toast-undo">
+            실행 취소
+          </button>
+        </li>
+      </ol>
+    );
+  }
+
+  // The palette harness mounts no Toaster (#1030 pattern from the @fops/ui
+  // dialog tests): a separate [data-sonner-toaster] stands in for sonner's.
+  async function openPaletteWithToast(): Promise<void> {
+    await renderPalette();
+    pressShortcut({ ctrlKey: true });
+    render(<ToasterHarness />);
+    // DismissableLayer installs its document pointerdown listener on the next turn.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it('keeps the palette open when a toast inside [data-sonner-toaster] is pressed and clicked', async () => {
+    await openPaletteWithToast();
+    const toast = screen.getByTestId('toast-undo');
+
+    fireEvent.pointerDown(toast, { pointerType: 'mouse', button: 0 });
+    expect(screen.getByRole('dialog', { name: '명령 메뉴' })).toBeInTheDocument();
+
+    fireEvent.click(toast);
+    expect(screen.getByRole('dialog', { name: '명령 메뉴' })).toBeInTheDocument();
+  });
+
+  it('closes when the overlay itself is pressed', async () => {
+    await openPaletteWithToast();
+    // Radix portals the overlay as the dialog content's previous sibling.
+    const overlay = screen.getByRole('dialog', { name: '명령 메뉴' })
+      .previousElementSibling as HTMLElement;
+
+    fireEvent.pointerDown(overlay, { pointerType: 'mouse', button: 0 });
+
+    expect(screen.queryByRole('dialog', { name: '명령 메뉴' })).not.toBeInTheDocument();
+  });
+});
