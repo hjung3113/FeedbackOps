@@ -41,13 +41,15 @@ interface TaskRequestRowProps {
   selected: boolean;
   names: NameMaps;
   onSelect: (id: string) => void;
+  /** #1032: registers the row element for the screen's close-focus return. */
+  rowRef?: (element: HTMLDivElement | null) => void;
 }
 
 function sourceDisplayId(item: TaskRequestListItem): string {
   return item.source?.display_id?.trim() ? item.source.display_id : 'Finding';
 }
 
-export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestRowProps) {
+export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: TaskRequestRowProps) {
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
   const ms = names.managedSystemsById[item.primary_managed_system_id];
@@ -91,6 +93,7 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
 
   return (
     <ObjectRow
+      ref={rowRef}
       id={item.display_id}
       title={
         sourceTitle ? (

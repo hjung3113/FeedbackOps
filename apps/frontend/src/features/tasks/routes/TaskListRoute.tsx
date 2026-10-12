@@ -29,6 +29,7 @@ import {
 } from '../adapters/taskDisplayAdapters';
 import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { useCloseFocusReturn } from '../hooks/useCloseFocusReturn';
 
 const PAGE_SIZE = 50;
 
@@ -46,6 +47,9 @@ export function TaskListRoute({
   managedSystem?: string;
 }) {
   const navigate = useNavigate();
+  const { rowRef, returnFocus, cancel } = useCloseFocusReturn(
+    JSON.stringify([view, managedSystem ?? null]),
+  );
   const [linkMissing, setLinkMissing] = React.useState(false);
   const [panelClosed, setPanelClosed] = React.useState(false);
   const [panelContext, setPanelContext] = React.useState({ view, managedSystem });
@@ -106,6 +110,11 @@ export function TaskListRoute({
       setLinkMissing(false);
     }
   }, [selectedParam]);
+
+  // #1032: a new selection (row click or URL param) cancels a pending focus return.
+  React.useEffect(() => {
+    if (selectedId !== null) cancel();
+  }, [selectedId, cancel]);
 
   React.useEffect(() => {
     if (
@@ -206,6 +215,7 @@ export function TaskListRoute({
             return (
               <ObjectRow
                 key={task.id}
+                ref={rowRef(task.id)}
                 id={task.display_id}
                 title={task.title}
                 selected={selected?.id === task.id}
@@ -275,6 +285,7 @@ export function TaskListRoute({
             managedSystemNamesById={managedSystemNamesById}
             view={view}
             onClose={() => {
+              returnFocus(selected.id);
               setPanelClosed(true);
               setLocalSelectedId(null);
               void navigate({

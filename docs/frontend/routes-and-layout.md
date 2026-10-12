@@ -229,7 +229,9 @@ as the other surfaces.
   Panel close and detail 404/out-of-scope cleanup remove `param` with
   replace; only the current selection's detail can trigger cleanup. On both screens,
   closing a panel keeps it closed until row selection, a tab/view or scope change,
-  or a new defined `param`. A detail 404/out-of-scope link shows the not-found notice
+  or a new defined `param`. Closing either Task screen's panel returns keyboard
+  focus to the row that was selected when the close started; when that row is
+  not shown, focus does not move. A detail 404/out-of-scope link shows the not-found notice
   in the detail-panel area and opens no row, including after URL cleanup or refetch.
   The notice clears on row selection, a tab/view or scope change, or a new defined
   `param`; removing `param` during cleanup does not clear it. First-row auto-selection
