@@ -188,3 +188,13 @@ transaction; shared identity/history remains a projection of source predicates. 
 hiding cannot repair a gap. Outcome response decisions/presentation/history remain
 Survey-owned under ADR-0055's personal seam. Home uses only currently actionable items,
 Integration owns the compact shared UI, and source actions retain their owning routes.
+
+## Analytics Area operational report (ADR-0069; implementation pending)
+
+Coverage's accepted `Analytics Area별 현황` tab opens exact source lists for operational attention;
+FR-DASH-002 in `08-dashboard-system.md` defines the metrics. Optional classification and links stay
+optional. Attribute each object to its own current Area; cross-Area links do not duplicate counts.
+Task Request review stays Managed System-wide. Survey report follow-up counts each qualifying closed
+Outcome Survey once via the Survey-owned safe signal, while individual response decisions and personal
+review stay governed by ADR-0055. All source jumps recheck permissions; source actions update the same
+canonical gap resolution consumed by Home/Integration, without report-specific lifecycle state.

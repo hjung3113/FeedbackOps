@@ -382,3 +382,27 @@ fall through to existing scoped unassigned queue with Admin warning. Creation DT
 returns safe routing metadata, with no private skipped-candidate IDs for Reporter.
 VOC-origin Finding/request transitions use the destination resolver, retain source
 visibility and atomic links/audit/replay. Optional later triage assignment remains valid.
+
+## Analytics Area report destination extension (ADR-0069)
+
+These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+legacy and paging behavior. Apply workspace and source authorization before Area filtering,
+counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+For `GET /vocs`, broaden the existing wire `filter.analytics_area` from `unset` to UUID or `unset`;
+no alternate wire key is introduced. `/vocs?view=inbox` without a tab is the non-archived total,
+including resolved/closed VOCs. `tab=unassigned` requires both owner fields null;
+`tab=no-task` is the direct active VOC→Task complement, a connection inspection rather than
+mandatory work. `tab=high-no-link` matches high/critical severity and missing canonical expected
+follow-up: no direct or qualifying cluster-origin Finding/Task Request/Task follow-up and no current
+authorized no-follow-up resolution. Canonical resolution comes from scheduled ADR-0059 D3 work;
+this extension does not implement its storage or a second recovery lifecycle. Count each VOC once.
+Report links include the source Managed System UUID and Area UUID/unset. Existing Triage's archived
+Managed System exclusions remain; report links use Inbox so retained context is still readable.

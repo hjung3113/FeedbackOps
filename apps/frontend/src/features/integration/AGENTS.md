@@ -60,3 +60,11 @@ Code ownership and URL mount are not the same thing here:
   selection stays open. Render backend actions/visibility/hints without response identity leaks.
 - Offer personal snooze (1/7 days), current-occurrence mute, hidden view/restore; refresh shared
   queries after source repairs. Coverage uses server bands/no-data/computation time, not local rules.
+
+## Analytics Area report (ADR-0069; accepted, implementation pending)
+
+- Extend Coverage's PageShell with URL-backed `view=areas`; default overview omits `view`.
+- Keep Managed System/Area/paging state and source destinations per `docs/frontend/routes-and-layout.md`.
+- Render unavailable, zero, zero-denominator, loading/error/denial separately; no stale prior-scope counts.
+- Operational positive counts link to exact typed source filters; repairs remain on owning source routes.
+- Add the secondary Area-tab link to the existing Integration Coverage card; no new Admin/rail surface.

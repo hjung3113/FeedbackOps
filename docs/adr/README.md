@@ -118,6 +118,8 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 - [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links rejected (2026-10-13). *Accepted, D1/D3 deferrals superseded by 0067*
 
+- [0069](0069-analytics-area-report.md) Analytics Area report attribution and safe metric grain — Coverage tab, own current classification, Survey-level output and exact source links. *Accepted, implementation pending*
+
 ## Status legend
 
 - *Accepted* - in force. *Accepted, implemented* - in force and shipped.

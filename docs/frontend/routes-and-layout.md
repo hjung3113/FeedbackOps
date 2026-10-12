@@ -429,3 +429,37 @@ Proposed/new Task Request URL `reviewer` (Actor UUID/`me`) and `reviewerTeam` (t
 map to backend assigned-reviewer filters in `view=requests`; omitted means full authorized
 review queue. Home's personal request panel sends `reviewer=me`; team membership is not
 inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.
+
+## Coverage Analytics Area tab and report destinations (ADR-0069)
+
+Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
+The extensions in this section are **proposed/new**, not registered by #1071; the shipped route
+and search inventory above remains the current implementation. FR-DASH-002 in
+`docs/design/08-dashboard-system.md` owns metric meanings and UI acceptance.
+
+- `/integration/coverage`: existing PageShell; overview is the default (omit `view`),
+  `view=areas` selects `Analytics Area별 현황`. Keep `managedSystem=<uuid|all>` and add
+  `filter.analytics_area=<uuid|unset>` plus opaque `cursor` for report paging.
+  Omitted scope means the actor's effective scope union. Default report page size is 50.
+  Scope changes clear incompatible Area and pagination; Area changes clear pagination.
+  Back/Forward/refresh restore tab, filters and page. No new rail or Admin report route.
+- Integration's Coverage card gets a secondary link to `view=areas` preserving Managed System;
+  Home's existing Coverage entry still reaches the same page. Catalog administration remains separate.
+- `/vocs`, `/findings`, `/tasks`, `/surveys` accept `filter.analytics_area=<uuid|unset>` in their
+  strict browser schemas and typed clients. VOC forwards the same dot key; the other clients map
+  it to backend `analytics_area_id`. Report links always retain the row's Managed System UUID.
+- VOC total/unassigned/high-follow-up/unlinked inspection use `view=inbox`, with omitted tab,
+  `tab=unassigned`, `tab=high-no-link`, or `tab=no-task` respectively.
+- Finding links carry `status=active` or existing `execution=none`; Task links carry `view=backlog`
+  plus single `status`, `status_group=in-flight`, `overdue=true`, `public_update=missing`, or
+  `reporter_update=needed`; Survey links carry `status=open` or `follow_up=needed`.
+  These are source membership filters, not `action=` intents. All combinations intersect.
+- Show active filters with explicit clear actions. Selection and panel close preserve them;
+  restore them with navigation history. Counts reevaluate on arrival and after owning repair.
+  A count must not link to a destination that drops its filter during strict validation.
+- Task Request review is `/tasks?view=requests&managedSystem=<system>` only, labeled
+  `Task Request 검토`, explicitly the whole Managed System queue with no Area count/filter.
+- The report uses its own typed query/cache key including scope, Area, page and session lifecycle.
+  Scope/permission changes clear stale counts; loading/error/denial do not render zero.
+  No eager source detail/personal Survey reads. Tab and positive-count links support keyboard
+  operation and visible focus. Source actions remain on source routes with fresh permissions.

@@ -670,3 +670,15 @@ automatic reassignment, team membership, or permission grant. Safe proposed/new 
 metadata `default_resolved`, `source_rule`, `managed_system_id`, persisted responsibility,
 and skipped-rule categories lives in responses/creation audits, not a second assignment
 truth; private candidate IDs stay out of Reporter responses.
+
+## Analytics Area report projection — accepted, proposed/new (ADR-0069)
+
+This is a computed read projection, not a table or new lifecycle. Wire shape is owned by
+`docs/implementation/api/dashboard.md`; metric meanings by FR-DASH-002 in `08-dashboard-system.md`.
+VOC/Finding/Task/Survey retain their existing nullable `analytics_area_id`, attributed independently
+to each source's current classification. Null is valid and has a per-System `미지정` row; referenced
+archived UUIDs remain distinct from a new Area reusing the same slug/name. No source Area backfill,
+mandatory field, linked-source inheritance rule or Task Request Area column is introduced.
+Canonical active `requested_task` links define Finding handoff, not `linked_task_id`.
+Survey report totals count Surveys and use Survey-grain `follow_up_needed`; the response-grain
+ADR-0055 decision state remains Survey-owned and is never copied into report storage.

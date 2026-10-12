@@ -481,3 +481,38 @@ and replay notification deduplication; team targets send no arbitrary-member not
 Typed DTOs/source-owned edits and Actor/team filters must ship with fields; `assignee=me`
 remains personal Actor assignment, never implicit team membership. No standalone create
 endpoint is introduced by this ADR.
+
+## Analytics Area report destination extension (ADR-0069)
+
+These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+legacy and paging behavior. Apply workspace and source authorization before Area filtering,
+counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+`GET /tasks` gains wire `analytics_area_id=<uuid|unset>`, `status_group=in-flight`, `overdue=true`,
+and `reporter_update=needed`. Keep single `status` (the seven existing lowercase wire values)
+and `public_update=missing`; combined filters intersect, never widen scope.
+
+- `status_group=in-flight`: `todo`, `doing`, `review`; Backlog is separate from work started.
+- `overdue=true`: status in `backlog`, `todo`, `doing`, `review`, `reopened`, with non-null
+  `due_date` strictly before the current UTC date. Due today/null and Done/Released are excluded.
+  The report uses its UTC `as_of_date`; arrival recomputes live date/state, so a midnight boundary
+  may change membership and is explained by the snapshot time rather than frozen authorization.
+- `public_update=missing`: Released Tasks with at least one active `voc→task evidence_of` link
+  to a non-archived VOC and no linked non-skipped Public Update. Its matching ratio means at least
+  one update exists, not all reporters updated after release.
+- `reporter_update=needed`: Released Tasks with at least one such linked VOC whose reporter-facing
+  status is neither `resolved` nor `closed`. Each Task counts once regardless of linked VOC count.
+
+Report destinations use `/tasks?view=backlog` for all these filters, with source System and Area;
+extend strict browser validation and typed client forwarding to support `public_update=missing`
+in that list as well as the existing board. Linked VOC/report-update facts require the existing
+VOC read seam; omit unavailable cross-source report metrics instead of returning hidden complements.
+Task detail opens the approved linked VOC/review path, and publishing stays VOC-owned.
+The report introduces no Task Blocked state and never resolves VOC on Task release.

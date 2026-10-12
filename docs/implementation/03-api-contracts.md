@@ -15,7 +15,7 @@ Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains 
 | [`api/navigation.md`](api/navigation.md) | Navigation Count Contract; Route Resolution Contract |
 | [`api/auth.md`](api/auth.md) | Authentication |
 | [`api/attachments.md`](api/attachments.md) | Attachments |
-| [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract; Coverage settings; Recovery queue/detail/presentation/history (proposed/new) |
+| [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract; Coverage settings; Recovery queue/detail/presentation/history (proposed/new); Analytics Area Report Contract (accepted, proposed/new) |
 | [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC List And Triage Fields; VOC Similarity Projection; Task release side effect (Issue #165); POST /vocs/:id/create-finding; VOC Recommendations |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes |

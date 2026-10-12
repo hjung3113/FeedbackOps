@@ -290,7 +290,17 @@ Dashboard may query entity links to detect records missing relation types expect
 - VOC Cluster marked "needs synthesis" without Finding
 - Finding marked actionable without Task Request, Task, linked existing Task, or not_actionable decision
 - Released Task with unresolved reporter-facing VOC status
-- Bad Outcome Survey without configured follow-up Finding or Task Request
+- Bad Outcome Survey response without the qualifying Finding or current no-follow-up decision (ADR-0055); Task Request links do not clear the response classifier
 ```
 
 Dashboard must not treat every unlinked record as incomplete. Dashboard must deep-link users to owning module actions and must not mutate source lifecycle state directly.
+
+### Analytics Area report relation attribution (ADR-0069; implementation pending)
+
+Report source membership/counts use canonical active links and approved owner read projections,
+with Entity Linking visibility semantics. Finding handoff recognizes `requested_task` to Task Request
+or Task, not convenience columns; direct VOC→Task coverage uses an active direct link. Cross-Area
+links within the allowed Managed System do not change source attribution or multiply source counts.
+If required linked facts are unavailable, omit the cross-source metric instead of treating hidden
+links as absent. Survey's safe aggregate classifier retains ADR-0055's approved resolution semantics
+without exposing linked Finding metadata or response-grain facts on the report.

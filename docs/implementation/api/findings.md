@@ -64,8 +64,9 @@ Admin sees the workspace population. Developer visibility uses the existing
 point `finding.read` checks once per distinct Primary Managed System, including
 explicit denies, before the SQL page limit and counts. Empty allowed scope
 returns no rows and a first-page total of zero. The same SQL visibility
-predicate applies in full-set mode. `execution=none` keeps the active,
-no-linked-Task, no-active-requested-Task-Request predicate.
+predicate applies in full-set mode. `execution=none` currently keeps the active, no-linked-Task, no-active-requested-Task-Request
+predicate. Its convenience-column test is superseded for implementation by the accepted ADR-0069
+canonical-link predicate in the extension below (implementation pending).
 
 Saved Finding views reject both `cursor` and `limit`; paging is transient list
 state and is never persisted as a saved filter.
@@ -195,3 +196,25 @@ automatic candidates skip with safe audit metadata/Admin warning. Preserve sourc
 entity links, creation state, rollback/idempotent replay, and no provenance backfill.
 Proposed/new owner fields must appear in typed list/detail/create DTOs and source-owned
 assignment display/edit/filter; assignment changes validate/audit in the owning mutation.
+
+## Analytics Area report destination extension (ADR-0069)
+
+These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+legacy and paging behavior. Apply workspace and source authorization before Area filtering,
+counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+`unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
+an empty authorized result, without catalog existence disclosure. Archived referenced Areas
+remain filterable; they are not selectable as new classifications. Browser key is
+`filter.analytics_area=<uuid|unset>`; clients translate it to the owning wire query key below.
+Grouped report counts and exact list membership must share the owner predicate, including
+cross-source availability rules; hidden links are not absent links. These ordinary reads write
+no source records or domain audit events. Source repair commands keep their existing gates/audits.
+
+`GET /findings` gains wire `analytics_area_id=<uuid|unset>` and `status=active`.
+For report handoff metrics and the existing `execution=none` filter, execution is present only with
+an active canonical `(finding, task_request, requested_task)` or `(finding, task, requested_task)`
+link. `linked_task_id` is a convenience reference and is not the predicate's truth.
+`execution=none` continues to restrict to active Findings, now using the canonical link complement;
+draft/not_actionable/converted/archived Findings are not handoff gaps. Both filters work in full-set
+and paged reads with identical authorized first-page totals. An existing direct Task connection is
+not Task Request approval or work completion. Scope uses the existing elevated Finding read seam.
