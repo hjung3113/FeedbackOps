@@ -101,6 +101,10 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       [systemIds],
     );
     await migrateHandle.pool.query(
+      'delete from survey.finding_response_bindings where finding_id in (select id from finding.findings where primary_managed_system_id=any($1::uuid[]))',
+      [systemIds],
+    );
+    await migrateHandle.pool.query(
       'delete from finding.findings where primary_managed_system_id=any($1::uuid[])',
       [systemIds],
     );
@@ -609,10 +613,27 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       "insert into survey.outcome_follow_up_decisions(workspace_id,survey_id,response_id,managed_system_id,state,reason,decided_by_actor_id) values($1,$2,$3,$4,'no_follow_up','Already handled',$5)",
       [WORKSPACE_ID, id, responseId, systemId, adminId],
     );
-    const finding = await migrateHandle.pool.query<{ id: string }>(
-      "insert into finding.findings(workspace_id,display_id,primary_managed_system_id,title,summary,source_type,source_id,severity,status,created_by) values($1,core.next_display_id($1::uuid,'finding'),$2,'Historic Finding','summary','survey_response',$3,'medium','active',$4) returning id",
-      [WORKSPACE_ID, systemId, responseId, adminId],
-    );
+    // #739: a Survey-sourced Finding keeps its response binding only in the protected
+    // table; the public row carries no source_id and the deferred check needs both rows.
+    const bindingClient = await migrateHandle.pool.connect();
+    let finding: { rows: Array<{ id: string }> };
+    try {
+      await bindingClient.query('begin');
+      finding = await bindingClient.query<{ id: string }>(
+        "insert into finding.findings(workspace_id,display_id,primary_managed_system_id,title,summary,source_type,source_id,severity,status,created_by) values($1,core.next_display_id($1::uuid,'finding'),$2,'Historic Finding','summary','survey_response',null,'medium','active',$3) returning id",
+        [WORKSPACE_ID, systemId, adminId],
+      );
+      await bindingClient.query(
+        "insert into survey.finding_response_bindings(workspace_id,finding_id,response_id,historical_generated_title,historical_generated_summary) values($1,$2,$3,'Historic Finding','summary')",
+        [WORKSPACE_ID, finding.rows[0]?.id, responseId],
+      );
+      await bindingClient.query('commit');
+    } catch (error) {
+      await bindingClient.query('rollback');
+      throw error;
+    } finally {
+      bindingClient.release();
+    }
     await migrateHandle.pool.query(
       "insert into core.entity_links(workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values($1,'survey_response',$2,'finding',$3,'generated_finding','internal_only','active',$4,$5)",
       [WORKSPACE_ID, responseId, finding.rows[0]?.id, systemId, adminId],
