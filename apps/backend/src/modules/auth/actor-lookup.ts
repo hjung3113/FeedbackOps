@@ -54,3 +54,21 @@ export async function findWorkspaceActorIds(
     .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, [...actorIds])));
   return new Set(rows.map((row) => row.id));
 }
+
+/** Workspace-filtered recipient lock. Call before request/policy/grant locks. */
+export async function lockWorkspaceActor(
+  tx: Tx,
+  input: { workspaceId: string; actorId: string },
+): Promise<WorkspaceActor | null> {
+  const rows = await tx
+    .select({ id: actors.id, role_level: actors.roleLevel })
+    .from(actors)
+    .where(and(eq(actors.workspaceId, input.workspaceId), eq(actors.id, input.actorId)))
+    .for('update');
+  const row = rows[0];
+  if (!row) return null;
+  if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
+    throw new Error(`unexpected role_level for actor ${row.id}: ${row.role_level}`);
+  }
+  return { id: row.id, role_level: row.role_level };
+}

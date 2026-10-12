@@ -407,6 +407,13 @@
       "when": 1790899200000,
       "tag": "0057_excerpt_approval_response_id_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791849600000,
+      "tag": "0058_permission_request_revision",
+      "breakpoints": true
     }
   ]
 }

@@ -400,6 +400,13 @@ It does not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, o
 
 ## Permission close-out migration contract (ADR-0066; proposed/new)
 
+Migration `0058_permission_request_revision.sql` adds the request revision and
+`cancelled` status without altering the open-request unique index. Apply it before
+writers and deploy required-revision API and #1083 clients together. Its SQL
+contains a history-preserving rollback note. Scratch-DB verification and the
+latest snapshot refresh must precede the migration drift gate; never adopt a
+TS-derived snapshot without comparing actual migrated SQL as described above.
+
 No migration is applied by the docs decision. Implementation adds positive integer
 permission.permission_requests.revision NOT NULL DEFAULT 1 and extends the existing
 text status CHECK with cancelled, retaining every old status. Every successful

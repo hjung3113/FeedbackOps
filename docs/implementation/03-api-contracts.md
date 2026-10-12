@@ -88,22 +88,23 @@ Each endpoint must define:
 Audit-sensitive mutation endpoints must require an optimistic concurrency token
 such as `expected_version` or `last_seen_at`. On mismatch, APIs must return a
 conflict-style response with the current object version and must not auto-merge
-or apply the stale action. Only five endpoints implement this token, as a
+or apply the stale action. Five endpoints implement a timestamp token, as a
 required `If-Match` header: `PATCH /vocs/:id`, `PATCH /vocs/:id/description`,
 `PATCH /tasks/:id`, `POST /tasks/:id/milestone`, and `PATCH /milestones/:id`.
-Public Update send, Task Request decisions, and Permission decisions take no
-token and are guarded by object state instead: Public Update send validates the
+Public Update send and Task Request decisions are guarded by object state instead.
+Public Update send validates the
 requested reporter-facing status transition against the current status
 (`422 reporter_facing_status.invalid_transition`), Task Request decisions
 return `422 validation.failed` for a disallowed transition and a `200` no-op
-when the Task Request is already in the target status, and Permission decisions
-return `409 conflict.stale_write` when the request is no longer decidable.
+when the Task Request is already in the target status. Permission decisions require
+`expected_revision` and return `409 conflict.stale_write`
+with authorized `current_revision` for changed revision or no-longer-decidable status.
 Survey evidence attachment to VOC has no route. The preceding token coverage is
 the shipped snapshot; ADR-0066 supersedes the Permission state-only contract with
-proposed required expected_revision on requester edit/withdraw/supplement and all
+required expected_revision on requester edit/withdraw/supplement and all
 Admin decisions. Authorization precedes replay; lock/revision checks occur inside
 the idempotent run, and mismatch returns authorized current_revision only. See
-`api/permissions.md` for the accepted, not-yet-implemented wire changes.
+`api/permissions.md` for the wire contract and the remaining selected-read/direct-grant work.
 
 ## Default Owner / Reviewer Resolution
 

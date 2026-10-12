@@ -490,8 +490,8 @@ permission_requests
 - source_object_id: uuid, nullable
 - source_action_id: text, nullable
 - return_route_intent: text, nullable
-- status: text + CHECK(pending, needs_more_info, approved, rejected, expired, revoked, cancelled), required; cancelled is proposed/new (ADR-0066)
-- revision: positive integer, required, default 1; proposed/new (ADR-0066)
+- status: text + CHECK(pending, needs_more_info, approved, rejected, expired, revoked, cancelled), required; cancelled is added by migration 0058 (ADR-0066)
+- revision: positive integer, required, default 1; migration 0058 (ADR-0066)
 - created_at: timestamp, required
 - updated_at: timestamp, required
 ```
@@ -501,7 +501,7 @@ Rules:
 ```text
 - Sensitive permissions require reason.
 - requested_managed_system_id carries supported Managed System scope; nullable workspace scope is capability-policy controlled. Single-object authorization is post-MVP (ADR-0066). Preserve historical requested_object_type/id, reject non-null object scope in new create/edit/supplement and legacy approval, and never silently widen it. source_object_* remain provenance.
-- Requester pending edit and needs_more_info supplement retain identity; withdrawal to cancelled frees the open slot and preserves history. Every successful request mutation advances revision and updated_at (proposed/new).
+- Requester pending edit and needs_more_info supplement retain identity; withdrawal to cancelled frees the open slot and preserves history. Every successful request mutation advances revision and updated_at (#1080).
 - Approval retains requested scope/expiration and records actual granted scope/expiration separately in response and audit; no requested-field overwrite.
 - analytics_area_id is not an MVP permission boundary.
 - Expiry and revocation must be enforceable.

@@ -1,5 +1,6 @@
 export {
   findWorkspaceActor,
+  lockWorkspaceActor,
   findWorkspaceActorIds,
   listWorkspaceAdminActorIds,
   type WorkspaceActor,

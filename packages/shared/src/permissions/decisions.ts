@@ -1,9 +1,16 @@
 import { z } from 'zod';
 
-const optionalReasonSchema = z.object({ reason: z.string().max(2000).optional() }).strict();
+const optionalReasonSchema = z
+  .object({
+    expected_revision: z.number().int().positive(),
+    reason: z.string().max(2000).optional(),
+  })
+  .strict();
 
 export const approvePermissionRequestSchema = z
   .object({
+    expected_revision: z.number().int().positive(),
+    granted_managed_system_id: z.string().uuid().nullable().optional(),
     reason: z.string().max(2000).optional(),
     expiration: z.string().datetime().nullable().optional(),
     self_approval: z
@@ -20,13 +27,19 @@ export const approvePermissionRequestSchema = z
 export const rejectPermissionRequestSchema = optionalReasonSchema;
 export const denyPermissionRequestSchema = optionalReasonSchema;
 export const needMoreInfoPermissionRequestSchema = z
-  .object({ note: z.string().max(2000).optional() })
+  .object({ expected_revision: z.number().int().positive(), note: z.string().max(2000).optional() })
   .strict();
 
 export const permissionDecisionResultSchema = z
   .object({
     id: z.string().uuid(),
+    revision: z.number().int().positive(),
     status: z.enum(['approved', 'rejected', 'needs_more_info']),
+    updated_at: z.string().datetime(),
+    requested_managed_system_id: z.string().uuid().nullable().optional(),
+    granted_managed_system_id: z.string().uuid().nullable().optional(),
+    requested_expiration: z.string().datetime().nullable().optional(),
+    granted_expiration: z.string().datetime().nullable().optional(),
     grant_id: z.string().uuid().optional(),
     deny_id: z.string().uuid().optional(),
   })

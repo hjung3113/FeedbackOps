@@ -29,6 +29,8 @@ import type { DatabaseError } from 'pg';
 
 import {
   type AuditEventType,
+  type CancelPermissionRequest,
+  type CancelPermissionRequestResult,
   type Capability,
   type SubmitMoreInfoPermissionRequest,
   type SubmitMoreInfoPermissionRequestResult,
@@ -39,14 +41,14 @@ import {
 import type { Db } from '../../db/client.js';
 import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError } from '../../lib/errors.js';
-import { listWorkspaceAdminActorIds } from '../auth/index.js';
+import { listWorkspaceAdminActorIds, lockWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import { managedSystemExists } from '../managed-systems/read-projections.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import type { ActorContext, CheckScope, CheckService } from './check-service.js';
 import type { OpenRequestSummary } from './state-mapper.js';
+import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface CreatePermissionRequestBody {
   requested_capability: string;
@@ -66,6 +68,7 @@ export interface CreatePermissionRequestResult {
   body: {
     id: string;
     status: 'pending';
+    revision: number;
     created_at: string;
   };
 }
@@ -94,7 +97,15 @@ const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 const PERMISSION_MORE_INFO_SUBMITTED: AuditEventType = 'permission_more_info_submitted';
 
 const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
-const REVIEW_STATUSES = ['pending', 'needs_more_info', 'approved', 'rejected'] as const;
+const REVIEW_STATUSES = [
+  'pending',
+  'needs_more_info',
+  'approved',
+  'rejected',
+  'cancelled',
+  'expired',
+  'revoked',
+] as const;
 export type PermissionRequestReviewStatus = (typeof REVIEW_STATUSES)[number] | 'all';
 
 export function createRequestService(deps: RequestServiceDeps) {
@@ -123,9 +134,10 @@ export function createRequestService(deps: RequestServiceDeps) {
         { capability },
       );
     }
-    const requestHash = hashRequestBody(body);
+    const requestHash = hashRequestBody({ action: 'create', ...body });
 
     return await db.transaction(async (tx) => {
+      await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       // (1) Idempotency lookup.
       if (options.idempotencyKey) {
         // S-001: serialise concurrent first-time retries with the same
@@ -154,6 +166,18 @@ export function createRequestService(deps: RequestServiceDeps) {
           );
         }
       }
+
+      await validateSupportedScope(
+        tx,
+        actor.workspace_id,
+        capability,
+        body.requested_managed_system_id ?? null,
+        body.requested_object_type ?? null,
+        body.requested_object_id ?? null,
+      );
+      validateRequestExpiration(
+        body.requested_expiration ? new Date(body.requested_expiration) : null,
+      );
 
       // (2) Re-check capability — fail fast if the actor already has it.
       // S-002: thread the open tx so this re-check observes any grant a
@@ -230,6 +254,7 @@ export function createRequestService(deps: RequestServiceDeps) {
         subject_id: insertedId,
         summary: `Permission requested: ${capability}`,
         detail: {
+          revision: 1,
           capability,
           managed_system_id: body.requested_managed_system_id ?? null,
           reason: body.reason,
@@ -253,6 +278,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       const responseBody = {
         id: insertedId,
         status: 'pending' as const,
+        revision: 1,
         created_at: insertedCreatedAt.toISOString(),
       };
 
@@ -277,19 +303,33 @@ export function createRequestService(deps: RequestServiceDeps) {
     requestId: string,
     body: SubmitMoreInfoPermissionRequest,
     options: CreatePermissionRequestOptions = {},
+    action: 'submit_more_info' | 'edit' = 'submit_more_info',
   ): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> {
     const idempotency = options.idempotencyKey
       ? {
           key: options.idempotencyKey,
           requestHash: hashRequestBody({
             request_id: requestId,
-            action: 'submit_more_info',
+            action,
             ...body,
           }),
         }
       : undefined;
 
     return await db.transaction(async (tx) => {
+      await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
+      // Owner authorization precedes replay, including Admin callers.
+      const owned = await tx
+        .select({ id: permissionRequests.id })
+        .from(permissionRequests)
+        .where(
+          and(
+            eq(permissionRequests.id, requestId),
+            eq(permissionRequests.workspaceId, actor.workspace_id),
+            eq(permissionRequests.requesterActorId, actor.actor_id),
+          ),
+        );
+      if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
       const run = async (): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> => {
         const requests = await tx
           .select()
@@ -306,10 +346,14 @@ export function createRequestService(deps: RequestServiceDeps) {
         if (!request) {
           throw new HttpError('not_found.record', 'permission request not found');
         }
-        if (request.status !== 'needs_more_info') {
+        if (
+          request.status !== (action === 'edit' ? 'pending' : 'needs_more_info') ||
+          request.revision !== body.expected_revision
+        ) {
           throw new HttpError(
             'conflict.stale_write',
-            'permission request is not awaiting requester supplementation',
+            'permission request status or revision changed',
+            { current_revision: request.revision },
           );
         }
         if (!isCapability(request.requestedCapability)) {
@@ -338,14 +382,8 @@ export function createRequestService(deps: RequestServiceDeps) {
           body.requested_managed_system_id === undefined
             ? request.requestedManagedSystemId
             : body.requested_managed_system_id;
-        const requestedObjectType =
-          body.requested_object_type === undefined
-            ? request.requestedObjectType
-            : body.requested_object_type;
-        const requestedObjectId =
-          body.requested_object_id === undefined
-            ? request.requestedObjectId
-            : body.requested_object_id;
+        const requestedObjectType = request.requestedObjectType;
+        const requestedObjectId = request.requestedObjectId;
         const requestedExpiration =
           body.requested_expiration === undefined
             ? request.requestedExpiration
@@ -353,18 +391,15 @@ export function createRequestService(deps: RequestServiceDeps) {
               ? null
               : new Date(body.requested_expiration);
 
-        if (requestedManagedSystemId !== null) {
-          const managedSystemFound = await managedSystemExists(
-            tx,
-            actor.workspace_id,
-            requestedManagedSystemId,
-          );
-          if (!managedSystemFound) {
-            throw new HttpError('validation.failed', 'managed system is outside this workspace', {
-              fields: [{ path: ['requested_managed_system_id'], code: 'custom' }],
-            });
-          }
-        }
+        await validateSupportedScope(
+          tx,
+          actor.workspace_id,
+          capability,
+          requestedManagedSystemId,
+          requestedObjectType,
+          requestedObjectId,
+        );
+        validateRequestExpiration(requestedExpiration);
 
         const scopeChanged =
           requestedManagedSystemId !== request.requestedManagedSystemId ||
@@ -401,6 +436,7 @@ export function createRequestService(deps: RequestServiceDeps) {
               requestedObjectId,
               requestedExpiration,
               status: 'pending',
+              revision: request.revision + 1,
               updatedAt: sql`now()`,
             })
             .where(eq(permissionRequests.id, request.id))
@@ -424,27 +460,55 @@ export function createRequestService(deps: RequestServiceDeps) {
         await auditService.record(tx, {
           workspace_id: actor.workspace_id,
           actor_id: actor.actor_id,
-          event_type: PERMISSION_MORE_INFO_SUBMITTED,
+          event_type:
+            action === 'edit' ? 'permission_request_updated' : PERMISSION_MORE_INFO_SUBMITTED,
           subject_type: 'permission_request',
           subject_id: request.id,
-          summary: 'Permission request more info submitted',
-          detail: {
-            capability,
-            managed_system_id: requestedManagedSystemId,
-            requester_actor_id: request.requesterActorId,
-            reason,
-            sensitive,
-            requested_object_type: requestedObjectType,
-            requested_object_id: requestedObjectId,
-            requested_expiration: requestedExpiration?.toISOString() ?? null,
-            previous: {
-              reason: request.reason,
-              managed_system_id: request.requestedManagedSystemId,
-              requested_object_type: request.requestedObjectType,
-              requested_object_id: request.requestedObjectId,
-              requested_expiration: request.requestedExpiration?.toISOString() ?? null,
-            },
-          },
+          summary:
+            action === 'edit'
+              ? 'Permission request updated'
+              : 'Permission request more info submitted',
+          detail:
+            action === 'edit'
+              ? {
+                  capability,
+                  requester_actor_id: request.requesterActorId,
+                  previous_revision: request.revision,
+                  revision: request.revision + 1,
+                  previous: {
+                    reason: request.reason,
+                    managed_system_id: request.requestedManagedSystemId,
+                    requested_object_type: request.requestedObjectType,
+                    requested_object_id: request.requestedObjectId,
+                    requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                  },
+                  resulting: {
+                    reason,
+                    managed_system_id: requestedManagedSystemId,
+                    requested_object_type: requestedObjectType,
+                    requested_object_id: requestedObjectId,
+                    requested_expiration: requestedExpiration?.toISOString() ?? null,
+                  },
+                }
+              : {
+                  previous_revision: request.revision,
+                  revision: request.revision + 1,
+                  capability,
+                  managed_system_id: requestedManagedSystemId,
+                  requester_actor_id: request.requesterActorId,
+                  reason,
+                  sensitive,
+                  requested_object_type: requestedObjectType,
+                  requested_object_id: requestedObjectId,
+                  requested_expiration: requestedExpiration?.toISOString() ?? null,
+                  previous: {
+                    reason: request.reason,
+                    managed_system_id: request.requestedManagedSystemId,
+                    requested_object_type: request.requestedObjectType,
+                    requested_object_id: request.requestedObjectId,
+                    requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                  },
+                },
         });
 
         return {
@@ -452,6 +516,7 @@ export function createRequestService(deps: RequestServiceDeps) {
           body: {
             id: request.id,
             status: 'pending',
+            revision: request.revision + 1,
             updated_at: updatedAt.toISOString(),
           },
         };
@@ -463,6 +528,99 @@ export function createRequestService(deps: RequestServiceDeps) {
         actor.actor_id,
         idempotency.key,
         idempotency.requestHash,
+        run,
+      );
+    });
+  }
+
+  async function cancelRequest(
+    actor: ActorContext,
+    requestId: string,
+    body: CancelPermissionRequest,
+    options: CreatePermissionRequestOptions = {},
+  ): Promise<{ status: number; body: CancelPermissionRequestResult }> {
+    return db.transaction(async (tx) => {
+      await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
+      const owned = await tx
+        .select()
+        .from(permissionRequests)
+        .where(
+          and(
+            eq(permissionRequests.id, requestId),
+            eq(permissionRequests.workspaceId, actor.workspace_id),
+            eq(permissionRequests.requesterActorId, actor.actor_id),
+          ),
+        );
+      if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
+      const run = async (): Promise<{ status: number; body: CancelPermissionRequestResult }> => {
+        const rows = await tx
+          .select()
+          .from(permissionRequests)
+          .where(
+            and(
+              eq(permissionRequests.id, requestId),
+              eq(permissionRequests.workspaceId, actor.workspace_id),
+              eq(permissionRequests.requesterActorId, actor.actor_id),
+            ),
+          )
+          .for('update');
+        const request = rows[0];
+        if (!request) throw new HttpError('not_found.record', 'permission request not found');
+        if (
+          !ACTIVE_STATUSES.includes(request.status as 'pending' | 'needs_more_info') ||
+          request.revision !== body.expected_revision
+        ) {
+          throw new HttpError(
+            'conflict.stale_write',
+            'permission request status or revision changed',
+            { current_revision: request.revision },
+          );
+        }
+        const revision = request.revision + 1;
+        const updated = await tx
+          .update(permissionRequests)
+          .set({ status: 'cancelled', revision, updatedAt: sql`now()` })
+          .where(eq(permissionRequests.id, request.id))
+          .returning({ updatedAt: permissionRequests.updatedAt });
+        const row = updated[0];
+        if (!row)
+          throw new HttpError('internal.unexpected', 'permission request update returned no row');
+        const reason = body.reason?.trim();
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: 'permission_request_cancelled',
+          subject_type: 'permission_request',
+          subject_id: request.id,
+          summary: 'Permission request cancelled',
+          detail: {
+            capability: request.requestedCapability,
+            requester_actor_id: request.requesterActorId,
+            managed_system_id: request.requestedManagedSystemId,
+            requested_object_type: request.requestedObjectType,
+            requested_object_id: request.requestedObjectId,
+            previous_status: request.status,
+            previous_revision: request.revision,
+            revision,
+            ...(reason ? { reason } : {}),
+          },
+        });
+        return {
+          status: 200,
+          body: {
+            id: request.id,
+            status: 'cancelled',
+            revision,
+            updated_at: row.updatedAt.toISOString(),
+          },
+        };
+      };
+      if (!options.idempotencyKey) return run();
+      return idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        options.idempotencyKey,
+        hashRequestBody({ action: 'cancel', request_id: requestId, ...body }),
         run,
       );
     });
@@ -523,6 +681,8 @@ export function createRequestService(deps: RequestServiceDeps) {
         requestedExpiration: permissionRequests.requestedExpiration,
         reason: permissionRequests.reason,
         status: permissionRequests.status,
+        revision: permissionRequests.revision,
+        updatedAt: permissionRequests.updatedAt,
         createdAt: permissionRequests.createdAt,
       })
       .from(permissionRequests)
@@ -543,6 +703,8 @@ export function createRequestService(deps: RequestServiceDeps) {
         requested_expiration: r.requestedExpiration?.toISOString() ?? null,
         reason: r.reason,
         status: r.status,
+        revision: r.revision,
+        updated_at: r.updatedAt.toISOString(),
         created_at: r.createdAt.toISOString(),
       })),
       count: rows.length,
@@ -556,12 +718,16 @@ export function createRequestService(deps: RequestServiceDeps) {
         requestedCapability: permissionRequests.requestedCapability,
         requestedManagedSystemId: permissionRequests.requestedManagedSystemId,
         reason: permissionRequests.reason,
+        requestedExpiration: permissionRequests.requestedExpiration,
+        returnRouteIntent: permissionRequests.returnRouteIntent,
         requestedObjectType: permissionRequests.requestedObjectType,
         requestedObjectId: permissionRequests.requestedObjectId,
         sourceObjectType: permissionRequests.sourceObjectType,
         sourceObjectId: permissionRequests.sourceObjectId,
         sourceActionId: permissionRequests.sourceActionId,
         status: permissionRequests.status,
+        revision: permissionRequests.revision,
+        updatedAt: permissionRequests.updatedAt,
         createdAt: permissionRequests.createdAt,
       })
       .from(permissionRequests)
@@ -584,6 +750,10 @@ export function createRequestService(deps: RequestServiceDeps) {
       source_object_type: r.sourceObjectType,
       source_object_id: r.sourceObjectId,
       source_action_id: r.sourceActionId,
+      revision: r.revision,
+      updated_at: r.updatedAt.toISOString(),
+      requested_expiration: r.requestedExpiration?.toISOString() ?? null,
+      return_route_intent: r.returnRouteIntent,
       status: r.status,
       created_at: r.createdAt.toISOString(),
     }));
@@ -620,6 +790,13 @@ export function createRequestService(deps: RequestServiceDeps) {
   return {
     createRequest,
     submitMoreInfoRequest,
+    editRequest: (
+      actor: ActorContext,
+      id: string,
+      body: SubmitMoreInfoPermissionRequest,
+      options?: CreatePermissionRequestOptions,
+    ) => submitMoreInfoRequest(actor, id, body, options, 'edit'),
+    cancelRequest,
     findOpenRequestSummary,
     listMine,
     listAllActive,

@@ -16,7 +16,7 @@
 //   rows and expiry is enforced at write time in the permission service.
 
 import { sql } from 'drizzle-orm';
-import { index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 // NOTE: Drizzle-kit's CJS loader cannot resolve the `.js` re-write that
 // NodeNext requires at runtime for cross-file `.ts` imports, so we declare
@@ -115,11 +115,12 @@ export const permissionRequests = permissionSchema.table(
     sourceObjectId: uuid('source_object_id'),
     sourceActionId: text('source_action_id'),
     returnRouteIntent: text('return_route_intent'),
-    // status: pending | needs_more_info | approved | rejected | expired | revoked
+    // status: pending | needs_more_info | approved | rejected | cancelled | expired | revoked
     // (docs/implementation/05-permission-policy.md). Enforced as text + CHECK
     // in hand-edited migration SQL; constraint kept out of Drizzle to avoid
     // duplicating the enum list in two places before the capability vocab
     // file lands in S1.3.
+    revision: integer('revision').notNull().default(1),
     status: text('status').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

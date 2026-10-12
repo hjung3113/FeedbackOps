@@ -53,7 +53,13 @@ export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'conflict.parent_archived':              { tone: 'error', message: '상위 항목이 보관되어 더 이상 변경할 수 없습니다.' },
   'conflict.record_archived':              { tone: 'error', message: '이 항목은 보관되어 더 이상 변경할 수 없습니다.' },
   'conflict.saved_view_name_taken':        { tone: 'error', message: '이미 사용 중인 저장된 보기 이름입니다.' },
-  'conflict.stale_write':                  { tone: 'warning', message: '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?' },
+  'conflict.stale_write': {
+    tone: 'warning',
+    message: (detail) =>
+      Number.isInteger(detail?.current_revision) && Number(detail?.current_revision) > 0
+        ? '요청 내용이 변경되었습니다. 최신 요청을 확인한 후 다시 시도해 주세요.'
+        : '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?',
+  },
   'conflict.triage_already_committed':     { tone: 'error', message: '이미 Triage가 완료되어 본인이 직접 수정할 수 없습니다.' },
   'conflict.survey_not_open':              { tone: 'error', message: '이 Survey는 현재 응답을 받을 수 없습니다.' },
   'conflict.survey_response_already_submitted': { tone: 'info', message: '이 Survey에는 이미 응답을 제출했습니다.' },
