@@ -27,3 +27,23 @@ Survey owns Survey, Survey Response, Survey Result, survey-specific summaries, a
 - Proposed/new response presentation/history adapter stays Survey-owned/personal-gated;
   Dashboard gets aggregate count/safe Survey navigation, no non-holder response enumeration.
 - Response-derived Finding responsibility is resolved by Findings after the personal source gate.
+
+## Provenance and safe reuse (ADR-0064; implementation pending)
+
+- Survey owns proposed/new protected Finding/highlight response/approval/text
+  extensions and authorized batch read/write seams; Finding owns parent lifecycle
+  and counters. No direct app SELECT/general DML on the extensions.
+- Safe highlight reads check source access and exact active approval in the same
+  transaction snapshot with target Finding read. Preserve their existing audience
+  separately from result-picker cohort/per-question suppression; omit denied/revoked quote.
+- Proposed/new #816 candidates allow result readers to reuse suppression-visible
+  approved excerpts without a personal grant. The Finding command requires target
+  `finding.manage`, rechecks source/result audience and approval on submit, and
+  resolves response UUIDs internally. Existing response-addressed creation keeps
+  explicit personal access and no Admin bypass.
+- Results derived-Finding lookup uses a proposed/new workspace+Survey-ID reader,
+  returning candidate Finding IDs/target scope, not a raw response-ID link join.
+  Source and target Managed Systems may differ under independent authorization
+  inside one workspace. No personal grant merely for safe derived discovery.
+- Generic summaries are metadata-only; preserve private UUIDs/history. Trusted
+  app authorization does not promise SQL unlinkability for stolen app credentials.

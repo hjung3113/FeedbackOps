@@ -4,6 +4,9 @@
 
 Accepted.
 
+Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) (2026-10-13) on the decisions
+recorded in the dated amendment below; affected historical text is superseded.
+
 Sensitive Permission grants and uses, Permission Request decisions, Reporter-Facing VOC Status changes, Task Request approvals (including Task Request Self-Approval), workspace settings changes, and Managed System Registry edits must all be **audited** per `docs/implementation/05-permission-policy.md`, `docs/design/04-voc-system.md`, and CONTEXT.md invariants.
 
 ## Storage
@@ -57,3 +60,14 @@ Indefinite for MVP. The dataset is small and internal; setting a deletion policy
 ## Reopening
 
 Moving to an external audit store, splitting per-domain tables, or introducing automatic retention each warrants a new ADR. Adding new `event_type` values is *not* a reopen — it is the normal way new audited features extend this contract, by adding the string to `AUDIT_EVENT_TYPES` and a detail schema to `AUDIT_EVENT_DETAIL_SCHEMAS` in `packages/shared/src/enums/audit-events.ts`.
+
+## Amended 2026-10-13 — application audit reads (ADR-0064)
+
+ADR-0064 supersedes the application `INSERT, SELECT` grant above: #740 must revoke
+raw `core.audit_log` SELECT from `fops_app`, retain INSERT and no UPDATE/DELETE,
+and move audit observations to the controlled migrate/operator handle. Actor,
+subject/detail identifiers, append-only accountability, indefinite retention and
+same-transaction writes remain unchanged. No broad app-readable audit definer
+is added. Inventory consumers before cutover; any required app audit UI needs an
+explicitly allowlisted projection. Acceptance of this decision does not claim
+the grant migration is already deployed.

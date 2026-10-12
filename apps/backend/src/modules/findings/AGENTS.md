@@ -27,3 +27,21 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
 - Target-system `finding.manage` eligibility follows source visibility (Survey personal gate
   first); explicit/null/default/fallback semantics keep audit/links/replay atomic.
 - Source mutations use the injected Dashboard recorder; it writes only Dashboard projections.
+
+## Survey provenance and excerpts (ADR-0064; #739/#740/#816 pending)
+
+- Finding owns parent/highlight lifecycle and counters; Survey owns proposed/new
+  protected response/approval/text extensions. Write them through Survey's seam,
+  canonical links through Entity Links' seam, in the command transaction.
+- Public Survey Finding `source_id` and Survey highlight binding/text fields are
+  NULL after cutover. Survey-generated title/summary/provider/mutation cache and
+  Task Request defaults contain deterministic metadata only. Keep ordinary
+  VOC/Cluster IDs, VOC source checks and authored note text unchanged.
+- Hydrate Survey highlight quotes with fresh target read/source read/exact active
+  approval in one snapshot; deny/revoke omits text with safe unavailable local
+  metadata. Existing highlight audience differs from result-picker suppression.
+- Proposed/new #816 attachment accepts an approved selection, not response UUID
+  or free quote, requires source/result eligibility plus target `finding.manage`,
+  and atomically writes binding/highlight/counter/`evidence_of`/audit/idempotency.
+  Never add `generated_finding` to an existing Finding. Coordinate schema/grant
+  cutover and targeted legacy cache sanitization with #740; neither alone is delivery.

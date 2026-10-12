@@ -48,3 +48,14 @@ It does not own source object lifecycles or backend authorization truth.
 - ADR-0067 adds proposed/new source-owned owner display/edit/filter across all creation
   sources. Show Actor/team/null assignment from the server, never infer it from provenance
   or grant permissions. Preserve personal Survey source visibility before target disclosure.
+
+## Survey evidence reuse (ADR-0064; #816 pending)
+
+Survey-derived Finding/source/default summaries are metadata-only after #739/#740;
+render excerpt text only from freshly authorized active highlight DTOs, with safe
+unavailable state after revoke/source denial. Preserve Finding URL/detail context.
+#816 replaces response UUID/free quote entry in `AddEvidenceModal` with scoped
+Survey selection and approved result-visible previews; target `finding.manage`
+and source/suppression revalidation remain backend authority. No personal grant
+is needed for safe reuse. Reuse the VOC chooser pattern and preserve VOC behavior,
+keyboard selection, retry context, Korean chrome and English domain nouns.

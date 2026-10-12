@@ -287,3 +287,16 @@ allowed. Matching open asks lead to review; overlapping denies require explicit
 lift. Server validation repeats preflight checks. Grants do not promote Role Level.
 Expired grant reissue preserves history and creates a new grant ID. Full API and
 scope/error rules live in `docs/implementation/api/permissions.md` and `05-permission-policy.md`.
+
+## Approved Survey evidence reuse (ADR-0064)
+
+The proposed/new #816 safe picker/attachment grants no personal-response access:
+Survey result readers select only currently suppression-visible approved excerpts
+and attach with `finding.manage` on the target. Source and target Managed System
+permissions are checked independently in one workspace. Existing role/deny rules
+remain; Admin never bypasses personal-response access. Personal holders retain
+existing below-threshold result exceptions but receive no response UUID from the
+picker. Existing response-addressed creation retains the personal grant; attached
+highlight reads retain their separate existing source-read audience and exact-active
+approval check. Implementation/API authority: `05-permission-policy.md`,
+`api/surveys.md` and `api/findings.md` under `docs/implementation/`.

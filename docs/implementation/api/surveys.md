@@ -202,9 +202,15 @@ Candidate reads write `survey_response_personal_read` in the same transaction; a
 
 This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
 
-The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`; backend-generated title and summary use only survey type/display ID, approved question label, and approved redacted excerpt. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
+The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`. After ADR-0064/#739 cutover the public `source_id` is
+NULL and the original response UUID is retained in a Survey-owned protected
+extension (proposed/new); generated title/summary contain deterministic Survey
+type/display ID and approved question metadata only, never excerpt text. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
 
-Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
+Same actor/key/body/source replays the original Finding with no duplicate side effects
+(subject to ADR-0015/ADR-0064 targeted legacy Survey cache sanitization); changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic raw survey-response highlight attachment remains rejected. ADR-0064
+accepts the separate proposed/new approval-selection command documented in
+`findings.md`, implemented in #816 after #739/#740.
 
 Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
@@ -318,3 +324,46 @@ ordinary filtered list add no personal-read fields or audits. Survey detail's ex
 `/surveys/:surveyId/follow-up` route calls `GET /surveys/:id/outcome-follow-up`; per-response
 commands retain fresh personal capability checks and the source's existing read/mutation audits.
 A personal-read holder still receives only Survey-grain report metrics.
+
+## GET /surveys/:id/evidence-candidates — proposed/new (#816, ADR-0064)
+
+Accepted target contract; no route/schema implementation is claimed here.
+
+- **Auth:** authenticated session Actor/workspace; lookup Survey in workspace,
+  then `survey.read` on source Managed System. Missing/foreign/source-denied
+  (including explicit-denied Admin) returns `404 not_found.record`. Draft returns
+  `409 conflict.survey_results_unavailable` only after source access. No personal
+  grant is required. Existing explicit personal holders retain below-threshold
+  result exceptions; role alone grants no personal access.
+- **Query:** strict `{ limit?: integer 1..100, cursor?: opaque string }`, default
+  50; no arbitrary text/dimension filters. Stable bounded pages, with an opaque
+  cursor containing no response identity. Recheck source permissions, current
+  approvals and result suppression on every page. Invalid ID/query/cursor uses
+  existing `422 validation.failed` envelope.
+- **Response (proposed/new wire shape):** `{ response_state, items, page }`, with
+  `response_state: none | below_threshold | visible`,
+  `items: [{ approved_excerpt_id, redacted_excerpt, question_label, survey_type,
+  survey_display_id, identity_protected }]`, and `page: { has_more, cursor? }`.
+  `approved_excerpt_id` is the approval selection reference, not a response ID;
+  schemas must be strict. Suppressed/none states have empty items and no numeric
+  suppressed count. Cursor is present only for another eligible page.
+- **Privacy:** derive state from actual response subjects and per-question answers,
+  not approval counts; preserve existing low positive bucket and text-answer
+  suppression. A visible Survey may still have suppressed questions. Personal
+  holders receive no response UUID in this endpoint. No respondent, response
+  deep link, exact submission time, raw answer, Survey title or audit internals.
+- **Side effects:** no links, counters or mutation/idempotency entries. Safe picker
+  reads write no fabricated personal-read audit. Use existing read rate limiting
+  (`rate_limited.actor`); actual personal source reads retain their own audits.
+
+### Derived Finding read cutover (ADR-0064/#740)
+
+Results uses a proposed/new Survey-owned workspace+Survey-ID reader that returns
+candidate Finding IDs and target scope only. Source Survey read/privacy and each
+Finding's target read gate remain independent, including different Managed
+Systems in the same workspace. No personal grant is required merely to discover
+already-derived accessible Findings. The raw `core.entity_links` response-ID join
+is removed; #740 revokes app raw link/audit reads without changing the existing
+personal result/follow-up response-ID gates. Linked quotes use the batch Survey
+projection with exact-active approval/source/target checks in one transaction
+snapshot. Existing attached-highlight audience is not tightened to picker suppression.

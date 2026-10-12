@@ -142,7 +142,8 @@ Acceptance Criteria:
 ```text
 - Admin or same-scope Developer can create Finding from VOC, VOC Cluster, Survey Result, or manual analysis when synthesis is needed.
 - Finding requires exactly one Primary Managed System.
-- Finding stores source_type and source_id.
+- Finding stores source_type and preserves source identity. Under ADR-0064, Survey
+  response UUIDs live in Survey-owned protected provenance, with public source_id NULL.
 - Finding can link Analytics Area under its Primary Managed System.
 - Finding can include Evidence Highlights.
 - Finding is not required for every VOC, Survey Result, or Task.
@@ -283,3 +284,22 @@ Actor/team owner pair in the destination Finding module. `created_by` is provena
 never implicit ownership. Explicit/null/omitted and MS/AA/fallback resolution follows
 ADR-0067 and `09-permission-access.md`; target-system eligibility and source visibility
 remain separate gates. Assignment display/edit/filter is source-owned and auditable.
+
+## Survey evidence withdrawal and reuse (ADR-0064)
+
+Accepted target contract; implementation pending #739/#740/#816. The generic
+field sketches above are qualified for Survey evidence: public source/binding/text
+columns are NULL, while Survey-owned protected extensions retain original source
+UUIDs and historical generated text (`15-data-contracts.md`). Generated Survey
+Finding title/summary and provider/default summaries contain metadata only.
+Fresh authorized exact-active-approval highlight reads supply excerpt text; source
+deny or approval revocation omits the quote with safe unavailable local metadata.
+VOC/Cluster references, VOC source checks and authored note text remain unchanged.
+
+Survey result readers may reuse only suppression-visible approved excerpts with
+target `finding.manage`, without personal-response permission. #816 replaces the
+raw response UUID/free quote inputs with scoped Survey selection and approved safe
+previews, including empty/suppressed/denied/error/revoked states and submit-time
+revalidation. Response-addressed create-Finding keeps its explicit personal gate.
+Source/target Managed Systems may differ with independent authorization in one
+workspace. UI ownership and endpoint contracts stay in their existing modules.

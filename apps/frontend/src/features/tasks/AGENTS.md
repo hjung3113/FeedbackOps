@@ -76,3 +76,11 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
   full authorized review remains available and assignment grants no self-approval.
 - Explicit null opts out, omission requests defaults; preserve Backlog, source links and
   server validation/audit. Do not infer member assignment from a team label.
+
+## Survey source defaults (ADR-0064; #739/#740 pending)
+
+Survey-derived Finding/source summaries and Task Request draft defaults contain
+metadata only after cutover. Approved text requires a fresh authorized highlight
+projection, never a cached summary or private response/link/audit reconstruction.
+Preserve ordinary source permissions and authored Task/Task Request prose; no
+bulk history rewrite is authorized. Consume the existing owning-module seams.

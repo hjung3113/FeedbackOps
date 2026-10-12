@@ -4,6 +4,9 @@
 
 Accepted.
 
+Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) (2026-10-13) on the decisions
+recorded in the dated amendment below; affected historical text is superseded.
+
 Four small but load-bearing decisions that the engineering skills and reviewers need a stable answer to. None of them is large enough to deserve a separate ADR; they share one document and one reopening discipline.
 
 ## Rate limit
@@ -154,3 +157,15 @@ lock pattern that closes it. Applies to `registerManagedSystem` (managed-systems
 ## Reopening
 
 Each section is independently reopenable. Tightening or relaxing rate limits, switching off CSP, adopting a different migration tool, or removing the idempotency table each warrants a new ADR. Adding new index types or new rate-limit tiers within the established structure is *not* a reopen.
+
+## Amended 2026-10-13 — Survey-derived legacy response caches (ADR-0064)
+
+ADR-0064 authorizes one targeted exception to verbatim historical replay during
+#739/#740 cutover: inventory cached Finding create/status/link responses and
+include nested Task source Finding summaries, and sanitize only confirmed
+Survey-derived generated copies to metadata-only
+summaries. Preserve Actor/key/request hash/response status, retention and exactly-once
+side effects; do not reset unrelated caches. New cached mutations contain safe
+metadata only; active excerpt text requires a fresh authorized read. This cache
+exception does not authorize rewriting independently authored Task/Task Request
+text or altering the Drizzle-generated migration/journal/snapshot discipline.

@@ -200,8 +200,11 @@ active tuple.
 
 Every `survey_response`-source tuple, `(survey_response, finding, generated_finding)`
 and `(survey_response, finding, evidence_of)`, is command-only: it is registered
-for DB validation and created only by `POST /survey-responses/:id/create-finding`
-(which also writes the `evidence_of` link once per approved excerpt). Generic
+for DB validation and currently created by `POST /survey-responses/:id/create-finding`
+(which creates highlights per excerpt, with one active `evidence_of` link per
+response/Finding pair). ADR-0064 also accepts the proposed/new
+`POST /findings/:id/survey-evidence` for approval-selection attachment: it writes
+`evidence_of` only, never `generated_finding`. Generic
 `POST /entity-links` and generic link listings exclude every `survey_response`
 source (`genericEntityLinkPairs` in the backend entity-links service).
 
@@ -243,7 +246,8 @@ PATCH /entity-links/:id
 - already detached, revoked, stale, or lost update race: 409
 - side effects in one transaction: update status/detach metadata and append
   audit_log event_type entity_link.detached
-- hard delete is forbidden; fops_app has UPDATE but not DELETE on core.entity_links
+- hard delete is forbidden; after ADR-0064 cutover fops_app UPDATE uses the filtered
+  canonical-link view (proposed/new), not the raw core.entity_links table; no DELETE
 ```
 
 Because the active uniqueness constraint is partial (`WHERE status='active'`),
@@ -304,3 +308,29 @@ links within the allowed Managed System do not change source attribution or mult
 If required linked facts are unavailable, omit the cross-source metric instead of treating hidden
 links as absent. Survey's safe aggregate classifier retains ADR-0055's approved resolution semantics
 without exposing linked Finding metadata or response-grain facts on the report.
+
+## ADR-0064 Survey boundary (accepted; #739/#740 implementation pending)
+
+Canonical `core.entity_links` retains original endpoints, all statuses, active
+uniqueness and detach history. A proposed/new column-listed owner-backed
+`security_barrier` updatable view with `WITH CHECK OPTION` excludes either
+`survey_response` endpoint in every status. Ordinary app SELECT/INSERT/UPDATE
+uses this view, no DELETE; raw table and surviving column ACLs are revoked.
+All generic inventory counts/cursors/status filters and detach exclude Survey
+response tuples, not merely their endpoint IDs. Survey mutations are narrow
+Entity Links-owned definers returning local link ID/inserted state only.
+
+The Survey command-only Managed System exception above is explicit: source
+Survey and target Finding may differ in Managed System, but both must be
+independently authorized in the same workspace. The old universal-equality
+module guide is superseded on this exception by ADR-0064.
+
+Results uses a proposed/new Survey-owned workspace+Survey-ID reader returning
+candidate Finding IDs/target scope, not response UUIDs; the application applies
+source read/privacy and target Finding read. No personal grant is required just
+to discover accessible derived Findings. Generic Finding summaries remain
+metadata-only for Survey-derived records; excerpt text uses fresh exact-active
+approval/source/target checks. Raw audit reads are removed per ADR-0008's
+ADR-0064 amendment, preserving controlled operator history. Cutover must prove
+ordinary view conflict/RETURNING paths and concurrency before revoking grants;
+unsupported operations block rollout rather than justify restoring raw access.

@@ -4,6 +4,9 @@
 
 Accepted (Slice 5: Finding From VOC). Amends ADR-0023 Section C and annotates its reopening trigger #1.
 
+Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) on Survey-only
+provenance placement; ordinary VOC/Cluster provenance remains unchanged.
+
 ## Context
 
 ADR-0023 locked the entity-link visibility decision table, the `hidden`/`denied` boundary, the `request_access` deferral, and the canonical Task reporter-summary contract — all for the world that existed at Slice 4.4, where the only linkable endpoint type is `voc` and creation is hard-locked to `internal_only`. ADR-0023 named three reopening triggers; Slice 5 fires the first one (*"A slice introduces a non-VOC link target (Task/Finding) with a reporter summary…"*) **partially**, because Finding is the first non-VOC link target but has **no reporter-facing summary**.
@@ -190,3 +193,14 @@ The link command hides an unreadable cluster or target as `404`, and requires
 - **Independent value CHECKs on entity_links** — rejected: would admit invalid tuples (`voc→voc evidence_of`, `finding→voc`, `finding→finding`).
 - **Compute `evidence_count` instead of storing** — rejected: `15:135` makes it a required stored field; drift is handled by same-transaction maintenance instead.
 - **Implement a Finding reporter summary now** — rejected: no doc defines one and CONTEXT.md forbids exposing Finding detail to reporters.
+
+## Amended 2026-10-13 — Survey-only provenance placement (ADR-0064)
+
+ADR-0064 qualifies sections A/F for Survey-derived records: the response UUID
+and historical generated text move to proposed/new Survey-owned protected
+extensions, with public Survey Finding `source_id` NULL and metadata-only
+summary. Exact Survey highlight response/approval/text bindings are private;
+quote is hydrated only with fresh source/target and exact-active-approval checks.
+Immutable source identity survives privately and canonical link history is kept.
+Ordinary VOC/Cluster direct-column provenance and source visibility rules remain
+unchanged. The coordinated #739/#740 cutover is pending implementation.
