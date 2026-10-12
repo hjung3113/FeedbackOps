@@ -397,3 +397,30 @@ The seed is a separate, idempotent command (`pnpm --filter @fops/backend db:seed
 ```
 
 It does not seed Findings, Evidence Highlights, Task Requests, Tasks, Surveys, or Dashboard rows.
+
+## Permission close-out migration contract (ADR-0066; proposed/new)
+
+No migration is applied by the docs decision. Implementation adds positive integer
+permission.permission_requests.revision NOT NULL DEFAULT 1 and extends the existing
+text status CHECK with cancelled, retaining every old status. Every successful
+mutation advances revision/updated_at. Preserve permission_requests_active_uq over
+the full COALESCE requester/capability/scope/source tuple and open predicate
+pending/needs_more_info; cancelled falls outside it, preserving history.
+
+Add nullable permission.permission_grants.superseded_at. Atomic expired exact-tuple
+reissue sets only that predecessor marker and inserts a new ID. Preserve original
+expiry/grantor/time/revoke metadata. permission_grants_active_uq keeps every existing
+COALESCE scope column, changing only its predicate to revoked_at IS NULL AND
+superseded_at IS NULL. Never now(); expiry remains enforced at runtime. Checks,
+scope resolution, active lists, revoke validation and seed existence checks exclude
+superseded rows. Register generated SQL/journal/snapshot under the existing rules;
+verify SQL-only indexes against real applied SQL, not a shortened Drizzle definition.
+
+Inventory legacy non-null object scope requests and unsuperseded grants; retain
+historical fields, reject unsupported request writes/approval, and resolve legacy
+grant disposition explicitly before release without automatic widening/revocation.
+Schema precedes writers; API/shared/frontend expected_revision consumers roll out
+together with stale-client refresh. After cancelled/superseded rows exist, restoring
+the old CHECK/unique predicate blindly is unsafe. Rollback requires explicit data
+handling preserving history or a forward fix; document irreversible state in the
+implementation migration plan and test audit-failure rollback of reissue.

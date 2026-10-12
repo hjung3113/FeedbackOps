@@ -59,3 +59,13 @@ Approved Task Requests may remain in `approved` state until converted or linked
 to an existing Task.
 Converted Tasks start in Backlog by default. Backlog Tasks may have assignees,
 but execution has not started until the Task moves to Todo or Doing.
+
+## Permission close-out boundary (ADR-0066; proposed/new)
+
+Requester pending edit/withdrawal and governed direct grants stay Permission-owned.
+They create no entity_links and never run the originally blocked source action.
+Approval retains its request-subject audit and notification while distinguishing
+requested/granted scope/expiry; direct grant has a grant-subject permission_granted
+audit and no fabricated request or request-decided notification. Supported scope
+narrowing and revision requirements are in `permissions.md`; restricted source
+summaries remain source-owner authorized, including personal Survey capability.

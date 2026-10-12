@@ -98,7 +98,7 @@ The backend returns effective navigation and capability states for the current w
 Notes:
 
 ```text
-- scoped means access depends on explicit Managed System, team, or permission scope.
+- scoped means access depends on explicit Managed System permission scope; team and single-object authorization are outside MVP (ADR-0066).
 - Managed System scope is the MVP authorization boundary below workspace Admin.
 - Access to one Managed System does not grant access to sibling Managed Systems.
 - Analytics Area is not an MVP permission boundary.
@@ -113,8 +113,8 @@ Permission scope shape:
 ```text
 - workspace_id required
 - managed_system_id optional
-- team_id optional
-- object_type/object_id optional for single-object grants
+- team and single-object authorization are not supported in MVP (ADR-0066)
+- source_object_type/source_object_id identify provenance, not grant scope
 ```
 
 List endpoints for Tasks, Task Requests, Managed Systems, Findings, VOC triage, and Dashboard queues must accept managed_system_id filters where scoped data can appear. Backend responses must exclude objects outside the actor's effective Managed System scopes.
@@ -151,7 +151,8 @@ Permission Request
 - return_route_intent optional
 - reason
 - approver_id
-- status: pending / needs_more_info / approved / rejected / expired / revoked
+- status: pending / needs_more_info / approved / rejected / expired / revoked / cancelled
+- revision: positive integer, advances on every successful mutation (proposed/new, ADR-0066)
 - more_info_request optional
 - expires_at optional
 - created_at
@@ -169,7 +170,7 @@ Priority: MUST
 Acceptance Criteria:
 
 ```text
-- User can request Task access, specific Managed System access, Survey creation, Survey personal response access, Export, or Admin permission.
+- User can request supported Task/Managed System access, Survey creation, Survey personal response access, or Export. Workspace administrative capability is granted only through explicit Admin direct-grant governance, never an ordinary blocked-action ask (ADR-0066).
 - Permission requests can start from blocked linked objects, blocked next actions, or explicit Admin request flows.
 - Inline blocked-state requests must include the blocked object or action, requested scope, reason, and return route intent when available.
 - Sensitive permission requests require reason.
@@ -196,12 +197,16 @@ Acceptance Criteria:
 ```text
 - Admin can approve, reject, revoke, or let permission expire.
 - Admin review detail shows requester identity, current role/scope, requested capability, requested scope, source object/action, safe source summary, reason, risk indicators, requested expiration, and explicit deny state.
-- Admin can approve as requested, approve narrower scope, approve with expiration, reject, request more info, or revoke existing grants.
+- Admin can approve as requested, narrow a server-supported workspace scope to one valid Managed System, override granted expiration, reject, request more info, or revoke existing grants. A system scope cannot widen or move to a sibling; workspace-only authority cannot become fictitious system authority. Requested scope/expiry stay unchanged; response and audit distinguish granted values (ADR-0066).
 - Request more info moves the request to needs_more_info with an Admin question or requested clarification.
-- Requester can update reason, requested scope, or requested expiration and resubmit to pending.
+- Requester can edit reason, supported scope, or optional expiration on the same pending ask, or supplement needs_more_info back to pending; capability/source/return intent remain immutable.
+- Only the requester can withdraw pending or needs_more_info to cancelled with an optional reason; history stays and no grant/deny is created.
+- Edit, withdrawal, supplementation and Admin decisions require the reviewed revision; stale writes require a refresh and new review, never auto-submit (ADR-0066).
 - Decision is recorded in Audit Log.
 - Approved permissions are scoped when scope is provided.
 ```
+
+Reopened and reconciled 2026-10-13 by ADR-0066 (owner #1041): supported-scope narrowing replaces the old policy prohibition; single-object enforcement is deferred. New lifecycle/read/direct-grant behavior is accepted, not implemented by this docs change.
 
 Status (ADR-0061, 2026-10-05): grant revocation and deny lifting ship with the
 Admin "활성 권한" screen in #762.
@@ -244,3 +249,24 @@ Acceptance Criteria:
 - Role simulation
 - Advanced policy language
 ```
+
+## MVP close-out review and direct grant (ADR-0066; proposed/new)
+
+Home's own open requests provide `수정`, `요청 철회`, and `보완 제출` only as allowed
+by owner-scoped detail. Withdrawal retains history; closing a form does not withdraw.
+Admin history includes `cancelled` with no decision controls.
+
+Admin selected review shows current role/effective access and four explained server
+signals under `검토 시 확인할 사항`: sensitive capability, workspace-wide scope,
+no expiration, and overlapping active deny. No numeric risk/role-jump score.
+`추가 확인 사항 없음` means successful computation with no signals; failure offers
+retry. No requester risk/deny internals, email, or restricted Survey data.
+
+The existing `활성 권한` screen gains `권한 부여`, with workspace Actor names,
+server-supported capability/scope choices, required reason, and optional expiration.
+`workspace.admin` requires explicit governance mode and confirmation; direct self
+grant follows `permission_self_approval`, including the strict self envelope when
+allowed. Matching open asks lead to review; overlapping denies require explicit
+lift. Server validation repeats preflight checks. Grants do not promote Role Level.
+Expired grant reissue preserves history and creates a new grant ID. Full API and
+scope/error rules live in `docs/implementation/api/permissions.md` and `05-permission-policy.md`.

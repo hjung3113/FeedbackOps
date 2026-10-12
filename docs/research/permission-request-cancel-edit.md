@@ -1,11 +1,19 @@
-# Permission request — requester cancel / edit of a pending request (open)
+# Permission request — requester cancel / edit (historical research)
+
+> Historical research. ADR-0066 (owner #1041–#1043, 2026-10-13) supersedes the
+> undecided/stop recommendations for cancellation, pending edit, stale review,
+> permissive object scope and expiration. Accepted contracts now live in
+> `docs/implementation/api/permissions.md` and `05-permission-policy.md`.
+> This document records earlier implementation observations, not current authority.
+
 
 ## Status
 
 The `needs_more_info` supplement shipped in Issue #511 at
 `POST /permission-requests/:id/submit-more-info`. The 2026-09-26 research below
 predates that route. ADR-0044 still governs request-creation UX; requester
-cancellation and edits to a `pending` request remain undecided.
+cancellation and pending edits were undecided at that snapshot; ADR-0066 now
+accepts both with backend revision protection (implementation pending).
 
 The full original research, including the shipped supplement contract (§2, §5), is in git history at `docs/superpowers/specs/2026-09-26-permission-request-supplement-design.md`; section numbers below keep their original values.
 

@@ -4,6 +4,13 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 
 ## Permission
 
+ADR-0066 (accepted 2026-10-13, implementation pending) amends this contract.
+All new endpoints, `revision`, `expected_revision`, narrowed-scope approval,
+selected detail/risk, direct-grant options/writes and superseded-grant filtering
+below are proposed/new; this docs-only change adds no routes or schemas.
+Existing endpoints retain their other rules. Single-object scope is post-MVP;
+source objects remain provenance. FR-PERM-001/002 are the requirement anchors.
+
 ```text
 GET /me/permissions/check?capability={capability}&managed_system_id={uuid?}
   -> 200 { state, decision }
@@ -29,6 +36,13 @@ GET /permissions/grants
 GET /permissions/denies
 POST /permissions/grants/:id/revoke
 POST /permissions/denies/:id/revoke
+# Proposed/new under ADR-0066:
+GET /permission-requests/:id      # requester-owned selected detail
+PATCH /permission-requests/:id    # pending edit
+POST /permission-requests/:id/cancel
+GET /permissions/requests/:id     # Admin selected detail
+GET /permissions/grant-options?actor_id={uuid}
+POST /permissions/grants
 ```
 
 ### `GET /me/permissions/check`
@@ -81,8 +95,7 @@ service stores that requested end time on the Permission Request.
 {
   requested_capability: string;
   requested_managed_system_id?: uuid;
-  requested_object_type?: string;
-  requested_object_id?: uuid;
+  // requested_object_type/id are rejected when non-null (ADR-0066)
   reason: string;
   requested_expiration?: iso8601;
   source_object_type?: string;
@@ -92,7 +105,15 @@ service stores that requested end time on the Permission Request.
 }
 ```
 
-The response remains `{ id: uuid, status: "pending", created_at: iso8601 }`.
+Proposed response adds `revision: 1` to
+`{ id: uuid, status: "pending", created_at: iso8601 }`. Validate a known capability
+and active workspace Managed System against server scope candidates inside the
+transaction; reject ordinary workspace.admin requests and unsupported object
+scope with `422 validation.failed`. Retain optional expiration, no default;
+non-null expiration must be future. Already-effective access is
+`409 conflict.capability_already_granted`; duplicate complete open scope/source
+is `409 conflict.permission_request_duplicate`. Request creation participates in
+recipient serialization with direct grant/approval (ADR-0066).
 
 ### `POST /permission-requests/:id/submit-more-info`
 
@@ -106,16 +127,19 @@ The strict request body accepts:
 
 ```ts
 {
+  expected_revision: positive_integer; // proposed/new, required
   reason?: string; // 1–2000 characters
   requested_managed_system_id?: uuid | null;
-  requested_object_type?: string | null; // at least 1 character when present
-  requested_object_id?: uuid | null;
+  // Non-null object scope is unsupported; no object-scope mutation field (ADR-0066).
   requested_expiration?: iso8601 | null;
 }
 ```
 
-Omitted values keep the stored value. JSON `null` clears the four nullable
-scope and expiration columns; `reason` cannot be null.
+Omitted values keep the stored value. JSON `null` clears requested Managed System
+only when server policy permits workspace scope, or clears requested expiration;
+`reason` cannot be null. Legacy non-null object scope is rejected, never silently
+stripped. Use server candidates and validate active workspace Managed System and
+future non-null expiry; `{ expected_revision }` alone may resubmit unchanged values.
 Submitted reasons are trimmed and must remain non-empty. A sensitive
 capability returns `validation.sensitive_reason_required` for an empty resolved
 reason; other capabilities return `validation.failed` with a `reason` field
@@ -131,12 +155,15 @@ non-UUID `:id` returns `422 validation.failed`.
 {
   "id": "uuid",
   "status": "pending",
-  "updated_at": "iso8601"
+  "updated_at": "iso8601",
+  "revision": 1
 }
 ```
 
-The command locks the request row inside the transaction and accepts only
-`needs_more_info`; all other statuses return `409 conflict.stale_write`. A
+The command compares expected_revision after locking the request row inside
+the idempotent run and accepts only `needs_more_info`; status/revision mismatch
+returns `409 conflict.stale_write` with authorized current_revision. Success
+advances revision/updated_at, and the audit gains previous/resulting revisions. A
 resolved managed-system id must belong to the current workspace. When the
 scope tuple changes, the service rechecks the capability in the same
 transaction and returns `409 conflict.capability_already_granted` if the actor
@@ -171,7 +198,8 @@ non-admin caller receives `permission.denied` → `403`. Response:
       "requested_managed_system_id": "uuid | null",
       "requested_expiration": "iso8601 | null",
       "reason": "string",
-      "status": "pending | needs_more_info | approved | rejected",
+      "status": "pending | needs_more_info | approved | rejected | cancelled",
+      "revision": 1,
       "created_at": "iso8601"
     }
   ],
@@ -180,10 +208,12 @@ non-admin caller receives `permission.denied` → `403`. Response:
 ```
 
 `GET /permissions/requests` is the canonical Admin review-console list and
-accepts `status=pending|needs_more_info|approved|rejected|all`; without a
+accepts `status=pending|needs_more_info|approved|rejected|cancelled|all`; without a
 status it returns open requests. It uses the same review item shape, including
-`requested_expiration`. The detail panel is populated from that item and shows
-the same requested value; no separate detail endpoint is used.
+`requested_expiration` and proposed revision. Collection rows remain minimal;
+Admin detail is fetched through the new selected-detail endpoint below. `all`
+retains history including cancelled/expired/revoked; terminal rows expose no
+decision actions. Cancellation disappears from both default open lists and mine.
 
 ### `POST /permissions/requests/:id/approve`
 
@@ -191,7 +221,9 @@ The strict approve body accepts:
 
 ```ts
 {
+  expected_revision: positive_integer; // proposed/new, required
   reason?: string;
+  granted_managed_system_id?: uuid | null; // proposed/new narrowing override
   expiration?: iso8601 | null;
   self_approval?: {
     policy_citation: string;
@@ -204,8 +236,21 @@ Omitting `expiration` keeps the request's `requested_expiration`; `null` grants
 permanent access; an ISO datetime overrides the requested value. A datetime at
 or before the current time returns `422 validation.failed` with
 `fields: [{ path: ['expiration'], code: 'custom' }]`. The grant's `expires_at`
-is the resolved value. The `permission_approved` audit detail records both
-`requested_expiration` and `granted_expiration`, each as `iso8601 | null`.
+is the resolved value; even an unchanged non-null requested expiry must be future.
+Omitted granted_managed_system_id keeps requested scope; a UUID narrows a server-
+valid workspace ask to one active Managed System or retains that same system.
+Null keeps workspace scope only if already requested and permitted. No widening,
+sibling move, unsupported object scope, or fictitious system-scoped workspace.admin:
+`422 validation.failed` with the offending field. Request fields stay unchanged.
+
+Proposed response is `200 { id, status: approved, grant_id, revision, updated_at,
+requested_managed_system_id, granted_managed_system_id, requested_expiration,
+granted_expiration }` (scope and expiry values nullable). The strict
+`permission_approved` audit records both requested/granted scope and expiry,
+previous/resulting revision, and previous_grant_id on expired reissue. It retains
+its request subject and existing notification. Shared grant writer preserves
+expired predecessor history and inserts a new grant ID; active duplicates conflict.
+The Admin gate, status and proposed revision/replay rules below apply to approve too.
 
 ### `POST /permissions/requests/:id/reject`, `/need-more-info`, `/deny`
 
@@ -215,7 +260,11 @@ transaction shape. Each requires `workspace.admin` (checked before any
 non-admin caller receives `403 permission.denied`. The request row is locked
 inside the transaction. An unknown id or one from another workspace returns
 `404 not_found.record`. Only `pending` and `needs_more_info` requests are
-decidable; any other status returns `409 conflict.stale_write`. Unknown body
+decidable; all four commands require expected_revision and compare it after
+locking in the idempotent run. Status/revision mismatch returns
+`409 conflict.stale_write` with authorized current_revision. Every successful
+decision advances revision and updated_at; responses below also add both fields
+(proposed/new). Unknown body
 keys, or a value over 2000 characters, return `422 validation.failed`. An
 invalid UUIDv4 `Idempotency-Key` returns `422 validation.malformed_idempotency_key`;
 a valid one stores and replays the `200` response for the same actor, key, and
@@ -230,7 +279,7 @@ writes one audit event, with `capability`, `managed_system_id`, and
 #### `POST /permissions/requests/:id/reject`
 
 ```ts
-{ reason?: string } // max 2000 characters; must be non-empty after trimming
+{ expected_revision: positive_integer, reason?: string } // max 2000; non-empty after trim
 ```
 
 An empty or whitespace-only `reason` returns `422 validation.failed` with
@@ -246,7 +295,7 @@ event is `permission_rejected`, with `reason` in its detail.
 #### `POST /permissions/requests/:id/need-more-info`
 
 ```ts
-{ note?: string } // max 2000 characters; must be non-empty after trimming
+{ expected_revision: positive_integer, note?: string } // max 2000; non-empty after trim
 ```
 
 An empty or whitespace-only `note` returns `422 validation.failed` with
@@ -262,7 +311,7 @@ An empty or whitespace-only `note` returns `422 validation.failed` with
 #### `POST /permissions/requests/:id/deny`
 
 ```ts
-{ reason?: string } // max 2000 characters; must be non-empty after trimming
+{ expected_revision: positive_integer, reason?: string } // max 2000; non-empty after trim
 ```
 
 An empty or whitespace-only `reason` returns `422 validation.failed` with
@@ -286,8 +335,8 @@ requester receives a `permission_request.decided` notification
 return `{ items }` for the current workspace, ordered newest first, without
 pagination. Grant items contain `id`, `actor_id`, `capability`,
 `managed_system_id`, `granted_by_actor_id`, `granted_at`, and `expires_at`.
-Only rows with `revoked_at IS NULL` and no expiry or a future expiry are
-returned. Deny items contain `id`, `actor_id`, `capability`,
+Only rows with `revoked_at IS NULL`, proposed `superseded_at IS NULL`, and no
+expiry or a future expiry are returned. Deny items contain `id`, `actor_id`, `capability`,
 `managed_system_id`, `reason`, `created_by_actor_id`, and `created_at`; only
 rows with `revoked_at IS NULL` are returned.
 
@@ -302,7 +351,7 @@ body returns `409 conflict.idempotency_key_reuse`.
 
 Each command locks its target row in the current workspace. A missing row or a
 row from another workspace returns `404 not_found.record`. An already-revoked
-row, or an expired grant, returns `409 conflict.permission_not_active`.
+row, expired grant, or proposed superseded grant returns `409 conflict.permission_not_active`.
 The `:id` path parameter must be a UUID; otherwise the route returns
 `422 validation.failed`.
 
@@ -325,6 +374,140 @@ column. A self-lift follows `permission_self_approval`: `forbidden` returns
 lowers privilege. Lifting a deny sends no notification.
 
 Both return `200 { id, revoked_at }`. Permission Request status is unchanged.
+Expired reissue under ADR-0066 inserts a fresh ID after marking its exact-tuple
+predecessor superseded_at; audit and both writes are atomic. Preserve grant
+provenance/revoke metadata and full unique scope tuple, exclude superseded rows
+from all effective readers and seed checks, and keep old-ID revoke 409.
 The next permission check observes the revocation immediately; a revoked grant
 is requestable again, and so is an expired grant (#767), while an explicit active
 deny remains non-requestable.
+
+## Proposed requester and selected-read contracts (ADR-0066)
+
+All commands below use strict shared schemas (proposed/new under
+`packages/shared/src/permissions/`). IDs must be UUIDs; revision is a positive
+integer. Unknown keys, missing revision, malformed fields/unsupported scope or
+past resolved expiry return `422 validation.failed` with field paths. Malformed
+UUIDv4 key returns `validation.malformed_idempotency_key`.
+
+Owner item lookup combines ID + session workspace + requester, with no Admin
+bypass: missing/foreign/non-owner all `404 not_found.record`. Admin reads/commands
+check `workspace.admin` first (403 on failure), then workspace-filtered 404.
+Require session for all reads/writes (401 if invalid). Optional UUIDv4 mutation
+keys replay stored success after authorization, before status/revision validation;
+hash action/ID/revision/body. Different-body reuse is 409
+`conflict.idempotency_key_reuse`. Transaction/audit/idempotency failure rolls back
+all writes. Read endpoints accept no Idempotency-Key and have no mutation tier.
+
+### `POST /permission-requests/:id/cancel` (proposed/new)
+
+Strict body `{ expected_revision: positive_integer, reason?: string }`; trim
+reason, max 2000, empty treated as omitted. Requester only; `pending` or
+`needs_more_info` only. Lock/reload and compare revision inside the idempotent run;
+wrong status/revision is `409 conflict.stale_write` with `{ current_revision }`
+(proposed detail shape after authorization). Success:
+`200 { id, status: cancelled, updated_at, revision }`. Use mutation rate-limit tier.
+Set cancelled, advance revision/time, free existing open uniqueness. Strict new
+`permission_request_cancelled` request-subject audit includes previous status,
+requester/capability/scope, reason if supplied and previous/resulting revisions.
+No grant, deny, entity link, notification, blocked-action execution or queue write;
+derived open Dashboard/mine counts lose this request. No owner-resolution effects.
+
+### `PATCH /permission-requests/:id` (proposed/new)
+
+Strict body `{ expected_revision, reason?, requested_managed_system_id?: uuid | null,
+requested_expiration?: iso8601 | null }`. Only `pending`; needs_more_info uses its
+existing supplement path. Omit keeps, null clears nullable values only if policy
+allows. Immutable requester/capability/source/return intent cannot be supplied.
+Retain ID, advance revision/time, return `200 { id, status: pending, updated_at,
+revision }`. Use mutation tier. Validate supported scope/expiry and resolved reason,
+including sensitive reason requirements, inside transaction; reject legacy object
+scope. Changed scope already held is `409 conflict.capability_already_granted`;
+complete open-tuple collision is `409 conflict.permission_request_duplicate`.
+No partial writes; status/revision rules match cancel. New strict request-subject
+`permission_request_updated` audit includes identity, complete previous/resulting
+editable reason/scope/expiry and revisions. No grant/deny/link/notification/domain
+action or queue write; derived status lists reflect current request. No owner resolution.
+
+### Requester mine and `GET /permission-requests/:id` (detail proposed/new)
+
+Mine stays session-only and owner/open scoped; add revision, requested_expiration,
+updated_at and return_route_intent to existing items. Selected owner detail returns
+current request identity, reason, supported requested scope, source/return intent,
+status/timestamps/revision, latest Admin question (nullable), typed editable scope
+candidates and allowed actions (edit only pending, supplement only needs_more_info,
+withdraw either open; terminal none). Latest question comes through a Core-owned
+audit projection, not a Permission query into audit storage. No risk, deny internals,
+email, raw Survey text or unsafe source summaries. Item ownership 404 as above.
+No writes, audits, links, notifications, queue or default-owner effects for these reads.
+
+### `GET /permissions/requests/:id` (proposed/new)
+
+Admin selected read, 200 current request/revision and requested/source context,
+requester display name/Role Level, effective access/scope/expiry, administrative
+authority context, authorized safe source summary when available, matching active
+deny state, typed approval scope candidates and allowed decision actions. Terminal
+requests have no actions. Risk is `risk_indicators: [{ code, evidence }]` with
+proposed codes `sensitive_capability`, `workspace_scope`, `no_expiration`,
+`active_deny`; evidence contains the corresponding capability, requested scope,
+null expiry or overlapping deny scope. Workspace asks overlap all active denies
+for that capability; system asks match workspace/same-system denies, not sibling
+or revoked denies. A successful zero-signal result is `[]`; failed computation
+returns an error (existing `internal.unexpected` 500), never a false safe result.
+Permission computes only selected-row context, no per-list-row risk/large source
+collection scan. Source-owner gates/allowlists apply; Admin without personal Survey
+capability receives no restricted response text. No email or deny-reason leakage
+into requester detail. Read has no writes/audits/links/notification/queue/default effects.
+
+## Proposed direct-grant contracts (ADR-0066)
+
+### `GET /permissions/grant-options?actor_id={uuid}` (proposed/new)
+
+Admin capability gate before data; invalid/missing UUID is 422 validation.failed;
+unknown/foreign recipient is 404 not_found.record. Return 200 recipient ID/display
+name/Role Level, typed supported capability/scope candidates, governance/self-policy
+requirements, and advisory preflight per candidate: matching open request ID/review
+route, overlapping deny IDs/lift destination, or available. All references are
+workspace-filtered Admin-safe; no email. Workspace comes from session. Read has
+no mutation tier, idempotency, writes/audits/links/notifications/queue/default effects.
+
+### `POST /permissions/grants` (proposed/new)
+
+Strict body `{ actor_id: uuid, capability: known_capability,
+managed_system_id?: uuid, expires_at?: iso8601, reason: string,
+self_approval?: { policy_citation: string, peer_reviewer_absence: string } }`.
+Omitted managed_system_id means workspace only when capability policy permits;
+omitted expiration means permanent. No object/team/Analytics Area/free-text scope.
+Reason is trimmed 1–2000 for all direct grants; supplied expiry must be future.
+Known capability vocabulary is `CAPABILITY_META`; server validates current active
+workspace scope candidates. `workspace.admin` is workspace-only and selected via
+an explicitly named governance mode with reason and confirmation in the form.
+No ordinary request-access candidate offers it. Self-grant forbidden returns 403
+permission.denied; allowed requires the strict non-empty existing self envelope.
+Another-Actor envelope or missing/invalid allowed-self envelope is 422 validation.failed.
+
+Sensitive tier (5/minute/Actor); optional UUIDv4 key. Gate workspace.admin inside
+transaction before replay, even if access was denied since the original submit.
+Unknown/cross-workspace recipient 404; invalid fields, scope, expiry, reason or
+self envelope 422; active duplicate `409 conflict.capability_already_granted`.
+Matching open ask is `409 conflict.permission_request_duplicate` with proposed
+Admin-safe `{ request_id, review_route }`; overlapping active deny is
+`409 conflict.capability_already_denied` with proposed `{ deny_ids, lift_route }`.
+Extend the closed error detail union (ADR-0012), without inventing error codes.
+If both exist, matching ask directs to review; review still obeys deny precedence.
+For workspace grant, any same-capability deny overlaps; for system grant only
+workspace/same-system denies overlap. Neither request nor deny is silently changed.
+
+Resolve/lock recipient through Auth seam; use recipient → request when relevant →
+workspace policy → grant order and shared Permission grant command with approval.
+Request creation/edit/supplement serialize by recipient too. Expired exact-tuple
+reissue sets proposed superseded_at and inserts a fresh ID; no in-place renewal.
+Return `201` actual `permissionGrantAdminItemSchema` item, parsed through shared
+schema (`packages/shared/src/permissions/admin.ts`), not fabricated form input.
+New strict `permission_granted` grant-subject audit includes actual grant/recipient/
+capability/scope/reason/expiry, create/reissue mode, predecessor ID on reissue,
+self_grant: true and envelope only on self grant. Failed audit rolls back predecessor,
+replacement and idempotency. No fake request, Role Level change, entity link,
+request-decided notification or automatic domain action. No stored queue writes or
+owner/reviewer resolution. Next privileged call on an existing recipient session
+sees access immediately; invalidate client check/scope/grant caches on success.

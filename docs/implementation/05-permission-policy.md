@@ -5,6 +5,10 @@
 This file owns permission check order, audit event verbs, sensitive-capability rules, and permission-request decision mechanics.
 What the default user can do, and the capability matrix, live in docs/design/09-permission-access.md. Do not copy that matrix here.
 
+ADR-0066 (accepted 2026-10-13) adds proposed/new revision, withdrawal/edit,
+supported narrowing, selected risk detail, direct-grant and superseded-row behavior.
+These accepted contracts are implementation work; this docs change ships none of them.
+
 ## Role Level And Capability
 
 Role Level controls authority; backend capability checks are authoritative.
@@ -101,7 +105,7 @@ Permission scope shape:
 ```text
 workspace_id required
 managed_system_id optional for Admin, required for Developer-scoped grants
-object_type/object_id optional
+object_type/object_id are historical storage fields; single-object authorization is post-MVP (ADR-0066)
 ```
 
 Admin grants may omit managed_system_id when the capability is workspace-level.
@@ -137,9 +141,10 @@ survey.export
 
 Every other capability is non-sensitive and needs no reason beyond the route's `min(1)`.
 
-Scoped Developer permission requests should include a requested expiration. If
-the requester omits one, the API applies a default expiration such as 30 days.
-Admins may approve a longer or permanent grant when policy allows. Workspace
+Requester expiration is optional, with no automatic default (ADR-0044, confirmed
+by ADR-0066). Any supplied/resolved non-null expiry must be future in create,
+edit, supplement, approve, and direct grant. Admins may override grant expiration
+without overwriting requested expiration. Workspace
 Admin-level grants should not be offered through ordinary blocked-action request
 flows in MVP; they require an explicit Admin governance path.
 
@@ -159,12 +164,16 @@ review request must include a reason and the approval audit event records
 ```text
 pending
 -> needs_more_info -> pending
--> approved | rejected | expired | revoked
+-> approved | rejected | expired | revoked | cancelled
 ```
 
 `needs_more_info` keeps the same Permission Request identity. Requester
 supplementation moves the same request back to `pending`; it must not create a
 new request for the same source object, source action, and requested scope.
+ADR-0066 adds requester-only same-ID pending edit and withdrawal from either open
+status to cancelled. Each successful mutation advances proposed revision/updated_at;
+wrong status or revision returns conflict.stale_write after authorization. Withdrawal
+retains history, frees open uniqueness, and writes no grant/deny/domain action.
 
 Permission requests may originate from blocked linked objects, blocked
 `next_actions`, or explicit Admin request flows. Requests created from blocked
@@ -194,7 +203,7 @@ decision actions.
 The admin review queue is read via `GET /permissions/requests` (the legacy
 `GET /permission-requests` remains compatible), which returns the workspace's
 open (`pending` | `needs_more_info`) requests and a `count` by default. Admins
-may request `?status=pending|needs_more_info|approved|rejected|all` to review
+may request `?status=pending|needs_more_info|approved|rejected|cancelled|all` to review
 decided rows. The endpoint is gated by `workspace.admin`; a non-admin caller
 receives `permission.denied` (`403`). The caller-scoped variant
 `GET /permission-requests/mine` requires only a session (an Actor may always
@@ -222,14 +231,19 @@ administrator endpoints all require `workspace.admin`, lock the request row,
 and write the request change plus its audit row in one transaction:
 
 ```text
-POST /permissions/requests/:id/approve         { reason?: string, expiration?: string | null }
-POST /permissions/requests/:id/reject          { reason: string }
-POST /permissions/requests/:id/need-more-info  { note: string }
-POST /permissions/requests/:id/deny            { reason: string }
+POST /permissions/requests/:id/approve         { expected_revision, reason?, expiration?, granted_managed_system_id?, self_approval? }
+POST /permissions/requests/:id/reject          { expected_revision, reason: string }
+POST /permissions/requests/:id/need-more-info  { expected_revision, note: string }
+POST /permissions/requests/:id/deny            { expected_revision, reason: string }
 ```
 
-- Approve copies the requested capability and Managed System scope into a real
-  `permission_grants` row, then sets the request to `approved`. It never
+- Approve grants the requested capability with the same or a supported narrower
+  scope through the shared Permission grant command, then sets the request to
+  `approved`. ADR-0066 reopens and supersedes the earlier copy-scope-only rule:
+  workspace may narrow to one server-valid Managed System; system cannot widen
+  or move to a sibling, and workspace-only authority cannot become system scope.
+  The response/audit distinguish requested and granted scope/expiry without
+  overwriting requested fields. Unsupported legacy object approval is 422. It never
   auto-runs the blocked action. The grant's expiration is the requested
   expiration unless the approver changes it (`expiration`: a future datetime
   overrides it, `null` clears it, omitted keeps it; a past datetime is
@@ -245,13 +259,19 @@ POST /permissions/requests/:id/deny            { reason: string }
   Approve requires one only for `isSensitiveCapability`; it is optional for a
   non-sensitive capability. Missing decision reason/note is a `validation.*`
   response (`422`), including `validation.sensitive_reason_required` for a
-  sensitive approval. Reviewers cannot alter requested scope or expiry.
+  sensitive approval. Reviewers may alter granted scope/expiry within ADR-0066,
+  but never overwrite the requested values. All resolved non-null expirations
+  must be future, including an unchanged requested expiry.
 - Unknown request IDs are `not_found.record` (`404`); non-decidable requests
   are `conflict.stale_write` (`409`). Duplicate active grants/denies are
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
+  All decisions require proposed expected_revision and advance revision. Compare
+  inside the idempotent run after row lock; authorization precedes replay, and
+  replay precedes revision/status checks. Return current_revision only after
+  authorization; no request data on owner/workspace lookup failure.
 
-### Self-approval policy (Permission Requests and self deny lifts)
+### Self-approval policy (Permission Requests, self deny lifts, and direct self grants)
 
 An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that
@@ -268,7 +288,10 @@ An Admin lifting an active deny on themself follows the same setting:
 `forbidden` returns `permission.denied` without changing the deny or writing an
 audit row, while `allowed` permits the lift and records `self_lift: true` in the
 audit detail. An Admin may revoke their own grant because that action only
-lowers privilege.
+lowers privilege. ADR-0066 extends the setting to direct self grants: forbidden
+returns permission.denied; allowed requires the same strict self_approval envelope
+and records self_grant: true plus the envelope. Another-Actor grant rejects that
+envelope. This is capability authority, not a Role Level promotion.
 
 The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) are aggregated in `packages/shared/src/enums/audit-events.ts`. The event literals and detail schemas are owned per domain in `packages/shared/src/audit/*.ts`.
 
@@ -386,3 +409,57 @@ revoked
 ```
 
 The backend decides which state applies.
+
+## Accepted close-out extensions (ADR-0066; proposed/new)
+
+The rules above incorporating revision, withdrawal and narrowing replace older
+scope-copy/default-expiration text; the new API fields and behavior are not yet
+implemented. `api/permissions.md` owns exact bodies, reads, responses and errors.
+
+One Permission capability/scope policy supplies server candidates and validates
+create/edit/supplement/approval/direct grants inside transactions. Developer-scoped
+capabilities require an active Managed System; honor workspace Survey export per
+ADR-0033. No ordinary workspace.admin request; use explicit direct-grant governance.
+Reject non-null requested object scopes, preserve historical rows/source provenance,
+and inventory legacy object grants before release (ADR-0066 / post-MVP backlog).
+
+Recipient serialization uses an Auth-owned lock extension. Shared grant writer lock
+order is recipient Actor, request if relevant, workspace policy row, grant row.
+Request creation and scope-changing requester commands participate; the policy row
+is obtained through Workspace Settings' approved seam. Admin capability is checked
+before replay; a changed body under the same key conflicts. Audits and idempotency
+rows share the mutation transaction.
+
+Direct grant requires a reason for all capabilities and explicit workspace.admin
+form governance. Match open asks by recipient/capability/supported scope regardless
+of source, and refuse with a safe review destination; overlapping active denies
+require explicit lift, never silent removal. Workspace grants overlap any deny for
+that capability; system grants overlap workspace/same-system denies, not siblings.
+Preflight is advisory and all checks run again transactionally on submission.
+No Role Level change, automatic action, entity link, fake ask or decided notification.
+
+New expired reissue sets superseded_at on an expired exact-tuple predecessor and
+inserts a fresh ID. Preserve expiry/grantor/time/revoke fields. Keep the full COALESCE
+unique scope tuple and change only the predicate to revoked_at IS NULL AND
+superseded_at IS NULL; never now(). Checks, scope reads, active lists, revoke and
+seed existence checks exclude superseded grants. Audit failure restores both rows;
+expired/old-ID revoke stays conflict.permission_not_active.
+
+Permission computes four explained codes only for selected Admin detail:
+sensitive_capability, workspace_scope, no_expiration, active_deny (proposed/new).
+Effective access and Role Level are facts, not a role-jump score. Unknown/failure
+is retryable, not zero risk. Owner detail/mine omit risk and deny internals. Core
+owns the latest-question audit projection; source-owner gates/allowlists control
+safe summaries, including personal Survey data without an Admin bypass.
+
+Proposed strict audits (register in shared permission audit schemas and aggregator):
+- permission_request_cancelled: request subject; previous status, requester,
+  capability/scope, optional trimmed reason, previous/resulting revisions.
+- permission_request_updated: request subject; complete previous/resulting editable
+  reason/scope/expiry and revisions, capability/requester identity.
+- permission_granted: grant subject; actual recipient/capability/scope/reason/expiry,
+  grant ID, create/reissue mode, predecessor ID on reissue, self_grant/envelope when self.
+- Existing request mutation audits gain revisions; supplementation keeps pre/post
+  values. permission_approved keeps the request subject and gains requested/granted
+  scope, revisions, and predecessor ID when reissuing. Requestless grants do not
+  reuse request-decided notifications. Withdrawal emits no decided notification.
