@@ -39,7 +39,7 @@ print(json.dumps({'bases': pairs, 'targets': [t.strip() for t in targets.split('
                   'runs': int(runs), 'start': start, 'personas': [p for p in personas.split(',') if p]}))
 PY
 )
-log="${out%.json}.log"
+log="$out.log"
 [ ! -e "$out" ] || trash "$out"
 { printf 'const NAV_CONFIG = %s;\n' "$config"; cat "$here/nav-perf.mjs"; } | ego-browser nodejs >"$log" 2>&1 || true
 python3 "$here/nav-perf-summary.py" "$out" "$log"
