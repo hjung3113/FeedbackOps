@@ -265,7 +265,10 @@ describe('TaskRequestsRoute decision dialogs', () => {
         });
         expect(document.activeElement).toBe(heading);
         if (!cached) expect(screen.getByText('Task Request을 불러오는 중…')).toBeInTheDocument();
-        if (animated && dialog.isConnected) {
+        if (animated) {
+          // The closed content must be retained until its exit animation ends.
+          expect(dialog).toBeInTheDocument();
+          expect(dialog).toHaveAttribute('data-state', 'closed');
           const end = new Event('animationend', { bubbles: true });
           Object.defineProperty(end, 'animationName', { value: 'decision-exit' });
           fireEvent(dialog, end);
