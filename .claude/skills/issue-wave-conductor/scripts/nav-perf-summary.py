@@ -3,8 +3,9 @@
 
 The second base is compared with the first; a single base reports only timeouts. A target breaches when its
 median readyMs exceeds first x 1.2 + 50, it reloads only in the second base, its median apiCalls grows by 2 or
-more, or it timed out. Exit 1 when the
-result is missing or recorded errors; a breach alone exits 0 (the verdict line reports it).
+more, or it timed out. A target with no usable sample on a compared base (all excluded, e.g. 429) is
+`inconclusive`, not `ok`. Exit 1 when the result is missing, recorded errors, or any target is inconclusive (rerun
+before accepting it); a breach alone exits 0 (the verdict line reports it).
 """
 import json
 import os
@@ -41,17 +42,26 @@ def main(argv):
     print(f"nav-perf: out={out} samples={len(d['rows'])} errors={len(d['errors'])}" + (f' log={log}' if log else ''))
     print(f"{'href':<34}{ref + ' ms':>14}{cand + ' ms':>14}{'api':>10}  verdict")
     breaches = []
+    inconclusive = []
     for href in d['config']['targets']:
         a, b = per[ref][href], per[cand][href]
-        why = breach_reasons(a if len(labels) > 1 else None, b)
-        if why:
+        empty = [label for label in {ref, cand} if per[label][href]['samples'] == 0]
+        if empty:
+            inconclusive.append(href)
+            excluded = ', '.join(f"{label} {per[label][href]['rateLimitedSamples']} excluded" for label in sorted(empty))
+            why = [f'inconclusive: no usable sample ({excluded})']
+        else:
+            why = breach_reasons(a if len(labels) > 1 else None, b)
+        if why and not empty:
             breaches.append(href)
         api = f"{a['apiCalls']}/{b['apiCalls']}"
         print(f"{href:<34}{str(a['readyMs']):>14}{str(b['readyMs']):>14}{api:>10}  {', '.join(why) or 'ok'}")
     print(f"breach: {', '.join(breaches) if breaches else 'none'}")
+    if inconclusive:
+        print(f"inconclusive: {', '.join(inconclusive)}")
     for err in d['errors']:
         print(f'error: {json.dumps(err)[:200]}')
-    return 1 if d['errors'] else 0
+    return 1 if d['errors'] or inconclusive else 0
 
 
 if __name__ == '__main__':
