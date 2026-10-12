@@ -821,6 +821,42 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
     expect(unknown.statusCode).toBe(422);
     expect(await effects()).toEqual(before);
   });
+  // Overlap barrier for the concurrency test below: polls pg_stat_activity
+  // from the migrate connection until Postgres reports a backend blocked by
+  // the writer's PID (pg_blocking_pids — the only locks the writer holds are
+  // the source-survey row and its own xid, so such a waiter can only be the
+  // copy attempt parked at the survey.surveys FOR UPDATE). No reliance on
+  // restricted pg_stat_activity columns (query, usename). A copy that reaches
+  // the database only after the writer's commit never produces such a waiter,
+  // so this times out and fails the test instead of letting the 409 pass.
+  // The setTimeout poll loop is deliberate: the awaited condition (a lock
+  // waiter in another backend) lives in Postgres, not in this process, so no
+  // in-process signal or fake timer can observe it — real polling is the only
+  // deterministic proof.
+  async function waitForSourceLockWait(
+    writerPid: number,
+    options: { timeoutMs: number; pollIntervalMs: number },
+  ) {
+    const deadline = Date.now() + options.timeoutMs;
+    while (Date.now() < deadline) {
+      const waits = await migrateHandle.pool.query<{ wait_detected: number }>(
+        `select 1 as wait_detected
+           from pg_stat_activity a
+          where a.datname = current_database()
+            and a.wait_event_type = 'Lock'
+            and $1::int = any(pg_blocking_pids(a.pid))
+          limit 1`,
+        [writerPid],
+      );
+      if (waits.rows.length >= 1) return;
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, Math.min(options.pollIntervalMs, Math.max(0, deadline - Date.now()))),
+      );
+    }
+    throw new Error(
+      `timed out waiting for a lock wait on the source survey after ${options.timeoutMs}ms`,
+    );
+  }
   it('rejects a concurrent locked multi-question edit instead of copying a mixed graph', async () => {
     const id = await source();
     const selected = surveyCopySourceResponseSchema.parse((await preview(id)).json());
@@ -829,6 +865,9 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
     let attempt: ReturnType<typeof reuse> | undefined;
     try {
       await writer.query('begin');
+      const writerPid = (await writer.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]?.pid;
+      if (!writerPid) throw new Error('writer backend pid missing');
       await writer.query('select id from survey.surveys where id=$1 for update', [id]);
       await writer.query(
         "update survey.survey_questions set prompt='first committed edit' where id=$1",
@@ -839,6 +878,7 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
         "update survey.survey_questions set prompt='second committed edit' where id=$1",
         [selected.questions[1]?.id],
       );
+      await waitForSourceLockWait(writerPid, { timeoutMs: 2000, pollIntervalMs: 25 });
       await writer.query('commit');
       const response = await attempt;
       expect(response.statusCode).toBe(409);
