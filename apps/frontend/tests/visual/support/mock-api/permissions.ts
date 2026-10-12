@@ -45,10 +45,15 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
           throw new Error(`No mutable permission request fixture for ${request.method()} ${url}`);
         const template = permissionDecisionResultTemplates[action];
         target.status = template.status;
+        target.revision += 1;
         await json(
           route,
           200,
-          permissionDecisionResultSchema.parse({ ...template, id: requestId }),
+          permissionDecisionResultSchema.parse({
+            ...template,
+            id: requestId,
+            revision: target.revision,
+          }),
         );
       },
     },

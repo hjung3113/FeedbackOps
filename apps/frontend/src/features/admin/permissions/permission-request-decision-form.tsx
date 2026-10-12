@@ -167,6 +167,7 @@ export function PermissionRequestDecisionForm({
     mutation.mutate(
       {
         id: request.id,
+        expectedRevision: request.revision,
         action,
         reason: reason.trim(),
         idempotencyKey,

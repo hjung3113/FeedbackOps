@@ -4,10 +4,13 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 
 ## Permission
 
-ADR-0066 (accepted 2026-10-13, implementation pending) amends this contract.
-All new endpoints, `revision`, `expected_revision`, narrowed-scope approval,
-selected detail/risk, direct-grant options/writes and superseded-grant filtering
-below are proposed/new; this docs-only change adds no routes or schemas.
+ADR-0066 (accepted 2026-10-13) amends this contract. #1080 implements requester
+edit/cancel/supplement revisions, required revisions for all Admin decisions,
+supported-scope narrowing, and corresponding audits. Selected detail/risk,
+direct-grant options/writes and superseded-grant filtering remain pending.
+Deploy migration 0058 before these writers and roll out the #1083 revision
+consumers together, refreshing old clients. DB verification and the migration
+snapshot refresh remain conductor release checks.
 Existing endpoints retain their other rules. Single-object scope is post-MVP;
 source objects remain provenance. FR-PERM-001/002 are the requirement anchors.
 

@@ -59,6 +59,7 @@ const REQUESTS = [
     requested_capability: "workspace.read",
     requested_managed_system_id: null,
     requested_expiration: null,
+    revision: 7,
     reason: "need access",
     status: "pending",
     created_at: "2026-07-17T00:00:00.000Z",
@@ -69,6 +70,7 @@ const REQUESTS = [
     requested_capability: "workspace.write",
     requested_managed_system_id: "system-1",
     requested_expiration: null,
+    revision: 7,
     reason: "need detail",
     status: "needs_more_info",
     created_at: "2026-07-16T00:00:00.000Z",
@@ -79,6 +81,7 @@ const REQUESTS = [
     requested_capability: "workspace.admin",
     requested_managed_system_id: null,
     requested_expiration: null,
+    revision: 7,
     reason: "done",
     status: "approved",
     created_at: "2026-07-15T00:00:00.000Z",
@@ -89,6 +92,7 @@ const REQUESTS = [
     requested_capability: "workspace.delete",
     requested_managed_system_id: null,
     requested_expiration: null,
+    revision: 7,
     reason: "no",
     status: "rejected",
     created_at: "2026-07-14T00:00:00.000Z",
@@ -318,7 +322,7 @@ describe("/admin/permissions/requests", () => {
       expect(new Headers(init.headers).get("Idempotency-Key")).toMatch(
         /^[0-9a-f-]{36}$/i,
       );
-      expect(JSON.parse(init.body as string)).toEqual(expectedBody);
+      expect(JSON.parse(init.body as string)).toEqual({ ...expectedBody, expected_revision: 7 });
     },
   );
 
@@ -414,6 +418,7 @@ describe("/admin/permissions/requests", () => {
     await waitFor(() => expect(decisionPosts()).toHaveLength(1));
     const [, init] = decisionPosts()[0]!;
     expect(JSON.parse(init.body as string)).toEqual({
+      expected_revision: 7,
       self_approval: {
         policy_citation: "policy-8",
         peer_reviewer_absence: "reviewer",
@@ -465,6 +470,7 @@ describe("/admin/permissions/requests", () => {
       await waitFor(() => expect(decisionPosts()).toHaveLength(1));
       const [, init] = decisionPosts()[0]!;
       expect(JSON.parse(init.body as string)).toEqual({
+        expected_revision: 7,
         self_approval: {
           policy_citation: "policy-8",
           peer_reviewer_absence: "reviewer absence",

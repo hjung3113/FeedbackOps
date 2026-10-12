@@ -22,6 +22,7 @@ describe('permission approval expiration request body', () => {
         'approve',
         '',
         IDEMPOTENCY_KEY,
+        7,
         undefined,
         expiration,
       );
@@ -30,7 +31,7 @@ describe('permission approval expiration request body', () => {
         'POST',
         `/permissions/requests/${REQUEST_ID}/approve`,
         {
-          body: { reason: undefined, expiration },
+          body: { expected_revision: 7, reason: undefined, expiration },
           idempotencyKey: IDEMPOTENCY_KEY,
         },
       );

@@ -196,3 +196,17 @@ describe('errorMapper — unknown and missing errors', () => {
     if (expected === GENERIC_ERROR_MESSAGE) expect(mapped).not.toHaveProperty('action');
   });
 });
+
+it('maps authorized permission request revision conflicts while preserving generic stale copy', () => {
+  expect(
+    errorMapper({ code: 'conflict.stale_write', message: '', detail: { current_revision: 2 } })
+      .message,
+  ).toBe('요청 내용이 변경되었습니다. 최신 요청을 확인한 후 다시 시도해 주세요.');
+  expect(
+    errorMapper({
+      code: 'conflict.stale_write',
+      message: '',
+      detail: { current_updated_at: '2026-01-01T00:00:00Z' },
+    }).message,
+  ).toBe('다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?');
+});

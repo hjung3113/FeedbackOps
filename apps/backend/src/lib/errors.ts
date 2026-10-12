@@ -60,6 +60,7 @@ export type DetailShape =
         reason_required?: boolean;
       };
     }
+  | { current_revision: number }
   | { current_updated_at: string }
   | { current_triage_state: string }
   | {

@@ -165,13 +165,14 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'content-type': 'application/json',
       },
       payload: {
-        requested_capability: 'workspace.admin',
+        requested_capability: 'survey.export',
         reason: 'I need admin to do thing',
       },
     });
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.status).toBe('pending');
+    expect(body.revision).toBe(1);
     expect(typeof body.id).toBe('string');
 
     const requestRows = await dbHandle.pool.query(
@@ -180,7 +181,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     );
     expect(requestRows.rowCount).toBe(1);
     expect(requestRows.rows[0]?.status).toBe('pending');
-    expect(requestRows.rows[0]?.requested_capability).toBe('workspace.admin');
+    expect(requestRows.rows[0]?.requested_capability).toBe('survey.export');
 
     const auditRows = await dbHandle.pool.query(
       `select event_type, subject_type, subject_id from core.audit_log
@@ -208,7 +209,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'content-type': 'application/json',
       },
       payload: {
-        requested_capability: 'workspace.admin',
+        requested_capability: 'survey.export',
         reason: 'I need admin to do thing',
       },
     });
@@ -251,7 +252,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'content-type': 'application/json',
       },
       payload: {
-        requested_capability: 'workspace.admin',
+        requested_capability: 'survey.export',
         reason: 'Transactional notification check.',
       },
     });
@@ -290,7 +291,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     const cookie = await loginAs('mock-user-1');
     const idempotencyKey = randomUUID();
     const payload = {
-      requested_capability: 'workspace.admin',
+      requested_capability: 'survey.export',
       reason: 'concurrent test',
     };
     const inject = () =>
@@ -330,7 +331,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     const cookie = await loginAs('mock-user-1');
     const idempotencyKey = randomUUID();
     const payload = {
-      requested_capability: 'workspace.admin',
+      requested_capability: 'survey.export',
       reason: 'replay test',
     };
     const first = await app.inject({
@@ -384,7 +385,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'idempotency-key': idempotencyKey,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'first body' },
+      payload: { requested_capability: 'survey.export', reason: 'first body' },
     });
     expect(first.statusCode).toBe(201);
     const second = await app.inject({
@@ -395,7 +396,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'idempotency-key': idempotencyKey,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'different body' },
+      payload: { requested_capability: 'survey.export', reason: 'different body' },
     });
     expect(second.statusCode).toBe(409);
     expect(second.json().code).toBe('conflict.idempotency_key_reuse');
@@ -404,7 +405,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
   it('duplicate active request (no key) → 409 conflict.permission_request_duplicate', async () => {
     const cookie = await loginAs('mock-user-1');
     const payload = {
-      requested_capability: 'workspace.admin',
+      requested_capability: 'survey.export',
       reason: 'dup test',
     };
     const first = await app.inject({
@@ -432,7 +433,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       method: 'POST',
       url: '/permission-requests',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
-      payload: { requested_capability: 'workspace.admin', reason: 'already have it' },
+      payload: { requested_capability: 'workspace.read', reason: 'already have it' },
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('conflict.capability_already_granted');
@@ -456,7 +457,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       method: 'POST',
       url: '/permission-requests',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
-      payload: { requested_capability: 'workspace.admin' },
+      payload: { requested_capability: 'survey.export' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
@@ -472,7 +473,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       method: 'POST',
       url: '/permission-requests',
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
-      payload: { requested_capability: 'workspace.admin', reason: '   ' },
+      payload: { requested_capability: 'survey.export', reason: '   ' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.sensitive_reason_required');
@@ -488,7 +489,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'idempotency-key': 'not-a-uuid',
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'k' },
+      payload: { requested_capability: 'survey.export', reason: 'k' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.malformed_idempotency_key');
@@ -510,7 +511,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         'idempotency-key': v1Key,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'k' },
+      payload: { requested_capability: 'survey.export', reason: 'k' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.malformed_idempotency_key');
@@ -521,7 +522,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       method: 'POST',
       url: '/permission-requests',
       headers: { 'content-type': 'application/json' },
-      payload: { requested_capability: 'workspace.admin', reason: 'k' },
+      payload: { requested_capability: 'survey.export', reason: 'k' },
     });
     expect(res.statusCode).toBe(401);
     expect(res.json().code).toBe('auth.session_invalid');
@@ -577,7 +578,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
         cookie: `${SESSION_COOKIE_NAME}=${cookieValue}`,
         'content-type': 'application/json',
       },
-      payload: { requested_capability: 'workspace.admin', reason: 'k' },
+      payload: { requested_capability: 'survey.export', reason: 'k' },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('auth.workspace_mismatch');
@@ -637,7 +638,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
           workspace_id: WORKSPACE_ID,
           role_level: actorRow.roleLevel,
         },
-        { requested_capability: 'workspace.admin', reason: 'tx test' },
+        { requested_capability: 'survey.export', reason: 'tx test' },
       ),
     ).rejects.toThrow(/poisoned audit/);
 
@@ -655,5 +656,40 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       expect(auditRows.rows[0]?.n).toBe(0);
       await ops.close();
     }
+  });
+  it.each([
+    { requested_capability: 'workspace.admin', reason: 'governance belongs to direct grant' },
+    { requested_capability: 'voc.triage', reason: 'missing required system' },
+    {
+      requested_capability: 'survey.export',
+      reason: 'object scope',
+      requested_object_type: 'finding',
+      requested_object_id: randomUUID(),
+    },
+    {
+      requested_capability: 'survey.export',
+      reason: 'past expiry',
+      requested_expiration: '2020-01-01T00:00:00.000Z',
+    },
+  ])('rejects unsupported create policy without writes: $reason', async (payload) => {
+    const cookie = await loginAs('mock-user-1');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/permission-requests',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      payload,
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('validation.failed');
+    expect(
+      (await dbHandle.pool.query('select id from permission.permission_requests')).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await dbHandle.pool.query(
+          "select id from core.audit_log where event_type = 'permission_requested'",
+        )
+      ).rowCount,
+    ).toBe(0);
   });
 });

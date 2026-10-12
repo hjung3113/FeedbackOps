@@ -7,10 +7,16 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import {
+  type ApprovePermissionRequest,
   type Capability,
+  type DenyPermissionRequest,
+  type NeedMoreInfoPermissionRequest,
+  type RejectPermissionRequest,
   type RevokePermissionBody,
   approvePermissionRequestSchema,
+  cancelPermissionRequestSchema,
   denyPermissionRequestSchema,
+  editPermissionRequestSchema,
   isCapability,
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
@@ -46,18 +52,20 @@ export interface PermissionsRoutesOptions {
   };
 }
 
-const createRequestBodySchema = z.object({
-  requested_capability: z.string().min(1),
-  requested_managed_system_id: z.string().uuid().optional(),
-  requested_object_type: z.string().min(1).optional(),
-  requested_object_id: z.string().uuid().optional(),
-  reason: z.string().min(1).max(2000),
-  requested_expiration: z.string().datetime().optional(),
-  source_object_type: z.string().min(1).optional(),
-  source_object_id: z.string().uuid().optional(),
-  source_action_id: z.string().min(1).optional(),
-  return_route_intent: z.string().min(1).optional(),
-});
+const createRequestBodySchema = z
+  .object({
+    requested_capability: z.string().min(1),
+    requested_managed_system_id: z.string().uuid().optional(),
+    requested_object_type: z.string().min(1).optional(),
+    requested_object_id: z.string().uuid().optional(),
+    reason: z.string().min(1).max(2000),
+    requested_expiration: z.string().datetime().optional(),
+    source_object_type: z.string().min(1).optional(),
+    source_object_id: z.string().uuid().optional(),
+    source_action_id: z.string().min(1).optional(),
+    return_route_intent: z.string().min(1).optional(),
+  })
+  .strict();
 
 export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = async (
   app,
@@ -274,6 +282,114 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     },
   });
 
+  app.route({
+    method: 'PATCH',
+    url: '/permission-requests/:id',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const rawKey = req.headers['idempotency-key'];
+      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+      if (
+        typeof idempotencyKey === 'string' &&
+        idempotencyKey.length > 0 &&
+        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
+      ) {
+        return sendError(
+          reply,
+          'validation.malformed_idempotency_key',
+          'Idempotency-Key must be a UUIDv4',
+        );
+      }
+
+      const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
+      if (!parsedParams.success) {
+        return sendError(reply, 'validation.failed', 'invalid permission request id', {
+          fields: fieldsFromZodIssues(parsedParams.error.issues),
+        });
+      }
+
+      const parsedBody = editPermissionRequestSchema.safeParse(
+        req.body === undefined ? {} : req.body,
+      );
+      if (!parsedBody.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsedBody.error.issues),
+        });
+      }
+
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+      const result = await requestService.editRequest(
+        actor,
+        parsedParams.data.id,
+        parsedBody.data,
+        idempotencyKey ? { idempotencyKey } : {},
+      );
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/permission-requests/:id/cancel',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const rawKey = req.headers['idempotency-key'];
+      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+      if (
+        typeof idempotencyKey === 'string' &&
+        idempotencyKey.length > 0 &&
+        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
+      ) {
+        return sendError(
+          reply,
+          'validation.malformed_idempotency_key',
+          'Idempotency-Key must be a UUIDv4',
+        );
+      }
+
+      const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
+      if (!parsedParams.success) {
+        return sendError(reply, 'validation.failed', 'invalid permission request id', {
+          fields: fieldsFromZodIssues(parsedParams.error.issues),
+        });
+      }
+
+      const parsedBody = cancelPermissionRequestSchema.safeParse(
+        req.body === undefined ? {} : req.body,
+      );
+      if (!parsedBody.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsedBody.error.issues),
+        });
+      }
+
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+      const result = await requestService.cancelRequest(
+        actor,
+        parsedParams.data.id,
+        parsedBody.data,
+        idempotencyKey ? { idempotencyKey } : {},
+      );
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
   // ── GET /permission-requests/mine ───────────────────────────────────────
   // Returns the caller's open (pending|needs_more_info) permission requests.
   app.route({
@@ -315,7 +431,18 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
 
       const parsed = z
         .object({
-          status: z.enum(['pending', 'needs_more_info', 'approved', 'rejected', 'all']).optional(),
+          status: z
+            .enum([
+              'pending',
+              'needs_more_info',
+              'approved',
+              'rejected',
+              'cancelled',
+              'expired',
+              'revoked',
+              'all',
+            ])
+            .optional(),
         })
         .safeParse(req.query);
       if (!parsed.success) {
@@ -339,7 +466,18 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
       const parsed = z
         .object({
-          status: z.enum(['pending', 'needs_more_info', 'approved', 'rejected', 'all']).optional(),
+          status: z
+            .enum([
+              'pending',
+              'needs_more_info',
+              'approved',
+              'rejected',
+              'cancelled',
+              'expired',
+              'revoked',
+              'all',
+            ])
+            .optional(),
         })
         .safeParse(req.query);
       if (!parsed.success) {
@@ -471,27 +609,15 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'approve',
       schema: approvePermissionRequestBodySchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.approveRequest(
-          actor,
-          id,
-          body as {
-            reason?: string;
-            expiration?: string | null;
-            self_approval?: {
-              policy_citation: string;
-              peer_reviewer_absence: string;
-            };
-          },
-          {
-            idempotencyKey,
-          },
-        ),
+        decisionService.approveRequest(actor, id, body as ApprovePermissionRequest, {
+          idempotencyKey,
+        }),
     },
     {
       suffix: 'reject',
       schema: rejectPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.rejectRequest(actor, id, body as { reason?: string }, {
+        decisionService.rejectRequest(actor, id, body as RejectPermissionRequest, {
           idempotencyKey,
         }),
     },
@@ -499,7 +625,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'need-more-info',
       schema: needMoreInfoPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.needMoreInfoRequest(actor, id, body as { note?: string }, {
+        decisionService.needMoreInfoRequest(actor, id, body as NeedMoreInfoPermissionRequest, {
           idempotencyKey,
         }),
     },
@@ -507,7 +633,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'deny',
       schema: denyPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.denyRequest(actor, id, body as { reason?: string }, {
+        decisionService.denyRequest(actor, id, body as DenyPermissionRequest, {
           idempotencyKey,
         }),
     },
@@ -546,8 +672,18 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
           workspace_id: sess.workspace_id,
           role_level: sess.role_level,
         };
-        const { id } = req.params as { id: string };
-        const result = await route.invoke(actor, id, parsed.data, idempotencyKey || undefined);
+        const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
+        if (!parsedParams.success) {
+          return sendError(reply, 'validation.failed', 'invalid permission request id', {
+            fields: fieldsFromZodIssues(parsedParams.error.issues),
+          });
+        }
+        const result = await route.invoke(
+          actor,
+          parsedParams.data.id,
+          parsed.data,
+          idempotencyKey || undefined,
+        );
         return reply.code(result.status).send(result.body);
       },
     });

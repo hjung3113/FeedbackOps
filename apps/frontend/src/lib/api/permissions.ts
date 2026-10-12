@@ -148,6 +148,7 @@ export async function fetchPermissionRequestsMine(
 // Admin workspace-wide list. 403 for non-admins → ApiError.
 export interface AdminPermissionRequestRow {
   id: string;
+  revision: number;
   requester_actor_id: string;
   requested_capability: string;
   requested_managed_system_id: string | null;
@@ -225,13 +226,15 @@ export async function decidePermissionRequest(
   action: PermissionRequestDecisionAction,
   reason: string,
   idempotencyKey: string,
+  expectedRevision: number,
   selfApproval?: ApprovePermissionRequest['self_approval'],
   expiration?: ApprovePermissionRequest['expiration'],
 ): Promise<PermissionDecisionResult> {
   const body =
     action === 'need-more-info'
-      ? { note: reason || undefined }
+      ? { expected_revision: expectedRevision, note: reason || undefined }
       : {
+          expected_revision: expectedRevision,
           reason: reason || undefined,
           ...(action === 'approve' && expiration !== undefined ? { expiration } : {}),
           ...(action === 'approve' && selfApproval !== undefined ? { self_approval: selfApproval } : {}),

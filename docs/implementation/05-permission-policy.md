@@ -417,8 +417,9 @@ The backend decides which state applies.
 ## Accepted close-out extensions (ADR-0066; proposed/new)
 
 The rules above incorporating revision, withdrawal and narrowing replace older
-scope-copy/default-expiration text; the new API fields and behavior are not yet
-implemented. `api/permissions.md` owns exact bodies, reads, responses and errors.
+scope-copy/default-expiration text. #1080 implements versioned requester
+mutations, supported-scope validation and narrowed Admin decisions; selected reads,
+risk and direct grants remain pending. `api/permissions.md` owns exact bodies, reads, responses and errors.
 
 One Permission capability/scope policy supplies server candidates and validates
 create/edit/supplement/approval/direct grants inside transactions. Developer-scoped

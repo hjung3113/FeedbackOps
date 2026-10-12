@@ -41,6 +41,7 @@ const REQUEST: AdminPermissionRequestRow = {
   requester_actor_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   requested_capability: 'workspace.read',
   requested_managed_system_id: null,
+  revision: 1,
   requested_expiration: '2099-12-31T23:59:59.000Z',
   reason: 'Review the requested access.',
   status: 'pending',

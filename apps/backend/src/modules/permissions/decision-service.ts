@@ -4,31 +4,37 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
 import {
+  type ApprovePermissionRequest,
   type AuditEventType,
   type Capability,
+  type DenyPermissionRequest,
+  type NeedMoreInfoPermissionRequest,
+  type PermissionDecisionResult,
+  type RejectPermissionRequest,
   isCapability,
   isSensitiveCapability,
-  type PermissionDecisionResult,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import {
   permissionDenies,
   permissionGrants,
   permissionRequests,
 } from '../../db/schema/permission.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { lockWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
+import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface DecisionServiceDeps {
   db: Db;
@@ -54,10 +60,12 @@ type SelfApprovalEnvelope = {
   peer_reviewer_absence: string;
 };
 type DecisionBody = {
-  reason?: string;
-  note?: string;
-  expiration?: string | null;
-  self_approval?: SelfApprovalEnvelope;
+  expected_revision: number;
+  granted_managed_system_id?: string | null | undefined;
+  reason?: string | undefined;
+  note?: string | undefined;
+  expiration?: string | null | undefined;
+  self_approval?: SelfApprovalEnvelope | undefined;
 };
 type DecidableStatus = 'pending' | 'needs_more_info';
 
@@ -89,6 +97,20 @@ export function createDecisionService(deps: DecisionServiceDeps) {
       if (admin.allow !== true) {
         throw new HttpError('permission.denied', 'workspace.admin required');
       }
+      const selected = await tx
+        .select({ requesterActorId: permissionRequests.requesterActorId })
+        .from(permissionRequests)
+        .where(
+          and(
+            eq(permissionRequests.id, requestId),
+            eq(permissionRequests.workspaceId, actor.workspace_id),
+          ),
+        );
+      if (!selected[0]) throw new HttpError('not_found.record', 'permission request not found');
+      await lockWorkspaceActor(tx, {
+        workspaceId: actor.workspace_id,
+        actorId: selected[0].requesterActorId,
+      });
       const run = async (): Promise<{
         status: number;
         body: PermissionDecisionResult;
@@ -105,8 +127,15 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           .for('update');
         const request = rows[0];
         if (!request) throw new HttpError('not_found.record', 'permission request not found');
-        if (!DECIDABLE_STATUSES.includes(request.status as DecidableStatus)) {
-          throw new HttpError('conflict.stale_write', 'permission request is no longer decidable');
+        if (
+          !DECIDABLE_STATUSES.includes(request.status as DecidableStatus) ||
+          request.revision !== body.expected_revision
+        ) {
+          throw new HttpError(
+            'conflict.stale_write',
+            'permission request status or revision changed',
+            { current_revision: request.revision },
+          );
         }
         if (!isCapability(request.requestedCapability)) {
           throw new HttpError('validation.unknown_capability', 'unknown capability', {
@@ -165,6 +194,42 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           });
         }
 
+        let grantedManagedSystemId = request.requestedManagedSystemId;
+        if (action === 'approve') {
+          await validateSupportedScope(
+            tx,
+            actor.workspace_id,
+            capability,
+            request.requestedManagedSystemId,
+            request.requestedObjectType,
+            request.requestedObjectId,
+            { approval: true },
+          );
+          if (body.granted_managed_system_id !== undefined) {
+            if (
+              request.requestedManagedSystemId !== null &&
+              request.requestedManagedSystemId !== body.granted_managed_system_id
+            ) {
+              throw new HttpError(
+                'validation.failed',
+                'approval cannot move or widen requested scope',
+                {
+                  fields: [{ path: ['granted_managed_system_id'], code: 'custom' }],
+                },
+              );
+            }
+            grantedManagedSystemId = body.granted_managed_system_id;
+            await validateSupportedScope(
+              tx,
+              actor.workspace_id,
+              capability,
+              grantedManagedSystemId,
+              null,
+              null,
+              { approval: true, field: 'granted_managed_system_id' },
+            );
+          }
+        }
         let grantedExpiration = request.requestedExpiration;
         if (action === 'approve' && body.expiration !== undefined) {
           if (body.expiration === null) {
@@ -183,6 +248,8 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           }
         }
 
+        if (action === 'approve') validateRequestExpiration(grantedExpiration, 'expiration');
+
         let grantId: string | undefined;
         let denyId: string | undefined;
         const status =
@@ -200,7 +267,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
                 workspaceId: request.workspaceId,
                 actorId: request.requesterActorId,
                 capability,
-                managedSystemId: request.requestedManagedSystemId,
+                managedSystemId: grantedManagedSystemId,
                 grantedByActorId: actor.actor_id,
                 expiresAt: grantedExpiration,
                 sensitiveReason: reason || null,
@@ -241,9 +308,10 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           throw err;
         }
 
+        const updatedAt = new Date();
         await tx
           .update(permissionRequests)
-          .set({ status, updatedAt: new Date() })
+          .set({ status, revision: request.revision + 1, updatedAt })
           .where(eq(permissionRequests.id, request.id));
 
         const eventType: AuditEventType =
@@ -255,6 +323,8 @@ export function createDecisionService(deps: DecisionServiceDeps) {
                 ? 'permission_needs_more_info'
                 : 'permission_denied';
         const detail = {
+          previous_revision: request.revision,
+          revision: request.revision + 1,
           capability,
           managed_system_id: request.requestedManagedSystemId,
           requester_actor_id: request.requesterActorId,
@@ -262,6 +332,8 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           ...(grantId ? { grant_id: grantId } : {}),
           ...(action === 'approve'
             ? {
+                requested_managed_system_id: request.requestedManagedSystemId,
+                granted_managed_system_id: grantedManagedSystemId,
                 requested_expiration: request.requestedExpiration?.toISOString() ?? null,
                 granted_expiration: grantedExpiration?.toISOString() ?? null,
               }
@@ -294,6 +366,16 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           status: 200,
           body: {
             id: request.id,
+            revision: request.revision + 1,
+            updated_at: updatedAt.toISOString(),
+            ...(action === 'approve'
+              ? {
+                  requested_managed_system_id: request.requestedManagedSystemId,
+                  granted_managed_system_id: grantedManagedSystemId,
+                  requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                  granted_expiration: grantedExpiration?.toISOString() ?? null,
+                }
+              : {}),
             status,
             ...(grantId ? { grant_id: grantId } : {}),
             ...(denyId ? { deny_id: denyId } : {}),
@@ -316,25 +398,25 @@ export function createDecisionService(deps: DecisionServiceDeps) {
     approveRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason?: string; self_approval?: SelfApprovalEnvelope },
+      body: ApprovePermissionRequest,
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'approve', body, options),
     rejectRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason?: string },
+      body: RejectPermissionRequest,
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'reject', body, options),
     needMoreInfoRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { note?: string },
+      body: NeedMoreInfoPermissionRequest,
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'need_more_info', body, options),
     denyRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason?: string },
+      body: DenyPermissionRequest,
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'deny', body, options),
   };

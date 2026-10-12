@@ -50,6 +50,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   let adminCookie: string;
   let adminId: string;
   let requesterId: string;
+  let defaultSystemId: string;
   let requesterExternalId: string;
   const notifications = createRecordingNotificationDispatcher();
   let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
@@ -88,6 +89,11 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     await db.pool.query('delete from core.idempotency_keys');
     await db.pool.query('delete from core.rate_limits');
     const actor = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
+    const system = await db.pool.query<{ id: string }>(
+      "insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, 'Decision default system') returning id",
+      [WORKSPACE_ID, `perm-decision-${randomUUID()}`],
+    );
+    defaultSystemId = system.rows[0]?.id ?? '';
     requesterId = actor.id;
     requesterExternalId = actor.externalId;
   });
@@ -184,7 +190,13 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         WORKSPACE_ID,
         input.requesterActorId ?? requesterId,
         input.capability ?? 'voc.read',
-        input.managedSystemId ?? null,
+        input.managedSystemId !== undefined
+          ? input.managedSystemId
+          : input.capability === 'workspace.read' ||
+              input.capability === 'workspace.admin' ||
+              input.capability === 'survey.export'
+            ? null
+            : defaultSystemId,
         `${TEST_REASON}${randomUUID()}`,
         input.status ?? 'pending',
       ],
@@ -197,9 +209,15 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       `insert into permission.permission_requests
         (workspace_id, requester_actor_id, requested_capability, requested_managed_system_id,
          reason, status, requested_expiration)
-       values ($1, $2, 'voc.read', null, $3, 'pending', $4)
+       values ($1, $2, 'voc.read', $5, $3, 'pending', $4)
        returning id`,
-      [WORKSPACE_ID, requesterId, `${TEST_REASON}${randomUUID()}`, requestedExpiration],
+      [
+        WORKSPACE_ID,
+        requesterId,
+        `${TEST_REASON}${randomUUID()}`,
+        requestedExpiration,
+        defaultSystemId,
+      ],
     );
     return inserted.rows[0]?.id ?? '';
   }
@@ -219,7 +237,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         'content-type': 'application/json',
         ...(key ? { 'idempotency-key': key } : {}),
       },
-      payload,
+      payload: { expected_revision: 1, ...payload },
     });
   }
 
@@ -270,8 +288,10 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   }
 
   it('approve mints workspace and managed-system grants consumed by check-service', async () => {
-    const workspaceRequest = await seedRequest();
-    expect((await decide(workspaceRequest, 'approve', {})).statusCode).toBe(200);
+    const workspaceRequest = await seedRequest({ capability: 'survey.export' });
+    expect(
+      (await decide(workspaceRequest, 'approve', { reason: 'approved export' })).statusCode,
+    ).toBe(200);
     const check = createCheckService({ db: db.db });
     expect(
       await check.checkCapability(
@@ -280,7 +300,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
           workspace_id: WORKSPACE_ID,
           role_level: 'developer',
         },
-        'voc.read',
+        'survey.export',
         { workspace_id: WORKSPACE_ID },
       ),
     ).toMatchObject({ allow: true, via: 'direct_grant' });
@@ -398,7 +418,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         role_level: 'developer',
       },
       'voc.read',
-      { workspace_id: WORKSPACE_ID },
+      { workspace_id: WORKSPACE_ID, managed_system_id: defaultSystemId },
     );
     expect(decision).toMatchObject({ allow: false, reason: 'explicit_deny' });
     const audit = await db.pool.query<{ count: string }>(
@@ -493,7 +513,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
         'content-type': 'application/json',
       },
-      payload: {},
+      payload: { expected_revision: 1 },
     });
 
     expect(response.statusCode).toBeGreaterThanOrEqual(500);
@@ -859,5 +879,122 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const response = await decide(randomUUID(), 'approve', {});
     expect(response.statusCode).toBe(404);
     expect(response.json().code).toBe('not_found.record');
+  });
+  it('narrows supported workspace export scope and retains requested/granted values', async () => {
+    const id = await seedRequest({ capability: 'survey.export' });
+    const response = await decide(id, 'approve', {
+      reason: 'minimum useful access',
+      granted_managed_system_id: defaultSystemId,
+      expiration: CHANGED_EXPIRATION,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      revision: 2,
+      updated_at: expect.any(String),
+      requested_managed_system_id: null,
+      granted_managed_system_id: defaultSystemId,
+      requested_expiration: null,
+      granted_expiration: CHANGED_EXPIRATION,
+    });
+    const request = await db.pool.query(
+      'select requested_managed_system_id, requested_expiration from permission.permission_requests where id = $1',
+      [id],
+    );
+    expect(request.rows[0]).toEqual({
+      requested_managed_system_id: null,
+      requested_expiration: null,
+    });
+    const audit = await db.pool.query(
+      'select detail from core.audit_log where subject_id = $1 and event_type = $2',
+      [id, 'permission_approved'],
+    );
+    expect(audit.rows[0]?.detail).toMatchObject({
+      previous_revision: 1,
+      revision: 2,
+      requested_managed_system_id: null,
+      granted_managed_system_id: defaultSystemId,
+      requested_expiration: null,
+      granted_expiration: CHANGED_EXPIRATION,
+    });
+    const grant = await db.pool.query(
+      'select managed_system_id, expires_at from permission.permission_grants where id = $1',
+      [response.json().grant_id],
+    );
+    expect(grant.rows[0]).toEqual({
+      managed_system_id: defaultSystemId,
+      expires_at: new Date(CHANGED_EXPIRATION),
+    });
+  });
+
+  it.each(['sibling', 'widen', 'archived', 'unknown', 'workspace-only'] as const)(
+    'rejects %s approval scope with no partial writes',
+    async (kind) => {
+      const requestedSystem = ['workspace-only', 'archived', 'unknown'].includes(kind)
+        ? null
+        : defaultSystemId;
+      const id = await seedRequest({
+        capability:
+          kind === 'workspace-only'
+            ? 'workspace.read'
+            : ['archived', 'unknown'].includes(kind)
+              ? 'survey.export'
+              : 'voc.read',
+        managedSystemId: requestedSystem,
+      });
+      let candidate: string | null = kind === 'widen' ? null : randomUUID();
+      if (kind === 'sibling' || kind === 'archived') {
+        const system = await db.pool.query<{ id: string }>(
+          'insert into core.managed_systems (workspace_id, slug, name, archived_at) values ($1, $2, $2, $3) returning id',
+          [WORKSPACE_ID, `perm-decision-${randomUUID()}`, kind === 'archived' ? new Date() : null],
+        );
+        candidate = system.rows[0]?.id ?? '';
+      }
+      if (kind === 'workspace-only') candidate = defaultSystemId;
+      const before = await db.pool.query(
+        'select * from permission.permission_requests where id = $1',
+        [id],
+      );
+      const grants = await db.pool.query(
+        'select * from permission.permission_grants where actor_id = $1',
+        [requesterId],
+      );
+      const result = await decide(
+        id,
+        'approve',
+        { reason: 'review reason', granted_managed_system_id: candidate },
+        adminCookie,
+        randomUUID(),
+      );
+      expect(result.statusCode).toBe(422);
+      expect(result.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['granted_managed_system_id'], code: 'custom' }] },
+      });
+      expect(
+        (await db.pool.query('select * from permission.permission_requests where id = $1', [id]))
+          .rows,
+      ).toEqual(before.rows);
+      expect(
+        (
+          await db.pool.query('select * from permission.permission_grants where actor_id = $1', [
+            requesterId,
+          ])
+        ).rows,
+      ).toEqual(grants.rows);
+      expect(
+        (await db.pool.query('select id from core.audit_log where subject_id = $1', [id])).rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it('rejects an elapsed requested expiration when approval keeps it', async () => {
+    const id = await seedRequestWithExpiration('2020-01-01T00:00:00.000Z');
+    const result = await decide(id, 'approve', {});
+    expect(result.statusCode).toBe(422);
+    expect(result.json()).toMatchObject({
+      detail: { fields: [{ path: ['expiration'], code: 'custom' }] },
+    });
+    expect(await requestStatus(id)).toBe('pending');
+    expect((await decide(id, 'approve', { expiration: null })).statusCode).toBe(200);
   });
 });

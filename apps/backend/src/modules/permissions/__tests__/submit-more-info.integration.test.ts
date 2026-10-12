@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type Capability, isSensitiveCapability } from '@fops/shared';
 import { loadConfig } from '../../../config.js';
@@ -33,6 +33,7 @@ type RequestRow = {
   status: string;
   created_at: Date;
   updated_at: Date;
+  revision: number;
 };
 type AuditRow = {
   actor_id: string;
@@ -59,6 +60,12 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     migrateDb = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle: db });
     await app.ready();
+  });
+
+  // The new stale-review cases send several sensitive-tier decisions; reset the
+  // per-actor buckets so earlier cases cannot push them into 429.
+  beforeEach(async () => {
+    await migrateDb.pool.query('delete from core.rate_limits');
   });
 
   afterAll(async () => {
@@ -193,7 +200,13 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
         input.workspaceId ?? WORKSPACE_ID,
         requesterActorId,
         input.capability ?? 'voc.triage',
-        input.managedSystemId ?? null,
+        input.managedSystemId !== undefined
+          ? input.managedSystemId
+          : input.capability === 'survey.export' ||
+              input.capability === 'workspace.admin' ||
+              input.capability === 'unknown.capability'
+            ? null
+            : await createManagedSystem(),
         input.objectType ?? null,
         input.objectId ?? null,
         input.reason ?? `stored reason ${id}`,
@@ -259,7 +272,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
         'content-type': 'application/json',
         ...(key ? { 'idempotency-key': key } : {}),
       },
-      payload: body,
+      payload: { expected_revision: 1, ...body },
     });
   }
 
@@ -307,11 +320,13 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     expect(result).toEqual({
       id: requestId,
       status: 'pending',
+      revision: before.revision + 1,
       updated_at: expect.any(String),
     });
     expect(Number.isNaN(Date.parse(result.updated_at))).toBe(false);
 
     const after = await readRequest(requestId);
+    expect(after.revision).toBe(before.revision + 1);
     expect(after.status).toBe('pending');
     expect(after.updated_at.getTime()).toBeGreaterThan(before.updated_at.getTime());
     expect(new Date(result.updated_at).getTime()).toBe(after.updated_at.getTime());
@@ -334,6 +349,8 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
       summary: 'Permission request more info submitted',
     });
     expect(audit?.detail).toEqual({
+      previous_revision: before.revision,
+      revision: after.revision,
       capability: after.requested_capability,
       managed_system_id: after.requested_managed_system_id,
       requester_actor_id: actorId,
@@ -356,19 +373,16 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
   it('omitting every field keeps the stored values and submits the request', async () => {
     const actor = await createLoggedInActor();
     const managedSystemId = await createManagedSystem();
-    const objectId = randomUUID();
     const requestId = await seedRequest(actor.id, {
       managedSystemId,
-      objectType: 'finding',
-      objectId,
       expiration: '2030-01-01T00:00:00.000Z',
       reason: 'stored create-time reason',
     });
     const { after } = await assertSuccess(requestId, actor.id, actor.cookie);
     expect(after).toMatchObject({
       requested_managed_system_id: managedSystemId,
-      requested_object_type: 'finding',
-      requested_object_id: objectId,
+      requested_object_type: null,
+      requested_object_id: null,
       reason: 'stored create-time reason',
     });
     expect(after.requested_expiration?.toISOString()).toBe('2030-01-01T00:00:00.000Z');
@@ -383,20 +397,16 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     expect(after.reason).toBe('more');
   });
 
-  it('null clears each nullable scope and expiration field', async () => {
+  it('null clears supported workspace export scope and expiration', async () => {
     const actor = await createLoggedInActor();
     const managedSystemId = await createManagedSystem();
-    const objectId = randomUUID();
     const requestId = await seedRequest(actor.id, {
       managedSystemId,
-      objectType: 'finding',
-      objectId,
+      capability: 'survey.export',
       expiration: '2030-01-01T00:00:00.000Z',
     });
     const { after } = await assertSuccess(requestId, actor.id, actor.cookie, {
       requested_managed_system_id: null,
-      requested_object_type: null,
-      requested_object_id: null,
       requested_expiration: null,
     });
     expect(after).toMatchObject({
@@ -668,7 +678,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
         cookie: `${SESSION_COOKIE_NAME}=${admin.cookie}`,
         'content-type': 'application/json',
       },
-      payload: {},
+      payload: { expected_revision: 2 },
     });
     expect(approval.statusCode).toBe(200);
 
@@ -711,7 +721,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
         cookie: `${SESSION_COOKIE_NAME}=${admin.cookie}`,
         'content-type': 'application/json',
       },
-      payload: {},
+      payload: { expected_revision: 1 },
     });
     expect(approval.statusCode).toBe(200);
     const before = await captureState(requestId);
@@ -736,7 +746,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
   it('allows an Admin to submit more information on their own request', async () => {
     const requester = await createLoggedInActor('admin');
     const requestId = await seedRequest(requester.id, {
-      capability: 'workspace.admin',
+      capability: 'survey.export',
       reason: 'existing sensitive reason',
     });
     await assertSuccess(requestId, requester.id, requester.cookie);
@@ -749,5 +759,544 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     const before = await captureState(requestId);
     const response = await submit(requestId, admin.cookie);
     await expectRejectedUnchanged(requestId, before, response, 404, 'not_found.record');
+  });
+  function mutate(
+    id: string,
+    cookie: string,
+    action:
+      | 'edit'
+      | 'cancel'
+      | 'submit-more-info'
+      | 'approve'
+      | 'reject'
+      | 'deny'
+      | 'need-more-info',
+    payload: Record<string, unknown>,
+    key?: string,
+  ) {
+    return app.inject({
+      method: action === 'edit' ? 'PATCH' : 'POST',
+      url:
+        action === 'edit'
+          ? `/permission-requests/${id}`
+          : ['cancel', 'submit-more-info'].includes(action)
+            ? `/permission-requests/${id}/${action}`
+            : `/permissions/requests/${id}/${action}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        ...(key ? { 'idempotency-key': key } : {}),
+      },
+      payload,
+    });
+  }
+
+  async function allEffects(id: string, ...actors: string[]) {
+    return {
+      row: await readRequest(id),
+      audits: (
+        await db.pool.query('select * from core.audit_log where subject_id = $1 order by id', [id])
+      ).rows,
+      grants: (
+        await db.pool.query(
+          'select * from permission.permission_grants where actor_id = any($1::uuid[]) order by id',
+          [actors],
+        )
+      ).rows,
+      denies: (
+        await db.pool.query(
+          'select * from permission.permission_denies where actor_id = any($1::uuid[]) order by id',
+          [actors],
+        )
+      ).rows,
+      keys: (
+        await db.pool.query(
+          'select * from core.idempotency_keys where actor_id = any($1::uuid[]) order by key',
+          [actors],
+        )
+      ).rows,
+    };
+  }
+
+  it.each(['edit', 'cancel'] as const)(
+    '%s preserves uniform owner/workspace 404, even for an Admin',
+    async (action) => {
+      const caller = await createLoggedInActor('admin');
+      const owner = await createLoggedInActor();
+      const foreignWorkspace = await createWorkspace();
+      const ownWorkspaceId = await seedRequest(owner.id, { status: 'pending' });
+      const foreignId = await seedRequest(owner.id, {
+        workspaceId: foreignWorkspace,
+        status: 'pending',
+        capability: 'survey.export',
+      });
+      for (const id of [ownWorkspaceId, foreignId, randomUUID()]) {
+        const response = await mutate(
+          id,
+          caller.cookie,
+          action,
+          { expected_revision: 1 },
+          randomUUID(),
+        );
+        expect(response.statusCode).toBe(404);
+        expect(response.json()).toMatchObject({ code: 'not_found.record' });
+        expect(response.json()).not.toHaveProperty('detail.current_revision');
+      }
+      expect((await readRequest(ownWorkspaceId)).revision).toBe(1);
+      expect((await readRequest(foreignId)).revision).toBe(1);
+    },
+  );
+
+  it.each(['pending', 'needs_more_info'])(
+    'withdraws %s once, preserves history, and frees the exact open slot',
+    async (status) => {
+      const actor = await createLoggedInActor();
+      const system = await createManagedSystem();
+      const id = await seedRequest(actor.id, { managedSystemId: system, status });
+      const key = randomUUID();
+      const body = { expected_revision: 1, reason: '  obsolete ask  ' };
+      const before = await allEffects(id, actor.id);
+      const response = await mutate(id, actor.cookie, 'cancel', body, key);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ id, status: 'cancelled', revision: 2 });
+      const after = await allEffects(id, actor.id);
+      expect(after.grants).toEqual(before.grants);
+      expect(after.denies).toEqual(before.denies);
+      expect(after.audits).toHaveLength(before.audits.length + 1);
+      expect(after.audits.at(-1)).toMatchObject({
+        event_type: 'permission_request_cancelled',
+        detail: {
+          previous_status: status,
+          previous_revision: 1,
+          revision: 2,
+          reason: 'obsolete ask',
+        },
+      });
+      expect((await mutate(id, actor.cookie, 'cancel', body, key)).json()).toEqual(response.json());
+      expect(
+        (await mutate(id, actor.cookie, 'cancel', { ...body, reason: 'different' }, key)).json(),
+      ).toMatchObject({ code: 'conflict.idempotency_key_reuse' });
+      const fresh = await app.inject({
+        method: 'POST',
+        url: '/permission-requests',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${actor.cookie}` },
+        payload: {
+          requested_capability: 'voc.triage',
+          requested_managed_system_id: system,
+          reason: 'new need',
+        },
+      });
+      expect(fresh.statusCode).toBe(201);
+      expect(fresh.json().id).not.toBe(id);
+      expect((await readRequest(id)).status).toBe('cancelled');
+    },
+  );
+
+  it('edits the same pending ID with immutable provenance and complete pre/post audit', async () => {
+    const actor = await createLoggedInActor();
+    const id = await seedRequest(actor.id, {
+      status: 'pending',
+      reason: 'old reason',
+      expiration: '2030-01-01T00:00:00.000Z',
+    });
+    const before = await readRequest(id);
+    const system = await createManagedSystem();
+    const body = {
+      expected_revision: before.revision,
+      reason: '  corrected  ',
+      requested_managed_system_id: system,
+      requested_expiration: null,
+    };
+    const key = randomUUID();
+    const response = await mutate(id, actor.cookie, 'edit', body, key);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id, status: 'pending', revision: 2 });
+    const after = await readRequest(id);
+    expect(after).toMatchObject({
+      requester_actor_id: before.requester_actor_id,
+      requested_capability: before.requested_capability,
+      source_object_type: before.source_object_type,
+      source_object_id: before.source_object_id,
+      source_action_id: before.source_action_id,
+      return_route_intent: before.return_route_intent,
+      reason: 'corrected',
+      requested_managed_system_id: system,
+      requested_expiration: null,
+    });
+    const audit = await db.pool.query(
+      'select detail from core.audit_log where subject_id = $1 and event_type = $2',
+      [id, 'permission_request_updated'],
+    );
+    expect(audit.rows[0]?.detail).toMatchObject({
+      previous_revision: 1,
+      revision: 2,
+      previous: {
+        reason: 'old reason',
+        managed_system_id: before.requested_managed_system_id,
+        requested_expiration: '2030-01-01T00:00:00.000Z',
+      },
+      resulting: { reason: 'corrected', managed_system_id: system, requested_expiration: null },
+    });
+    const state = await allEffects(id, actor.id);
+    expect((await mutate(id, actor.cookie, 'edit', body, key)).json()).toEqual(response.json());
+    expect(
+      (await mutate(id, actor.cookie, 'edit', { ...body, reason: 'different' }, key)).json(),
+    ).toMatchObject({ code: 'conflict.idempotency_key_reuse' });
+    expect(await allEffects(id, actor.id)).toEqual(state);
+  });
+
+  it.each(['edit', 'submit-more-info'] as const)(
+    '%s first invalidates every previously reviewed Admin action',
+    async (mutation) => {
+      const requester = await createLoggedInActor();
+      for (const action of ['approve', 'reject', 'deny', 'need-more-info'] as const) {
+        const admin = await createLoggedInActor('admin');
+        const id = await seedRequest(requester.id, {
+          status: mutation === 'edit' ? 'pending' : 'needs_more_info',
+        });
+        const r = (await readRequest(id)).revision;
+        const changed = await mutate(id, requester.cookie, mutation, {
+          expected_revision: r,
+          reason: 'review these new values',
+        });
+        expect(changed.statusCode).toBe(200);
+        expect(changed.json().revision).toBe(r + 1);
+        const before = await allEffects(id, requester.id, admin.id);
+        const body =
+          action === 'need-more-info' ? { note: 'question' } : { reason: 'decision reason' };
+        const stale = await mutate(
+          id,
+          admin.cookie,
+          action,
+          { expected_revision: r, ...body },
+          randomUUID(),
+        );
+        expect(stale.statusCode).toBe(409);
+        expect(stale.json()).toMatchObject({
+          code: 'conflict.stale_write',
+          detail: { current_revision: r + 1 },
+        });
+        expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+        const fresh = await mutate(
+          id,
+          admin.cookie,
+          action,
+          { expected_revision: r + 1, ...body },
+          randomUUID(),
+        );
+        expect(fresh.statusCode).toBe(200);
+        expect(fresh.json().revision).toBe(r + 2);
+      }
+    },
+  );
+
+  it('repeated need-more-info advances revision while status remains unchanged', async () => {
+    const requester = await createLoggedInActor();
+    const admin = await createLoggedInActor('admin');
+    const id = await seedRequest(requester.id);
+    const r = (await readRequest(id)).revision;
+    expect(
+      (
+        await mutate(id, admin.cookie, 'need-more-info', { expected_revision: r, note: 'first' })
+      ).json(),
+    ).toMatchObject({ status: 'needs_more_info', revision: r + 1 });
+    const before = await allEffects(id, requester.id, admin.id);
+    expect(
+      (await mutate(id, admin.cookie, 'approve', { expected_revision: r })).json(),
+    ).toMatchObject({ code: 'conflict.stale_write', detail: { current_revision: r + 1 } });
+    expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+    expect(
+      (
+        await mutate(id, admin.cookie, 'need-more-info', {
+          expected_revision: r + 1,
+          note: 'second',
+        })
+      ).json(),
+    ).toMatchObject({ status: 'needs_more_info', revision: r + 2 });
+  });
+
+  it.each(['approve', 'cancel'] as const)(
+    '%s first makes later edit and supplement stale without writes',
+    async (winner) => {
+      const requester = await createLoggedInActor();
+      const admin = await createLoggedInActor('admin');
+      const id = await seedRequest(requester.id, { status: 'pending' });
+      const r = (await readRequest(id)).revision;
+      expect(
+        (
+          await mutate(id, winner === 'cancel' ? requester.cookie : admin.cookie, winner, {
+            expected_revision: r,
+          })
+        ).statusCode,
+      ).toBe(200);
+      const before = await allEffects(id, requester.id, admin.id);
+      for (const action of ['edit', 'submit-more-info'] as const) {
+        const result = await mutate(
+          id,
+          requester.cookie,
+          action,
+          { expected_revision: r, reason: 'too late' },
+          randomUUID(),
+        );
+        expect(result.statusCode).toBe(409);
+        expect(result.json()).toMatchObject({ detail: { current_revision: r + 1 } });
+        expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+      }
+    },
+  );
+
+  it.each(['edit', 'submit-more-info', 'approve'] as const)(
+    '%s rejects planted legacy object scope without stripping history',
+    async (action) => {
+      const requester = await createLoggedInActor();
+      const admin = await createLoggedInActor('admin');
+      const id = await seedRequest(requester.id, {
+        status: action === 'submit-more-info' ? 'needs_more_info' : 'pending',
+        objectType: 'finding',
+        objectId: randomUUID(),
+      });
+      const before = await allEffects(id, requester.id, admin.id);
+      const result = await mutate(
+        id,
+        action === 'approve' ? admin.cookie : requester.cookie,
+        action,
+        { expected_revision: 1 },
+      );
+      expect(result.statusCode).toBe(422);
+      expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+      expect(
+        (await mutate(id, requester.cookie, 'cancel', { expected_revision: 1 })).statusCode,
+      ).toBe(200);
+      expect((await readRequest(id)).requested_object_id).toBe(before.row.requested_object_id);
+    },
+  );
+
+  it.each(['edit', 'submit-more-info'] as const)(
+    '%s rejects archived scope, expired duration, and immutable keys without writes',
+    async (action) => {
+      const requester = await createLoggedInActor();
+      const id = await seedRequest(requester.id, {
+        status: action === 'edit' ? 'pending' : 'needs_more_info',
+      });
+      const archived = await createManagedSystem();
+      await migrateDb.pool.query(
+        'update core.managed_systems set archived_at = now() where id = $1',
+        [archived],
+      );
+      for (const body of [
+        { requested_managed_system_id: archived },
+        { requested_managed_system_id: null },
+        { requested_expiration: '2020-01-01T00:00:00.000Z' },
+        { requested_capability: 'survey.export' },
+        { source_action_id: 'changed' },
+        { requested_object_id: null },
+      ]) {
+        const before = await allEffects(id, requester.id);
+        expect(
+          (
+            await mutate(
+              id,
+              requester.cookie,
+              action,
+              { expected_revision: 1, ...body },
+              randomUUID(),
+            )
+          ).statusCode,
+        ).toBe(422);
+        expect(await allEffects(id, requester.id)).toEqual(before);
+      }
+    },
+  );
+
+  it.each([
+    'edit',
+    'cancel',
+    'submit-more-info',
+    'approve',
+    'reject',
+    'deny',
+    'need-more-info',
+  ] as const)('%s validates missing/invalid revision before mutation', async (action) => {
+    const requester = await createLoggedInActor();
+    const admin = await createLoggedInActor('admin');
+    const id = await seedRequest(requester.id, {
+      status: action === 'edit' ? 'pending' : 'needs_more_info',
+    });
+    const before = await allEffects(id, requester.id, admin.id);
+    for (const expected_revision of [undefined, 0, -1, 1.5, '1']) {
+      const result = await mutate(
+        id,
+        ['edit', 'cancel', 'submit-more-info'].includes(action) ? requester.cookie : admin.cookie,
+        action,
+        {
+          ...(expected_revision === undefined ? {} : { expected_revision }),
+          reason: 'reason',
+          note: 'question',
+        },
+      );
+      expect(result.statusCode).toBe(422);
+      expect(result.json().detail.fields).toContainEqual(
+        expect.objectContaining({ path: ['expected_revision'] }),
+      );
+    }
+    expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+  });
+
+  it.each(['edit', 'cancel', 'submit-more-info', 'approve', 'deny'] as const)(
+    '%s audit failure rolls back request, access, audit, and idempotency writes',
+    async (action) => {
+      const requester = await createLoggedInActor();
+      const admin = await createLoggedInActor('admin');
+      const id = await seedRequest(requester.id, {
+        status: action === 'submit-more-info' ? 'needs_more_info' : 'pending',
+      });
+      const before = await allEffects(id, requester.id, admin.id);
+      // Scoped failure injection follows the existing Task audit rollback pattern.
+      // Only this request fails; unrelated suites' audit writes are unaffected.
+      await migrateDb.pool.query(`
+      create function core.fail_w1080_audit() returns trigger language plpgsql as $$
+      begin
+        if NEW.subject_id = '${id}'::uuid then raise exception 'forced W1080 audit failure'; end if;
+        return NEW;
+      end; $$;
+      create trigger fail_w1080_audit before insert on core.audit_log
+      for each row execute function core.fail_w1080_audit();
+    `);
+      try {
+        const result = await mutate(
+          id,
+          ['approve', 'deny'].includes(action) ? admin.cookie : requester.cookie,
+          action,
+          { expected_revision: 1, reason: 'audit rollback' },
+          randomUUID(),
+        );
+        expect(result.statusCode).toBe(500);
+        expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+      } finally {
+        await migrateDb.pool.query(
+          'drop trigger fail_w1080_audit on core.audit_log; drop function core.fail_w1080_audit();',
+        );
+      }
+    },
+  );
+
+  it.each(['edit', 'submit-more-info'] as const)(
+    '%s rejects exact scope collision and already-held scope atomically',
+    async (action) => {
+      const requester = await createLoggedInActor();
+      const original = await createManagedSystem();
+      const duplicate = await createManagedSystem();
+      const granted = await createManagedSystem();
+      const id = await seedRequest(requester.id, {
+        status: action === 'edit' ? 'pending' : 'needs_more_info',
+        managedSystemId: original,
+      });
+      await seedRequest(requester.id, { status: 'pending', managedSystemId: duplicate });
+      await migrateDb.pool.query(
+        `insert into permission.permission_grants (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id) values ($1, $2, 'voc.triage', $3, $2)`,
+        [WORKSPACE_ID, requester.id, granted],
+      );
+      const before = await allEffects(id, requester.id);
+      for (const [scope, code] of [
+        [duplicate, 'conflict.permission_request_duplicate'],
+        [granted, 'conflict.capability_already_granted'],
+      ]) {
+        const result = await mutate(
+          id,
+          requester.cookie,
+          action,
+          { expected_revision: 1, requested_managed_system_id: scope },
+          randomUUID(),
+        );
+        expect(result.statusCode).toBe(409);
+        expect(result.json().code).toBe(code);
+        expect(await allEffects(id, requester.id)).toEqual(before);
+      }
+    },
+  );
+
+  it('concurrent edit and approval serialize one winning revision', async () => {
+    const requester = await createLoggedInActor();
+    const admin = await createLoggedInActor('admin');
+    const id = await seedRequest(requester.id, { status: 'pending', reason: 'original' });
+    const r = (await readRequest(id)).revision;
+    const results = await Promise.all([
+      mutate(
+        id,
+        requester.cookie,
+        'edit',
+        { expected_revision: r, reason: 'changed' },
+        randomUUID(),
+      ),
+      mutate(id, admin.cookie, 'approve', { expected_revision: r }, randomUUID()),
+    ]);
+    expect(results.map((result) => result.statusCode).sort()).toEqual([200, 409]);
+    expect(results.find((result) => result.statusCode === 409)?.json()).toMatchObject({
+      code: 'conflict.stale_write',
+      detail: { current_revision: r + 1 },
+    });
+    const state = await allEffects(id, requester.id, admin.id);
+    expect(state.row.revision).toBe(r + 1);
+    expect(state.audits).toHaveLength(1);
+    expect(state.keys).toHaveLength(1);
+    expect(state.grants).toHaveLength(state.row.status === 'approved' ? 1 : 0);
+    expect(state.denies).toHaveLength(0);
+  });
+
+  it('Admin capability gate still precedes replay of a successful decision', async () => {
+    const requester = await createLoggedInActor();
+    const admin = await createLoggedInActor('admin');
+    const id = await seedRequest(requester.id, { status: 'pending' });
+    const key = randomUUID();
+    const body = { expected_revision: 1, reason: 'reject' };
+    expect((await mutate(id, admin.cookie, 'reject', body, key)).statusCode).toBe(200);
+    await migrateDb.pool.query(
+      `insert into permission.permission_denies (workspace_id, actor_id, capability, reason, created_by_actor_id) values ($1, $2, 'workspace.admin', 'admin access removed', $2)`,
+      [WORKSPACE_ID, admin.id],
+    );
+    const before = await allEffects(id, requester.id, admin.id);
+    const replay = await mutate(id, admin.cookie, 'reject', body, key);
+    expect(replay.statusCode).toBe(403);
+    expect(replay.json()).toMatchObject({ code: 'permission.denied' });
+    expect(await allEffects(id, requester.id, admin.id)).toEqual(before);
+  });
+  it('keeps legacy object history visible to its owner and permits rejection', async () => {
+    const requester = await createLoggedInActor();
+    const admin = await createLoggedInActor('admin');
+    const objectId = randomUUID();
+    const id = await seedRequest(requester.id, {
+      status: 'pending',
+      objectType: 'finding',
+      objectId,
+    });
+    const mine = await app.inject({
+      method: 'GET',
+      url: '/permission-requests/mine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${requester.cookie}` },
+    });
+    expect(mine.json().requests).toContainEqual(
+      expect.objectContaining({
+        id,
+        requested_object_type: 'finding',
+        requested_object_id: objectId,
+        revision: 1,
+      }),
+    );
+    expect(
+      (
+        await mutate(id, admin.cookie, 'reject', {
+          expected_revision: 1,
+          reason: 'unsupported legacy scope',
+        })
+      ).statusCode,
+    ).toBe(200);
+    const state = await allEffects(id, requester.id, admin.id);
+    expect(state.row).toMatchObject({
+      status: 'rejected',
+      revision: 2,
+      requested_object_type: 'finding',
+      requested_object_id: objectId,
+    });
+    expect(state.grants).toEqual([]);
+    expect(state.denies).toEqual([]);
   });
 });
