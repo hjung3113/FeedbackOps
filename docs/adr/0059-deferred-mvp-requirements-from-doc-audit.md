@@ -13,6 +13,9 @@ Amended by ADR-0069 for the new Analytics Area report's required snapshot time o
 
 Amended 2026-10-13: the MVP close-out (`docs/design/13-mvp-roadmap.md`) schedules D1-D3 as their own issues; D4 is closed by rejecting ADR-0035/0036.
 
+D2 amended 2026-10-13 by [ADR-0070](0070-survey-starting-templates-and-definition-reuse.md);
+see the dated amendment below for delivery boundaries.
+
 ## Context
 
 The 2026-10-05 doc-to-code audit found four behaviors that the design docs describe as MVP requirements but that were never built, and that no ADR deferred. MVP shipped without them (slices through 29 are released). Leaving them as unqualified requirements makes the design docs read as if the behavior exists.
@@ -61,3 +64,14 @@ for truthful snapshot and overdue context. This exception does not deliver or fo
 recovery identity, resolution storage, detail, snooze/mute or history. The report consumes the
 canonical expected-follow-up/no-follow-up interface from the scheduled D3 close-out work;
 its delivery does not wait on snooze/history UI.
+
+## Amended 2026-10-13 — D2 delivery scope
+
+[ADR-0070](0070-survey-starting-templates-and-definition-reuse.md) narrows D2 to
+delivered behavior: #1073 supplies three built-in starting templates through
+the backend/shared creation contract. Existing-definition reuse (#1074) and
+visible dialog selection (#1075) remain pending until their delivery. The
+historical D2 statement above describes the 2026-10-05 audit baseline; #1073
+does not complete #1047's user-visible FR-SURVEY-001 acceptance. An editable
+saved-template library remains outside the agreed MVP scope. Explicit Managed
+System/privacy and persisted-ID requirements from ADR-0039 stay in force.

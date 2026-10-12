@@ -3,6 +3,7 @@ import {
   outcomeFollowUpDecisionRequestSchema,
   surveyQuestionKindSchema,
   surveyResponseSubmissionSchema,
+  surveyStartingPointSchema,
   surveyTypeSchema,
 } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
@@ -30,6 +31,7 @@ const create = z
     analytics_area_id: uuid.optional(),
     operator_actor_id: uuid.optional(),
     responses_identity_protected: z.boolean(),
+    starting_point: surveyStartingPointSchema.optional(),
   })
   .strict();
 const update = z
@@ -158,6 +160,16 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
         q.data.managed_system_id === 'all' ? undefined : q.data.managed_system_id,
       ),
     );
+  });
+  app.get('/surveys/templates', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = z.object({ managed_system_id: uuid }).strict().safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply
+      .header('cache-control', 'private, no-cache')
+      .send(await opts.surveysService.getSurveyTemplates(actor(req), query.data.managed_system_id));
   });
   app.get('/surveys/:id', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;

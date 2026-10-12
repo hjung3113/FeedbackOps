@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { SurveyType } from '@fops/shared';
+import type { SurveyStartingPoint, SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -33,6 +33,7 @@ import {
   updateSurvey,
 } from './repo.js';
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
+import { builtinSurveyTemplates, findBuiltinSurveyTemplate } from './templates.js';
 
 export type CreateSurveyInput = {
   type: SurveyType;
@@ -42,6 +43,7 @@ export type CreateSurveyInput = {
   analytics_area_id?: string;
   operator_actor_id?: string;
   responses_identity_protected: boolean;
+  starting_point?: SurveyStartingPoint;
 };
 export type QuestionInput = {
   kind: QuestionKind;
@@ -373,6 +375,14 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             throw new HttpError('validation.failed', 'operator requires survey.manage', {
               fields: [{ path: ['operator_actor_id'], code: 'permission_denied' }],
             });
+          const startingPoint = a.input.starting_point;
+          const template = startingPoint
+            ? findBuiltinSurveyTemplate(startingPoint.template_id, startingPoint.version)
+            : undefined;
+          if (startingPoint && !template)
+            validation('unknown built-in template or version', ['starting_point']);
+          if (template && template.type !== a.input.type)
+            validation('type must match starting template', ['type']);
           const s = await insertSurvey(tx, {
             workspaceId: a.actor.workspace_id,
             type: a.input.type,
@@ -384,6 +394,32 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             responsesIdentityProtected: a.input.responses_identity_protected,
             createdBy: a.actor.actor_id,
           });
+          const questions: QuestionRow[] = [];
+          for (const definition of template?.questions ?? []) {
+            const { key: _key, ...input } = definition;
+            const q = await insertQuestion(tx, {
+              workspaceId: a.actor.workspace_id,
+              surveyId: s.id,
+              ...normalized(input),
+            });
+            questions.push(q);
+            await deps.auditService.record(tx, {
+              workspace_id: a.actor.workspace_id,
+              actor_id: a.actor.actor_id,
+              event_type: 'survey_question_created',
+              subject_type: 'survey_question',
+              subject_id: q.id,
+              summary: 'Survey question created',
+              detail: {
+                survey_id: s.id,
+                question_id: q.id,
+                kind: q.kind,
+                branch_depth: q.branch_depth,
+                sort_order: q.sort_order,
+              },
+            });
+          }
+          validateQuestions(questions);
           await deps.auditService.record(tx, {
             workspace_id: a.actor.workspace_id,
             actor_id: a.actor.actor_id,
@@ -400,12 +436,27 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
               operator_actor_id: operator,
               operator_resolution: resolution,
               responses_identity_protected: s.responses_identity_protected,
+              ...(startingPoint
+                ? { starting_point: startingPoint, question_count: questions.length }
+                : {}),
             },
           });
           return { status: 201, body: dto(s) };
         },
       ),
     );
+  }
+  async function getSurveyTemplates(actor: SurveysActor, managedSystemId: string) {
+    return deps.db.transaction(async (tx) => {
+      const system = await lockManagedSystem(tx, actor.workspace_id, managedSystemId);
+      if (!system) throw new HttpError('not_found.record', 'managed system not found');
+      if (system.archived_at)
+        throw new HttpError('conflict.parent_archived', 'managed system archived');
+      const manage = await checkSurveyManage(deps.checkService, actor, system.id, { tx });
+      if (!manage.allow)
+        throw new HttpError('permission.denied', 'survey.manage capability required');
+      return builtinSurveyTemplates();
+    });
   }
   async function mutateQuestion(
     mode: 'create' | 'update' | 'delete',
@@ -892,6 +943,7 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
   }
   return {
     createSurvey,
+    getSurveyTemplates,
     updateSurveyFields,
     reorderQuestions,
     createQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('create', a),

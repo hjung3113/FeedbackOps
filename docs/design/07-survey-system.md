@@ -14,7 +14,8 @@ Owns:
 - Survey
 - Survey Response
 - Survey Result
-- Survey templates (deferred, ADR-0059 D2)
+- Server-owned starting templates (ADR-0070; backend contract #1073)
+- Existing definition reuse (ADR-0070; pending #1074)
 ```
 
 Does not own:
@@ -93,9 +94,21 @@ Acceptance Criteria:
 - Survey Operator can create Discovery, Validation, or Outcome Survey.
 - Survey requires exactly one Primary Managed System.
 - Survey can link Analytics Area under that Managed System.
-- Survey can be created from template. (Deferred, ADR-0059 D2.)
+- Survey can be created atomically from one of three built-in starters through the backend contract (#1073, ADR-0070).
+- Existing Survey definition reuse (#1074) and visible dialog source selection (#1075) remain pending until delivery; #1073 alone does not complete #1047's user-visible acceptance.
+- Managed System and respondent privacy remain explicit choices, and builder navigation uses only the persisted server ID (ADR-0039, amended by ADR-0070).
 - Survey supports link distribution. (MVP distribution is the authenticated `/surveys/:id/respond` link; public links (ADR-0035/0036) were rejected on 2026-10-13, ADR-0059 D4.)
 ```
+
+Built-in IDs are `discovery-basic`, `validation-basic`, and `outcome-basic`,
+version 1. The server owns definitions; shared previews use symbolic question
+keys without persisted IDs. Creation submits an editable title and independent
+description, resolves the operator anew, and writes the full question graph
+in the creation transaction. Blank creation remains available. Outcome uses a
+positive 1–5 usefulness rating, retaining ADR-0055's low-band classification.
+The exact Korean content and endpoint envelope live in
+[the Survey API contract](../implementation/api/surveys.md#built-in-definitions-version-1).
+No saved-template library or response/history copying is part of this scope.
 
 ### FR-SURVEY-002: Basic Builder
 
