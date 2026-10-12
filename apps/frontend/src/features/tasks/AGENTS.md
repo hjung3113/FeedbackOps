@@ -41,6 +41,8 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
 - `apps/frontend/src/features/tasks/hooks/useTaskPanelSelection.ts` — shared Task list and Task Request
   selection reconciliation, panel close, auto-selection, and missing-link state; callers own detail queries,
   scope/filter checks, and focus return.
+- `apps/frontend/src/features/tasks/hooks/useTaskBoardKeyboardFocus.ts` — route-lifetime keyboard
+  focus recovery and generation invalidation; status cache writes stay in `useTaskStatusTransition`.
 - `apps/frontend/src/features/tasks/adapters/taskDisplayAdapters.ts` — shared Managed System name
   lookup, assignment resolution, and priority-to-severity projection.
 - `apps/frontend/src/features/tasks/routes/TaskRequestsRoute.tsx` — Task Request queue and selected detail.
