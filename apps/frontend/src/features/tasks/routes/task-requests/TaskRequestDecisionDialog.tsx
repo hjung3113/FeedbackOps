@@ -22,6 +22,8 @@ export interface DecisionDialogState {
 }
 
 export function TaskRequestDecisionDialog({
+  completedResult = null,
+  getCompletedFocusTarget,
   dialog,
   request,
   isSelfApproval,
@@ -30,6 +32,8 @@ export function TaskRequestDecisionDialog({
   onClose,
   onSubmit,
 }: {
+  completedResult?: TaskRequestDto | null;
+  getCompletedFocusTarget?: (result: TaskRequestDto) => HTMLElement | null;
   dialog: DecisionDialogState | null;
   request: TaskRequestDto;
   isSelfApproval: boolean;
@@ -50,12 +54,20 @@ export function TaskRequestDecisionDialog({
     key: number;
     opener: HTMLElement | null;
     dismissed: boolean;
-  }>({ key: 0, opener: null, dismissed: false });
+    resultAtOpen: TaskRequestDto | null;
+    successTarget: HTMLElement | null;
+  }>({ key: 0, opener: null, dismissed: false, resultAtOpen: null, successTarget: null });
   if (previousDialog !== liveDialog) {
     setPreviousDialog(liveDialog);
     if (liveDialog) setRetained(liveDialog);
     if (liveDialog && (!previousDialog || previousDialog.action !== liveDialog.action)) {
-      setOpening({ key: opening.key + 1, opener: null, dismissed: false });
+      setOpening({
+        key: opening.key + 1,
+        opener: null,
+        dismissed: false,
+        resultAtOpen: null,
+        successTarget: null,
+      });
     }
   }
   const content = liveDialog ?? retained;
@@ -67,6 +79,31 @@ export function TaskRequestDecisionDialog({
       mounted.current = false;
     };
   }, []);
+
+  const [handedOff, setHandedOff] = React.useState<typeof opening | null>(null);
+  const successfulClose =
+    liveDialog === null &&
+    completedResult !== null &&
+    completedResult.id === request.id &&
+    completedResult !== opening.resultAtOpen &&
+    ((content?.action === 'approve' && completedResult.status === 'approved') ||
+      (content?.action === 'reject' && completedResult.status === 'rejected'));
+  // Keep focused content connected until the same-request target is available.
+  // Child FocusScope effects first release the closed dialog's focus trap.
+  React.useEffect(() => {
+    if (
+      !successfulClose ||
+      handedOff === opening ||
+      activeOpening.current !== opening ||
+      !completedResult
+    )
+      return;
+    const target = getCompletedFocusTarget?.(completedResult);
+    if (!target?.isConnected) return;
+    target.focus();
+    opening.successTarget = target;
+    setHandedOff(opening);
+  }, [successfulClose, handedOff, opening, completedResult, getCompletedFocusTarget]);
 
   function dismiss() {
     if (isSubmitting) return;
@@ -105,11 +142,14 @@ export function TaskRequestDecisionDialog({
       {content && (
         <DialogContent
           key={opening.key}
+          {...(successfulClose && handedOff !== opening ? { forceMount: true } : {})}
           onOpenAutoFocus={() => {
             activeOpening.current = opening;
             opening.opener =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
             opening.dismissed = false;
+            opening.resultAtOpen = completedResult;
+            opening.successTarget = null;
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -121,6 +161,15 @@ export function TaskRequestDecisionDialog({
               opening.opener?.isConnected
             ) {
               opening.opener.focus();
+            }
+            // Reconcile only this opening's handoff; a newer focus owner wins.
+            if (
+              mounted.current &&
+              activeOpening.current === opening &&
+              opening.successTarget?.isConnected &&
+              document.activeElement === opening.successTarget
+            ) {
+              opening.successTarget.focus();
             }
             opening.opener = null;
             opening.dismissed = false;

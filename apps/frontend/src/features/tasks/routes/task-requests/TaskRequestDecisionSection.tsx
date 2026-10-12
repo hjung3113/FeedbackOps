@@ -3,6 +3,7 @@ import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
 import type { TaskDto } from '@fops/shared';
 import { Button, InternalTaskBadge, ObjectRow, PanelSectionTitle, UnassignedBadge } from '@fops/ui';
 import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
+import type * as React from 'react';
 
 import { TaskRequestConversionForm } from './TaskRequestConversionForm';
 import { TaskRequestLinkedTask } from './TaskRequestLinkedTask';
@@ -12,12 +13,14 @@ import type { UseTaskRequestDecisionResult } from './useTaskRequestDecision';
 import type { UseTaskRequestLinkResult } from './useTaskRequestLink';
 
 export function TaskRequestDecisionSection({
+  headingRef,
   names,
   resultingTask,
   decision,
   conversion,
   link,
 }: {
+  headingRef?: React.Ref<HTMLHeadingElement>;
   names: NameMaps;
   resultingTask: TaskDto | null;
   decision: UseTaskRequestDecisionResult;
@@ -26,7 +29,9 @@ export function TaskRequestDecisionSection({
 }) {
   return (
     <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
-      <PanelSectionTitle>{TASK_REQUEST_REVIEW_DECISION_LABEL}</PanelSectionTitle>
+      <PanelSectionTitle ref={headingRef} tabIndex={-1}>
+        {TASK_REQUEST_REVIEW_DECISION_LABEL}
+      </PanelSectionTitle>
       <div className="flex flex-col gap-2">
         {resultingTask && (
           <div className="flex flex-col gap-1">

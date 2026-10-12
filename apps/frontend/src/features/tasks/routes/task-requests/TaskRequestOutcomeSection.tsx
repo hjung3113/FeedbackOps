@@ -2,22 +2,27 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import { PanelSectionTitle } from '@fops/ui';
+import type * as React from 'react';
 
 import { TaskRequestLinkedTask } from './TaskRequestLinkedTask';
 import { TaskRequestBadge } from './TaskRequestRow';
 
 export function TaskRequestOutcomeSection({
+  headingRef,
   item,
   reviewerName,
   taskForOutcome,
 }: {
+  headingRef?: React.Ref<HTMLHeadingElement>;
   item: TaskRequestDto;
   reviewerName: string | undefined;
   taskForOutcome: { id: string; title: string; display_id: string } | null;
 }) {
   return (
     <section data-anchor="outcome" className="border-t border-border-subtle px-4 py-4">
-      <PanelSectionTitle>결정 요약</PanelSectionTitle>
+      <PanelSectionTitle ref={headingRef} tabIndex={-1}>
+        결정 요약
+      </PanelSectionTitle>
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <TaskRequestBadge status={item.status} />

@@ -243,6 +243,18 @@ as the other surfaces.
   stays local and runs only without an explicit `param`, a closed panel, or the notice.
   Review decisions replace `param` with the returned
   request so refreshing restores that request.
+- Task Request status tabs stay mounted during initial load, uncached-tab loading,
+  cached refresh, and queue errors/permission denial; loading/error content replaces
+  only the list body. Empty/rows motion boundaries keep their existing context keys.
+  A manual tab or scope change still reconciles selection by the rules above.
+- Approval/rejection retains the same request panel through result-tab loading.
+  Approval focuses the retained `검토 결정` heading and keeps conversion/link actions;
+  rejection focuses `결정 요약`. These headings accept programmatic focus only
+  (`tabIndex=-1`). A successful dialog close retains its content until the connected
+  same-request heading receives focus, before content removal, and reconciles that
+  handoff in close autofocus. Cancel/Escape keep opener restoration. Request changes
+  reset panel-local state; newer openings/selections own focus over old close callbacks.
+  The additional-evidence success flow keeps its existing behavior.
 - Restoring a Task Request `param` follows its in-scope status tab once per URL-param
   occurrence, including Back/Forward. A matching status or the `all` tab also consumes
   the occurrence; later manual tab changes persist while the same `param` stays.

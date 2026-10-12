@@ -57,31 +57,6 @@ export function TaskRequestsRoute({
     if (queue.selectedId !== null) cancel();
   }, [queue.selectedId, cancel]);
 
-  if (queue.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>;
-  }
-
-  if (queue.permissionDeniedError) {
-    return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Task Request queue"
-        reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
-        className="m-4"
-      />
-    );
-  }
-  if (queue.hasError) {
-    return (
-      <ListStateMessage
-        variant="error"
-        title="Task Request 목록을 불러오지 못했습니다"
-        body="잠시 후 다시 시도하세요."
-        action={{ label: '다시 시도', onClick: queue.refetch }}
-      />
-    );
-  }
-
   const activeTabLabel =
     queue.tabs.find((tab) => tab.value === queue.activeTab)?.label ?? queue.activeTab;
   const isPendingEmpty =
@@ -101,59 +76,78 @@ export function TaskRequestsRoute({
             activeTab={queue.activeTab}
             onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
           />
-          <div
-            key={JSON.stringify([context, phase])}
-            ref={listMotion}
-            className="min-h-0 flex-1 overflow-y-auto"
-          >
-            {queue.shown.map((item) => (
-              <TaskRequestRow
-                key={item.id}
-                item={item}
-                selected={queue.selected?.id === item.id}
-                names={queue.names}
-                onSelect={queue.setSelectedId}
-                rowRef={rowRef(item.id)}
-              />
-            ))}
-            <ListLoadMore
-              hasMore={queue.hasMore}
-              loadingMore={queue.loadingMore}
-              failed={queue.loadMoreError}
-              onLoadMore={queue.loadMore}
+          {queue.isLoading ? (
+            <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>
+          ) : queue.permissionDeniedError ? (
+            <PermissionBlockedPanel
+              state="denied"
+              category="Task Request queue"
+              reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
+              className="m-4"
             />
-            {queue.shown.length === 0 &&
-              (isPendingEmpty ? (
-                <ListStateMessage
-                  variant="filtered"
-                  title="검토 대기 중인 Task Request가 없습니다"
-                  body="다른 상태의 Task Request가 있습니다."
-                />
-              ) : isFilteredEmpty ? (
-                <ListStateMessage
-                  variant="filtered"
-                  title="현재 조건에 맞는 Task Request가 없습니다"
-                  body={`선택한 상태: ${activeTabLabel}`}
-                  action={{
-                    label: '필터 초기화',
-                    onClick: () => queue.setActiveTab('pending_review'),
-                  }}
-                />
-              ) : (
-                <ListStateMessage
-                  variant="empty"
-                  title="Task Request가 없습니다."
-                  body="검토 요청이 접수되면 이 목록에 표시됩니다."
+          ) : queue.hasError ? (
+            <ListStateMessage
+              variant="error"
+              title="Task Request 목록을 불러오지 못했습니다"
+              body="잠시 후 다시 시도하세요."
+              action={{ label: '다시 시도', onClick: queue.refetch }}
+            />
+          ) : (
+            <div
+              key={JSON.stringify([context, phase])}
+              ref={listMotion}
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
+              {queue.shown.map((item) => (
+                <TaskRequestRow
+                  key={item.id}
+                  item={item}
+                  selected={queue.selected?.id === item.id}
+                  names={queue.names}
+                  onSelect={queue.setSelectedId}
+                  rowRef={rowRef(item.id)}
                 />
               ))}
-          </div>
+              <ListLoadMore
+                hasMore={queue.hasMore}
+                loadingMore={queue.loadingMore}
+                failed={queue.loadMoreError}
+                onLoadMore={queue.loadMore}
+              />
+              {queue.shown.length === 0 &&
+                (isPendingEmpty ? (
+                  <ListStateMessage
+                    variant="filtered"
+                    title="검토 대기 중인 Task Request가 없습니다"
+                    body="다른 상태의 Task Request가 있습니다."
+                  />
+                ) : isFilteredEmpty ? (
+                  <ListStateMessage
+                    variant="filtered"
+                    title="현재 조건에 맞는 Task Request가 없습니다"
+                    body={`선택한 상태: ${activeTabLabel}`}
+                    action={{
+                      label: '필터 초기화',
+                      onClick: () => queue.setActiveTab('pending_review'),
+                    }}
+                  />
+                ) : (
+                  <ListStateMessage
+                    variant="empty"
+                    title="Task Request가 없습니다."
+                    body="검토 요청이 접수되면 이 목록에 표시됩니다."
+                  />
+                ))}
+            </div>
+          )}
         </>
       }
       detailPanel={
-        queue.linkMissing ? (
+        queue.hasError ? null : queue.linkMissing ? (
           <LinkTargetMissingNotice message={TASK_REQUEST_LINK_MISSING_MESSAGE} />
         ) : queue.selected ? (
           <TaskRequestPanel
+            key={queue.selected.id}
             item={queue.selected}
             names={queue.names}
             currentActorId={queue.currentActorId}
