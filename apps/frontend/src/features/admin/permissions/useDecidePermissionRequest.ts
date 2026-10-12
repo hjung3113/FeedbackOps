@@ -20,6 +20,7 @@ export const permissionRequestsReviewKey = [
 
 export interface DecidePermissionRequestArgs {
   id: string;
+  expectedRevision: number;
   action: PermissionRequestDecisionAction;
   reason: string;
   idempotencyKey: string;
@@ -37,13 +38,22 @@ export function useDecidePermissionRequest(): UseMutationResult<
   return useMutation({
     mutationFn: ({
       id,
+      expectedRevision,
       action,
       reason,
       idempotencyKey,
       selfApproval,
       expiration,
     }: DecidePermissionRequestArgs) =>
-      decidePermissionRequest(id, action, reason, idempotencyKey, selfApproval, expiration),
+      decidePermissionRequest(
+        id,
+        action,
+        reason,
+        idempotencyKey,
+        expectedRevision,
+        selfApproval,
+        expiration,
+      ),
     onSuccess: async () => {
       toast.success("권한 요청이 처리되었습니다.");
       await queryClient.invalidateQueries({

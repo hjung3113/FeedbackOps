@@ -948,8 +948,8 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     '%s first invalidates every previously reviewed Admin action',
     async (mutation) => {
       const requester = await createLoggedInActor();
-      const admin = await createLoggedInActor('admin');
       for (const action of ['approve', 'reject', 'deny', 'need-more-info'] as const) {
+        const admin = await createLoggedInActor('admin');
         const id = await seedRequest(requester.id, {
           status: mutation === 'edit' ? 'pending' : 'needs_more_info',
         });

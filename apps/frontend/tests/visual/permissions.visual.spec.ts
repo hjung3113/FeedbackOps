@@ -126,7 +126,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .toEqual([
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
-          body: {},
+          body: { expected_revision: 1 },
           idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
         },
       ]);
@@ -135,12 +135,14 @@ test.describe('/admin/permissions/requests visual harness', () => {
   test('AC-3 parses valid self-approval envelopes and rejects unknown approve keys through the mock API parser', () => {
     expect(
       parsePermissionDecisionBody('approve', {
+        expected_revision: 1,
         self_approval: {
           policy_citation: 'workspace policy §4.3',
           peer_reviewer_absence: 'all peer reviewers are unavailable',
         },
       }),
     ).toEqual({
+      expected_revision: 1,
       self_approval: {
         policy_citation: 'workspace policy §4.3',
         peer_reviewer_absence: 'all peer reviewers are unavailable',
@@ -148,6 +150,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     });
     expect(() =>
       parsePermissionDecisionBody('approve', {
+        expected_revision: 1,
         reason: 'approved',
         unexpected: true,
       }),
@@ -196,6 +199,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.selfApproval}/approve`,
           body: {
+            expected_revision: 1,
             self_approval: {
               policy_citation: 'workspace policy §4.3',
               peer_reviewer_absence: '다른 reviewer 모두 PTO입니다.',
@@ -228,7 +232,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .toEqual([
         {
           pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
-          body: { reason: '읽기 권한을 승인합니다.' },
+          body: { expected_revision: 1, reason: '읽기 권한을 승인합니다.' },
           idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
         },
       ]);
