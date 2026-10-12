@@ -59,6 +59,7 @@ export function CreateSurveyDialog({
   const create = useCreateSurvey();
   const submitting = React.useRef(false);
   const opener = React.useRef<HTMLElement | null>(null);
+  const pinnedStart = React.useRef<SurveyStartingPoint | null>(null);
   const [mode, setMode] = React.useState<'blank' | 'builtin' | 'existing'>('blank');
   const [search, setSearch] = React.useState('');
   const [templateId, setTemplateId] = React.useState('');
@@ -77,31 +78,6 @@ export function CreateSurveyDialog({
       ? (sources.data?.pages.flatMap((page) => page.items) ?? [])
       : [];
   const template = templates.data?.items.find((item) => item.template_id === templateId);
-  const definition =
-    canManage && !blocked && system
-      ? mode === 'builtin' && !templates.isFetching && !templates.isError
-        ? template
-        : mode === 'existing' && !source.isFetching && !source.isError
-          ? source.data
-          : undefined
-      : undefined;
-  const clearSelection = React.useCallback(() => {
-    setTemplateId('');
-    setSourceId('');
-    setBlocked(false);
-  }, []);
-  React.useEffect(() => {
-    if (definition) {
-      setType(definition.type);
-      if (!titleEdited) setTitle(definition.title);
-    }
-  }, [definition, titleEdited]);
-  React.useEffect(() => {
-    if (!canManage) {
-      clearSelection();
-      setSearch('');
-    }
-  }, [canManage, clearSelection]);
   const systems = useQuery({
     queryKey: ['managed-systems', { includeArchived: false }],
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
@@ -128,6 +104,45 @@ export function CreateSurveyDialog({
         (scope.data?.scope.kind === 'scoped' &&
           scope.data.scope.managed_system_ids.includes(candidate.id))),
   );
+  const systemInScope = allowedSystems.some((candidate) => candidate.id === system);
+  const definition =
+    canManage && !blocked && systemInScope
+      ? mode === 'builtin' && !templates.isFetching && !templates.isError
+        ? template
+        : mode === 'existing' && !source.isFetching && !source.isError
+          ? source.data
+          : undefined
+      : undefined;
+  const clearSelection = React.useCallback(() => {
+    setTemplateId('');
+    setSourceId('');
+    setBlocked(false);
+    pinnedStart.current = null;
+  }, []);
+  React.useEffect(() => {
+    if (definition) {
+      setType(definition.type);
+      if (!titleEdited) setTitle(definition.title);
+    }
+  }, [definition, titleEdited]);
+  React.useEffect(() => {
+    if (!canManage) {
+      clearSelection();
+      setSearch('');
+    }
+  }, [canManage, clearSelection]);
+  const sourceReadDenied =
+    (sources.error instanceof ApiError &&
+      (sources.error.status === 403 || sources.error.status === 404)) ||
+    (source.error instanceof ApiError &&
+      (source.error.status === 403 || source.error.status === 404));
+  React.useEffect(() => {
+    if (!sourceReadDenied) return;
+    setBlocked(true);
+    setTemplateId('');
+    setSourceId('');
+    pinnedStart.current = null;
+  }, [sourceReadDenied]);
   const resetCreate = create.reset;
   const reset = React.useCallback(() => {
     setTitle('');
@@ -186,12 +201,14 @@ export function CreateSurveyDialog({
               !title.trim() ||
               !type ||
               !system ||
+              !systemInScope ||
               identityProtected === '' ||
               (mode !== 'blank' && (!definition || blocked))
             )
               return;
             const startingPoint: SurveyStartingPoint | undefined =
-              mode === 'builtin' && template
+              pinnedStart.current ??
+              (mode === 'builtin' && template
                 ? { kind: 'builtin', template_id: template.template_id, version: template.version }
                 : mode === 'existing' && source.data
                   ? {
@@ -199,7 +216,11 @@ export function CreateSurveyDialog({
                       survey_id: source.data.survey_id,
                       definition_token: source.data.definition_token,
                     }
-                  : undefined;
+                  : undefined);
+            // An unchanged retry replays the submitted token even if a background
+            // snapshot refetch installed a changed one (ADR-0070: one explicit key
+            // for an unchanged pending/uncertain attempt).
+            pinnedStart.current = startingPoint ?? null;
             submitting.current = true;
             try {
               const created = await create.mutateAsync({
@@ -224,6 +245,7 @@ export function CreateSurveyDialog({
                 setBlocked(true);
                 setTemplateId('');
                 setSourceId('');
+                pinnedStart.current = null;
               }
             } finally {
               submitting.current = false;
@@ -315,6 +337,8 @@ export function CreateSurveyDialog({
                 <section aria-label={COPY.preview} className="flex flex-col gap-2">
                   {!system ? (
                     <p>{COPY.chooseSystem}</p>
+                  ) : !systemInScope ? (
+                    <p role="alert">{COPY.reselect}</p>
                   ) : (
                     <>
                       {mode === 'existing' && (
@@ -488,7 +512,9 @@ export function CreateSurveyDialog({
               </div>
             </fieldset>
           )}
-          {blocked && <p role="alert">{COPY.reselect}</p>}
+          {(blocked || (Boolean(system) && !systemInScope && mode === 'blank')) && (
+            <p role="alert">{COPY.reselect}</p>
+          )}
           {create.isError && (
             <p role="alert" className="text-sm text-text-danger">
               {COPY.createFailed}
@@ -512,6 +538,7 @@ export function CreateSurveyDialog({
                 !title.trim() ||
                 !type ||
                 !system ||
+                !systemInScope ||
                 identityProtected === '' ||
                 (mode !== 'blank' && (!definition || blocked))
               }

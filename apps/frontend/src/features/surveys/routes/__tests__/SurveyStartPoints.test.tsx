@@ -1,3 +1,4 @@
+import { fetchCapabilityScope } from '@/lib/api';
 import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -26,10 +27,13 @@ vi.mock('@/lib/api', async (original) => ({
       { id: '99999999-9999-4999-8999-999999999999', name: 'Another System', archived_at: null },
     ],
   }),
-  fetchCapabilityScope: async () => ({ scope: { kind: 'all' } }),
+  fetchCapabilityScope: vi.fn(async () => ({ scope: { kind: 'all' } })),
   fetchAnalyticsAreas: async () => ({ items: [] }),
 }));
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.mocked(fetchCapabilityScope).mockImplementation(async () => ({ scope: { kind: 'all' } }));
+});
 
 it('starts from a built-in with visible questions and explicit privacy, using the server ID', async () => {
   const user = userEvent.setup();
@@ -206,7 +210,7 @@ it.each([
     'preview failure',
     200,
     surveyCopySourcesVisualFixture,
-    '미리보기를 불러오지 못했습니다. 다시 선택하세요.',
+    '문항이 변경되었거나 접근 권한이 없습니다. 새로고침 후 다시 선택하세요.',
   ],
 ])('distinguishes %s and leaves blank creation available', async (_name, status, list, message) => {
   const user = userEvent.setup();
@@ -513,6 +517,166 @@ it('preserves an uncertain attempt body/key through a rendered retry and uses a 
   await waitFor(() => expect(requests).toHaveLength(3));
   expect(key(requests[2])).not.toBe(key(requests[0]));
   expect(created).not.toHaveBeenCalled();
+});
+
+it('fails closed when the selected system leaves the manageable scope, keeping input until it recovers', async () => {
+  const user = userEvent.setup();
+  const scope = vi.mocked(fetchCapabilityScope);
+  scope.mockResolvedValueOnce({ scope: { kind: 'all' } });
+  scope.mockResolvedValue({ scope: { kind: 'scoped', managed_system_ids: [] } });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes('/copy-sources?')
+              ? surveyCopySourcesVisualFixture
+              : surveyCopySourceVisualFixture,
+          ),
+        ),
+    ),
+  );
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false },
+      mutations: { retry: false },
+    },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <CreateSurveyDialog open onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  await existing(user);
+  await user.type(screen.getByLabelText('제목'), '직접 작성');
+  await user.type(screen.getByLabelText('설명 (선택)'), '직접 작성한 설명');
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  expect(await screen.findByText(/분기:/)).toBeVisible();
+  await choose(user, '응답 익명 보호', '보호함');
+  await act(async () => {
+    await client.refetchQueries({ queryKey: ['permission-scope'] });
+  });
+  expect(
+    await screen.findByText(
+      '문항이 변경되었거나 접근 권한이 없습니다. 새로고침 후 다시 선택하세요.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/분기:/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('radio', { name: /지난 라운드 문항/ })).not.toBeInTheDocument();
+  expect(screen.getByTestId('survey-create-submit')).toBeDisabled();
+  expect(screen.getByLabelText('제목')).toHaveValue('직접 작성');
+  expect(screen.getByLabelText('설명 (선택)')).toHaveValue('직접 작성한 설명');
+  expect(screen.getByRole('combobox', { name: '응답 익명 보호' })).toHaveTextContent('보호함');
+  scope.mockResolvedValue({ scope: { kind: 'all' } });
+  await act(async () => {
+    await client.refetchQueries({ queryKey: ['permission-scope'] });
+  });
+  expect(await screen.findByText(/분기:/)).toBeVisible();
+  expect(screen.getByTestId('survey-create-submit')).toBeEnabled();
+});
+
+it('latches a 403 from 더 보기 while a snapshot is shown until refresh and reselection', async () => {
+  const user = userEvent.setup();
+  const bodies: unknown[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, init) => {
+      const path = String(url);
+      if (init?.method === 'POST') {
+        bodies.push(JSON.parse(init.body as string));
+        return new Response(JSON.stringify(surveyVisualFixture), { status: 201 });
+      }
+      if (path.includes('/copy-source') && !path.includes('/copy-sources?'))
+        return new Response(JSON.stringify(surveyCopySourceVisualFixture));
+      if (path.includes('cursor=next'))
+        return new Response(JSON.stringify({ code: 'permission.denied', message: 'revoked' }), {
+          status: 403,
+        });
+      return new Response(
+        JSON.stringify({
+          items: surveyCopySourcesVisualFixture.items,
+          page: { has_more: true, cursor: 'next' },
+        }),
+      );
+    }),
+  );
+  mountDialog();
+  await existing(user);
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  expect(await screen.findByText(/분기:/)).toBeVisible();
+  await user.click(screen.getByRole('button', { name: '더 보기' }));
+  expect(
+    await screen.findByText(
+      '문항이 변경되었거나 접근 권한이 없습니다. 새로고침 후 다시 선택하세요.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/분기:/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('radio', { name: /지난 라운드 문항/ })).not.toBeInTheDocument();
+  expect(screen.getByTestId('survey-create-submit')).toBeDisabled();
+  expect(screen.getByLabelText('제목')).toHaveValue('지난 라운드 문항');
+  expect(screen.getByRole('combobox', { name: '응답 익명 보호' })).toHaveTextContent(
+    '보호 여부 선택',
+  );
+  expect(bodies).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: '새로고침' }));
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  expect(await screen.findByText(/분기:/)).toBeVisible();
+  await choose(user, '응답 익명 보호', '보호함');
+  expect(screen.getByTestId('survey-create-submit')).toBeEnabled();
+});
+
+it('replays the pinned token and key when a background snapshot refetch changes it after a lost response', async () => {
+  const user = userEvent.setup();
+  const posts: RequestInit[] = [];
+  let token = 'saved-definition-v1';
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false },
+      mutations: { retry: false },
+    },
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, init) => {
+      const path = String(url);
+      if (init?.method === 'POST') {
+        posts.push(init);
+        throw new TypeError('response lost');
+      }
+      if (path.includes('/copy-source') && !path.includes('/copy-sources?'))
+        return new Response(
+          JSON.stringify({ ...surveyCopySourceVisualFixture, definition_token: token }),
+        );
+      return new Response(JSON.stringify(surveyCopySourcesVisualFixture));
+    }),
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <CreateSurveyDialog open onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  await existing(user);
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  expect(await screen.findByText(/분기:/)).toBeVisible();
+  await choose(user, '응답 익명 보호', '보호함');
+  await user.click(screen.getByTestId('survey-create-submit'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Survey를 만들지 못했습니다.');
+  token = 'refetched-definition-v2';
+  await act(async () => {
+    await client.refetchQueries({ queryKey: ['survey-copy-source'] });
+  });
+  await user.click(screen.getByTestId('survey-create-submit'));
+  await waitFor(() => expect(posts).toHaveLength(2));
+  const key = (request: RequestInit | undefined) =>
+    new Headers(request?.headers).get('Idempotency-Key');
+  expect(JSON.parse(posts[1]?.body as string).starting_point).toEqual({
+    kind: 'existing_survey',
+    survey_id: surveyVisualFixture.id,
+    definition_token: 'saved-definition-v1',
+  });
+  expect(key(posts[1])).toBe(key(posts[0]));
+  expect(new Set(posts.map(key)).size).toBe(1);
 });
 
 it('clears source titles and preview immediately on system change, without inheriting privacy', async () => {
