@@ -257,7 +257,16 @@ The recommendation mechanism (ADR-0034) is pgvector-backed, versioned embeddings
 
 The 0.75 similarity threshold (`VOC_RECOMMENDATION_SIMILARITY_THRESHOLD`) is unvalidated against real embeddings. The evaluation fixture verifies query and threshold mechanics, not recommendation quality.
 
-The VOC create screen's pre-submit panel is a separate ADR-0031 same-Managed-System heuristic peer read. It is distinct from the saved-VOC embedding recommendation resource and has no embedding availability, score, dismiss, or confirm state.
+The shipped VOC create panel remains a separate ADR-0031 same-Managed-System heuristic peer read, without embedding availability, score, dismiss or confirm. ADR-0068 accepts a second, optional paid Draft Similar-VOC Preview (implementation pending): explicit `유사 VOC 확인` only, disclosure before sending derived draft prose, no typing-triggered requests, actor/workspace budgets, honest quota/provider/empty states and navigation only. Text/MS edits clear semantic results; preview never blocks submit. The heuristic heading stays `같은 Managed System의 최근 VOC`, the semantic heading `유사 VOC 추천`.
+
+#### Close-out Cluster suggestions (ADR-0068; proposed/new)
+
+- Admin opt-in defaults off. Hourly automation stores pair-only suggestions outside domain Cluster tables; it does not create Clusters or members. Disabling stops generation while existing suggestions remain reviewable.
+- Suggestion review lives in the existing `/voc-clusters` surface. Elevated `finding.read` plus both VOC reads gate complete pairs and visible totals. Confirm/discard/restore require elevated `finding.manage` and both VOC reads.
+- One reviewed fresh pair creates one human-confirmed Cluster. Existing manual drafts and saved create/join confirmation remain usable. Suggestions cannot create Finding, Task Request, Public Update or Entity Link before this creation because they are not domain Clusters.
+- Initial suggestion cut 0.85, five new pairs/MS/UTC hour, 20 eligible pending/workspace are precautionary values, not measured calibration. Generation stays off until the seven-day shadow/workload and real-provider precision measurement in ADR-0068 passes.
+- Exclude current Cluster members, stale vectors, archived/foreign VOCs and saved active-version dismissals in either orientation/any scope. Suggestion rejection is permanent across model versions; five-minute server-validated accidental-discard undo is the only reversal. Confirmed pair history prevents automatic re-proposal after member removal.
+- API homes are `docs/implementation/api/voc.md` (suggestion/preview resources) and `voc-clusters.md` (Cluster effects); storage fields are in `15-data-contracts.md`. Fully automatic clustering remains excluded.
 
 ### FR-VOC-005: Public Update
 

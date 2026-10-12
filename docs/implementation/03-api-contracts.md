@@ -16,8 +16,8 @@ Detailed schemas may later move into OpenAPI; until they do, `api/*.md` remains 
 | [`api/auth.md`](api/auth.md) | Authentication |
 | [`api/attachments.md`](api/attachments.md) | Attachments |
 | [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract; Coverage settings; Recovery queue/detail/presentation/history (proposed/new); Analytics Area Report Contract (accepted, proposed/new) |
-| [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC List And Triage Fields; VOC Similarity Projection; Task release side effect (Issue #165); POST /vocs/:id/create-finding; VOC Recommendations |
-| [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
+| [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC List And Triage Fields; VOC Similarity Projection; Task release side effect (Issue #165); POST /vocs/:id/create-finding; VOC Recommendations; VOC Cluster suggestions (proposed/new); Draft Similar-VOC Preview (proposed/new) |
+| [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster; human creation from a suggestion |
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes; Survey summaries/highlights; proposed/new Survey evidence attachment; Integration Evidence consumer contract |
 | [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138); POST /tasks/:id/milestone — Task milestone assign (issue #514 B1b) |
 | [`api/milestones.md`](api/milestones.md) | Milestone Create Contract; Milestone List Contract; Milestone Detail Contract; Milestone Update Contract; Status; Not implemented |

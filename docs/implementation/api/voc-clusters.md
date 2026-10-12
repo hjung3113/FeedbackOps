@@ -57,3 +57,17 @@ they never write target responsibility tables themselves. Preserve same-Managed-
 compatibility, source visibility, links/audit and idempotent replay; explicit/null/default/
 fallback behavior follows ADR-0067. Assignment display/edit/filter belongs to the target
 surface, and configured team responsibility grants no cluster or target authority.
+
+## Human creation from a suggestion (ADR-0068; proposed/new)
+
+The separate VOC-owned resource and its normative endpoint contract are in
+[voc.md](voc.md) §VOC Cluster suggestions. Automatic pairs are never rows in
+`voc_cluster.voc_clusters` or `voc_cluster.voc_cluster_members`.
+An authorized confirmation creates one Cluster, adds its reviewed pair and
+sets `status='confirmed'`, `created_by`, member `added_by`, `confirmed_by/at`
+to the human in one transaction with suggestion state and audits. It cannot
+join a Cluster discovered during a race; that review becomes stale.
+No Cluster origin/discard field, `suggested` status, auto-draft lifecycle or
+pre-accept use guard is added. Existing manual drafts and all their downstream
+commands retain this file's contracts. Suggestion UUIDs are not Cluster UUIDs,
+Entity Link endpoints or sources for the endpoints above.

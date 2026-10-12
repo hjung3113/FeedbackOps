@@ -28,3 +28,14 @@ Recommendations and pre-submit peers live under `../voc/`. The autogen shadow jo
 - ADR-0067 responsibility writes belong to destination Finding/Task Request commands;
   wire Cluster sources through those seams, preserving same-system links and replay/audit.
   Cluster routing never grants permissions or writes target assignment tables.
+
+## Suggestion confirmation boundary (ADR-0068; proposed/new)
+
+Suggestions are VOC-owned operational records, not Cluster rows. Only human
+confirmation invokes exported Cluster creation/member/confirmation commands,
+with human provenance and atomic suggestion/Cluster audits. Coordinate manual
+and saved membership writers with the shared admission locks before Cluster
+locks; a new member during review makes suggestion confirmation stale. Keep
+manual draft behavior and saved join-newest unchanged; no system actor,
+auto-origin/provisional/discard columns or pre-accept domain use guards. Never
+accept suggestion UUIDs as linkable/execution source Clusters.

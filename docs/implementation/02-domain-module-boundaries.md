@@ -271,3 +271,22 @@ backend composition owner/endpoint before implementation. UI ownership grants
 no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
 and Finding-owned attachment command rather than granting personal-response
 access to safe result readers.
+
+## Cluster suggestion and draft-preview ownership (ADR-0068; proposed/new)
+
+VOC owns the non-domain suggestion lifecycle, generation job/cursor/caps and
+paid-preview ledger/budgets/cleanup; proposed subdirectories are
+`apps/backend/src/modules/voc/cluster-suggestions/` and
+`apps/backend/src/modules/voc/similarity-preview/`. They are not a generic Core
+AI service. VOC Clusters alone writes its existing Cluster/member tables through
+exported application commands, called only on human suggestion confirmation.
+Automatic generation calls no Cluster mutation service. Saved recommendations
+and shadow measurements remain separate. Workspace Settings owns the proposed
+`voc_cluster_suggestions_enabled` policy; VOC consumes its exported resolved
+settings seam. Human confirmation, generation and existing membership writers
+coordinate the ADR-0068 lock order; no foreign repository imports.
+
+Frontend `features/voc-cluster/` owns suggestion review on `/voc-clusters`,
+`features/voc/` owns optional preview on the create screen and Admin owns the
+opt-in on `/admin/settings`. No new shell, top-level feature or domain route is
+needed. Shared response/detail/audit schemas have no runtime permission logic.

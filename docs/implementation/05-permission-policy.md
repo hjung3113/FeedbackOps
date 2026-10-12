@@ -487,3 +487,24 @@ read/source access in one snapshot. Safe reads do not fabricate personal-read
 audits; actual personal-data reads keep existing per-row audits. Raw audit SELECT
 is revoked at #740 cutover without deleting Actor/detail history (ADR-0008).
 Endpoint authority: `api/surveys.md` and `api/findings.md`.
+
+## Cluster suggestions and paid preview (ADR-0068; proposed/new)
+
+Suggestion list/read: elevated `finding.read` on the pair's MS **and both VOCs**
+readable through VOC's canonical scope-or-reporter rule. Suggestion mutations:
+elevated `finding.manage` and both VOC reads; evaluate permission before replay.
+No new capability or role bypass, and no partial pair/count leakage. Restore
+additionally requires the original discard actor within five server minutes.
+Owner settings remain `workspace.admin`. Paid preview needs only VOC create's
+session/workspace authority, grants no candidate authority, and includes Admin
+in paid budgets. Fresh candidate visibility is checked after egress/on replay.
+
+New proposed human events are `voc_cluster_suggestion_confirmed`,
+`voc_cluster_suggestion_discarded`, `voc_cluster_suggestion_restored`, subject
+`voc_cluster_suggestion/<UUID>`. Shared closed event/subject registries and detail
+schemas must be extended together during implementation. Confirm also emits
+existing human Cluster create/member/update events in the same transaction;
+no-op/replay writes no second event. Details contain pair/MS/revision/version/
+hashes/score/cut and resulting Cluster reference, never prose/titles. Automatic
+suggestion generation and read-only paid preview emit operational logs, no
+`system.` event or domain audit. No new system actor is needed.

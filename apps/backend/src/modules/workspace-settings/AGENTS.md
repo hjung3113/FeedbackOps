@@ -18,3 +18,12 @@ table directly.
   `0 <= warn < good <= 100`. Missing keys resolve defaults; unknown/reserved keys reject.
 - Partial maps merge complete pairs under the singleton lock; strict resolved/audit schemas
   retain all effective per-metric changes. No-op stays audit-free; consumers own color behavior.
+
+## Cluster suggestion policy (ADR-0068; proposed/new)
+
+Add `voc_cluster_suggestions_enabled:boolean=false` to resolved settings and
+strict partial Admin PATCH with effective-change audit only. Preserve other
+settings; missing rows default off. VOC generation locks/rechecks the exported
+resolved-settings-for-update seam; disabling serializes through the singleton
+and never reverses VOC's admission lock order. Pending suggestions/history remain
+reviewable. Do not add model/cut/quota/per-MS switches or Core-owned AI behavior.

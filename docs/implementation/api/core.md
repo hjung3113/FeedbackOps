@@ -81,3 +81,16 @@ diffs (ADR-0017 amendment), preserve existing assignments, and expose safe Admin
 for skipped automatic defaults. Registry supplies transaction-aware inputs; destination
 services resolve assignments. Existing known-team display is supported; no team CRUD,
 membership, or workspace team-candidate endpoint is introduced.
+
+## Cluster suggestion opt-in (ADR-0068; proposed/new)
+
+The accepted close-out addition to the settings response and strict non-empty
+partial PATCH is `voc_cluster_suggestions_enabled:boolean`, default `false`.
+The two-field response/defaults above describe the shipped pre-ADR-0068 shape;
+implementation extends the complete resolved response with this field. Both
+routes still require `workspace.admin`. Preserve unspecified settings, serialize
+through the singleton, and audit only effective `{ from,to }` changes through
+`workspace_settings_updated`. VOC generation locks/rechecks the policy via
+`getResolvedWorkspaceSettingsForUpdate`; shadow remains independent. Turning off
+stops new automatic suggestions, without deleting pending/history or prohibiting
+human review/confirmation. No preview quota/model/scheduling settings are added.

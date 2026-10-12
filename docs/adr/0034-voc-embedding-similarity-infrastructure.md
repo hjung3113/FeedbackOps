@@ -11,6 +11,8 @@ epic #168 without deciding how it is built). ADR-0031's same-Managed-System
 peer heuristic stays in force until the recommendation resource described here
 ships.
 
+Amended by ADR-0068: a separate persisted Cluster suggestion lifecycle and a source-less paid preview are added. D3’s no-unattended-Cluster-write boundary and saved directional decision identity remain in force; its saved-resource-only confirmation wording does not exclude the new human suggestion command.
+
 ## Context
 
 FR-VOC-004 ("System recommends similar VOCs using embedding similarity",
@@ -165,3 +167,18 @@ justifies a cache.
    confirmation → cluster path.
 5. Threshold evaluation fixture and tuning.
 6. ADR-0031 amendment + FR-VOC-004 status update + API/FE surface.
+
+## Amended 2026-10-13 — Cluster suggestions and source-less preview
+
+ADR-0068 adds a separate durable sorted-pair Cluster suggestion lifecycle.
+Automatic generation never writes Clusters; authorized human confirmation creates
+one confirmed Cluster. Explicit suggestion rejection survives embedding-version
+changes, with five-minute accidental-discard undo. This does not widen ordinary
+saved recommendation dismissal scope/version or change saved join-newest behavior.
+D6's saved recommendation resource still computes on read; the new suggestion
+store is distinct from it and from shadow measurements.
+
+The source-less preview is a read, not a saved recommendation decision. Its
+explicit-click paid budgets, privacy-safe replay and distinct unavailable states
+are in ADR-0068 and `docs/implementation/api/voc.md`. No fictitious source VOC,
+relationship or recommendation dismissal/confirmation identity is introduced.

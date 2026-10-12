@@ -334,3 +334,12 @@ approval/source/target checks. Raw audit reads are removed per ADR-0008's
 ADR-0064 amendment, preserving controlled operator history. Cutover must prove
 ordinary view conflict/RETURNING paths and concurrency before revoking grants;
 unsupported operations block rollout rather than justify restoring raw access.
+
+## Assistance is not a link endpoint (ADR-0068; proposed/new)
+
+VOC Cluster Suggestions and Draft Similar-VOC Preview are outside the registered
+entity-type/tuple vocabulary. Do not register suggestion or unsaved-draft providers,
+accept their UUIDs as Cluster sources, create convenience Entity Links, or count
+them in expected-link/coverage/recovery queries. Only authorized human suggestion
+confirmation creates a real Cluster; its later commands/providers use existing
+Cluster contracts. No auto-origin or pre-accept domain Cluster guard is needed.
