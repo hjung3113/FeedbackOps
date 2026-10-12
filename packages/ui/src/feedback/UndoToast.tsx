@@ -28,7 +28,7 @@ export interface UndoToastProps {
   message: string;
   /** Called when the user clicks 실행 취소 or presses Enter on the button. */
   onAction: () => void;
-  /** Called when the auto-dismiss timer fires. Optional. */
+  /** Called when the auto-dismiss timer fires or Escape is pressed inside the toast. Optional. */
   onDismiss?: () => void;
   /** Auto-dismiss delay in ms. 0 disables the timer. Default: 4000. Paused while focus/pointer is inside. */
   duration?: number;

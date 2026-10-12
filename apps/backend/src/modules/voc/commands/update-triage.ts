@@ -134,15 +134,6 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
           },
         );
       }
-      if (input.postpone_review !== undefined) {
-        throw new HttpError(
-          'validation.failed',
-          'restore_review_postponed_at and postpone_review cannot be set together',
-          {
-            fields: [{ path: ['restore_review_postponed_at'], code: 'invalid' }],
-          },
-        );
-      }
       if (row.triageState === 'untriaged') {
         throw new HttpError(
           'validation.failed',
