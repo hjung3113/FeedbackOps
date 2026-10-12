@@ -87,7 +87,7 @@ Invariants:
 
 ```text
 - MVP clustering is confirmed by an authorized Admin or same-scope Developer.
-- Similarity recommendations do not automatically create clusters.
+- Similarity recommendations and VOC Cluster Suggestions do not automatically create clusters; a suggestion is a separate pair review record, and human confirmation creates a Cluster (ADR-0068).
 - Cluster can create Finding.
 ```
 

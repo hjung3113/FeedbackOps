@@ -345,7 +345,7 @@ only as its Reporter. A repeat dismissal of the same pair under the same scope
 and `embedding_version` leaves the stored decision unchanged. Audit event:
 `voc_recommendation_dismissed` (subject is the source VOC).
 
-`confirm` is the only path that creates or joins a cluster, through the same
+Within this saved recommendation resource, `confirm` is the only path that creates or joins a cluster, through the same
 cluster commands as `POST /voc-clusters` and `POST /voc-clusters/:id/vocs`,
 inside one transaction. It returns `200`:
 
@@ -406,3 +406,120 @@ authorized no-follow-up resolution. Canonical resolution comes from scheduled AD
 this extension does not implement its storage or a second recovery lifecycle. Count each VOC once.
 Report links include the source Managed System UUID and Area UUID/unset. Existing Triage's archived
 Managed System exclusions remain; report links use Inbox so retained context is still readable.
+
+## VOC Cluster suggestions (ADR-0068; proposed/new, not shipped)
+
+Requirement: FOP-VOC-003/004, FOP-OUT-004. VOC owns the separate non-domain
+suggestion resource. Its read/generation never writes a Cluster or saved
+recommendation decision. Existing saved confirm/create/join semantics above
+remain unchanged; the new command is a second explicit human creation path.
+
+```text
+GET /voc-cluster-suggestions?managed_system_id=<uuid>
+POST /voc-cluster-suggestions/:id/confirm
+POST /voc-cluster-suggestions/:id/discard
+POST /voc-cluster-suggestions/:id/restore
+```
+
+All routes require session/workspace validation. List filters the caller's
+Finding-read MS scope, requires elevated `finding.read` and both active VOCs
+readable through the existing VOC predicate, then C6 eligibility before ordering
+and limit. Optional UUID MS filter grants no authority. Read tier; response
+`200 { items }`, maximum 20 eligible pending pairs, score DESC/sorted UUID ASC.
+Each proposed item is `{ id, primary_managed_system_id, revision,
+embedding_version, source_hashes:[hash_a,hash_b],
+vocs:[{id,display_id,title,description_rich_content}, {...}] }`, in sorted UUID
+order. Both bodies are current authorized VOC prose, not cached shadow text.
+No partial pairs, unfiltered total, score/confidence, severity or Cluster ID.
+Provider disabled returns `200 { available:false, reason:'provider_disabled',
+items:[] }`; enabled reads return `200 { available:true, items }` (possibly
+empty). This availability union is separate from saved recommendations/preview.
+
+Mutation tier; required UUIDv4 `Idempotency-Key` and strict body:
+`{ expected_revision, embedding_version, source_hashes:[hash_a,hash_b] }` for
+confirm/restore, `{ expected_revision }` for discard. `expected_revision` is a
+positive integer. Permission is elevated `finding.manage` on MS plus both VOC
+reads, rechecked before replay. Missing/foreign/unreadable suggestion or VOC
+is identical `404 not_found.record`; readable pair without management capability
+is `403 permission.denied`; malformed inputs are `422 validation.failed`.
+Stale revision/text/vector, membership, veto or restore expiry/conflict is
+`409 conflict.stale_write`, without hidden pair detail. Same key with changed
+request is `409 conflict.idempotency_key_reuse`. Serialize with coordinated
+workspace/MS/member locks before the suggestion row and Cluster commands.
+
+Confirm rechecks ADR-0068 C6, creates one human Cluster with title from the
+reviewed sorted-first VOC, adds exactly two members and confirms it atomically.
+`201 { voc_cluster_id, cluster_created:true }`; same-key replay or already
+confirmed authorized command returns `200` with that same result, no second
+Cluster/audit. Terminal confirmed replay still requires current pair read/manage
+access, but does not rerun pending-membership eligibility against its own result.
+Concurrent membership acquisition returns stale instead of joining. It writes
+suggestion state/reference, existing Cluster creation/member/confirmation audits
+and proposed `voc_cluster_suggestion_confirmed`, all in one transaction. It
+writes no saved recommendation decision or Entity Link and creates no execution
+work. Existing domain Cluster APIs apply afterwards.
+
+Discard sets soft discard actor/time and increments revision, retains the pair
+across versions, returns `200 { id, revision, discarded_at, undo_until }`.
+Repeat discard (with current revision) is a no-op and cannot extend the original
+five-minute deadline. Restore is only by the original discard actor within that
+server deadline; other actors receive `403 permission.denied`. After C6,
+disjointness/pending-cap rechecks it clears that discard's veto and returns
+`200 { id, revision }`; repeat successful restore with current revision is a
+no-op. Same-key replay returns the original command result after authorization,
+without mutating or renewing grace. Confirmed suggestions cannot be discarded
+or restored. Changed human actions write proposed suggestion discard/restore
+audit events; no-op/replay/reads write none. These actions cannot delete or undo
+Cluster/member/link/audit work, and affect no Dashboard/coverage queues.
+
+## Draft Similar-VOC Preview (ADR-0068; proposed/new, not shipped)
+
+Requirement: FOP-VOC-001/004, #340. `POST /vocs/similarity-preview`; strict body
+`{ primary_managed_system_id:uuid, title, description_rich_content }`, existing
+VOC title/rich-content validation, required UUIDv4 `Idempotency-Key`. Same
+session/workspace boundary as VOC create; all roles, no triage/Finding grant.
+Validate active selected MS without granting candidate reads. Existing request
+body ceiling and 16 KiB UTF-8 derived prose ceiling are enforced before spend;
+validation/rich-content errors use existing envelopes. Missing/foreign MS is
+`404 not_found.record`; archived MS is `409 conflict.parent_archived`.
+
+A distinct preview-abuse bucket is 10 requests/minute/actor, independent of
+submit and paid budgets. Atomic Postgres paid reservation is actor 2/minute and
+20/UTC day, workspace 10/minute and 100/UTC day across all roles/pods. If denied,
+roll back all reservations; `429 rate_limited.actor` or proposed
+`rate_limited.workspace`, `{ budget_period:'minute'|'day', retry_after_seconds }`
+and `Retry-After`. Fail storage with `500 internal.unexpected`, zero egress.
+Disabled/invalid/unauthenticated/no-authorized-active-version-candidate inputs
+make zero paid calls. With provider enabled and no authorized candidate, return
+successful empty without spending a paid slot.
+
+Sanitize content and send only `deriveVocEmbeddingText` prose, one input/call,
+no attachment/mention attributes or candidate prose. Commit reservation before
+cancellable provider I/O, ten-second deadline, zero automatic retries. All
+attempts including failed/timeout/uncertain/crashed dispatch consume allowance.
+Same-key changed canonical text/MS conflicts (`409 conflict.idempotency_key_reuse`);
+concurrent/same-key retry never dispatches twice. VOC-owned ledger stores hashes
+and provider/model/version metadata, never raw input or result IDs/titles.
+Vector lives at most ten minutes, tombstone 24h; expiry applies even if cleanup
+is late. Identical replay reauthorizes/requeries fresh candidates, never a cached
+response body. In-flight/unknown outcome or incompatible in-flight configuration
+returns `provider_outcome_unknown`; expiry returns `preview_expired`; new paid
+attempt needs a new explicit button request/key.
+
+```text
+200 { available:true, items:[{id,display_id,title,created_at}] }
+200 { available:false, reason, items:[] }
+reason = provider_disabled | provider_failed | provider_timeout |
+         preview_expired | provider_outcome_unknown
+```
+
+Candidate query: same current workspace/MS, unarchived, compatible active-version
+embeddings whose hashes match current prose, `similarVocVisibilityPredicate`
+before score ordering/limit; cosine >= 0.75, top three, score DESC/UUID ASC.
+Recheck visibility and provider/model/version/dimensions after completion and
+on replay. A true empty result is `available:true`; quota/unavailable is never
+empty-success or heuristic fallback. No score/severity/private fields/total.
+No VOC, Cluster/member, recommendation decision, domain audit, Entity Link or
+Dashboard mutation. Operational budget/ledger writes and sanitized logs only.
+Submission and saved embedding enqueue remain independent. Preview admission
+can be disabled operationally without a new workspace settings UI.

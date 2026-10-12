@@ -311,8 +311,11 @@ Rules:
 - owner_user_id references an assignable internal user in the cluster workspace.
 - confirmed_by and confirmed_at are server-owned. A draft-to-confirmed transition
   writes both atomically; later confirmation requests preserve the original provenance.
-- linked_findings lists Findings created from the cluster where
-  finding.source_type='voc_cluster' and finding.source_id=cluster.id.
+- linked_findings lists every active `created_finding` or `evidence_of` Finding link of the
+  cluster that the reader can read (`docs/implementation/api/voc-clusters.md`, Linked Findings
+  visibility). Cross-system history is canonical through entity_links, not the Finding's
+  source_type/source_id convenience columns (root AGENTS.md, Product Invariants; reconciled
+  2026-10-13 in #1070).
 - linked_findings is derived at read time. It exposes only id, display_id, and
   status; title and summary are intentionally omitted to avoid content leakage.
 - Cluster detail and list reads include linked_findings as an array. Create and
@@ -715,3 +718,71 @@ endpoints in every status. Audit identifiers remain canonical but raw app audit
 SELECT is revoked. #816 approval selection IDs are safe selection references,
 not response IDs; candidate suppression counts response subjects/answers, never
 approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.
+
+## VOC Cluster Suggestion (ADR-0068; proposed/new)
+
+Owner: VOC. Separate from both domain Clusters and shadow measurements.
+
+```text
+voc.voc_cluster_suggestions (new)
+- id: uuid; workspace_id, primary_managed_system_id: uuid, required
+- voc_a_id, voc_b_id: uuid, required; sorted, distinct same-workspace/MS pair
+- unique: (workspace_id, primary_managed_system_id, voc_a_id, voc_b_id), across all versions
+- state: pending | discarded | confirmed; revision: positive integer
+- provider, model, dimensions, embedding_version: required current scoring metadata
+- source_hash_a, source_hash_b: derived-text fingerprints, required
+- embedding_watermark_a/b: source-row watermarks, required
+- score, cut, run_correlation_id: required; created_at, refreshed_at: timestamptz
+- discarded_by_actor_id, discarded_at: nullable, required together only when discarded
+- confirmed_by_actor_id, confirmed_at, voc_cluster_id: nullable, required together only when confirmed
+```
+
+Pair identity/initial timestamp are immutable; rescore updates pending metadata
+and increments revision. Confirmed state/reference are terminal; discarded state
+can only restore within five minutes by its actor with fresh validation, clearing
+its own discard fields and incrementing revision. Confirm retains reviewed
+scoring/hash metadata. Discard history remains append-only in human audit.
+All referenced VOCs/Cluster/actors belong to the workspace; MS matches both VOCs
+and the resulting Cluster. Keep terminal rows forever, no hard delete. Pending
+eligibility is derived from current text/vectors/provider/MS/archive/membership/
+saved-dismissal state before reads or occupancy counts. Ineligible pending rows
+release cap/disjoint occupancy without becoming human rejection. Proposal UUID
+is not a CLU display ID; no status/origin fields are added to domain Clusters.
+
+Proposed suggestion read DTO is the complete-pair shape in
+`docs/implementation/api/voc.md`: current authorized titles/prose, reviewed
+hashes/version/revision, no partial pair, hidden total, score or execution fields.
+Human-confirmed Cluster uses existing DTO/status/provenance fields. Suggestion
+confirm writes no saved directional recommendation decision.
+
+Proposed VOC-owned admission counters track workspace eligible-pending occupancy
+and per-workspace/MS/UTC-hour new admissions, shared across pods. Proposed scan
+cursors track committed embedding revisions per workspace/MS and reconciliation
+progress; advance atomically with writes, use no per-process counters. Old hour
+buckets may be reclaimed after the window ends; terminal pair history may not.
+
+## Draft Similar-VOC Preview operational data (ADR-0068; proposed/new)
+
+```text
+voc.voc_similarity_preview_requests (new)
+- workspace_id, actor_id, idempotency_key(UUIDv4): unique required identity
+- request_hash, primary_managed_system_id, provider/model/dimensions/version: required
+- outcome: reserved | succeeded | failed | timed_out | outcome_unknown
+- reserved_at, completed_at(nullable), expires_at: timestamptz; tombstone TTL 24h
+- vector(nullable), vector_expires_at(nullable): successful retry vector, at most ten minutes
+voc.voc_similarity_preview_budgets (new)
+- workspace_id, scope(actor|workspace), actor_id(actor scope only), period(minute|day), window_start
+- used_attempts: non-negative integer
+- unique: workspace/scope/actor-or-workspace/period/UTC window
+```
+
+Reservation claims one request and increments all four actor/workspace buckets
+atomically; rolled-back denials increment none. One dispatched/uncertain attempt
+consumes allowance; completion updates only operational outcome/vector. No raw
+draft text, attachment data, saved candidate prose, result IDs/titles or cached
+response body. Ended buckets can be purged; reads enforce vector/tombstone TTL
+independently of cleanup. Identity is actor-scoped, never a shared draft cache.
+In-flight/version-incompatible/expired replay cannot redispatch and exposes an
+explicit unavailable reason. Candidate DTO is only `{id,display_id,title,created_at}`
+with the availability union in `docs/implementation/api/voc.md`. There is no
+persisted source VOC, recommendation decision, Entity Link or domain audit row.

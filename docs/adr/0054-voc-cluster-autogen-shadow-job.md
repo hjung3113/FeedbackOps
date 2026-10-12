@@ -6,6 +6,8 @@ Date: 2026-09-28
 
 Accepted.
 
+Amended by ADR-0068: choice (b) is accepted for #1048; its open-choice-(b) deferral below is superseded. Choice (c), unattended domain Cluster writes, is outside this MVP slice.
+
 ## Context
 
 ADR-0034 D5 pins the recommendation threshold at 0.75, but its committed
@@ -89,3 +91,13 @@ already in clusters, caps informed by shadow measurements, rechecking stale
 pairs, discard and undo behavior, system actor provisioning, audit-event
 vocabulary, and the §4.6 join-newest rule all require a future decision. This
 ADR chooses none of them.
+
+## Amended 2026-10-13 — choice (b), not unattended Cluster writes
+
+ADR-0068 resolves cached pair-only suggestions outside domain Cluster tables,
+Admin opt-in/default off, human confirmation, permanent rejection and five-minute
+undo, initial cut/caps and measurement prerequisites. The shadow table/job stay
+measurement-only; a proposed separate VOC-owned suggestion store/queue handles
+review. No system actor, auto Cluster provenance, `system.` event or join-newest
+reopening is required. The open questions above are historical for choice (b);
+choice (c) requires a future owner decision. No activation measurement is claimed.

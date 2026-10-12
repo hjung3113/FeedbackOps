@@ -210,3 +210,14 @@ with the fixed message `malformed request`; the handler logs only the Fastify
 error `code` and `statusCode` at info level. This covers malformed or empty JSON,
 unsupported media types, oversized bodies, and invalid Content-Length.
 `POST /attachments` maps malformed multipart input the same way (#770).
+
+## Amended 2026-10-13 — paid-preview quota detail (proposed/new)
+
+ADR-0068 adds proposed `rate_limited.workspace` (429) alongside
+`rate_limited.actor`. Paid exhaustion detail is `{ budget_period: 'minute'|'day',
+retry_after_seconds }` plus `Retry-After`, without another actor's usage/identity.
+Implementation must update the shared closed code enum, backend `DetailShape`
+and frontend classification/catalog together. Existing envelopes remain.
+Preview unavailable reasons are a successful discriminated response, not quota
+errors; `conflict.idempotency_key_reuse`, `conflict.stale_write`, validation and
+`internal.unexpected` retain their existing meaning.

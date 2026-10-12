@@ -468,3 +468,13 @@ and search inventory above remains the current implementation. FR-DASH-002 in
   Scope/permission changes clear stale counts; loading/error/denial do not render zero.
   No eager source detail/personal Survey reads. Tab and positive-count links support keyboard
   operation and visible focus. Source actions remain on source routes with fresh permissions.
+
+## Close-out assistance (ADR-0068; proposed/new)
+
+No new domain route/shell is added. The existing `/voc-clusters` ListShell owns a
+separate suggestion review section with feature-local selection, not a fake
+`selected` Cluster ID or `/voc-clusters/:clusterId` detail. Preserve existing
+Cluster URL/search restoration. `/vocs` create owns the optional explicit-click
+semantic preview alongside its recent-peer panel; candidate UUID navigation
+retains the unsaved-change blocker and never creates a relationship.
+`/admin/settings` owns the default-off suggestion-generation opt-in.

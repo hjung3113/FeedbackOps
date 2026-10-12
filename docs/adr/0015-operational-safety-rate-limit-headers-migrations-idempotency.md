@@ -169,3 +169,21 @@ side effects; do not reset unrelated caches. New cached mutations contain safe
 metadata only; active excerpt text requires a fresh authorized read. This cache
 exception does not authorize rewriting independently authored Task/Task Request
 text or altering the Drizzle-generated migration/journal/snapshot discipline.
+
+## Amended 2026-10-13 — bounded paid preview (proposed/new)
+
+ADR-0068 requires a separate preview request-abuse bucket (10/minute/actor),
+not the read or VOC-submit mutation bucket. It additionally reserves actor
+2/minute·20/UTC day and workspace 10/minute·100/UTC day atomically in Postgres
+across all pods/roles. Budget storage failure fails closed before paid egress.
+These ceilings apply only to draft preview; rate-limit events remain logs, not
+domain audits.
+
+For `POST /vocs/similarity-preview`, a VOC-owned workspace/actor/UUIDv4-key
+ledger replaces verbatim response caching: claim and four budgets commit before
+one bounded provider call, then completion commits separately. No raw input or
+candidate IDs/titles are cached. Identical replay reauthorizes/requeries from a
+compatible vector retained at most ten minutes; tombstones last 24h. Unknown
+outcome/expiry never redispatches automatically. Changed text/MS conflicts;
+there is no exactly-once external-billing claim. This narrow exception leaves
+existing mutation idempotency contracts intact.

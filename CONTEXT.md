@@ -268,6 +268,14 @@ _Avoid_: Test coverage, BI metric
 A manually curated grouping of related **VOC** records used by **Developer** and **Admin** for internal triage and bulk operations. **VOC** records remain independent and are not merged. Not visible to **Reporters** in MVP.
 _Avoid_: VOC merge, deduplication, duplicate group, parent VOC
 
+**VOC Cluster Suggestion**:
+An automatically proposed pair of existing **VOC** records for an authorized **Developer** or **Admin** to review. It is not a **VOC Cluster**; only human confirmation creates the curated grouping, and rejection prevents automatic re-proposal unless promptly undone (ADR-0068).
+_Avoid_: Auto Cluster, provisional Cluster, Cluster Candidate, merged VOC
+
+**Draft Similar-VOC Preview**:
+An optional similarity check of unsaved **VOC** prose that helps the author find an existing authorized **VOC** before submission. It permits navigation only and creates no **VOC** or relationship (ADR-0068).
+_Avoid_: Draft VOC, automatic duplicate decision, join mutation
+
 **Cluster Candidate**:
 A **VOC** selected as a target of a cluster-scoped bulk action; bulk actions apply individually to each candidate rather than to the cluster as a single record.
 _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate" (the code also uses it for a candidate peer in the cluster membership picker, a similar-VOC recommendation candidate, and a Public Update review candidate created when a linked **Task** is released; name which one)
@@ -363,7 +371,7 @@ _Avoid_: Cluster member as a single bulk target, merged record, bare "candidate"
 - **Reporter Reply** does not automatically change **Reporter-Facing VOC Status**.
 - **VOC Cluster** is not reporter-visible in MVP.
 - **VOC Cluster** does not merge **VOC** records; each **VOC** remains independent.
-- MVP **VOC Cluster** supports manual create, add/remove membership, and confirm; cluster merge/split is a later feature.
+- MVP **VOC Cluster** supports manual create, add/remove membership, and confirm; confirming a **VOC Cluster Suggestion** creates a human-curated Cluster. Suggestions themselves are not execution evidence or linkable records (ADR-0068). Cluster merge/split is a later feature.
 - Cluster bulk update behavior is candidate-only; selected **VOC** records receive individual **Public Updates**.
 - **VOC Triage State**, **Reporter-Facing VOC Status**, and **Task Status** are separate state machines with no automatic cross-mapping; canonical enums in `docs/design/15-data-contracts.md`, locked by ADR-0005.
 - **Task Status** reaching Released may create a reporter-facing status review candidate; it does not automatically resolve the **VOC**.

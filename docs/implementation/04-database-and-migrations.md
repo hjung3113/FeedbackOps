@@ -488,3 +488,25 @@ Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; n
   JSON scan in request paths. Verify actual app ACL denial and operator history.
 - This closes direct-table paths, not SQL-level unlinkability against stolen app
   credentials: permitted definers remain trusted application tools.
+
+## Close-out assistance storage (ADR-0068; proposed/new, no migration yet)
+
+VOC owns proposed `voc.voc_cluster_suggestions`, suggestion admission counters/
+scan cursors, `voc.voc_similarity_preview_requests` and
+`voc.voc_similarity_preview_budgets`. Fields/constraints are in
+`docs/design/15-data-contracts.md`; these are not existing schema objects. Keep
+shadow measurements untouched and separate, and add no Cluster/member origin,
+discard/provisional status/backfill fields. Generation writes only operational
+suggestion state; human confirm creates Cluster/member/audit rows atomically
+through owner commands. Permanent sorted-pair identity preserves human rejection
+and accepted history across versions/removal. Coordinate cap/settings/member
+locks per ADR-0068; retain terminal rows without DELETE grants.
+
+Preview requests/budgets are operational: no raw prose or cached candidate IDs/
+titles, vectors at most ten minutes, tombstones 24h, budget buckets until UTC
+window expiry. A proposed VOC pg-boss cleanup job may receive narrowly scoped
+DELETE only on preview operational rows/ended counters, never Cluster, member
+or audit tables. Enforce expiry in reads even when cleanup lags. Provider I/O is
+outside short reservation/completion transactions. Generate/register migrations,
+constraints/indexes/grants and metadata by existing migration discipline; verify
+as app/migrate roles in conductor-owned throwaway DBs before activation.

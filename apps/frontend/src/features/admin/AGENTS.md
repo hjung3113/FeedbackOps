@@ -62,3 +62,11 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Invalidate all Dashboard summary scopes after save; failed refetch must not show stale bands
   as current. Surface safe automatic-default configuration warnings. Known teams may render;
   no team CRUD/candidate listing or automatic reassignment is introduced.
+
+## Suggestion opt-in (ADR-0068; proposed/new)
+
+The existing `/admin/settings` surface owns the single default-off Cluster
+suggestion switch. Preserve existing policies and permission gates. Disabling
+stops new suggestions while pending review remains available; explain that
+boundary with Korean chrome. Suggestion review stays in `features/voc-cluster/`;
+preview quota/model/scheduling consoles are not part of this addition.

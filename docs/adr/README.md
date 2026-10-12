@@ -67,8 +67,10 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 
 - [0031](0031-similar-voc-same-managed-system-heuristic.md) Same-Managed-System similar-VOC heuristic — authorized peers, newest first, capped at three; fallback beside embeddings. *Accepted, amended*
 - [0034](0034-voc-embedding-similarity-infrastructure.md) VOC embedding similarity — pgvector behind a provider port; recommendations are a separate resource with dismissal. *Accepted, implemented*
-- [0046](0046-pre-submit-similar-voc-surface.md) Pre-submit similar-VOC surface — shows the 0031 heuristic peers, navigation only, no draft embedding preview. *Accepted*
-- [0054](0054-voc-cluster-autogen-shadow-job.md) Cluster auto-generation shadow job — hourly pair measurement at >= 0.60 into a non-domain table; no cluster writes. *Accepted*
+- [0046](0046-pre-submit-similar-voc-surface.md) Pre-submit similar-VOC surface — shows the 0031 heuristic peers, navigation only; paid-preview deferral superseded for #340. *Accepted, amended by 0068*
+- [0054](0054-voc-cluster-autogen-shadow-job.md) Cluster auto-generation shadow job — hourly pair measurement at >= 0.60 into a non-domain table; no cluster writes; choice (b) resolved by 0068. *Accepted, amended*
+
+- [0068](0068-voc-cluster-suggestions-and-draft-preview.md) VOC Cluster suggestions and paid draft preview — choice (b), human Cluster creation, durable suggestion rejection/undo, explicit-click preview and atomic actor/workspace paid budgets. *Accepted 2026-10-13*
 
 ## Entity links and Findings
 

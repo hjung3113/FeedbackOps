@@ -66,7 +66,7 @@ Scope labels state scope, not delivery status; delivery status is the GitHub mil
 | FOP-OUT-001 | Survey Response creates VOC | OUT | Survey Response creates Finding or Evidence Highlight |
 | FOP-OUT-002 | Task Done automatically resolves Reporter-facing VOC Status | OUT | Released triggers status review |
 | FOP-OUT-003 | Analytics Area automatically syncs with real menus/routes/code modules in MVP | OUT | Analytics Area is managed manually as analytics menu context |
-| FOP-OUT-004 | Full automatic clustering in MVP | OUT | Similarity recommendation plus authorized confirmation |
+| FOP-OUT-004 | Full automatic clustering in MVP | OUT | Similarity recommendation and separate pair-only Cluster suggestions; domain Cluster creation only on authorized human confirmation (ADR-0068 choice b) |
 | FOP-OUT-005 | Jira-style custom workflow builder in MVP | OUT | Fixed simple Task and VOC statuses |
 | FOP-OUT-006 | Requiring VOC, Survey, or Task to pass through Finding, Dashboard, Evidence, or Links | OUT | Systems complete local workflows independently; integration is optional and policy-driven |
 | FOP-OUT-007 | Duplicating VOC, Survey, or Task navigation per Project | OUT | One system with Managed System scope, filters, and defaults |

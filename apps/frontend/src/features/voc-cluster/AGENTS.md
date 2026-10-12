@@ -51,3 +51,14 @@ It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Tas
 - ADR-0067's proposed/new Finding owner/Task Request assigned-reviewer creation inputs and
   results follow destination commands; Cluster never invents target ownership/permissions.
   Preserve same-system/source visibility, pending/error states and atomic provenance.
+
+## Cluster suggestion review (ADR-0068; proposed/new)
+
+Own the separate `Cluster 제안` section on the existing `/voc-clusters` ListShell,
+feature-local selection/panel/hooks and `lib/copy/voc-cluster.ts` wording. Review
+two currently authorized VOC texts, then `확인 후 Cluster 생성`, `기각`, or contextual
+`되돌리기`. A suggestion is not Cluster detail or a fake CLU ID, and offers no
+Finding/Task Request/member/bulk/link operations. Confirm creates a human-confirmed
+Cluster, invalidating suggestions and Cluster list; discard/restore invalidate
+suggestions. Preserve existing Cluster URL state/manual flows. Hide a complete
+pair/count when either VOC is unreadable; never infer permission from labels.

@@ -42,8 +42,8 @@ Evidence or Source Record
 
 ```text
 VOC
-→ Similar VOC Recommendation optional
-→ VOC Cluster optional
+→ Similar VOC Recommendation / VOC Cluster Suggestion optional
+→ authorized human confirmation creates VOC Cluster optional
 → optional Finding
 → optional Task Request
 → approved Task starts in Backlog
@@ -215,3 +215,12 @@ attachment does not resolve an Outcome follow-up gap (ADR-0055). Existing person
 create-Finding and no-direct-response→Task Request rules remain unchanged.
 Integration Evidence consumes safe DTOs, never raw link/audit/private binding joins.
 Implementation is pending the coordinated #739/#740 cutover and Slice 54.
+
+## Close-out assistance boundary (ADR-0068; proposed/new)
+
+Cluster suggestions and source-less draft preview are optional assistance, not
+required workflow steps or execution evidence. Suggestions are not Entity Link
+endpoints or inputs to Finding, Task Request, bulk Public Update, coverage or
+recovery. Only a human-created Cluster can use the existing downstream commands.
+Preview permits navigation only and creates no VOC/relationship/decision; VOC
+submission and saved embedding enqueue remain independent of preview availability.
