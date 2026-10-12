@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type Capability, isSensitiveCapability } from '@fops/shared';
 import { loadConfig } from '../../../config.js';
@@ -60,6 +60,12 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     migrateDb = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle: db });
     await app.ready();
+  });
+
+  // The new stale-review cases send several sensitive-tier decisions; reset the
+  // per-actor buckets so earlier cases cannot push them into 429.
+  beforeEach(async () => {
+    await migrateDb.pool.query('delete from core.rate_limits');
   });
 
   afterAll(async () => {
