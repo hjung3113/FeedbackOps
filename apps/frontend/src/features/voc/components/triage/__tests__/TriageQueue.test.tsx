@@ -1,9 +1,11 @@
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 // TriageQueue.test.tsx — RED tests for the triage queue container.
 // Covers: renders rows, empty state, OutOfScopeSummary.
 // TDD RED: these tests are written before the implementation file exists.
 
 import type { VocListItem } from '@fops/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageQueue } from '../TriageQueue';
 
@@ -119,5 +121,68 @@ describe('TriageQueue', () => {
     expect(screen.getByText('잠시 후 다시 시도해 주세요.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(onRetryQueue).toHaveBeenCalledTimes(1);
+  });
+});
+
+function RetryQueryHarness({ load }: { load: () => Promise<VocListItem[]> }) {
+  const query = useQuery({ queryKey: ['retry-focus'], queryFn: load });
+  return (
+    <TriageQueue
+      vocs={query.data ?? []}
+      selectedId={null}
+      onSelect={vi.fn()}
+      queuePending={query.isLoading}
+      queueError={query.isError && !query.data?.length}
+      onRetryQueue={() => void query.refetch()}
+    />
+  );
+}
+
+describe('Triage retry accessibility (#953)', () => {
+  function renderQuery(load: () => Promise<VocListItem[]>) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <RetryQueryHarness load={load} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it.each(['error', 'success'] as const)(
+    'keeps retry focus through pending → %s',
+    async (outcome) => {
+      const user = userEvent.setup();
+      let resolveRetry!: (items: VocListItem[]) => void;
+      let rejectRetry!: (error: Error) => void;
+      const retry = new Promise<VocListItem[]>((resolve, reject) => {
+        resolveRetry = resolve;
+        rejectRetry = reject;
+      });
+      const load = vi
+        .fn<() => Promise<VocListItem[]>>()
+        .mockRejectedValueOnce(new Error('initial failure'))
+        .mockReturnValueOnce(retry);
+      renderQuery(load);
+      await user.click(await screen.findByRole('button', { name: '다시 시도' }));
+      const target = screen.getByRole('region', { name: 'Triage 대기열' });
+      await screen.findByRole('status');
+      await waitFor(() => expect(document.activeElement).toBe(target));
+      if (outcome === 'error') {
+        rejectRetry(new Error('retry failure'));
+        await screen.findByRole('button', { name: '다시 시도' });
+        expect(screen.getByRole('alert')).toHaveTextContent('불러오기 실패');
+      } else {
+        resolveRetry(VOCS.slice(0, 1));
+        await screen.findByText('First VOC');
+      }
+      await waitFor(() => expect(document.activeElement).toBe(target));
+    },
+  );
+
+  it('announces a first-load failure without moving focus', async () => {
+    renderQuery(() => Promise.reject(new Error('initial failure')));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('불러오기 실패');
+    await waitFor(() => expect(document.activeElement).toBe(document.body));
   });
 });

@@ -122,7 +122,26 @@ const SKELETON_COUNT = 10;
 // VocList
 // ---------------------------------------------------------------------------
 
-export function VocList({
+export function VocList(props: VocListProps) {
+  const retryFocusTarget = React.useRef<HTMLElement>(null);
+  return (
+    <section ref={retryFocusTarget} aria-label="VOC 목록" tabIndex={-1}>
+      <VocListContent
+        {...props}
+        {...(props.onRetry !== undefined
+          ? {
+              onRetry: () => {
+                retryFocusTarget.current?.focus();
+                props.onRetry?.();
+              },
+            }
+          : {})}
+      />
+    </section>
+  );
+}
+
+function VocListContent({
   items,
   loading,
   error,
@@ -179,17 +198,19 @@ export function VocList({
   // 2. Error with no items → error empty state
   if (error !== null && items.length === 0) {
     return (
-      <EmptyState
-        title={VOC_LIST_LOAD_ERROR_LABELS.title}
-        body={VOC_LIST_LOAD_ERROR_LABELS.body}
-        action={
-          onRetry !== undefined ? (
-            <Button onClick={onRetry} type="button">
-              {VOC_LIST_LOAD_ERROR_LABELS.retry}
-            </Button>
-          ) : undefined
-        }
-      />
+      <div role="alert">
+        <EmptyState
+          title={VOC_LIST_LOAD_ERROR_LABELS.title}
+          body={VOC_LIST_LOAD_ERROR_LABELS.body}
+          action={
+            onRetry !== undefined ? (
+              <Button onClick={onRetry} type="button">
+                {VOC_LIST_LOAD_ERROR_LABELS.retry}
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
     );
   }
 

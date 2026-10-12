@@ -162,7 +162,7 @@ function renderRoute(requestedOutcome = requestedOutcome225) {
 
 async function openConvertForm() {
   renderRoute();
-  await screen.findByText('REQ-42');
+  await screen.findByRole('button', { name: '패널 닫기' });
   fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
   return screen.findByTestId('task-request-convert-title-input');
 }
@@ -205,7 +205,7 @@ describe('TaskRequestsRoute conversion title', () => {
 
   it('AC-C6c leaves a 69-character requested outcome unchanged', async () => {
     renderRoute(requestedOutcome69);
-    await screen.findByText('REQ-42');
+    await screen.findByRole('button', { name: '패널 닫기' });
     fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
     expect(await screen.findByTestId('task-request-convert-title-input')).toHaveValue(
       requestedOutcome69,
@@ -811,7 +811,7 @@ async function openConvertFormReturnsClient() {
       <TaskRequestsRoute selectedParam={taskRequest.id} />
     </QueryClientProvider>,
   );
-  await screen.findByText('REQ-42');
+  await screen.findByRole('button', { name: '패널 닫기' });
   fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
   await screen.findByTestId('task-request-convert-title-input');
   return { queryClient };

@@ -2,6 +2,8 @@
 export const SAME_MANAGED_SYSTEM_VOC_LABEL = '같은 Managed System의 VOC';
 export const SAME_MANAGED_SYSTEM_RECENT_VOC_LABEL = '같은 Managed System의 최근 VOC';
 export const SEMANTIC_VOC_RECOMMENDATIONS_LABEL = '유사 VOC 추천';
+export const SEMANTIC_VOC_RECOMMENDATIONS_NOTICE =
+  '자동 클러스터링은 추천만 합니다. 확정이 필요합니다.';
 export const VOC_TRIAGE_SUMMARY_SECTION_LABEL = '요약 · 변경 사항';
 export const VOC_DETAIL_BODY_LABEL = '본문';
 

@@ -125,9 +125,22 @@ describe('Task list paging and independent selection', () => {
         expect(navigate).toHaveBeenCalledWith({
           to: '/tasks',
           replace: true,
-          search: { view: 'backlog', managedSystem: ms },
+          search: expect.any(Function),
         }),
       );
+      const cleanupSearch = navigate.mock.calls.at(-1)?.[0].search;
+      expect(
+        cleanupSearch({
+          view: 'backlog',
+          managedSystem: ms,
+          public_update: 'missing',
+          param: second.id,
+        }),
+      ).toEqual({
+        view: 'backlog',
+        managedSystem: ms,
+        public_update: 'missing',
+      });
       expect(screen.queryByText(second.id)).not.toBeInTheDocument();
     },
   );

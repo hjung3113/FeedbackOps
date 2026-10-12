@@ -3,7 +3,7 @@ import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
 import { parseRouteSearch } from '@/lib/router/search';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 
 export const tasksSearchSchema = z
@@ -31,7 +31,7 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
     search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
   const selectedParamProps = search.param !== undefined ? { selectedParam: search.param } : {};
   if (search.view === 'requests') {
-    return <TaskRequestsRoute {...managedSystemProps} {...selectedParamProps} />;
+    return <TaskRequestsUrlRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   if (search.view === 'board') {
     return (
@@ -51,4 +51,23 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
 
 function TasksRouteShell() {
   return <TasksRouteView search={Route.useSearch()} />;
+}
+
+function TaskRequestsUrlRoute(props: { managedSystem?: string; selectedParam?: string }) {
+  const navigate = useNavigate();
+  return (
+    <TaskRequestsRoute
+      {...props}
+      onSelectionChange={(id, replace) => {
+        void navigate({
+          to: '/tasks',
+          replace,
+          search: (previous) => {
+            const { param: _param, ...rest } = previous;
+            return { ...rest, view: 'requests', ...(id === null ? {} : { param: id }) };
+          },
+        });
+      }}
+    />
+  );
 }

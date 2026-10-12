@@ -198,9 +198,11 @@ blocker or an owner request.
      throwaway DB.
    - `scripts/nav-perf.sh --base develop=<url> --base branch=<url> --targets <rail and touched hrefs> --out
      <worktree>/.review/<n>-perf/nav-perf.json`. Each base logs in as its own admin (`mock-admin-1`, `mock-admin-2`),
-     and samples that saw a 429 are kept out of the medians.
+     and samples that saw a 429 are kept out of the medians. Stdout is a plain-text table (`nav-perf-summary.py`)
+     ending in `breach: none|<hrefs>`; it is not JSON, so read numbers from the `--out` file.
    - **Breach:** for any target, the median `branch.readyMs > develop × 1.2 + 50`, a new `reloaded`, `apiCalls` +2,
-     or `timedOut`. A new list query with no bound or index decision also counts.
+     or `timedOut` (the table's verdict column applies these). A new list query with no bound or index decision also
+     counts; the table cannot see that.
    - On a breach, launch `review-perf`. Otherwise paste the comparison table into the code reviewer's task, or into
      VERIFY if the code reviewer has already started.
    - Then launch `review-ux` with the two preview URLs, the persona(s), at most three scenarios from the brief, and
@@ -369,7 +371,9 @@ blocker or an owner request.
     one bucket in the 2026-10-08 mock wave.
   - There is one warm-up pass, then the bases alternate for `--runs` passes, and per-target medians are compared.
   - Samples that saw a 429 are excluded (`rateLimitedSamples`).
-  - Failures are recorded per target, and the JSON (with `fs`) is always written.
+  - Failures are recorded per target, and the JSON (with `fs`) is always written. The ego-browser output goes to
+    `<out>.log`; a missing result, a recorded error, or a target with no usable sample on a compared base
+    (`inconclusive`, e.g. every sample rate-limited) exits 1: reset the rate limits and rerun.
   - Noise floor, develop vs develop: ≤4 ms. A reload-heavy build can hit the `/me` rate limit and drop a sample.
 - `scripts/app-preview.py start <checkout> [--backend --env <throwaway env> [--seed]] [--name <label>]` / `stop <label>|--all` / `status`:
   - It serves the checkout's vite at `http://<label>.localhost:<port>`. Each label gets its own host so logins do not

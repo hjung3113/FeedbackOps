@@ -6,11 +6,12 @@
 // whole queue is known to be empty (queueTotal === 0), tab-scoped copy
 // otherwise (FIX1: an unknown total claims nothing about the whole queue).
 
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { VOC_LIST_LOAD_ERROR_LABELS } from '@/lib/copy/voc';
 import type { VocListItem } from '@fops/shared';
 import { Button, EmptyState, useListMotion } from '@fops/ui';
 import type * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { OutOfScopeSummaryBanner } from './OutOfScopeSummaryBanner';
 import { TriageEmpty } from './TriageEmpty';
 import { TriageRow } from './TriageRow';
@@ -52,6 +53,7 @@ export function TriageQueue({
   // #922 FIX1: an unknown total is not evidence of a truly empty queue — only
   // a known zero earns the whole-queue success copy; an unknown (or positive)
   // total gets the neutral tab-empty copy.
+  const retryFocusTarget = useRef<HTMLElement>(null);
   const listMotion = useListMotion();
   const context = animationContext ?? activeTab;
   const [settlement, setSettlement] = useState({ context, settled: queueSettled });
@@ -72,57 +74,72 @@ export function TriageQueue({
           : 'cached';
   const tabScopedEmpty = queueTotal !== 0;
   return (
-    <div
-      key={JSON.stringify([context, phase])}
-      ref={listMotion}
-      className="flex flex-col h-full overflow-y-auto"
+    <section
+      ref={retryFocusTarget}
+      aria-label={GLOSSARY.triageQueue}
+      tabIndex={-1}
+      className="h-full"
     >
-      {outOfScopeSummary !== undefined && (
-        <OutOfScopeSummaryBanner
-          count={outOfScopeSummary.count}
-          severityDistribution={outOfScopeSummary.severity_distribution}
-          className="px-4 py-3 border-b border-border-subtle"
-        />
-      )}
-
-      {queuePending === true ? (
-        // #922 FIX1: <output> carries the implicit "status" role, so the
-        // pending cue reaches assistive tech when the tab changes but rows
-        // are still loading.
-        <output className="flex items-center justify-center h-full">
-          <span className="text-sm text-text-muted">불러오는 중…</span>
-        </output>
-      ) : queueError === true ? (
-        // #935: a failed queue read with no rows must not pass for an empty
-        // queue; mirror VocList's error state so the failure is visible and
-        // retryable inside the queue column.
-        <EmptyState
-          title={VOC_LIST_LOAD_ERROR_LABELS.title}
-          body={VOC_LIST_LOAD_ERROR_LABELS.body}
-          action={
-            onRetryQueue !== undefined ? (
-              <Button onClick={onRetryQueue} type="button">
-                {VOC_LIST_LOAD_ERROR_LABELS.retry}
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : vocs.length === 0 ? (
-        <TriageEmpty {...(tabScopedEmpty ? { tabScoped: true } : {})} />
-      ) : (
-        vocs.map((voc) => (
-          <TriageRow
-            key={voc.id}
-            voc={voc}
-            showPostponedMarker={activeTab !== 'waiting'}
-            selected={voc.id === selectedId}
-            onSelect={() => {
-              onSelect(voc.id);
-            }}
+      <div
+        key={JSON.stringify([context, phase])}
+        ref={listMotion}
+        className="flex flex-col h-full overflow-y-auto"
+      >
+        {outOfScopeSummary !== undefined && (
+          <OutOfScopeSummaryBanner
+            count={outOfScopeSummary.count}
+            severityDistribution={outOfScopeSummary.severity_distribution}
+            className="px-4 py-3 border-b border-border-subtle"
           />
-        ))
-      )}
-    </div>
+        )}
+
+        {queuePending === true ? (
+          // #922 FIX1: <output> carries the implicit "status" role, so the
+          // pending cue reaches assistive tech when the tab changes but rows
+          // are still loading.
+          <output className="flex items-center justify-center h-full">
+            <span className="text-sm text-text-muted">불러오는 중…</span>
+          </output>
+        ) : queueError === true ? (
+          // #935: a failed queue read with no rows must not pass for an empty
+          // queue; mirror VocList's error state so the failure is visible and
+          // retryable inside the queue column.
+          <div role="alert">
+            <EmptyState
+              title={VOC_LIST_LOAD_ERROR_LABELS.title}
+              body={VOC_LIST_LOAD_ERROR_LABELS.body}
+              action={
+                onRetryQueue !== undefined ? (
+                  <Button
+                    onClick={() => {
+                      retryFocusTarget.current?.focus();
+                      onRetryQueue();
+                    }}
+                    type="button"
+                  >
+                    {VOC_LIST_LOAD_ERROR_LABELS.retry}
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : vocs.length === 0 ? (
+          <TriageEmpty {...(tabScopedEmpty ? { tabScoped: true } : {})} />
+        ) : (
+          vocs.map((voc) => (
+            <TriageRow
+              key={voc.id}
+              voc={voc}
+              showPostponedMarker={activeTab !== 'waiting'}
+              selected={voc.id === selectedId}
+              onSelect={() => {
+                onSelect(voc.id);
+              }}
+            />
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 

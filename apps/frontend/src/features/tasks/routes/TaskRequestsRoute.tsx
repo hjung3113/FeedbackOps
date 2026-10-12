@@ -1,10 +1,13 @@
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { TASK_REQUEST_LINK_MISSING_MESSAGE } from '@/lib/copy/task-requests';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
+import { useCloseFocusReturn } from '../hooks/useCloseFocusReturn';
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
 import { type TaskRequestTab, useTaskRequestsQueue } from './task-requests/useTaskRequestsQueue';
@@ -20,13 +23,16 @@ export {
 export function TaskRequestsRoute({
   selectedParam,
   managedSystem,
+  onSelectionChange,
 }: {
   selectedParam?: string | undefined;
   managedSystem?: string;
+  onSelectionChange?: (id: string | null, replace: boolean) => void;
 }) {
   const listMotion = useListMotion();
-  const queue = useTaskRequestsQueue({ selectedParam, managedSystem });
+  const queue = useTaskRequestsQueue({ selectedParam, managedSystem, onSelectionChange });
   const context = JSON.stringify([queue.activeTab, managedSystem ?? null]);
+  const { rowRef, returnFocus, cancel } = useCloseFocusReturn(context);
   const [settlement, setSettlement] = useState({ context, settled: queue.queueSettled });
   const settledOnce = queue.queueSettled || (settlement.context === context && settlement.settled);
   // First fresh data replaces the cached boundary; later fetches keep its motion and scroll.
@@ -45,6 +51,11 @@ export function TaskRequestsRoute({
         })
       : null;
   useDocumentTitle(selectedDocumentTitle);
+
+  // #1032: a new selection (row click or URL param) cancels a pending focus return.
+  useEffect(() => {
+    if (queue.selectedId !== null) cancel();
+  }, [queue.selectedId, cancel]);
 
   if (queue.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>;
@@ -102,6 +113,7 @@ export function TaskRequestsRoute({
                 selected={queue.selected?.id === item.id}
                 names={queue.names}
                 onSelect={queue.setSelectedId}
+                rowRef={rowRef(item.id)}
               />
             ))}
             <ListLoadMore
@@ -138,13 +150,18 @@ export function TaskRequestsRoute({
         </>
       }
       detailPanel={
-        queue.selected ? (
+        queue.linkMissing ? (
+          <LinkTargetMissingNotice message={TASK_REQUEST_LINK_MISSING_MESSAGE} />
+        ) : queue.selected ? (
           <TaskRequestPanel
             item={queue.selected}
             names={queue.names}
             currentActorId={queue.currentActorId}
             currentRole={queue.currentRole}
-            onClose={() => queue.setSelectedId(null)}
+            onClose={() => {
+              if (queue.selectedId !== null) returnFocus(queue.selectedId);
+              queue.setSelectedId(null);
+            }}
             onDecisionComplete={queue.onDecisionComplete}
           />
         ) : null

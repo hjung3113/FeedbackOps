@@ -1042,6 +1042,275 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(afterTriage.rows[0]?.postponed_at).toBeNull();
   });
 
+  it('955: confirm compensation restores the timestamp read by the client exactly in Postgres', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-955-roundtrip', 'Restore MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'restore',
+        description_rich_content: paragraphDoc('x'),
+      },
+      randomUUID(),
+    );
+    const postponed = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(postponed.statusCode).toBe(200);
+    const original = await dbHandle.pool.query<{ timestamp: string }>(
+      'select triage_state_review_postponed_at::text as timestamp from voc.vocs where id = $1',
+      [voc.id],
+    );
+    const read = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=triage&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}` },
+    });
+    expect(read.statusCode).toBe(200);
+    const prior = read.json().items.find((item: { id: string }) => item.id === voc.id);
+    expect(prior.review_postponed_at).toEqual(expect.any(String));
+    const confirmed = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      {
+        triage_state: 'triaged',
+        severity: 'high',
+        owner_user_id: adminActorId,
+        owner_team_id: null,
+        analytics_area_id: null,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: postponed.json().updated_at },
+    );
+    expect(confirmed.statusCode).toBe(200);
+    const afterConfirm = await dbHandle.pool.query(
+      'select triage_state_review_postponed_at from voc.vocs where id = $1',
+      [voc.id],
+    );
+    expect(afterConfirm.rows[0].triage_state_review_postponed_at).toBeNull();
+    const auditsBefore = await getAuditTypes(voc.id);
+    const restored = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      {
+        triage_state: prior.triage_state,
+        severity: prior.severity,
+        owner_user_id: prior.owner_user_id,
+        owner_team_id: prior.owner_team_id,
+        analytics_area_id: prior.analytics_area_id,
+        restore_review_postponed_at: prior.review_postponed_at,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: confirmed.json().updated_at },
+    );
+    expect(restored.statusCode).toBe(200);
+    const afterRestore = await dbHandle.pool.query(
+      `select triage_state, severity, owner_user_id, owner_team_id, analytics_area_id,
+        triage_state_review_postponed_at = $2::timestamptz as exact
+        from voc.vocs where id = $1`,
+      [voc.id, original.rows[0]?.timestamp],
+    );
+    expect(afterRestore.rows[0]).toEqual({
+      triage_state: 'untriaged',
+      severity: prior.severity,
+      owner_user_id: prior.owner_user_id,
+      owner_team_id: prior.owner_team_id,
+      analytics_area_id: prior.analytics_area_id,
+      exact: true,
+    });
+    for (const tab of ['waiting', 'untriaged']) {
+      const list = await app.inject({
+        method: 'GET',
+        url: `/vocs?view=triage&tab=${tab}&managed_system_id=${msId}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}` },
+      });
+      expect(list.statusCode).toBe(200);
+      const ids = list.json().items.map((item: { id: string }) => item.id);
+      if (tab === 'waiting') expect(ids).toContain(voc.id);
+      else expect(ids).not.toContain(voc.id);
+    }
+    const auditsAfter = await getAuditTypes(voc.id);
+    for (const type of ['voc_triage_postponed', 'voc_triage_postpone_cleared']) {
+      expect(auditsAfter.filter((value) => value === type)).toEqual(
+        auditsBefore.filter((value) => value === type),
+      );
+    }
+    expect(auditsAfter.slice(auditsBefore.length)).toEqual([
+      'voc_severity_set',
+      'voc_owner_assigned',
+    ]);
+  });
+
+  it.each([
+    [
+      'missing target',
+      'triaged',
+      { restore_review_postponed_at: '2026-01-01T00:00:00.000Z' },
+      'restore_review_postponed_at',
+      'custom',
+    ],
+    [
+      'wrong target',
+      'triaged',
+      { triage_state: 'triaged', restore_review_postponed_at: '2026-01-01T00:00:00.000Z' },
+      'restore_review_postponed_at',
+      'custom',
+    ],
+    [
+      'postpone true',
+      'triaged',
+      {
+        triage_state: 'untriaged',
+        postpone_review: true,
+        restore_review_postponed_at: '2026-01-01T00:00:00.000Z',
+      },
+      'postpone_review',
+      'custom',
+    ],
+    [
+      'postpone false',
+      'triaged',
+      {
+        triage_state: 'untriaged',
+        postpone_review: false,
+        restore_review_postponed_at: '2026-01-01T00:00:00.000Z',
+      },
+      'postpone_review',
+      'custom',
+    ],
+    [
+      'already untriaged',
+      'untriaged',
+      { triage_state: 'untriaged', restore_review_postponed_at: '2026-01-01T00:00:00.000Z' },
+      'restore_review_postponed_at',
+      'invalid_state',
+    ],
+    [
+      'future',
+      'triaged',
+      { triage_state: 'untriaged', restore_review_postponed_at: '2999-01-01T00:00:00.000Z' },
+      'restore_review_postponed_at',
+      'invalid',
+    ],
+    [
+      'not ISO',
+      'triaged',
+      { triage_state: 'untriaged', restore_review_postponed_at: 'not ISO' },
+      'restore_review_postponed_at',
+      'invalid_string',
+    ],
+  ] as const)(
+    '955: %s is 422 and leaves row and audits unchanged',
+    async (_name, state, body, path, code) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-patch-955-invalid', 'Invalid Restore MS');
+      const voc = await postVoc(
+        app,
+        admin,
+        {
+          primary_managed_system_id: msId,
+          title: 'restore',
+          description_rich_content: paragraphDoc('x'),
+        },
+        randomUUID(),
+      );
+      await dbHandle.pool.query('update voc.vocs set triage_state = $2 where id = $1', [
+        voc.id,
+        state,
+      ]);
+      const before = await dbHandle.pool.query(
+        'select to_jsonb(v) as row, v.updated_at from voc.vocs v where id = $1',
+        [voc.id],
+      );
+      const audits = await getAuditTypes(voc.id);
+      // The direct UPDATE above bumps updated_at; send the current value.
+      const res = await patchVoc(app, admin, voc.id, body, {
+        idempotencyKey: randomUUID(),
+        ifMatch: (before.rows[0].updated_at as Date).toISOString(),
+      });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe('validation.failed');
+      expect(res.json().detail.fields[0]).toEqual({ path: [path], code });
+      expect(
+        (
+          await dbHandle.pool.query(
+            'select to_jsonb(v) as row, v.updated_at from voc.vocs v where id = $1',
+            [voc.id],
+          )
+        ).rows,
+      ).toEqual(before.rows);
+      expect(await getAuditTypes(voc.id)).toEqual(audits);
+    },
+  );
+
+  it.each([
+    ['untriaged', '2026-01-01T00:00:00.000Z'],
+    ['untriaged', '2999-01-01T00:00:00.000Z'],
+    ['triaged', '2026-01-01T00:00:00.000Z'],
+    ['triaged', '2999-01-01T00:00:00.000Z'],
+  ])(
+    '955: permission denial precedes state=%s and timestamp=%s checks',
+    async (state, timestamp) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-patch-955-permission', 'Restore Permission MS');
+      const voc = await postVoc(
+        app,
+        admin,
+        {
+          primary_managed_system_id: msId,
+          title: 'restore',
+          description_rich_content: paragraphDoc('x'),
+        },
+        randomUUID(),
+      );
+      await dbHandle.pool.query('update voc.vocs set triage_state = $2 where id = $1', [
+        voc.id,
+        state,
+      ]);
+      const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `955-${randomUUID()}`);
+      const developer = await loginAs(app, externalId);
+      const opts = { idempotencyKey: randomUUID(), ifMatch: voc.updated_at };
+      const denied = await patchVoc(app, developer, voc.id, { severity: 'low' }, opts);
+      const res = await patchVoc(
+        app,
+        developer,
+        voc.id,
+        {
+          triage_state: 'untriaged',
+          restore_review_postponed_at: timestamp,
+          severity: null,
+          owner_user_id: null,
+          owner_team_id: null,
+          analytics_area_id: null,
+        },
+        { ...opts, idempotencyKey: randomUUID() },
+      );
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('permission.scope_required');
+      expect(res.json()).toEqual(denied.json());
+      const schemaInvalid = await patchVoc(
+        app,
+        developer,
+        voc.id,
+        { restore_review_postponed_at: timestamp },
+        { ...opts, idempotencyKey: randomUUID() },
+      );
+      expect(schemaInvalid.statusCode).toBe(422);
+      expect(schemaInvalid.json().code).toBe('validation.failed');
+      expect(schemaInvalid.json().detail.fields[0]).toEqual({
+        path: ['restore_review_postponed_at'],
+        code: 'custom',
+      });
+    },
+  );
+
   // ── 10d. postpone_review: false clears a postponed untriaged review (#921) ──
   it('PATCH { postpone_review: false } after postpone clears postponed_at and tab=waiting', async () => {
     const admin = await loginAs(app, 'mock-admin-1');

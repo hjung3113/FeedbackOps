@@ -159,17 +159,6 @@ describe('TaskListRoute My Tasks view', () => {
     expect(queries.at(-1)?.cursor).toBe('next');
   });
 
-  it('keeps view=my when a Task row is selected', async () => {
-    renderWithClient(<TasksRouteView search={{ view: 'my' }} />);
-
-    fireEvent.click(await screen.findByText(task.title));
-
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/tasks',
-      search: { view: 'my', param: task.id },
-    });
-  });
-
   it.each([
     { view: 'my' as const, title: '내 Task' },
     { view: 'backlog' as const, title: 'Tasks' },

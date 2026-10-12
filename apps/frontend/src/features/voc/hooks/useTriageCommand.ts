@@ -36,6 +36,7 @@ import { type CallToken, useUndoableMutation } from './useUndoableMutation';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;
+  serverReviewPostponedAt?: string | null;
   onProcessed?: ((delta: 1 | -1) => void) | undefined;
   onMutationFailure?: ((vocId: string) => void) | undefined;
   onQueueOutcome?: ((input: TriageInput, outcome: TriageQueueOutcome) => void) | undefined;
@@ -52,6 +53,7 @@ export interface UseTriageCommandResult {
 
 export function useTriageCommand({
   voc,
+  serverReviewPostponedAt = null,
   onOptimisticRestore,
   onOptimisticRollback,
   onQueueOutcome,
@@ -128,6 +130,7 @@ export function useTriageCommand({
     snapshot: (input: TriageInput) => ({
       ...buildTriageSnapshot(input, {
         triageState: voc.triage_state,
+        reviewPostponedAt: serverReviewPostponedAt,
         severity: voc.severity,
         ownerUserId: voc.owner_user_id,
         ownerTeamId: voc.owner_team_id,

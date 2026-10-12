@@ -39,4 +39,11 @@ interface TriageSnapshotFields {
 }
 
 export type TriageSnapshot = TriageSnapshotFields &
-  ({ wasConfirm: true; triageState: VocListItem['triage_state'] } | { wasConfirm: false });
+  (
+    | {
+        wasConfirm: true;
+        triageState: VocListItem['triage_state'];
+        reviewPostponedAt: string | null;
+      }
+    | { wasConfirm: false }
+  );

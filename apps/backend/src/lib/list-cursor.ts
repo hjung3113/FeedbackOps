@@ -1,6 +1,8 @@
+// Keyset list cursor shared by the Finding, Task and Task Request lists (#990): base64 JSON of the
+// row timestamp and id. Wire shape and the invalid_cursor error are part of the list contract.
 import { z } from 'zod';
-import { HttpError } from '../../lib/errors.js';
-import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
+import { HttpError } from './errors.js';
+import { normalizePgTimestampToIso } from './pg-timestamp.js';
 
 const cursorSchema = z
   .object({ timestamp: z.string().datetime({ offset: true }), id: z.string().uuid() })

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { ListCursor } from './list-cursor.js';
+import type { ListCursor } from '../../lib/list-cursor.js';
 
 import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
