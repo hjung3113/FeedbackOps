@@ -49,15 +49,22 @@ export function useTaskBoardDragGeometry() {
     if (!activeRect) return undefined;
     const columns = context.droppableContainers
       .getEnabled()
-      .flatMap(({ node }) => (node.current ? [outerColumnRect(node.current)] : []))
-      .filter((rect) => rect.width > 0)
-      .sort((a, b) => a.left - b.left);
+      .flatMap(({ id, node }) =>
+        node.current ? [{ id, rect: outerColumnRect(node.current) }] : [],
+      )
+      .filter(({ rect }) => rect.width > 0)
+      .sort((a, b) => a.rect.left - b.rect.left);
     if (!columns.length) return undefined;
     const centre = activeRect.left + activeRect.width / 2;
-    let current = columns.findIndex((rect) => centre >= rect.left && centre <= rect.right);
+    // Sensor scrolling can change live bounds before collisionRect catches up. The over ID
+    // identifies the current column independently of those two geometry snapshots.
+    let current = columns.findIndex(({ id }) => id === context.over?.id);
+    if (current === -1) {
+      current = columns.findIndex(({ rect }) => centre >= rect.left && centre <= rect.right);
+    }
     const outsideColumns = current === -1;
     if (outsideColumns) {
-      const distance = (rect: (typeof columns)[number]) =>
+      const distance = ({ rect }: (typeof columns)[number]) =>
         Math.min(Math.abs(centre - rect.left), Math.abs(centre - rect.right));
       let nearestDistance = Number.POSITIVE_INFINITY;
       columns.forEach((rect, index) => {
@@ -71,7 +78,10 @@ export function useTaskBoardDragGeometry() {
       columns[outsideColumns ? current : current + (event.code === 'ArrowRight' ? 1 : -1)];
     if (!target) return undefined;
     // KeyboardSensor coordinates are the active rect's top-left, not its centre.
-    return { x: target.left + target.width / 2 - activeRect.width / 2, y: currentCoordinates.y };
+    return {
+      x: target.rect.left + target.rect.width / 2 - activeRect.width / 2,
+      y: currentCoordinates.y,
+    };
   };
   function onDragStart(event: Pick<DragStartEvent, 'activatorEvent'>) {
     const activator = event.activatorEvent;
