@@ -1,29 +1,27 @@
-// useCloseFocusReturn registry hygiene (#1032): rowRef(id) drops the element on
-// detach. focusSelectedRow guards with isConnected, so a stale registry entry
-// would be behaviorally invisible — a plain focus assertion cannot catch one.
-// The assertion therefore observes the lookup itself: after detach, returnFocus
-// must never consult the detached row element again.
+// A row whose ref was detached must stop being a live focus target — even after
+// its original DOM node reconnects: auto-animate reinserts the removed node for
+// the exit animation (packages/ui/src/utils/useListMotion.ts). returnFocus must
+// then leave focus on the control the user is actually on.
 import { act, renderHook } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import { useCloseFocusReturn } from './useCloseFocusReturn';
 
-it('drops a detached row from the registry: returnFocus never consults it', () => {
+it('keeps focus off a row whose ref was detached, even after its node reconnects', () => {
   const { result } = renderHook(() => useCloseFocusReturn('ctx'));
   const node = document.createElement('button');
   document.body.appendChild(node);
-  const consulted: string[] = [];
-  const tracked = new Proxy(node, {
-    get(target: HTMLElement, property: string | symbol, receiver: unknown) {
-      consulted.push(String(property));
-      return Reflect.get(target, property, receiver);
-    },
-  });
+  const other = document.createElement('button');
+  document.body.appendChild(other);
 
   const attach = result.current.rowRef('r1');
-  attach(tracked); // mount
+  attach(node); // mount
   document.body.removeChild(node); // unmount: React removes the node, then detaches the ref
   attach(null);
+  document.body.appendChild(node); // exit animation: the removed node is reinserted
+  act(() => {
+    other.focus();
+  });
   act(() => result.current.returnFocus('r1'));
 
-  expect(consulted).toEqual([]);
+  expect(document.activeElement).toBe(other);
 });
