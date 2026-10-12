@@ -132,7 +132,7 @@ Never built: `IconButton`, `Table` / `DataTable`, `InboxList`, `ScopeFilterBar`,
 
 ## Implemented Shared Flow Components
 
-- `CommandPalette` (`apps/frontend/src/lib/layout/command-palette/`) — the inventory's `CommandMenu`, built in #611: cmdk's Radix Dialog hosted by `AppFrame`, shortcut + sidebar-row entry per `docs/frontend/routes-and-layout.md` → Global command palette (#611).
+- `CommandPalette` (`apps/frontend/src/lib/layout/command-palette/`) — the inventory's `CommandMenu`, built in #611: cmdk `Command` composed inside `@fops/ui` Radix dialog primitives (`Dialog` + `DialogPortal` + `DialogOverlay` + `DialogContentBare`; the palette scrim/panel is the `variant="palette"` treatment owned by `packages/ui`, not app-side classes), hosted by `AppFrame`; #1050 replaced `Command.Dialog` so undo-toast clicks don't dismiss the palette. Shortcut + sidebar-row entry per `docs/frontend/routes-and-layout.md` → Global command palette (#611).
 - `apps/frontend/src/features/cross-system/request-task/TaskRequestDraftCard.tsx` — neutral inline source request form and pending-source read presentation with the contract fields Evidence Summary and Requested Outcome; source mutations stay in their owning features.
 - `ListTabs` — reusable 28px list tab strip with optional bare counts, icons, native title tips, and overflow controls; composed by `ListToolbar`.
 - Internal `useHorizontalOverflow` — shared 1px scroll-edge state, resize observation, direct-child rebinding, and cleanup for `ListTabs` and `DetailPanelSectionNav`. Each consumer retains its active-item reveal, fade or scrollspy behavior, and component-specific layout rules.

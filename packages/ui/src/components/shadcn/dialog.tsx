@@ -1,4 +1,5 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { type VariantProps, cva } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '../../utils/cn.js';
@@ -15,13 +16,23 @@ interface DialogContentProps
   closeLabel?: string;
 }
 
+// #1050 command palette: accent-tinted, blurred scrim instead of the default black.
+const dialogOverlayVariants = cva('fixed inset-0 z-50 bg-black/80', {
+  variants: {
+    variant: {
+      palette: 'z-60 bg-accent-primary/16 backdrop-blur-xs',
+    },
+  },
+});
+
 export const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> &
+    VariantProps<typeof dialogOverlayVariants>
+>(({ className, variant, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-50 bg-black/80', SCRIM_MOTION, className)}
+    className={cn(dialogOverlayVariants({ variant }), SCRIM_MOTION, className)}
     {...props}
   />
 ));
@@ -56,6 +67,43 @@ export const DialogContent = React.forwardRef<
   </DialogPortal>
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+// #1050 command palette panel: the prototype .cmdk-panel surface, owned here so
+// app code styles the primitive only through the named variant.
+const dialogContentBareVariants = cva('', {
+  variants: {
+    variant: {
+      palette: cn(
+        // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps the 10px radius of the prototype .cmdk-panel (styles.css:865)
+        'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl',
+        DIALOG_CONTENT_MOTION,
+      ),
+    },
+  },
+});
+
+/**
+ * Bare dialog content: portal + Radix content with no default chrome and no
+ * close button, for dialog surfaces that own their styling and their
+ * outside-interaction policy (command palette, #1050). The `palette` variant
+ * carries the palette panel surface and its motion.
+ */
+export const DialogContentBare = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> &
+    VariantProps<typeof dialogContentBareVariants>
+>(({ children, className, variant, ...props }, ref) => (
+  <DialogPortal>
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(dialogContentBareVariants({ variant }), className)}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContentBare.displayName = 'DialogContentBare';
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
