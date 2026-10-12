@@ -16,6 +16,7 @@ import {
 } from '@tanstack/react-query';
 import * as React from 'react';
 
+import { useTaskPanelSelection } from '../../hooks/useTaskPanelSelection';
 import type { NameMaps } from './TaskRequestRow';
 import { isPermissionDenied } from './predicates';
 
@@ -67,41 +68,7 @@ export function useTaskRequestsQueue({
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
-  const [linkMissing, setLinkMissing] = React.useState(false);
-  const [panelClosed, setPanelClosed] = React.useState(false);
-  const [panelContext, setPanelContext] = React.useState({ activeTab, managedSystem });
-  if (panelContext.activeTab !== activeTab || panelContext.managedSystem !== managedSystem) {
-    setPanelContext({ activeTab, managedSystem });
-    setPanelClosed(false);
-    setLinkMissing(false);
-  }
-  React.useEffect(() => {
-    if (selectedParam !== undefined) {
-      setPanelClosed(false);
-      setLinkMissing(false);
-    }
-  }, [selectedParam]);
-  const [selection, setSelection] = React.useState({
-    param: selectedParam,
-    id: selectedParam ?? null,
-  });
-  // Reconcile URL changes during render so a new scope never sees the previous detail query.
-  const selectedId = selection.param === selectedParam ? selection.id : (selectedParam ?? null);
-  if (selection.param !== selectedParam) setSelection({ param: selectedParam, id: selectedId });
-  const setLocalSelectedId = React.useCallback(
-    (id: string | null) => setSelection({ param: selectedParam, id }),
-    [selectedParam],
-  );
-  const setSelectedId = React.useCallback(
-    (id: string | null) => {
-      setPanelClosed(id === null);
-      setLinkMissing(false);
-      setLocalSelectedId(id);
-      onSelectionChange?.(id, id === null);
-    },
-    [onSelectionChange, setLocalSelectedId],
-  );
-
+  const [decisionSelection, setDecisionSelection] = React.useState<string | null>(null);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
   const summaryQuery = useQuery({
     queryKey: ['task-requests', managedSystem, 'summary'] as const,
@@ -124,6 +91,25 @@ export function useTaskRequestsQueue({
   const items = React.useMemo(
     () => taskRequestsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [taskRequestsQuery.data],
+  );
+  const { selectedId, linkMissing, setLocalSelectedId, selectRow, closePanel, markLinkMissing } =
+    useTaskPanelSelection({
+      selectedParam,
+      items,
+      context: [activeTab, managedSystem],
+      onSelectionChange,
+    });
+  if (decisionSelection !== null) {
+    // Apply after the hook reconciles the result tab, so its context reset cannot drop the decision.
+    setLocalSelectedId(decisionSelection);
+    setDecisionSelection(null);
+  }
+  const setSelectedId = React.useCallback(
+    (id: string | null) => {
+      if (id === null) closePanel();
+      else selectRow(id);
+    },
+    [closePanel, selectRow],
   );
   const selectedDetail = useQuery({
     queryKey: ['task-request', selectedId] as const,
@@ -150,18 +136,9 @@ export function useTaskRequestsQueue({
       (selectedDetail.error instanceof ApiError && selectedDetail.error.status === 404) ||
       filteredOut
     ) {
-      setLinkMissing(true);
-      setLocalSelectedId(null);
-      onSelectionChange?.(null, true);
+      markLinkMissing();
     }
-  }, [
-    selectedDetail.data,
-    selectedDetail.error,
-    managedSystem,
-    selectedId,
-    setLocalSelectedId,
-    onSelectionChange,
-  ]);
+  }, [selectedDetail.data, selectedDetail.error, managedSystem, selectedId, markLinkMissing]);
   const restoredDetail =
     selected?.id === selectedParam
       ? selectedDetail.data?.id === selectedParam
@@ -254,17 +231,6 @@ export function useTaskRequestsQueue({
 
   const shown = items;
 
-  React.useEffect(() => {
-    if (
-      !panelClosed &&
-      !linkMissing &&
-      selectedParam === undefined &&
-      selectedId === null &&
-      shown[0]
-    )
-      setLocalSelectedId(shown[0].id);
-  }, [panelClosed, linkMissing, selectedId, shown, selectedParam, setLocalSelectedId]);
-
   const onDecisionComplete = React.useCallback(
     (updatedItem: TaskRequestDto) => {
       queryClient.setQueryData(['task-request', updatedItem.id], updatedItem);
@@ -283,10 +249,10 @@ export function useTaskRequestsQueue({
       );
       void queryClient.invalidateQueries({ queryKey: ['task-requests', managedSystem] });
       setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
-      setLocalSelectedId(updatedItem.id);
+      setDecisionSelection(updatedItem.id);
       onSelectionChange?.(updatedItem.id, true);
     },
-    [managedSystem, queryClient, setLocalSelectedId, onSelectionChange],
+    [managedSystem, queryClient, onSelectionChange],
   );
 
   return {

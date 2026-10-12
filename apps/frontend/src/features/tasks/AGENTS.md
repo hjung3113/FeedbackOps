@@ -38,6 +38,9 @@ It does not own reporter-facing VOC status or source evidence visibility rules.
   control; the route retains URL state and DnD sensors.
 - `apps/frontend/src/features/tasks/hooks/useTaskStatusTransition.ts` — scoped optimistic Task status
   writes, rollback, and stale-write handling.
+- `apps/frontend/src/features/tasks/hooks/useTaskPanelSelection.ts` — shared Task list and Task Request
+  selection reconciliation, panel close, auto-selection, and missing-link state; callers own detail queries,
+  scope/filter checks, and focus return.
 - `apps/frontend/src/features/tasks/adapters/taskDisplayAdapters.ts` — shared Managed System name
   lookup, assignment resolution, and priority-to-severity projection.
 - `apps/frontend/src/features/tasks/routes/TaskRequestsRoute.tsx` — Task Request queue and selected detail.
