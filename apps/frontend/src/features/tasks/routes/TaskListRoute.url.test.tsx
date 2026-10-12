@@ -142,6 +142,31 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it.each(['empty', 'populated'] as const)(
+  'follows My Task after an unassigned backlog auto-selection (%s)',
+  async (state) => {
+    mockTasks([
+      { ...first, assignee_actor_id: null },
+      ...(state === 'populated' ? [sameScope] : []),
+    ]);
+    const mounted = mount('/tasks?view=backlog');
+    expect(await screen.findByTestId('detail')).toHaveTextContent(first.id);
+
+    await act(async () => {
+      await mounted.router.navigate({ to: '/tasks', search: { view: 'my' } });
+    });
+    await settle(mounted);
+
+    if (state === 'populated') {
+      expect(await screen.findByTestId('detail')).toHaveTextContent(sameScope.id);
+    } else {
+      expect(screen.getByText('나에게 배정된 Task가 없습니다.')).toBeInTheDocument();
+      expectNoSelectedRow();
+    }
+    expect(screen.queryByTestId('tasks-link-missing')).not.toBeInTheDocument();
+  },
+);
+
 it.each(['backlog', 'my'] as const)(
   'pushes row selection keeping every search key in %s',
   async (view) => {

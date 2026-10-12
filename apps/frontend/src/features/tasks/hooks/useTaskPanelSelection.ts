@@ -14,15 +14,16 @@ export function useTaskPanelSelection({
   const [linkMissing, setLinkMissing] = React.useState(false);
   const [panelClosed, setPanelClosed] = React.useState(false);
   const [panelContext, setPanelContext] = React.useState(context);
-  if (panelContext?.[0] !== context?.[0] || panelContext?.[1] !== context?.[1]) {
-    setPanelContext(context);
-    setPanelClosed(false);
-    setLinkMissing(false);
-  }
   const [selection, setSelection] = React.useState({
     param: selectedParam,
     id: selectedParam ?? null,
   });
+  if (panelContext?.[0] !== context?.[0] || panelContext?.[1] !== context?.[1]) {
+    setPanelContext(context);
+    setPanelClosed(false);
+    setLinkMissing(false);
+    setSelection({ param: selectedParam, id: selectedParam ?? null });
+  }
   // Reconcile during render so a URL/scope change never queries the previous detail ID.
   const selectedId = selection.param === selectedParam ? selection.id : (selectedParam ?? null);
   if (selection.param !== selectedParam) setSelection({ param: selectedParam, id: selectedId });

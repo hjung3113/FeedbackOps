@@ -223,6 +223,11 @@ as the other surfaces.
   fall back to another row while unresolved. Review decisions refresh page and
   summary caches and retain the returned request across the result-tab switch,
   including when the destination's first page does not contain it.
+- Without an explicit `param`, changing the Task list view or either Task screen's
+  Managed System scope, or switching a Task Request status tab, resets the panel
+  selection to the new context's first row (or none when empty). An explicit
+  `param` remains authoritative; a completed review retains the decided request
+  on its result tab as described above.
 - Task Request row selection pushes `param` while preserving the current search
   context. Task list row selection also pushes `param` while preserving the current
   search context, including `view` and `managedSystem`.

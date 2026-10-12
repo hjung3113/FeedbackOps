@@ -68,6 +68,7 @@ export function useTaskRequestsQueue({
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
+  const [decisionSelection, setDecisionSelection] = React.useState<string | null>(null);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
   const summaryQuery = useQuery({
     queryKey: ['task-requests', managedSystem, 'summary'] as const,
@@ -98,6 +99,11 @@ export function useTaskRequestsQueue({
       context: [activeTab, managedSystem],
       onSelectionChange,
     });
+  if (decisionSelection !== null) {
+    // Apply after the hook reconciles the result tab, so its context reset cannot drop the decision.
+    setLocalSelectedId(decisionSelection);
+    setDecisionSelection(null);
+  }
   const setSelectedId = React.useCallback(
     (id: string | null) => {
       if (id === null) closePanel();
@@ -243,10 +249,10 @@ export function useTaskRequestsQueue({
       );
       void queryClient.invalidateQueries({ queryKey: ['task-requests', managedSystem] });
       setActiveTab(TAB_ORDER.find((tab) => tab.value === updatedItem.status)?.value ?? 'all');
-      setLocalSelectedId(updatedItem.id);
+      setDecisionSelection(updatedItem.id);
       onSelectionChange?.(updatedItem.id, true);
     },
-    [managedSystem, queryClient, setLocalSelectedId, onSelectionChange],
+    [managedSystem, queryClient, onSelectionChange],
   );
 
   return {
