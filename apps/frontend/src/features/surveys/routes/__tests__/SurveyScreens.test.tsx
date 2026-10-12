@@ -2670,8 +2670,8 @@ describe('Survey screens', () => {
   });
 
   it('AC-9 creates from the empty state with four required fields and returns the server id', async () => {
-    const created = { ...survey, id: 'server-survey-id' };
-    apiClient.mockResolvedValue({ data: created });
+    const created = { ...survey, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+    apiRequest.mockResolvedValue({ data: created });
     const onCreated = vi.fn();
     function EmptyCreateFlow() {
       const [open, setOpen] = React.useState(false);
@@ -2702,16 +2702,25 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByRole('option', { name: '보호함' }));
     fireEvent.click(screen.getByTestId('survey-create-submit'));
 
-    await waitFor(() => expect(calls('POST', '/surveys')).toHaveLength(1));
-    expect(calls('POST', '/surveys')[0]?.[2].body).toEqual({
+    await waitFor(() =>
+      expect(
+        apiRequest.mock.calls.filter(([method, path]) => method === 'POST' && path === '/surveys'),
+      ).toHaveLength(1),
+    );
+    expect(
+      apiRequest.mock.calls.filter(
+        ([method, path]) => method === 'POST' && path === '/surveys',
+      )[0]?.[3].body,
+    ).toEqual({
       type: 'validation',
       title: '신규 설문 제목',
       primary_managed_system_id: MANAGED_SYSTEM_ID,
       responses_identity_protected: true,
     });
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('server-survey-id'));
+    await waitFor(() =>
+      expect(onCreated).toHaveBeenCalledWith('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    );
   });
-
   it('AC-10 hides creation actions when SurveyPermissionGate denies management', async () => {
     render(
       <SurveyList

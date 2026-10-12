@@ -39,9 +39,30 @@ test.describe('/surveys visual harness', () => {
         await dragTarget.dispatchEvent('dragover', { dataTransfer });
         await expect(dragTarget).toHaveAttribute('data-drag-over', 'true');
       }
-      if (scenario === 'create-dialog') {
+      if (scenario.startsWith('create-')) {
         await page.getByTestId('survey-create-button').click();
         await expect(page.getByRole('dialog')).toBeVisible();
+        if (scenario !== 'create-dialog') {
+          await page.getByRole('combobox', { name: '시작 방법' }).click();
+          await page
+            .getByRole('option', {
+              name: scenario === 'create-builtin' ? '기본 템플릿' : '기존 Survey 문항 사용',
+            })
+            .click();
+          await page.getByRole('combobox', { name: 'Managed System', exact: true }).click();
+          await page.getByRole('option', { name: 'Revenue Analytics' }).click();
+          await page
+            .getByRole('radio', {
+              name: scenario === 'create-builtin' ? /Discovery 기본 템플릿/ : /지난 라운드 문항/,
+            })
+            .click();
+          await expect(page.getByRole('textbox', { name: '제목', exact: true })).toHaveValue(
+            scenario === 'create-builtin' ? 'Discovery 기본 템플릿' : '지난 라운드 문항',
+          );
+          await expect(
+            page.getByRole('region', { name: '문항 미리보기' }).getByRole('list'),
+          ).toBeVisible();
+        }
       }
       if (scenario === 'detail-empty') {
         await expect(page.getByRole('link', { name: '질문 편집' })).toBeVisible();
@@ -50,7 +71,7 @@ test.describe('/surveys visual harness', () => {
 
       const target = isBuilder
         ? page.getByTestId('survey-builder')
-        : scenario === 'create-dialog'
+        : scenario.startsWith('create-')
           ? page.getByRole('dialog')
           : isDetail
             ? page.getByTestId('survey-detail')

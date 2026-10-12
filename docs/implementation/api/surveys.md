@@ -136,8 +136,9 @@ oriented (1–2 poor low band, ADR-0055); this starter makes no automatic
 before/after causality or Task-completion claim.
 
 #1073 supplies built-in creation and #1074 supplies existing-definition reuse.
-Visible dialog selection (#1075) remains pending; #1047's user-visible acceptance
-is not complete. Source/read/token/snapshot/retry decisions are in
+The creation dialog (#1075) consumes these parsed reads and creates with a retained
+Idempotency-Key for unchanged uncertain attempts. Creation errors never fall back
+to blank creation; the builder loads persisted questions from GET detail. Source/read/token/snapshot/retry decisions are in
 [ADR-0070](../../adr/0070-survey-starting-templates-and-definition-reuse.md).
 
 ### Existing Survey starting-point creation (#1074, ADR-0070)
@@ -238,7 +239,7 @@ No Workspace/system/operator/creator/privacy/area/lifecycle/runtime fields or
 question timestamps/survey ID/parent-depth storage fields are returned. The
 source type is informational until the create request explicitly matches it;
 the frontend must use these dedicated schemas, not the symbolic built-in preview
-schema. #1075's dialog remains pending.
+schema. #1075's creation dialog consumes this private snapshot for its read-only preview.
 
 ### Existing Survey list and mutation commands
 

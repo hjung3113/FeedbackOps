@@ -3,6 +3,7 @@ import type {
   SurveyDto,
   SurveyQuestionDto,
   SurveyQuestionKind,
+  SurveyStartingPoint,
 } from '@fops/shared';
 
 export type SurveyType = SharedSurveyType;
@@ -19,6 +20,7 @@ export type SurveyQuestion = SurveyQuestionDto;
 export type Survey = SurveyDto;
 
 export interface CreateSurveyInput {
+  starting_point?: SurveyStartingPoint;
   type: SurveyType;
   title: string;
   description?: string;
@@ -28,7 +30,7 @@ export interface CreateSurveyInput {
   responses_identity_protected: boolean;
 }
 
-export type SurveyPatchInput = Partial<CreateSurveyInput>;
+export type SurveyPatchInput = Partial<Omit<CreateSurveyInput, 'starting_point'>>;
 
 /**
  * Strict question-route input: absent optional fields must be omitted, never

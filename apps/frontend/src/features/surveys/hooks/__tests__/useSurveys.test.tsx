@@ -8,7 +8,13 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
-import { useSurvey, useSurveys } from '../useSurveys';
+import {
+  useCreateSurvey,
+  useSurvey,
+  useSurveyCopySource,
+  useSurveyTemplates,
+  useSurveys,
+} from '../useSurveys';
 
 const originalFetch = global.fetch;
 
@@ -124,3 +130,56 @@ describe('useSurvey (detail)', () => {
     expect(result.current.error).toBeInstanceOf(ApiParseError);
   });
 });
+
+describe('Survey creation transport', () => {
+  const body = {
+    type: 'discovery' as const,
+    title: '새 라운드',
+    primary_managed_system_id: SURVEY.primary_managed_system_id,
+    responses_identity_protected: false,
+  };
+  it('retains the serialized body and key after a lost response; edits start a new attempt', async () => {
+    const requests: RequestInit[] = [];
+    global.fetch = vi.fn(async (_url, init) => {
+      if (init) requests.push(init);
+      if (requests.length < 3) throw new TypeError('response lost');
+      return new Response(JSON.stringify(SURVEY), { status: 201 });
+    });
+    const { result } = renderHookWithClient(() => useCreateSurvey());
+    await expect(result.current.mutateAsync(body)).rejects.toThrow('response lost');
+    await expect(result.current.mutateAsync(body)).rejects.toThrow('response lost');
+    await result.current.mutateAsync({ ...body, title: '수정한 라운드' });
+    expect(requests[0]?.body).toBe(requests[1]?.body);
+    const key = (request: RequestInit | undefined) =>
+      new Headers(request?.headers).get('Idempotency-Key');
+    expect(key(requests[0])).toMatch(/^[0-9a-f-]{36}$/);
+    expect(key(requests[1])).toBe(key(requests[0]));
+    expect(key(requests[2])).not.toBe(key(requests[0]));
+  });
+  it('rejects a malformed successful creation instead of accepting an invented ID', async () => {
+    global.fetch = mockFetch({ status: 201, jsonBody: { ...SURVEY, id: 'invented' } });
+    const { result } = renderHookWithClient(() => useCreateSurvey());
+    await expect(result.current.mutateAsync(body)).rejects.toBeInstanceOf(ApiParseError);
+  });
+});
+
+it.each(['catalog', 'snapshot'] as const)(
+  'rejects malformed %s responses at the real fetch seam',
+  async (kind) => {
+    global.fetch = mockFetch({
+      status: 200,
+      jsonBody:
+        kind === 'catalog'
+          ? { items: [{ template_id: 'invented' }] }
+          : { survey_id: SURVEY.id, questions: [] },
+    });
+    const { result } = renderHookWithClient(() =>
+      kind === 'catalog'
+        ? useSurveyTemplates(SURVEY.primary_managed_system_id, true)
+        : useSurveyCopySource(SURVEY.id, true),
+    );
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(ApiParseError);
+    expect(result.current.data).toBeUndefined();
+  },
+);

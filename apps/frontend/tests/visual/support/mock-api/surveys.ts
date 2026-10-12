@@ -24,8 +24,11 @@ import {
 } from '../../fixtures/survey-results';
 import {
   surveyBuilderDragOverVisualFixture,
+  surveyCopySourceVisualFixture,
+  surveyCopySourcesVisualFixture,
   surveyDetailVisualFixture,
   surveyEmptyBuilderVisualFixture,
+  surveyTemplateVisualFixture,
   surveyVisualActorsFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
@@ -90,6 +93,23 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
   }
 
   if (options.surveyScenario) {
+    handlers.push(
+      {
+        method: 'GET',
+        path: '/surveys/templates',
+        handle: (route) => json(route, 200, surveyTemplateVisualFixture),
+      },
+      {
+        method: 'GET',
+        path: '/surveys/copy-sources',
+        handle: (route) => json(route, 200, surveyCopySourcesVisualFixture),
+      },
+      {
+        method: 'GET',
+        path: `/surveys/${surveyVisualFixture.id}/copy-source`,
+        handle: (route) => json(route, 200, surveyCopySourceVisualFixture),
+      },
+    );
     handlers.push({
       method: 'GET',
       path: '/surveys',
