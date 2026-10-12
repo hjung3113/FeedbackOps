@@ -6,6 +6,8 @@ Date: 2026-10-05
 
 Accepted 2026-10-05 by the owner (recommendation approved in session).
 
+Amended 2026-10-13: the MVP close-out (`docs/design/13-mvp-roadmap.md`) schedules D1-D3 as their own issues; D4 is closed by rejecting ADR-0035/0036.
+
 ## Context
 
 The 2026-10-05 doc-to-code audit found four behaviors that the design docs describe as MVP requirements but that were never built, and that no ADR deferred. MVP shipped without them (slices through 29 are released). Leaving them as unqualified requirements makes the design docs read as if the behavior exists.
@@ -37,9 +39,9 @@ The shipped surface is `GET /dashboard/summary`: KPIs, action-queue counts with 
 
 The Outcome Survey follow-up flow keeps its own recovery identity (ADR-0055).
 
-### D4 — Public survey links stay unscheduled
+### D4 — Public survey links are not built
 
-ADR-0035 and ADR-0036 stay Proposed and unscheduled. MVP survey distribution is the authenticated in-app link `/surveys/:id/respond`.
+The owner rejected ADR-0035 and ADR-0036 on 2026-10-13. MVP survey distribution is the authenticated in-app link `/surveys/:id/respond`.
 
 ## Consequences
 

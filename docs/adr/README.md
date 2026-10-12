@@ -91,8 +91,8 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## Surveys
 
 - [0033](0033-survey-evidence-anonymity-safe-summary-contract.md) Survey evidence, anonymity and safe summaries — identity-protected responses, no Admin bypass for personal reads, threshold 5. *Accepted, amended by 0053*
-- [0035](0035-external-survey-responses.md) External survey responses — public-link responses store no Actor, dedupe by cookie identity. *Proposed (not implemented)*
-- [0036](0036-survey-link-distribution-and-respondent-model.md) Survey link distribution — opaque 30-day revocable links; no recipients or delivery channels. *Proposed (not implemented)*
+- [0035](0035-external-survey-responses.md) External survey responses — public-link responses store no Actor, dedupe by cookie identity. *Rejected 2026-10-13*
+- [0036](0036-survey-link-distribution-and-respondent-model.md) Survey link distribution — opaque 30-day revocable links; no recipients or delivery channels. *Rejected 2026-10-13*
 - [0053](0053-survey-result-response-state.md) Survey result response state — `none` / `below_threshold` / `visible` without exposing small counts. *Accepted*
 - [0055](0055-outcome-survey-follow-up-decisions.md) Outcome Survey follow-up — low-band poor-response classifier; Finding or no-follow-up decision clears the gap. *Accepted*
 
@@ -113,7 +113,7 @@ These record where the product deliberately differs from `docs/design-prototype/
 
 ## Scope decisions
 
-- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links unscheduled. *Accepted*
+- [0059](0059-deferred-mvp-requirements-from-doc-audit.md) Deferred MVP requirements — default owner/reviewer resolution (except Survey operator), Survey templates, Dashboard recovery items deferred; public survey links rejected (2026-10-13). *Accepted*
 
 ## Status legend
 
