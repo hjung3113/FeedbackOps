@@ -481,8 +481,12 @@ and the selected decision grant's nullable `expires_at` and
 `administrative_authority` records the reviewer's `workspace.admin` authority,
 `is_requester`, resolved `permission_self_approval`, and
 `self_approval_required`. Forbidden self-approval omits `approve` from actions.
-Scope candidates never broaden or move a system request to a sibling, and
-legacy object requests have no approval candidates.
+Scope candidates never broaden or move a system request to a sibling. If the
+original requested scope is unsupported by the command's shared scope policy
+(including legacy workspace-scoped Developer capabilities and object requests),
+Admin detail returns no approval candidates or `approve` action. Supported
+workspace `survey.export` requests retain workspace approval and system narrowing;
+non-approving decisions and requester withdrawal remain available for open requests.
 
 Risk evidence is a strict union: `sensitive_capability` has `{ capability }`,
 `workspace_scope` has `{ managed_system_id: null }`, `no_expiration` has

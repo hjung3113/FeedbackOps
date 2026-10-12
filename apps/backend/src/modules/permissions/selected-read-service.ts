@@ -22,7 +22,7 @@ import { permissionTaskSourceSummary } from '../tasks/index.js';
 import { permissionVocSourceSummary } from '../voc/index.js';
 import { getResolvedWorkspaceSettings } from '../workspace-settings/index.js';
 import { type ActorContext, type CheckService, applyAdminModuleBypass } from './check-service.js';
-import { supportedScopeCandidates } from './supported-scope-policy.js';
+import { isSupportedScope, supportedScopeCandidates } from './supported-scope-policy.js';
 
 type RequestRow = typeof permissionRequests.$inferSelect;
 export type SelectedReadService = ReturnType<typeof createSelectedReadService>;
@@ -225,14 +225,18 @@ export function createSelectedReadService(deps: { db: Db; checkService: CheckSer
             evidence: { denies: [firstDeny, ...otherDenies] },
           });
         const candidates = await supportedScopeCandidates(tx, actor.workspace_id, cap);
-        const approval_scope_candidates =
-          row.requestedObjectType !== null || row.requestedObjectId !== null
-            ? []
-            : candidates.filter(
-                (candidate) =>
-                  row.requestedManagedSystemId === null ||
-                  candidate.managed_system_id === row.requestedManagedSystemId,
-              );
+        const approval_scope_candidates = isSupportedScope(
+          candidates,
+          row.requestedManagedSystemId,
+          row.requestedObjectType,
+          row.requestedObjectId,
+        )
+          ? candidates.filter(
+              (candidate) =>
+                row.requestedManagedSystemId === null ||
+                candidate.managed_system_id === row.requestedManagedSystemId,
+            )
+          : [];
         const policy = await getResolvedWorkspaceSettings(tx, actor.workspace_id);
         const is_requester = actor.actor_id === requester.id;
         const open = row.status === 'pending' || row.status === 'needs_more_info';

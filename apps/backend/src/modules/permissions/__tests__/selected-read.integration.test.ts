@@ -232,6 +232,92 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
     expect(response.body).not.toMatch(/private@example|test-deny/);
   });
 
+  it.each([
+    ['legacy workspace VOC', 'voc.read', 'workspace', false, false],
+    ['workspace Survey export', 'survey.export', 'workspace', true, false],
+    ['narrowed Survey export', 'survey.export', 'workspace', true, true],
+    ['system VOC', 'voc.read', 'system', true, false],
+  ] as const)(
+    '%s advertises only executable Admin decisions',
+    async (_label, capability, scopeKind, supported, narrow) => {
+      const scope = scopeKind === 'workspace' ? null : ms;
+      const { id } = await request({ capability, scope });
+      const response = await get(`/permissions/requests/${id}`);
+      expect(response.statusCode).toBe(200);
+      const detail = permissionRequestAdminDetailSchema.parse(response.json());
+      expect(detail.allowed_actions).toEqual(
+        supported
+          ? ['approve', 'reject', 'need_more_info', 'deny']
+          : ['reject', 'need_more_info', 'deny'],
+      );
+      if (supported) {
+        expect(detail.approval_scope_candidates).toContainEqual({ managed_system_id: scope });
+        if (narrow)
+          expect(detail.approval_scope_candidates).toContainEqual({ managed_system_id: ms });
+      } else {
+        expect(detail.approval_scope_candidates).toEqual([]);
+        const approval = await app.inject({
+          method: 'POST',
+          url: `/permissions/requests/${id}/approve`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${admin.cookie}` },
+          payload: { expected_revision: detail.revision, granted_managed_system_id: ms },
+        });
+        expect(approval.statusCode).toBe(422);
+        expect(approval.json()).toMatchObject({ code: 'validation.failed' });
+      }
+
+      // Each decision gets its own requester/request so terminal states and grants cannot interfere.
+      for (const action of detail.allowed_actions) {
+        const target = await request({ capability, scope });
+        const selected = await get(`/permissions/requests/${target.id}`);
+        expect(selected.statusCode).toBe(200);
+        const current = permissionRequestAdminDetailSchema.parse(selected.json());
+        expect(current.allowed_actions).toEqual(detail.allowed_actions);
+        const decision = await app.inject({
+          method: 'POST',
+          url: `/permissions/requests/${target.id}/${action === 'need_more_info' ? 'need-more-info' : action}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${admin.cookie}` },
+          payload: {
+            expected_revision: current.revision,
+            ...(action === 'need_more_info' ? { note: '추가 확인 요청' } : { reason: '검토 완료' }),
+            ...(action === 'approve' ? { granted_managed_system_id: narrow ? ms : scope } : {}),
+          },
+        });
+        expect(decision.statusCode).toBe(200);
+        expect(decision.json()).toMatchObject({
+          id: target.id,
+          revision: current.revision + 1,
+          status:
+            action === 'approve'
+              ? 'approved'
+              : action === 'need_more_info'
+                ? 'needs_more_info'
+                : 'rejected',
+          ...(action === 'approve'
+            ? { requested_managed_system_id: scope, granted_managed_system_id: narrow ? ms : scope }
+            : {}),
+        });
+      }
+
+      if (!supported) {
+        const owner = await actor('user');
+        const target = await request({ owner: owner.id, capability, scope });
+        const selected = await get(`/permission-requests/${target.id}`, owner);
+        expect(selected.statusCode).toBe(200);
+        const current = permissionRequestOwnerDetailSchema.parse(selected.json());
+        expect(current.allowed_actions).toContain('withdraw');
+        const withdrawal = await app.inject({
+          method: 'POST',
+          url: `/permission-requests/${target.id}/cancel`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${owner.cookie}` },
+          payload: { expected_revision: current.revision },
+        });
+        expect(withdrawal.statusCode).toBe(200);
+        expect(withdrawal.json()).toMatchObject({ id: target.id, status: 'cancelled' });
+      }
+    },
+  );
+
   it('requester detail omits risk and deny internals even when all four signals exist', async () => {
     const owner = await actor('user');
     const { id } = await request({ owner: owner.id, capability: 'survey.export', scope: null });
