@@ -41,6 +41,11 @@ export function TaskRequestDecisionDialog({
   const liveDialog = dialog?.requestId === request.id ? dialog : null;
   const [previousDialog, setPreviousDialog] = React.useState(liveDialog);
   const [retained, setRetained] = React.useState(liveDialog);
+  // One record per opening, identified by object identity. Handlers below mutate
+  // `opener`/`dismissed` in place on purpose: a late close callback compares
+  // `activeOpening.current === opening` and must see its own record. Do not turn
+  // these mutations into immutable `setOpening` updates — that would detach late
+  // close callbacks from their opening (#997, #1012).
   const [opening, setOpening] = React.useState<{
     key: number;
     opener: HTMLElement | null;
