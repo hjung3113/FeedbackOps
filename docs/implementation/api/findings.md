@@ -218,3 +218,76 @@ link. `linked_task_id` is a convenience reference and is not the predicate's tru
 draft/not_actionable/converted/archived Findings are not handoff gaps. Both filters work in full-set
 and paged reads with identical authorized first-page totals. An existing direct Task connection is
 not Task Request approval or work completion. Scope uses the existing elevated Finding read seam.
+
+## Survey summaries and highlights — ADR-0064 cutover
+
+Accepted target contract, pending coordinated #739/#740: Survey-derived Finding
+list/detail/provider and mutation DTOs contain deterministic source metadata only
+in title/summary and omit response IDs. Public parent `source_id` is NULL; exact
+response binding and historical generated text remain in Survey-owned protected
+extensions (proposed/new). New cached mutation bodies are metadata-only; confirmed
+legacy Survey cache copies are sanitized under ADR-0015's dated exception.
+Task Request/source defaults therefore never automatically propagate excerpts.
+
+`GET /findings/:id/evidence-highlights` retains the existing Finding read gate.
+Survey quote is hydrated in a batch from private bindings only with fresh
+`survey.read` and exact active approval in one transaction snapshot. No personal
+grant is needed for attached safe highlights, and their existing audience is
+separate from candidate result suppression. Denied/revoked evidence retains safe
+local highlight/classification metadata with quote omitted and an unavailable
+state; never emit private response/approval bindings or denied source detail.
+VOC quotes retain source/reporter checks; notes retain authored text. Preserve
+ordinary VOC/Cluster source IDs rather than revoke them globally.
+
+## POST /findings/:id/survey-evidence — proposed/new (#816, ADR-0064)
+
+Accepted target contract; the existing generic raw Survey attachment stays rejected.
+
+- **Request:** strict `{ approved_excerpt_id, analytics_area_id?, sentiment?,
+  importance? }` using existing classification validation, required UUIDv4
+  `Idempotency-Key`. No response UUID, caller quote, source title or summary.
+  `approved_excerpt_id` is selected from the safe Survey candidate read, never
+  typed as a raw response identifier in the UI.
+- **Auth/validation:** in order: strict request/header validation, session workspace/Actor,
+  target Finding existence/parent state and `finding.manage` under existing
+  mutation rules, then resolve the workspace-bound approval/source and require
+  source `survey.read`, non-draft result state, current result audience/suppression
+  and exact active approval. Resolve the response
+  internally through the Survey seam. Source Survey and target Finding may have
+  different Managed Systems inside the same workspace; check each independently.
+  No personal grant or new Admin personal bypass. Validate classification against
+  the target, and recheck all rights inside transaction/response locking on submit.
+- **Failures:** use existing error families: malformed/missing headers or strict
+  body/selection failures `422 validation.failed` or
+  `validation.malformed_idempotency_key`; missing/foreign/source-denied data
+  `404 not_found.record`; target manage `403 permission.denied` under existing
+  target ordering; draft `409 conflict.survey_results_unavailable`. Wrong/revoked
+  or no-longer-visible approvals reject safely without returning stale text or
+  hidden counts. Unknown/foreign/source-denied selections return 404; after source access,
+  revoked or suppressed selections return 422 without excerpt/hidden counts.
+  #816 route tests pin this order and strict field validation.
+- **Transaction:** Finding command owns highlight lifecycle/counter and idempotency;
+  Survey seam writes the protected binding/snapshot; Entity Links seam writes
+  internal-only `evidence_of`. Two approvals of one response yield two highlights
+  and one active response/Finding link. Never create `generated_finding` here.
+  Use existing `evidence_highlight_added` and `entity_link.created` only when a
+  link is inserted, with identifier-only audit detail, in the same transaction.
+  Denial writes no mutation audit. No new Dashboard resolution rule is introduced:
+  `evidence_of` does not clear an Outcome follow-up gap (ADR-0055).
+- **Response (proposed/new):** `201 { evidence_highlight_id, finding_id }`, safe
+  local mutation metadata only. Fetch quotes through the fresh highlight read.
+  Same Actor/key/body/target retries replay safely without duplicate highlights,
+  links/counters/audits; changed reuse is `409 conflict.idempotency_key_reuse`.
+  Use existing mutation rate limiting. Concurrent revoke/attach follows the
+  shared response-lock ordering; preview eligibility never authorizes later submit.
+
+## Integration Evidence consumer contract (proposed/new, Slice 54)
+
+The Integration-owned `/integration/evidence` UI consumes a backend-composed
+projection from owning source modules, using the same authorized Survey batch
+projection and #816 candidate/attachment APIs where attachment is offered.
+Expose local evidence/Finding IDs, safe metadata and currently authorized excerpts;
+never private response bindings, raw links, audit JSON or response URLs. VOC
+source/reporter rules and note text remain unchanged. Backend endpoint/composition
+owner is assigned in the Slice 54 brief before implementation, not inferred from
+UI ownership. Bound pages and batch hydration; preserve existing Links/Coverage.

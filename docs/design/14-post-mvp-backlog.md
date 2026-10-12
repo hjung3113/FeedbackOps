@@ -45,3 +45,9 @@ or any of the six accepted D3 capabilities.
 Area permissions, hierarchy, mandatory classification/backfill and persisted report lifecycle remain explicit
 non-goals, not implicit future commitments. The separately scheduled ADR-0059 D3 recovery-model work
 is MVP close-out scope, not a post-MVP deferral or a requirement to wait for snooze/history UI.
+
+| Item | Reason / decision | Reopen when |
+| --- | --- | --- |
+| SQL-level Survey unlinkability against a stolen `fops_app` credential; separate authenticated read boundary | ADR-0064 O1-A retains trusted app authorization and closes named direct-table copies. A second credential/service model and review of every personal/raw/self-history/aggregate reader exceed MVP value; app-executable reader composition remains an accepted limit. | Owner requires compromised-credential unlinkability or an API path violates the accepted guarantee; new boundary/threat-model ADR before rebriefing implementation. |
+| Retroactive remediation of independently authored Task/Task Request prose, exports or already-read browser material | ADR-0064 O2-B withdraws system-generated excerpts and sanitizes confirmed generated caches, not authored history. Production contents were not established and no bulk rewrite is authorized. | Inventory proves a remaining authored copy needs remediation and the owner approves the exact affected records/surfaces and handling policy. |
+| New Survey result/picker free-text or cohort/dimension filters | Existing result suppression relies on actual response/answer cohorts; immutable cohort snapshots and subtraction-resistant policy are absent. ADR-0064 keeps #816 bounded and filter-free. | Stored cohort dimensions plus an explicit privacy decision and inference tests justify the filter. |

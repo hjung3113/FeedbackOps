@@ -198,3 +198,20 @@ Task Request review stays Managed System-wide. Survey report follow-up counts ea
 Outcome Survey once via the Survey-owned safe signal, while individual response decisions and personal
 review stay governed by ADR-0055. All source jumps recheck permissions; source actions update the same
 canonical gap resolution consumed by Home/Integration, without report-specific lifecycle state.
+
+## Survey evidence continuity (ADR-0064)
+
+WF-X-002 preserves response identity privately and canonical internal-only links;
+ordinary link Managed System equality has an explicit Survey command exception
+with independent source/target authorization inside one workspace. Survey-derived
+Finding/generated Task Request source defaults contain metadata only. Approved
+text flows through fresh exact-active-approval/source/target reads, so withdrawal
+works across the system-generated surfaces. Authored downstream text is not erased.
+
+Proposed/new #816 attaches result-visible approved excerpts to an existing Finding
+without a personal grant, requiring source Survey read/suppression and target
+`finding.manage`; it writes `evidence_of`, never `generated_finding`. Consequently
+attachment does not resolve an Outcome follow-up gap (ADR-0055). Existing personal
+create-Finding and no-direct-response→Task Request rules remain unchanged.
+Integration Evidence consumes safe DTOs, never raw link/audit/private binding joins.
+Implementation is pending the coordinated #739/#740 cutover and Slice 54.

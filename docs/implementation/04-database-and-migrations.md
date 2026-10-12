@@ -44,9 +44,9 @@ Applied migrations are the final database authority.
   `SELECT` on every column except `response_id`, and column-level `UPDATE ("revoked_at")`
   (0057; before 0057 the `SELECT` was table-wide). The **direct table join** on
   `survey_response_excerpt_approvals.response_id` is therefore denied to `fops_app`;
-  this is not SQL-level unlinkability: audit `detail` linkage, Finding / evidence-highlight
-  provenance, internal `survey_response` entity links, and the `fops_app`-executable
-  Survey definers remain composable paths, tracked as #569 follow-ups;
+  this is not SQL-level unlinkability: app-executable Survey definers remain
+  composable. The historical audit/Finding/highlight/link direct-read residuals
+  are superseded by ADR-0064 and must close in the coordinated #739/#740 cutover;
   every per-response binding read — highlight projections, the stored-highlight
   active check, and the revoke binding check — runs through the
   `survey.read_approved_response_excerpts` and `survey.read_response_excerpt_approval`
@@ -453,3 +453,38 @@ read grant. If batching requires a new protected reader, its name/migration is p
 implemented: register it in `apps/backend/migrations/meta/_journal.json`, narrowly grant the owner's
 needed columns, fix `search_path = pg_catalog`, revoke PUBLIC and preserve existing capability gates.
 Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; no preemptive materialized cache.
+
+## Survey provenance cutover — ADR-0064 (accepted; implementation pending)
+
+- Proposed/new Survey-owned protected Finding and highlight extensions retain
+  workspace-qualified response/approval bindings and historical generated text.
+  Fields, NULL conditions and consistency rules are in `docs/design/15-data-contracts.md`.
+  `fops_app` has no SELECT/INSERT/UPDATE/DELETE on these extensions; use scoped
+  functions with least-privileged NOLOGIN reader/separate mutator owners,
+  `search_path=pg_catalog`, qualified tables, no dynamic SQL, PUBLIC EXECUTE
+  revoked and explicit app EXECUTE only. Do not widen existing owner writes.
+- Public Survey Finding `source_id` is NULL; title/summary contain deterministic
+  allowlisted metadata only. Public Survey highlight `source_id`,
+  `approved_excerpt_id` and `quote_or_summary` are NULL. Ordinary provenance/text
+  remains readable under existing rules; conditional constraints enforce the split.
+- Proposed/new owner-backed, explicitly column-listed `security_barrier` updatable
+  link view excludes either `survey_response` endpoint in every status, with
+  `WITH CHECK OPTION`. App SELECT/INSERT/UPDATE use this view, no DELETE; revoke
+  raw `core.entity_links` SELECT/INSERT/UPDATE and surviving column/inherited grants.
+  Survey link mutations use an Entity Links-owned narrow definer. Verify real
+  conflict/RETURNING/UPDATE paths rather than assuming table SQL works on the view.
+- `core.audit_log`: revoke raw app SELECT, retain INSERT/no UPDATE/DELETE. Preserve
+  Actor/subject/detail identifiers and history; controlled migrate/operator reads
+  supply verification. No broad app audit reader. Inventory consumers before cutover.
+- Backfill/reconcile active and archived Findings, zero-highlight creations, revoked
+  approvals and all link statuses; reject orphan/workspace/approval-response mismatches.
+  Preserve original UUIDs, timestamps, counters and detach metadata. Sanitize only
+  confirmed Survey-derived legacy mutation cache copies under ADR-0015's dated
+  exception, preserving keys/hashes/status and exactly-once effects.
+- Update application/repositories/DTOs with schema and grants in one coordinated
+  release; old binaries are incompatible. Generate/review SQL, journal and snapshots
+  through existing migration discipline. Neither #739 nor #740 alone proves delivery.
+  Index private workspace+parent/response/approval paths and batch hydration; no audit
+  JSON scan in request paths. Verify actual app ACL denial and operator history.
+- This closes direct-table paths, not SQL-level unlinkability against stolen app
+  credentials: permitted definers remain trusted application tools.

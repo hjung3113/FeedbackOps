@@ -13,11 +13,11 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## Architecture, platform and operations
 
 - [0007](0007-core-technology-stack.md) Core technology stack — Node 22, Fastify, Postgres 16, Drizzle, Zod, TanStack, Vitest, Biome, pnpm + Turborepo. *Accepted, amended by 0062*
-- [0008](0008-audit-log-storage-and-immutability.md) Audit log storage and immutability — one `core.audit_log` table committed with the mutation, append-only by DB role grants. *Accepted*
+- [0008](0008-audit-log-storage-and-immutability.md) Audit log storage and immutability — one `core.audit_log` table committed with the mutation, append-only by DB role grants. *Accepted, app read grant amended by 0064*
 - [0009](0009-background-jobs-with-pg-boss.md) Background jobs with pg-boss — jobs run in the backend process, idempotent, locked retry defaults. *Accepted*
 - [0012](0012-error-code-contract.md) API error code contract — one envelope, stable dotted codes, field-path validation detail, conditional `requestable_permission`. *Accepted*
 - [0013](0013-observability-logs-first-deployment-k8s.md) Observability and deployment — Docker on internal k8s, structured stdout logs only, `/health/live` + `/health/ready`, no metrics/tracing yet. *Accepted*
-- [0015](0015-operational-safety-rate-limit-headers-migrations-idempotency.md) Operational safety — Postgres-backed rate limits, helmet CSP and no CORS, Drizzle Kit SQL migrations, `Idempotency-Key`. *Accepted*
+- [0015](0015-operational-safety-rate-limit-headers-migrations-idempotency.md) Operational safety — Postgres-backed rate limits, helmet CSP and no CORS, Drizzle Kit SQL migrations, `Idempotency-Key`. *Accepted, Survey cache replay amended by 0064*
 
 ## Auth, roles and permissions
 
@@ -73,7 +73,7 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 ## Entity links and Findings
 
 - [0023](0023-entity-link-visibility-decision-and-summary-contract.md) Entity-link visibility and summary contract — backend verdicts allowed/hidden/denied/summary_visible; `request_access` deferred. *Accepted, amended by 0024, 0032*
-- [0024](0024-finding-as-entity-link-target-and-provider-registry.md) Finding as link target and provider registry — `created_finding` link, `finding.read`/`finding.manage`, Finding status endpoint. *Accepted*
+- [0024](0024-finding-as-entity-link-target-and-provider-registry.md) Finding as link target and provider registry — `created_finding` link, `finding.read`/`finding.manage`, Finding status endpoint. *Accepted, amended by 0064*
 - [0032](0032-task-reporter-summary-read-time-projection.md) Task reporter summary — Reporter sees a read-time projection of Task title and coarse status only. *Accepted*
 - [0047](0047-entity-link-voc-read-required-not-triage.md) Entity-link VOC read needs `voc.read` — `voc.triage` alone is not enough to read or create VOC links. *Accepted*
 
@@ -91,11 +91,13 @@ ADRs record decisions that are hard to reverse, surprising without context, and 
 
 ## Surveys
 
-- [0033](0033-survey-evidence-anonymity-safe-summary-contract.md) Survey evidence, anonymity and safe summaries — identity-protected responses, no Admin bypass for personal reads, threshold 5. *Accepted, amended by 0053*
+- [0033](0033-survey-evidence-anonymity-safe-summary-contract.md) Survey evidence, anonymity and safe summaries — identity-protected responses, no Admin bypass for personal reads, threshold 5. *Accepted, amended by 0053, 0064*
 - [0035](0035-external-survey-responses.md) External survey responses — public-link responses store no Actor, dedupe by cookie identity. *Rejected 2026-10-13*
 - [0036](0036-survey-link-distribution-and-respondent-model.md) Survey link distribution — opaque 30-day revocable links; no recipients or delivery channels. *Rejected 2026-10-13*
 - [0053](0053-survey-result-response-state.md) Survey result response state — `none` / `below_threshold` / `visible` without exposing small counts. *Accepted*
 - [0055](0055-outcome-survey-follow-up-decisions.md) Outcome Survey follow-up — low-band poor-response classifier; Finding or no-follow-up decision clears the gap. *Accepted*
+
+- [0064](0064-survey-provenance-read-boundary.md) Survey provenance read boundary and safe approved-excerpt reuse — trusted application authorization, protected bindings, metadata-only Finding summaries, filtered link/audit access and suppression-aware reuse. *Accepted 2026-10-13; implementation pending #739/#740/#816*
 
 ## Notifications
 

@@ -467,3 +467,23 @@ Proposed strict audits (register in shared permission audit schemas and aggregat
   values. permission_approved keeps the request subject and gains requested/granted
   scope, revisions, and predecessor ID when reissuing. Requestless grants do not
   reuse request-decided notifications. Withdrawal emits no decided notification.
+
+## Safe Survey evidence reuse (ADR-0064; proposed/new #816 routes)
+
+A Survey result reader may browse approved safe excerpt candidates with
+`survey.read` and attach with `finding.manage` on the target Finding, without
+`survey.read_personal_responses`. Non-holders obey existing response cohort,
+per-question answer and low-bucket suppression on every page and on submit;
+personal holders retain their existing result exceptions, but the picker still
+omits response IDs. Source Survey and target Finding Managed Systems may differ
+inside one workspace; each gate is independent. Existing module-specific role,
+explicit-deny and non-disclosing source 404 rules remain in force; no new User
+Finding-read grant or Admin personal bypass is introduced.
+
+The response-addressed create-Finding command retains explicit personal access.
+Existing attached highlights retain their source-read audience, separately from
+result-picker suppression, and require exact active approval plus fresh target
+read/source access in one snapshot. Safe reads do not fabricate personal-read
+audits; actual personal-data reads keep existing per-row audits. Raw audit SELECT
+is revoked at #740 cutover without deleting Actor/detail history (ADR-0008).
+Endpoint authority: `api/surveys.md` and `api/findings.md`.

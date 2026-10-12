@@ -43,8 +43,12 @@ An evidence-based judgment object that summarizes a problem, pattern, or executi
 _Avoid_: Task, survey result, VOC
 
 **Evidence Highlight**:
-A compact evidence fragment stored on one **Finding**, taken from a **VOC**, a Survey Response, or a manual note, that explains why the **Finding** exists. It keeps its source reference and its visibility never exceeds its source's; a Survey Response highlight is an approved, redacted excerpt, never respondent identity or raw response text (ADR-0033).
+A compact evidence fragment stored on one **Finding**, taken from a **VOC**, a Survey Response, or a manual note, that explains why the **Finding** exists. It keeps its source reference and its visibility never exceeds its source's; a Survey Response highlight is an approved, redacted excerpt, never respondent identity or raw response text (ADR-0033, ADR-0064). Its text is available only while the exact approval is active and source/target access permits it; Survey-derived Finding summaries contain source metadata only.
 _Avoid_: Quote, tag, attachment
+
+**Approved Survey Excerpt**:
+A redacted fragment explicitly approved as Survey evidence. Result readers may reuse it only when result privacy rules allow it and they can manage the target **Finding**; personal-response access is not required for this safe reuse (ADR-0064). Revocation withdraws future evidence reads without erasing independently authored prose.
+_Avoid_: Raw response, respondent identity, permanent public quote
 
 **Task Request**:
 A reviewed execution candidate for one **Managed System**.

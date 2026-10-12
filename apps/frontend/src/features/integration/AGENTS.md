@@ -68,3 +68,13 @@ Code ownership and URL mount are not the same thing here:
 - Render unavailable, zero, zero-denominator, loading/error/denial separately; no stale prior-scope counts.
 - Operational positive counts link to exact typed source filters; repairs remain on owning source routes.
 - Add the secondary Area-tab link to the existing Integration Coverage card; no new Admin/rail surface.
+
+## Evidence read contract (ADR-0064; proposed/new Slice 54 surface)
+
+`/integration/evidence` consumes backend-composed authorized DTOs and the shared
+Survey safe projection/#816 candidate/attachment APIs where actions are offered.
+Show local evidence/Finding IDs and safe metadata/authorized excerpts, never raw
+canonical links, response bindings, audit JSON or reconstructed response URLs.
+VOC source/reporter rules and authored notes remain intact. Backend composition
+owner/endpoint is named in the Slice 54 brief; Integration UI ownership gives no
+Survey/Finding mutation ownership. Preserve ordinary Links/Coverage behavior.

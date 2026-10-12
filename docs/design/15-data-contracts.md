@@ -196,7 +196,7 @@ findings
 - title: text, required
 - summary: text, required
 - source_type: enum(voc, voc_cluster, survey, survey_response, manual), required
-- source_id: uuid, nullable when source_type=manual
+- source_id: uuid, NULL for manual and survey_response after ADR-0064 cutover; required for ordinary source provenance
 - evidence_count: integer, required
 - severity: enum(low, medium, high, critical), required
 - confidence: enum(low, medium, high), nullable
@@ -233,10 +233,11 @@ evidence_highlights
 - finding_id: uuid, required   # parent Finding (added by ADR-0024 §F; POST /findings/:id/evidence-highlights)
 - primary_managed_system_id: uuid, required
 - source_type: enum(voc, survey_response, note), required
-- source_id: uuid, nullable when source_type=note
+- source_id: uuid, NULL for note and survey_response after ADR-0064 cutover; required for voc
 - source_title: text, nullable
 - source_meta: text, nullable
-- quote_or_summary: text, required
+- quote_or_summary: text, NULL for survey_response after ADR-0064 cutover; required for voc/note
+- approved_excerpt_id: uuid, NULL in public parents after ADR-0064 cutover; exact Survey binding is private
 - analytics_area_id: uuid, nullable
 - sentiment: enum(negative, neutral, positive), nullable
 - importance: enum(low, medium, high), nullable
@@ -247,7 +248,8 @@ evidence_highlights
 Rules:
 
 ```text
-- Evidence Highlight must preserve source reference when source_type is voc or survey_response.
+- Evidence Highlight preserves VOC source reference publicly and Survey response reference
+  in a Survey-owned protected extension (ADR-0064); never substitute Survey ID for response ID.
 - Evidence visibility cannot exceed source visibility.
 - source_title and source_meta are read-time DTO derivations for source_type=voc only.
   source_title is the source VOC title; source_meta is the source VOC display_id.
@@ -682,3 +684,34 @@ mandatory field, linked-source inheritance rule or Task Request Area column is i
 Canonical active `requested_task` links define Finding handoff, not `linked_task_id`.
 Survey report totals count Surveys and use Survey-grain `follow_up_needed`; the response-grain
 ADR-0055 decision state remains Survey-owned and is never copied into report storage.
+
+## Survey protected provenance (ADR-0064; proposed/new storage)
+
+These extensions are accepted for #739 and not present in the shipped schema yet;
+exact table/function names are chosen by the implementation issue.
+
+| Survey-owned extension | Private fields | Consistency |
+| --- | --- | --- |
+| Finding provenance | workspace_id, finding_id, response_id, historical_generated_summary | Exactly one binding per Survey-derived Finding, including zero highlights |
+| Highlight provenance | workspace_id, highlight_id, response_id, approved_excerpt_id, approved_excerpt_snapshot | Exactly one binding per Survey highlight; approval belongs to exact response |
+
+Workspace-qualified composite keys/constraints and transactional validation
+must enforce parent/Survey/response/approval consistency. `fops_app` has no
+SELECT or general DML on either extension; narrow owner-backed functions are
+specified in `docs/implementation/04-database-and-migrations.md`. Original UUIDs
+and historical generated text remain recoverable to the controlled operator.
+
+Public Survey Finding title/summary is deterministic allowlisted source metadata
+only; never copied excerpt text, Survey title or respondent data. Public Survey
+highlight binding/text columns are NULL; DTO quote is supplied only after fresh
+source/target and exact-active-approval checks. Denied/revoked text is omitted,
+with safe local metadata/unavailable state. VOC/Cluster IDs and note/VOC text
+retain ordinary behavior. Task source summaries/defaults must not automatically
+copy Survey excerpt text; independently authored prose is outside this backfill.
+
+Canonical Entity Link fields and active uniqueness remain unchanged; after #740,
+ordinary app access uses the proposed/new filtered view excluding both Survey
+endpoints in every status. Audit identifiers remain canonical but raw app audit
+SELECT is revoked. #816 approval selection IDs are safe selection references,
+not response IDs; candidate suppression counts response subjects/answers, never
+approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.

@@ -45,6 +45,13 @@ Scope:
 
 Not in scope: Phase 2, the Explicit MVP Exclusions below, and public survey links (ADR-0035/0036 rejected). Every item deferred or dropped before release is recorded in `14-post-mvp-backlog.md`.
 
+Survey privacy release claim (ADR-0064): trusted application authorization with
+named direct Finding/highlight/link/audit and generated cache copies closed by
+coordinated #739/#740. SQL-level unlinkability against stolen `fops_app`
+credentials is not guaranteed; permitted app-executable readers remain composable.
+ADR acceptance alone is not implementation completion. Safe #816 reuse and Evidence
+follow in Slice 54; public Survey links stay excluded.
+
 ### Release Value Gate
 
 The release ships only when an adversarial product review finds no blocker. Product value comes first; code quality alone does not pass the gate.

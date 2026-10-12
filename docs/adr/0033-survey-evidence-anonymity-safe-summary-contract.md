@@ -6,6 +6,9 @@ Date: 2026-07-19
 
 Accepted.
 
+Amended by [ADR-0064](0064-survey-provenance-read-boundary.md) (2026-10-13) on the decisions
+recorded in the dated amendment below; affected historical text is superseded.
+
 Amended by ADR-0053.
 
 ## Context
@@ -128,3 +131,35 @@ Consequences:
 
 Reopening trigger: a requirement for unlinkability against a compromised application database credential, or an
 application route that exposes any of the residual paths.
+
+## Amended 2026-10-13 — MVP provenance closure and safe reuse (ADR-0064)
+
+ADR-0064 supersedes the October 3 acceptance of directly readable Finding/highlight,
+canonical-link and audit copies, and the optional-hardening disposition of #739/#740.
+Those issues now close all named direct-table paths, including detached/history
+and confirmed generated cache copies. The October 3 trusted-application limit
+remains: permitted app-executable readers can be composed by a stolen `fops_app`
+credential, so SQL-level unlinkability is not guaranteed.
+
+Survey response UUIDs, exact approval bindings and historical generated text move
+to Survey-owned protected extensions (proposed/new). Public Survey-derived Finding
+summary is deterministic source metadata only; public Survey parent binding/text
+fields are NULL. Approved text is read only through exact-active-approval and fresh
+source/target-authorized highlights. Generic Finding/provider summaries never copy
+that quote. This narrows section H for system-generated Finding summaries; source
+identity is retained privately, never replaced by a Survey ID. Revocation suppresses
+future authorized reads; it does not erase independently authored downstream prose.
+
+The proposed/new #816 candidate/attachment routes allow Survey result readers to
+reuse approved safe excerpts under cohort/per-question suppression with target
+`finding.manage`, without personal-response permission. Personal holders retain
+existing result exceptions, but the picker never emits response IDs. Existing
+response-addressed create-Finding and personal/export gates remain unchanged, with
+no Admin personal bypass. Existing attached-highlight audience stays distinct from
+result-picker suppression. Survey command-only cross-Managed-System links require
+independent source and target authorization within one workspace.
+
+Audit identifiers/Actor attribution and append-only history remain unchanged;
+#740 removes raw app audit SELECT and preserves controlled operator access. No
+public Survey link or Survey Response→VOC conversion is introduced. This amendment
+records the accepted target contract, not completed schema/API delivery.

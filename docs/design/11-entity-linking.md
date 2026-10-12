@@ -141,3 +141,14 @@ Recommended:
 - Visual graph explorer
 - Cross-workspace links
 ```
+
+## Survey canonical history isolation (ADR-0064)
+
+Accepted target contract, pending #740: keep every canonical link endpoint/status
+and detach metadata, but move ordinary app reads/writes to a proposed/new filtered
+owner-backed view excluding either Survey-response endpoint in every status.
+Generic counts/cursors/detach omit those rows entirely. Survey mutations remain
+Entity Links-owned narrow commands; safe derived-Finding reads belong to Survey,
+with source/target authorization including the cross-Managed-System exception.
+Raw app audit SELECT is revoked while controlled operator history remains intact.
+No new generic Survey detach or raw provenance reconstruction surface is added.

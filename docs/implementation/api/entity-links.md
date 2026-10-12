@@ -55,3 +55,21 @@ cursor?: string, status_counts?: { active, stale, detached, revoked } } }`.
 status filter includes `status_counts` for all list-visible rows matching the
 relation type and Managed System filters. Status, relation type, and Managed
 System filters apply to every page.
+
+## ADR-0064 canonical-link access (accepted; #740 pending)
+
+Generic POST/GET/PATCH, all status filters, counts and cursors categorically
+exclude either `survey_response` endpoint. After cutover ordinary repositories
+read/write the proposed/new explicitly column-listed owner-backed
+`security_barrier` updatable view with `WITH CHECK OPTION`; app raw canonical
+SELECT/INSERT/UPDATE (including surviving column ACLs) is revoked, no DELETE.
+Canonical UUIDs, tuple checks, active uniqueness and detach history remain intact.
+Verify actual ordinary conflict/RETURNING/UPDATE callers against the view.
+
+Survey writes use Entity Links-owned narrow functions returning link ID/inserted
+state, not raw endpoint rows. Existing create-Finding writes `generated_finding`
+and `evidence_of`; proposed/new #816 attachment writes `evidence_of` only. Results
+uses the Survey-owned safe derived-Finding reader under independent source/target
+Managed System gates; generic Survey detach remains unavailable. Raw app audit
+SELECT is also revoked without deleting Actor/subject/detail history. Survey-derived
+Finding provider summaries are metadata-only; quotes require the authorized Survey seam.

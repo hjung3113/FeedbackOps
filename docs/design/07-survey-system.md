@@ -284,3 +284,30 @@ response viewing permission.
 - Advanced statistical analysis
 - Branding-heavy form editor
 ```
+
+## Provenance boundary and safe reuse (ADR-0064)
+
+Accepted close-out contract, pending #739/#740/#816: trusted application
+authorization plus closure of direct Finding/highlight/link/audit copies.
+SQL-level unlinkability against stolen `fops_app` credentials is not guaranteed;
+permitted Survey readers remain composable trusted internal tools. Original
+response identity and approval snapshots stay in Survey-owned protected extensions.
+Audit Actor/subject/detail history is retained with controlled operator access;
+raw app audit reads are revoked. Public Survey-derived Finding summary is source
+metadata only; approved text requires fresh source/target checks and exact active
+approval. Withdrawal suppresses future evidence reads, not independently authored prose.
+
+For #816, a Survey result reader selects only active approved safe excerpts their
+cohort/per-question suppression permits and attaches with target `finding.manage`.
+Personal-response permission is unnecessary for safe reuse; existing holders keep
+below-threshold result exceptions, but the picker never exposes response IDs.
+Existing response-addressed create-Finding retains its personal gate and no Admin
+bypass. Existing linked-highlight audience remains distinct from picker suppression.
+Count response subjects/answers, not approvals; add no free-text/dimension filters.
+The proposed/new candidate and attachment APIs live in `api/surveys.md` and
+`api/findings.md` under `docs/implementation/`.
+
+Integration's proposed/new Evidence surface consumes the same safe projection.
+No response UUID entry, raw quote entry, response URL reconstruction, public Survey
+link or response→VOC conversion. Generic Survey Link Finding remains deferred
+(ADR-0037); #816 approval-selected evidence attachment is a distinct action.

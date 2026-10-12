@@ -516,3 +516,15 @@ in that list as well as the existing board. Linked VOC/report-update facts requi
 VOC read seam; omit unavailable cross-source report metrics instead of returning hidden complements.
 Task detail opens the approved linked VOC/review path, and publishing stays VOC-owned.
 The report introduces no Task Blocked state and never resolves VOC on Task release.
+
+## Survey-derived source summaries/defaults (ADR-0064; cutover pending)
+
+After #739/#740, Survey-derived Finding title/summary in Task source DTOs and
+Task Request draft defaults is deterministic source metadata only, never a copied
+excerpt. Excerpt display delegates to a fresh authorized Finding/Survey highlight
+projection with exact active approval and source/target checks. This does not
+authorize retroactive rewriting of independently authored `evidence_summary`,
+requested outcomes or Task prose. Ordinary source links and their permissions
+remain unchanged; canonical relation reads use #740's filtered view. Inventory
+cached Task mutation DTOs with nested Finding summaries too; confirmed generated
+Survey copies follow ADR-0015's targeted legacy sanitization exception.

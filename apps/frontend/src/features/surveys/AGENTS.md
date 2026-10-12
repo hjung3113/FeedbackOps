@@ -59,3 +59,13 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
   Proposed/new per-response hiding/history is Survey-owned/personal-gated; non-holders get
   safe Survey-level navigation/booleans, no opaque response-derived identity enumeration.
   Derived Finding ownership comes from the destination command after source authorization.
+
+## Safe evidence projection (ADR-0064; Slice 53/54 implementation pending)
+
+Survey-derived Finding summaries contain metadata only; approved text comes from
+fresh authorized active highlight DTOs. Proposed/new #816 candidates expose
+approval selections under result cohort/per-question suppression without personal
+access or response IDs. No response URL reconstruction or new filters. Existing
+response-addressed Create Finding retains its personal gate; existing linked
+highlights keep their distinct source-read audience. Preserve result state and
+selected-Finding orchestration; backend owns permission truth and attachment writes.

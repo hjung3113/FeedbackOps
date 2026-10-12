@@ -255,3 +255,19 @@ archives. New read exports are proposed/new owner seams, not foreign repository/
 Integration owns the Coverage Area tab; Admin owns catalog maintenance only. Source repair commands,
 entity-link visibility and canonical recovery resolution keep their existing owners. Report reads never
 mutate sources or create report-specific assignment/resolution state.
+
+## Survey provenance and Evidence composition (ADR-0064)
+
+Accepted target contract, implementation pending #739/#740: Finding retains
+Finding/highlight lifecycle and counters; Survey owns proposed/new protected
+response/approval/text extensions and authorized batch projections. Foreign
+modules reach those bindings only through the Survey application seam. Entity
+Links owns canonical link mutation, including the narrow Survey definer; Core
+keeps append-only audit APIs, with raw app audit reads revoked at cutover.
+
+Integration's proposed/new Evidence route consumes backend-composed authorized
+DTOs, never private provenance/link/audit joins. The Slice 54 brief must name its
+backend composition owner/endpoint before implementation. UI ownership grants
+no Survey/Finding mutation ownership. #816 reuses the approved Survey projection
+and Finding-owned attachment command rather than granting personal-response
+access to safe result readers.
