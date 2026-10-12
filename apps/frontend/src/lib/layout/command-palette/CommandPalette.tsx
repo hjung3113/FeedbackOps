@@ -8,13 +8,11 @@ import { fetchNavResolve } from '@/lib/api/nav';
 import { ApiError } from '@/lib/api/types';
 import { COMMAND_PALETTE_COPY, normalizeDisplayId } from '@/lib/copy/command-palette';
 import {
-  DIALOG_CONTENT_MOTION,
   Dialog,
   DialogContentBare,
   DialogOverlay,
   DialogPortal,
   KeyboardShortcut,
-  cn,
   isToastTarget,
 } from '@fops/ui';
 import { useCommandPalette } from './CommandPaletteContext';
@@ -146,14 +144,10 @@ export function CommandPalette({ navTree, canAccessWorkspaceAdmin }: CommandPale
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogPortal>
-        <DialogOverlay className="fixed inset-0 z-60 bg-accent-primary/16 backdrop-blur-xs" />
+        <DialogOverlay variant="palette" />
         <DialogContentBare
           aria-label={COMMAND_PALETTE_COPY.accessibleName}
-          className={cn(
-            // oxlint-disable-next-line shadcn/no-arbitrary-values -- the palette panel keeps the 10px radius of the prototype .cmdk-panel (styles.css:865)
-            'fixed left-1/2 top-[14vh] z-60 flex max-h-[72vh] w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col overflow-hidden rounded-[10px] border border-border-subtle bg-surface-popover shadow-xl',
-            DIALOG_CONTENT_MOTION,
-          )}
+          variant="palette"
           onInteractOutside={(event) => {
             // #1050: an undo toast must stay clickable while the palette is open.
             if (isToastTarget(event.target)) event.preventDefault();
