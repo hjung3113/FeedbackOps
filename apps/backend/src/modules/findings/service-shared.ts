@@ -1,4 +1,5 @@
 import type { FindingDto } from '@fops/shared';
+import type { Tx } from '../../db/tx.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { checkFindingManage, checkFindingRead } from './authorization.js';
 import type { FindingReadRow, findCreatedFindingSourceLink } from './repo-read.js';
@@ -90,9 +91,16 @@ export async function canReadFinding(
   deps: Pick<FindingsServiceDeps, 'checkService'>,
   actor: FindingsActor,
   managedSystemId: string,
+  options?: { tx: Tx },
 ): Promise<boolean> {
-  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
-    requireElevatedRole: true,
-  });
+  const decision = await checkFindingRead(
+    deps.checkService,
+    actor,
+    managedSystemId,
+    {
+      requireElevatedRole: true,
+    },
+    options,
+  );
   return decision.allow;
 }

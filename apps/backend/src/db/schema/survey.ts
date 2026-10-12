@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
+import { evidenceHighlights, findings } from './finding.js';
 
 export const surveySchema = pgSchema('survey');
 
@@ -143,6 +144,7 @@ export const surveyResponses = surveySchema.table(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceIdUq: unique('survey_responses_workspace_id_uq').on(t.workspaceId, t.id),
     surveyIdIdUq: unique('survey_responses_survey_id_id_uq').on(t.surveyId, t.id),
     surveyRespondentActorUq: uniqueIndex('survey_responses_survey_respondent_actor_uq').on(
       t.surveyId,
@@ -207,6 +209,11 @@ export const surveyResponseExcerptApprovals = surveySchema.table(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (t) => ({
+    workspaceResponseIdUq: unique('excerpt_approvals_workspace_response_id_uq').on(
+      t.workspaceId,
+      t.responseId,
+      t.id,
+    ),
     workspaceSurveyActiveIdx: index('survey_response_excerpt_approvals_workspace_survey_active_idx')
       .on(t.workspaceId, t.surveyId, t.approvedAt.desc())
       .where(sql`${t.revokedAt} is null`),
@@ -262,6 +269,84 @@ export const outcomeFollowUpDecisions = surveySchema.table(
       name: 'outcome_follow_up_decisions_response_survey_fk',
       columns: [t.surveyId, t.responseId],
       foreignColumns: [surveyResponses.surveyId, surveyResponses.id],
+    }),
+  }),
+);
+
+// Survey owns these protected extensions; the runtime role has no table privileges.
+export const findingResponseBindings = surveySchema.table(
+  'finding_response_bindings',
+  {
+    workspaceId: uuid('workspace_id').notNull(),
+    findingId: uuid('finding_id').primaryKey(),
+    responseId: uuid('response_id').notNull(),
+    historicalGeneratedTitle: text('historical_generated_title').notNull(),
+    historicalGeneratedSummary: text('historical_generated_summary').notNull(),
+  },
+  (t) => ({
+    workspaceParentUq: unique('finding_bindings_workspace_parent_uq').on(
+      t.workspaceId,
+      t.findingId,
+    ),
+    workspaceResponseIdx: index('finding_bindings_workspace_response_idx').on(
+      t.workspaceId,
+      t.responseId,
+      t.findingId,
+    ),
+    parentFk: foreignKey({
+      name: 'finding_bindings_parent_fk',
+      columns: [t.workspaceId, t.findingId],
+      foreignColumns: [findings.workspaceId, findings.id],
+    }).onDelete('cascade'),
+    responseFk: foreignKey({
+      name: 'finding_bindings_response_fk',
+      columns: [t.workspaceId, t.responseId],
+      foreignColumns: [surveyResponses.workspaceId, surveyResponses.id],
+    }),
+  }),
+);
+
+export const highlightResponseBindings = surveySchema.table(
+  'highlight_response_bindings',
+  {
+    workspaceId: uuid('workspace_id').notNull(),
+    highlightId: uuid('highlight_id').primaryKey(),
+    responseId: uuid('response_id').notNull(),
+    approvedExcerptId: uuid('approved_excerpt_id').notNull(),
+    approvedExcerptSnapshot: text('approved_excerpt_snapshot').notNull(),
+  },
+  (t) => ({
+    workspaceParentUq: unique('highlight_bindings_workspace_parent_uq').on(
+      t.workspaceId,
+      t.highlightId,
+    ),
+    workspaceResponseIdx: index('highlight_bindings_workspace_response_idx').on(
+      t.workspaceId,
+      t.responseId,
+      t.highlightId,
+    ),
+    workspaceApprovalIdx: index('highlight_bindings_workspace_approval_idx').on(
+      t.workspaceId,
+      t.approvedExcerptId,
+    ),
+    parentFk: foreignKey({
+      name: 'highlight_bindings_parent_fk',
+      columns: [t.workspaceId, t.highlightId],
+      foreignColumns: [evidenceHighlights.workspaceId, evidenceHighlights.id],
+    }).onDelete('cascade'),
+    approvalFk: foreignKey({
+      name: 'highlight_bindings_approval_response_fk',
+      columns: [t.workspaceId, t.responseId, t.approvedExcerptId],
+      foreignColumns: [
+        surveyResponseExcerptApprovals.workspaceId,
+        surveyResponseExcerptApprovals.responseId,
+        surveyResponseExcerptApprovals.id,
+      ],
+    }),
+    responseFk: foreignKey({
+      name: 'highlight_bindings_response_fk',
+      columns: [t.workspaceId, t.responseId],
+      foreignColumns: [surveyResponses.workspaceId, surveyResponses.id],
     }),
   }),
 );

@@ -7,6 +7,7 @@ import {
   pgSchema,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -48,6 +49,7 @@ export const findings = findingSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceIdUq: unique('findings_workspace_id_uq').on(t.workspaceId, t.id),
     workspaceDisplayUq: uniqueIndex('findings_workspace_display_id_uq').on(
       t.workspaceId,
       t.displayId,
@@ -62,7 +64,7 @@ export const findings = findingSchema.table(
     ),
     sourceIdRequiredCheck: check(
       'findings_source_id_required_check',
-      sql`${t.sourceType} = 'manual' or ${t.sourceId} is not null`,
+      sql`(${t.sourceType} = 'survey_response' and ${t.sourceId} is null) or (${t.sourceType} = 'manual') or (${t.sourceType} in ('voc','voc_cluster','survey') and ${t.sourceId} is not null)`,
     ),
     evidenceCountCheck: check('findings_evidence_count_check', sql`${t.evidenceCount} >= 0`),
     severityCheck: check(
@@ -138,7 +140,7 @@ export const evidenceHighlights = findingSchema.table(
     approvedExcerptId: uuid('approved_excerpt_id').references(
       () => surveyResponseExcerptApprovals.id,
     ),
-    quoteOrSummary: text('quote_or_summary').notNull(),
+    quoteOrSummary: text('quote_or_summary'),
     analyticsAreaId: uuid('analytics_area_id').references(() => analyticsAreas.id),
     sentiment: text('sentiment'),
     importance: text('importance'),
@@ -148,6 +150,7 @@ export const evidenceHighlights = findingSchema.table(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceIdUq: unique('evidence_highlights_workspace_id_uq').on(t.workspaceId, t.id),
     workspaceFindingIdx: index('evidence_highlights_workspace_finding_idx').on(
       t.workspaceId,
       t.findingId,
@@ -158,7 +161,7 @@ export const evidenceHighlights = findingSchema.table(
     ),
     sourceIdRequiredCheck: check(
       'evidence_highlights_source_id_required_check',
-      sql`${t.sourceType} = 'note' or ${t.sourceId} is not null`,
+      sql`(${t.sourceType} = 'survey_response' and ${t.sourceId} is null and ${t.approvedExcerptId} is null and ${t.quoteOrSummary} is null) or (${t.sourceType} = 'note' and ${t.sourceId} is null and ${t.approvedExcerptId} is null and ${t.quoteOrSummary} is not null) or (${t.sourceType} = 'voc' and ${t.sourceId} is not null and ${t.approvedExcerptId} is null and ${t.quoteOrSummary} is not null)`,
     ),
     sentimentCheck: check(
       'evidence_highlights_sentiment_check',

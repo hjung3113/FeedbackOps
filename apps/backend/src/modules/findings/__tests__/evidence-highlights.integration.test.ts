@@ -354,6 +354,30 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
     ]);
   });
 
+  it('retains app-readable authored note text after the Survey-only cutover (#739)', async () => {
+    const source = await seedSource();
+    const finding = await seedFinding({ managedSystemId: source.msId, sourceVocId: source.vocId });
+    const created = await postHighlight(adminCookie, finding.id, {
+      source_type: 'note',
+      quote_or_summary: 'Authored note remains readable.',
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+    const rows = await dbHandle.pool.query(
+      'select source_id,approved_excerpt_id,quote_or_summary from finding.evidence_highlights where id=$1',
+      [id],
+    );
+    expect(rows.rows).toEqual([
+      {
+        source_id: null,
+        approved_excerpt_id: null,
+        quote_or_summary: 'Authored note remains readable.',
+      },
+    ]);
+    const list = await getHighlights(adminCookie, finding.id);
+    expect(list.statusCode).toBe(200);
+    expect(list.body).toContain('Authored note remains readable.');
+  });
   it('links additional VOC evidence to a Finding using the evidence_of tuple', async () => {
     const source = await seedSource();
     // Cross-MS link creation is rejected (#388): the extra evidence VOC must

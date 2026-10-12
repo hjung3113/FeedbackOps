@@ -256,9 +256,9 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
     expect(persisted.rows).toEqual([
       {
         source_type: 'survey_response',
-        source_id: source.responseId,
+        source_id: null,
         highlight_type: 'survey_response',
-        highlight_id: source.responseId,
+        highlight_id: null,
       },
     ]);
     const audit = await migrateHandle.pool.query<{
@@ -530,7 +530,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       expectNoPrivacyPayload(`${actorLabel} task`, linkedTask.json());
       const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
       expectExactKeys('finding', actorLabel, parsedFinding);
-      expect(linkedFinding.body, actorLabel).toContain(APPROVED);
+      expect(linkedFinding.body, actorLabel).not.toContain(APPROVED);
       const evidenceItems = linkedEvidence.json<{ items: unknown[] }>().items;
       expect(evidenceItems).toHaveLength(1);
       for (const item of evidenceItems) {
@@ -747,6 +747,14 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         (visibility === 'hidden' ? hiddenKeys : allowedKeys).sort(),
       );
       expectNoPrivacyPayload(label, linked);
+      if (visibility === 'allowed') {
+        expect(linked?.source_summary, label).toMatchObject({
+          type: 'finding',
+          id: findingId,
+          summary: expect.stringMatching(/^Survey response from outcome · /),
+        });
+        expect(JSON.stringify(linked?.source_summary), label).not.toContain(APPROVED);
+      }
     }
   });
 });

@@ -9,6 +9,7 @@
 // survey_response_personal_read row per exposed (response, low-answer
 // question) pair, exactly like a holder result read.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -136,7 +137,7 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         [actorIds],
       );
       await migrateDb.pool.query('delete from core.rate_limits where key = any($1::text[])', [
-        actorIds,
+        actorIds.map((id) => `${WORKSPACE_ID}:${id}`),
       ]);
       await migrateDb.pool.query('delete from core.sessions where actor_id = any($1::uuid[])', [
         actorIds,
@@ -146,6 +147,10 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         [actorIds, responses],
       );
     }
+    // Parent deletion cascades protected response bindings before response teardown.
+    await migrateDb.pool.query('delete from finding.findings where id = any($1::uuid[])', [
+      findingIds,
+    ]);
     for (const { workspaceId, surveys } of surveyTrees) {
       await migrateDb.pool.query(
         'delete from survey.survey_response_answers where workspace_id = $1 and survey_id = any($2::uuid[])',
@@ -168,9 +173,6 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
       'delete from permission.permission_grants where actor_id = any($1::uuid[])',
       [[...actorIds, ...secondaryActorIds]],
     );
-    await migrateDb.pool.query('delete from finding.findings where id = any($1::uuid[])', [
-      findingIds,
-    ]);
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
@@ -348,12 +350,14 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         // decision to pin the Finding precedence.
         const liveLinks = resolution === 'finding' ? 2 : 1;
         for (let number = 0; number < liveLinks; number += 1) {
-          const finding = await migrateDb.pool.query<{ id: string; display_id: string }>(
+          const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(
+            migrateDb,
+            responseId,
             `insert into finding.findings (
                workspace_id, display_id, primary_managed_system_id, title, summary,
                source_type, source_id, severity, status, created_by, created_at
              ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Follow-up finding', 'summary',
-               'survey_response', $3, 'medium', 'active', $4, now() - ($5 || ' hours')::interval)
+               'survey_response', nullif($3::uuid,$3::uuid), 'medium', 'active', $4, now() - ($5 || ' hours')::interval)
              returning id, display_id`,
             [WORKSPACE_ID, msId, responseId, grantorActorId, String(2 - number)],
           );
@@ -372,12 +376,14 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
         if (resolution === 'finding_and_no_follow_up')
           await insertDecision('no_follow_up', 'Handled outside the tool.');
       } else if (resolution === 'archived_finding') {
-        const finding = await migrateDb.pool.query<{ id: string; display_id: string }>(
+        const finding = await insertSurveyFindingFixture<{ id: string; display_id: string }>(
+          migrateDb,
+          responseId,
           `insert into finding.findings (
              workspace_id, display_id, primary_managed_system_id, title, summary,
              source_type, source_id, severity, status, created_by
            ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Archived finding', 'summary',
-             'survey_response', $3, 'medium', 'archived', $4) returning id, display_id`,
+             'survey_response', nullif($3::uuid,$3::uuid), 'medium', 'archived', $4) returning id, display_id`,
           [WORKSPACE_ID, msId, responseId, grantorActorId],
         );
         const row = finding.rows[0];

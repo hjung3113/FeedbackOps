@@ -1,3 +1,4 @@
+import { waitForResponseEvidenceWaiters } from '../../../test-support/response-evidence-barrier.js';
 // Route-level contract for the only permitted Survey Response -> Finding command.
 // It deliberately uses the fops_app server path and the fops_migrate handle only
 // for fixtures, observable persistence assertions, and deterministic cleanup.
@@ -60,7 +61,12 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     if (!adminId) throw new Error('mock admin fixture is missing');
   });
 
-  beforeEach(async () => cleanup());
+  beforeEach(async () => {
+    await cleanup();
+    await migrateHandle.pool.query('delete from core.rate_limits where key=$1', [
+      `${WORKSPACE_ID}:${adminId}`,
+    ]);
+  });
   afterEach(async () => cleanup());
   afterAll(async () => {
     await cleanup();
@@ -120,7 +126,18 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       `${SLUG}%`,
     ]);
     await migrateHandle.pool.query(
+      `delete from permission.permission_denies where workspace_id=$1 and managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from permission.permission_grants where workspace_id=$1 and managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits where key in (
+         select workspace_id::text || ':' || id::text from core.actors
+         where workspace_id=$1 and external_id like $2
+       )`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
@@ -283,9 +300,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       audits: string;
     }>(
       `select
-         (select count(*) from finding.findings where source_type='survey_response' and source_id=$1::uuid)::text as findings,
+         (select count(*) from survey.finding_response_bindings where response_id=$1::uuid)::text as findings,
          (select count(*) from core.entity_links where source_type='survey_response' and source_id=$1::uuid)::text as links,
-         (select count(*) from finding.evidence_highlights where source_type='survey_response' and source_id=$1::uuid)::text as highlights,
+         (select count(*) from survey.highlight_response_bindings where response_id=$1::uuid)::text as highlights,
          (select count(*) from core.audit_log where detail->>'source_survey_response_id'=$1::text)::text as audits`,
       [responseId],
     );
@@ -377,6 +394,74 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     ]);
   });
 
+  it('keeps metadata in public parents and exact provenance only behind migrate (#739)', async () => {
+    const source = await seed();
+    const creator = await actor();
+    await grant(creator.id, 'survey.read', source.msId);
+    await grant(creator.id, 'survey.read_personal_responses', source.msId);
+    await grant(creator.id, 'survey.manage', source.msId);
+    await grant(creator.id, 'finding.manage', source.msId);
+    await grant(creator.id, 'finding.read', source.msId);
+    const approval = await approve(source, creator.cookie);
+    const created = await post(creator.cookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [approval],
+    });
+    expect(created.statusCode).toBe(201);
+    const finding = findingDtoSchema.parse(created.json());
+    expect(finding.summary).toMatch(/^Survey response from outcome · /);
+    expect(finding.summary).not.toContain(APPROVED);
+    const publicRows = await appHandle.pool.query(
+      `select f.source_id, h.source_id as highlight_source_id, h.approved_excerpt_id,
+                h.quote_or_summary from finding.findings f
+         join finding.evidence_highlights h on h.finding_id=f.id where f.id=$1`,
+      [finding.id],
+    );
+    expect(publicRows.rows).toEqual([
+      {
+        source_id: null,
+        highlight_source_id: null,
+        approved_excerpt_id: null,
+        quote_or_summary: null,
+      },
+    ]);
+    const privateRows = await migrateHandle.pool.query(
+      `select b.response_id, h.response_id as highlight_response_id,
+                h.approved_excerpt_id, h.approved_excerpt_snapshot
+         from survey.finding_response_bindings b
+         join finding.evidence_highlights e on e.finding_id=b.finding_id
+         join survey.highlight_response_bindings h on h.highlight_id=e.id
+         where b.workspace_id=$1 and b.finding_id=$2`,
+      [WORKSPACE_ID, finding.id],
+    );
+    expect(privateRows.rows).toEqual([
+      {
+        response_id: source.responseId,
+        highlight_response_id: source.responseId,
+        approved_excerpt_id: approval,
+        approved_excerpt_snapshot: APPROVED,
+      },
+    ]);
+    for (const table of ['finding_response_bindings', 'highlight_response_bindings']) {
+      await expect(appHandle.pool.query(`select * from survey.${table}`)).rejects.toMatchObject({
+        code: '42501',
+      });
+    }
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/findings/${finding.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
+    });
+    const list = await app.inject({
+      method: 'GET',
+      url: '/findings',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
+    });
+    for (const response of [detail, list]) {
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toContain(APPROVED);
+    }
+  });
   it('replays the same idempotency key without duplicate rows or audits', async () => {
     const source = await seed();
     const creator = await actor();
@@ -750,6 +835,95 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     }
   });
 
+  it('omits quote and source metadata after an explicit source deny to Admin (#739)', async () => {
+    const source = await seed();
+    await grant(adminId, 'survey.read_personal_responses', source.msId);
+    const approval = await approve(source, adminCookie);
+    const created = await post(adminCookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [approval],
+    });
+    expect(created.statusCode).toBe(201);
+    await migrateHandle.pool.query(
+      `insert into permission.permission_denies
+          (workspace_id,actor_id,capability,managed_system_id,created_by_actor_id,reason)
+         values ($1,$2,'survey.read',$3,$2,'#739 source withdrawn')`,
+      [WORKSPACE_ID, adminId, source.msId],
+    );
+    const before = await counts(source.responseId);
+    const deniedCreate = await post(adminCookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [approval],
+    });
+    expect(deniedCreate.statusCode).toBe(404);
+    expect(await counts(source.responseId)).toEqual(before);
+    const evidence = await app.inject({
+      method: 'GET',
+      url: `/findings/${created.json<{ id: string }>().id}/evidence-highlights`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(evidence.statusCode).toBe(200);
+    const items = evidence.json<{ items: Array<Record<string, unknown>> }>().items;
+    expect(items).toHaveLength(1);
+    expect(items[0]?.quote_or_summary).toBeUndefined();
+    expect(items[0]?.source_meta).toBe('Survey response · Unknown · Identity protected');
+    expect(evidence.body).not.toContain(source.responseId);
+    expect(evidence.body).not.toContain(APPROVED);
+  });
+
+  it.each(['read-first', 'revoke-first'] as const)(
+    'serializes competing highlight read/revoke routes: %s (#739)',
+    async (order) => {
+      const source = await seed();
+      await grant(adminId, 'survey.read_personal_responses', source.msId);
+      const approval = await approve(source, adminCookie);
+      const created = await post(adminCookie, source.responseId, {
+        severity: 'medium',
+        approved_excerpt_ids: [approval],
+      });
+      expect(created.statusCode).toBe(201);
+      const findingId = created.json<{ id: string }>().id;
+      const blocker = await appHandle.pool.connect();
+      const headers = { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` };
+      const read = () =>
+        app.inject({ method: 'GET', url: `/findings/${findingId}/evidence-highlights`, headers });
+      const revoke = () =>
+        app.inject({
+          method: 'DELETE',
+          url: `/survey-responses/${source.responseId}/approved-excerpts/${approval}`,
+          headers,
+        });
+      let first: ReturnType<typeof read> | undefined;
+      let second: ReturnType<typeof read> | undefined;
+      try {
+        await blocker.query('begin');
+        await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+          source.responseId,
+        ]);
+        // Calling then starts inject immediately; observing pg_locks is the barrier.
+        first = (order === 'read-first' ? read() : revoke()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, first);
+        second = (order === 'read-first' ? revoke() : read()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 2, second);
+        await blocker.query('commit');
+        const [a, b] = await Promise.all([first, second]);
+        const readResult = order === 'read-first' ? a : b;
+        const revokeResult = order === 'read-first' ? b : a;
+        expect(readResult.statusCode).toBe(200);
+        expect(revokeResult.statusCode).toBe(200);
+        const quote = readResult.json<{ items: Array<{ quote_or_summary?: string }> }>().items[0]
+          ?.quote_or_summary;
+        expect(quote).toBe(order === 'read-first' ? APPROVED : undefined);
+        const later = await read();
+        expect(later.body).not.toContain(APPROVED);
+        expect(created.body).not.toContain(APPROVED);
+      } finally {
+        await blocker.query('rollback');
+        blocker.release();
+        await Promise.allSettled([first, second].filter((p) => p !== undefined));
+      }
+    },
+  );
   it('generates title and summary without raw answer text', async () => {
     const source = await seed();
     const creator = await actor();

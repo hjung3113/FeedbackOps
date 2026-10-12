@@ -64,7 +64,7 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     const systems = 'select id from core.managed_systems where workspace_id=$1 and slug like $2';
     const surveys = `select id from survey.surveys where workspace_id=$1 and primary_managed_system_id in (${systems})`;
     const responses = `select id from survey.survey_responses where survey_id in (${surveys})`;
-    const findings = `select id from finding.findings where source_type='survey_response' and source_id in (${responses})`;
+    const findings = `select finding_id from survey.finding_response_bindings where response_id in (${responses})`;
     await migrateHandle.pool.query(
       `delete from core.audit_log where subject_id in (${surveys}) or subject_id in (${responses}) or subject_id in (${findings}) or detail->>'source_survey_response_id' in (select id::text from survey.survey_responses where survey_id in (${surveys}))`,
       [WORKSPACE_ID, `${SLUG}%`],

@@ -414,6 +414,13 @@
       "when": 1791849600000,
       "tag": "0058_permission_request_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791849601000,
+      "tag": "0059_survey_finding_provenance",
+      "breakpoints": true
     }
   ]
 }

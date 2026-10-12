@@ -1,5 +1,6 @@
 import type { SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 
 export type SurveyResponseEvidenceSubject = {
@@ -244,4 +245,51 @@ export async function hasActiveApprovedResponseExcerpt(
   // a returned row exists only while the approval is active.
   const rows = await readApprovedResponseExcerpts(tx, workspaceId, responseId, [approvedExcerptId]);
   return rows.length > 0;
+}
+
+export async function bindFindingResponse(
+  tx: Tx,
+  workspaceId: string,
+  findingId: string,
+  responseId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select survey.bind_finding_response(${workspaceId}, ${findingId}, ${responseId})`,
+  );
+}
+
+export async function bindHighlightResponse(
+  tx: Tx,
+  workspaceId: string,
+  highlightId: string,
+  responseId: string,
+  approvalId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select survey.bind_highlight_response(${workspaceId}, ${highlightId}, ${responseId}, ${approvalId})`,
+  );
+}
+
+export type FindingHighlightEvidence = {
+  highlight_id: string;
+  primary_managed_system_id: string;
+  survey_type: SurveyType;
+  survey_display_id: string;
+  identity_protected: boolean;
+  question_label: string;
+  approved_excerpt_snapshot: string;
+};
+
+export async function readFindingHighlightEvidence(
+  tx: Tx,
+  workspaceId: string,
+  findingId: string,
+  highlightIds: string[],
+): Promise<FindingHighlightEvidence[]> {
+  if (highlightIds.length === 0) return [];
+  const result = await tx.execute<FindingHighlightEvidence>(sql`
+    select * from survey.read_finding_highlight_evidence(
+      ${workspaceId}, ${findingId}, ${sqlUuidArray(highlightIds)})
+  `);
+  return result.rows;
 }

@@ -12,11 +12,15 @@ import {
   checkSurveyRead,
 } from './authorization.js';
 import {
+  type FindingHighlightEvidence,
   type SurveyResponseEvidenceSubject,
+  bindFindingResponse,
+  bindHighlightResponse,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
+  readFindingHighlightEvidence,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
   revokeApprovedExcerpt,
@@ -302,4 +306,48 @@ export function createSurveyEvidenceAccess(deps: SurveysServiceDeps) {
     });
   }
   return { readEvidenceExcerptCandidate, approveEvidenceExcerpt, revokeEvidenceExcerpt };
+}
+
+/** Called only inside the authorized Finding command transaction. */
+export async function recordSurveyFindingBinding(
+  tx: Tx,
+  actor: SurveysActor,
+  findingId: string,
+  responseId: string,
+): Promise<void> {
+  await bindFindingResponse(tx, actor.workspace_id, findingId, responseId);
+}
+
+export async function recordSurveyHighlightBinding(
+  tx: Tx,
+  actor: SurveysActor,
+  highlightId: string,
+  responseId: string,
+  approvalId: string,
+): Promise<void> {
+  await bindHighlightResponse(tx, actor.workspace_id, highlightId, responseId, approvalId);
+}
+
+/** Target Finding read is checked by Findings in this same transaction. */
+export async function resolveFindingSurveyHighlights(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  findingId: string,
+  highlightIds: string[],
+): Promise<Map<string, FindingHighlightEvidence>> {
+  const rows = await readFindingHighlightEvidence(tx, actor.workspace_id, findingId, highlightIds);
+  const sourceDecisions = new Map<string, boolean>();
+  const permitted = new Map<string, FindingHighlightEvidence>();
+  for (const row of rows) {
+    let allowed = sourceDecisions.get(row.primary_managed_system_id);
+    if (allowed === undefined) {
+      allowed = (
+        await checkSurveyRead(deps.checkService, actor, row.primary_managed_system_id, { tx })
+      ).allow;
+      sourceDecisions.set(row.primary_managed_system_id, allowed);
+    }
+    if (allowed) permitted.set(row.highlight_id, row);
+  }
+  return permitted;
 }

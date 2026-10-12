@@ -7,6 +7,7 @@
 // Rejected commands additionally assert that no state row and no audit row
 // were written, so a regression cannot silently mutate on denial.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -99,7 +100,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         [actorIds],
       );
       await migrateDb.pool.query('delete from core.rate_limits where key = any($1::text[])', [
-        actorIds,
+        actorIds.map((id) => `${WORKSPACE_ID}:${id}`),
       ]);
       await migrateDb.pool.query('delete from core.sessions where actor_id = any($1::uuid[])', [
         actorIds,
@@ -109,6 +110,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         [actorIds, responses],
       );
     }
+    // Parent deletion cascades protected response bindings before response teardown.
+    await migrateDb.pool.query('delete from finding.findings where id = any($1::uuid[])', [
+      findingIds,
+    ]);
     for (const { workspaceId, surveys } of surveyTrees) {
       await migrateDb.pool.query(
         'delete from survey.survey_response_answers where workspace_id = $1 and survey_id = any($2::uuid[])',
@@ -131,9 +136,6 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       'delete from permission.permission_grants where actor_id = any($1::uuid[])',
       [[...actorIds, ...secondaryActorIds]],
     );
-    await migrateDb.pool.query('delete from finding.findings where id = any($1::uuid[])', [
-      findingIds,
-    ]);
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
@@ -258,12 +260,14 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
   /** Poor subject already resolved by an active generated_finding link. */
   async function seedResolvedSubject(): Promise<Subject> {
     const subject = await seedSubject();
-    const finding = await migrateDb.pool.query<{ id: string }>(
+    const finding = await insertSurveyFindingFixture<{ id: string }>(
+      migrateDb,
+      subject.responseId,
       `insert into finding.findings (
          workspace_id, display_id, primary_managed_system_id, title, summary,
          source_type, source_id, severity, status, created_by
        ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Resolved finding', 'summary',
-         'survey_response', $3, 'medium', 'active', $4) returning id`,
+         'survey_response', nullif($3::uuid,$3::uuid), 'medium', 'active', $4) returning id`,
       [WORKSPACE_ID, subject.msId, subject.responseId, grantorActorId],
     );
     const findingId = finding.rows[0]?.id;
@@ -627,12 +631,14 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
 
   it('rejects with recovery_item_resolved when a generated_finding link to an active Finding exists', async () => {
     const subject = await seedSubject();
-    const finding = await migrateDb.pool.query<{ id: string }>(
+    const finding = await insertSurveyFindingFixture<{ id: string }>(
+      migrateDb,
+      subject.responseId,
       `insert into finding.findings (
          workspace_id, display_id, primary_managed_system_id, title, summary,
          source_type, source_id, severity, status, created_by
        ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Follow-up finding', 'summary',
-         'survey_response', $3, 'medium', 'active', $4) returning id`,
+         'survey_response', nullif($3::uuid,$3::uuid), 'medium', 'active', $4) returning id`,
       [WORKSPACE_ID, subject.msId, subject.responseId, grantorActorId],
     );
     const findingId = finding.rows[0]?.id;

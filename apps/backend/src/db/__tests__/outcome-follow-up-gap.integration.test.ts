@@ -14,6 +14,7 @@
 // under test are called through the app handle so EXECUTE for fops_app is
 // itself part of the proof.
 import { randomUUID } from 'node:crypto';
+import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { getRatingBandForValue } from '@fops/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -157,12 +158,14 @@ describe.skipIf(!runIntegration)('Outcome follow-up gap predicate (0052, ADR-005
     };
 
     const seedFinding = async (msId: string, status: string, responseId: string) => {
-      const finding = await migrateHandle.pool.query<{ id: string }>(
+      const finding = await insertSurveyFindingFixture<{ id: string }>(
+        migrateHandle,
+        responseId,
         `insert into finding.findings (
            workspace_id, display_id, primary_managed_system_id, title, summary,
            source_type, source_id, severity, status, created_by
          ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Gap finding', 'Gap finding summary',
-           'survey_response', $3, 'medium', $4, $5) returning id`,
+           'survey_response', nullif($3::uuid,$3::uuid), 'medium', $4, $5) returning id`,
         [workspaceId, msId, responseId, status, expectValue(respondentIds[0], 'first respondent')],
       );
       const findingId = requiredId(finding.rows[0], `${status} finding`);

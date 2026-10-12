@@ -461,7 +461,14 @@ implemented: register it in `apps/backend/migrations/meta/_journal.json`, narrow
 needed columns, fix `search_path = pg_catalog`, revoke PUBLIC and preserve existing capability gates.
 Measure grouped query plans around 5k VOCs/5k Tasks before proposing an index; no preemptive materialized cache.
 
-## Survey provenance cutover — ADR-0064 (accepted; implementation pending)
+## Survey provenance cutover — ADR-0064 (coordinated delivery pending)
+
+#739 adds generated/journaled migration `0059_survey_finding_provenance.sql`,
+protected `survey.finding_response_bindings` and `survey.highlight_response_bindings`,
+and scoped reader/mutator seams. Existing-DB owner prerequisites, constraints,
+function signatures, cache inventory, standalone legacy-upgrade procedure and #740
+coordination are in [the #739 cutover contract](survey-provenance-cutover-739.md).
+Execution and combined #739/#740 verification are still required.
 
 - Proposed/new Survey-owned protected Finding and highlight extensions retain
   workspace-qualified response/approval bindings and historical generated text.
