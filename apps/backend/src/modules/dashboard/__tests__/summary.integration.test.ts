@@ -1416,43 +1416,76 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const seed = await createDashboardScope();
     await seedSurveyGaps(seed.msA, 2);
     await seedSurveyGaps(seed.msB, 3);
-    for (const systemId of [seed.msA, seed.msB]) {
-      await denyCapability(
-        migrateHandle,
-        WORKSPACE_ID,
-        adminActorId,
-        'survey.read',
-        systemId,
-        adminActorId,
+    // Prove the fixtures qualify for the aggregate before removing all Survey read scope.
+    const unrestricted = await get(adminCookie);
+    expect(unrestricted.statusCode).toBe(200);
+    expect(
+      queue(unrestricted.json<Summary>(), 'bad-outcome-no-followup')?.count,
+    ).toBeGreaterThanOrEqual(5);
+    for (const [systemId, count] of [
+      [seed.msA, 2],
+      [seed.msB, 3],
+    ] as const) {
+      const selected = await get(adminCookie, systemId);
+      expect(selected.statusCode).toBe(200);
+      expect(queue(selected.json<Summary>(), 'bad-outcome-no-followup')?.count).toBe(count);
+    }
+    const systems = await migrateHandle.pool.query<{ id: string }>(
+      'SELECT id FROM core.managed_systems WHERE workspace_id = $1::uuid',
+      [WORKSPACE_ID],
+    );
+    const denyIds: string[] = [];
+    try {
+      for (const { id: systemId } of systems.rows) {
+        denyIds.push(
+          await denyCapability(
+            migrateHandle,
+            WORKSPACE_ID,
+            adminActorId,
+            'survey.read',
+            systemId,
+            adminActorId,
+          ),
+        );
+      }
+      // An empty effective scope must never reach 0052's unrestricted [] branch.
+      // Check summary first so the regression fails independently of recovery routes.
+      for (const selector of ['all', seed.msA, seed.msB]) {
+        const response = await get(adminCookie, selector);
+        expect(response.statusCode).toBe(200);
+        const body = response.json<Summary>();
+        expect(queue(body, 'bad-outcome-no-followup')?.count ?? 0).toBe(0);
+        for (const row of systemRows(body)) {
+          expect(row.action_queues?.['bad-outcome-no-followup'] ?? 0).toBe(0);
+        }
+      }
+      const deniedList = await recoveryList(adminCookie, 'category=bad-outcome-no-followup');
+      expect(deniedList.total).toBe(0);
+      expect(
+        (
+          await recoveryList(
+            adminCookie,
+            `category=bad-outcome-no-followup&managed_system_id=${seed.msA}`,
+          )
+        ).total,
+      ).toBe(0);
+      const survey = required(
+        (
+          await migrateHandle.pool.query<{ id: string }>(
+            'SELECT id FROM survey.surveys WHERE primary_managed_system_id = $1::uuid',
+            [seed.msA],
+          )
+        ).rows[0],
+      );
+      const token = `r1_${Buffer.concat([Buffer.from([5]), Buffer.from(survey.id.replaceAll('-', ''), 'hex')]).toString('base64url')}`;
+      expect((await recoveryDetail(adminCookie, token)).statusCode).toBe(404);
+    } finally {
+      // Remove only this test's denies before fixture cleanup deletes systems/actors.
+      await migrateHandle.pool.query(
+        'DELETE FROM permission.permission_denies WHERE id = ANY($1::uuid[])',
+        [denyIds],
       );
     }
-    const deniedList = await recoveryList(adminCookie, 'category=bad-outcome-no-followup');
-    expect(deniedList.total).toBe(0);
-    expect(
-      (
-        await recoveryList(
-          adminCookie,
-          `category=bad-outcome-no-followup&managed_system_id=${seed.msA}`,
-        )
-      ).total,
-    ).toBe(0);
-    const survey = required(
-      (
-        await migrateHandle.pool.query<{ id: string }>(
-          'SELECT id FROM survey.surveys WHERE primary_managed_system_id = $1::uuid',
-          [seed.msA],
-        )
-      ).rows[0],
-    );
-    const token = `r1_${Buffer.concat([Buffer.from([5]), Buffer.from(survey.id.replaceAll('-', ''), 'hex')]).toString('base64url')}`;
-    expect((await recoveryDetail(adminCookie, token)).statusCode).toBe(404);
-    const body = (await get(adminCookie)).json<Summary>();
-    // An empty effective scope must never reach 0052's unrestricted [] branch.
-    expect(queue(body, 'bad-outcome-no-followup')?.count ?? 0).toBe(0);
-    expect(
-      queue((await get(adminCookie, seed.msA)).json<Summary>(), 'bad-outcome-no-followup')?.count ??
-        0,
-    ).toBe(0);
   });
   it('limits a developer to their one Managed System and omits unavailable entries', async () => {
     const seed = await createDashboardScope();
