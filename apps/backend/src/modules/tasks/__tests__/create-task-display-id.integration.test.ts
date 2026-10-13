@@ -94,6 +94,11 @@ describe.skipIf(!runIntegration)('task display_id assignment (#142)', () => {
           adminActorId,
         ]);
       }
+      // 56-F conversions record skipped-default diagnostics on the fixture systems.
+      await migrateHandle.pool.query(
+        `delete from core.responsibility_default_failures where workspace_id = $1`,
+        [workspaceId],
+      );
       await migrateHandle.pool.query(
         `delete from core.managed_systems where workspace_id = $1`,
         [workspaceId],
