@@ -416,7 +416,7 @@ mutation advances revision/updated_at. Preserve permission_requests_active_uq ov
 the full COALESCE requester/capability/scope/source tuple and open predicate
 pending/needs_more_info; cancelled falls outside it, preserving history.
 
-Migration `0062_permission_grant_reissue.sql` (#1085) adds nullable
+Migration `0063_permission_grant_reissue.sql` (#1085) adds nullable
 permission.permission_grants.superseded_at. Generated journal/snapshot accompany
 it; the SQL preserves the historical expression scope columns. Apply before the
 writers; migration numbering and combined metadata verification belong to the conductor. Atomic expired exact-tuple
