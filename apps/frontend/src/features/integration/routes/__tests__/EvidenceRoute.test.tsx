@@ -469,12 +469,20 @@ it('keeps only pages through the restored cursor when going Back from page two',
 });
 it.each(
   (['withheld', 'missing', 'denied'] as const).flatMap((state) =>
-    (['close', 'select'] as const).map((transition) => ({ state, transition })),
+    (['close', 'select'] as const).flatMap((transition) =>
+      (['closed-refetch', 'other-refetch', 'history'] as const).map((restore) => ({
+        state,
+        transition,
+        restore,
+      })),
+    ),
   ),
 )(
-  'keeps direct $state withdrawal after $transition before the list catches up',
-  async ({ state, transition }) => {
+  'keeps direct $state withdrawal after $transition through $restore before the list catches up',
+  async ({ state, transition, restore }) => {
     let revoke = false;
+    let settleList: (() => void) | undefined;
+    let deferList = false;
     const voc = getEvidenceInventoryResponseSchema.parse({
       ...item,
       source_type: 'voc',
@@ -493,7 +501,14 @@ it.each(
     });
     const other = { ...item, id: PARENT, quote_or_summary: '다른 Evidence 메모' };
     installFetch(
-      () => response({ items: [voc, other], page: { has_more: false } }),
+      () => {
+        const result = response({ items: [voc, other], page: { has_more: false } });
+        return deferList
+          ? new Promise<Response>((resolve) => {
+              settleList = () => resolve(result);
+            })
+          : result;
+      },
       () =>
         revoke && state !== 'withheld'
           ? response(
@@ -508,7 +523,7 @@ it.each(
         ? Promise.resolve(response(other))
         : originalFetch(input),
     );
-    const { client, router } = await mount(`/integration/evidence?selected=${ID}`);
+    const { client, router, history } = await mount(`/integration/evidence?selected=${ID}`);
     await screen.findByRole('link', { name: 'Finding 보기' });
     revoke = true;
     await act(async () => {
@@ -543,6 +558,72 @@ it.each(
     await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
     expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
     expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+    if (restore === 'other-refetch') {
+      fireEvent.click(await screen.findByRole('button', { name: /다른 Evidence 메모/ }));
+      await screen.findByRole('link', { name: 'Finding 보기' });
+    }
+    if (restore === 'history') {
+      await act(async () =>
+        router.navigate({ to: '/integration/evidence', search: { cursor: 'stale-page' } }),
+      );
+      await screen.findByRole('button', { name: /다른 Evidence 메모/ });
+      await act(async () => history.back());
+      await waitFor(() => expect(router.state.location.search.cursor).toBeUndefined());
+      await screen.findByRole('button', { name: /다른 Evidence 메모/ });
+      expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+      expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+      await act(async () => history.forward());
+      await waitFor(() => expect(router.state.location.search.cursor).toBe('stale-page'));
+    } else {
+      deferList = true;
+      let refetch!: Promise<void>;
+      await act(async () => {
+        refetch = client.invalidateQueries({
+          predicate: (query) => query.queryKey.includes('list'),
+        });
+      });
+      await screen.findByRole('status', { name: 'Evidence 확인 중…' });
+      await act(async () => {
+        settleList?.();
+        await refetch;
+      });
+    }
+    await screen.findByRole('button', { name: /다른 Evidence 메모/ });
+    await waitFor(() => expect(client.isFetching({ queryKey: ['evidence-inventory'] })).toBe(0));
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+    const withheldRow = screen.queryByRole('button', {
+      name: /원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다/,
+    });
+    if (state === 'withheld') expect(withheldRow).toBeVisible();
+    else expect(withheldRow).toBeNull();
+
+    deferList = false;
+    if (restore === 'closed-refetch') {
+      revoke = false;
+      await act(async () =>
+        router.navigate({
+          to: '/integration/evidence',
+          search: (previous) => ({ ...previous, selected: ID }),
+        }),
+      );
+      await screen.findByRole('link', { name: 'Finding 보기' });
+      fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+      await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
+    } else if (restore === 'other-refetch') {
+      await act(async () =>
+        router.navigate({ to: '/integration/evidence', search: { q: '다운로드' } }),
+      );
+    } else {
+      await act(async () => {
+        client.setQueryData(['me'], {
+          actor: { id: 'other', role_level: 'admin' },
+          workspace_id: 'workspace',
+        });
+      });
+    }
+    await screen.findByRole('button', { name: /월간 다운로드가 느려졌습니다/ });
+    expect(screen.getByText(/철회된 원본 제목/)).toBeVisible();
   },
 );
 it('keeps initial pending reads distinct from empty and error', async () => {

@@ -85,6 +85,9 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
       { response: ListEvidenceInventoryResponse; items: EvidenceInventoryItem[] }
     >;
   }>({ refresh, entries: new Map() });
+  const [withdrawn, setWithdrawn] = useState(
+    new Map<string, { item: EvidenceInventoryItem | 'gone'; updatedAt: number }>(),
+  );
   const rows = useRef(new Map<string, HTMLDivElement>());
   const origin = useRef<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -149,32 +152,24 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
     entries.set(pageKey, { response: list.data, items: list.data.items });
     setPages({ refresh, entries });
   }
-  // Reconcile stored page items as well as the selected row. Keep the transport
-  // response identity separate so an unchanged list cannot restore withdrawn text.
+  // Withdrawal outlives selection and page responses, but resets with this keyed
+  // session/scope. Only a newer successful detail read may restore available text.
   if (search.selected && !detail.isFetching) {
+    const previous = withdrawn.get(search.selected);
     const unreadable =
       denied(detail.error) || (detail.error instanceof ApiError && detail.error.status === 404);
-    const withheld =
-      !detail.isError && detail.data?.content_state === 'withheld' ? detail.data : undefined;
-    if (unreadable || withheld) {
-      const entries = new Map(pages.entries);
-      let changed = false;
-      for (const [cursor, page] of entries) {
-        if (
-          !page.items.some(
-            (item) => item.id === search.selected && (unreadable || item !== withheld),
-          )
-        )
-          continue;
-        entries.set(cursor, {
-          ...page,
-          items: unreadable
-            ? page.items.filter((item) => item.id !== search.selected)
-            : page.items.map((item) => (item.id === search.selected && withheld ? withheld : item)),
-        });
-        changed = true;
+    const updatedAt = detail.isError ? detail.errorUpdatedAt : detail.dataUpdatedAt;
+    if (updatedAt > (previous?.updatedAt ?? 0)) {
+      const item = unreadable ? 'gone' : detail.isSuccess ? detail.data : undefined;
+      if (item === 'gone' || item?.content_state === 'withheld') {
+        const entries = new Map(withdrawn);
+        entries.set(search.selected, { item, updatedAt });
+        setWithdrawn(entries);
+      } else if (previous && item?.content_state === 'available') {
+        const entries = new Map(withdrawn);
+        entries.delete(search.selected);
+        setWithdrawn(entries);
       }
-      if (changed) setPages({ refresh, entries });
     }
   }
   const blocked = denied(list.error) || denied(detail.error);
@@ -194,7 +189,14 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
       ? []
       : [
           ...new Map(
-            visiblePages.flatMap((page) => page.items).map((item) => [item.id, item]),
+            visiblePages
+              .flatMap((page) =>
+                page.items.flatMap((item) => {
+                  const replacement = withdrawn.get(item.id)?.item;
+                  return replacement === 'gone' ? [] : [replacement ?? item];
+                }),
+              )
+              .map((item) => [item.id, item]),
           ).values(),
         ];
   const filtered = Boolean(search.source || search.q);
