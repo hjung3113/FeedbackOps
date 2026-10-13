@@ -153,6 +153,20 @@ FOR EACH ROW EXECUTE FUNCTION voc.guard_cluster_suggestion();
 CREATE FUNCTION voc.guard_cluster_suggestion_progress() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $$
 BEGIN
+  -- Progress rows are keyed by workspace/MS (and UTC hour for admissions); a key
+  -- change would let a live admission bucket be moved into an ended hour and reclaimed.
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+      OR NEW.primary_managed_system_id IS DISTINCT FROM OLD.primary_managed_system_id THEN
+      RAISE EXCEPTION 'suggestion progress identity is immutable' USING ERRCODE = '23514';
+    END IF;
+    -- Only admissions carry window_start; cursors must not reference it.
+    IF TG_TABLE_NAME = 'voc_cluster_suggestion_admissions' THEN
+      IF to_jsonb(NEW) -> 'window_start' IS DISTINCT FROM to_jsonb(OLD) -> 'window_start' THEN
+        RAISE EXCEPTION 'suggestion progress identity is immutable' USING ERRCODE = '23514';
+      END IF;
+    END IF;
+  END IF;
   PERFORM 1 FROM core.managed_systems WHERE id = NEW.primary_managed_system_id
     AND workspace_id = NEW.workspace_id FOR SHARE;
   IF NOT FOUND THEN

@@ -447,6 +447,13 @@ describe.skipIf(!runIntegration)('ADR-0068 inert Cluster suggestion storage', ()
         workspaceId,
       ]),
     ).rejects.toMatchObject({ code: '23514' });
+    // A live bucket cannot be re-keyed into an ended hour and then reclaimed.
+    await expect(
+      app.pool.query(
+        "update voc.voc_cluster_suggestion_admissions set window_start = window_start - interval '2 hours' where workspace_id = $1",
+        [workspaceId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
     await expect(app.pool.query('truncate voc.voc_cluster_suggestions')).rejects.toMatchObject({
       code: '42501',
     });
