@@ -181,6 +181,7 @@ export const findingActors = listActorsResponseSchema.parse({
       display_name: '정민수',
       email: 'minsu@example.test',
       role_level: 'admin',
+      actor_type: 'internal_member',
     },
   ],
 });

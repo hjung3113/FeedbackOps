@@ -38,18 +38,21 @@ export const workspaceActorsFixture = listActorsResponseSchema.parse({
       display_name: 'Named Requester',
       email: 'named.requester@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
     {
       id: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       display_name: 'Admin One',
       email: 'admin.one@example.test',
       role_level: 'admin',
+      actor_type: 'internal_member',
     },
     {
       id: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       display_name: 'Admin Two',
       email: 'admin.two@example.test',
       role_level: 'admin',
+      actor_type: 'internal_member',
     },
   ],
 });

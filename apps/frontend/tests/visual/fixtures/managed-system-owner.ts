@@ -12,6 +12,7 @@ export const managedSystemOwnerActors = listActorsResponseSchema.parse({
       display_name: 'Default Owner Visual Name',
       email: 'visual-email-must-not-render@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
   ],
 });

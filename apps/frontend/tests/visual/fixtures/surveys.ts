@@ -173,6 +173,7 @@ export const surveyVisualActorsFixture = listActorsResponseSchema.parse({
       display_name: 'Dana Rivera',
       email: 'survey.operator@example.test',
       role_level: 'developer',
+      actor_type: 'internal_member',
     },
   ],
 });
