@@ -8,8 +8,8 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertActorRow } from '../../../test-support/actor-fixtures.js';
-import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -316,7 +316,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       'insert into core.workspace_settings (workspace_id) values ($1)',
       [WORKSPACE_ID],
     );
-    const cookies = await Promise.all([
+    const [firstCookie, secondCookie, thirdCookie] = await Promise.all([
       actorCookie('admin'),
       actorCookie('admin'),
       actorCookie('admin'),
@@ -330,13 +330,13 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
         [WORKSPACE_ID],
       );
       requests = [
-        request('PATCH', cookies[0]!, {
+        request('PATCH', firstCookie, {
           coverage_thresholds: { 'voc-task': { good_min_percent: 80, warn_min_percent: 50 } },
         }),
-        request('PATCH', cookies[1]!, {
+        request('PATCH', secondCookie, {
           coverage_thresholds: { 'high-followup': { good_min_percent: 90, warn_min_percent: 60 } },
         }),
-        request('PATCH', cookies[2]!, { survey_anonymity_threshold: 9 }),
+        request('PATCH', thirdCookie, { survey_anonymity_threshold: 9 }),
       ];
       // Start Fastify injection then prove all three transactions wait on the held singleton.
       const running = Promise.all(requests);

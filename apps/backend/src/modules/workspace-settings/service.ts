@@ -1,9 +1,9 @@
 import {
-  COVERAGE_METRIC_IDS,
-  resolveCoverageThresholds,
   type AuditEventType,
-  type CoverageThresholds,
+  COVERAGE_METRIC_IDS,
   type CoverageThresholdPair,
+  type CoverageThresholds,
+  resolveCoverageThresholds,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
@@ -12,9 +12,9 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { ActorContext, CheckService } from '../permissions/check-service.js';
 import {
+  type PermissionSelfApproval,
   ensureAndLockWorkspaceSettings,
   findWorkspaceSettings,
-  type PermissionSelfApproval,
   updateWorkspaceSettings,
 } from './repo.js';
 

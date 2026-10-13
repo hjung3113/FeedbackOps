@@ -66,7 +66,10 @@ export const workspaceSettings = coreSchema.table(
       .references(() => workspaces.id),
     permissionSelfApproval: text('permission_self_approval').notNull().default('allowed'),
     surveyAnonymityThreshold: integer('survey_anonymity_threshold').notNull().default(5),
-    coverageThresholds: jsonb('coverage_thresholds').$type<Partial<CoverageThresholds>>().notNull().default({}),
+    coverageThresholds: jsonb('coverage_thresholds')
+      .$type<Partial<CoverageThresholds>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
