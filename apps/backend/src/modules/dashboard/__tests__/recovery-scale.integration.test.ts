@@ -332,12 +332,18 @@ describe.skipIf(
       const s = run % 4;
       const n = Math.floor(run / 4);
       const id = scaleId(`${kind}-${s}-${n}`);
+      // Reporter-facing rules allow resolved only from progress/prep; setup is excluded from samples.
+      if (kind === 'voc')
+        await required(migrate).pool.query(
+          "update voc.vocs set reporter_facing_status='progress' where id=$1::uuid",
+          [id],
+        );
       const pre = await request(0, {
         method: 'GET',
         url: `/${kind === 'voc' ? 'vocs' : 'findings'}/${id}`,
       });
       expect(pre.body[kind === 'voc' ? 'reporter_facing_status' : 'status']).toBe(
-        kind === 'voc' ? 'received' : 'active',
+        kind === 'voc' ? 'progress' : 'active',
       );
       const subjectIds =
         kind === 'voc'
