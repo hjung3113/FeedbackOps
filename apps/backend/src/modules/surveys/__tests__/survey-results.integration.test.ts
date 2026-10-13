@@ -1023,16 +1023,14 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toEqual({
       response_state: 'visible',
-      items: ids
-        .slice(0, 2)
-        .map((id) => ({
-          approved_excerpt_id: id,
-          redacted_excerpt: 'approved result excerpt',
-          question_label: 'Text',
-          survey_type: 'validation',
-          survey_display_id: expect.any(String),
-          identity_protected: true,
-        })),
+      items: ids.slice(0, 2).map((id) => ({
+        approved_excerpt_id: id,
+        redacted_excerpt: 'approved result excerpt',
+        question_label: 'Text',
+        survey_type: 'validation',
+        survey_display_id: expect.any(String),
+        identity_protected: true,
+      })),
       page: { has_more: true, cursor: expect.any(String) },
     });
     const cursor = first.json().page.cursor;
@@ -1105,7 +1103,11 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         headers: { cookie: `${SESSION_COOKIE_NAME}=${reader.cookie}` },
       });
       expect(result.statusCode).toBe(200);
-      expect(result.json()).toEqual({ response_state: state, items: [], page: { has_more: false } });
+      expect(result.json()).toEqual({
+        response_state: state,
+        items: [],
+        page: { has_more: false },
+      });
     }
     const noApproved = await seed(full(5));
     const result = await app.inject({
@@ -1187,7 +1189,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       'update survey.survey_response_excerpt_approvals set revoked_at=now() where id=$1',
       [ids[1]],
     );
-    const next = await read(survey.id.toUpperCase(), `?limit=1&cursor=${encodeURIComponent(cursor)}`);
+    const next = await read(
+      survey.id.toUpperCase(),
+      `?limit=1&cursor=${encodeURIComponent(cursor)}`,
+    );
     expect(next.statusCode).toBe(200);
     expect(next.json().items[0].approved_excerpt_id).toBe(ids[2]);
     const other = await seed(full(5));
@@ -1214,9 +1219,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
           [WORKSPACE_ID, previous.rows[0].survey_anonymity_threshold],
         );
       else
-        await migrateHandle.pool.query('delete from core.workspace_settings where workspace_id=$1', [
-          WORKSPACE_ID,
-        ]);
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id=$1',
+          [WORKSPACE_ID],
+        );
     }
   });
 });

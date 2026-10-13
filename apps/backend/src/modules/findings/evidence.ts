@@ -12,8 +12,8 @@ import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/in
 import { createSurveyFindingLink, resolveVocEndpoint } from '../entity-links/index.js';
 import {
   recordSurveyHighlightBinding,
-  resolveSurveyAttachmentSelection,
   resolveFindingSurveyHighlights,
+  resolveSurveyAttachmentSelection,
 } from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import { createEvidenceInventory } from './evidence-inventory.js';
@@ -201,7 +201,6 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
       };
     });
   }
-
 
   async function attachSurveyEvidence(args: {
     actor: FindingsActor;

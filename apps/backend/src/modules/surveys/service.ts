@@ -6,9 +6,9 @@ import type { CheckService } from '../permissions/check-service.js';
 import { createMyAnswerableSurveys } from './answerable-surveys.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
+import { createSurveyEvidenceCandidates } from './evidence-candidates.js';
 import { createSurveyFollowUp } from './follow-up.js';
 import { createMySurveyResponseHistory } from './response-history.js';
-import { createSurveyEvidenceCandidates } from './evidence-candidates.js';
 import { createSurveyResults } from './results.js';
 
 export interface SurveysActor {

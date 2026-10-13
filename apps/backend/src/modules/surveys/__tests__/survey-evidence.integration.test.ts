@@ -3,9 +3,9 @@ import { waitForResponseEvidenceWaiters } from '../../../test-support/response-e
 
 import {
   approvedExcerptDtoSchema,
+  surveyEvidenceCandidatesResponseSchema,
   surveyResponseExcerptCandidateDtoSchema,
   surveyResultDtoSchema,
-  surveyEvidenceCandidatesResponseSchema,
 } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';

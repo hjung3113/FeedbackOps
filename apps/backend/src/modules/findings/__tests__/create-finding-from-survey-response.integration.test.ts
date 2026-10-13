@@ -6,8 +6,8 @@ import { waitForResponseEvidenceWaiters } from '../../../test-support/response-e
 import { randomUUID } from 'node:crypto';
 
 import {
-  entityLinkDtoSchema,
   attachSurveyEvidenceResponseSchema,
+  entityLinkDtoSchema,
   evidenceHighlightDtoSchema,
   evidenceInventoryItemSchema,
   findingDtoSchema,
@@ -1539,7 +1539,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           [
             WORKSPACE_ID,
             source.surveyId,
-            response.rows[0]!.id,
+            response.rows[0]?.id,
             source.questionId,
             JSON.stringify(RAW_ANSWER),
           ],
@@ -1551,7 +1551,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
        values ($1,$2,$3,$4,$5,$6) returning id`,
       [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, APPROVED, adminId],
     );
-    return { ...source, approvalId: approval.rows[0]!.id };
+    return { ...source, approvalId: approval.rows[0]?.id };
   }
   async function attachmentTarget(msId: string, status: 'draft' | 'archived' = 'draft') {
     return insertFindingRow(migrateHandle, {
@@ -1590,7 +1590,12 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
 
   it('#1109 non-personal cross-system attach is atomic, metadata-only and duplicate-free on replay', async () => {
     const source = await safeAttachmentSource();
-    const targetSystem = await insertMsDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG), 'Target MS');
+    const targetSystem = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      uid(SLUG),
+      'Target MS',
+    );
     const target = await attachmentTarget(targetSystem);
     const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
@@ -1658,7 +1663,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       'select response_body from core.idempotency_keys where actor_id=$1 and key=$2',
       [reader.id, key],
     );
-    expect(cached.rows[0]!.response_body).toEqual(metadata);
+    expect(cached.rows[0]?.response_body).toEqual(metadata);
     expect((await counts(source.responseId)).findings).toBe(0);
     const parentsAfter = await migrateHandle.pool.query(
       `select (select count(*)::int from finding.findings where workspace_id=$1::uuid) as findings,
@@ -1712,8 +1717,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
-    for (const approved_excerpt_id of [source.approvalId, second.rows[0]!.id]) {
-      expect((await attach(reader.cookie, target.id, { approved_excerpt_id })).statusCode).toBe(201);
+    for (const approved_excerpt_id of [source.approvalId, second.rows[0]?.id]) {
+      expect((await attach(reader.cookie, target.id, { approved_excerpt_id })).statusCode).toBe(
+        201,
+      );
     }
     expect(await attachmentResidue(target.id, reader.id)).toEqual({
       counter: 2,
@@ -1739,7 +1746,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       variant === 'draft' ? 'draft' : 'open',
       variant === 'suppressed' ? 1 : 5,
     );
-    const target = await attachmentTarget(source.msId, variant === 'archived' ? 'archived' : 'draft');
+    const target = await attachmentTarget(
+      source.msId,
+      variant === 'archived' ? 'archived' : 'draft',
+    );
     const reader = await attachmentActor();
     if (!['deny_target', 'unknown_target_denied'].includes(variant))
       await grant(reader.id, 'finding.manage', source.msId);
@@ -1836,14 +1846,14 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     );
     const target = await attachmentTarget(source.msId);
     expect(
-      (await attach(adminCookie, target.id, { approved_excerpt_id: approval.rows[0]!.id }))
+      (await attach(adminCookie, target.id, { approved_excerpt_id: approval.rows[0]?.id }))
         .statusCode,
     ).toBe(422);
     const reader = await attachmentActor();
     for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
       await grant(reader.id, permission, source.msId);
     const result = await attach(reader.cookie, target.id, {
-      approved_excerpt_id: approval.rows[0]!.id,
+      approved_excerpt_id: approval.rows[0]?.id,
     });
     expect(result.statusCode).toBe(201);
     expect(attachSurveyEvidenceResponseSchema.safeParse(result.json()).success).toBe(true);
@@ -1868,7 +1878,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     await grant(reader.id, 'finding.manage', source.msId);
     const before = await attachmentResidue(target.id, reader.id);
     expect(
-      (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId })).statusCode,
+      (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }))
+        .statusCode,
     ).toBe(403);
     expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
   });
@@ -1900,19 +1911,19 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     const approval = await migrateHandle.pool.query<{ id: string }>(
       `insert into survey.survey_response_excerpt_approvals (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
        select workspace_id,survey_id,id,$2,'foreign approved',respondent_actor_id from survey.survey_responses where id=$1 returning id`,
-      [foreignResponse, question.rows[0]!.id],
+      [foreignResponse, question.rows[0]?.id],
     );
     try {
       const before = await attachmentResidue(target.id, reader.id);
       expect(
-        (await attach(reader.cookie, target.id, { approved_excerpt_id: approval.rows[0]!.id }))
+        (await attach(reader.cookie, target.id, { approved_excerpt_id: approval.rows[0]?.id }))
           .statusCode,
       ).toBe(404);
       expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
     } finally {
       await migrateHandle.pool.query(
         'delete from survey.survey_response_excerpt_approvals where id=$1',
-        [approval.rows[0]!.id],
+        [approval.rows[0]?.id],
       );
     }
   });
@@ -2028,7 +2039,11 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     },
   );
 
-  async function waitForSettingsWaiter(blockerPid: number, pending: Promise<{ statusCode: number }>) {
+  async function waitForSettingsWaiter(
+    blockerPid: number | undefined,
+    pending: Promise<{ statusCode: number }>,
+  ) {
+    if (blockerPid === undefined) throw new Error('settings blocker has no backend pid');
     const deadline = Date.now() + 1500;
     const completed = pending.then((r): never => {
       throw new Error(`Request completed before settings barrier: ${r.statusCode}`);
@@ -2042,7 +2057,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           [blockerPid],
         ),
       ]);
-      if (waiting.rows[0]!.count > 0) return;
+      if ((waiting.rows[0]?.count ?? 0) > 0) return;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error('No observed settings lock waiter');
@@ -2071,8 +2086,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
         'update core.workspace_settings set survey_anonymity_threshold=6 where workspace_id=$1',
         [WORKSPACE_ID],
       );
-      const pid = (await blocker.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]!
-        .pid;
+      const pid = (await blocker.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]
+        ?.pid;
       const before = await attachmentResidue(target.id, reader.id);
       pending = attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }).then(
         (r) => r,
@@ -2091,9 +2106,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           [WORKSPACE_ID, old.rows[0].survey_anonymity_threshold],
         );
       else
-        await migrateHandle.pool.query('delete from core.workspace_settings where workspace_id=$1', [
-          WORKSPACE_ID,
-        ]);
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id=$1',
+          [WORKSPACE_ID],
+        );
     }
   });
 
@@ -2142,7 +2158,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           payload: { survey_anonymity_threshold: 6 },
         })
         .then((r) => r);
-      await waitForSettingsWaiter(holder.rows[0]!.pid, update);
+      await waitForSettingsWaiter(holder.rows[0]?.pid, update);
       await blocker.query('commit');
       expect((await pending).statusCode).toBe(201);
       expect((await update).statusCode).toBe(200);
@@ -2162,9 +2178,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           [WORKSPACE_ID, old.rows[0].survey_anonymity_threshold],
         );
       else
-        await migrateHandle.pool.query('delete from core.workspace_settings where workspace_id=$1', [
-          WORKSPACE_ID,
-        ]);
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id=$1',
+          [WORKSPACE_ID],
+        );
     }
   });
 });

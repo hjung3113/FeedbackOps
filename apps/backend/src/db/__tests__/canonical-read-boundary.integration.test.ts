@@ -323,7 +323,7 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
           has_table_privilege($1::name,$2::text,'DELETE,TRUNCATE') as allowed`,
         [owner, table],
       );
-      expect(write.rows[0]!.allowed).toBe(false);
+      expect(write.rows[0]?.allowed).toBe(false);
     }
   });
 });

@@ -12,6 +12,7 @@ import {
   checkSurveyPersonalResponseRead,
   checkSurveyRead,
 } from './authorization.js';
+import { resolveExcerptResultAudience } from './evidence-candidates.js';
 import {
   type FindingHighlightEvidence,
   type SurveyResponseEvidenceSubject,
@@ -19,8 +20,8 @@ import {
   bindHighlightResponse,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
-  lockResponseEvidenceSubject,
   lockAttachmentResponse,
+  lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
   readFindingHighlightEvidence,
   readInventoryHighlightEvidence,
@@ -28,7 +29,6 @@ import {
   readSurveyQuestionLabel,
   revokeApprovedExcerpt,
 } from './repo-evidence.js';
-import { resolveExcerptResultAudience } from './evidence-candidates.js';
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
 
 export type SurveyResponseEvidencePurpose =
@@ -378,7 +378,6 @@ export async function resolveInventorySurveyHighlights(
   }
   return permitted;
 }
-
 
 /** Finding has already locked/authorized its target. Selection is never authority. */
 export async function resolveSurveyAttachmentSelection(

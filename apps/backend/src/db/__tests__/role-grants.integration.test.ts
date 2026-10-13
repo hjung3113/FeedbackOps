@@ -336,7 +336,4 @@ describe.skipIf(!runIntegration)('Index conventions (ADR-0015:55-61)', () => {
     expect(definition).toMatch(/superseded_at IS NULL/i);
     expect(definition).not.toMatch(/expires_at|now\(\)/i);
   });
-
-
-
 });
