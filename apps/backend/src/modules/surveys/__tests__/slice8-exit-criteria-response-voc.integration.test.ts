@@ -132,6 +132,7 @@ describe.skipIf(!runIntegration)(
         'delete from core.actors where workspace_id=$1 and external_id like $2',
         [WORKSPACE_ID, `${SLUG}-%`],
       );
+      await migrateHandle.pool.query(`delete from core.responsibility_default_failures where managed_system_id in (${systems})`, [WORKSPACE_ID, `${SLUG}%`]);
       await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
         WORKSPACE_ID,
         `${SLUG}%`,

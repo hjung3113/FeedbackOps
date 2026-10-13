@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
+import { createCheckService } from '../../permissions/check-service.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
@@ -104,7 +105,7 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
         confidence: 'medium',
         analyticsAreaId: null,
         createdBy: actorId,
-      });
+      }, { checkService: createCheckService({ db: dbHandle.db }) });
       expect(finding.workspace_id).toBe(WORKSPACE_ID);
       expect(finding.source_type).toBe('voc_cluster');
       expect(finding.status).toBe('draft');

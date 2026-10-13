@@ -73,6 +73,10 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
   // Children before parents: voc_embeddings → vocs → managed_systems.
   async function cleanup(): Promise<void> {
     if (!migrateHandle) return;
+    await migrateHandle.pool.query(`delete from core.responsibility_default_failures
+      where workspace_id=$1 and managed_system_id in
+        (select id from core.managed_systems where workspace_id=$1 and slug like $2)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`]);
     const scope = `(select id from core.managed_systems where workspace_id = $1 and slug like $2)`;
     await migrateHandle.pool.query(
       `delete from voc.voc_embeddings where voc_id in (

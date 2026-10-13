@@ -41,18 +41,27 @@ attachment_ids optional uuid[] (max 10, pre-uploaded via POST /attachments)
 stored. `description_rich_content` must contain non-whitespace content. Either
 required-value violation returns `422 validation.failed`.
 
-`POST /vocs` must not accept:
+`POST /vocs` must not accept the following server fields:
 
 ```text
 reporter_id
 severity (voc.severity_not_user_settable)
 reporter_facing_status
 triage_state
-owner_user_id
-owner_team_id
 display_id
 (all others: validation.unexpected_field)
 ```
+
+Optional nullable `owner_user_id` / `owner_team_id` require server `voc.triage` on
+this Managed System; ordinary Reporter input still returns `validation.unexpected_field`.
+Explicit Actor/team/null skips defaults. Omission resolves eligible Managed System owner,
+then active same-system Analytics Area owner team, then null fallback. Creation stays
+`untriaged`, with null severity and `received` reporter status. The response and
+`voc_created` audit carry the persisted pair, `default_resolved`, `source_rule`
+(`explicit`, `managed_system_owner`, `analytics_area_owner`, `workspace_fallback_queue`),
+and `managed_system_id`. Skipped rules append safe diagnostics within the same transaction;
+replays and rejected creation append nothing. Actor eligibility uses current `voc.triage`
+including explicit denies, expiry and revocation. Teams must be active and same-workspace.
 
 Reporter is derived from the authenticated Actor. Severity is assigned during
 triage by an authorized Admin or same-Managed-System Developer. The Reporter
@@ -226,6 +235,7 @@ request body: strict object
   summary string, trimmed, required non-empty
   severity low|medium|high|critical required
   confidence optional low|medium|high
+  owner_actor_id / owner_team_id optional nullable uuid (Finding responsibility)
   analytics_area_id optional uuid
   primary_managed_system_id optional uuid; defaults to the VOC's Primary
     Managed System and, when sent, must equal it
@@ -372,16 +382,16 @@ inside one transaction. It returns `200`:
   `voc_cluster_member_added`) as applicable, committed in the same
   transaction.
 
-## Close-out responsibility (ADR-0067; implementation pending)
+## Close-out responsibility (ADR-0067; VOC/Finding implemented by #1090)
 
-VOC create keeps ordinary Reporter owner fields forbidden. Proposed/new privileged owner
+VOC create keeps ordinary Reporter owner fields forbidden. Privileged owner
 Actor/team override requires server `voc.triage`; authorized explicit null opts out and
 omission requests defaults. Persist existing owner fields while remaining untriaged;
 invalid explicit assignment rejects `validation.failed`, absent/invalid automatic defaults
 fall through to existing scoped unassigned queue with Admin warning. Creation DTO/audit
 returns safe routing metadata, with no private skipped-candidate IDs for Reporter.
-VOC-origin Finding/request transitions use the destination resolver, retain source
-visibility and atomic links/audit/replay. Optional later triage assignment remains valid.
+VOC-origin Finding transitions use the destination resolver and retain source
+visibility and atomic links/audit/replay. Task Request routing remains the separate 56-F item. Optional later triage assignment remains valid.
 
 ## Analytics Area report destination extension (ADR-0069)
 

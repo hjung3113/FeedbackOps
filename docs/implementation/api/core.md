@@ -168,7 +168,11 @@ resolution failures in their source transaction, once per skipped rule, and own 
 fallback/creation end-to-end evidence. They must recheck destination eligibility, keep
 explicit-null versus omitted semantics, and never call this seam on replay or rejected
 creation. #1089 supplies and tests the seam/read/UI with real fixtures; it does not install
-creation-time producers. Defaults never reassign historical rows; Survey's dedicated
+creation-time producers itself. #1090 wires VOC and all three Finding source producers.
+`lockAnalyticsArea` / `assertActiveAnalyticsAreaForManagedSystem` now return stored
+`owner_team_id` in the caller transaction after workspace/system/archive validation.
+Core also supplies an active-team validity input; destination eligibility remains source-owned.
+Defaults never reassign historical rows; Survey's dedicated
 operator routing remains unchanged. Known teams display without new CRUD, membership,
 or a workspace team-candidate endpoint.
 

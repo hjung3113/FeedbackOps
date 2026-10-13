@@ -210,6 +210,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
         [workspaceId],
       );
       await migrateHandle.pool.query(`delete from voc.vocs where workspace_id = $1`, [workspaceId]);
+      await migrateHandle.pool.query('delete from core.responsibility_default_failures where workspace_id=$1', [workspaceId]);
       await migrateHandle.pool.query(`delete from core.managed_systems where workspace_id = $1`, [
         workspaceId,
       ]);

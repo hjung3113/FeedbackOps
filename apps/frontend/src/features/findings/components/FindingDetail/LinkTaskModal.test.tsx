@@ -34,6 +34,8 @@ const FINDING: FindingDto = {
   summary: '쿼리 플랜 개선 필요',
   source_type: 'manual',
   source_id: null,
+  owner_actor_id: null,
+  owner_team_id: null,
   evidence_count: 0,
   severity: 'high',
   confidence: 'medium',

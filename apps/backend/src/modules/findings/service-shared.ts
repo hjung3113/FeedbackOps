@@ -29,6 +29,8 @@ export function toDto(
     severity: row.severity,
     confidence: row.confidence,
     status: row.status,
+    owner_actor_id: row.owner_actor_id,
+    owner_team_id: row.owner_team_id,
     analytics_area_id: row.analytics_area_id,
     linked_task_id: row.linked_task_id,
     linked_milestone_id: row.linked_milestone_id,

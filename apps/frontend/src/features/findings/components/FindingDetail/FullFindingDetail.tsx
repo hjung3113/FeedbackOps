@@ -23,6 +23,7 @@ import {
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import type * as React from 'react';
+import { FindingOwnerField } from './FindingOwnerField';
 import { AddEvidenceModal } from './AddEvidenceModal';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
 import {
@@ -100,6 +101,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
             <FieldRow label="상태" inset="none">
               <FitBadge>{FINDING_STATUS_LABELS[finding.status]}</FitBadge>
             </FieldRow>
+            <FindingOwnerField key={finding.id} finding={finding} canManage={canManage} actorsById={actorsById} />
             <FieldRow label="생성자" inset="none">
               <UserChip
                 user={{

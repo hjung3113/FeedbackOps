@@ -9,6 +9,8 @@ import { findingConfidenceSchema, findingSeveritySchema } from '../findings/inde
  */
 export const createFindingFromSurveyResponseRequestSchema = z
   .object({
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
     severity: findingSeveritySchema,
     confidence: findingConfidenceSchema.optional(),
     analytics_area_id: z.string().uuid().optional(),

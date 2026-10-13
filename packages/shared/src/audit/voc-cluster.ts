@@ -91,11 +91,19 @@ export const vocClusterMemberRemovedDetailSchema = z.object({
 export type VocClusterMemberRemovedDetail = z.infer<typeof vocClusterMemberRemovedDetailSchema>;
 
 export const findingCreatedFromVocClusterDetailSchema = z.object({
+  owner_actor_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   finding_id: z.string().uuid(),
   source_voc_cluster_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
   source_type: z.literal('voc_cluster'),
 });
+
 export type FindingCreatedFromVocClusterDetail = z.infer<
   typeof findingCreatedFromVocClusterDetailSchema
 >;

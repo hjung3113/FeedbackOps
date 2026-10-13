@@ -59,6 +59,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
   'finding_status_changed',
   'finding_comment_created',
+  'finding_owner_assigned',
   'task_request_created_from_finding',
   'task_request_created_from_voc',
   'task_request_created_from_voc_cluster',
@@ -102,7 +103,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(82);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(83);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

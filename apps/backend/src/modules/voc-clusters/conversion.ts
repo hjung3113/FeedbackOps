@@ -119,17 +119,27 @@ export function createVocClusterConversion(
             managedSystemId: targetManagedSystemId,
           });
 
-          const finding = await createFindingFromVocCluster(tx, {
-            workspaceId: args.actor.workspace_id,
-            primaryManagedSystemId: targetManagedSystemId,
-            title: args.input.title,
-            summary: args.input.summary,
-            sourceId: cluster.id,
-            severity: args.input.severity,
-            confidence: args.input.confidence ?? null,
-            analyticsAreaId: args.input.analytics_area_id ?? null,
-            createdBy: args.actor.actor_id,
-          });
+          const finding = await createFindingFromVocCluster(
+            tx,
+            {
+              workspaceId: args.actor.workspace_id,
+              primaryManagedSystemId: targetManagedSystemId,
+              title: args.input.title,
+              summary: args.input.summary,
+              sourceId: cluster.id,
+              severity: args.input.severity,
+              confidence: args.input.confidence ?? null,
+              analyticsAreaId: args.input.analytics_area_id ?? null,
+              createdBy: args.actor.actor_id,
+              ...(args.input.owner_actor_id === undefined
+                ? {}
+                : { owner_actor_id: args.input.owner_actor_id }),
+              ...(args.input.owner_team_id === undefined
+                ? {}
+                : { owner_team_id: args.input.owner_team_id }),
+            },
+            deps,
+          );
 
           const createdFindingTuple = registeredEntityLinkPairSchema.parse({
             source_type: 'voc_cluster',
@@ -161,6 +171,11 @@ export function createVocClusterConversion(
               source_voc_cluster_id: cluster.id,
               primary_managed_system_id: targetManagedSystemId,
               source_type: 'voc_cluster',
+              owner_actor_id: finding.owner_actor_id,
+              owner_team_id: finding.owner_team_id,
+              default_resolved: finding.default_resolved,
+              source_rule: finding.source_rule,
+              managed_system_id: targetManagedSystemId,
             },
           });
 
@@ -185,6 +200,12 @@ export function createVocClusterConversion(
           return {
             status: 201,
             body: {
+              owner_actor_id: finding.owner_actor_id,
+              owner_team_id: finding.owner_team_id,
+              default_resolved: finding.default_resolved,
+              source_rule: finding.source_rule,
+              managed_system_id: targetManagedSystemId,
+              display_id: finding.display_id,
               id: finding.id,
               workspace_id: finding.workspace_id,
               primary_managed_system_id: finding.primary_managed_system_id,

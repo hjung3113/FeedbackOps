@@ -107,8 +107,6 @@ describe('createVocRequestSchema', () => {
       'severity',
       'reporter_facing_status',
       'triage_state',
-      'owner_user_id',
-      'owner_team_id',
       'display_id',
     ]);
   });

@@ -34,6 +34,31 @@ describe('vocCreatedDetailSchema', () => {
     expect(parsed.source_context).toBe('direct_use');
   });
 
+  it.each([
+    'explicit',
+    'managed_system_owner',
+    'analytics_area_owner',
+    'workspace_fallback_queue',
+  ] as const)('retains safe %s routing metadata in the existing creation audit', (rule) => {
+    const metadata = {
+      owner_user_id: null,
+      owner_team_id: null,
+      default_resolved: rule === 'managed_system_owner' || rule === 'analytics_area_owner',
+      source_rule: rule,
+      managed_system_id: U,
+    };
+    const parsed = vocCreatedDetailSchema.parse({
+      voc_id: U,
+      workspace_id: U,
+      primary_managed_system_id: U,
+      analytics_area_id: null,
+      reporter_id: U,
+      source_context: 'direct_use',
+      ...metadata,
+    });
+    expect(parsed).toMatchObject(metadata);
+  });
+
   it('rejects bad source_context', () => {
     expect(() =>
       vocCreatedDetailSchema.parse({

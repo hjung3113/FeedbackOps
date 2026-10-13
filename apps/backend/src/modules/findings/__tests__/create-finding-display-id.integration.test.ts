@@ -104,6 +104,7 @@ describe.skipIf(!runIntegration)('finding display_id assignment (#142)', () => {
       await migrateHandle.pool.query(`delete from finding.findings where workspace_id = $1`, [
         workspaceId,
       ]);
+      await migrateHandle.pool.query(`delete from core.responsibility_default_failures where workspace_id=$1`, [workspaceId]);
       await migrateHandle.pool.query(`delete from voc.vocs where workspace_id = $1`, [workspaceId]);
       if (adminActorId) {
         await migrateHandle.pool.query(`delete from core.idempotency_keys where actor_id = $1`, [

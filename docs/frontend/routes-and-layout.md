@@ -31,7 +31,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId&public_update=missing
 /tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
 /integration?managedSystem=:managedSystemId|all
-/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
+/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all&status=active|stale|detached|revoked&type=related_to
@@ -531,3 +531,8 @@ load-more without discarding successful rows. Explain `Finding에 저장된 Evid
 No editing, standalone creation, Unlinked tab, count/coverage KPI or execution
 control. Use ADR-0060's prototype reference only for this new surface and shipped
 Integration patterns for density/copy/scroll; verify desktop 1440 and keyboard focus.
+
+Finding responsibility (#1090): the source-owned list uses persisted owner fields for its
+owner display and `assignment=assigned|unassigned` URL filter. Owner-only detail edits preserve
+workflow status, refetch detail/list/Home/navigation counts after success, and keep the editor
+open on failure without retrying a mutation. The creator is displayed separately as provenance.

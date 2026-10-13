@@ -59,9 +59,9 @@ export async function findWorkspaceActorIds(
 export async function lockWorkspaceActor(
   tx: Tx,
   input: { workspaceId: string; actorId: string },
-): Promise<WorkspaceActor | null> {
+): Promise<(WorkspaceActor & { actor_type: string }) | null> {
   const rows = await tx
-    .select({ id: actors.id, role_level: actors.roleLevel })
+    .select({ id: actors.id, role_level: actors.roleLevel, actor_type: actors.actorType })
     .from(actors)
     .where(and(eq(actors.workspaceId, input.workspaceId), eq(actors.id, input.actorId)))
     .for('update');
@@ -70,7 +70,7 @@ export async function lockWorkspaceActor(
   if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
     throw new Error(`unexpected role_level for actor ${row.id}: ${row.role_level}`);
   }
-  return { id: row.id, role_level: row.role_level };
+  return { id: row.id, role_level: row.role_level, actor_type: row.actor_type };
 }
 
 /** Selected review identity projection. Never exposes the Actor email. */

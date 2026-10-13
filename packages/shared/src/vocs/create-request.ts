@@ -50,8 +50,6 @@ export const FORBIDDEN_CREATE_FIELDS = [
   'severity',
   'reporter_facing_status',
   'triage_state',
-  'owner_user_id',
-  'owner_team_id',
   'display_id',
 ] as const;
 export type ForbiddenCreateField = (typeof FORBIDDEN_CREATE_FIELDS)[number];
@@ -68,5 +66,7 @@ export const createVocRequestSchema = z.object({
   analytics_area_id: z.string().uuid().optional(),
   source_context: sourceContextSchema.default('direct_use'),
   attachment_ids: attachmentIdsSchema.optional(),
+  owner_user_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
 });
 export type CreateVocRequest = z.infer<typeof createVocRequestSchema>;

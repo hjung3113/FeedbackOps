@@ -107,6 +107,8 @@ function toDateOrNull(v: Date | string | null): Date | null {
 }
 
 export interface InsertVocInput {
+  ownerUserId?: string | null;
+  ownerTeamId?: string | null;
   workspaceId: string;
   primaryManagedSystemId: string;
   analyticsAreaId: string | null;
@@ -342,8 +344,10 @@ export async function insertVoc(tx: Tx, input: InsertVocInput) {
       title: input.title,
       descriptionRichContent: input.descriptionRichContent as object,
       sourceContext: input.sourceContext,
+      ownerUserId: input.ownerUserId ?? null,
+      ownerTeamId: input.ownerTeamId ?? null,
       // defaults handle: severity=null, reporterFacingStatus='received',
-      // triageState='untriaged', ownerUserId=null, ownerTeamId=null
+      // triageState='untriaged'; responsibility was resolved by the command
     })
     .returning();
   return inserted[0];

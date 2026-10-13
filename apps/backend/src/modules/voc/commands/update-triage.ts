@@ -16,6 +16,7 @@ import { isRequestableDenial } from '../../permissions/index.js';
 import { selectVocForUpdate } from '../repo.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
+import { validateOwner } from '../responsibility.js';
 import { composeEnvelope } from './compose-envelope.js';
 
 export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
@@ -202,6 +203,13 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
           fields: [{ path: ['owner_team_id'], code: 'invalid' }],
         },
       );
+    }
+    if (input.owner_user_id !== undefined || input.owner_team_id !== undefined) {
+      const failure = await validateOwner(tx, deps, actor.workspace_id,
+        { id: row.primaryManagedSystemId }, newOwnerUser, newOwnerTeam);
+      if (failure) throw new HttpError('validation.failed', 'invalid owner', {
+        fields: [{ path: [newOwnerTeam ? 'owner_team_id' : 'owner_user_id'], code: failure }],
+      });
     }
     if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
       patch.ownerUserId = newOwnerUser;

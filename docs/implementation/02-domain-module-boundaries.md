@@ -242,6 +242,9 @@ and selected risk calculation; collection reads do not invoke selected projectio
 ## Responsibility and recovery seams (ADR-0067; implementation pending)
 
 Core-owned Managed Systems/Analytics Areas export locked transaction-aware routing inputs;
+#1090 extends the existing AA lock with `owner_team_id` and consumes the Core-owned
+`responsibility-read-projections.ts` team validity input plus the Auth barrel actor lock.
+These are validity inputs only; no default resolver or domain assignment lives in Core.
 destination VOC/Finding/Task Request/Task application services decide eligibility and write
 only owned assignments. Extend `lockManagedSystem`/approved readers; shared contains DTOs,
 not runtime resolution. Survey's independent operator rule stays intact.

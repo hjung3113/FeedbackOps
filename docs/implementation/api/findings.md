@@ -25,13 +25,20 @@ Creation happens only through source conversion routes:
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
 
-`PATCH /findings/:id` accepts strict body `{ status, reason? }` and returns the
+`PATCH /findings/:id` accepts strict body `{ status?, reason?, owner_actor_id?, owner_team_id? }` and returns the
 updated `FindingDto`. Slice 6 supports only `draft -> active`,
 `draft -> not_actionable`, `active -> not_actionable`, and
 `not_actionable -> active`; `converted` and `archived` remain stored statuses but
 are rejected as user-directed targets here. Authz reuses `finding.manage`.
 Successful non-no-op transitions audit `finding_status_changed`; same-status
-requests are `200` no-ops returning the current Finding.
+requests are `200` no-ops returning the current Finding. At least a status or owner key
+is required. Owner-only edits preserve status and use current destination `finding.manage`
+(Admin always bypasses even explicit deny), internal Actor/same-workspace active-team and
+XOR validation. Omitted PATCH owner keys preserve their current value; both null clears.
+A changed pair emits `finding_owner_assigned` with from/to Actor/team and Managed System.
+Owner/status changes, audits and replay are atomic; invalid combined status rolls back all.
+All Finding list/detail/create DTOs include required nullable `owner_actor_id` / `owner_team_id`;
+`created_by` remains provenance.
 
 `POST /findings/:id/link-task` accepts strict body `{ task_id: uuid }`, requires
 `Idempotency-Key`, and returns the updated `FindingDto`. Authz is Admin or
@@ -45,7 +52,8 @@ the existing `(finding, task, requested_task)` entity link, audit
 
 ## GET /findings — opt-in list pages
 
-Query: `managed_system_id` (UUID), `execution=none`, optional opaque `cursor`,
+Query: `managed_system_id` (UUID), `execution=none`, `owner_actor_id` / `owner_team_id`
+(UUID), `assignment=assigned|unassigned`, optional opaque `cursor`,
 and optional integer `limit` (1..100). The list screen sends `limit=50`;
 there is no server default for this list's limit. Without `limit`, the response
 stays exactly `{ items: FindingDto[] }` for full-set consumers, including
@@ -58,7 +66,8 @@ opaque to clients. `page.cursor` appears only when another page exists;
 `total` appears only on the first page (no request cursor) and counts visible
 rows under the same filters. An invalid cursor returns `422 validation.failed`,
 `detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]`. Invalid limits
-also return `422 validation.failed` using the query validation envelope.
+also return `422 validation.failed` using the query validation envelope. Owner and assignment predicates apply before both
+counts and pagination; assigned means either owner present, unassigned means both null.
 
 Admin sees the workspace population. Developer visibility uses the existing
 point `finding.read` checks once per distinct Primary Managed System, including
@@ -185,17 +194,22 @@ idempotency behavior: Idempotency-Key required. Replay of the same key and
   bucket is 429 rate_limited.actor.
 ```
 
-## Close-out responsibility (ADR-0067; implementation pending)
+## Close-out responsibility (ADR-0067; implemented by #1090)
 
-All VOC/Cluster/Survey-response create paths write proposed/new nullable
+All VOC/Cluster/Survey-response create paths write nullable
 `owner_actor_id` / `owner_team_id` through the Finding destination command. Resolve target
 Managed System owner → active same-system Analytics Area team → scoped fallback; permitted
 explicit value/null takes precedence, omission requests defaults. Validate target eligibility
 with `finding.manage`; invalid explicit assignments reject `validation.failed`, invalid
 automatic candidates skip with safe audit metadata/Admin warning. Preserve source gate,
 entity links, creation state, rollback/idempotent replay, and no provenance backfill.
-Proposed/new owner fields must appear in typed list/detail/create DTOs and source-owned
-assignment display/edit/filter; assignment changes validate/audit in the owning mutation.
+Creation responses and audits include the persisted owner pair, `default_resolved`,
+`source_rule` (`explicit`, `managed_system_owner`, `analytics_area_owner`,
+`workspace_fallback_queue`), and `managed_system_id`. Skipped-rule categories append through
+Core diagnostics in the same transaction, never on replay/rejection. Normal reads use the
+persisted pair; no default-edit backfill or provenance inference occurs. The source-owned
+Finding detail displays/edits responsibility and the list persists its assignment filter in
+URL state. No team candidate catalog or team membership administration is introduced.
 
 ## Analytics Area report destination extension (ADR-0069)
 

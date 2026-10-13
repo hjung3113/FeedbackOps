@@ -126,6 +126,8 @@ const findings = [
     summary: '결제 실패 VOC가 반복됩니다.',
     source_type: 'voc_cluster' as const,
     source_id: '22222222-2222-2222-2222-222222222222',
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 3,
     severity: 'high' as const,
     confidence: 'medium' as const,
@@ -147,6 +149,8 @@ const findings = [
     summary: '배송 지연 문의가 증가했습니다.',
     source_type: 'manual' as const,
     source_id: null,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'medium' as const,
     confidence: null,
@@ -345,6 +349,10 @@ describe('FindingsListPage', () => {
   });
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {
+    useFindingsListMock.mockReturnValue({
+      data: { items: findings.map((finding, index) => index === 0 ? { ...finding, owner_actor_id: finding.created_by } : finding) },
+      isPending: false, isError: false, isSuccess: true, isFetching: false, error: null,
+    });
     await renderFindingsPage();
 
     const richRow = screen.getByTestId('finding-row-FND-101');

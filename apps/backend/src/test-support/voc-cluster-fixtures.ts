@@ -68,6 +68,10 @@ export async function cleanupVocClusterFixtures(
     input.clusterIds,
   ]);
   await dbHandle.pool.query('delete from voc.vocs where id = any($1::uuid[])', [vocIds]);
+  await dbHandle.pool.query(
+    'delete from core.responsibility_default_failures where workspace_id=$1 and managed_system_id=any($2::uuid[])',
+    [input.workspaceId, input.managedSystemIds],
+  );
   await dbHandle.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
     input.managedSystemIds,
   ]);
