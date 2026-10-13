@@ -107,28 +107,30 @@ export function FindingOwnerField({
   return (
     <div data-testid="finding-owner-field">
       <FieldRow label={GLOSSARY.owner} inset="none">
-        <span>{label}</span>
-        {canManage && !editing && (
-          <Button
-            ref={editButtonRef}
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              mutation.reset();
-              restoreFocusRef.current = false;
-              setValue(
-                finding.owner_actor_id
-                  ? `actor:${finding.owner_actor_id}`
-                  : teamId
-                    ? `team:${teamId}`
-                    : 'none',
-              );
-              setEditing(true);
-            }}
-          >
-            {COPY.edit}
-          </Button>
-        )}
+        <span className="inline-flex items-center gap-2">
+          <span>{label}</span>
+          {canManage && !editing && (
+            <Button
+              ref={editButtonRef}
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                mutation.reset();
+                restoreFocusRef.current = false;
+                setValue(
+                  finding.owner_actor_id
+                    ? `actor:${finding.owner_actor_id}`
+                    : teamId
+                      ? `team:${teamId}`
+                      : 'none',
+                );
+                setEditing(true);
+              }}
+            >
+              {COPY.edit}
+            </Button>
+          )}
+        </span>
       </FieldRow>
       {editing && (
         <div
