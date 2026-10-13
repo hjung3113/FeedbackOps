@@ -331,3 +331,18 @@ export const listEvidenceInventoryResponseSchema = z
   })
   .strict();
 export type ListEvidenceInventoryResponse = z.infer<typeof listEvidenceInventoryResponseSchema>;
+
+// Approval selection is separate from the generic VOC/note evidence command.
+export const attachSurveyEvidenceRequestSchema = z
+  .object({
+    approved_excerpt_id: z.string().uuid(),
+    analytics_area_id: z.string().uuid().nullable().optional(),
+    sentiment: evidenceHighlightSentimentSchema.nullable().optional(),
+    importance: evidenceHighlightImportanceSchema.nullable().optional(),
+  })
+  .strict();
+export type AttachSurveyEvidenceRequest = z.infer<typeof attachSurveyEvidenceRequestSchema>;
+export const attachSurveyEvidenceResponseSchema = z
+  .object({ evidence_highlight_id: z.string().uuid(), finding_id: z.string().uuid() })
+  .strict();
+export type AttachSurveyEvidenceResponse = z.infer<typeof attachSurveyEvidenceResponseSchema>;

@@ -28,7 +28,10 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
   first); explicit/null/default/fallback semantics keep audit/links/replay atomic.
 - Source mutations use the injected Dashboard recorder; it writes only Dashboard projections.
 
-## Survey provenance and excerpts (ADR-0064; #739/#740/#816 pending)
+## Survey provenance and excerpts (ADR-0064; #1109 backend/shared implemented)
+
+Backend/shared implementation is present; migration application and real-role
+integration verification remain conductor-owned. The frontend picker is separate.
 
 - Finding owns parent/highlight lifecycle and counters; Survey owns proposed/new
   protected response/approval/text extensions. Write them through Survey's seam,
@@ -40,7 +43,7 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
 - Hydrate Survey highlight quotes with fresh target read/source read/exact active
   approval in one snapshot; deny/revoke omits text with safe unavailable local
   metadata. Existing highlight audience differs from result-picker suppression.
-- Proposed/new #816 attachment accepts an approved selection, not response UUID
+- The #1109 attachment accepts an approved selection, not response UUID
   or free quote, requires source/result eligibility plus target `finding.manage`,
   and atomically writes binding/highlight/counter/`evidence_of`/audit/idempotency.
   Never add `generated_finding` to an existing Finding. Coordinate schema/grant

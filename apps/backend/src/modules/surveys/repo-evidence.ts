@@ -293,3 +293,44 @@ export async function readInventoryHighlightEvidence(
   `);
   return result.rows;
 }
+
+/** Safe approval columns only; eligibility is applied before the bounded page. */
+export async function readEvidenceCandidatePage(
+  tx: Tx,
+  workspaceId: string,
+  surveyId: string,
+  questionIds: string[],
+  after: string | null,
+  limit: number,
+): Promise<
+  Array<{ approved_excerpt_id: string; redacted_excerpt: string; question_label: string }>
+> {
+  if (questionIds.length === 0) return [];
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    redacted_excerpt: string;
+    question_label: string;
+  }>(sql`
+    SELECT a.id AS approved_excerpt_id, a.redacted_excerpt, q.prompt AS question_label
+    FROM survey.survey_response_excerpt_approvals a
+    JOIN survey.survey_questions q ON q.workspace_id=a.workspace_id AND q.survey_id=a.survey_id
+      AND q.id=a.question_id AND q.kind='text'
+    WHERE a.workspace_id=${workspaceId}::uuid AND a.survey_id=${surveyId}::uuid
+      AND a.revoked_at IS NULL AND a.question_id=ANY(${sqlUuidArray(questionIds)})
+      AND (${after}::uuid IS NULL OR a.id>${after}::uuid)
+    ORDER BY a.id LIMIT ${limit}
+  `);
+  return result.rows;
+}
+
+/** Internal selection resolution; no response UUID is serialized to the caller. */
+export async function lockAttachmentResponse(
+  tx: Tx,
+  workspaceId: string,
+  approvalId: string,
+): Promise<string | null> {
+  const result = await tx.execute<{ response_id: string }>(sql`
+    SELECT response_id FROM survey.lock_attachment_response(${workspaceId}::uuid, ${approvalId}::uuid)
+  `);
+  return result.rows[0]?.response_id ?? null;
+}

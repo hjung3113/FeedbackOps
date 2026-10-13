@@ -22,12 +22,12 @@ must pass the real-role command/route suites before cutover. Detach uses UPDATE 
 
 `createSurveyFindingLink` is Entity Links' authorized application command and calls
 `core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid)`, owned by
-`fops_entity_links_survey_mutator_owner`. It allows only the current response-derived
+`fops_entity_links_survey_mutator_owner`. In 0064 it allows only the current response-derived
 Finding's generated_finding/evidence_of relations, validates workspace-qualified
 private parent/response binding and source Managed System, and returns `{id,inserted}`.
 It neither returns raw endpoints nor exposes detach. Findings authorizes both systems
 before calling it and retains exact same-transaction audits/counters/idempotent replay.
-This is not the deferred #816 existing-Finding attachment command.
+0066 extends only evidence_of to approved attachment witnesses as described below.
 
 Survey's `survey.read_derived_findings(uuid,uuid,boolean)` is addressed by workspace
 and Survey ID and returns only Finding ID/target Managed System. The boolean enables
@@ -113,3 +113,44 @@ restore/replace and execute a real-role legacy upgrade/history check before decl
 Slice 53 complete. See `survey-provenance-cutover-739.md`. Migration execution, deployed
 ACLs, inherited role state, SQL view behavior and concurrency remain runtime-verification
 requirements; TypeScript success alone proves none of them.
+
+## #1109 approved attachment extension (0066; runtime verification pending)
+
+`0066_survey_evidence_attachment.sql` is a Drizzle-generated custom migration with
+journal and snapshot. It reuses both existing isolated mutator owners; no new role,
+app table/column privilege, app owner membership or reader-owner extension is added.
+The migration adds precisely these effective privileges:
+
+| Owner | Object | Privilege and purpose |
+| --- | --- | --- |
+| `fops_entity_links_survey_mutator_owner` | `survey.highlight_response_bindings` | SELECT `(workspace_id, highlight_id, response_id)` to verify the private attachment witness |
+| `fops_entity_links_survey_mutator_owner` | `finding.evidence_highlights` | SELECT `(id, workspace_id, finding_id, source_type)` to bind that witness to its Survey highlight and target |
+| `fops_survey_provenance_mutator_owner` | schema `core` | USAGE to execute deferred canonical-link consistency checks |
+| `fops_survey_provenance_mutator_owner` | `core.entity_links` | SELECT `(workspace_id, source_type, source_id, target_type, target_id, relation_type, status, visibility)` to require the exact active internal-only evidence tuple |
+| `fops_app` | `survey.lock_attachment_response(uuid,uuid)` | EXECUTE only; resolve a workspace-bound approval internally and take the existing response advisory lock |
+
+The existing `core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid)` app
+EXECUTE is reaffirmed. PUBLIC EXECUTE is revoked. The new function has
+`search_path=pg_catalog`, qualified storage and no dynamic SQL. Temporary schema
+CREATE for ownership transfer is revoked in the same migration transaction.
+CREATE OR REPLACE retains the existing owners and ACLs of the consistency functions.
+
+The link command now accepts `evidence_of` backed by a same-workspace private
+highlight binding; `generated_finding` still requires the original private parent
+binding. The 0059 deferred checks permit an attached response different from that
+original response only with an active internal-only `evidence_of` for the attached
+response and target. Original parent bindings and protected snapshots remain immutable.
+
+Findings locks and authorizes the target before Survey selection resolution.
+Survey locks the workspace settings singleton (including default-row initialization)
+and response, then rechecks source access, draft state, active approval, cohort and
+text-question suppression. Highlight, protected snapshot, count, canonical link,
+identifier-only audits and metadata-only idempotency cache commit together.
+Safe candidate reads use repeatable-read snapshots and actual result aggregates;
+they never invoke audited personal Results. Existing reader/aggregate/view/audit
+owners receive no privileges, and raw app link/audit reads remain forbidden.
+
+Conductor must apply 0066 and run the real-role ACL, deferred consistency, attachment,
+rollback, replay, revoke and settings-threshold race tests plus existing personal
+creation/approval, ordinary VOC/note, linked-highlight and inventory regressions.
+Worker typechecks those tests; it does not establish runtime SQL or deployment success.

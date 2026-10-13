@@ -570,3 +570,20 @@ The coordinated rollout, new owner-role prerequisite, consumer inventory and con
 verification are recorded in `survey-link-audit-cutover-740.md`. Neither 0059 nor #740
 alone closes Slice 53. Trusted permitted-definer composition is the accepted limit;
 stolen-app-credential unlinkability is not claimed.
+
+### #1109 approved Survey attachment extension (0066)
+
+`apps/backend/migrations/0066_survey_evidence_attachment.sql` and its generated
+`meta/0066_snapshot.json`/journal extend the existing Survey provenance and Entity
+Links mutator functions. No storage table changes, new owners, app table grants or
+reader-owner widening are introduced. Exact column privileges and their purposes
+are recorded in [the #1109 cutover section](survey-link-audit-cutover-740.md#1109-approved-attachment-extension-0066-runtime-verification-pending).
+The new approval-addressed response lock has PUBLIC EXECUTE revoked and app EXECUTE
+only. Ownership-transfer schema CREATE is temporary and revoked before commit.
+Deferred 0059 checks allow another response on a target only with its same-transaction
+active internal-only `evidence_of`; generated lineage and original history stay intact.
+
+Generation is completed; application and real-role verification are conductor-owned.
+Apply after 0065, verify owner/membership/function/column ACLs, and execute the new
+route rollback/replay/revoke/threshold race tests together with existing provenance
+and canonical-read suites on a throwaway database before deployment acceptance.
