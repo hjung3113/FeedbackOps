@@ -17,10 +17,10 @@ import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import {
-  grantCapability,
   denyCapability,
-  revokeCapabilityGrant,
   expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
 } from '../../../test-support/permissions-fixtures.js';
 import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
@@ -153,11 +153,11 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       WORKSPACE_ID,
     ]);
     await migrateHandle.pool.query(
-      `delete from finding.findings where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      'delete from finding.findings where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
@@ -466,7 +466,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       const second = await requestTask(adminCookie, source, seeded.id, key);
       expect(second.json()).toEqual(first.json());
       const audit = await migrateHandle.pool.query(
-        `select detail from core.audit_log where subject_id = $1 and event_type = $2`,
+        'select detail from core.audit_log where subject_id = $1 and event_type = $2',
         [first.json().id, `task_request_created_from_${source}`],
       );
       expect(audit.rows).toHaveLength(1);

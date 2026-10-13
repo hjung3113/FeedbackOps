@@ -120,12 +120,14 @@ export const taskLinkedToRequestDetailSchema = z.object({
 });
 export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
 
-export const taskRequestReviewerAssignedDetailSchema = z.object({
-  from_actor_id: z.string().uuid().nullable(),
-  from_team_id: z.string().uuid().nullable(),
-  to_actor_id: z.string().uuid().nullable(),
-  to_team_id: z.string().uuid().nullable(),
-}).strict();
+export const taskRequestReviewerAssignedDetailSchema = z
+  .object({
+    from_actor_id: z.string().uuid().nullable(),
+    from_team_id: z.string().uuid().nullable(),
+    to_actor_id: z.string().uuid().nullable(),
+    to_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
 
 export const TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,

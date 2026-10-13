@@ -2,7 +2,7 @@ import { useDroppable } from '@dnd-kit/core';
 import type { TaskDto, TaskStatus } from '@fops/shared';
 import { InternalTaskBadge } from '@fops/ui';
 
-import { taskTeamLabel, resolveTaskAssignee } from '../../adapters/taskDisplayAdapters';
+import { resolveTaskAssignee, taskTeamLabel } from '../../adapters/taskDisplayAdapters';
 import { TaskBoardCard } from './TaskBoardCard';
 import type { TaskBoardGroupBy } from './TaskBoardGroupByButton';
 

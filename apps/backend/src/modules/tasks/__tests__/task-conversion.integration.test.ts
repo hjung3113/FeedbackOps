@@ -19,7 +19,12 @@ import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability, denyCapability, revokeCapabilityGrant, expireCapabilityGrant } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import {
@@ -233,7 +238,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
-      `delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
