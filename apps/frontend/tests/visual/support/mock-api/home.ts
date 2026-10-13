@@ -51,7 +51,7 @@ export function createHomeRequestHandlers(context: MockApiContext): MockApiHandl
   return [
     {
       method: 'GET',
-      path: /^\/permission-requests\/([^/]+)$/,
+      path: /^\/permission-requests\/(?!mine$)([^/]+)$/,
       handle: async (route, _context, _url, match) => {
         const detail = details.find((row) => match !== true && row.id === match[1]);
         await json(
@@ -66,7 +66,7 @@ export function createHomeRequestHandlers(context: MockApiContext): MockApiHandl
         method: action === 'edit' ? 'PATCH' : 'POST',
         path:
           action === 'edit'
-            ? /^\/permission-requests\/([^/]+)$/
+            ? /^\/permission-requests\/(?!mine$)([^/]+)$/
             : action === 'supplement'
               ? /^\/permission-requests\/([^/]+)\/submit-more-info$/
               : /^\/permission-requests\/([^/]+)\/cancel$/,

@@ -24,7 +24,7 @@ test.describe('/home visual harness', () => {
   }) => {
     const mock = await installMockApi(page, { home: 'populated' });
     await page.goto('/home');
-    await page.getByRole('button', { name: 'Finding 관리', exact: true }).click();
+    await page.getByRole('button', { name: /^Finding 관리/ }).click();
     const dialog = page.getByTestId('owner-permission-request-dialog');
     await expect(dialog.getByText('필요한 Finding 관리 범위와 기간을 알려 주세요.')).toBeVisible();
     await dialog.getByLabel('사유', { exact: true }).fill('Finding 검토 사유를 보완합니다.');
@@ -49,20 +49,18 @@ test.describe('/home visual harness', () => {
   test('requester withdrawal confirmation is separate from closing a form', async ({ page }) => {
     const mock = await installMockApi(page, { home: 'populated' });
     await page.goto('/home');
-    await page.getByRole('button', { name: '워크스페이스 관리자 권한', exact: true }).click();
+    await page.getByRole('button', { name: /^워크스페이스 관리자 권한/ }).click();
     const dialog = page.getByTestId('owner-permission-request-dialog');
     await expect(dialog.getByLabel('사유', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: '요청 철회', exact: true }).click();
     const confirmation = page.getByTestId('owner-withdraw-confirmation');
     await expectVisual(page, dialog, 'home-requester-withdraw-confirmation.png');
-    await confirmation.getByRole('button', { name: '닫기', exact: true }).click();
+    await confirmation.getByRole('button', { name: '취소', exact: true }).click();
     expect(mock.postedRequests).toEqual([]);
     await dialog.getByRole('button', { name: '요청 철회', exact: true }).click();
     await confirmation.getByRole('button', { name: '요청 철회', exact: true }).click();
-    await expect(
-      page.getByRole('button', { name: '워크스페이스 관리자 권한', exact: true }),
-    ).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Finding 관리', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^워크스페이스 관리자 권한/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Finding 관리/ })).toBeVisible();
     expect(mock.postedRequests[0]?.body).toEqual({ expected_revision: 1 });
   });
 
