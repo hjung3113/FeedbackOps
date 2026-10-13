@@ -20,11 +20,7 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import {
-  permissionDenies,
-  permissionGrants,
-  permissionRequests,
-} from '../../db/schema/permission.js';
+import { permissionDenies, permissionRequests } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { lockWorkspaceActor } from '../auth/index.js';
@@ -34,6 +30,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import type { NotificationNotifier } from '../notifications/index.js';
 import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
+import { writePermissionGrant } from './grant-command.js';
 import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface DecisionServiceDeps {
@@ -147,11 +144,11 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         const note = body.note?.trim();
         const isSelfApproval = action === 'approve' && request.requesterActorId === actor.actor_id;
         if (action === 'approve') {
+          const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(
+            tx,
+            actor.workspace_id,
+          );
           if (isSelfApproval) {
-            const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(
-              tx,
-              actor.workspace_id,
-            );
             if (workspaceSettings.permission_self_approval === 'forbidden') {
               throw new HttpError(
                 'permission.denied',
@@ -251,6 +248,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         if (action === 'approve') validateRequestExpiration(grantedExpiration, 'expiration');
 
         let grantId: string | undefined;
+        let previousGrantId: string | undefined;
         let denyId: string | undefined;
         const status =
           action === 'approve'
@@ -261,21 +259,19 @@ export function createDecisionService(deps: DecisionServiceDeps) {
 
         try {
           if (action === 'approve') {
-            const inserted = await tx
-              .insert(permissionGrants)
-              .values({
-                workspaceId: request.workspaceId,
-                actorId: request.requesterActorId,
-                capability,
-                managedSystemId: grantedManagedSystemId,
-                grantedByActorId: actor.actor_id,
-                expiresAt: grantedExpiration,
-                sensitiveReason: reason || null,
-              })
-              .returning({ id: permissionGrants.id });
-            grantId = inserted[0]?.id;
-            if (!grantId)
-              throw new HttpError('internal.unexpected', 'permission grant insert returned no row');
+            // Policy lock precedes the shared writer's grant-row lock for all approvals.
+            validateRequestExpiration(grantedExpiration, 'expiration');
+            const result = await writePermissionGrant(tx, {
+              workspaceId: request.workspaceId,
+              actorId: request.requesterActorId,
+              capability,
+              managedSystemId: grantedManagedSystemId,
+              grantedByActorId: actor.actor_id,
+              expiresAt: grantedExpiration,
+              reason: reason || null,
+            });
+            grantId = result.item.id;
+            previousGrantId = result.previousGrantId;
           }
           if (action === 'deny') {
             const inserted = await tx
@@ -330,6 +326,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           requester_actor_id: request.requesterActorId,
           ...(action === 'need_more_info' ? { note: note as string } : { reason: reason || null }),
           ...(grantId ? { grant_id: grantId } : {}),
+          ...(previousGrantId ? { previous_grant_id: previousGrantId } : {}),
           ...(action === 'approve'
             ? {
                 requested_managed_system_id: request.requestedManagedSystemId,

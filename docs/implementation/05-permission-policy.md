@@ -7,7 +7,9 @@ What the default user can do, and the capability matrix, live in docs/design/09-
 
 ADR-0066 (accepted 2026-10-13) adds proposed/new revision, withdrawal/edit,
 supported narrowing, selected risk detail, direct-grant and superseded-row behavior.
-These accepted contracts are implementation work; this docs change ships none of them.
+#1080/#1081 implement requester revisions and selected reads; #1085 implements
+governed direct grants and superseded-row behavior. Runtime integration and release
+checks remain conductor-owned.
 
 ## Role Level And Capability
 
@@ -419,7 +421,8 @@ The backend decides which state applies.
 The rules above incorporating revision, withdrawal and narrowing replace older
 scope-copy/default-expiration text. #1080 implements versioned requester
 mutations, supported-scope validation and narrowed Admin decisions; #1081 adds
-selected owner/Admin reads and explained risk. Direct grants remain pending.
+selected owner/Admin reads and explained risk; #1085 adds the governed direct
+grant and audited expired reissue (BE). The direct-grant UI remains #1086.
 `api/permissions.md` owns exact bodies, reads, responses and errors.
 
 One Permission capability/scope policy supplies server candidates and validates

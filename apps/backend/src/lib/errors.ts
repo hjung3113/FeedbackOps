@@ -60,6 +60,8 @@ export type DetailShape =
         reason_required?: boolean;
       };
     }
+  | { request_id: string; review_route: string }
+  | { deny_ids: string[]; lift_route: string }
   | { current_revision: number }
   | { current_updated_at: string }
   | { current_triage_state: string }

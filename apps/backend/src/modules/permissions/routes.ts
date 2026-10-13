@@ -16,6 +16,7 @@ import {
   approvePermissionRequestSchema,
   cancelPermissionRequestSchema,
   denyPermissionRequestSchema,
+  directPermissionGrantSchema,
   editPermissionRequestSchema,
   isCapability,
   needMoreInfoPermissionRequestSchema,
@@ -523,6 +524,61 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     },
   });
 
+  app.route({
+    method: 'GET',
+    url: '/permissions/grant-options',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+      const decision = await checkService.checkCapability(actor, 'workspace.admin', {
+        workspace_id: actor.workspace_id,
+      });
+      if (!decision.allow) throw new HttpError('permission.denied', 'workspace.admin required');
+      const query = z.object({ actor_id: z.string().uuid() }).strict().safeParse(req.query);
+      if (!query.success)
+        return sendError(reply, 'validation.failed', 'invalid recipient', {
+          fields: fieldsFromZodIssues(query.error.issues),
+        });
+      return grantAdminService.grantOptions(actor, query.data.actor_id);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/permissions/grants',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.sensitive as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const rawKey = req.headers['idempotency-key'];
+      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+      if (idempotencyKey !== undefined && !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)) {
+        return sendError(
+          reply,
+          'validation.malformed_idempotency_key',
+          'Idempotency-Key must be a UUIDv4',
+        );
+      }
+      const parsed = directPermissionGrantSchema.safeParse(req.body ?? {});
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid direct grant', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const result = await grantAdminService.grant(
+        { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+        parsed.data,
+        idempotencyKey ? { idempotencyKey } : {},
+      );
+      return reply.code(result.status).send(result.body);
+    },
+  });
   const activePermissionListRoutes = [
     {
       url: '/permissions/grants',

@@ -146,10 +146,9 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
     // upgrade (or app-side mistake) cannot trigger DDL through fops_app's
     // SECURITY DEFINER elevation.
     await expect(
-      appHandle.pool.query(
-        "select pgboss.create_queue($1, '{\"partition\":true}'::jsonb)",
-        ['__f010_test_partitioned__'],
-      ),
+      appHandle.pool.query('select pgboss.create_queue($1, \'{"partition":true}\'::jsonb)', [
+        '__f010_test_partitioned__',
+      ]),
     ).rejects.toMatchObject({ code: '42501' });
   });
 
@@ -164,10 +163,9 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
       '{"partition":1}', // numeric truthy
     ]) {
       await expect(
-        appHandle.pool.query(
-          `select pgboss.create_queue($1, '${payload}'::jsonb)`,
-          [`__f010_test_variant_${payload}__`],
-        ),
+        appHandle.pool.query(`select pgboss.create_queue($1, '${payload}'::jsonb)`, [
+          `__f010_test_variant_${payload}__`,
+        ]),
       ).rejects.toMatchObject({ code: '42501' });
     }
   });
@@ -203,7 +201,7 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
       'permission_requests_workspace_requested_managed_system_idx',
     ];
     const { rows } = await migrateHandle.pool.query<{ indexname: string }>(
-      `select indexname from pg_indexes where indexname = ANY($1::text[])`,
+      'select indexname from pg_indexes where indexname = ANY($1::text[])',
       [expected],
     );
     const got = new Set(rows.map((r) => r.indexname));
@@ -299,5 +297,20 @@ describe.skipIf(!runIntegration)('Index conventions (ADR-0015:55-61)', () => {
         'workspace_id',
       );
     }
+  });
+
+  it('final permission grant index retains every COALESCE scope column and excludes superseded rows', async () => {
+    const result = await handle.pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where schemaname = 'permission'
+       and indexname = 'permission_grants_active_uq'`,
+    );
+    expect(result.rows).toHaveLength(1);
+    const definition = result.rows[0]?.indexdef;
+    expect(definition).toMatch(/COALESCE\(managed_system_id/i);
+    expect(definition).toMatch(/COALESCE\(object_type/i);
+    expect(definition).toMatch(/COALESCE\(object_id/i);
+    expect(definition).toMatch(/revoked_at IS NULL/i);
+    expect(definition).toMatch(/superseded_at IS NULL/i);
+    expect(definition).not.toMatch(/expires_at|now\(\)/i);
   });
 });

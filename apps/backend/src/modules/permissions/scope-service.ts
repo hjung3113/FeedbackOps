@@ -15,9 +15,9 @@ import { and, eq, isNull, or } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
-import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 
 export type Scope = { kind: 'all' } | { kind: 'scoped'; managedSystemIds: string[] };
 
@@ -29,7 +29,7 @@ export interface ScopeActorContext {
 
 /**
  * Resolves the set of managed systems for which an actor holds
- * a non-revoked, non-expired grant for `capability`, minus any active denies.
+ * a non-revoked, non-superseded, non-expired grant for `capability`, minus active denies.
  *
  * When `capability` is undefined, ANY capability grant is matched
  * (used for actorEffectiveScope).
@@ -59,11 +59,9 @@ export async function actorScopeForCapability(
     eq(permissionGrants.workspaceId, actor.workspace_id),
     eq(permissionGrants.actorId, actor.actor_id),
     isNull(permissionGrants.revokedAt),
+    isNull(permissionGrants.supersededAt),
     // expires_at IS NULL OR expires_at > now()
-    or(
-      isNull(permissionGrants.expiresAt),
-      sql`${permissionGrants.expiresAt} > now()`,
-    ),
+    or(isNull(permissionGrants.expiresAt), sql`${permissionGrants.expiresAt} > now()`),
   ];
 
   if (capability !== undefined) {

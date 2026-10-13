@@ -277,7 +277,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
   }
 
   async function submissionAuditCount(requestId: string): Promise<number> {
-    const result = await db.pool.query<{ count: number }>(
+    const result = await migrateDb.pool.query<{ count: number }>(
       `select count(*)::int as count from core.audit_log
         where subject_id = $1 and event_type = 'permission_more_info_submitted'`,
       [requestId],
@@ -332,7 +332,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     expect(new Date(result.updated_at).getTime()).toBe(after.updated_at.getTime());
     expect(await submissionAuditCount(requestId)).toBe(beforeAuditCount + 1);
 
-    const auditRows = await db.pool.query<AuditRow>(
+    const auditRows = await migrateDb.pool.query<AuditRow>(
       `select actor_id, event_type, subject_type, subject_id, summary, detail
          from core.audit_log
         where subject_id = $1 and event_type = 'permission_more_info_submitted'`,
@@ -696,7 +696,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
       expires_at: new Date('2031-05-06T07:08:09.000Z'),
     });
 
-    const events = await db.pool.query<{ event_type: string }>(
+    const events = await migrateDb.pool.query<{ event_type: string }>(
       'select event_type from core.audit_log where subject_id = $1 order by created_at, id',
       [requestId],
     );
@@ -794,7 +794,10 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     return {
       row: await readRequest(id),
       audits: (
-        await db.pool.query('select * from core.audit_log where subject_id = $1 order by id', [id])
+        await migrateDb.pool.query(
+          'select * from core.audit_log where subject_id = $1 order by id',
+          [id],
+        )
       ).rows,
       grants: (
         await db.pool.query(
@@ -922,7 +925,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
       requested_managed_system_id: system,
       requested_expiration: null,
     });
-    const audit = await db.pool.query(
+    const audit = await migrateDb.pool.query(
       'select detail from core.audit_log where subject_id = $1 and event_type = $2',
       [id, 'permission_request_updated'],
     );

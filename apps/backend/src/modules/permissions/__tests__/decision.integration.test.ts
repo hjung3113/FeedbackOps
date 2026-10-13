@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import {
   NOTIFICATION_DISPATCH_QUEUE,
@@ -144,12 +144,21 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     await db.pool.query(`delete from core.idempotency_keys where actor_id in (${actorIds})`, [
       WORKSPACE_ID,
     ]);
+    await db.pool.query(
+      `delete from core.rate_limits where key in
+       (select ($1::uuid)::text || ':' || id::text from core.actors
+        where workspace_id = $1::uuid and ${actorPattern})`,
+      [WORKSPACE_ID],
+    );
     await db.pool.query(`delete from core.sessions where actor_id in (${actorIds})`, [
       WORKSPACE_ID,
     ]);
-    await migrateDb.pool.query(`delete from core.audit_log where actor_id in (${actorIds})`, [
-      WORKSPACE_ID,
-    ]);
+    await migrateDb.pool.query(
+      `delete from core.audit_log where actor_id in (${actorIds})
+      or detail->>'grantee_actor_id' in (select id::text from core.actors where workspace_id = $1 and ${actorPattern})
+      or detail->>'requester_actor_id' in (select id::text from core.actors where workspace_id = $1 and ${actorPattern})`,
+      [WORKSPACE_ID],
+    );
     await db.pool.query(`delete from core.actors where workspace_id = $1 and ${actorPattern}`, [
       WORKSPACE_ID,
     ]);
@@ -304,7 +313,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         { workspace_id: WORKSPACE_ID },
       ),
     ).toMatchObject({ allow: true, via: 'direct_grant' });
-    const approvalAudit = await db.pool.query<{ count: string }>(
+    const approvalAudit = await migrateDb.pool.query<{ count: string }>(
       `select count(*) from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
       [workspaceRequest],
     );
@@ -370,7 +379,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         [grantId],
       );
       expect(grant.rows[0]?.expires_at?.toISOString() ?? null).toBe(grantedExpiration);
-      const audit = await db.pool.query<{
+      const audit = await migrateDb.pool.query<{
         detail: { requested_expiration: string | null; granted_expiration: string | null };
       }>(
         `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
@@ -421,7 +430,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       { workspace_id: WORKSPACE_ID, managed_system_id: defaultSystemId },
     );
     expect(decision).toMatchObject({ allow: false, reason: 'explicit_deny' });
-    const audit = await db.pool.query<{ count: string }>(
+    const audit = await migrateDb.pool.query<{ count: string }>(
       `select count(*) from core.audit_log where subject_id = $1 and event_type = 'permission_denied'`,
       [id],
     );
@@ -446,7 +455,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       [requesterId],
     );
     expect(Number(grants.rows[0]?.count)).toBe(0);
-    const audit = await db.pool.query<{ event_type: string; count: string }>(
+    const audit = await migrateDb.pool.query<{ event_type: string; count: string }>(
       `select event_type, count(*) from core.audit_log
         where subject_id in ($1, $2)
         group by event_type`,
@@ -696,7 +705,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const response = await decide(request, 'approve', { self_approval: envelope }, self.cookie);
     expect(response.statusCode).toBe(200);
     expect(await requestStatus(request)).toBe('approved');
-    const audit = await db.pool.query<{ detail: unknown }>(
+    const audit = await migrateDb.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
       [request],
     );
@@ -904,7 +913,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       requested_managed_system_id: null,
       requested_expiration: null,
     });
-    const audit = await db.pool.query(
+    const audit = await migrateDb.pool.query(
       'select detail from core.audit_log where subject_id = $1 and event_type = $2',
       [id, 'permission_approved'],
     );
@@ -982,7 +991,8 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         ).rows,
       ).toEqual(grants.rows);
       expect(
-        (await db.pool.query('select id from core.audit_log where subject_id = $1', [id])).rowCount,
+        (await migrateDb.pool.query('select id from core.audit_log where subject_id = $1', [id]))
+          .rowCount,
       ).toBe(0);
     },
   );
@@ -996,5 +1006,824 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     });
     expect(await requestStatus(id)).toBe('pending');
     expect((await decide(id, 'approve', { expiration: null })).statusCode).toBe(200);
+  });
+
+  function directGrant(payload: Record<string, unknown> = {}, key?: string, cookie = adminCookie) {
+    return app.inject({
+      method: 'POST',
+      url: '/permissions/grants',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        ...(key ? { 'idempotency-key': key } : {}),
+      },
+      payload: {
+        actor_id: requesterId,
+        capability: 'survey.export',
+        managed_system_id: defaultSystemId,
+        reason: 'Approved direct access',
+        ...payload,
+      },
+    });
+  }
+
+  it('direct grant is immediately effective on an existing session and replays once without notification', async () => {
+    const cookie = await loginAs(app, requesterExternalId);
+    const key = randomUUID();
+    const first = await directGrant({}, key);
+    expect(first.statusCode).toBe(201);
+    const item = first.json();
+    expect(item).toMatchObject({
+      actor_id: requesterId,
+      capability: 'survey.export',
+      managed_system_id: defaultSystemId,
+      granted_by_actor_id: adminId,
+      expires_at: null,
+    });
+    expect((await directGrant({}, key)).json()).toEqual(item);
+    const check = await app.inject({
+      method: 'GET',
+      url: `/me/permissions/check?capability=survey.export&managed_system_id=${defaultSystemId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(check.json()).toMatchObject({ decision: { allow: true, grant_id: item.id } });
+    const audit = await migrateDb.pool.query(
+      'select event_type, subject_type, detail from core.audit_log where subject_id = $1',
+      [item.id],
+    );
+    expect(audit.rows).toEqual([
+      {
+        event_type: 'permission_granted',
+        subject_type: 'permission_grant',
+        detail: {
+          grant_id: item.id,
+          grantee_actor_id: requesterId,
+          capability: 'survey.export',
+          managed_system_id: defaultSystemId,
+          reason: 'Approved direct access',
+          expires_at: null,
+          mode: 'create',
+        },
+      },
+    ]);
+    expect(notifications.jobs).toHaveLength(0);
+    expect((await directGrant({ reason: 'Different intent' }, key)).json()).toMatchObject({
+      code: 'conflict.idempotency_key_reuse',
+    });
+    expect((await directGrant()).json()).toMatchObject({
+      code: 'conflict.capability_already_granted',
+    });
+  });
+
+  it.each([
+    { reason: ' ' },
+    { expires_at: '2020-01-01T00:00:00.000Z' },
+    { managed_system_id: randomUUID() },
+    { capability: 'workspace.admin', managed_system_id: randomUUID() },
+    { self_approval: { policy_citation: 'Policy', peer_reviewer_absence: 'None' } },
+    { object_id: randomUUID() },
+  ])('invalid direct grant leaves no grants or audit: %j', async (body) => {
+    expect((await directGrant(body)).statusCode).toBe(422);
+    expect(
+      (
+        await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+          requesterId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await migrateDb.pool.query(
+          "select id from core.audit_log where event_type = 'permission_granted' and detail->>'grantee_actor_id' = $1",
+          [requesterId],
+        )
+      ).rowCount,
+    ).toBe(0);
+  });
+
+  it('unknown recipient is 404 and an ordinary requester cannot grant', async () => {
+    expect((await directGrant({ actor_id: randomUUID() })).statusCode).toBe(404);
+    const cookie = await loginAs(app, requesterExternalId);
+    expect((await directGrant({}, undefined, cookie)).statusCode).toBe(403);
+  });
+
+  it('matching open ask wins over deny and both provide safe explicit destinations', async () => {
+    const requestId = await seedRequest({
+      capability: 'survey.export',
+      managedSystemId: defaultSystemId,
+    });
+    const deny = await db.pool.query<{ id: string }>(
+      `insert into permission.permission_denies (workspace_id, actor_id, capability, reason, created_by_actor_id)
+       values ($1, $2, 'survey.export', 'Hold', $3) returning id`,
+      [WORKSPACE_ID, requesterId, adminId],
+    );
+    const conflict = await directGrant();
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toMatchObject({
+      code: 'conflict.permission_request_duplicate',
+      detail: {
+        request_id: requestId,
+        review_route: `/admin/permissions/requests?selected=${requestId}`,
+      },
+    });
+    await db.pool.query(
+      "update permission.permission_requests set status = 'cancelled' where id = $1",
+      [requestId],
+    );
+    const denied = await directGrant();
+    expect(denied.statusCode).toBe(409);
+    expect(denied.json()).toMatchObject({
+      code: 'conflict.capability_already_denied',
+      detail: {
+        deny_ids: [deny.rows[0]?.id],
+        lift_route: `/admin/permissions/grants?tab=denies&selected=${deny.rows[0]?.id}`,
+      },
+    });
+    expect(
+      (
+        await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+          requesterId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+  });
+
+  it.each(['direct', 'approve'] as const)(
+    'expired %s reissue preserves predecessor and rejects old revoke',
+    async (mode) => {
+      const old = await db.pool.query<{ id: string }>(
+        `insert into permission.permission_grants
+       (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id, expires_at, sensitive_reason)
+       values ($1, $2, 'survey.export', $3, $4, '2020-01-01', 'Original grant') returning id`,
+        [WORKSPACE_ID, requesterId, defaultSystemId, adminId],
+      );
+      const oldId = old.rows[0]?.id;
+      const before = (
+        await db.pool.query('select * from permission.permission_grants where id = $1', [oldId])
+      ).rows[0];
+      const requestId =
+        mode === 'approve'
+          ? await seedRequest({ capability: 'survey.export', managedSystemId: defaultSystemId })
+          : null;
+      const response = requestId
+        ? await decide(requestId, 'approve', { reason: 'Approved replacement' })
+        : await directGrant();
+      expect(response.statusCode).toBe(mode === 'approve' ? 200 : 201);
+      const newId = mode === 'approve' ? response.json().grant_id : response.json().id;
+      expect(newId).not.toBe(oldId);
+      const after = (
+        await db.pool.query('select * from permission.permission_grants where id = $1', [oldId])
+      ).rows[0];
+      expect(after).toEqual({ ...before, superseded_at: expect.any(Date) });
+      const audit = await migrateDb.pool.query(
+        'select detail from core.audit_log where subject_id = $1',
+        [requestId ?? newId],
+      );
+      expect(audit.rows[0]?.detail).toMatchObject({ previous_grant_id: oldId, grant_id: newId });
+      const cookie = await loginAs(app, requesterExternalId);
+      const check = await app.inject({
+        method: 'GET',
+        url: `/me/permissions/check?capability=survey.export&managed_system_id=${defaultSystemId}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(check.json()).toMatchObject({ decision: { allow: true, grant_id: newId } });
+      const scope = await app.inject({
+        method: 'GET',
+        url: '/me/permissions/scope?capability=survey.export',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+      expect(scope.json()).toEqual({
+        scope: { kind: 'scoped', managed_system_ids: [defaultSystemId] },
+      });
+      const list = await app.inject({
+        method: 'GET',
+        url: '/permissions/grants',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(
+        list.json().items.filter((item: { actor_id: string }) => item.actor_id === requesterId),
+      ).toEqual([expect.objectContaining({ id: newId })]);
+      if (requestId) {
+        const detail = await app.inject({
+          method: 'GET',
+          url: `/permissions/requests/${requestId}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        });
+        expect(detail.statusCode).toBe(200);
+        expect(detail.json()).toMatchObject({
+          revision: 2,
+          allowed_actions: [],
+          effective_access: {
+            decision: { allow: true, grant_id: newId },
+            expires_at: null,
+            granted_managed_system_id: defaultSystemId,
+          },
+        });
+        expect(detail.json().requester).not.toHaveProperty('email');
+      }
+      const revoke = await app.inject({
+        method: 'POST',
+        url: `/permissions/grants/${oldId}/revoke`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        payload: { reason: 'End access' },
+      });
+      expect(revoke.statusCode).toBe(409);
+      expect(revoke.json().code).toBe('conflict.permission_not_active');
+    },
+  );
+
+  it('grant options are gated, read-only and expose supported governance and advisory state without email', async () => {
+    const before = await db.pool.query(
+      'select * from permission.permission_grants where actor_id = $1',
+      [requesterId],
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/permissions/grant-options?actor_id=${requesterId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().recipient).toEqual({
+      id: requesterId,
+      display_name: `Dev Read ${requesterExternalId.replace('mock-dev-read-', '')}`,
+      role_level: 'developer',
+    });
+    expect(response.json().candidates).toContainEqual({
+      capability: 'workspace.admin',
+      managed_system_id: null,
+      governance_required: true,
+      preflight: { state: 'available' },
+    });
+    expect(response.json().candidates).not.toContainEqual(
+      expect.objectContaining({
+        capability: 'workspace.admin',
+        managed_system_id: defaultSystemId,
+      }),
+    );
+    expect(response.json().recipient).not.toHaveProperty('email');
+    expect(
+      (
+        await db.pool.query('select * from permission.permission_grants where actor_id = $1', [
+          requesterId,
+        ])
+      ).rows,
+    ).toEqual(before.rows);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/permissions/grant-options',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        })
+      ).statusCode,
+    ).toBe(422);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/permissions/grant-options?actor_id=${randomUUID()}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        })
+      ).statusCode,
+    ).toBe(404);
+    const cookie = await loginAs(app, requesterExternalId);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/permissions/grant-options?actor_id=${requesterId}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+        })
+      ).statusCode,
+    ).toBe(403);
+  });
+
+  it('workspace administrative direct grant changes capability access without changing Role Level', async () => {
+    const cookie = await loginAs(app, requesterExternalId);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/permissions/grants',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      payload: {
+        actor_id: requesterId,
+        capability: 'workspace.admin',
+        reason: 'Governed administrative delegation',
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/me/permissions/check?capability=workspace.admin',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+        })
+      ).json(),
+    ).toMatchObject({ decision: { allow: true } });
+    expect(
+      (await db.pool.query('select role_level from core.actors where id = $1', [requesterId])).rows,
+    ).toEqual([{ role_level: 'developer' }]);
+    expect(
+      (
+        await db.pool.query(
+          'select id from permission.permission_requests where requester_actor_id = $1',
+          [requesterId],
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect(notifications.jobs).toHaveLength(0);
+  });
+
+  it('self grants obey policy and require paired strict audit metadata', async () => {
+    const saved = await db.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    const self = await insertAdmin(`perm-self-direct-${randomUUID()}`);
+    const body = {
+      actor_id: self.id,
+      self_approval: { policy_citation: 'POL-196', peer_reviewer_absence: 'No peer available' },
+    };
+    try {
+      await migrateDb.pool.query(
+        "update core.workspace_settings set permission_self_approval = 'forbidden' where workspace_id = $1",
+        [WORKSPACE_ID],
+      );
+      expect((await directGrant(body, undefined, self.cookie)).statusCode).toBe(403);
+      await migrateDb.pool.query(
+        "update core.workspace_settings set permission_self_approval = 'allowed' where workspace_id = $1",
+        [WORKSPACE_ID],
+      );
+      expect((await directGrant({ actor_id: self.id }, undefined, self.cookie)).statusCode).toBe(
+        422,
+      );
+      const result = await directGrant(body, undefined, self.cookie);
+      expect(result.statusCode).toBe(201);
+      const audit = await migrateDb.pool.query(
+        'select detail from core.audit_log where subject_id = $1',
+        [result.json().id],
+      );
+      expect(audit.rows[0]?.detail).toMatchObject({
+        self_grant: true,
+        self_approval: body.self_approval,
+      });
+    } finally {
+      await migrateDb.pool.query(
+        'update core.workspace_settings set permission_self_approval = $2 where workspace_id = $1',
+        [WORKSPACE_ID, saved.rows[0]?.permission_self_approval ?? 'allowed'],
+      );
+    }
+  });
+
+  it('a deny on the submitting Admin gates a stored direct-grant replay', async () => {
+    const submitter = await insertAdmin(`perm-self-replay-${randomUUID()}`);
+    const key = randomUUID();
+    expect((await directGrant({}, key, submitter.cookie)).statusCode).toBe(201);
+    await db.pool.query(
+      `insert into permission.permission_denies
+      (workspace_id, actor_id, capability, reason, created_by_actor_id)
+      values ($1, $2, 'workspace.admin', 'Policy hold', $3)`,
+      [WORKSPACE_ID, submitter.id, adminId],
+    );
+    expect((await directGrant({}, key, submitter.cookie)).statusCode).toBe(403);
+  });
+
+  it.each(['direct', 'approve'] as const)(
+    'audit failure rolls back %s replacement, predecessor and idempotency',
+    async (mode) => {
+      const old = await db.pool.query<{ id: string }>(
+        `insert into permission.permission_grants
+      (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id, expires_at)
+      values ($1, $2, 'survey.export', $3, $4, '2020-01-01') returning id`,
+        [WORKSPACE_ID, requesterId, defaultSystemId, adminId],
+      );
+      const oldId = old.rows[0]?.id;
+      const before = (
+        await db.pool.query('select * from permission.permission_grants where id = $1', [oldId])
+      ).rows;
+      const requestId =
+        mode === 'approve'
+          ? await seedRequest({ capability: 'survey.export', managedSystemId: defaultSystemId })
+          : null;
+      const key = randomUUID();
+      // The test-only audit trigger fails only after BOTH writer effects are visible in its tx.
+      await migrateDb.pool.query(`create function core.test_1085_audit_failure() returns trigger
+      language plpgsql as $$ begin
+        if NEW.event_type in ('permission_granted', 'permission_approved')
+          and exists (select 1 from permission.permission_grants where id = '${oldId}'::uuid and superseded_at is not null)
+          and exists (select 1 from permission.permission_grants where id = (NEW.detail->>'grant_id')::uuid and id <> '${oldId}'::uuid)
+        then raise exception 'W-1085 injected audit failure after replacement'; end if;
+        return NEW;
+      end $$`);
+      await migrateDb.pool.query(
+        'create trigger test_1085_audit_failure before insert on core.audit_log for each row execute function core.test_1085_audit_failure()',
+      );
+      try {
+        const result = requestId
+          ? await decide(requestId, 'approve', { reason: 'Reissue' }, adminCookie, key)
+          : await directGrant({}, key);
+        expect(result.statusCode).toBe(500);
+        expect(
+          (
+            await db.pool.query('select * from permission.permission_grants where actor_id = $1', [
+              requesterId,
+            ])
+          ).rows,
+        ).toEqual(before);
+        expect(
+          (
+            await db.pool.query(
+              'select key from core.idempotency_keys where actor_id = $1 and key = $2',
+              [adminId, key],
+            )
+          ).rowCount,
+        ).toBe(0);
+        if (requestId) expect(await requestStatus(requestId)).toBe('pending');
+        await expectRecipientAudits([]);
+      } finally {
+        await migrateDb.pool.query('drop trigger test_1085_audit_failure on core.audit_log');
+        await migrateDb.pool.query('drop function core.test_1085_audit_failure()');
+      }
+      const retry = requestId
+        ? await decide(requestId, 'approve', { reason: 'Reissue' }, adminCookie, key)
+        : await directGrant({}, key);
+      expect(retry.statusCode).toBe(requestId ? 200 : 201);
+    },
+  );
+
+  async function expectRecipientAudits(events: string[]) {
+    const audits = await migrateDb.pool.query<{ event_type: string }>(
+      `select event_type from core.audit_log where actor_id = $1::uuid
+       or detail->>'grantee_actor_id' = ($1::uuid)::text
+       or detail->>'requester_actor_id' = ($1::uuid)::text order by event_type`,
+      [requesterId],
+    );
+    expect(audits.rows.map((row) => row.event_type)).toEqual(events);
+  }
+
+  // Queue actual route transactions behind a real recipient lock, observing both
+  // blocked transactions before release. FIFO lock wait establishes each ordering.
+  async function overlap(
+    first: () => ReturnType<typeof directGrant>,
+    second: () => ReturnType<typeof directGrant>,
+  ) {
+    const blocker = await migrateDb.pool.connect();
+    let firstRun: ReturnType<typeof directGrant> | undefined;
+    let secondRun: ReturnType<typeof directGrant> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query('select id from core.actors where id = $1 for update', [requesterId]);
+      const waitForBlocked = (count: number) =>
+        vi.waitFor(
+          async () => {
+            const result = await db.pool.query<{
+              count: number;
+            }>(`select count(*)::int as count
+          from pg_stat_activity where datname = current_database() and usename = 'fops_app'
+          and wait_event_type = 'Lock' and query like '%"core"."actors"%' and query like '%for update%'`);
+            expect(result.rows[0]?.count).toBe(count);
+          },
+          { timeout: 5000, interval: 10 },
+        );
+      firstRun = first();
+      await waitForBlocked(1);
+      secondRun = second();
+      await waitForBlocked(2);
+      await blocker.query('commit');
+      return await Promise.all([firstRun, secondRun]);
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      await Promise.allSettled([firstRun, secondRun].filter(Boolean));
+    }
+  }
+
+  it.each(['direct-first', 'approve-first'] as const)(
+    'serializes direct/approve %s with the open-ask conflict intact',
+    async (order) => {
+      const requestId = await seedRequest({
+        capability: 'survey.export',
+        managedSystemId: defaultSystemId,
+      });
+      const approve = () => decide(requestId, 'approve', { reason: 'Reviewed grant' });
+      const responses =
+        order === 'direct-first'
+          ? await overlap(() => directGrant(), approve)
+          : await overlap(approve, () => directGrant());
+      expect(responses.map((r) => r.statusCode)).toEqual(
+        order === 'direct-first' ? [409, 200] : [200, 409],
+      );
+      const conflict = responses.find((r) => r.statusCode === 409);
+      expect(conflict?.json().code).toBe(
+        order === 'direct-first'
+          ? 'conflict.permission_request_duplicate'
+          : 'conflict.capability_already_granted',
+      );
+      expect(
+        (
+          await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+            requesterId,
+          ])
+        ).rowCount,
+      ).toBe(1);
+      expect(await requestStatus(requestId)).toBe('approved');
+      await expectRecipientAudits(['permission_approved']);
+      expect(
+        (
+          await migrateDb.pool.query(
+            "select id from core.audit_log where subject_id = $1 and event_type = 'permission_approved'",
+            [requestId],
+          )
+        ).rowCount,
+      ).toBe(1);
+    },
+  );
+
+  it('serializes direct/direct to one committed grant and audit', async () => {
+    const responses = await overlap(
+      () => directGrant(),
+      () => directGrant(),
+    );
+    expect(responses.map((r) => r.statusCode)).toEqual([201, 409]);
+    const id = responses[0]?.json().id;
+    expect(
+      (await migrateDb.pool.query('select id from core.audit_log where subject_id = $1', [id]))
+        .rowCount,
+    ).toBe(1);
+    expect(
+      (
+        await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+          requesterId,
+        ])
+      ).rowCount,
+    ).toBe(1);
+  });
+
+  it.each(['direct-first', 'request-first'] as const)(
+    'serializes direct/request-create %s without a satisfied open ask',
+    async (order) => {
+      const cookie = await loginAs(app, requesterExternalId);
+      const request = () =>
+        app.inject({
+          method: 'POST',
+          url: '/permission-requests',
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+          payload: {
+            requested_capability: 'survey.export',
+            requested_managed_system_id: defaultSystemId,
+            reason: 'Request export',
+          },
+        });
+      const responses =
+        order === 'direct-first'
+          ? await overlap(() => directGrant(), request)
+          : await overlap(request, () => directGrant());
+      expect(responses.map((r) => r.statusCode)).toEqual([201, 409]);
+      expect(responses[1]?.json().code).toBe(
+        order === 'direct-first'
+          ? 'conflict.capability_already_granted'
+          : 'conflict.permission_request_duplicate',
+      );
+      expect(
+        (
+          await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+            requesterId,
+          ])
+        ).rowCount,
+      ).toBe(order === 'direct-first' ? 1 : 0);
+      expect(
+        (
+          await db.pool.query(
+            "select id from permission.permission_requests where requester_actor_id = $1 and status = 'pending'",
+            [requesterId],
+          )
+        ).rowCount,
+      ).toBe(order === 'request-first' ? 1 : 0);
+      await expectRecipientAudits([
+        order === 'direct-first' ? 'permission_granted' : 'permission_requested',
+      ]);
+    },
+  );
+
+  it.each([
+    ['edit', 'direct-first'],
+    ['edit', 'edit-first'],
+    ['submit-more-info', 'direct-first'],
+    ['submit-more-info', 'edit-first'],
+  ] as const)('serializes direct/%s scope change %s', async (action, order) => {
+    const cookie = await loginAs(app, requesterExternalId);
+    const id = await seedRequest({
+      capability: 'survey.export',
+      managedSystemId: null,
+      status: action === 'edit' ? 'pending' : 'needs_more_info',
+    });
+    const edit = () =>
+      app.inject({
+        method: action === 'edit' ? 'PATCH' : 'POST',
+        url: `/permission-requests/${id}${action === 'edit' ? '' : '/submit-more-info'}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+        payload: { expected_revision: 1, requested_managed_system_id: defaultSystemId },
+      });
+    const responses =
+      order === 'direct-first'
+        ? await overlap(() => directGrant(), edit)
+        : await overlap(edit, () => directGrant());
+    expect(responses.map((r) => r.statusCode)).toEqual([order === 'direct-first' ? 201 : 200, 409]);
+    const row = (
+      await db.pool.query(
+        'select revision, requested_managed_system_id from permission.permission_requests where id = $1',
+        [id],
+      )
+    ).rows[0];
+    expect(row).toEqual({
+      revision: order === 'direct-first' ? 1 : 2,
+      requested_managed_system_id: order === 'direct-first' ? null : defaultSystemId,
+    });
+    expect(
+      (
+        await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+          requesterId,
+        ])
+      ).rowCount,
+    ).toBe(order === 'direct-first' ? 1 : 0);
+    await expectRecipientAudits([
+      order === 'direct-first'
+        ? 'permission_granted'
+        : action === 'edit'
+          ? 'permission_request_updated'
+          : 'permission_more_info_submitted',
+    ]);
+  });
+
+  it('foreign recipients are uniformly 404 and User recipients get immediate scoped access', async () => {
+    const foreignWorkspace = randomUUID();
+    await migrateDb.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [
+      foreignWorkspace,
+      'W-1085 foreign fixture',
+    ]);
+    const foreign = await insertActorRow(migrateDb, {
+      workspaceId: foreignWorkspace,
+      externalId: `perm-self-foreign-${randomUUID()}`,
+      roleLevel: 'user',
+    });
+    try {
+      expect((await directGrant({ actor_id: foreign.id })).statusCode).toBe(404);
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: `/permissions/grant-options?actor_id=${foreign.id}`,
+            headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+          })
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+            foreign.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+    } finally {
+      await migrateDb.pool.query('delete from core.actors where id = $1', [foreign.id]);
+      await migrateDb.pool.query('delete from core.workspaces where id = $1', [foreignWorkspace]);
+    }
+    const externalId = `perm-self-user-${randomUUID()}`;
+    const user = await insertActorRow(db, {
+      workspaceId: WORKSPACE_ID,
+      externalId,
+      roleLevel: 'user',
+    });
+    const cookie = await loginAs(app, externalId);
+    expect((await directGrant({ actor_id: user.id })).statusCode).toBe(201);
+    const check = await app.inject({
+      method: 'GET',
+      url: `/me/permissions/check?capability=survey.export&managed_system_id=${defaultSystemId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(check.json()).toMatchObject({ decision: { allow: true } });
+    expect(
+      (await db.pool.query('select role_level from core.actors where id = $1', [user.id])).rows,
+    ).toEqual([{ role_level: 'user' }]);
+  });
+
+  it.each([
+    ['workspace', 'system', true],
+    ['system', 'workspace', true],
+    ['same', 'system', true],
+    ['sibling', 'system', false],
+  ] as const)(
+    'direct %s deny versus %s grant preserves explicit deny precedence',
+    async (denyScope, grantScope, blocked) => {
+      const sibling = await db.pool.query<{ id: string }>(
+        "insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, 'Deny sibling') returning id",
+        [WORKSPACE_ID, `deny-scope-${randomUUID()}`],
+      );
+      const denySystemId =
+        denyScope === 'workspace'
+          ? null
+          : denyScope === 'sibling'
+            ? sibling.rows[0]?.id
+            : defaultSystemId;
+      await db.pool.query(
+        `insert into permission.permission_denies
+      (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+      values ($1, $2, 'survey.export', $3, 'Hold', $4)`,
+        [WORKSPACE_ID, requesterId, denySystemId, adminId],
+      );
+      const payload = {
+        actor_id: requesterId,
+        capability: 'survey.export',
+        reason: 'Direct export',
+        ...(grantScope === 'system' ? { managed_system_id: defaultSystemId } : {}),
+      };
+      const response = await app.inject({
+        method: 'POST',
+        url: '/permissions/grants',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        payload,
+      });
+      expect(response.statusCode).toBe(blocked ? 409 : 201);
+      if (blocked) expect(response.json().code).toBe('conflict.capability_already_denied');
+      expect(
+        (
+          await db.pool.query(
+            'select id from permission.permission_denies where actor_id = $1 and revoked_at is null',
+            [requesterId],
+          )
+        ).rowCount,
+      ).toBe(1);
+      expect(
+        (
+          await db.pool.query('select id from permission.permission_grants where actor_id = $1', [
+            requesterId,
+          ])
+        ).rowCount,
+      ).toBe(blocked ? 0 : 1);
+    },
+  );
+
+  it('archived systems are absent from options and invalid on submission', async () => {
+    await db.pool.query('update core.managed_systems set archived_at = now() where id = $1', [
+      defaultSystemId,
+    ]);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/permissions/grant-options?actor_id=${requesterId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(
+      response
+        .json()
+        .candidates.some(
+          (c: { managed_system_id: string | null }) => c.managed_system_id === defaultSystemId,
+        ),
+    ).toBe(false);
+    expect((await directGrant()).statusCode).toBe(422);
+  });
+
+  it('direct grant uses the sensitive tier and rejects malformed replay keys', async () => {
+    const submitter = await insertAdmin(`perm-self-tier-${randomUUID()}`);
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/permissions/grants',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`, 'idempotency-key': 'invalid' },
+      payload: { actor_id: requesterId, capability: 'survey.export', reason: 'Reason' },
+    });
+    expect(invalid.statusCode).toBe(422);
+    expect(invalid.json().code).toBe('validation.malformed_idempotency_key');
+    for (let i = 0; i < 5; i++)
+      expect(
+        (await directGrant({ actor_id: randomUUID() }, undefined, submitter.cookie)).statusCode,
+      ).toBe(404);
+    expect(
+      (await directGrant({ actor_id: randomUUID() }, undefined, submitter.cookie)).statusCode,
+    ).toBe(429);
+  });
+
+  it('active grant collection excludes superseded history even with a future historical expiry', async () => {
+    const result = await directGrant();
+    expect(result.statusCode).toBe(201);
+    await db.pool.query(
+      'update permission.permission_grants set superseded_at = now() where id = $1',
+      [result.json().id],
+    );
+    const list = await app.inject({
+      method: 'GET',
+      url: '/permissions/grants',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().items.some((item: { id: string }) => item.id === result.json().id)).toBe(
+      false,
+    );
+    const revoke = await app.inject({
+      method: 'POST',
+      url: `/permissions/grants/${result.json().id}/revoke`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      payload: { reason: 'End' },
+    });
+    expect(revoke.statusCode).toBe(409);
+    expect(revoke.json().code).toBe('conflict.permission_not_active');
   });
 });

@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 
+import { CAPABILITIES } from '../enums/capabilities.js';
+
 export const PERMISSION_AUDIT_EVENT_TYPES = [
   'permission_requested',
   'permission_approved',
@@ -16,6 +18,7 @@ export const PERMISSION_AUDIT_EVENT_TYPES = [
   'permission_request_cancelled',
   'permission_revoked',
   'permission_deny_revoked',
+  'permission_granted',
 ] as const;
 
 // `permission_requested` detail shape — locked by issue #5 application
@@ -46,6 +49,7 @@ export const permissionApprovedDetailSchema = z
     requested_managed_system_id: z.string().uuid().nullable(),
     granted_managed_system_id: z.string().uuid().nullable(),
     grant_id: z.string().uuid(),
+    previous_grant_id: z.string().uuid().optional(),
     requested_expiration: z.string().datetime().nullable(),
     granted_expiration: z.string().datetime().nullable(),
     self_approval: z
@@ -172,6 +176,43 @@ export const permissionDenyRevokedDetailSchema = z
   .strict();
 export type PermissionDenyRevokedDetail = z.infer<typeof permissionDenyRevokedDetailSchema>;
 
+export const permissionGrantedDetailSchema = z
+  .object({
+    grant_id: z.string().uuid(),
+    grantee_actor_id: z.string().uuid(),
+    capability: z.enum(CAPABILITIES),
+    managed_system_id: z.string().uuid().nullable(),
+    reason: z.string().trim().min(1).max(2000),
+    expires_at: z.string().datetime().nullable(),
+    mode: z.enum(['create', 'reissue']),
+    previous_grant_id: z.string().uuid().optional(),
+    self_grant: z.literal(true).optional(),
+    self_approval: z
+      .object({
+        policy_citation: z.string().trim().min(1),
+        peer_reviewer_absence: z.string().trim().min(1),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((detail, ctx) => {
+    if ((detail.mode === 'reissue') !== (detail.previous_grant_id !== undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['previous_grant_id'],
+        message: 'reissue requires predecessor',
+      });
+    }
+    if ((detail.self_grant === true) !== (detail.self_approval !== undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['self_approval'],
+        message: 'self grant requires envelope',
+      });
+    }
+  });
+export type PermissionGrantedDetail = z.infer<typeof permissionGrantedDetailSchema>;
 export const PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -183,4 +224,5 @@ export const PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_request_cancelled: permissionRequestCancelledDetailSchema,
   permission_revoked: permissionRevokedDetailSchema,
   permission_deny_revoked: permissionDenyRevokedDetailSchema,
+  permission_granted: permissionGrantedDetailSchema,
 } as const satisfies Record<(typeof PERMISSION_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

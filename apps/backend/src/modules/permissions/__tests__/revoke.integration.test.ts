@@ -249,7 +249,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   async function expectNoAudit(command: Command, id: string): Promise<void> {
-    const rows = await db.pool.query(
+    const rows = await migrateDb.pool.query(
       'select 1 from core.audit_log where subject_id = $1 and event_type = $2',
       [id, command.eventType],
     );
@@ -257,7 +257,10 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   async function assertAudit(command: Command, id: string, detail: Record<string, unknown>) {
-    const rows = await db.pool.query<{ subject_type: string; detail: Record<string, unknown> }>(
+    const rows = await migrateDb.pool.query<{
+      subject_type: string;
+      detail: Record<string, unknown>;
+    }>(
       'select subject_type, detail from core.audit_log where subject_id = $1 and event_type = $2',
       [id, command.eventType],
     );
@@ -510,7 +513,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       ]);
       const hadSettingsRow = settingsRow.rows.length > 0;
       const originalPolicy = settingsRow.rows[0]?.permission_self_approval ?? 'allowed';
-      const settingAudits = await db.pool.query<{ id: string }>(
+      const settingAudits = await migrateDb.pool.query<{ id: string }>(
         `select id from core.audit_log
           where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
             and event_type = 'workspace_settings_updated'`,
@@ -551,7 +554,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
         expect(
           (await patchWorkspaceSettings({ permission_self_approval: originalPolicy })).statusCode,
         ).toBe(200);
-        const updatedAudits = await db.pool.query<{ id: string }>(
+        const updatedAudits = await migrateDb.pool.query<{ id: string }>(
           `select id from core.audit_log
             where workspace_id = $1 and subject_type = 'workspace' and subject_id = $1
               and event_type = 'workspace_settings_updated'`,
@@ -730,7 +733,7 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
       expect(first.statusCode).toBe(200);
       expect(replay.statusCode).toBe(200);
       expect(replay.json()).toEqual(first.json());
-      const audits = await db.pool.query(
+      const audits = await migrateDb.pool.query(
         'select 1 from core.audit_log where subject_id = $1 and event_type = $2',
         [id, command.eventType],
       );
