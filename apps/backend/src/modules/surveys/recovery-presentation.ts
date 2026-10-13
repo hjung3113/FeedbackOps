@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
 import { findSurvey } from './repo-read.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { readOutcomeFollowUpState } from './repo-results.js';
@@ -108,7 +109,7 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
     const rows = (
       await tx.execute<{ response_id: string; question_id: string }>(sql`
       SELECT DISTINCT response_id,question_id FROM survey.read_outcome_follow_up_items_personal(${actor.workspace_id}::uuid,${surveyId}::uuid)
-      WHERE response_id=ANY(${responseIds}::uuid[])`)
+      WHERE response_id=ANY(${sqlUuidArray(responseIds)})`)
     ).rows;
     for (const row of rows)
       await deps.auditService.record(tx, {
