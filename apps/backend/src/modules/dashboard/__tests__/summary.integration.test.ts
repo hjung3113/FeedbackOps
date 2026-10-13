@@ -1911,6 +1911,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       action_queues: [],
       coverage: [],
       by_managed_system: [],
+      computed_at: expect.any(String),
     });
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
   });
