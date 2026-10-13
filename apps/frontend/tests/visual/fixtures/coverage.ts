@@ -11,6 +11,7 @@ export const COVERAGE_IDS = {
 // explicit zero (finding-execution 0/4, unassigned-voc 0), system B omits the
 // finding keys entirely (em dashes), and the area row omits high-severity.
 export const coverageSummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {
     open_voc: 47,
     active_finding: 14,
@@ -184,6 +185,7 @@ export const coverageAnalyticsAreasFixture = {
 } as const;
 
 export const coverageEmptySummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {},
   action_queues: [],
   coverage: [],

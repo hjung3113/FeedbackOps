@@ -41,3 +41,10 @@ export { selectVocForUpdate } from './repo.js';
 export { permissionVocSourceSummary } from './permission-source-projection.js';
 
 export { readVocEvidenceSources } from './evidence-projection.js';
+export {
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
+  releasedTaskVocRecoverySql,
+  releasedTaskUnresolvedVocPredicate,
+  readTaskRecoveryVocs,
+} from './recovery-read.js';

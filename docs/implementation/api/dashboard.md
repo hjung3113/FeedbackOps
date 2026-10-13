@@ -46,9 +46,9 @@ closed coverage ID set (`coverage[].id`) and per-Managed-System coverage shape
 (`by_managed_system[].coverage`); `DASHBOARD_HOP_ROUTES` in the same file defines
 dashboard hop IDs and destinations.
 
-## Close-out Coverage and freshness (ADR-0067; implementation pending)
+## Close-out Coverage and freshness (ADR-0067; 56-G implemented)
 
-Proposed/new summary `computed_at` is server computation time, not an atomic database
+Required summary `computed_at` is server computation time, not an atomic database
 snapshot. Home, Coverage and Integration show the last successful timestamp and preserve
 an honest stale/error state on refetch failure. Summary remains bounded and operational;
 item details/history are fetched separately.
@@ -62,67 +62,122 @@ neutral `집계 대상 없음`. Permission-unavailable keys remain absent/`—`.
 shipped with #1088 in the same PR as this contract. Ratios,
 released-update's non-skipped predicate, queue membership, and anonymity do not change.
 
-## Recovery queue, detail, presentation and history (proposed/new, ADR-0067)
+## Recovery queue, detail, presentation and history (ADR-0067)
 
-- `GET /dashboard/recovery-items?category=...&managed_system_id=...&cursor=...&limit=...`
+### 56-G: implemented live reads
+
+- `GET /dashboard/recovery-items?category=...&managed_system_id=...&view=operational|actionable&cursor=...&limit=...`
 - `GET /dashboard/recovery-items/:id`
-- `GET /dashboard/recovery-history?category=...&managed_system_id=...&cursor=...&limit=...`
-- `PATCH /dashboard/recovery-items/:id/presentation`
 
-Authenticated session workspace and current category/source visibility bound every read.
-`all` is capability-specific effective scope union; Permission Requests remain workspace
-Admin-only. Lists default to 50, max 100, deterministic cursor order. Apply scope/category/
-presentation predicates before LIMIT/count. List DTOs include visible and personally
-hidden totals; operational summary totals ignore hiding and assignee. Home requests only
-items the current Actor can act on now, without changing scope-wide operational summaries.
+Both require the authenticated workspace session and the configured read rate tier; responses
+use `Cache-Control: private, no-cache`. The list query is strict: unknown fields, invalid
+category/view/scope/limit/cursor return `422 validation.failed`. Default view is `operational`,
+default limit 50, maximum 100. `managed_system_id` is optional UUID or `all`; omitted/all resolves
+each category's own capability scope. Permission Requests remain workspace-level under
+`workspace.admin`, independent of a selected System; an explicit deny wins. No caller Actor,
+presentation or history selector is accepted in G.
 
-Stable opaque `recovery_item_id` maps workspace/category/source, shared across surfaces;
-different categories on one source remain distinct. Existing grains/predicates are retained:
-VOC for `unassigned-voc`/`high-severity-unlinked`, Finding for
-`actionable-finding-no-execution`, one Task for `released-task-unresolved-voc` even with
-many affected VOCs, Permission Request for `permission-requests-pending`.
-`bad-outcome-no-followup` uses the exception below. No wishlist categories are added.
+`view=actionable` is Home's explicit selector. Owner-computed executable repair eligibility
+is applied **before count and cursor LIMIT**, under independent source readability. Assignment,
+a source jump, a blocked/requestable action or a presentation action alone never qualifies.
+Operational totals stay scope-wide. VOC uses current `voc.triage` and live parent policy;
+Finding execution uses its source command gate; Task reporter updates require an independently
+readable, non-archived unresolved affected VOC with public-update authority and a live parent.
+Permission review uses current decision gates (a rejection intent grants no self-approval).
+Survey repair requires personal-response authority and `finding.manage`, described below.
+Source commands still recheck state, concurrency, permissions and required inputs on submit.
 
-Detail returns identity/occurrence, active/resolved/withdrawn state, backend reason/priority/
-severity, safe affected summaries, independently gated source identity/route jumps,
-permission-filtered `next_actions`, derived `responsible_actor_hint`, presentation and
-safe resolution metadata. Unknown/foreign/unreadable identity returns the same
-`404 not_found.record`. A readable resolved selection remains open without stale actions.
-Recheck current source visibility for detail/history/action references; readable Task gaps
-must not expose restricted linked VOC titles/routes/actions. Hints derive from source owner,
-assigned reviewer/assignee or Admin queue, with safe team/unassigned/multiple-responsible
-labels; omit email and any unsafe identity. Assignment never grants action eligibility.
+List response is strict `{ computed_at, items, total, page: { has_more, cursor? } }`.
+`total` is before paging. Items and detail contain `recovery_item_id`, `category`, current
+`state`, backend `reason_code`/Korean `reason`, numeric `priority`, `severity`, nullable
+`managed_system_id`, nullable safe `source`, bounded safe `affected`, `next_actions` and derived
+`responsible_actor_hint`. Detail adds `computed_at`. No occurrence, resolution metadata,
+presentation or visible/hidden totals exist in G. Timestamp is computation time, not an
+atomic database snapshot; independently refreshed summary/list/detail can observe changes.
 
-Presentation PATCH is a strict discriminated command: proposed/new `action` is `snooze`
-(with proposed/new `days` exactly 1 or 7), `mute`, or `restore`. Derive Actor from session;
-reject caller Actor/resolution/owner fields with `validation.failed`. Authorize current
-item visibility before writing only that Actor/identity/occurrence presentation. Mute ends
-with the occurrence; reopen resets all hiding. Restore clears current hiding. Domain state,
-operational totals and source mutation audits remain unchanged. There is no generic
-resolve/dismiss endpoint; stale source repairs use `api/next-actions.md` failures.
+Order is ascending backend priority (10 urgent, 20 warn, 30 info), then category identifier,
+then source UUID. Cursor is opaque and versioned, bound to session Actor/workspace, effective
+read/repair scopes, category, selected System and view; incompatible or noncanonical cursors
+fail with `fields[].path=[cursor]`, `code=invalid_cursor`. Changing filters/scopes starts paging
+again. Page hydration batches safe linked VOCs and bounds affected summaries to 100 per Task;
+responsibility considers all currently readable affected owners, including beyond that bound.
+No per-item owner-service queries or personal Survey readers are used.
 
-History covers three calendar months by resolution time, cursor-paged and currently
-permission-filtered. Source/link commands call a transaction-aware Dashboard recorder
-through injected approved seams, reevaluate authoritative predicates, lock/deduplicate
-identity and record only committed transitions with safe action/audit references.
-Rollback/no-op/replay yields no duplicate repair. Reopen increments occurrence and retains
-prior history even between scans. Permission loss is not resolution; archive/policy
-withdrawal has a separate label. pg-boss initializes active identities and reconciles drift
-idempotently; observation-only corrections do not invent Actor/action time. Generic GETs
-write neither source nor projection state/audit. Do not fabricate pre-rollout history or
-prune indefinite `core.audit_log`.
+Identity wire format is **opaque to clients; clients must not parse it**. Version 1 uses
+`r1_` followed by canonical unpadded base64url of exactly 17 bytes: one category code byte,
+then the 16 source UUID bytes. Codes: 1 unassigned-voc, 2 high-severity-unlinked,
+3 actionable-finding-no-execution, 4 released-task-unresolved-voc,
+5 bad-outcome-no-followup, 6 permission-requests-pending. Validate prefix, alphabet, length,
+code and exact canonical re-encoding. Workspace comes from the session. Same category/source
+has the same ID across reads/restarts/surfaces; different categories remain distinct.
+Survey identity encodes the **Survey ID**, never a response ID. H storage keys workspace plus
+this token. It is an address, not a credential, encryption or proof of a prior occurrence.
 
-### Outcome Survey adapter exception
+Task membership preserves the scope-wide predicate even when a User lacks the elevated source role: its source is null, with no affected objects, owner identity or actions; its detail returns the same 404.
 
-ADR-0055 remains binding: closed/threshold/low-band per-response classification, resolution
-only by qualifying `generated_finding` or current `no_follow_up`, Survey-owned state,
-commands/reopen/audits. Dashboard retains its authorized aggregate count and Survey-level
-safe navigation. Non-personal holders receive Survey-grain booleans, no per-Survey response
-counts, response IDs/opaque response-derived IDs, raw answers, or per-response personal
-presentation/history enumeration. Personal holders enter the existing Survey follow-up
-route/seam (`survey.read` then explicit `survey.read_personal_responses`, no Admin bypass).
-Response presentation/history is a proposed/new Survey-owned adapter, with required personal
-read audits and no duplicated decision state. Generic Dashboard APIs never bypass it.
+Detail rechecks category/source compatibility and readability. VOC categories address VOCs,
+Finding addresses Findings, Task addresses Tasks, Permission addresses Permission Requests,
+and the Survey category addresses outcome Surveys only. A compatible readable source returns
+`active` while its authoritative predicate holds, `withdrawn` for archived VOC/Finding or
+cancelled Permission Request, otherwise `resolved`, even without historical gap proof.
+Readable resolved/withdrawn selections return 200 with no repair actions. Malformed,
+unsupported, noncanonical, unknown, incompatible, foreign or unreadable addresses all return
+the same `404 not_found.record` (`recovery item not found`). Permission loss never resolves an item.
+
+G's strict recovery action DTO is distinct from summary navigation metadata. It carries
+`id`, Korean `label`, `availability` (`available`, `blocked_requestable`,
+`blocked_not_requestable`), nullable `blocked_reason` and `requestable_permission`, a safe
+`target` (`source_type`, `source_id`, route, nullable endpoint/method, intent), and backend
+`confirmation` metadata (required flag, title/body, risk level, required reason and audit-event intent). Available actions have no blocked fields; requestable blocked
+actions require a safe candidate. Hidden actions are omitted. G currently emits available
+repair intents only; unavailable repairs are omitted. Generic source commands identify their
+existing endpoint/method. Survey `create_finding` is a routed repair intent: endpoint/method
+are null because response selection and the audited personal commands belong to the follow-up
+route. An authorized safe Survey jump alone is never this action. No Dashboard repair command
+or duplicated source workflow is introduced.
+
+Source and affected summaries contain only independently readable IDs/display IDs/titles/routes.
+A Task gap may depend on restricted VOCs without exposing their identity, title, route,
+owner or action. Hints use persisted VOC/Finding owner, safely readable affected VOC owners
+and/or Task assignee, Survey operator or Admin queue. Actor/team hints carry safe source-owned
+IDs and generic labels, never email; multiple distinct readable responsibilities produce
+`multiple`, never an arbitrary owner. Hints grant no authority and have no mutation endpoint.
+GETs write no source, projection, idempotency or domain audit rows. Infrastructure rate-limit
+writes are outside this no-product-write contract.
+
+### Outcome Survey adapter exception (56-G)
+
+ADR-0055 remains binding: closed/threshold/low-band classification, resolution only by
+qualifying current `generated_finding` or current `no_follow_up`. Summary's authorized
+aggregate remains **response-grain**, unchanged. Safe recovery list/total are **Survey-grain**
+(one Survey with follow-up needed), explicitly exempt from numeric summary/list equality.
+Every other category retains exact membership/grain/count parity under stable fixture data.
+
+The Survey-owned safe batch adapter evaluates the existing safe Survey-state definer over
+an authorized materialized source set. Empty effective scopes fail closed before any
+aggregate/state definer call; an outside-selected System cannot replace scope. Admin's
+permitted empty data is zero, while all-denied projection availability is absent. Survey
+explicit-deny precedence stays intact. Generic reads return Survey metadata and boolean-derived
+state only, even for personal holders: no response IDs/response-derived IDs, per-Survey
+response counts, raw answers or respondent metadata. Personal access plus Finding management
+allows a current routed repair intent; it never enlarges the generic payload.
+
+Personal disclosures continue on `/surveys/:surveyId/follow-up` via the existing
+`GET /surveys/:id/outcome-follow-up`: `survey.read`, then explicit
+`survey.read_personal_responses`, **no Admin bypass**, and unchanged per-response/question
+personal read audits. Generic reads never invoke that personal service. Response presentation
+and history remain Survey-owned in H.
+
+### 56-H: proposed, not shipped by G
+
+`GET /dashboard/recovery-history` and `PATCH /dashboard/recovery-items/:id/presentation`,
+identity/occurrence/history/presentation storage, snooze/mute/restore, occurrence numbering,
+visible/hidden totals, safe resolution metadata, transactional recorder and pg-boss
+reconciliation are H work. H extends the strict G schemas; no placeholder fields ship now.
+Own-session 1-day/7-day snooze/current-occurrence mute never changes operational totals;
+reopen resets hiding. History covers three calendar months and rechecks current permissions.
+Record only real committed transitions, preserve rollback/no-op/replay semantics, never
+fabricate pre-rollout history, and never prune indefinite `core.audit_log`.
 
 ### Performance acceptance
 

@@ -22,15 +22,23 @@ Dashboard is not a passive reporting helper.
 
 - Test missing-link queues, permission-aware rows, refresh after repair, and next-action routing when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; staged G/H)
 
-- ADR-0067 accepts proposed/new stable recovery identity/occurrences, bounded detail,
-  personal presentation, three-calendar-month history, computation time and derived hints;
-  implementation is pending. Reuse summary predicates/grains; GETs write no projections.
-- Dashboard's injected transaction-aware recorder captures committed source/link transitions;
-  pg-boss discovers/reconciles drift without invented action time. No source resolution writes.
-- Personal 1-day/7-day snooze/current-occurrence mute never changes counts; reopen resets hiding.
-- Outcome response presentation/history remains Survey-owned/personal-gated under ADR-0055.
+- 56-G implements required `computed_at` and live recovery list/detail with deterministic
+  canonical opaque category/source tokens. Compatibility/readability is rechecked; a readable
+  resolved address needs no historical proof and returns no repair actions.
+- Reuse owner predicates for summary/list/active detail. Scope/category and Home's explicit
+  `view=actionable` executable repair eligibility precede count/LIMIT. Permission Requests stay
+  workspace-level; Survey safe list is Survey-grain while its summary remains response-grain.
+- Inject owner recovery projections through server wiring; batch distinct-System decisions
+  and safe linked VOC hydration. Restricted linked identities/owners/routes/actions never leak.
+  Generic Survey reads use only the safe batch adapter, fail closed on empty scopes, and never
+  call personal readers or write domain audits. Required personal source audits are unchanged.
+- G strict schemas omit occurrence, resolution metadata, presentation and hidden totals.
+  56-H owns proposed storage/recorder/pg-boss, presentation PATCH and history; GETs write no
+  source/projection state. H extends G rather than exposing placeholder fields now.
+- H's personal 1-day/7-day snooze/current-occurrence mute never changes counts; reopen resets
+  hiding. Outcome response presentation/history remains Survey-owned/personal-gated (ADR-0055).
 - Coverage (#1087) reads resolved five metric pairs once; `no_data` differs from absent keys.
   Rendered consumer compatibility is #1088-owned; deliver atomically.
   Measure bounded API/UI and recorder fanout against ADR-0067's budget.

@@ -50,6 +50,7 @@ const systemRows = [
 ] as const;
 
 export const integrationDashboardSummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {
     open_voc: 47,
     active_finding: 14,
@@ -154,6 +155,7 @@ export const integrationDashboardSummaryFixture = dashboardSummarySchema.parse({
 });
 
 export const integrationDashboardEmptySummaryFixture = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {},
   action_queues: [],
   coverage: [],

@@ -73,6 +73,7 @@ const CONSUMER_SYSTEM_ID = '77777777-0000-0000-0000-0000000000a1';
 
 function summaryResponse(status: 'bad' | 'good', percent: number): Response {
   const summary = dashboardSummarySchema.parse({
+    computed_at: '2026-10-13T00:00:00.000Z',
     kpis: {},
     action_queues: [],
     coverage: [{ id: 'voc-task', value: percent, total: 100, percent, status }],

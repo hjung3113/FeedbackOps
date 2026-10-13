@@ -51,6 +51,9 @@ export const findings = findingSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryActiveIdx: index('findings_recovery_active_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.status} = 'active' AND ${t.linkedTaskId} IS NULL`),
     workspaceIdUq: unique('findings_workspace_id_uq').on(t.workspaceId, t.id),
     responsibilityXorCheck: check(
       'findings_responsibility_xor_check',

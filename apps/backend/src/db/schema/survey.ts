@@ -49,6 +49,9 @@ export const surveys = surveySchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryOutcomeIdx: index('surveys_recovery_outcome_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.type} = 'outcome' AND ${t.status} = 'closed'`),
     workspaceDisplayUq: uniqueIndex('surveys_workspace_display_id_uq').on(
       t.workspaceId,
       t.displayId,

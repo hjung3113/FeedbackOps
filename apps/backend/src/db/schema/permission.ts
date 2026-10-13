@@ -127,6 +127,9 @@ export const permissionRequests = permissionSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryOpenIdx: index('permission_requests_recovery_open_idx')
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.status} IN ('pending', 'needs_more_info')`),
     workspaceRequesterIdx: index('permission_requests_workspace_requester_idx').on(
       t.workspaceId,
       t.requesterActorId,

@@ -40,7 +40,12 @@ import { healthRoutes } from './modules/core/health/routes.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
-import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
+import {
+  createFindingsService,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+  findingsRoutes,
+} from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -67,12 +72,17 @@ import {
   createGrantAdminService,
   createRequestService,
   createSelectedReadService,
+  permissionRecoveryProjection,
   permissionsRoutes,
 } from './modules/permissions/index.js';
 import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
-import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
+import {
+  createSurveysService,
+  surveyRecoveryProjection,
+  surveysRoutes,
+} from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
-import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
+import { createTasksService, taskRecoveryProjection, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import {
@@ -82,7 +92,10 @@ import {
   createVocReadService,
   createVocRecommendationsService,
   createVocService,
+  readTaskRecoveryVocs,
   vocRecommendationsRoutes,
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
   vocRoutes,
 } from './modules/voc/index.js';
 import {
@@ -718,6 +731,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });
   const dashboardService = createDashboardService({
+    recoveryReaders: {
+      vocRecoveryProjection,
+      vocRecoveryRepairScope,
+      findingRecoveryProjection,
+      findingRecoveryRepairScope,
+      taskRecoveryProjection,
+      permissionRecoveryProjection,
+      surveyRecoveryProjection,
+      readTaskRecoveryVocs,
+    },
     db: dbHandle.db,
     checkService,
     requestService,

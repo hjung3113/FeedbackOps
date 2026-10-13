@@ -14,3 +14,8 @@ export {
   findSourceFindingForMilestone,
   type MilestoneSourceFindingRow,
 } from './repo-read.js';
+export {
+  findingRecoveryPredicate,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+} from './recovery-read.js';

@@ -1,3 +1,4 @@
+import { RECOVERY_PERMISSION_ACTIVE_STATUSES } from './recovery-read.js';
 // Permission-request application service. Owns permission request commands and
 // permission_requests read models per
 // docs/implementation/02-domain-module-boundaries.md and
@@ -96,7 +97,7 @@ export type RequestService = ReturnType<typeof createRequestService>;
 const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 const PERMISSION_MORE_INFO_SUBMITTED: AuditEventType = 'permission_more_info_submitted';
 
-const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
+const ACTIVE_STATUSES = RECOVERY_PERMISSION_ACTIVE_STATUSES;
 const REVIEW_STATUSES = [
   'pending',
   'needs_more_info',

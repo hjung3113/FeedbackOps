@@ -6,6 +6,7 @@ import {
   type ScopeActorContext,
   actorScopeForCapability,
 } from '../permissions/scope-service.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import { listSurveyManagedSystemIds } from './repo-read.js';
 
 export type SurveyAuthorizationActor = ScopeActorContext;
@@ -98,4 +99,23 @@ export async function checkSurveyPersonalResponseRead(
     },
     options,
   );
+}
+
+/** Dashboard distinguishes authorized empty data from an empty denied scope. */
+export async function actorSurveyRecoveryScope(
+  db: Db,
+  checkService: CheckService,
+  actor: SurveyAuthorizationActor,
+): Promise<Scope> {
+  if (actor.role_level !== 'admin') return actorSurveyReadScope(db, checkService, actor);
+  const systems = [
+    ...new Set([
+      ...(await allManagedSystemIds(db, actor.workspace_id)),
+      ...(await listSurveyManagedSystemIds(db, actor.workspace_id)),
+    ]),
+  ];
+  const decisions = await Promise.all(
+    systems.map((id) => checkSurveyRead(checkService, actor, id)),
+  );
+  return { kind: 'scoped', managedSystemIds: systems.filter((_, i) => decisions[i]?.allow) };
 }
