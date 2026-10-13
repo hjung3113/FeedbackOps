@@ -1055,7 +1055,7 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
       quote_or_summary: 'unapproved text',
     });
     expect(generic.statusCode).toBe(422);
-    expect(generic.json().error.code).toBe('validation.failed');
+    expect(generic.json().code).toBe('validation.failed');
     const strict = await app.inject({
       method: 'POST',
       url: `/findings/${target.id}/survey-evidence`,

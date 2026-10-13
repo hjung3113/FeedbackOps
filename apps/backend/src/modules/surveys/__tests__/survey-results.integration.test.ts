@@ -1130,7 +1130,7 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
       });
       expect(result.statusCode).toBe(422);
-      expect(result.json().error.code).toBe('validation.failed');
+      expect(result.json().code).toBe('validation.failed');
     },
   );
 

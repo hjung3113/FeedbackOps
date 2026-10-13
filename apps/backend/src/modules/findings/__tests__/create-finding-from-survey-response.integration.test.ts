@@ -51,6 +51,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   let adminCookie: string;
   const foreignWorkspaceIds = new Set<string>();
   const teamIds: string[] = [];
+  const attachmentActors: Awaited<ReturnType<typeof actor>>[] = [];
+  let attachmentActorIndex = 0;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -68,6 +70,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   });
 
   beforeEach(async () => {
+    attachmentActorIndex = 0;
     await cleanup();
     await migrateHandle.pool.query('delete from core.rate_limits where key=$1', [
       `${WORKSPACE_ID}:${adminId}`,
@@ -75,6 +78,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   });
   afterEach(async () => cleanup());
   afterAll(async () => {
+    attachmentActors.length = 0;
     await cleanup();
     await app?.close();
     await appHandle?.close();
@@ -151,16 +155,16 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
-      "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2)",
-      [WORKSPACE_ID, `${SLUG}-%`],
+      "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2) and not (actor_id=any($3::uuid[]))",
+      [WORKSPACE_ID, `${SLUG}-%`, attachmentActors.map((actor) => actor.id)],
     );
     await migrateHandle.pool.query(
       `update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id in (${systems})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
-      "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2",
-      [WORKSPACE_ID, `${SLUG}-%`],
+      "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2 and not (id=any($3::uuid[]))",
+      [WORKSPACE_ID, `${SLUG}-%`, attachmentActors.map((actor) => actor.id)],
     );
     await migrateHandle.pool.query(
       `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
@@ -1507,10 +1511,22 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   }, 60_000);
 
   // #1109 additions use the new existing-target route. Personal creation tests above stay intact.
+  async function attachmentActor() {
+    const index = attachmentActorIndex++;
+    const cached = attachmentActors[index];
+    if (cached) return cached;
+    const seeded = await actor();
+    attachmentActors[index] = seeded;
+    return seeded;
+  }
   async function safeAttachmentSource(status: 'open' | 'draft' = 'open', answers = 5) {
     const source = await seed(status);
     for (let index = 1; index < 5; index++) {
-      const respondent = await actor();
+      const respondent = await insertDevActor(
+        migrateHandle,
+        WORKSPACE_ID,
+        `${SLUG}-${randomUUID()}`,
+      );
       const response = await migrateHandle.pool.query<{ id: string }>(
         `insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at)
          values ($1,$2,$3,true,now()) returning id`,
@@ -1576,7 +1592,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     const source = await safeAttachmentSource();
     const targetSystem = await insertMsDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG), 'Target MS');
     const target = await attachmentTarget(targetSystem);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', targetSystem);
     const body = {
@@ -1693,7 +1709,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, adminId],
     );
     const target = await attachmentTarget(source.msId);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
     for (const approved_excerpt_id of [source.approvalId, second.rows[0]!.id]) {
@@ -1724,7 +1740,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       variant === 'suppressed' ? 1 : 5,
     );
     const target = await attachmentTarget(source.msId, variant === 'archived' ? 'archived' : 'draft');
-    const reader = await actor();
+    const reader = await attachmentActor();
     if (!['deny_target', 'unknown_target_denied'].includes(variant))
       await grant(reader.id, 'finding.manage', source.msId);
     if (!['deny_target', 'deny_source_revoked'].includes(variant))
@@ -1748,18 +1764,18 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it.each(['response_id', 'quote_or_summary', 'source_id', 'unknown'])(
     '#1109 rejects strict body field %s before target access',
     async (field) => {
-      const reader = await actor();
+      const reader = await attachmentActor();
       const result = await attach(reader.cookie, randomUUID(), {
         approved_excerpt_id: randomUUID(),
         [field]: randomUUID(),
       });
       expect(result.statusCode).toBe(422);
-      expect(result.json().error.code).toBe('validation.failed');
+      expect(result.json().code).toBe('validation.failed');
     },
   );
 
   it('#1109 validates UUIDv4 header before target access', async () => {
-    const reader = await actor();
+    const reader = await attachmentActor();
     const result = await attach(
       reader.cookie,
       randomUUID(),
@@ -1767,12 +1783,12 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       'bad',
     );
     expect(result.statusCode).toBe(422);
-    expect(result.json().error.code).toBe('validation.malformed_idempotency_key');
+    expect(result.json().code).toBe('validation.malformed_idempotency_key');
   });
 
   it('#1109 adds multiple other responses without rewriting derived lineage or immutable history', async () => {
     const origin = await seed();
-    const creator = await actor();
+    const creator = await attachmentActor();
     for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
       await grant(creator.id, permission, origin.msId);
     const parent = await post(creator.cookie, origin.responseId, {
@@ -1785,7 +1801,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       'select * from survey.finding_response_bindings where finding_id=$1',
       [findingId],
     );
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'finding.manage', origin.msId);
     for (let index = 0; index < 2; index++) {
       const source = await safeAttachmentSource();
@@ -1823,7 +1839,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       (await attach(adminCookie, target.id, { approved_excerpt_id: approval.rows[0]!.id }))
         .statusCode,
     ).toBe(422);
-    const reader = await actor();
+    const reader = await attachmentActor();
     for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
       await grant(reader.id, permission, source.msId);
     const result = await attach(reader.cookie, target.id, {
@@ -1847,7 +1863,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       'Other target',
     );
     const target = await attachmentTarget(otherSystem);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
     const before = await attachmentResidue(target.id, reader.id);
@@ -1873,7 +1889,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it('#1109 foreign approval cannot select local evidence', async () => {
     const source = await safeAttachmentSource();
     const target = await attachmentTarget(source.msId);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'finding.manage', source.msId);
     const foreignResponse = await seedForeignResponse();
     const question = await migrateHandle.pool.query<{ id: string }>(
@@ -1904,7 +1920,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it('#1109 invalid target classification and a late link failure leave no residue', async () => {
     const source = await safeAttachmentSource();
     const target = await attachmentTarget(source.msId);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
     const wrongSystem = await insertMsDirectly(
@@ -1928,18 +1944,32 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       ).statusCode,
     ).toBe(422);
     expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
-    await migrateHandle.pool.query(
-      'revoke execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) from fops_app',
-    );
+    const operator = await migrateHandle.pool.connect();
     try {
+      await operator.query('set role fops_entity_links_survey_mutator_owner');
+      await operator.query(
+        'revoke execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) from fops_app',
+      );
+      const privilege = await operator.query<{ can_execute: boolean }>(
+        "select has_function_privilege('fops_app', 'core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid)', 'EXECUTE') as can_execute",
+      );
+      expect(privilege.rows[0]?.can_execute).toBe(false);
       expect(
         (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }))
           .statusCode,
       ).toBe(500);
     } finally {
-      await migrateHandle.pool.query(
-        'grant execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) to fops_app',
-      );
+      try {
+        await operator.query(
+          'grant execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) to fops_app',
+        );
+      } finally {
+        try {
+          await operator.query('reset role');
+        } finally {
+          operator.release();
+        }
+      }
     }
     expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
   });
@@ -1949,10 +1979,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     async (order) => {
       const source = await safeAttachmentSource();
       const target = await attachmentTarget(source.msId);
-      const reader = await actor();
+      const reader = await attachmentActor();
       await grant(reader.id, 'survey.read', source.msId);
       await grant(reader.id, 'finding.manage', source.msId);
-      const revoker = await actor();
+      const revoker = await attachmentActor();
       for (const permission of ['survey.read', 'survey.manage', 'survey.read_personal_responses'])
         await grant(revoker.id, permission, source.msId);
       const doAttach = () =>
@@ -2021,7 +2051,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it('#1109 threshold update committed ahead of waiting attachment rejects it with no residue', async () => {
     const source = await safeAttachmentSource();
     const target = await attachmentTarget(source.msId);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
     const old = await migrateHandle.pool.query<{ survey_anonymity_threshold: number }>(
@@ -2070,7 +2100,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it('#1109 attachment holds threshold authorization until commit before a later threshold update', async () => {
     const source = await safeAttachmentSource();
     const target = await attachmentTarget(source.msId);
-    const reader = await actor();
+    const reader = await attachmentActor();
     await grant(reader.id, 'survey.read', source.msId);
     await grant(reader.id, 'finding.manage', source.msId);
     const old = await migrateHandle.pool.query<{ survey_anonymity_threshold: number }>(
