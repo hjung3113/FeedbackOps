@@ -80,7 +80,10 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   const [refresh, setRefresh] = useState(0);
   const [pages, setPages] = useState<{
     refresh: number;
-    entries: Map<string, ListEvidenceInventoryResponse>;
+    entries: Map<
+      string,
+      { response: ListEvidenceInventoryResponse; items: EvidenceInventoryItem[] }
+    >;
   }>({ refresh, entries: new Map() });
   const rows = useRef(new Map<string, HTMLDivElement>());
   const origin = useRef<string | null>(null);
@@ -137,10 +140,42 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   // Keep successful earlier pages for a load-more retry. No previous session/scope
   // state survives the keyed session, and failed reauthorization hides all content.
   if (pages.refresh !== refresh) setPages({ refresh, entries: new Map() });
-  else if (list.isSuccess && !list.isFetching && pages.entries.get(pageKey) !== list.data) {
+  else if (
+    list.isSuccess &&
+    !list.isFetching &&
+    pages.entries.get(pageKey)?.response !== list.data
+  ) {
     const entries = new Map(pages.entries);
-    entries.set(pageKey, list.data);
+    entries.set(pageKey, { response: list.data, items: list.data.items });
     setPages({ refresh, entries });
+  }
+  // Reconcile stored page items as well as the selected row. Keep the transport
+  // response identity separate so an unchanged list cannot restore withdrawn text.
+  if (search.selected && !detail.isFetching) {
+    const unreadable =
+      denied(detail.error) || (detail.error instanceof ApiError && detail.error.status === 404);
+    const withheld =
+      !detail.isError && detail.data?.content_state === 'withheld' ? detail.data : undefined;
+    if (unreadable || withheld) {
+      const entries = new Map(pages.entries);
+      let changed = false;
+      for (const [cursor, page] of entries) {
+        if (
+          !page.items.some(
+            (item) => item.id === search.selected && (unreadable || item !== withheld),
+          )
+        )
+          continue;
+        entries.set(cursor, {
+          ...page,
+          items: unreadable
+            ? page.items.filter((item) => item.id !== search.selected)
+            : page.items.map((item) => (item.id === search.selected && withheld ? withheld : item)),
+        });
+        changed = true;
+      }
+      if (changed) setPages({ refresh, entries });
+    }
   }
   const blocked = denied(list.error) || denied(detail.error);
   useEffect(() => {
@@ -149,7 +184,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
     rows.current.clear();
     origin.current = null;
   }, [blocked]);
-  const visiblePages: ListEvidenceInventoryResponse[] = [];
+  const visiblePages: { items: EvidenceInventoryItem[] }[] = [];
   for (const [cursor, page] of pages.entries) {
     visiblePages.push(page);
     if (cursor === pageKey) break;
@@ -198,7 +233,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
                 label,
               })),
             ]}
-            tabsAriaLabel="Evidence 출처"
+            tabsAriaLabel={COPY.sourceTabs}
             activeTab={search.source ?? 'all'}
             onTabChange={(value) =>
               changeFilter({

@@ -1,5 +1,12 @@
+import { ADMIN_PERMISSIONS_COPY } from './admin-permissions';
+
 export const EVIDENCE_COPY = {
   title: 'Evidence',
+  panelLabel: 'Evidence 상세',
+  closePanel: ADMIN_PERMISSIONS_COPY.closePanel,
+  close: ADMIN_PERMISSIONS_COPY.close,
+  sourceTabs: 'Evidence 출처',
+  identityProtected: '응답자 보호',
   loading: 'Evidence 확인 중…',
   description: 'Finding에 저장된 Evidence를 찾습니다.',
   search: 'Evidence 검색…',

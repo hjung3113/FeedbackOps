@@ -11,6 +11,7 @@ test.describe('/integration/coverage visual harness', () => {
     await page.goto('/integration/coverage');
     await expect(page.getByTestId('integration-coverage')).toBeVisible();
     await expect(page.getByTestId('coverage-row-voc-task')).toBeVisible();
+    await expect(page.getByTestId('coverage-settings-link')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), coverageVisualSnapshot);
   });
 
@@ -19,6 +20,7 @@ test.describe('/integration/coverage visual harness', () => {
     await page.goto('/integration/coverage');
     await expect(page.getByTestId('integration-coverage')).toBeVisible();
     await expect(page.getByTestId('coverage-empty')).toBeVisible();
+    await expect(page.getByTestId('coverage-settings-link')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), coverageEmptyVisualSnapshot);
   });
 });

@@ -14,6 +14,7 @@ test('Evidence inventory: keyboard selection, focus return and shell-local scrol
     'aria-current',
     'page',
   );
+  await expect(page.getByTestId('rail-admin')).toBeVisible();
   await expectVisual(page, page.locator('[data-app-frame]'), 'evidence-normal.png');
   await row.focus();
   await page.keyboard.press('Enter');
@@ -22,6 +23,7 @@ test('Evidence inventory: keyboard selection, focus return and shell-local scrol
     'href',
     /selected=b2222222/,
   );
+  await expect(page.getByTestId('rail-admin')).toBeVisible();
   await expectVisual(page, page.locator('[data-app-frame]'), 'evidence-selected.png');
   const panelScroll = panel.locator('div.overflow-y-auto');
   await panelScroll.evaluate((node) => {
@@ -58,6 +60,7 @@ for (const scenario of ['withheld', 'empty', 'error'] as const) {
         )
         .first(),
     ).toBeVisible();
+    await expect(page.getByTestId('rail-admin')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), `evidence-${scenario}.png`);
   });
 }

@@ -21,7 +21,7 @@ export function EvidenceSource({ item }: { item: EvidenceInventoryItem }) {
       <span>
         {item.source.survey_display_id} · {SURVEY_TYPE_LABELS[item.source.survey_type]} ·{' '}
         {item.source.question_label}
-        {item.source.identity_protected ? ' · 응답자 보호' : ''}
+        {item.source.identity_protected ? ` · ${EVIDENCE_COPY.identityProtected}` : ''}
       </span>
     );
   }

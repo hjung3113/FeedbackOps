@@ -313,7 +313,7 @@ it('never redisplays a deferred old-scope quote/source after new scope denial', 
   expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
   expect(screen.queryByText(/이전 범위 원본/)).toBeNull();
 });
-it.each(['withheld', 'missing'] as const)(
+it.each(['withheld', 'missing', 'denied'] as const)(
   'clears previously displayed quote/source after source becomes %s',
   async (state) => {
     let revoked = false;
@@ -333,12 +333,22 @@ it.each(['withheld', 'missing'] as const)(
       ...metadata,
       content_state: 'withheld',
     });
+    const other = { ...item, id: PARENT, quote_or_summary: '다른 Evidence 메모' };
     installFetch(
-      () => response({ items: [revoked ? safe : voc], page: { has_more: false } }),
+      () => response({ items: [revoked ? safe : voc, other], page: { has_more: false } }),
       () =>
-        revoked && state === 'missing'
-          ? response({ code: 'not_found.record' }, 404)
+        revoked && state !== 'withheld'
+          ? response(
+              { code: state === 'missing' ? 'not_found.record' : 'permission.denied' },
+              state === 'missing' ? 404 : 403,
+            )
           : response(revoked ? safe : voc),
+    );
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (input: string) =>
+      input === `/evidence-highlights/${PARENT}`
+        ? Promise.resolve(response(other))
+        : originalFetch(input),
     );
     const { client } = await mount(`/integration/evidence?selected=${ID}`);
     await screen.findByRole('link', { name: 'Finding 보기' });
@@ -347,11 +357,22 @@ it.each(['withheld', 'missing'] as const)(
     await act(async () => {
       await client.invalidateQueries({ queryKey: ['evidence-inventory'] });
     });
-    await screen.findAllByText(
-      state === 'missing'
-        ? '선택한 Evidence를 찾을 수 없습니다.'
-        : '원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다.',
-    );
+    if (state === 'denied') {
+      await waitFor(() => expect(document.querySelector('[data-state="denied"]')).not.toBeNull());
+    } else
+      await screen.findAllByText(
+        state === 'missing'
+          ? '선택한 Evidence를 찾을 수 없습니다.'
+          : '원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다.',
+      );
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/비공개 원본 제목/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/비공개 원본 제목/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /다른 Evidence 메모/ }));
+    await screen.findByRole('link', { name: 'Finding 보기' });
     expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
     expect(screen.queryByText(/비공개 원본 제목/)).toBeNull();
   },
@@ -446,20 +467,84 @@ it('keeps only pages through the restored cursor when going Back from page two',
   await screen.findByRole('button', { name: '더 보기' });
   expect(screen.queryByRole('button', { name: /뒤 페이지 전용 메모/ })).toBeNull();
 });
-it('withdraws a selected row quote when direct detail becomes withheld before the list catches up', async () => {
-  let revoke = false;
-  const { quote_or_summary: _quote, ...metadata } = item;
-  const safe = getEvidenceInventoryResponseSchema.parse({ ...metadata, content_state: 'withheld' });
-  installFetch(undefined, () => response(revoke ? safe : item));
-  const { client } = await mount(`/integration/evidence?selected=${ID}`);
-  await screen.findByRole('link', { name: 'Finding 보기' });
-  revoke = true;
-  await act(async () => {
-    await client.invalidateQueries({ predicate: (query) => query.queryKey.includes('detail') });
-  });
-  await screen.findAllByText('원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다.');
-  expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
-});
+it.each(
+  (['withheld', 'missing', 'denied'] as const).flatMap((state) =>
+    (['close', 'select'] as const).map((transition) => ({ state, transition })),
+  ),
+)(
+  'keeps direct $state withdrawal after $transition before the list catches up',
+  async ({ state, transition }) => {
+    let revoke = false;
+    const voc = getEvidenceInventoryResponseSchema.parse({
+      ...item,
+      source_type: 'voc',
+      source: {
+        id: PARENT,
+        display_id: 'VOC-77',
+        title: '철회된 원본 제목',
+        route: `/vocs?selected=${PARENT}`,
+      },
+    });
+    if (voc.source_type !== 'voc') throw new Error('Expected VOC fixture');
+    const { quote_or_summary: _quote, source: _source, ...metadata } = voc;
+    const safe = getEvidenceInventoryResponseSchema.parse({
+      ...metadata,
+      content_state: 'withheld',
+    });
+    const other = { ...item, id: PARENT, quote_or_summary: '다른 Evidence 메모' };
+    installFetch(
+      () => response({ items: [voc, other], page: { has_more: false } }),
+      () =>
+        revoke && state !== 'withheld'
+          ? response(
+              { code: state === 'missing' ? 'not_found.record' : 'permission.denied' },
+              state === 'missing' ? 404 : 403,
+            )
+          : response(revoke ? safe : voc),
+    );
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', (input: string) =>
+      input === `/evidence-highlights/${PARENT}`
+        ? Promise.resolve(response(other))
+        : originalFetch(input),
+    );
+    const { client, router } = await mount(`/integration/evidence?selected=${ID}`);
+    await screen.findByRole('link', { name: 'Finding 보기' });
+    revoke = true;
+    await act(async () => {
+      await client.invalidateQueries({ predicate: (query) => query.queryKey.includes('detail') });
+    });
+    if (state === 'denied') {
+      await waitFor(() => expect(document.querySelector('[data-state="denied"]')).not.toBeNull());
+    } else {
+      await screen.findAllByText(
+        state === 'missing'
+          ? '선택한 Evidence를 찾을 수 없습니다.'
+          : '원본 접근 권한 또는 승인 상태가 변경되어 내용을 표시할 수 없습니다.',
+      );
+    }
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+    if (transition === 'close') {
+      fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+      await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
+      expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+      expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+      fireEvent.click(await screen.findByRole('button', { name: /다른 Evidence 메모/ }));
+    } else {
+      await act(async () =>
+        router.navigate({ to: '/integration/evidence', search: { selected: PARENT } }),
+      );
+    }
+    await screen.findByRole('link', { name: 'Finding 보기' });
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+    expect(screen.queryByText(/철회된 원본 제목/)).toBeNull();
+  },
+);
 it('keeps initial pending reads distinct from empty and error', async () => {
   let settle!: (value: Response) => void;
   installFetch(

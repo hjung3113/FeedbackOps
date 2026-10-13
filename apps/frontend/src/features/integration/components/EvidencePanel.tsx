@@ -24,14 +24,14 @@ export function EvidencePanel({
 }) {
   return (
     <section
-      aria-label="Evidence 상세"
+      aria-label={COPY.panelLabel}
       className="flex h-full min-h-0 flex-col"
       data-testid="evidence-panel"
     >
       <header className="flex h-toolbar shrink-0 items-center justify-between border-b border-border-subtle px-4">
-        <h2 className="text-sm font-semibold">Evidence</h2>
-        <Button variant="subtle" size="sm" onClick={onClose} aria-label="패널 닫기">
-          닫기
+        <h2 className="text-sm font-semibold">{COPY.title}</h2>
+        <Button variant="subtle" size="sm" onClick={onClose} aria-label={COPY.closePanel}>
+          {COPY.close}
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
