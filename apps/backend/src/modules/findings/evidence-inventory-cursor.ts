@@ -6,7 +6,14 @@ import type { FindingsActor } from './service.js';
 
 const cursorSchema = z
   .object({
-    timestamp: z.string().datetime({ offset: true }),
+    // Zod accepts offsets such as +99:99 that PostgreSQL cannot cast; keep real ones only.
+    timestamp: z
+      .string()
+      .datetime({ offset: true })
+      .refine(
+        (value) =>
+          /(Z|[+-](0\d|1[0-4]):[0-5]\d)$/.test(value) && Number.isFinite(Date.parse(value)),
+      ),
     id: z.string().uuid(),
     workspace: z.string().uuid(),
     actor: z.string().uuid(),
