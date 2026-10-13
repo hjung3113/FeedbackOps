@@ -37,10 +37,11 @@ export const ADMIN_PERMISSIONS_COPY = {
   selfDenyLiftForbidden: '관리자는 본인에게 걸린 차단도 직접 해제할 수 없습니다.',
   riskReview: {
     title: '검토 시 확인할 사항',
+    currentState: '현재 상태 기준',
     noSignals: '추가 확인 사항 없음',
     requesterRole: '요청자 역할',
-    effectiveDecision: '현재 권한 판단',
-    effectiveScope: '현재 유효 범위',
+    effectiveDecision: '요청 범위의 현재 권한',
+    effectiveScope: '현재 보유 범위',
     effectiveGrantScope: '현재 직접 부여 범위',
     effectiveExpiration: '현재 권한 만료일',
     noEffectivePermission: '해당 없음',
@@ -70,8 +71,6 @@ export const ADMIN_PERMISSIONS_COPY = {
     noExpiration: '요청 만료일 없음',
     activeDeny: '겹치는 활성 차단',
     requestedCapability: '요청한 권한',
-    workspaceScopeEvidence: '요청 범위는 워크스페이스 전체입니다.',
-    noExpirationEvidence: '요청 만료일이 없습니다.',
     denyScope: '차단 범위',
   },
 } as const;

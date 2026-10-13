@@ -47,6 +47,36 @@ const RISK_INDICATORS: PermissionRiskIndicator[] = [
 ];
 
 describe('permission request risk review', () => {
+  it.each([{ riskIndicators: [] }, { riskIndicators: RISK_INDICATORS.slice(0, 3) }])(
+    'puts signals before compact access facts and omits unrelated self-approval rows (%j)',
+    ({ riskIndicators }) => {
+      render(
+        <PermissionRequestDetail
+          request={adminDetailFixture(REQUEST, false, 'allowed', {
+            risk_indicators: riskIndicators,
+          })}
+          onClose={() => undefined}
+        />,
+      );
+      const review = within(screen.getByTestId('permission-request-risk-review'));
+      const signals =
+        riskIndicators.length === 0
+          ? review.getByText('추가 확인 사항 없음')
+          : review.getByText('민감한 권한');
+      const access = review.getByText('요청 범위의 현재 권한');
+      expect(
+        signals.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(access.parentElement).toHaveTextContent(
+        '권한 없음 · 현재 보유 범위: 유효 범위 없음 · 해당 없음',
+      );
+      expect(review.queryByText('본인 요청')).not.toBeInTheDocument();
+      expect(review.queryByText('본인 승인 정책')).not.toBeInTheDocument();
+      expect(review.queryByText('본인 승인 사유 필요')).not.toBeInTheDocument();
+      expect(review.queryByText('현재 상태 기준')).not.toBeInTheDocument();
+    },
+  );
+
   it('explains each supplied signal with requester, effective access, and authority facts', () => {
     const request = adminDetailFixture(REQUEST, false, 'forbidden', {
       requester: {
@@ -89,20 +119,13 @@ describe('permission request risk review', () => {
     expect(review).toHaveTextContent('검토 시 확인할 사항');
     expect(review).toHaveTextContent('요청자 역할');
     expect(review).toHaveTextContent('개발자');
-    expect(review).toHaveTextContent('현재 권한 판단');
+    expect(review).toHaveTextContent('요청 범위의 현재 권한');
     expect(review).toHaveTextContent('허용 · 직접 부여');
-    expect(review).toHaveTextContent('현재 유효 범위');
+    expect(review).toHaveTextContent('현재 보유 범위:');
     expect(review).toHaveTextContent('Payments Ops · Analytics Ops');
-    expect(review).toHaveTextContent('현재 권한 만료일');
     expect(review).toHaveTextContent(/2100/);
     expect(review).toHaveTextContent('검토 권한');
     expect(review).toHaveTextContent('워크스페이스 관리자 권한');
-    expect(review).toHaveTextContent('본인 요청');
-    expect(review).toHaveTextContent('아니요');
-    expect(review).toHaveTextContent('본인 승인 정책');
-    expect(review).toHaveTextContent('금지');
-    expect(review).toHaveTextContent('본인 승인 사유 필요');
-    expect(review).toHaveTextContent('예');
 
     const requestInfo = screen.getByText('요청 정보').closest('section');
     expect(requestInfo).toHaveTextContent('요청 만료일');
@@ -110,9 +133,7 @@ describe('permission request risk review', () => {
     expect(review).toHaveTextContent('민감한 권한');
     expect(review).toHaveTextContent('요청한 권한: 워크스페이스 관리자 권한');
     expect(review).toHaveTextContent('워크스페이스 전체 범위');
-    expect(review).toHaveTextContent('요청 범위는 워크스페이스 전체입니다.');
     expect(review).toHaveTextContent('요청 만료일 없음');
-    expect(review).toHaveTextContent('요청 만료일이 없습니다.');
     expect(review).toHaveTextContent('겹치는 활성 차단 2건');
     expect(review).toHaveTextContent('차단 범위: 워크스페이스 전체');
     expect(review).toHaveTextContent('차단 범위: Managed System (50000000)');
@@ -134,5 +155,49 @@ describe('permission request risk review', () => {
     const requestInfo = screen.getByText('요청 정보').closest('section');
     if (!requestInfo) throw new Error('Request info section is missing');
     expect(within(requestInfo).getByText('승인됨')).toBeInTheDocument();
+  });
+
+  it.each(['approved', 'rejected', 'cancelled'] as const)(
+    'marks terminal review facts as current state (%s)',
+    (status) => {
+      render(
+        <PermissionRequestDetail
+          request={adminDetailFixture({ ...REQUEST, status })}
+          onClose={() => undefined}
+        />,
+      );
+      expect(
+        within(screen.getByTestId('permission-request-risk-review')).getByText('현재 상태 기준'),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('retains the self-approval facts for the reviewer’s own request', () => {
+    render(
+      <PermissionRequestDetail
+        request={adminDetailFixture(REQUEST, true)}
+        onClose={() => undefined}
+      />,
+    );
+    const review = within(screen.getByTestId('permission-request-risk-review'));
+    expect(review.getByText('본인 요청').parentElement).toHaveTextContent('예');
+    expect(review.getByText('본인 승인 정책').parentElement).toHaveTextContent('허용');
+    expect(review.getByText('본인 승인 사유 필요').parentElement).toHaveTextContent('예');
+  });
+
+  it('explains constant-evidence signals once through their titles', () => {
+    render(
+      <PermissionRequestDetail
+        request={adminDetailFixture(REQUEST, false, 'allowed', {
+          risk_indicators: RISK_INDICATORS.slice(1, 3),
+        })}
+        onClose={() => undefined}
+      />,
+    );
+    const review = within(screen.getByTestId('permission-request-risk-review'));
+    expect(review.getByText('워크스페이스 전체 범위')).toBeInTheDocument();
+    expect(review.getByText('요청 만료일 없음')).toBeInTheDocument();
+    expect(review.queryByText('요청 범위는 워크스페이스 전체입니다.')).not.toBeInTheDocument();
+    expect(review.queryByText('요청 만료일이 없습니다.')).not.toBeInTheDocument();
   });
 });

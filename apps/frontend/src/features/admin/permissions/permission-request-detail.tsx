@@ -179,47 +179,9 @@ function PermissionRequestRiskReview({
   return (
     <section className="flex flex-col gap-2" data-testid="permission-request-risk-review">
       <PanelSectionTitle>{copy.title}</PanelSectionTitle>
-      <div className="flex flex-col gap-1">
-        <FieldRow label={copy.requesterRole} inset="none">
-          {ROLE_LEVEL_DISPLAY_LABELS[request.requester.role_level]}
-        </FieldRow>
-        <FieldRow label={copy.effectiveDecision} inset="none">
-          {effectiveDecision}
-        </FieldRow>
-        <FieldRow label={copy.effectiveScope} inset="none">
-          {formatEffectiveScope(request.effective_access.scope, managedSystemNames)}
-        </FieldRow>
-        {accessDecision.allow && accessDecision.via === 'direct_grant' ? (
-          <FieldRow label={copy.effectiveGrantScope} inset="none">
-            {formatManagedSystemScope(
-              request.effective_access.granted_managed_system_id,
-              managedSystemNames,
-            )}
-          </FieldRow>
-        ) : null}
-        <FieldRow label={copy.effectiveExpiration} inset="none">
-          {request.effective_access.expires_at
-            ? formatDateTime(request.effective_access.expires_at)
-            : accessDecision.allow
-              ? ADMIN_PERMISSIONS_COPY.noExpiration
-              : copy.noEffectivePermission}
-        </FieldRow>
-        <FieldRow label={copy.reviewAuthority} inset="none">
-          {getCapabilityDisplayLabel(request.administrative_authority.capability)} ·{' '}
-          {request.administrative_authority.allowed ? copy.allowed : copy.forbidden}
-        </FieldRow>
-        <FieldRow label={copy.selfRequest} inset="none">
-          {request.administrative_authority.is_requester ? copy.yes : copy.no}
-        </FieldRow>
-        <FieldRow label={copy.selfApprovalPolicy} inset="none">
-          {request.administrative_authority.permission_self_approval === 'allowed'
-            ? copy.allowed
-            : copy.forbidden}
-        </FieldRow>
-        <FieldRow label={copy.selfApprovalRequired} inset="none">
-          {request.administrative_authority.self_approval_required ? copy.yes : copy.no}
-        </FieldRow>
-      </div>
+      {request.status !== 'pending' && request.status !== 'needs_more_info' ? (
+        <p className="text-sm text-text-muted">{copy.currentState}</p>
+      ) : null}
       {request.risk_indicators.length === 0 ? (
         <output className="text-sm text-text-muted">{copy.noSignals}</output>
       ) : (
@@ -234,6 +196,50 @@ function PermissionRequestRiskReview({
           ))}
         </ul>
       )}
+      <div className="flex flex-col gap-1">
+        <FieldRow label={copy.requesterRole} inset="none">
+          {ROLE_LEVEL_DISPLAY_LABELS[request.requester.role_level]}
+        </FieldRow>
+        <FieldRow label={copy.effectiveDecision} inset="none">
+          {effectiveDecision} · {copy.effectiveScope}:{' '}
+          {formatEffectiveScope(request.effective_access.scope, managedSystemNames)}
+          {accessDecision.allow && accessDecision.via === 'direct_grant' ? (
+            <>
+              {' · '}
+              {copy.effectiveGrantScope}:{' '}
+              {formatManagedSystemScope(
+                request.effective_access.granted_managed_system_id,
+                managedSystemNames,
+              )}
+            </>
+          ) : null}
+          {' · '}
+          {request.effective_access.expires_at
+            ? formatDateTime(request.effective_access.expires_at)
+            : accessDecision.allow
+              ? ADMIN_PERMISSIONS_COPY.noExpiration
+              : copy.noEffectivePermission}
+        </FieldRow>
+        <FieldRow label={copy.reviewAuthority} inset="none">
+          {getCapabilityDisplayLabel(request.administrative_authority.capability)} ·{' '}
+          {request.administrative_authority.allowed ? copy.allowed : copy.forbidden}
+        </FieldRow>
+        {request.administrative_authority.is_requester ? (
+          <>
+            <FieldRow label={copy.selfRequest} inset="none">
+              {copy.yes}
+            </FieldRow>
+            <FieldRow label={copy.selfApprovalPolicy} inset="none">
+              {request.administrative_authority.permission_self_approval === 'allowed'
+                ? copy.allowed
+                : copy.forbidden}
+            </FieldRow>
+            <FieldRow label={copy.selfApprovalRequired} inset="none">
+              {request.administrative_authority.self_approval_required ? copy.yes : copy.no}
+            </FieldRow>
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -257,19 +263,9 @@ function PermissionRiskIndicatorItem({
         </>
       );
     case 'workspace_scope':
-      return (
-        <>
-          <p className="text-sm font-medium text-text-primary">{copy.workspaceScope}</p>
-          <p className="text-sm text-text-secondary">{copy.workspaceScopeEvidence}</p>
-        </>
-      );
+      return <p className="text-sm font-medium text-text-primary">{copy.workspaceScope}</p>;
     case 'no_expiration':
-      return (
-        <>
-          <p className="text-sm font-medium text-text-primary">{copy.noExpiration}</p>
-          <p className="text-sm text-text-secondary">{copy.noExpirationEvidence}</p>
-        </>
-      );
+      return <p className="text-sm font-medium text-text-primary">{copy.noExpiration}</p>;
     case 'active_deny':
       return (
         <>

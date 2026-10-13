@@ -226,6 +226,59 @@ describe("/admin/permissions/requests", () => {
     toast.error.mockReset();
   });
 
+  test('a list refetch moving the selection out of the tab keeps the draft for stale review', async () => {
+    let detail: AdminPermissionRequestRow = { ...REQUESTS[0] };
+    const requests = [detail];
+    installFetch({
+      requests,
+      detail: () => adminDetailFixture(detail),
+      decision: {
+        status: 409,
+        body: { code: 'conflict.stale_write', message: 'stale', detail: { current_revision: 8 } },
+      },
+    });
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'preserved review' } });
+
+    detail = { ...detail, status: 'needs_more_info', revision: 8, reason: 'latest request' };
+    requests[0] = detail;
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permission-requests', 'review'] });
+    });
+
+    await within(screen.getByTestId('permission-requests-list')).findByText(
+      '표시할 요청이 없습니다.',
+    );
+    expect(router.state.location.search).toEqual({ selected: REQUESTS[0].id });
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('preserved review');
+    expect(screen.getByTestId('permission-decision-submit')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await screen.findByText('latest request');
+    expect(screen.getByTestId('permission-request-stale-alert')).toHaveTextContent(
+      ADMIN_PERMISSIONS_COPY.reviewAgain,
+    );
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+    expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(decisionPosts()).toHaveLength(1);
+    const post = decisionPosts()[0];
+    if (!post) throw new Error('Expected the stale decision POST');
+    expect(JSON.parse(post[1].body as string)).toEqual({
+      expected_revision: 7,
+      reason: 'preserved review',
+    });
+    expect(router.state.location.search).toEqual({ selected: REQUESTS[0].id });
+  });
+
   test('selected GET renders every supplied server risk signal and review fact', async () => {
     installFetch({
       detail: (row) =>
@@ -237,13 +290,13 @@ describe("/admin/permissions/requests", () => {
     expect(review).toHaveTextContent('검토 시 확인할 사항');
     expect(review).toHaveTextContent('요청자 역할');
     expect(review).toHaveTextContent('사용자');
-    expect(review).toHaveTextContent('현재 권한 판단');
+    expect(review).toHaveTextContent('요청 범위의 현재 권한');
     expect(review).toHaveTextContent('권한 없음');
     expect(review).toHaveTextContent('검토 권한');
     expect(review).toHaveTextContent('워크스페이스 관리자 권한');
     expect(review).toHaveTextContent('요청한 권한: 워크스페이스 전체 읽기');
-    expect(review).toHaveTextContent('요청 범위는 워크스페이스 전체입니다.');
-    expect(review).toHaveTextContent('요청 만료일이 없습니다.');
+    expect(review).toHaveTextContent('워크스페이스 전체 범위');
+    expect(review).toHaveTextContent('요청 만료일 없음');
     expect(review).toHaveTextContent('겹치는 활성 차단 1건');
     expect(review).toHaveTextContent('차단 범위: 워크스페이스 전체');
   });
@@ -272,7 +325,7 @@ describe("/admin/permissions/requests", () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-    await screen.findByText('요청 범위는 워크스페이스 전체입니다.');
+    await screen.findByText('워크스페이스 전체 범위');
     fireEvent.click(screen.getByRole('button', { name: '거절' }));
     fireEvent.change(screen.getByLabelText(/^사유/), {
       target: { value: 'old risk review' },
@@ -288,7 +341,7 @@ describe("/admin/permissions/requests", () => {
     await screen.findByText('겹치는 활성 차단 1건');
     const review = screen.getByTestId('permission-request-risk-review');
     expect(review).toHaveTextContent('겹치는 활성 차단 1건');
-    expect(screen.queryByText('요청 범위는 워크스페이스 전체입니다.')).not.toBeInTheDocument();
+    expect(screen.queryByText('워크스페이스 전체 범위')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('old risk review')).not.toBeInTheDocument();
     expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
     expect(decisionPosts()).toHaveLength(0);
@@ -311,7 +364,7 @@ describe("/admin/permissions/requests", () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-    await screen.findByText('요청 만료일이 없습니다.');
+    await screen.findByText('요청 만료일 없음');
     fireEvent.click(screen.getByRole('button', { name: '거절' }));
     fireEvent.change(screen.getByLabelText(/^사유/), {
       target: { value: 'keep this review' },
@@ -324,7 +377,7 @@ describe("/admin/permissions/requests", () => {
     });
 
     expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
-      '요청 만료일이 없습니다.',
+      '요청 만료일 없음',
     );
     expect(screen.getByLabelText(/^사유/)).toHaveValue('keep this review');
     expect(screen.getByTestId('permission-decision-submit')).toBeEnabled();

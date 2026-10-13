@@ -453,7 +453,7 @@ describe('/admin/permissions/requests URL state', () => {
     });
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
 
-    await screen.findByText('요청 만료일이 없습니다.');
+    await screen.findByText('요청 만료일 없음');
     expect(screen.queryByText('요청한 권한: 워크스페이스 전체 읽기')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '거절' }));
     expect(screen.getByLabelText(/^사유/)).toHaveValue('');
@@ -494,7 +494,7 @@ describe('/admin/permissions/requests URL state', () => {
 
     await screen.findByText('요청 상세를 불러오는 중입니다.');
     fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
-    await screen.findByText('요청 만료일이 없습니다.');
+    await screen.findByText('요청 만료일 없음');
     fireEvent.click(screen.getByRole('button', { name: '거절' }));
     fireEvent.change(screen.getByLabelText(/^사유/), {
       target: { value: 'new selected draft' },
@@ -512,7 +512,7 @@ describe('/admin/permissions/requests URL state', () => {
       selected: REQUESTS[1].id,
     });
     expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
-      '요청 만료일이 없습니다.',
+      '요청 만료일 없음',
     );
     expect(screen.queryByText('요청한 권한: 워크스페이스 전체 읽기')).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
