@@ -93,12 +93,15 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'workspace_settings_updated',
   'voc_recommendation_dismissed',
   'voc_recommendation_confirmed',
+  'voc_cluster_suggestion_confirmed',
+  'voc_cluster_suggestion_discarded',
+  'voc_cluster_suggestion_restored',
 ] as const;
 
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(78);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(81);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

@@ -31,6 +31,10 @@ export const workspaceSettingsUpdatedDetailSchema = z
     changes: z
       .object({
         coverage_thresholds: coverageChangesSchema.optional(),
+        voc_cluster_suggestions_enabled: z
+          .object({ from: z.boolean(), to: z.boolean() })
+          .strict()
+          .optional(),
         permission_self_approval: z
           .object({
             from: z.enum(['allowed', 'forbidden']),

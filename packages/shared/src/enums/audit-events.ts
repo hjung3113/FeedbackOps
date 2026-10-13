@@ -77,6 +77,11 @@ import {
   WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES,
 } from '../audit/workspace-settings.js';
 
+import {
+  VOC_CLUSTER_SUGGESTION_AUDIT_EVENT_DETAIL_SCHEMAS,
+  VOC_CLUSTER_SUGGESTION_AUDIT_EVENT_TYPES,
+} from '../audit/voc-cluster-suggestion.js';
+
 // Spread order preserves the historical AUDIT_EVENT_TYPES order byte-for-byte
 // (Zod's enum option list is order-sensitive). Do not reorder or re-group.
 export const AUDIT_EVENT_TYPES = [
@@ -98,6 +103,7 @@ export const AUDIT_EVENT_TYPES = [
   ...FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_TYPES,
   ...WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES,
   ...VOC_RECOMMENDATION_AUDIT_EVENT_TYPES,
+  ...VOC_CLUSTER_SUGGESTION_AUDIT_EVENT_TYPES,
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -122,4 +128,5 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   ...FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_DETAIL_SCHEMAS,
   ...WORKSPACE_SETTINGS_AUDIT_EVENT_DETAIL_SCHEMAS,
   ...VOC_RECOMMENDATION_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...VOC_CLUSTER_SUGGESTION_AUDIT_EVENT_DETAIL_SCHEMAS,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

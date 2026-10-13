@@ -26,6 +26,7 @@ const defaultBands = {
 };
 
 interface SettingsBody {
+  voc_cluster_suggestions_enabled: boolean;
   coverage_thresholds: CoverageThresholds;
   permission_self_approval: 'allowed' | 'forbidden';
   survey_anonymity_threshold: number;
@@ -138,6 +139,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 5,
@@ -360,6 +362,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     expect(settings).toEqual({
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 9,
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: {
         ...defaultBands,
         'voc-task': { good_min_percent: 80, warn_min_percent: 50 },
@@ -422,12 +425,14 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
 
     expect(patchResponse.statusCode).toBe(200);
     expect(patchResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 7,
     });
     const getResponse = await request('GET', adminCookie);
     expect(getResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 7,
@@ -473,6 +478,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     expect(response.statusCode).toBeLessThan(500);
     const getResponse = await request('GET', adminCookie);
     expect(getResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 5,
@@ -509,6 +515,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     ).toBe(0);
     const getResponse = await request('GET', adminCookie);
     expect(getResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 5,
@@ -528,6 +535,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 7,
@@ -549,12 +557,14 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     });
     expect(patchResponse.statusCode).toBe(200);
     expect(patchResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'forbidden',
       survey_anonymity_threshold: 5,
     });
     const getResponse = await request('GET', adminCookie);
     expect(getResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'forbidden',
       survey_anonymity_threshold: 5,
@@ -586,9 +596,201 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
 
     const getResponse = await request('GET', adminCookie);
     expect(getResponse.json<SettingsBody>()).toEqual({
+      voc_cluster_suggestions_enabled: false,
       coverage_thresholds: defaultBands,
       permission_self_approval: 'forbidden',
       survey_anonymity_threshold: 9,
     });
+  });
+
+  it('keeps a missing-row false policy PATCH entirely inert', async () => {
+    const response = await request('PATCH', adminCookie, {
+      voc_cluster_suggestions_enabled: false,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<SettingsBody>().voc_cluster_suggestions_enabled).toBe(false);
+    expect(await auditCount()).toBe(0);
+    expect(
+      (
+        await appHandle.pool.query(
+          'select * from core.workspace_settings where workspace_id = $1',
+          [WORKSPACE_ID],
+        )
+      ).rowCount,
+    ).toBe(0);
+  });
+
+  it('audits boolean opt-in and disable while preserving unrelated settings and operational state', async () => {
+    expect(
+      (
+        await request('PATCH', adminCookie, {
+          permission_self_approval: 'forbidden',
+          survey_anonymity_threshold: 9,
+          coverage_thresholds: { 'voc-task': { good_min_percent: 80, warn_min_percent: 50 } },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const system = await migrateHandle.pool.query<{ id: string }>(
+      'select id from core.managed_systems where workspace_id = $1 limit 1',
+      [WORKSPACE_ID],
+    );
+    const systemId = system.rows[0]?.id;
+    if (!systemId) throw new Error('seed Managed System missing');
+    try {
+      await migrateHandle.pool.query(
+        'insert into voc.voc_cluster_suggestion_counters (workspace_id, eligible_pending_count) values ($1, 2)',
+        [WORKSPACE_ID],
+      );
+      await migrateHandle.pool.query(
+        'insert into voc.voc_cluster_suggestion_admissions (workspace_id, primary_managed_system_id, window_start, new_admissions) values ($1, $2, $3, 3)',
+        [WORKSPACE_ID, systemId, '2026-10-13T00:00:00Z'],
+      );
+      await migrateHandle.pool.query(
+        'insert into voc.voc_cluster_suggestion_cursors (workspace_id, primary_managed_system_id, embedding_version, embedding_watermark, last_voc_id) values ($1, $2, 1, $3, $4)',
+        [WORKSPACE_ID, systemId, '2026-10-13T00:00:00Z', randomUUID()],
+      );
+      async function operationalSnapshot() {
+        return Promise.all(
+          [
+            'voc_cluster_suggestions',
+            'voc_cluster_suggestion_counters',
+            'voc_cluster_suggestion_admissions',
+            'voc_cluster_suggestion_cursors',
+          ].map(
+            async (table) =>
+              (
+                await appHandle.pool.query(
+                  `select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text), '[]'::jsonb) as rows
+         from voc.${table} t where workspace_id = $1`,
+                  [WORKSPACE_ID],
+                )
+              ).rows,
+          ),
+        );
+      }
+      const operationalBefore = await operationalSnapshot();
+      for (const enabled of [true, false]) {
+        const response = await request('PATCH', await actorCookie('admin'), {
+          voc_cluster_suggestions_enabled: enabled,
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json<SettingsBody>()).toEqual({
+          voc_cluster_suggestions_enabled: enabled,
+          permission_self_approval: 'forbidden',
+          survey_anonymity_threshold: 9,
+          coverage_thresholds: {
+            ...defaultBands,
+            'voc-task': { good_min_percent: 80, warn_min_percent: 50 },
+          },
+        });
+        const before = await appHandle.pool.query(
+          'select * from core.workspace_settings where workspace_id = $1',
+          [WORKSPACE_ID],
+        );
+        const count = await auditCount();
+        expect(
+          (
+            await request('PATCH', await actorCookie('admin'), {
+              voc_cluster_suggestions_enabled: enabled,
+            })
+          ).statusCode,
+        ).toBe(200);
+        expect(await auditCount()).toBe(count);
+        expect(
+          (
+            await appHandle.pool.query(
+              'select * from core.workspace_settings where workspace_id = $1',
+              [WORKSPACE_ID],
+            )
+          ).rows,
+        ).toEqual(before.rows);
+      }
+      const audits = await migrateHandle.pool.query<{ detail: unknown }>(
+        `select detail from core.audit_log where workspace_id = $1 and event_type = 'workspace_settings_updated'
+       and detail->'changes' ? 'voc_cluster_suggestions_enabled' order by created_at`,
+        [WORKSPACE_ID],
+      );
+      expect(audits.rows).toEqual([
+        { detail: { changes: { voc_cluster_suggestions_enabled: { from: false, to: true } } } },
+        { detail: { changes: { voc_cluster_suggestions_enabled: { from: true, to: false } } } },
+      ]);
+      expect(await operationalSnapshot()).toEqual(operationalBefore);
+    } finally {
+      for (const table of [
+        'voc_cluster_suggestion_counters',
+        'voc_cluster_suggestion_admissions',
+        'voc_cluster_suggestion_cursors',
+      ]) {
+        await migrateHandle.pool.query(`delete from voc.${table} where workspace_id = $1`, [
+          WORKSPACE_ID,
+        ]);
+      }
+    }
+  });
+
+  it.each(['developer', 'user', 'denied-admin'] as const)(
+    'denies suggestion opt-in for %s without row/audit side effects',
+    async (persona) => {
+      const cookie = await actorCookie(
+        persona === 'denied-admin' ? 'admin' : persona,
+        persona === 'denied-admin',
+      );
+      const response = await request('PATCH', cookie, { voc_cluster_suggestions_enabled: true });
+      expect(response.statusCode).toBe(403);
+      expect(response.json<{ code: string }>().code).toBe('permission.denied');
+      expect(await auditCount()).toBe(0);
+      expect(
+        (
+          await appHandle.pool.query(
+            'select * from core.workspace_settings where workspace_id = $1',
+            [WORKSPACE_ID],
+          )
+        ).rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it.each([null, 'true', 1])(
+    'rejects nonboolean suggestion policy %j without side effects',
+    async (value) => {
+      const response = await request('PATCH', adminCookie, {
+        voc_cluster_suggestions_enabled: value,
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json<{ code: string }>().code).toBe('validation.failed');
+      expect(await auditCount()).toBe(0);
+      expect(
+        (
+          await appHandle.pool.query(
+            'select * from core.workspace_settings where workspace_id = $1',
+            [WORKSPACE_ID],
+          )
+        ).rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it('preserves Coverage and suggestion policy through concurrent partial PATCHes', async () => {
+    const [coverageCookie, policyCookie] = await Promise.all([
+      actorCookie('admin'),
+      actorCookie('admin'),
+    ]);
+    const responses = await Promise.all([
+      request('PATCH', coverageCookie, {
+        coverage_thresholds: { 'voc-task': { good_min_percent: 80, warn_min_percent: 50 } },
+      }),
+      request('PATCH', policyCookie, { voc_cluster_suggestions_enabled: true }),
+    ]);
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+    expect((await request('GET', adminCookie)).json<SettingsBody>()).toEqual({
+      permission_self_approval: 'allowed',
+      survey_anonymity_threshold: 5,
+      voc_cluster_suggestions_enabled: true,
+      coverage_thresholds: {
+        ...defaultBands,
+        'voc-task': { good_min_percent: 80, warn_min_percent: 50 },
+      },
+    });
+    expect(await auditCount()).toBe(2);
   });
 });

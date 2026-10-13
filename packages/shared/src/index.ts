@@ -19,6 +19,7 @@ export * from './audit/task-request.js';
 export * from './audit/task.js';
 export * from './audit/milestone.js';
 export * from './audit/voc-cluster.js';
+export * from './audit/voc-cluster-suggestion.js';
 export * from './audit/workspace-settings.js';
 export * from './entity-links.js';
 export * from './findings/index.js';

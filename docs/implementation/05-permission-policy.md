@@ -501,10 +501,11 @@ Owner settings remain `workspace.admin`. Paid preview needs only VOC create's
 session/workspace authority, grants no candidate authority, and includes Admin
 in paid budgets. Fresh candidate visibility is checked after egress/on replay.
 
-New proposed human events are `voc_cluster_suggestion_confirmed`,
+Shared human event schemas registered by #1096 are `voc_cluster_suggestion_confirmed`,
 `voc_cluster_suggestion_discarded`, `voc_cluster_suggestion_restored`, subject
-`voc_cluster_suggestion/<UUID>`. Shared closed event/subject registries and detail
-schemas must be extended together during implementation. Confirm also emits
+`voc_cluster_suggestion/<UUID>`. The shared event registry/barrel exports all three
+strict detail schemas; audit subjects remain strings (no new Core subject enum).
+Human command producers are deferred to ADR item 2. Future confirm also emits
 existing human Cluster create/member/update events in the same transaction;
 no-op/replay writes no second event. Details contain pair/MS/revision/version/
 hashes/score/cut and resulting Cluster reference, never prose/titles. Automatic

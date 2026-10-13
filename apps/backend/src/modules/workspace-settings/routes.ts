@@ -12,6 +12,7 @@ import type { WorkspaceSettingsService } from './service.js';
 export const workspaceSettingsSchema = z
   .object({
     coverage_thresholds: coverageThresholdsSchema,
+    voc_cluster_suggestions_enabled: z.boolean(),
     permission_self_approval: z.enum(['allowed', 'forbidden']),
     survey_anonymity_threshold: z.number().int().min(5).max(50),
   })
