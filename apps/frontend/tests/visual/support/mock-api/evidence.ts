@@ -46,7 +46,15 @@ export function createEvidenceHandlers(context: MockApiContext): MockApiHandler[
           ? json(route, 404, errorEnvelope(404))
           : scenario === 'error'
             ? json(route, 500, errorEnvelope(500))
-            : json(route, 200, scenario === 'withheld' ? evidenceWithheldItem : evidenceVisualItem),
+            : json(
+                route,
+                200,
+                scenario === 'withheld'
+                  ? evidenceWithheldItem
+                  : scenario === 'scoped-search-empty'
+                    ? evidenceVisualNoteItem
+                    : evidenceVisualItem,
+              ),
     },
   ];
 }

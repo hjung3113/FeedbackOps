@@ -80,7 +80,7 @@ test.describe('/admin/permissions/grants visual harness', () => {
       .click();
 
     await expect(
-      dialog.getByTestId('direct-grant-admin-note').getByText(/Admin Role Level은 모든 권한/),
+      dialog.getByTestId('direct-grant-admin-note').getByText(/Admin은 이미 모든 권한을/),
     ).toBeVisible();
     await expect(dialog).toContainText('Role Level은 변경되지 않습니다.');
     await expectVisual(page, dialog, 'direct-permission-grant-admin-recipient.png');
