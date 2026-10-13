@@ -7,6 +7,7 @@ const {
   useOpenSurvey,
   useSurvey,
   useSurveys,
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
   useWorkspaceActors,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useSurvey: vi.fn(),
   useSurveys: vi.fn(),
+  useSurveyManageAnySystemGate: vi.fn(),
   useSurveyManageGate: vi.fn(),
   useWorkspaceActors: vi.fn(() => ({ actors: [], isSuccess: true })),
 }));
@@ -26,6 +28,7 @@ vi.mock('@/features/surveys/hooks/useSurveys', () => ({
   useSurveys,
 }));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+  useSurveyManageAnySystemGate,
   useSurveyManageGate,
 }));
 vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({ useManagedSystemNamesResult }));
@@ -39,21 +42,23 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 import { SurveysIndexRoute } from '@/routes/_authed/surveys/index';
 
 describe('/surveys route', () => {
-  it.each(['loading', 'error', 'absent'] as const)(
-    'does not render the create entry point when the permission gate is %s',
-    (gateState) => {
-      useSurveys.mockReturnValue({ data: [], isLoading: false, error: null });
-      useSurvey.mockReturnValue({
-        data: undefined,
-        isLoading: false,
-        error: null,
-      });
-      useSurveyManageGate.mockReturnValue({ canManage: false, gateState });
+  // #1075 moved the entry decision to the survey.manage capability scope; the
+  // scope shapes themselves are covered in SurveyPermissionGate/SurveyScreens
+  // tests. Here only the route wiring is pinned: a denied scope gate renders
+  // no creation entry point.
+  it('does not render the create entry point when the scope gate denies creation', () => {
+    useSurveys.mockReturnValue({ data: [], isLoading: false, error: null });
+    useSurvey.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+    });
+    useSurveyManageAnySystemGate.mockReturnValue({ canManage: false });
+    useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
 
-      render(<SurveysIndexRoute />);
+    render(<SurveysIndexRoute />);
 
-      expect(screen.queryByTestId('survey-create-button')).not.toBeInTheDocument();
-      expect(screen.queryByText('Create VOC')).not.toBeInTheDocument();
-    },
-  );
+    expect(screen.queryByTestId('survey-create-button')).not.toBeInTheDocument();
+    expect(screen.queryByText('Create VOC')).not.toBeInTheDocument();
+  });
 });

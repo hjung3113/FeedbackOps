@@ -67,7 +67,8 @@ vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => {
       routeQueryStubs.survey ? routeQueryStubs.survey() : actual.useSurvey(surveyId),
   };
 });
-vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+vi.mock('@/features/surveys/routes/SurveyPermissionGate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/surveys/routes/SurveyPermissionGate')>()),
   useSurveyManageGate: () =>
     routeQueryStubs.manageGate?.() ?? { canManage: false, gateState: 'absent' as const },
 }));
@@ -3158,6 +3159,73 @@ describe('Survey screens', () => {
       expect(screen.getByRole('tab', { name: /^전체\s*,\s*0$/ })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /^초안\s*,\s*0$/ })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /^진행 중\s*,\s*0$/ })).toBeInTheDocument();
+    });
+  });
+
+  // #1075: creation entry follows the survey.manage capability SCOPE (ADR-0033),
+  // not the workspace-wide check: Admin (all) and a scoped Developer with at
+  // least one granted Managed System may open the dialog; an actor with no
+  // manageable system sees no opener anywhere.
+  describe('Survey create opener follows the manageable-system scope (#1075)', () => {
+    function stubIndexQuery(state: 'loaded-empty' | 'loaded-populated') {
+      routeQueryStubs.surveys = () => ({
+        data: state === 'loaded-empty' ? [] : [survey],
+        error: null,
+        status: 'success',
+        fetchStatus: 'idle',
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        isError: false,
+        isSuccess: true,
+        refetch: vi.fn(),
+      });
+    }
+
+    it('shows the openers to a scoped Developer and offers only the granted Managed System', async () => {
+      fetchCapabilityScope.mockResolvedValue({
+        scope: { kind: 'scoped', managed_system_ids: [MANAGED_SYSTEM_ID] },
+      });
+      fetchManagedSystems.mockResolvedValue({
+        items: [
+          { id: MANAGED_SYSTEM_ID, name: 'Tableau', archived_at: null },
+          { id: '22222222-2222-4222-8222-222222222222', name: 'Power BI', archived_at: null },
+        ],
+      });
+      stubIndexQuery('loaded-empty');
+
+      renderWithQuery(<SurveysIndexRoute />);
+
+      expect(await screen.findByTestId('survey-create-button')).toBeInTheDocument();
+      expect(screen.getByTestId('survey-empty-create-button')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('survey-empty-create-button'));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
+      expect(await screen.findByRole('option', { name: 'Tableau' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Power BI' })).not.toBeInTheDocument();
+    });
+
+    it('shows no opener to an actor whose scope has no Managed System', async () => {
+      fetchCapabilityScope.mockResolvedValue({
+        scope: { kind: 'scoped', managed_system_ids: [] },
+      });
+      stubIndexQuery('loaded-empty');
+
+      renderWithQuery(<SurveysIndexRoute />);
+
+      expect(await screen.findByText('생성된 Survey가 없습니다.')).toBeInTheDocument();
+      expect(screen.queryByTestId('survey-create-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
+    });
+
+    it('keeps the opener for Admin with the all scope', async () => {
+      fetchCapabilityScope.mockResolvedValue({ scope: { kind: 'all' } });
+      stubIndexQuery('loaded-populated');
+
+      renderWithQuery(<SurveysIndexRoute />);
+
+      expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+      expect(screen.getByTestId('survey-create-button')).toBeInTheDocument();
     });
   });
 });

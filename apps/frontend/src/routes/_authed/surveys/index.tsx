@@ -2,7 +2,10 @@ import { CreateSurveyDialog } from '@/features/surveys/components/create/CreateS
 import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
 import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
-import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import {
+  useSurveyManageAnySystemGate,
+  useSurveyManageGate,
+} from '@/features/surveys/routes/SurveyPermissionGate';
 export { CreateSurveyDialog } from '@/features/surveys/components/create/CreateSurveyDialog';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -48,6 +51,10 @@ export function SurveysIndexRoute() {
   const navigate = useNavigate({ from: '/surveys/' });
   const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
   const query = useSurveys(managedSystemId);
+  // Creation entry follows the survey.manage capability scope (ADR-0033): the
+  // workspace-wide check stays only for the empty-state request-access
+  // recovery; a scoped Developer with one granted system may create (#1075).
+  const scopeGate = useSurveyManageAnySystemGate();
   const gate = useSurveyManageGate();
   const managedSystemNames = useManagedSystemNamesResult();
   const managedSystemNamesById = managedSystemNames.isSuccess
@@ -117,7 +124,7 @@ export function SurveysIndexRoute() {
             error={query.error}
             selectedId={selectedId}
             onSelect={handleSelect}
-            canCreate={gate.canManage}
+            canCreate={scopeGate.canManage}
             {...(gate.permissionState !== undefined
               ? { permissionState: gate.permissionState }
               : {})}
@@ -141,7 +148,7 @@ export function SurveysIndexRoute() {
       />
       {createOpen && (
         <CreateSurveyDialog
-          canManage={gate.canManage}
+          canManage={scopeGate.canManage}
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           onCreated={(surveyId) =>
