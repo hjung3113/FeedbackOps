@@ -15,6 +15,7 @@ import type { CoverageThresholds } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -64,6 +65,9 @@ export const workspaceSettings = coreSchema.table(
     workspaceId: uuid('workspace_id')
       .primaryKey()
       .references(() => workspaces.id),
+    vocClusterSuggestionsEnabled: boolean('voc_cluster_suggestions_enabled')
+      .notNull()
+      .default(false),
     permissionSelfApproval: text('permission_self_approval').notNull().default('allowed'),
     surveyAnonymityThreshold: integer('survey_anonymity_threshold').notNull().default(5),
     coverageThresholds: jsonb('coverage_thresholds')

@@ -3,6 +3,7 @@ import {
   COVERAGE_METRIC_IDS,
   type CoverageThresholdPair,
   type CoverageThresholds,
+  type WorkspaceSettingsUpdatedDetail,
   resolveCoverageThresholds,
 } from '@fops/shared';
 
@@ -23,12 +24,14 @@ const DEFAULT_PERMISSION_SELF_APPROVAL: PermissionSelfApproval = 'allowed';
 const DEFAULT_SURVEY_ANONYMITY_THRESHOLD = 5;
 
 export interface ResolvedWorkspaceSettings {
+  voc_cluster_suggestions_enabled: boolean;
   coverage_thresholds: CoverageThresholds;
   permission_self_approval: PermissionSelfApproval;
   survey_anonymity_threshold: number;
 }
 
 export interface UpdateWorkspaceSettingsBody {
+  voc_cluster_suggestions_enabled?: boolean | undefined;
   coverage_thresholds?:
     | Partial<Record<(typeof COVERAGE_METRIC_IDS)[number], CoverageThresholdPair | undefined>>
     | undefined;
@@ -48,6 +51,7 @@ export async function getResolvedWorkspaceSettings(
 ): Promise<ResolvedWorkspaceSettings> {
   const row = await findWorkspaceSettings(db, workspaceId);
   return {
+    voc_cluster_suggestions_enabled: row?.voc_cluster_suggestions_enabled ?? false,
     coverage_thresholds: resolveCoverageThresholds(row?.coverage_thresholds),
     permission_self_approval: row?.permission_self_approval ?? DEFAULT_PERMISSION_SELF_APPROVAL,
     survey_anonymity_threshold:
@@ -61,6 +65,7 @@ export async function getResolvedWorkspaceSettingsForUpdate(
 ): Promise<ResolvedWorkspaceSettings> {
   const row = await ensureAndLockWorkspaceSettings(tx, workspaceId);
   return {
+    voc_cluster_suggestions_enabled: row.voc_cluster_suggestions_enabled,
     coverage_thresholds: resolveCoverageThresholds(row.coverage_thresholds),
     permission_self_approval: row.permission_self_approval,
     survey_anonymity_threshold: row.survey_anonymity_threshold,
@@ -107,11 +112,12 @@ export function createWorkspaceSettingsService(deps: WorkspaceSettingsServiceDep
         await requireWorkspaceAdmin(checkService, actor, tx);
         const current = await ensureAndLockWorkspaceSettings(tx, actor.workspace_id);
         const resolvedCurrent: ResolvedWorkspaceSettings = {
+          voc_cluster_suggestions_enabled: current.voc_cluster_suggestions_enabled,
           coverage_thresholds: resolveCoverageThresholds(current.coverage_thresholds),
           permission_self_approval: current.permission_self_approval,
           survey_anonymity_threshold: current.survey_anonymity_threshold,
         };
-        const changes: Record<string, unknown> = {};
+        const changes: WorkspaceSettingsUpdatedDetail['changes'] = {};
         const mergedBands = { ...resolvedCurrent.coverage_thresholds };
         for (const id of COVERAGE_METRIC_IDS) {
           const pair = body.coverage_thresholds?.[id];
@@ -154,6 +160,16 @@ export function createWorkspaceSettingsService(deps: WorkspaceSettingsServiceDep
           };
         }
 
+        if (
+          body.voc_cluster_suggestions_enabled !== undefined &&
+          body.voc_cluster_suggestions_enabled !== resolvedCurrent.voc_cluster_suggestions_enabled
+        ) {
+          changes.voc_cluster_suggestions_enabled = {
+            from: resolvedCurrent.voc_cluster_suggestions_enabled,
+            to: body.voc_cluster_suggestions_enabled,
+          };
+        }
+
         if (Object.keys(changes).length === 0) throw new SettingsNoop(resolvedCurrent);
 
         const updated = await updateWorkspaceSettings(tx, actor.workspace_id, {
@@ -170,6 +186,7 @@ export function createWorkspaceSettingsService(deps: WorkspaceSettingsServiceDep
           detail: { changes },
         });
         return {
+          voc_cluster_suggestions_enabled: updated.voc_cluster_suggestions_enabled,
           coverage_thresholds: resolveCoverageThresholds(updated.coverage_thresholds),
           permission_self_approval: updated.permission_self_approval,
           survey_anonymity_threshold: updated.survey_anonymity_threshold,

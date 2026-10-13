@@ -142,6 +142,11 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Issue #512 measurements are durable, but application code cannot erase
   // an observation; migration 0051 grants only the shadow worker's DML needs.
   'voc.voc_cluster_autogen_shadow_candidates': ['SELECT', 'INSERT', 'UPDATE'],
+  // ADR-0068: durable pair history; only ended hourly admission buckets can be reclaimed.
+  'voc.voc_cluster_suggestions': ['SELECT', 'INSERT', 'UPDATE'],
+  'voc.voc_cluster_suggestion_counters': ['SELECT', 'INSERT', 'UPDATE'],
+  'voc.voc_cluster_suggestion_admissions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'voc.voc_cluster_suggestion_cursors': ['SELECT', 'INSERT', 'UPDATE'],
   // Migration 0052 (ADR-0055): the current follow-up decision is updated in
   // place, never deleted. UPDATE is column-scoped and asserted below.
   'survey.outcome_follow_up_decisions': ['SELECT', 'INSERT'],

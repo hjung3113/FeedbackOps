@@ -96,6 +96,8 @@ voc
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
 - voc_recommendation_decisions
 - voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
+- voc_cluster_suggestions (inert retained pair history; ADR-0068)
+- voc_cluster_suggestion_counters / voc_cluster_suggestion_admissions / voc_cluster_suggestion_cursors (inert admission/scan state; ADR-0068)
 - voc_public_updates
 - public_update_review_candidates
 - voc_reporter_replies
@@ -503,27 +505,38 @@ Execution and combined #739/#740 verification are still required.
 - This closes direct-table paths, not SQL-level unlinkability against stolen app
   credentials: permitted definers remain trusted application tools.
 
-## Close-out assistance storage (ADR-0068; proposed/new, no migration yet)
+## Close-out assistance storage (ADR-0068; inert suggestions #1096, preview pending)
 
-VOC owns proposed `voc.voc_cluster_suggestions`, suggestion admission counters/
-scan cursors, `voc.voc_similarity_preview_requests` and
-`voc.voc_similarity_preview_budgets`. Fields/constraints are in
-`docs/design/15-data-contracts.md`; these are not existing schema objects. Keep
-shadow measurements untouched and separate, and add no Cluster/member origin,
-discard/provisional status/backfill fields. Generation writes only operational
-suggestion state; human confirm creates Cluster/member/audit rows atomically
-through owner commands. Permanent sorted-pair identity preserves human rejection
-and accepted history across versions/removal. Coordinate cap/settings/member
-locks per ADR-0068; retain terminal rows without DELETE grants.
+Generated migration `0062_cluster_suggestion_storage.sql` (journal + snapshot) adds
+`voc.voc_cluster_suggestions`, the three VOC-owned counter/cursor tables in
+`docs/design/15-data-contracts.md`, and the default-off workspace policy. No Cluster
+schema, queue registration, generation/review commands or Admin editor are added.
+Shadow measurements and saved recommendations stay separate and unchanged.
 
-Preview requests/budgets are operational: no raw prose or cached candidate IDs/
-titles, vectors at most ten minutes, tombstones 24h, budget buckets until UTC
-window expiry. A proposed VOC pg-boss cleanup job may receive narrowly scoped
-DELETE only on preview operational rows/ended counters, never Cluster, member
-or audit tables. Enforce expiry in reads even when cleanup lags. Provider I/O is
-outside short reservation/completion transactions. Generate/register migrations,
-constraints/indexes/grants and metadata by existing migration discipline; verify
-as app/migrate roles in conductor-owned throwaway DBs before activation.
+DB checks enforce sorted/distinct pairs, positive revision/version/dimensions,
+required nonempty scoring/hash metadata and exact lifecycle field combinations.
+The pair unique key excludes version/state, so retained terminal identities suppress
+recreation across model changes. NO ACTION FKs retain VOC/Actor/Cluster references;
+write guards check workspace/MS integrity without adding domain Cluster columns or
+keys, freeze initial identity/timestamp and make confirmed rows immutable. Source
+archive/text/MS changes still require future current-eligibility checks. Freshness,
+disjoint/cap admission, revision advancement, legal review transitions and five-minute
+restore belong to item 2's commands, not this inert item.
+
+`fops_app` has SELECT/INSERT/UPDATE on suggestions, occupancy and cursors, and
+SELECT/INSERT/UPDATE/DELETE on hourly admissions. An invoker guard permits app DELETE
+only after the hour ends. No app TRUNCATE or durable suggestion DELETE is granted;
+`fops_migrate` retains operator teardown privileges. Policy changes serialize under
+the existing settings singleton, preserve Coverage/other settings, audit boolean
+effective diffs only and never spend counters or advance cursors. The conductor
+owns migration numbering/reconciliation and actual app/migrate throwaway-DB checks.
+
+Paid preview requests/budgets remain proposed: no raw prose or cached candidate IDs/
+titles, vectors at most ten minutes, tombstones 24h, budget buckets until UTC window
+expiry. A future VOC cleanup job may receive narrowly scoped DELETE only on preview
+operational rows/ended counters, never Cluster, member or audit tables. No preview
+storage or cleanup registration ships in #1096. Future provider I/O remains outside
+short reservation/completion transactions.
 
 ## Responsibility storage (#1089 / ADR-0067 56-D)
 

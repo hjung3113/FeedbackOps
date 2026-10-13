@@ -721,12 +721,12 @@ SELECT is revoked. #816 approval selection IDs are safe selection references,
 not response IDs; candidate suppression counts response subjects/answers, never
 approval rows. Its proposed/new DTO/API shapes are owned by the API contracts.
 
-## VOC Cluster Suggestion (ADR-0068; proposed/new)
+## VOC Cluster Suggestion (ADR-0068; inert storage #1096)
 
 Owner: VOC. Separate from both domain Clusters and shadow measurements.
 
 ```text
-voc.voc_cluster_suggestions (new)
+voc.voc_cluster_suggestions
 - id: uuid; workspace_id, primary_managed_system_id: uuid, required
 - voc_a_id, voc_b_id: uuid, required; sorted, distinct same-workspace/MS pair
 - unique: (workspace_id, primary_managed_system_id, voc_a_id, voc_b_id), across all versions
@@ -757,11 +757,30 @@ hashes/version/revision, no partial pair, hidden total, score or execution field
 Human-confirmed Cluster uses existing DTO/status/provenance fields. Suggestion
 confirm writes no saved directional recommendation decision.
 
-Proposed VOC-owned admission counters track workspace eligible-pending occupancy
-and per-workspace/MS/UTC-hour new admissions, shared across pods. Proposed scan
-cursors track committed embedding revisions per workspace/MS and reconciliation
-progress; advance atomically with writes, use no per-process counters. Old hour
-buckets may be reclaimed after the window ends; terminal pair history may not.
+VOC-owned operational storage (inert; no generator registered):
+
+```text
+voc.voc_cluster_suggestion_counters
+- workspace_id: PK/FK; eligible_pending_count: non-negative integer, default 0; updated_at
+voc.voc_cluster_suggestion_admissions
+- workspace_id, primary_managed_system_id, window_start: composite PK
+- window_start: timestamptz at a UTC hour boundary; new_admissions: non-negative integer, default 0
+voc.voc_cluster_suggestion_cursors
+- workspace_id, primary_managed_system_id: composite PK; embedding_version: positive integer
+- embedding_watermark: required timestamptz source-row watermark; last_voc_id: required UUID tie-break
+- reconciliation_after_voc_id, reconciled_at: nullable progress; updated_at
+```
+
+Cursor UUIDs are scan positions, not retained entity references. Counters/cursors
+are shared across pods and only future generator commands spend/advance them,
+atomically with committed writes. Policy toggles never materialize or update them.
+Only ended hour admission buckets may be reclaimed by the app; durable suggestions,
+workspace occupancy and cursors have no app DELETE/TRUNCATE. Migration guards enforce
+write-time workspace/MS reference integrity, immutable pair/initial timestamp and
+confirmed history; NO ACTION FKs retain referenced VOC/Actor/Cluster rows.
+Current eligibility, disjointness/caps, revision increments and five-minute restore
+validation belong to future application commands (ADR item 2), not these DB checks.
+Existing source changes may make pending pairs ineligible; reads must recheck them.
 
 ## Draft Similar-VOC Preview operational data (ADR-0068; proposed/new)
 

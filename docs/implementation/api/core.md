@@ -32,6 +32,7 @@ caller receives `permission.denied` → `403`. The resolved response is always:
 {
   "permission_self_approval": "allowed | forbidden",
   "survey_anonymity_threshold": 5,
+  "voc_cluster_suggestions_enabled": false,
   "coverage_thresholds": {
     "voc-task": { "good_min_percent": 75, "warn_min_percent": 40 },
     "finding-execution": { "good_min_percent": 75, "warn_min_percent": 40 },
@@ -44,7 +45,7 @@ caller receives `permission.denied` → `403`. The resolved response is always:
 
 When no `core.workspace_settings` row exists, GET returns the baseline defaults
 `permission_self_approval=allowed`, `survey_anonymity_threshold=5`, and all five
-Coverage pairs at 75/40.
+Coverage pairs at 75/40, with `voc_cluster_suggestions_enabled=false`.
 PATCH accepts a strict, non-empty partial of those snake_case fields;
 `survey_anonymity_threshold` is an integer from 5 through 50. It creates and
 locks the workspace singleton in one transaction, updates only supplied
@@ -171,15 +172,17 @@ creation-time producers. Defaults never reassign historical rows; Survey's dedic
 operator routing remains unchanged. Known teams display without new CRUD, membership,
 or a workspace team-candidate endpoint.
 
-## Cluster suggestion opt-in (ADR-0068; proposed/new)
+## Cluster suggestion opt-in (ADR-0068; BE/shared storage #1096)
 
 The accepted close-out addition to the settings response and strict non-empty
 partial PATCH is `voc_cluster_suggestions_enabled:boolean`, default `false`.
-The two-field response/defaults above describe the shipped pre-ADR-0068 shape;
-implementation extends the complete resolved response with this field. Both
+The complete resolved response above includes this field. Both
 routes still require `workspace.admin`. Preserve unspecified settings, serialize
 through the singleton, and audit only effective `{ from,to }` changes through
-`workspace_settings_updated`. VOC generation locks/rechecks the policy via
+`workspace_settings_updated`, with strict boolean `from`/`to` values. A false
+PATCH against a missing row preserves row absence. Toggling never spends counters,
+advances cursors or writes suggestion/Cluster rows. The generator and Admin editor
+are deferred to ADR items 2 and 3. Future VOC generation locks/rechecks the policy via
 `getResolvedWorkspaceSettingsForUpdate`; shadow remains independent. Turning off
 stops new automatic suggestions, without deleting pending/history or prohibiting
 human review/confirmation. No preview quota/model/scheduling settings are added.

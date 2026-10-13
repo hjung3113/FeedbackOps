@@ -435,6 +435,13 @@
       "when": 1791849603000,
       "tag": "0061_coverage_thresholds",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791854622294,
+      "tag": "0062_cluster_suggestion_storage",
+      "breakpoints": true
     }
   ]
 }
