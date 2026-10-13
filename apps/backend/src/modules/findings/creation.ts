@@ -84,10 +84,10 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
 
           const area = input.analytics_area_id
             ? await assertActiveAnalyticsAreaForManagedSystem(
-              tx,
-              actor.workspace_id,
-              targetManagedSystemId,
-              input.analytics_area_id,
+                tx,
+                actor.workspace_id,
+                targetManagedSystemId,
+                input.analytics_area_id,
               )
             : null;
 
@@ -218,10 +218,10 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           const area = input.analytics_area_id
             ? await assertActiveAnalyticsAreaForManagedSystem(
-              tx,
-              actor.workspace_id,
-              targetManagedSystemId,
-              input.analytics_area_id,
+                tx,
+                actor.workspace_id,
+                targetManagedSystemId,
+                input.analytics_area_id,
               )
             : null;
           const safeExcerpts = await resolveApprovedSurveyResponseExcerpts(

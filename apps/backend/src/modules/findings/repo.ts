@@ -361,9 +361,15 @@ export async function listVocSourceMeta(
 export { findFindingById } from './repo-read.js';
 export type { FindingReadRow } from './repo-read.js';
 
-export async function updateFindingOwner(tx: Tx, input: {
-  workspaceId: string; findingId: string; ownerActorId: string | null; ownerTeamId: string | null;
-}): Promise<FindingReadRow> {
+export async function updateFindingOwner(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    findingId: string;
+    ownerActorId: string | null;
+    ownerTeamId: string | null;
+  },
+): Promise<FindingReadRow> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     UPDATE finding.findings SET owner_actor_id=${input.ownerActorId}, owner_team_id=${input.ownerTeamId}, updated_at=now()
     WHERE workspace_id=${input.workspaceId} AND id=${input.findingId}

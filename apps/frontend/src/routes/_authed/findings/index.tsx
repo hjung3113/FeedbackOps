@@ -24,11 +24,15 @@ import { parseRouteSearch } from '@/lib/router/search';
 import type { FindingDto } from '@fops/shared';
 import {
   type AvatarUser,
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   ListShell,
   ObjectRow,
   OutlineBadge,
   PermissionBlockedPanel,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SkeletonRows,
   UserAvatar,
 } from '@fops/ui';
@@ -156,7 +160,9 @@ function FindingsListShell({
       !findings.some((item) => item.id === selectedId),
   });
   const checkUnfiltered =
-    (execution === 'none' || assignment !== undefined) && listQuery.isSuccess && findings.length === 0;
+    (execution === 'none' || assignment !== undefined) &&
+    listQuery.isSuccess &&
+    findings.length === 0;
   const unfilteredQuery = useFindingsTotal(managedSystemId, checkUnfiltered);
   const stateError =
     listQuery.isError && !listQuery.isFetchNextPageError
@@ -195,8 +201,11 @@ function FindingsListShell({
     const filteredOut =
       item !== undefined &&
       ((managedSystemId !== undefined && item.primary_managed_system_id !== managedSystemId) ||
-        (assignment === 'unassigned' && (item.owner_actor_id !== null || item.owner_team_id !== null)) ||
-        (assignment === 'assigned' && item.owner_actor_id === null && item.owner_team_id === null) ||
+        (assignment === 'unassigned' &&
+          (item.owner_actor_id !== null || item.owner_team_id !== null)) ||
+        (assignment === 'assigned' &&
+          item.owner_actor_id === null &&
+          item.owner_team_id === null) ||
         (execution === 'none' &&
           (item.status !== 'active' ||
             item.linked_task_id !== null ||
@@ -241,7 +250,9 @@ function FindingsListShell({
               void navigate({
                 to: '/findings',
                 search: ({ assignment: _assignment, ...rest }) =>
-                  value === 'all' ? rest : { ...rest, assignment: value as 'assigned' | 'unassigned' },
+                  value === 'all'
+                    ? rest
+                    : { ...rest, assignment: value as 'assigned' | 'unassigned' },
               });
             }}
           >
@@ -433,7 +444,9 @@ function FindingsListBody({
               key={finding.id}
               finding={finding}
               selected={selectedId === finding.id}
-              owner={finding.owner_actor_id ? actorsById.get(finding.owner_actor_id) ?? null : null}
+              owner={
+                finding.owner_actor_id ? (actorsById.get(finding.owner_actor_id) ?? null) : null
+              }
               onClick={() => onSelect(finding.id)}
             />
           ))}
@@ -475,7 +488,14 @@ function FindingRow({
           {dot()}
           <span>Evidence {finding.evidence_count}개</span>
           {dot()}
-          <span>{GLOSSARY.owner}: {finding.owner_actor_id ? owner?.display_name ?? GLOSSARY.unknownUser : finding.owner_team_id ? `${OWNER_COPY.team} · ${finding.owner_team_id.slice(0, 8)}` : GLOSSARY.unassigned}</span>
+          <span>
+            {GLOSSARY.owner}:{' '}
+            {finding.owner_actor_id
+              ? (owner?.display_name ?? GLOSSARY.unknownUser)
+              : finding.owner_team_id
+                ? `${OWNER_COPY.team} · ${finding.owner_team_id.slice(0, 8)}`
+                : GLOSSARY.unassigned}
+          </span>
           {dot()}
           <span>{formatShortDate(finding.created_at)}</span>
         </>

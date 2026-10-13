@@ -219,7 +219,9 @@ describe('/findings URL state', () => {
       { requested },
       `/findings?assignment=unassigned&selected=${F1_ID}&returnTo=${encodeURIComponent(returnTo)}`,
     );
-    expect(await screen.findByRole('combobox', { name: '담당자 필터' })).toHaveTextContent('미배정');
+    expect(await screen.findByRole('combobox', { name: '담당자 필터' })).toHaveTextContent(
+      '미배정',
+    );
     await waitFor(() =>
       expect(
         requested.some(

@@ -12,8 +12,8 @@ import {
   linkRejectedFields,
 } from '../../attachments/index.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
-import { resolveOwner } from '../responsibility.js';
 import { insertVoc } from '../repo.js';
+import { resolveOwner } from '../responsibility.js';
 import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 

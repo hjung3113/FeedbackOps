@@ -136,10 +136,13 @@ function listPredicates(input: ListInput) {
     managedSystemPredicate,
     executionPredicate,
   ];
-  if (input.ownerActorId !== undefined) predicates.push(sql`f.owner_actor_id = ${input.ownerActorId}`);
+  if (input.ownerActorId !== undefined)
+    predicates.push(sql`f.owner_actor_id = ${input.ownerActorId}`);
   if (input.ownerTeamId !== undefined) predicates.push(sql`f.owner_team_id = ${input.ownerTeamId}`);
-  if (input.assignment === 'unassigned') predicates.push(sql`f.owner_actor_id IS NULL AND f.owner_team_id IS NULL`);
-  if (input.assignment === 'assigned') predicates.push(sql`(f.owner_actor_id IS NOT NULL OR f.owner_team_id IS NOT NULL)`);
+  if (input.assignment === 'unassigned')
+    predicates.push(sql`f.owner_actor_id IS NULL AND f.owner_team_id IS NULL`);
+  if (input.assignment === 'assigned')
+    predicates.push(sql`(f.owner_actor_id IS NOT NULL OR f.owner_team_id IS NOT NULL)`);
   if (input.allowedSystemIds !== undefined)
     predicates.push(
       sql`f.primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,

@@ -5,7 +5,12 @@
 
 import { sql } from 'drizzle-orm';
 
-import { vocInternalComments, vocPublicUpdates, vocReporterReplies, vocs } from '../../db/schema/voc.js';
+import {
+  vocInternalComments,
+  vocPublicUpdates,
+  vocReporterReplies,
+  vocs,
+} from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
 import type { ReporterFacingStatus } from './transitions.js';
 

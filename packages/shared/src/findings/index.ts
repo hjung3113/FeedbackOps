@@ -92,7 +92,9 @@ const findingDtoBaseSchema = {
   owner_actor_id: z.string().uuid().nullable(),
   owner_team_id: z.string().uuid().nullable(),
   default_resolved: z.boolean().optional(),
-  source_rule: z.enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue']).optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
   managed_system_id: z.string().uuid().optional(),
   analytics_area_id: z.string().uuid().nullable(),
   linked_task_id: z.string().uuid().nullable(),

@@ -150,13 +150,22 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2)",
       [WORKSPACE_ID, `${SLUG}-%`],
     );
-    await migrateHandle.pool.query(`update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id in (${systems})`, [WORKSPACE_ID, `${SLUG}%`]);
+    await migrateHandle.pool.query(
+      `update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query(
       "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2",
       [WORKSPACE_ID, `${SLUG}-%`],
     );
-    await migrateHandle.pool.query(`delete from core.responsibility_default_failures where managed_system_id in (${systems})`, [WORKSPACE_ID, `${SLUG}%`]);
-    await migrateHandle.pool.query(`delete from core.analytics_areas where managed_system_id in (${systems})`, [WORKSPACE_ID, `${SLUG}%`]);
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.analytics_areas where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
       WORKSPACE_ID,
       `${SLUG}%`,
@@ -186,7 +195,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.responsibility_default_failures where workspace_id=$1', [workspaceId]);
+      await migrateHandle.pool.query(
+        'delete from core.responsibility_default_failures where workspace_id=$1',
+        [workspaceId],
+      );
       await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
         workspaceId,
       ]);

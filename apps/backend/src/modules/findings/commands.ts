@@ -1,11 +1,11 @@
-import type { CheckService } from '../permissions/check-service.js';
-import { lockManagedSystem } from '../managed-systems/index.js';
-import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { HttpError } from '../../lib/errors.js';
-import { resolveOwner } from './responsibility.js';
 import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
+import type { CheckService } from '../permissions/check-service.js';
 import type { FindingReadRow } from './repo-read.js';
 import { insertFinding, lockFindingById, updateFindingLinkedTask } from './repo.js';
+import { resolveOwner } from './responsibility.js';
 
 /**
  * Application seam for cross-module Finding commands (#391). Findings owns the

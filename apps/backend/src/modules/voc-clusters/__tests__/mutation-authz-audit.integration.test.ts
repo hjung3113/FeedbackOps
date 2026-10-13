@@ -171,9 +171,17 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
 
   async function cleanupMutationFixtures(): Promise<void> {
     if (!migrateHandle) return;
-    await migrateHandle.pool.query('update core.managed_systems set default_owner_actor_id=null where workspace_id=$1', [workspaceId]);
-    await migrateHandle.pool.query('delete from core.responsibility_default_failures where workspace_id=$1', [workspaceId]);
-    await migrateHandle.pool.query('delete from core.rate_limits where key like $1', [`${workspaceId}:%`]);
+    await migrateHandle.pool.query(
+      'update core.managed_systems set default_owner_actor_id=null where workspace_id=$1',
+      [workspaceId],
+    );
+    await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where workspace_id=$1',
+      [workspaceId],
+    );
+    await migrateHandle.pool.query('delete from core.rate_limits where key like $1', [
+      `${workspaceId}:%`,
+    ]);
     await migrateHandle.pool.query('delete from core.entity_links where workspace_id = $1', [
       workspaceId,
     ]);
@@ -579,7 +587,10 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
 
   it('records finding_created_from_voc_cluster and entity_link.created audit rows for an authorized createFindingFromCluster', async () => {
     const cluster = await seedCluster('Audited create finding cluster');
-    await migrateHandle.pool.query('update core.managed_systems set default_owner_actor_id=$1 where id=$2', [managerActorId, managedSystemId]);
+    await migrateHandle.pool.query(
+      'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
+      [managerActorId, managedSystemId],
+    );
 
     const result = await vocClustersService.createFindingFromCluster({
       actor: manager(),
@@ -595,7 +606,13 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
 
     expect(result.status).toBe(201);
     const findingId = result.body.id;
-    expect(result.body).toMatchObject({ owner_actor_id: managerActorId, owner_team_id: null, default_resolved: true, source_rule: 'managed_system_owner', managed_system_id: managedSystemId });
+    expect(result.body).toMatchObject({
+      owner_actor_id: managerActorId,
+      owner_team_id: null,
+      default_resolved: true,
+      source_rule: 'managed_system_owner',
+      managed_system_id: managedSystemId,
+    });
     const rows = await auditRows(['finding_created_from_voc_cluster', 'entity_link.created']);
     expect(rows).toHaveLength(2);
 

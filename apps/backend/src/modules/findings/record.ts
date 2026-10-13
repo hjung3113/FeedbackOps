@@ -23,8 +23,8 @@ import {
   insertFindingComment,
   lockFindingById,
   updateFindingLinkedTask,
-  updateFindingStatus,
   updateFindingOwner,
+  updateFindingStatus,
 } from './repo.js';
 import { canManageFinding, canReadFinding, sanitizeCommentBody, toDto } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
@@ -207,7 +207,9 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             );
             if (failure)
               throw new HttpError('validation.failed', 'invalid owner', {
-                fields: [{ path: [ownerTeamId ? 'owner_team_id' : 'owner_actor_id'], code: failure }],
+                fields: [
+                  { path: [ownerTeamId ? 'owner_team_id' : 'owner_actor_id'], code: failure },
+                ],
               });
             if (ownerActorId !== finding.owner_actor_id || ownerTeamId !== finding.owner_team_id) {
               const previous = finding;

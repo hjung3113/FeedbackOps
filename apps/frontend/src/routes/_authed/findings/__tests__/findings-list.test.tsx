@@ -350,8 +350,16 @@ describe('FindingsListPage', () => {
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {
     useFindingsListMock.mockReturnValue({
-      data: { items: findings.map((finding, index) => index === 0 ? { ...finding, owner_actor_id: finding.created_by } : finding) },
-      isPending: false, isError: false, isSuccess: true, isFetching: false, error: null,
+      data: {
+        items: findings.map((finding, index) =>
+          index === 0 ? { ...finding, owner_actor_id: finding.created_by } : finding,
+        ),
+      },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      error: null,
     });
     await renderFindingsPage();
 

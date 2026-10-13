@@ -150,8 +150,16 @@ const mediumFinding: FindingDto = {
 
 describe('FindingDetailPanel', () => {
   it.each([
-    { owner_actor_id: '40000000-0000-0000-0000-000000000004', owner_team_id: null, label: '분석가' },
-    { owner_actor_id: null, owner_team_id: '50000000-0000-0000-0000-000000000005', label: '팀 · 50000000' },
+    {
+      owner_actor_id: '40000000-0000-0000-0000-000000000004',
+      owner_team_id: null,
+      label: '분석가',
+    },
+    {
+      owner_actor_id: null,
+      owner_team_id: '50000000-0000-0000-0000-000000000005',
+      label: '팀 · 50000000',
+    },
     { owner_actor_id: null, owner_team_id: null, label: '미배정' },
   ])('shows persisted responsibility separately from the creator: $label', async (assignment) => {
     renderWithClient(<FullFindingDetail finding={{ ...mediumFinding, ...assignment }} />);

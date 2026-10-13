@@ -172,10 +172,15 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
       try {
-        await ops.pool.query(`delete from core.responsibility_default_failures
+        await ops.pool.query(
+          `delete from core.responsibility_default_failures
           where workspace_id = $1 and managed_system_id in
-            (select id from core.managed_systems where slug like 'it-voc-%')`, [WORKSPACE_ID]);
-      } finally { await ops.close(); }
+            (select id from core.managed_systems where slug like 'it-voc-%')`,
+          [WORKSPACE_ID],
+        );
+      } finally {
+        await ops.close();
+      }
     }
     // Order matters: voc_attachments first (FKs to vocs via voc_id),
     // then vocs, then AA, then MS.
@@ -300,7 +305,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     const ownerId = owner.rows[0]?.id;
     await dbHandle.pool.query(
-      `update core.managed_systems set default_owner_actor_id = $1 where id = $2`,
+      'update core.managed_systems set default_owner_actor_id = $1 where id = $2',
       [ownerId, msId],
     );
     const reporter = await loginAs(app, 'mock-user-1');

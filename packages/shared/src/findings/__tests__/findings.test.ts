@@ -107,7 +107,10 @@ describe('createFindingRequestSchema', () => {
 
 describe('patchFindingRequestSchema', () => {
   it('accepts an owner-only patch while rejecting an empty patch', () => {
-    expect(patchFindingRequestSchema.parse({ owner_actor_id: null, owner_team_id: null })).toEqual({ owner_actor_id: null, owner_team_id: null });
+    expect(patchFindingRequestSchema.parse({ owner_actor_id: null, owner_team_id: null })).toEqual({
+      owner_actor_id: null,
+      owner_team_id: null,
+    });
     expect(patchFindingRequestSchema.safeParse({}).success).toBe(false);
   });
 
