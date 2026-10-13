@@ -1,4 +1,4 @@
-import { recoveryDetailSchema, recoveryListSchema, type DashboardSummary } from '@fops/shared';
+import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 

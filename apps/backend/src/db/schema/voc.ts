@@ -86,7 +86,9 @@ export const vocs = vocSchema.table(
   (t) => ({
     recoveryUnassignedIdx: index('vocs_recovery_unassigned_idx')
       .on(t.workspaceId, t.primaryManagedSystemId, t.id)
-      .where(sql`${t.archivedAt} IS NULL AND ${t.ownerUserId} IS NULL AND ${t.ownerTeamId} IS NULL`),
+      .where(
+        sql`${t.archivedAt} IS NULL AND ${t.ownerUserId} IS NULL AND ${t.ownerTeamId} IS NULL`,
+      ),
     recoveryHighIdx: index('vocs_recovery_high_idx')
       .on(t.workspaceId, t.primaryManagedSystemId, t.id)
       .where(sql`${t.archivedAt} IS NULL AND ${t.severity} IN ('high', 'critical')`),

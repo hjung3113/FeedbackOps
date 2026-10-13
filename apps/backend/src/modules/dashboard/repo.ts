@@ -3,8 +3,8 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import { findingRecoveryPredicate } from '../findings/index.js';
-import { taskRecoveryPredicate } from '../tasks/index.js';
 import type { Scope } from '../permissions/scope-service.js';
+import { taskRecoveryPredicate } from '../tasks/index.js';
 
 function scopePredicate(
   column: string,

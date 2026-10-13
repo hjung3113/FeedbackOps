@@ -2,7 +2,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import { hasElevatedFindingRole } from '../findings/authorization.js';
 import type { Scope } from '../permissions/scope-service.js';
-import { releasedTaskVocRecoverySql, releasedTaskUnresolvedVocPredicate } from '../voc/index.js';
+import { releasedTaskUnresolvedVocPredicate, releasedTaskVocRecoverySql } from '../voc/index.js';
 
 export function taskRecoveryPredicate(workspaceId: string): SQL {
   return sql`t.status = 'released' AND ${releasedTaskUnresolvedVocPredicate(workspaceId, sql`t.id`)}`;

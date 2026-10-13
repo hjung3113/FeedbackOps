@@ -458,3 +458,4 @@ packages/ui/src/feedback/UndoToast.tsx organizeImports -- pre-existing on develo
 packages/ui/src/feedback/__tests__/UndoToast.test.tsx format -- pre-existing on develop (measured 2026-10-11 with biome-cmp); #960 appends pause/resume tests
 packages/ui/src/feedback/__tests__/UndoToast.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-11 with biome-cmp); #960 appends pause/resume tests
 packages/ui/src/feedback/__tests__/UndoToast.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-11 with biome-cmp); #960 appends pause/resume tests
+apps/backend/src/modules/dashboard/routes.ts format -- pre-existing on develop (measured 2026-10-13 with biome-cmp); #1092 adds the recovery list/detail routes

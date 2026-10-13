@@ -1,12 +1,12 @@
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import type { CheckService, Decision } from '../permissions/check-service.js';
 import {
   type Scope,
   type ScopeActorContext,
   actorScopeForCapability,
 } from '../permissions/scope-service.js';
-import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import { listSurveyManagedSystemIds } from './repo-read.js';
 
 export type SurveyAuthorizationActor = ScopeActorContext;
