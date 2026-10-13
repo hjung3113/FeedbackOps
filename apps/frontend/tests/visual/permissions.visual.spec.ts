@@ -35,6 +35,27 @@ test.describe('/admin/permissions/requests visual harness', () => {
     });
   }
 
+  test('shows explained server risk signals with the selected review facts', async ({ page }) => {
+    await installMockApi(page, { permissionScenario: 'risk-signals' });
+    await page.goto('/admin/permissions/requests');
+
+    const detail = page.getByTestId('permission-request-detail-panel');
+    const review = detail.getByTestId('permission-request-risk-review');
+    await expect(review).toContainText('검토 시 확인할 사항');
+    await expect(review).toContainText('개발자');
+    await expect(review).toContainText('요청 범위의 현재 권한');
+    await expect(review).toContainText('검토 권한');
+    await expect(review).toContainText('민감한 권한 · 워크스페이스 관리자 권한');
+    await expect(review).toContainText('워크스페이스 전체 범위');
+    await expect(review).toContainText('요청 만료일 없음');
+    await expect(review).toContainText('겹치는 활성 차단 2건');
+    await expect(review).toContainText(
+      '겹치는 활성 차단 2건 · 워크스페이스 전체 · Managed System (99999999)',
+    );
+    await expect(detail).not.toContainText('99999999-9999-4999-8999-999999999999');
+    await expectVisual(page, detail, 'permission-request-risk-signals.png');
+  });
+
   test('stale review refetches the selected request and requires a fresh decision', async ({
     page,
   }) => {

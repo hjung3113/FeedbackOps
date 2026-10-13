@@ -28,7 +28,23 @@ export function SelectedPermissionRequestDetail({
   // keyed form until the Admin picks a new action — the refetch remount would
   // otherwise lose the transient form-level alert and the toast fades.
   const [staleReview, setStaleReview] = React.useState(false);
+  const [draft, setDraft] = React.useState<{
+    revision: number;
+    nonEmpty: boolean;
+    reason: string;
+  } | null>(null);
+  const [discardedReason, setDiscardedReason] = React.useState<string | null>(null);
+  const onDraftChanged = React.useCallback(
+    (next: { revision: number; nonEmpty: boolean; reason: string }) => setDraft(next),
+    [],
+  );
   const detail = query.data;
+  // Preserve the old reason outside the keyed form before its revision reset.
+  // Same-revision reads leave both the form and its intent key untouched.
+  if (detail && draft && draft.revision !== detail.revision) {
+    if (draft.nonEmpty) setDiscardedReason(draft.reason);
+    setDraft(null);
+  }
   if (query.isError || !detail || !query.isFetchedAfterMount)
     return (
       <aside className="flex flex-col gap-3 p-5" data-testid="permission-request-detail-panel">
@@ -50,14 +66,20 @@ export function SelectedPermissionRequestDetail({
       key={`${id}:${detail.revision}`}
       request={detail}
       actorName={detail.requester.display_name || actorNames[detail.requester_actor_id]}
+      managedSystemNames={managedSystemNames}
       managedSystemName={
         detail.requested_managed_system_id
           ? managedSystemNames[detail.requested_managed_system_id]
           : undefined
       }
       {...(staleReview ? { staleNotice: true } : {})}
+      {...(discardedReason !== null ? { discardedReason } : {})}
+      onDraftChanged={onDraftChanged}
       onStaleConflict={() => setStaleReview(true)}
-      onActionPicked={() => setStaleReview(false)}
+      onActionPicked={() => {
+        setStaleReview(false);
+        setDiscardedReason(null);
+      }}
       onClose={onClose}
     />
   );

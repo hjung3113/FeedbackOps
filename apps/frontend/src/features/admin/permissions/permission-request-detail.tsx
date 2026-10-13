@@ -1,3 +1,4 @@
+import { ROLE_LEVEL_DISPLAY_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 
 import {
@@ -22,7 +23,10 @@ export function PermissionRequestDetail({
   request,
   actorName,
   managedSystemName,
+  managedSystemNames,
   staleNotice,
+  discardedReason,
+  onDraftChanged,
   onStaleConflict,
   onActionPicked,
   onClose,
@@ -30,11 +34,15 @@ export function PermissionRequestDetail({
   request: PermissionRequestAdminDetail;
   actorName?: string | undefined;
   managedSystemName?: string | undefined;
+  managedSystemNames?: Record<string, string> | undefined;
   staleNotice?: boolean;
+  discardedReason?: string;
+  onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
   onActionPicked?: () => void;
   onClose: () => void;
 }) {
+  const resolvedManagedSystemNames = managedSystemNames ?? {};
   const staleAlertRef = React.useRef<HTMLParagraphElement>(null);
   // Explicit success boundary: a completed review remounts the decision form
   // with a clean draft even when the refetched detail keeps the same revision.
@@ -81,6 +89,10 @@ export function PermissionRequestDetail({
               {ADMIN_PERMISSIONS_COPY.reviewAgain}
             </p>
           ) : null}
+          <PermissionRequestRiskReview
+            request={request}
+            managedSystemNames={resolvedManagedSystemNames}
+          />
           <section className="flex flex-col gap-2">
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
             <FieldRow label="요청자" inset="none">
@@ -139,6 +151,8 @@ export function PermissionRequestDetail({
             request={request}
             managedSystemName={managedSystemName}
             {...(staleNotice ? { staleNoticeShown: true } : {})}
+            {...(discardedReason !== undefined ? { discardedReason } : {})}
+            {...(onDraftChanged ? { onDraftChanged } : {})}
             {...(onStaleConflict ? { onStaleConflict } : {})}
             {...(onActionPicked ? { onActionPicked } : {})}
             onReviewCompleted={() => setReviewEpoch((epoch) => epoch + 1)}
@@ -147,4 +161,147 @@ export function PermissionRequestDetail({
       </div>
     </aside>
   );
+}
+
+function PermissionRequestRiskReview({
+  request,
+  managedSystemNames,
+}: {
+  request: PermissionRequestAdminDetail;
+  managedSystemNames: Record<string, string>;
+}) {
+  const copy = ADMIN_PERMISSIONS_COPY.riskReview;
+  const accessDecision = request.effective_access.decision;
+  const effectiveDecision = accessDecision.allow
+    ? `${copy.allowed} · ${
+        accessDecision.via === 'direct_grant'
+          ? copy.directGrant
+          : accessDecision.via === 'role'
+            ? copy.roleAccess
+            : copy.managedSystemAccess
+      }`
+    : copy.accessReasons[accessDecision.reason];
+
+  return (
+    <section className="flex flex-col gap-2" data-testid="permission-request-risk-review">
+      <PanelSectionTitle>{copy.title}</PanelSectionTitle>
+      {request.status !== 'pending' && request.status !== 'needs_more_info' ? (
+        <p className="text-sm text-text-muted">{copy.currentState}</p>
+      ) : null}
+      {request.risk_indicators.length === 0 ? (
+        <output className="text-sm text-text-muted">{copy.noSignals}</output>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {request.risk_indicators.map((indicator, index) => (
+            <li className="border-l-2 border-border-subtle pl-3" key={`${indicator.code}:${index}`}>
+              <PermissionRiskIndicatorItem
+                indicator={indicator}
+                managedSystemNames={managedSystemNames}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-col gap-1">
+        <FieldRow label={copy.requesterRole} inset="none">
+          {ROLE_LEVEL_DISPLAY_LABELS[request.requester.role_level]}
+        </FieldRow>
+        <FieldRow label={copy.effectiveDecision} inset="none">
+          {effectiveDecision}
+          {request.effective_access.scope.kind === 'all' ||
+          request.effective_access.scope.managed_system_ids.length > 0 ? (
+            <>
+              {' · '}
+              {copy.effectiveScope}:{' '}
+              {formatEffectiveScope(request.effective_access.scope, managedSystemNames)}
+            </>
+          ) : null}
+          {accessDecision.allow && accessDecision.via === 'direct_grant' ? (
+            <>
+              {' · '}
+              {copy.effectiveGrantScope}:{' '}
+              {formatManagedSystemScope(
+                request.effective_access.granted_managed_system_id,
+                managedSystemNames,
+              )}
+            </>
+          ) : null}
+          {accessDecision.allow ? (
+            <>
+              {' · '}
+              {request.effective_access.expires_at
+                ? `${copy.expiration} ${formatDateOnly(request.effective_access.expires_at.slice(0, 10))}`
+                : copy.noAccessExpiration}
+            </>
+          ) : null}
+        </FieldRow>
+        <FieldRow label={copy.reviewAuthority} inset="none">
+          {getCapabilityDisplayLabel(request.administrative_authority.capability)} ·{' '}
+          {request.administrative_authority.allowed ? copy.allowed : copy.forbidden}
+        </FieldRow>
+        {request.administrative_authority.is_requester ? (
+          <FieldRow label={copy.selfRequest} inset="none">
+            {request.administrative_authority.permission_self_approval === 'allowed'
+              ? copy.selfApprovalAllowed
+              : copy.selfApprovalForbidden}
+            {' · '}
+            {request.administrative_authority.self_approval_required
+              ? copy.selfApprovalReasonRequired
+              : copy.selfApprovalReasonOptional}
+          </FieldRow>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PermissionRiskIndicatorItem({
+  indicator,
+  managedSystemNames,
+}: {
+  indicator: PermissionRequestAdminDetail['risk_indicators'][number];
+  managedSystemNames: Record<string, string>;
+}) {
+  const copy = ADMIN_PERMISSIONS_COPY.riskReview;
+  switch (indicator.code) {
+    case 'sensitive_capability':
+      return (
+        <p className="text-sm font-medium text-text-primary">
+          {copy.sensitiveCapability} · {getCapabilityDisplayLabel(indicator.evidence.capability)}
+        </p>
+      );
+    case 'workspace_scope':
+      return <p className="text-sm font-medium text-text-primary">{copy.workspaceScope}</p>;
+    case 'no_expiration':
+      return <p className="text-sm font-medium text-text-primary">{copy.noExpiration}</p>;
+    case 'active_deny':
+      return (
+        <p className="text-sm font-medium text-text-primary">
+          {copy.activeDeny} {indicator.evidence.denies.length}건 ·{' '}
+          {indicator.evidence.denies
+            .map((deny) => formatManagedSystemScope(deny.managed_system_id, managedSystemNames))
+            .join(' · ')}
+        </p>
+      );
+  }
+}
+
+function formatManagedSystemScope(
+  managedSystemId: string | null,
+  managedSystemNames: Record<string, string>,
+): string {
+  if (managedSystemId === null) return ADMIN_PERMISSIONS_COPY.riskReview.allScope;
+  const name = managedSystemNames[managedSystemId];
+  return name ? name : `Managed System (${shortId(managedSystemId)})`;
+}
+
+function formatEffectiveScope(
+  scope: PermissionRequestAdminDetail['effective_access']['scope'],
+  managedSystemNames: Record<string, string>,
+): string {
+  if (scope.kind === 'all') return ADMIN_PERMISSIONS_COPY.riskReview.allScope;
+  if (scope.managed_system_ids.length === 0) return ADMIN_PERMISSIONS_COPY.riskReview.noScope;
+  return scope.managed_system_ids
+    .map((managedSystemId) => formatManagedSystemScope(managedSystemId, managedSystemNames))
+    .join(' · ');
 }

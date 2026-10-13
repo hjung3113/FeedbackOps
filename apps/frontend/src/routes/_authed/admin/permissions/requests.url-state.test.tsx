@@ -11,6 +11,7 @@ import { adminDetailFixture } from '@/test/permission-details';
 // Harness: createRoute + memory history with the route's own search schema
 // (same pattern as __tests__/vocs.test.tsx and ./requests.test.tsx).
 
+import type { PermissionRiskIndicator } from '@fops/shared';
 import type * as FopsUi from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -409,6 +410,145 @@ describe('/admin/permissions/requests URL state', () => {
     });
     expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent('need detail');
     expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
+  });
+
+  test('another selection clears prior risk and decision draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    const oldRisk: PermissionRiskIndicator = {
+      code: 'sensitive_capability',
+      evidence: { capability: 'workspace.read' },
+    };
+    const selectedRisk: PermissionRiskIndicator = {
+      code: 'no_expiration',
+      evidence: { requested_expiration: null },
+    };
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/permissions/requests/${PENDING_ID}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[0], false, 'allowed', { risk_indicators: [oldRisk] }),
+          ),
+        );
+      if (url === `/permissions/requests/${REQUESTS[1].id}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[1], false, 'allowed', { risk_indicators: [selectedRisk] }),
+          ),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('민감한 권한 · 워크스페이스 전체 읽기');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'previous request draft' },
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+
+    await screen.findByText('요청 만료일 없음');
+    expect(screen.queryByText('민감한 권한 · 워크스페이스 전체 읽기')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+  });
+
+  test('a delayed old risk read cannot replace the new selection or its draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let resolveOld: ((value: Response) => void) | undefined;
+    const oldRisk: PermissionRiskIndicator = {
+      code: 'sensitive_capability',
+      evidence: { capability: 'workspace.read' },
+    };
+    const selectedRisk: PermissionRiskIndicator = {
+      code: 'no_expiration',
+      evidence: { requested_expiration: null },
+    };
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/permissions/requests/${PENDING_ID}`)
+        return new Promise<Response>((resolve) => {
+          resolveOld = resolve;
+        });
+      if (url === `/permissions/requests/${REQUESTS[1].id}`)
+        return Promise.resolve(
+          response(
+            adminDetailFixture(REQUESTS[1], false, 'allowed', { risk_indicators: [selectedRisk] }),
+          ),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('요청 상세를 불러오는 중입니다.');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+    await screen.findByText('요청 만료일 없음');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'new selected draft' },
+    });
+
+    await act(async () => {
+      resolveOld?.(
+        response(adminDetailFixture(REQUESTS[0], false, 'allowed', { risk_indicators: [oldRisk] })),
+      );
+      await Promise.resolve();
+    });
+
+    expect(router.state.location.search).toEqual({
+      tab: 'needs_more_info',
+      selected: REQUESTS[1].id,
+    });
+    expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
+      '요청 만료일 없음',
+    );
+    expect(screen.queryByText('민감한 권한 · 워크스페이스 전체 읽기')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
+  });
+
+  test('a parser failure stays unavailable until retry returns a successful empty result', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let detailReads = 0;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === `/permissions/requests/${PENDING_ID}` && ++detailReads === 1)
+        return Promise.resolve(
+          response({
+            ...adminDetailFixture(REQUESTS[0]),
+            risk_indicators: [{ code: 'unknown_flag', evidence: {} }],
+          }),
+        );
+      return base(input, init);
+    }) as typeof fetch;
+    const { router, queryClient } = buildHarness({
+      initialPath: `/admin/permissions/requests?selected=${PENDING_ID}`,
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.');
+    expect(screen.queryByText('추가 확인 사항 없음')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 확인' }));
+
+    await screen.findByText('추가 확인 사항 없음');
+    expect(detailReads).toBe(2);
+    expect(router.state.location.search).toEqual({ selected: PENDING_ID });
   });
 
   test('failed selected detail retains URL selection and offers a retry without decisions', async () => {

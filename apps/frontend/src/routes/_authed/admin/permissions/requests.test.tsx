@@ -22,6 +22,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { type AdminPermissionRequestRow, errorMapper } from "@/lib/api";
 import { ADMIN_PERMISSIONS_COPY } from "@/lib/copy/admin-permissions";
+import type { PermissionRiskIndicator } from '@fops/shared';
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -101,6 +102,18 @@ const REQUESTS = [
     created_at: "2026-07-14T00:00:00.000Z",
   },
 ] as const;
+
+const RISK_INDICATORS: PermissionRiskIndicator[] = [
+  { code: 'sensitive_capability', evidence: { capability: 'workspace.read' } },
+  { code: 'workspace_scope', evidence: { managed_system_id: null } },
+  { code: 'no_expiration', evidence: { requested_expiration: null } },
+  {
+    code: 'active_deny',
+    evidence: {
+      denies: [{ id: '55555555-5555-4555-8555-555555555555', managed_system_id: null }],
+    },
+  },
+];
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -211,6 +224,208 @@ describe("/admin/permissions/requests", () => {
     vi.restoreAllMocks();
     toast.success.mockReset();
     toast.error.mockReset();
+  });
+
+  test('a list refetch moving the selection out of the tab keeps the draft for stale review', async () => {
+    let detail: AdminPermissionRequestRow = { ...REQUESTS[0] };
+    const requests = [detail];
+    installFetch({
+      requests,
+      detail: () => adminDetailFixture(detail),
+      decision: {
+        status: 409,
+        body: { code: 'conflict.stale_write', message: 'stale', detail: { current_revision: 8 } },
+      },
+    });
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'preserved review' } });
+
+    detail = { ...detail, status: 'needs_more_info', revision: 8, reason: 'latest request' };
+    requests[0] = detail;
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['permission-requests', 'review'] });
+    });
+
+    await within(screen.getByTestId('permission-requests-list')).findByText(
+      '표시할 요청이 없습니다.',
+    );
+    expect(router.state.location.search).toEqual({ selected: REQUESTS[0].id });
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('preserved review');
+    expect(screen.getByTestId('permission-decision-submit')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await screen.findByText('latest request');
+    expect(screen.getByTestId('permission-request-stale-alert')).toHaveTextContent(
+      ADMIN_PERMISSIONS_COPY.reviewAgain,
+    );
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+    expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(decisionPosts()).toHaveLength(1);
+    const post = decisionPosts()[0];
+    if (!post) throw new Error('Expected the stale decision POST');
+    expect(JSON.parse(post[1].body as string)).toEqual({
+      expected_revision: 7,
+      reason: 'preserved review',
+    });
+    expect(router.state.location.search).toEqual({ selected: REQUESTS[0].id });
+  });
+
+  test('selected GET renders every supplied server risk signal and review fact', async () => {
+    installFetch({
+      detail: (row) =>
+        adminDetailFixture(row, false, 'allowed', { risk_indicators: RISK_INDICATORS }),
+    });
+    renderRoute();
+
+    const review = await screen.findByTestId('permission-request-risk-review');
+    expect(review).toHaveTextContent('검토 시 확인할 사항');
+    expect(review).toHaveTextContent('요청자 역할');
+    expect(review).toHaveTextContent('사용자');
+    expect(review).toHaveTextContent('요청 범위의 현재 권한');
+    expect(review).toHaveTextContent('권한 없음');
+    expect(review).toHaveTextContent('검토 권한');
+    expect(review).toHaveTextContent('워크스페이스 관리자 권한');
+    expect(review).toHaveTextContent('민감한 권한 · 워크스페이스 전체 읽기');
+    expect(review).toHaveTextContent('워크스페이스 전체 범위');
+    expect(review).toHaveTextContent('요청 만료일 없음');
+    expect(review).toHaveTextContent('겹치는 활성 차단 1건');
+    expect(review).toHaveTextContent('겹치는 활성 차단 1건 · 워크스페이스 전체');
+  });
+
+  test.each(['new decision', 'another request'] as const)(
+    'detail revision refetch exposes the discarded reason until %s, without posting',
+    async (dismissal) => {
+      let revision = 7;
+      installFetch({ detail: (row) => adminDetailFixture({ ...row, revision }) });
+      const { router, queryClient } = buildHarness();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await screen.findByTestId('permission-decision-section');
+      fireEvent.click(screen.getByRole('button', { name: '거절' }));
+      fireEvent.change(screen.getByLabelText(/^사유/), {
+        target: { value: 'discarded Admin reason' },
+      });
+      revision = 8;
+      await act(async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+        });
+      });
+      const notice = await screen.findByTestId('permission-decision-reset-notice');
+      expect(screen.getByTestId('permission-decision-section')).toContainElement(notice);
+      expect(notice).toHaveTextContent(
+        '다른 곳에서 요청이 변경되어 작성 중이던 결정을 초기화했습니다.',
+      );
+      expect(notice).toHaveTextContent('discarded Admin reason');
+      expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+      expect(screen.getByRole('button', { name: '거절' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(decisionPosts()).toHaveLength(0);
+      if (dismissal === 'new decision') {
+        fireEvent.click(screen.getByRole('button', { name: '거절' }));
+      } else {
+        fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+        await screen.findByText(REQUESTS[1].reason);
+      }
+      expect(screen.queryByTestId('permission-decision-reset-notice')).not.toBeInTheDocument();
+    },
+  );
+
+  test('same-ID revision updates its server risk evidence and clears the review draft', async () => {
+    let revision = 7;
+    const workspaceSignal: PermissionRiskIndicator = {
+      code: 'workspace_scope',
+      evidence: { managed_system_id: null },
+    };
+    const activeDenySignal: PermissionRiskIndicator = {
+      code: 'active_deny',
+      evidence: {
+        denies: [{ id: '55555555-5555-4555-8555-555555555555', managed_system_id: null }],
+      },
+    };
+    installFetch({
+      detail: (row) =>
+        adminDetailFixture({ ...row, revision }, false, 'allowed', {
+          risk_indicators: [revision === 7 ? workspaceSignal : activeDenySignal],
+        }),
+    });
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('워크스페이스 전체 범위');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'old risk review' },
+    });
+
+    revision = 8;
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+
+    await screen.findByText('겹치는 활성 차단 1건 · 워크스페이스 전체');
+    const review = screen.getByTestId('permission-request-risk-review');
+    expect(review).toHaveTextContent('겹치는 활성 차단 1건');
+    expect(screen.queryByText('워크스페이스 전체 범위')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('old risk review')).not.toBeInTheDocument();
+    expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+    expect(decisionPosts()).toHaveLength(0);
+  });
+
+  test('unchanged selected-detail refetch keeps its supplied risk evidence and draft', async () => {
+    const noExpirationSignal: PermissionRiskIndicator = {
+      code: 'no_expiration',
+      evidence: { requested_expiration: null },
+    };
+    installFetch({
+      detail: (row) =>
+        adminDetailFixture(row, false, 'allowed', {
+          risk_indicators: [noExpirationSignal],
+        }),
+    });
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('요청 만료일 없음');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), {
+      target: { value: 'keep this review' },
+    });
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+
+    expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
+      '요청 만료일 없음',
+    );
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('keep this review');
+    expect(screen.getByTestId('permission-decision-submit')).toBeEnabled();
   });
 
   test('same-ID revision refresh clears decision, reason, self envelope and expiry without resubmitting', async () => {

@@ -57,7 +57,7 @@ export function usePermissionRequestsConsole(): {
     activeTab === 'all'
       ? allRequests
       : allRequests.filter((request) => request.status === activeTab);
-  const selected = visibleRequests.find((request) => request.id === selectedId) ?? null;
+  const selected = allRequests.find((request) => request.id === selectedId) ?? null;
 
   function handleTabChange(next: ReviewTab): void {
     // Existing selection rule: keep the selection if it is visible in the new
@@ -102,10 +102,16 @@ export function usePermissionRequestsConsole(): {
     if (!query.isSuccess) return;
 
     if (selectedId !== null && !visibleRequests.some((request) => request.id === selectedId)) {
+      // A refetch can move the selected request to another status tab. Keep its
+      // detail/draft mounted so the revision-safe stale review can reconcile it.
+      if (
+        hasAppliedInitialSelection.current &&
+        allRequests.some((request) => request.id === selectedId)
+      )
+        return;
       // Stale/mismatched selection. On the very first reconcile (a deep link
       // whose selection is not in the tab) fall back to the first visible
-      // request like the original UI; afterwards (e.g. a decided request left
-      // the tab) just drop it.
+      // request like the original UI; afterwards drop only a missing record.
       const fallbackId = hasAppliedInitialSelection.current
         ? null
         : (visibleRequests[0]?.id ?? null);
@@ -130,7 +136,7 @@ export function usePermissionRequestsConsole(): {
         });
       }
     }
-  }, [navigate, query.isSuccess, selectedId, visibleRequests]);
+  }, [allRequests, navigate, query.isSuccess, selectedId, visibleRequests]);
 
   return {
     allRequests,

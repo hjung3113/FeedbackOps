@@ -419,11 +419,23 @@ review, never auto-submit. `selected-permission-request-detail.tsx` uses a per-I
 loading/error has no decision controls and retains URL selection. Drafts, mutation
 state and intent keys start fresh on ID or revision change; an unchanged
 background refetch (same ID and revision) must preserve them. A successful review
-refreshes to a new revision, which starts the next draft fresh.
+refreshes to a new revision, which starts the next draft fresh. When a same-ID
+revision refetch resets a non-empty Admin draft, the decision area shows an inline
+reset notice and the discarded reason as read-only text. Starting a new decision
+or selecting another request dismisses the notice.
+If a list refetch moves the selected request out of the active status tab, keep
+the URL selection and detail mounted; the existing stale-submit guard requires
+review of the latest revision. Explicit tab changes retain their keep/reselect rule.
 Identical retries reuse a key; a changed reviewed body/revision uses a new key.
 Completion invalidates the submitted ID even if selection changed during the call.
 No client-side risk computation and no source/privacy bypass. Risk presentation
 and direct-grant composition below remain separate ADR-0066 implementation items.
+Admin risk review presents supplied signals (or the successful zero-signals message)
+before compact current-access and review-authority facts. Signal evidence shares
+its title line; self-approval facts share one row on the reviewer's own request.
+Current-access expiry is labelled and shown only for allowed access; empty effective
+scope is omitted. Terminal requests retain the section with
+`현재 상태 기준`: these are current facts, not a snapshot of the original decision.
 
 `/admin/permissions/grants` stays `ListShell` with its existing grants/denies tabs.
 Its `권한 부여` primary action opens a feature-local form; direct-grant success
