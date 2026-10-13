@@ -258,3 +258,54 @@ export async function findSourceFindingForMilestone(
     evidence_count: Number(row.evidence_count),
   };
 }
+
+export type EvidenceInventoryRow = {
+  id: string;
+  finding_id: string;
+  primary_managed_system_id: string;
+  source_type: 'voc' | 'survey_response' | 'note';
+  source_id: string | null;
+  quote_or_summary: string | null;
+  analytics_area_id: string | null;
+  sentiment: 'negative' | 'neutral' | 'positive' | null;
+  importance: 'low' | 'medium' | 'high' | null;
+  created_at: Date;
+  cursor_timestamp: string;
+  finding_display_id: string;
+  finding_title: string;
+};
+
+/** Bounded local candidates; no summary, Survey binding or protected source text. */
+export async function readEvidenceInventoryBatch(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    allowedSystemIds: string[];
+    sourceType?: EvidenceInventoryRow['source_type'];
+    highlightId?: string;
+    cursor?: ListCursor;
+    limit: number;
+  },
+): Promise<EvidenceInventoryRow[]> {
+  if (input.allowedSystemIds.length === 0) return [];
+  const result = await tx.execute<EvidenceInventoryRow>(sql`
+    SELECT h.id, h.finding_id, f.primary_managed_system_id, h.source_type,
+      h.source_id, h.quote_or_summary, h.analytics_area_id, h.sentiment, h.importance,
+      h.created_at, h.created_at::text AS cursor_timestamp,
+      f.display_id AS finding_display_id, f.title AS finding_title
+    FROM finding.evidence_highlights h
+    JOIN finding.findings f ON f.workspace_id=h.workspace_id AND f.id=h.finding_id
+    WHERE h.workspace_id=${input.workspaceId}
+      AND f.primary_managed_system_id=ANY(${sql.param(input.allowedSystemIds)}::uuid[])
+      ${input.sourceType === undefined ? sql`` : sql`AND h.source_type=${input.sourceType}`}
+      ${input.highlightId === undefined ? sql`` : sql`AND h.id=${input.highlightId}::uuid`}
+      ${
+        input.cursor === undefined
+          ? sql``
+          : sql`AND (h.created_at,h.id) <
+        (${input.cursor.timestamp}::timestamptz,${input.cursor.id}::uuid)`
+      }
+    ORDER BY h.created_at DESC,h.id DESC LIMIT ${input.limit}
+  `);
+  return result.rows.map((row) => ({ ...row, created_at: toDate(row.created_at) }));
+}

@@ -155,6 +155,18 @@ Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs
 
 When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas`, and imports of the owner tables' Drizzle symbols (`managedSystems`, `analyticsAreas` from `db/schema/core`), outside their owner modules; tests and migrations are excluded, and `src/test-support` is also barred from importing those symbols.
 
+### Evidence inventory source projections (#1106)
+
+Findings composes its own parent/highlight reader with Survey's
+`resolveInventorySurveyHighlights` in `surveys/evidence-access.ts` and VOC's
+public `readVocEvidenceSources` export. Each hydration batch contains at most 100
+local highlights, authorizes its parents and sources in one transaction, and
+ends before the next batch. Survey's owner-backed
+`read_inventory_highlight_evidence(uuid,uuid[])` locks all batch response UUIDs
+in sorted order and refreshes the approval snapshot after lock waits. Finding
+summaries and private bindings never enter the inventory read model. Existing
+nested readers and attachment commands retain their contracts.
+
 ## Core Boundary
 
 Core is intentionally small.
