@@ -1,6 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { ApiError } from '@/lib/api';
 import { EVIDENCE_COPY as COPY } from '@/lib/copy/evidence';
+import { formatDate } from '@/lib/format/datetime';
 import type { EvidenceInventoryItem } from '@fops/shared';
 import { Button, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
@@ -54,9 +55,7 @@ export function EvidencePanel({
               {item.finding.display_id} · {item.finding.title}
             </h3>
             <EvidenceContent item={item} />
-            <p className="text-xs text-text-muted">
-              {new Date(item.created_at).toLocaleDateString('ko-KR')}
-            </p>
+            <p className="text-xs text-text-muted">{formatDate(item.created_at)}</p>
           </div>
         ) : null}
       </div>
