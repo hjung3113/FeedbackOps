@@ -155,3 +155,61 @@ describe('ResponsibilityEditor', () => {
     expect(screen.getByRole('combobox', { name: '팀 선택' })).toBeInTheDocument();
   });
 });
+
+it.each(['담당자', '배정된 검토자'])('marks a resolved team in %s detail', async (label) => {
+  renderEditor(
+    <ResponsibilityEditor
+      actorId={null}
+      teamId={teamId}
+      canEdit={false}
+      label={label}
+      onSave={vi.fn(async () => {})}
+    />,
+  );
+  expect(await screen.findByText('팀 · 검토팀')).toBeInTheDocument();
+});
+
+it('explains team mode with no candidates instead of offering an empty picker', async () => {
+  renderEditor(
+    <ResponsibilityEditor
+      actorId={null}
+      teamId={null}
+      canEdit
+      label="담당자"
+      onSave={vi.fn(async () => {})}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '배정 수정' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '배정 방식' }));
+  fireEvent.click(await screen.findByRole('option', { name: '팀 지정' }));
+  expect(screen.getByText('선택할 수 있는 팀이 없습니다')).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: '팀 선택' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '배정 저장' })).toBeDisabled();
+});
+
+it('ignores null candidates defensively when opening team mode', async () => {
+  renderEditor(
+    <ResponsibilityEditor
+      actorId={null}
+      teamId={teamId}
+      canEdit
+      label="담당자"
+      teamCandidates={[null, teamId] as unknown as readonly string[]}
+      onSave={vi.fn(async () => {})}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '배정 수정' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '팀 선택' }));
+  expect(await screen.findByRole('option', { name: '검토팀' })).toBeInTheDocument();
+});
+
+it('returns focus on cancel without saving', async () => {
+  const save = vi.fn(async () => {});
+  renderEditor(
+    <ResponsibilityEditor actorId={null} teamId={null} canEdit label="담당자" onSave={save} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '배정 수정' }));
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(screen.getByRole('button', { name: '배정 수정' })).toHaveFocus();
+  expect(save).not.toHaveBeenCalled();
+});

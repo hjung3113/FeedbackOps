@@ -14,12 +14,23 @@ import {
   SelectValue,
 } from '@fops/ui';
 
+import { useResponsibilityIdentityNames } from '../../components/ResponsibilityEditor';
+
 import type { NameMaps } from './TaskRequestRow';
 import { TASK_PRIORITIES, type UseTaskRequestConversionResult } from './useTaskRequestConversion';
 
 const NO_SELECTION = '__none__';
 const UNRESOLVED_ANALYTICS_AREA = '__analytics_area_unresolved__';
 const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
+
+function CandidateTeamOptions({ ids, names }: { ids: readonly string[]; names: NameMaps }) {
+  const identity = useResponsibilityIdentityNames(null, ids);
+  return ids.map((id) => (
+    <SelectItem key={id} value={id}>
+      {identity.teamName(id) ?? names.teamsById?.[id]?.name ?? `팀 ${shortId(id)}`}
+    </SelectItem>
+  ));
+}
 
 export function TaskRequestConversionForm({
   conversion,
@@ -165,11 +176,9 @@ export function TaskRequestConversionForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectTeam}</SelectItem>
-              {candidateTeamIds.map((id) => (
-                <SelectItem key={id} value={id}>
-                  {names.teamsById?.[id]?.name ?? `팀 ${shortId(id)}`}
-                </SelectItem>
-              ))}
+              {candidateTeamIds.length > 0 && (
+                <CandidateTeamOptions ids={candidateTeamIds} names={names} />
+              )}
             </SelectContent>
           </Select>
         )}

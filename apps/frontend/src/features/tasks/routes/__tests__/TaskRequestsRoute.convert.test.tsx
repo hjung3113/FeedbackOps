@@ -1,4 +1,5 @@
 import { resolveActors } from '@/lib/api';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
@@ -886,3 +887,30 @@ async function openConvertFormReturnsClient() {
   await screen.findByTestId('task-request-convert-title-input');
   return { queryClient };
 }
+
+it('names a default team candidate absent from every queue row', async () => {
+  const id = '80000000-0000-4000-8000-000000000008';
+  const resolve = vi.mocked(resolveActors).getMockImplementation();
+  vi.mocked(fetchManagedSystems).mockResolvedValueOnce({
+    total: 1,
+    items: [
+      {
+        id: taskRequest.primary_managed_system_id,
+        name: 'Billing Ops',
+        default_owner_team_id: id,
+      } as Awaited<ReturnType<typeof fetchManagedSystems>>['items'][number],
+    ],
+  });
+  vi.mocked(resolveActors).mockImplementation(async ({ teamIds }) => ({
+    actors: [],
+    teams: teamIds?.includes(id) ? [{ id, name: '후보 운영팀' }] : [],
+  }));
+  try {
+    await openConvertForm();
+    await chooseOption('담당자', '팀 지정');
+    fireEvent.click(screen.getByRole('combobox', { name: '팀 선택' }));
+    expect(await screen.findByRole('option', { name: '후보 운영팀' })).toBeInTheDocument();
+  } finally {
+    if (resolve) vi.mocked(resolveActors).mockImplementation(resolve);
+  }
+});

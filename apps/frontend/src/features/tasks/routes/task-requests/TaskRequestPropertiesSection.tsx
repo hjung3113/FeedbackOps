@@ -45,7 +45,7 @@ export function TaskRequestPropertiesSection({
       <FieldRow label={RESPONSIBILITY_COPY.reviewer}>
         {canAssign !== undefined ? (
           <ResponsibilityEditor
-            key={`${item.id}:${item.updated_at}`}
+            key={item.id}
             label={RESPONSIBILITY_COPY.reviewer}
             actorId={item.assigned_reviewer_actor_id}
             teamId={item.assigned_reviewer_team_id}

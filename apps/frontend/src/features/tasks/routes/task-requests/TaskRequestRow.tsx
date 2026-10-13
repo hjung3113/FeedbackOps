@@ -1,7 +1,7 @@
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import { ObjectRow, UnassignedBadge } from '@fops/ui';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
@@ -139,10 +139,10 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
       onClick={() => onSelect(item.id)}
       badges={<TaskRequestBadge status={item.status} />}
       meta={metaParts.map(({ key, node }, index) => (
-        <Fragment key={key}>
+        <span key={key} className="inline-flex items-center gap-2 whitespace-nowrap">
           {index > 0 && dot()}
           {node}
-        </Fragment>
+        </span>
       ))}
       trailing={
         <>

@@ -22,7 +22,7 @@ const NO_SELECTION = '__none__';
 type Mode = 'unassigned' | 'actor' | 'team';
 
 /** Names for the ids the pickers can select, resolved through /actors/resolve. */
-function useIdentityNames(actorId: string | null, teamIds: readonly string[]) {
+export function useResponsibilityIdentityNames(actorId: string | null, teamIds: readonly string[]) {
   const query = useQuery({
     queryKey: ['actors-resolve', actorId ? [actorId] : [], [...teamIds].sort()] as const,
     enabled: actorId !== null || teamIds.length > 0,
@@ -73,8 +73,10 @@ export function ResponsibilityEditor({
   const submissionKey = useRef<string | null>(null);
   const editTriggerRef = useRef<HTMLButtonElement | null>(null);
   const modeSelectRef = useRef<HTMLButtonElement | null>(null);
-  const candidateTeamIds = [...new Set([...(teamCandidates ?? []), ...(teamId ? [teamId] : [])])];
-  const identity = useIdentityNames(actorId, candidateTeamIds);
+  const candidateTeamIds = [
+    ...new Set([...(teamCandidates ?? []), teamId].filter((id): id is string => id != null)),
+  ];
+  const identity = useResponsibilityIdentityNames(actorId, candidateTeamIds);
   const eligibleActors = useEligibleResponsibilityActors(editing && canEdit);
   const save = useMutation({
     mutationFn: () => {
@@ -129,7 +131,9 @@ export function ResponsibilityEditor({
         {actorId ? (
           <span>{identity.actorName(actorId) ?? GLOSSARY.unknownUser}</span>
         ) : teamId ? (
-          <span>{identity.teamName(teamId) ?? `팀 ${shortId(teamId)}`}</span>
+          <span>
+            {RESPONSIBILITY_COPY.teamMark} · {identity.teamName(teamId) ?? `팀 ${shortId(teamId)}`}
+          </span>
         ) : (
           <UnassignedBadge
             label={label === RESPONSIBILITY_COPY.reviewer ? '미배정' : '담당자 없음'}
@@ -209,7 +213,10 @@ export function ResponsibilityEditor({
           </SelectContent>
         </Select>
       )}
-      {mode === 'team' && (
+      {mode === 'team' && candidateTeamIds.length === 0 && (
+        <span className="text-xs text-text-muted">{RESPONSIBILITY_COPY.noTeams}</span>
+      )}
+      {mode === 'team' && candidateTeamIds.length > 0 && (
         <Select
           value={value || NO_SELECTION}
           disabled={save.isPending}

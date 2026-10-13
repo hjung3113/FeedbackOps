@@ -278,7 +278,7 @@ export function TaskDetailPanel({
           </FieldRow>
           <FieldRow label="담당자">
             <ResponsibilityEditor
-              key={`${task.id}:${task.updated_at}`}
+              key={task.id}
               label="담당자"
               actorId={task.assignee_actor_id}
               teamId={task.assignee_team_id}
@@ -291,7 +291,7 @@ export function TaskDetailPanel({
                   [
                     managedSystem?.default_owner_team_id,
                     managedSystem?.default_reviewer_team_id,
-                  ].filter((id): id is string => id !== undefined),
+                  ].filter((id): id is string => id != null),
                 ),
               ]}
               onSave={(actorId, teamId, key) =>

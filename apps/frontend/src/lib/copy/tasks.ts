@@ -8,6 +8,7 @@ export const RESPONSIBILITY_COPY = {
   actor: '담당 사용자',
   selectActor: '사용자 선택',
   selectTeam: '팀 선택',
+  noTeams: '선택할 수 있는 팀이 없습니다',
   reviewer: '배정된 검토자',
   save: '배정 저장',
   saved: '배정을 저장했습니다.',
