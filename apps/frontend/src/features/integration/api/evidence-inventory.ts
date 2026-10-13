@@ -1,4 +1,5 @@
 import { apiRequest } from '@/lib/api';
+import { EVIDENCE_INVENTORY_QUERY_KEY } from '@/lib/query/evidence-inventory-key';
 import {
   getEvidenceInventoryResponseSchema,
   listEvidenceInventoryResponseSchema,
@@ -11,8 +12,8 @@ export interface EvidenceFilters {
   q?: string;
   cursor?: string;
 }
-/** Prefix seam for Finding attachment invalidation (54-5). */
-export const evidenceInventoryQueryKey = () => ['evidence-inventory'] as const;
+/** Shared prefix with Finding attachment invalidation (54-5, `lib/query`). */
+export const evidenceInventoryQueryKey = () => EVIDENCE_INVENTORY_QUERY_KEY;
 
 export async function fetchEvidenceInventory(filters: EvidenceFilters, signal: AbortSignal) {
   const query = new URLSearchParams();
