@@ -1,3 +1,5 @@
+import { VOC_SEARCH_EMPTY_LABEL } from './voc';
+
 export const SURVEY_BUILDER_COPY = {
   addOption: '옵션 추가',
   addQuestionBeforeLaunch: '시작하려면 질문을 하나 이상 추가하세요.',
@@ -34,6 +36,7 @@ export const SURVEY_BUILDER_COPY = {
 
 export const SURVEY_START_COPY = {
   mode: '시작 방법',
+  intro: '빈 Survey로 시작하거나 템플릿·기존 Survey 문항을 재사용하세요.',
   blank: '빈 Survey',
   builtin: '기본 템플릿',
   existing: '기존 Survey 문항 사용',
@@ -44,6 +47,8 @@ export const SURVEY_START_COPY = {
   loadFailed: '시작 문항을 불러오지 못했습니다.',
   previewFailed: '미리보기를 불러오지 못했습니다. 다시 선택하세요.',
   empty: '사용할 수 있는 Survey가 없습니다.',
+  searchEmpty: VOC_SEARCH_EMPTY_LABEL,
+  sourceSetsType: 'Survey 유형은 선택한 Survey를 따릅니다.',
   retry: '새로고침',
   preview: '문항 미리보기',
   required: '필수',

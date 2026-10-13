@@ -282,6 +282,12 @@ it.each([403, 404, 409])(
         '문항이 변경되었거나 접근 권한이 없습니다. 새로고침 후 다시 선택하세요.',
       ),
     ).toBeVisible();
+    // Only the reselect message: the create-failure alert must not blame the
+    // form input for a changed/forbidden source.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(
+      screen.queryByText('Survey를 만들지 못했습니다. 입력을 확인하고 다시 시도하세요.'),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText('제목')).toHaveValue('지난 라운드 문항');
     expect(screen.getByTestId('survey-create-submit')).toBeDisabled();
     expect(screen.queryByText(/분기:/)).not.toBeInTheDocument();
@@ -290,8 +296,94 @@ it.each([403, 404, 409])(
     await user.click(screen.getByRole('button', { name: '새로고침' }));
     await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
     await waitFor(() => expect(screen.getByTestId('survey-create-submit')).toBeEnabled());
+    // Reselecting must also have cleared the failed attempt's error state.
+    expect(
+      screen.queryByText('Survey를 만들지 못했습니다. 입력을 확인하고 다시 시도하세요.'),
+    ).not.toBeInTheDocument();
   },
 );
+
+it('opens with initial focus on 제목 as blank creation does on develop', async () => {
+  mountDialog();
+  await waitFor(() => expect(screen.getByLabelText('제목')).toHaveFocus());
+});
+
+it('states near the source list that the source sets the Survey type', async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes('/copy-sources?')
+              ? surveyCopySourcesVisualFixture
+              : surveyCopySourceVisualFixture,
+          ),
+        ),
+    ),
+  );
+  mountDialog();
+  await existing(user);
+  expect(screen.getByText('Survey 유형은 선택한 Survey를 따릅니다.')).toBeVisible();
+});
+
+it('shows a search-specific empty line when no source matches the search', async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url) => {
+      const query = new URLSearchParams(String(url).split('?')[1] ?? '');
+      return new Response(
+        JSON.stringify(
+          String(url).includes('/copy-sources?') && query.get('q')
+            ? { items: [], page: { has_more: false } }
+            : String(url).includes('/copy-sources?')
+              ? surveyCopySourcesVisualFixture
+              : surveyCopySourceVisualFixture,
+        ),
+      );
+    }),
+  );
+  mountDialog();
+  await existing(user);
+  await user.type(screen.getByLabelText('기존 Survey 검색'), '없는검색어');
+  expect(await screen.findByText('검색 결과가 없습니다.')).toBeVisible();
+  expect(screen.queryByText('사용할 수 있는 Survey가 없습니다.')).not.toBeInTheDocument();
+});
+
+it.each([
+  ['keeps the labels when present', false, '· 도움이 되지 않음 / 매우 도움이 됨'],
+  ['drops the label line when absent', true, null],
+])('rating preview %s', async (_name, stripLabels, expected) => {
+  const user = userEvent.setup();
+  const source = {
+    ...surveyCopySourceVisualFixture,
+    questions: surveyCopySourceVisualFixture.questions.map((question) =>
+      question.kind === 'rating' && stripLabels
+        ? { ...question, rating_low_label: null, rating_high_label: null }
+        : question,
+    ),
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes('/copy-sources?') ? surveyCopySourcesVisualFixture : source,
+          ),
+        ),
+    ),
+  );
+  mountDialog();
+  await existing(user);
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
+  const range = await screen.findByText(/1–5/);
+  expect(range).toBeVisible();
+  if (expected) expect(range).toHaveTextContent(expected);
+  else expect(range).not.toHaveTextContent('·');
+});
 
 function PersistedBuilder({ id }: { id: string }) {
   const survey = useSurvey(id);

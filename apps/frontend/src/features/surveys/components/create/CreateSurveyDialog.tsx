@@ -59,6 +59,7 @@ export function CreateSurveyDialog({
   const create = useCreateSurvey();
   const submitting = React.useRef(false);
   const opener = React.useRef<HTMLElement | null>(null);
+  const titleRef = React.useRef<HTMLInputElement | null>(null);
   const pinnedStart = React.useRef<SurveyStartingPoint | null>(null);
   const [mode, setMode] = React.useState<'blank' | 'builtin' | 'existing'>('blank');
   const [search, setSearch] = React.useState('');
@@ -113,12 +114,16 @@ export function CreateSurveyDialog({
           ? source.data
           : undefined
       : undefined;
+  const resetCreate = create.reset;
   const clearSelection = React.useCallback(() => {
     setTemplateId('');
     setSourceId('');
     setBlocked(false);
     pinnedStart.current = null;
-  }, []);
+    // A blocked attempt (409/403/404) must not leave its create error behind a
+    // fresh reselection; an in-flight attempt is never reset (ADR-0070).
+    if (!create.isPending) resetCreate();
+  }, [resetCreate, create.isPending]);
   React.useEffect(() => {
     // While an attempt is pinned (uncertain outcome) a background refetch must
     // not alter what the next unchanged retry sends (ADR-0070: one explicit key
@@ -156,7 +161,6 @@ export function CreateSurveyDialog({
     setSourceId('');
     pinnedStart.current = null;
   }, [system, systemInScope]);
-  const resetCreate = create.reset;
   const reset = React.useCallback(() => {
     setTitle('');
     setType('');
@@ -185,9 +189,14 @@ export function CreateSurveyDialog({
     >
       <DialogContent
         className="max-h-[90vh] overflow-y-auto"
-        onOpenAutoFocus={() => {
+        onOpenAutoFocus={(event) => {
           if (document.activeElement instanceof HTMLElement)
             opener.current = document.activeElement;
+          // Blank creation is the entry state; focus 제목 as on develop.
+          if (titleRef.current) {
+            event.preventDefault();
+            titleRef.current.focus();
+          }
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -202,7 +211,7 @@ export function CreateSurveyDialog({
       >
         <DialogHeader>
           <DialogTitle>Survey 생성</DialogTitle>
-          <DialogDescription>{COPY.mode}</DialogDescription>
+          <DialogDescription>{COPY.intro}</DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-4"
@@ -293,6 +302,7 @@ export function CreateSurveyDialog({
                 제목
                 <Input
                   id="survey-title"
+                  ref={titleRef}
                   aria-label="제목"
                   value={title}
                   onChange={(event) => {
@@ -351,19 +361,25 @@ export function CreateSurveyDialog({
                   {!system ? (
                     <p>{COPY.chooseSystem}</p>
                   ) : !systemInScope ? (
-                    <p role="alert">{COPY.reselect}</p>
+                    <p role="alert" className="text-sm text-text-danger">
+                      {COPY.reselect}
+                    </p>
                   ) : (
                     <>
                       {mode === 'existing' && (
-                        <Input
-                          aria-label={COPY.search}
-                          value={search}
-                          maxLength={200}
-                          onChange={(event) => {
-                            setSearch(event.target.value);
-                            clearSelection();
-                          }}
-                        />
+                        <>
+                          <Input
+                            aria-label={COPY.search}
+                            placeholder={`${COPY.search}…`}
+                            value={search}
+                            maxLength={200}
+                            onChange={(event) => {
+                              setSearch(event.target.value);
+                              clearSelection();
+                            }}
+                          />
+                          <p className="text-sm text-text-muted">{COPY.sourceSetsType}</p>
+                        </>
                       )}
                       {(mode === 'builtin'
                         ? templates.isFetching
@@ -371,13 +387,16 @@ export function CreateSurveyDialog({
                         <output>{COPY.loading}</output>
                       )}
                       {(mode === 'builtin' ? templates.isError : sources.isError) ? (
-                        <p role="alert">{COPY.loadFailed}</p>
+                        <p role="alert" className="text-sm text-text-danger">
+                          {COPY.loadFailed}
+                        </p>
                       ) : (
                         <ToggleGroup
                           type="single"
                           variant="outline"
+                          size="sm"
                           orientation="vertical"
-                          className="flex-col items-stretch"
+                          className="max-h-48 flex-col items-stretch overflow-y-auto"
                           aria-label={mode === 'builtin' ? COPY.builtin : COPY.existing}
                           value={mode === 'builtin' ? templateId : sourceId}
                           onValueChange={(value) => {
@@ -388,13 +407,23 @@ export function CreateSurveyDialog({
                         >
                           {mode === 'builtin'
                             ? templateItems.map((item) => (
-                                <ToggleGroupItem key={item.template_id} value={item.template_id}>
+                                <ToggleGroupItem
+                                  key={item.template_id}
+                                  value={item.template_id}
+                                  appearance="selected-filter"
+                                  className="justify-start"
+                                >
                                   {item.title} · {SURVEY_TYPE_LABELS[item.type]} ·{' '}
                                   {COPY.questions(item.questions.length)}
                                 </ToggleGroupItem>
                               ))
                             : sourceItems.map((item) => (
-                                <ToggleGroupItem key={item.survey_id} value={item.survey_id}>
+                                <ToggleGroupItem
+                                  key={item.survey_id}
+                                  value={item.survey_id}
+                                  appearance="selected-filter"
+                                  className="justify-start"
+                                >
                                   {item.display_id} · {item.title} ·{' '}
                                   {SURVEY_STATUS_LABELS[item.status]} ·{' '}
                                   {COPY.questions(item.question_count)}
@@ -408,7 +437,7 @@ export function CreateSurveyDialog({
                         !blocked &&
                         !sources.hasNextPage &&
                         sources.data.pages.every((page) => page.items.length === 0) && (
-                          <p>{COPY.empty}</p>
+                          <p>{search.trim() ? COPY.searchEmpty : COPY.empty}</p>
                         )}
                       {mode === 'existing' && sources.hasNextPage && (
                         <Button
@@ -424,11 +453,15 @@ export function CreateSurveyDialog({
                         <output>{COPY.loading}</output>
                       )}
                       {mode === 'existing' && sourceId && source.isError && (
-                        <p role="alert">{COPY.previewFailed}</p>
+                        <p role="alert" className="text-sm text-text-danger">
+                          {COPY.previewFailed}
+                        </p>
                       )}
                       <Button
                         type="button"
-                        variant="secondary"
+                        variant="ghost"
+                        size="sm"
+                        className="self-end"
                         onClick={() => {
                           clearSelection();
                           if (mode === 'builtin') void templates.refetch();
@@ -437,6 +470,9 @@ export function CreateSurveyDialog({
                       >
                         {COPY.retry}
                       </Button>
+                      {definition && (
+                        <p className="text-xs font-medium text-text-muted">{COPY.preview}</p>
+                      )}
                       {template && definition && <p className="text-sm">{template.description}</p>}
                       {definition && (
                         <ol className="flex max-h-40 flex-col gap-2 overflow-y-auto text-sm">
@@ -451,8 +487,17 @@ export function CreateSurveyDialog({
                               )}
                               {question.kind === 'rating' && (
                                 <p>
-                                  {question.rating_min}–{question.rating_max} ·{' '}
-                                  {question.rating_low_label} / {question.rating_high_label}
+                                  {question.rating_min}–{question.rating_max}
+                                  {(question.rating_low_label || question.rating_high_label) && (
+                                    <>
+                                      {' · '}
+                                      {question.rating_low_label}
+                                      {question.rating_low_label &&
+                                        question.rating_high_label &&
+                                        ' / '}
+                                      {question.rating_high_label}
+                                    </>
+                                  )}
                                 </p>
                               )}
                               {'branch_parent_question_id' in question &&
@@ -526,9 +571,11 @@ export function CreateSurveyDialog({
             </fieldset>
           )}
           {blocked && !(mode !== 'blank' && Boolean(system) && !systemInScope) && (
-            <p role="alert">{COPY.reselect}</p>
+            <p role="alert" className="text-sm text-text-danger">
+              {COPY.reselect}
+            </p>
           )}
-          {create.isError && (
+          {create.isError && !blocked && (
             <p role="alert" className="text-sm text-text-danger">
               {COPY.createFailed}
             </p>
