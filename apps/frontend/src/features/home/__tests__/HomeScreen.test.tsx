@@ -12,6 +12,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -1127,6 +1128,183 @@ describe('HomeScreen route content', () => {
     fireEvent.click(within(confirmation).getByRole('button', { name: '취소' }));
     expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
     expect(screen.getByLabelText('사유')).toBeInTheDocument();
+  });
+
+  it('a stale withdrawal exits the confirmation and keeps focus through reconciliation', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url.endsWith('/cancel')) {
+        writes += 1;
+        return new Response(
+          JSON.stringify({
+            code: 'conflict.stale_write',
+            message: 'stale',
+            detail: { current_revision: 8 },
+          }),
+          { status: 409 },
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) {
+        reads += 1;
+        return new Response(
+          JSON.stringify(reads === 1 ? detail : { ...detail, revision: 8, reason: 'server edit' }),
+        );
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    await user.click(screen.getByRole('button', { name: '요청 철회' }));
+    await user.click(
+      within(screen.getByTestId('owner-withdraw-confirmation')).getByRole('button', {
+        name: '요청 철회',
+      }),
+    );
+    const staleNotice = await screen.findByText(
+      '요청이 변경되었습니다. 입력은 유지됩니다. 최신 내용과 비교한 뒤 다시 확인해 주세요.',
+    );
+    // The confirmation yields to the stale comparison instead of unmounting
+    // the fields 최신 요청 확인 needs for focus.
+    expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
+    expect(staleNotice).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: '최신 요청 확인 · 입력 유지' }));
+    expect(screen.getByLabelText('사유')).toHaveFocus();
+    // 입력 유지: the untouched draft survives reconciliation; the stale
+    // section above shows 최신 요청 사유 · server edit for comparison.
+    expect(screen.getByLabelText('사유')).toHaveValue('original reason');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(1);
+  });
+
+  it('returns focus to the scope select when a scope-only change is refused', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH') {
+        writes += 1;
+        return new Response(
+          JSON.stringify({ code: 'conflict.capability_already_granted', message: 'refused' }),
+          { status: 409 },
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    const trigger = await screen.findByRole('combobox', { name: '요청 범위' });
+    // A real pointer click focuses the trigger before the select opens; the
+    // tracked target is what the refused PATCH must return focus to.
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Managed System · cccccccc' }));
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('이미 권한이 부여되어 있습니다.');
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveFocus();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(1);
+  });
+
+  it.each(['요청 범위', '만료일'] as const)(
+    'blocks 보완 제출 when only %s changed until 사유 answers',
+    async (field) => {
+      const detail = ownerDetailFixture('needs_more_info');
+      const base = installFetch();
+      let writes = 0;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [detail] }));
+        if (init?.method === 'PATCH' || url.endsWith('/submit-more-info')) {
+          writes += 1;
+          return new Response(JSON.stringify({ id: detail.id, revision: 8, status: 'pending' }), {
+            status: 200,
+          });
+        }
+        if (url === `/permission-requests/${detail.id}`)
+          return new Response(JSON.stringify(detail));
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      const user = userEvent.setup();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      await screen.findByDisplayValue('original reason');
+      const submit = screen.getByRole('button', { name: '보완 제출' });
+      if (field === '요청 범위') {
+        const trigger = screen.getByRole('combobox', { name: '요청 범위' });
+        trigger.focus();
+        fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+        fireEvent.click(await screen.findByRole('option', { name: 'Managed System · cccccccc' }));
+      } else {
+        await user.click(screen.getByRole('radio', { name: '만료일 변경' }));
+        fireEvent.change(screen.getByLabelText('새 만료일'), { target: { value: '2099-12-30' } });
+      }
+      expect(submit).toBeDisabled();
+      await user.click(submit);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(writes).toBe(0);
+      await user.type(screen.getByLabelText('사유'), ' and my answer');
+      expect(submit).toBeEnabled();
+    },
+  );
+
+  it('취소 returns focus to the 요청 철회 button that opened the confirmation', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url.endsWith('/cancel')) {
+        writes += 1;
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 9,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    await user.click(screen.getByRole('button', { name: '요청 철회' }));
+    const confirmation = screen.getByTestId('owner-withdraw-confirmation');
+    expect(within(confirmation).getByLabelText('철회 사유 · 선택')).toHaveFocus();
+    await user.click(within(confirmation).getByRole('button', { name: '취소' }));
+    expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '요청 철회' })).toHaveFocus();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(0);
   });
 
   it('resolves Managed System names in the scope select and the stale comparison', async () => {

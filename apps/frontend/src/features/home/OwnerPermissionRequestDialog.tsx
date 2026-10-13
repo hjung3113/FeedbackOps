@@ -130,6 +130,7 @@ function OwnerForm({
   const [dateValid, setDateValid] = React.useState(true);
   const [withdrawReason, setWithdrawReason] = React.useState('');
   const [withdrawConfirm, setWithdrawConfirm] = React.useState(false);
+  const [returnToWithdrawTrigger, setReturnToWithdrawTrigger] = React.useState(false);
   const [stale, setStale] = React.useState(false);
   const [validation, setValidation] = React.useState<{
     field: 'reason' | 'expiration';
@@ -139,6 +140,8 @@ function OwnerForm({
   const reasonRef = React.useRef<HTMLTextAreaElement>(null);
   const withdrawReasonRef = React.useRef<HTMLTextAreaElement>(null);
   const staleAlertRef = React.useRef<HTMLParagraphElement>(null);
+  const validationRef = React.useRef<HTMLParagraphElement>(null);
+  const withdrawTriggerRef = React.useRef<HTMLButtonElement>(null);
   const intent = React.useRef<{ fingerprint: string; key: string } | null>(null);
   const submitting = React.useRef(false);
   const mounted = React.useRef(true);
@@ -195,6 +198,9 @@ function OwnerForm({
       // cleared `isPending`; calling .focus() here hits a still-disabled field.
       if (error instanceof ApiError && error.code === 'conflict.stale_write') {
         setStale(true);
+        // Reconciliation needs the edit fields mounted; the confirmation
+        // replaces them, so it yields to the stale comparison.
+        setWithdrawConfirm(false);
         await Promise.all([
           refresh(),
           qc.invalidateQueries({ queryKey: permissionRequestsMineKey }),
@@ -215,12 +221,16 @@ function OwnerForm({
     reconcileRequired || readFailed || refreshing || mutation.isPending || mutation.isSuccess;
   // CR: a committed server error arrives after `isPending` cleared, so the
   // edited field can receive focus again; stale conflicts focus the stale
-  // notice instead (effect below).
+  // notice instead (effect below). The Select trigger is a BUTTON, so it is
+  // tracked separately from INPUT/TEXTAREA (container onFocus); when no
+  // tracked element survives, the error message takes focus.
   React.useEffect(() => {
     if (mutation.error === undefined) return;
     if (mutation.error instanceof ApiError && mutation.error.code === 'conflict.stale_write')
       return;
-    focusTarget.current?.focus();
+    const target = focusTarget.current;
+    if (target?.isConnected) target.focus();
+    else validationRef.current?.focus();
   }, [mutation.error]);
   // Focus the stale notice when reconciliation becomes required.
   React.useEffect(() => {
@@ -230,6 +240,14 @@ function OwnerForm({
   React.useEffect(() => {
     if (withdrawConfirm) withdrawReasonRef.current?.focus();
   }, [withdrawConfirm]);
+  // 취소 remounts the footer, so the opener button gets focus on the next
+  // commit instead of losing it with the unmounted confirmation.
+  React.useEffect(() => {
+    if (!withdrawConfirm && returnToWithdrawTrigger) {
+      setReturnToWithdrawTrigger(false);
+      withdrawTriggerRef.current?.focus();
+    }
+  }, [withdrawConfirm, returnToWithdrawTrigger]);
   const editable =
     baseline.allowed_actions.includes('edit') || baseline.allowed_actions.includes('supplement');
   const expirationDraft =
@@ -284,6 +302,11 @@ function OwnerForm({
     reason.trim() !== baseline.reason ||
     scope !== (baseline.requested_managed_system_id ?? 'workspace') ||
     expirationDraft !== baseline.requested_expiration;
+  // Supplementation answers the Admin question, and the answer lives in 사유:
+  // a scope/expiry-only change is not an answer, so 보완 제출 stays blocked
+  // until the reason differs from the baseline. 수정 keeps the general
+  // field-change predicate above.
+  const answered = reason.trim() !== baseline.reason;
   // One stale message at a time: while the stale section renders, the generic
   // conflict error line is suppressed in its favour.
   const validationMessage =
@@ -295,7 +318,8 @@ function OwnerForm({
       onFocus={(event) => {
         if (
           event.target instanceof HTMLElement &&
-          ['INPUT', 'TEXTAREA'].includes(event.target.tagName)
+          (['INPUT', 'TEXTAREA'].includes(event.target.tagName) ||
+            event.target.id === 'owner-request-scope')
         )
           focusTarget.current = event.target;
       }}
@@ -383,7 +407,13 @@ function OwnerForm({
       ) : null}
       {readFailed ? <p role="alert">{COPY.loadError}</p> : null}
       {validationMessage ? (
-        <p id="owner-request-validation" role="alert" className="text-sm text-accent-danger">
+        <p
+          id="owner-request-validation"
+          ref={validationRef}
+          role="alert"
+          tabIndex={-1}
+          className="text-sm text-accent-danger"
+        >
           {validationMessage}
         </p>
       ) : null}
@@ -434,7 +464,10 @@ function OwnerForm({
             <Button
               variant="secondary"
               disabled={mutation.isPending}
-              onClick={() => setWithdrawConfirm(false)}
+              onClick={() => {
+                setReturnToWithdrawTrigger(true);
+                setWithdrawConfirm(false);
+              }}
             >
               {COPY.cancel}
             </Button>
@@ -457,7 +490,12 @@ function OwnerForm({
             {COPY.close}
           </Button>
           {detail.allowed_actions.includes('withdraw') ? (
-            <Button variant="ghost" disabled={blocked} onClick={() => setWithdrawConfirm(true)}>
+            <Button
+              ref={withdrawTriggerRef}
+              variant="ghost"
+              disabled={blocked}
+              onClick={() => setWithdrawConfirm(true)}
+            >
               {COPY.withdraw}
             </Button>
           ) : null}
@@ -473,7 +511,7 @@ function OwnerForm({
           {detail.allowed_actions.includes('supplement') ? (
             <Button
               variant={reconcileRequired ? 'secondary' : 'primary'}
-              disabled={blocked || !dirty}
+              disabled={blocked || !answered}
               onClick={() => submit('supplement')}
             >
               {COPY.supplement}
