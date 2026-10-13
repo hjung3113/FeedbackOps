@@ -1,11 +1,9 @@
 # #740 canonical link and audit read cutover
 
-ADR-0064 item 2 is implemented in the proposed journaled
-`0064_canonical_read_boundary.sql` plus its Drizzle-generated snapshot. Numbering is
-provisional: the conductor coordinates #1085/#1096 ordering and regenerates combined
-metadata, preserving 0058 Permission revisions, 0059 Survey provenance, 0060
-responsibility defaults, 0061 Coverage and parallel Core counters/policies/grants.
-Workers do not edit another issue's migrations or concatenate snapshots.
+ADR-0064 item 2 is implemented in journaled `0064_canonical_read_boundary.sql`
+plus its Drizzle-generated snapshot, applied after 0058 Permission revisions, 0059
+Survey provenance, 0060 responsibility defaults, 0061 Coverage, 0062 Cluster
+suggestion storage and 0063 Permission grant reissue.
 
 ## Storage and owning seams
 
