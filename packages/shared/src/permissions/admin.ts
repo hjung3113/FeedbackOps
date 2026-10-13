@@ -38,7 +38,6 @@ export const listPermissionDeniesResponseSchema = z
   .strict();
 export type ListPermissionDeniesResponse = z.infer<typeof listPermissionDeniesResponseSchema>;
 
-
 export const directPermissionGrantSchema = z
   .object({
     actor_id: z.string().uuid(),

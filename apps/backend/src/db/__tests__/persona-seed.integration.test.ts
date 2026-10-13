@@ -389,5 +389,4 @@ describe.skipIf(!runIntegration)('persona seed layer', () => {
       );
     }
   });
-
 });

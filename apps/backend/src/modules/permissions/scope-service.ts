@@ -15,9 +15,9 @@ import { and, eq, isNull, or } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
-import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 
 export type Scope = { kind: 'all' } | { kind: 'scoped'; managedSystemIds: string[] };
 
@@ -61,10 +61,7 @@ export async function actorScopeForCapability(
     isNull(permissionGrants.revokedAt),
     isNull(permissionGrants.supersededAt),
     // expires_at IS NULL OR expires_at > now()
-    or(
-      isNull(permissionGrants.expiresAt),
-      sql`${permissionGrants.expiresAt} > now()`,
-    ),
+    or(isNull(permissionGrants.expiresAt), sql`${permissionGrants.expiresAt} > now()`),
   ];
 
   if (capability !== undefined) {

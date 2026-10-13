@@ -126,7 +126,6 @@ describe('Admin permission revocation contracts (ADR-0061)', () => {
   });
 });
 
-
 describe('governed direct grant contracts (ADR-0066)', () => {
   it('requires a trimmed reason and a strict known-capability direct body', () => {
     const body = { actor_id: ACTOR_ID, capability: 'voc.read', reason: '  Approved access  ' };

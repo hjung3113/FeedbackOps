@@ -794,7 +794,10 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     return {
       row: await readRequest(id),
       audits: (
-        await migrateDb.pool.query('select * from core.audit_log where subject_id = $1 order by id', [id])
+        await migrateDb.pool.query(
+          'select * from core.audit_log where subject_id = $1 order by id',
+          [id],
+        )
       ).rows,
       grants: (
         await db.pool.query(

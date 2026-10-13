@@ -257,7 +257,10 @@ describe.skipIf(!runIntegration)('Admin permission revocation (ADR-0061)', () =>
   }
 
   async function assertAudit(command: Command, id: string, detail: Record<string, unknown>) {
-    const rows = await migrateDb.pool.query<{ subject_type: string; detail: Record<string, unknown> }>(
+    const rows = await migrateDb.pool.query<{
+      subject_type: string;
+      detail: Record<string, unknown>;
+    }>(
       'select subject_type, detail from core.audit_log where subject_id = $1 and event_type = $2',
       [id, command.eventType],
     );

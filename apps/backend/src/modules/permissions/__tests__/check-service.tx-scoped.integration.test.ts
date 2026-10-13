@@ -129,7 +129,11 @@ describe.skipIf(!runIntegration)('checkService.checkCapability tx-scoped read (S
       supersededAt: new Date(),
       expiresAt: new Date(Date.now() + 60_000),
     });
-    const actor = { actor_id: tempActorId, workspace_id: WORKSPACE_ID, role_level: 'user' as const };
+    const actor = {
+      actor_id: tempActorId,
+      workspace_id: WORKSPACE_ID,
+      role_level: 'user' as const,
+    };
     await expect(
       svc.checkCapability(actor, 'survey.export', { workspace_id: WORKSPACE_ID }),
     ).resolves.toMatchObject({ allow: false, reason: 'no_grant' });
@@ -144,5 +148,4 @@ describe.skipIf(!runIntegration)('checkService.checkCapability tx-scoped read (S
       managedSystemIds: [],
     });
   });
-
 });

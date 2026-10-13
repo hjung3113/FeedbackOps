@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 
 import {
-  CAPABILITIES,
   type AuditEventType,
+  CAPABILITIES,
   type Capability,
   type DirectPermissionGrant,
   type PermissionDenyAdminItem,
@@ -18,7 +18,11 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { permissionDenies, permissionGrants, permissionRequests } from '../../db/schema/permission.js';
+import {
+  permissionDenies,
+  permissionGrants,
+  permissionRequests,
+} from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { findWorkspaceActorDisplay, lockWorkspaceActor } from '../auth/index.js';
@@ -124,7 +128,10 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
     return { state: 'available' };
   }
 
-  async function grantOptions(actor: ActorContext, actorId: string): Promise<PermissionGrantOptions> {
+  async function grantOptions(
+    actor: ActorContext,
+    actorId: string,
+  ): Promise<PermissionGrantOptions> {
     return deps.db.transaction(
       async (tx) => {
         await assertAdmin(actor, tx);
@@ -220,9 +227,13 @@ export function createGrantAdminService(deps: GrantAdminServiceDeps) {
           throw new HttpError('permission.denied', 'self grant forbidden by workspace policy');
         }
         if (self !== (input.self_approval !== undefined)) {
-          throw new HttpError('validation.failed', 'self envelope must accompany only a self grant', {
-            fields: [{ path: ['self_approval'], code: 'custom' }],
-          });
+          throw new HttpError(
+            'validation.failed',
+            'self envelope must accompany only a self grant',
+            {
+              fields: [{ path: ['self_approval'], code: 'custom' }],
+            },
+          );
         }
         validateRequestExpiration(expiresAt, 'expires_at');
         const result = await writePermissionGrant(tx, {

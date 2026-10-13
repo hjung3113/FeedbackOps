@@ -20,10 +20,7 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import {
-  permissionDenies,
-  permissionRequests,
-} from '../../db/schema/permission.js';
+import { permissionDenies, permissionRequests } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { lockWorkspaceActor } from '../auth/index.js';
@@ -32,8 +29,8 @@ import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
-import { writePermissionGrant } from './grant-command.js';
 import type { ActorContext, CheckService } from './check-service.js';
+import { writePermissionGrant } from './grant-command.js';
 import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface DecisionServiceDeps {

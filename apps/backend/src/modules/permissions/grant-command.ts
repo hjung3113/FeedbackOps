@@ -1,11 +1,11 @@
-// Caller owns the transaction and recipient → request → policy locks.
-// Both approval and requestless grants retain expired provenance through reissue.
-import { and, eq, isNull } from 'drizzle-orm';
 import {
   type Capability,
   type PermissionGrantAdminItem,
   permissionGrantAdminItemSchema,
 } from '@fops/shared';
+// Caller owns the transaction and recipient → request → policy locks.
+// Both approval and requestless grants retain expired provenance through reissue.
+import { and, eq, isNull } from 'drizzle-orm';
 import { permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';

@@ -991,7 +991,8 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         ).rows,
       ).toEqual(grants.rows);
       expect(
-        (await migrateDb.pool.query('select id from core.audit_log where subject_id = $1', [id])).rowCount,
+        (await migrateDb.pool.query('select id from core.audit_log where subject_id = $1', [id]))
+          .rowCount,
       ).toBe(0);
     },
   );
@@ -1253,7 +1254,10 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       preflight: { state: 'available' },
     });
     expect(response.json().candidates).not.toContainEqual(
-      expect.objectContaining({ capability: 'workspace.admin', managed_system_id: defaultSystemId }),
+      expect.objectContaining({
+        capability: 'workspace.admin',
+        managed_system_id: defaultSystemId,
+      }),
     );
     expect(response.json().recipient).not.toHaveProperty('email');
     expect(
@@ -1349,7 +1353,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         "update core.workspace_settings set permission_self_approval = 'allowed' where workspace_id = $1",
         [WORKSPACE_ID],
       );
-      expect((await directGrant({ actor_id: self.id }, undefined, self.cookie)).statusCode).toBe(422);
+      expect((await directGrant({ actor_id: self.id }, undefined, self.cookie)).statusCode).toBe(
+        422,
+      );
       const result = await directGrant(body, undefined, self.cookie);
       expect(result.statusCode).toBe(201);
       const audit = await migrateDb.pool.query(
@@ -1820,5 +1826,4 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect(revoke.statusCode).toBe(409);
     expect(revoke.json().code).toBe('conflict.permission_not_active');
   });
-
 });
