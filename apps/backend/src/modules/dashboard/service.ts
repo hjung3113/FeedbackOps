@@ -6,6 +6,8 @@ import {
   DASHBOARD_RELEASED_TASKS_ROUTE,
   DASHBOARD_UNASSIGNED_VOC_ROUTE,
   type DashboardSummary,
+  type CoverageThresholdPair,
+  type CoverageMetricId,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
@@ -17,6 +19,7 @@ import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
 import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
 import type { VocGroupedCountReader, VocGroupedCountRow } from '../voc/index.js';
+import { getResolvedWorkspaceSettings } from '../workspace-settings/index.js';
 import * as repo from './repo.js';
 
 export interface DashboardActor {
@@ -44,8 +47,13 @@ function percent(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
 }
 
-function coverageStatus(value: number): 'good' | 'warn' | 'bad' {
-  return value >= 75 ? 'good' : value >= 40 ? 'warn' : 'bad';
+function coverageStatus(
+  value: number,
+  total: number,
+  band: CoverageThresholdPair,
+): 'good' | 'warn' | 'bad' | 'no_data' {
+  if (total === 0) return 'no_data';
+  return value >= band.good_min_percent ? 'good' : value >= band.warn_min_percent ? 'warn' : 'bad';
 }
 
 function includesManagedSystem(scope: Scope | undefined, managedSystemId: string): scope is Scope {
@@ -79,9 +87,14 @@ function emptyAggregatedVocCounts(): AggregatedVocCounts {
   };
 }
 
-function coverageCell(value: number, total: number) {
+function coverageCell(value: number, total: number, band: CoverageThresholdPair) {
   const coveragePercent = percent(value, total);
-  return { value, total, percent: coveragePercent, status: coverageStatus(coveragePercent) };
+  return {
+    value,
+    total,
+    percent: coveragePercent,
+    status: coverageStatus(coveragePercent, total, band),
+  };
 }
 
 async function managedSystemUnion(
@@ -116,6 +129,12 @@ export function createDashboardService(deps: DashboardDeps) {
     actor: DashboardActor,
     managedSystemId?: string,
   ): Promise<DashboardSummary> {
+    const { coverage_thresholds: bands } = await getResolvedWorkspaceSettings(
+      deps.db,
+      actor.workspace_id,
+    );
+    const cell = (id: CoverageMetricId, value: number, total: number) =>
+      coverageCell(value, total, bands[id]);
     // `all` is the public selector for no backing filter; repositories receive
     // undefined so they apply the actor's resolved scope rather than cast it as a UUID.
     const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
@@ -249,7 +268,7 @@ export function createDashboardService(deps: DashboardDeps) {
         value: executed,
         total: active,
         percent: percent(executed, active),
-        status: coverageStatus(percent(executed, active)),
+        status: coverageStatus(percent(executed, active), active, bands['finding-execution']),
       });
     }
 
@@ -298,7 +317,11 @@ export function createDashboardService(deps: DashboardDeps) {
         id: 'released-update',
         ...releasedUpdate,
         percent: releasedUpdatePercent,
-        status: coverageStatus(releasedUpdatePercent),
+        status: coverageStatus(
+          releasedUpdatePercent,
+          releasedUpdate.total,
+          bands['released-update'],
+        ),
       });
     }
 
@@ -355,7 +378,7 @@ export function createDashboardService(deps: DashboardDeps) {
         value: vocTaskValue,
         total: openVoc,
         percent: vocTaskPercent,
-        status: coverageStatus(vocTaskPercent),
+        status: coverageStatus(vocTaskPercent, openVoc, bands['voc-task']),
       });
       const analyticsPercent = percent(analyticsAreaValue, openVoc);
       coverage.push({
@@ -363,7 +386,7 @@ export function createDashboardService(deps: DashboardDeps) {
         value: analyticsAreaValue,
         total: openVoc,
         percent: analyticsPercent,
-        status: coverageStatus(analyticsPercent),
+        status: coverageStatus(analyticsPercent, openVoc, bands['analytics-area']),
       });
       kpis.coverage_percent = vocTaskPercent;
     }
@@ -379,7 +402,7 @@ export function createDashboardService(deps: DashboardDeps) {
         value: followed,
         total: totalHigh,
         percent: highPercent,
-        status: coverageStatus(highPercent),
+        status: coverageStatus(highPercent, totalHigh, bands['high-followup']),
       });
     }
 
@@ -400,14 +423,16 @@ export function createDashboardService(deps: DashboardDeps) {
         const systemCounts = vocCountsBySystem.get(systemId) ?? emptyAggregatedVocCounts();
         rowKpis.open_voc = systemCounts.total;
         rowKpis.coverage_percent = percent(systemCounts.withTask, systemCounts.total);
-        rowCoverage['voc-task'] = coverageCell(systemCounts.withTask, systemCounts.total);
-        rowCoverage['analytics-area'] = coverageCell(
+        rowCoverage['voc-task'] = cell('voc-task', systemCounts.withTask, systemCounts.total);
+        rowCoverage['analytics-area'] = cell(
+          'analytics-area',
           systemCounts.withAnalyticsArea,
           systemCounts.total,
         );
         rowQueues['unassigned-voc'] = systemCounts.unassigned;
         rowQueues['high-severity-unlinked'] = systemCounts.highNoLink;
-        rowCoverage['high-followup'] = coverageCell(
+        rowCoverage['high-followup'] = cell(
+          'high-followup',
           systemCounts.highSeverity - systemCounts.highNoLink,
           systemCounts.highSeverity,
         );
@@ -417,8 +442,9 @@ export function createDashboardService(deps: DashboardDeps) {
           row.analytics_areas = [...areaCounts].map(([areaId, area]) => ({
             analytics_area_id: areaId,
             coverage: {
-              'voc-task': coverageCell(area.with_task, area.total),
-              'high-followup': coverageCell(
+              'voc-task': cell('voc-task', area.with_task, area.total),
+              'high-followup': cell(
+                'high-followup',
                 area.high_severity - area.high_no_link,
                 area.high_severity,
               ),
@@ -448,7 +474,7 @@ export function createDashboardService(deps: DashboardDeps) {
           ),
         ]);
         rowKpis.active_finding = active;
-        rowCoverage['finding-execution'] = coverageCell(executed, active);
+        rowCoverage['finding-execution'] = cell('finding-execution', executed, active);
         rowQueues['actionable-finding-no-execution'] = noExecution;
       }
 
@@ -464,7 +490,11 @@ export function createDashboardService(deps: DashboardDeps) {
           repo.countReleasedTasksWithPublicUpdate(deps.db, actor.workspace_id, taskScope, systemId),
         ]);
         rowKpis.tasks_in_flight = tasksInFlight;
-        rowCoverage['released-update'] = coverageCell(releasedUpdate.value, releasedUpdate.total);
+        rowCoverage['released-update'] = cell(
+          'released-update',
+          releasedUpdate.value,
+          releasedUpdate.total,
+        );
         rowQueues['released-task-unresolved-voc'] = unresolved;
       }
 

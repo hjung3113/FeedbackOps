@@ -15,7 +15,7 @@ import { Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
+import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   INTEGRATION_DASHBOARD_QUEUE_ORDER,
@@ -75,7 +75,11 @@ export function IntegrationDashboardRoute(): React.ReactElement {
     if (summary.isError) return undefined;
     const coverage = summary.data?.coverage;
     if (coverage === undefined || coverage.length === 0) return undefined;
-    const average = coverage.reduce((total, metric) => total + metric.percent, 0) / coverage.length;
+    // Total-zero metrics are absence of work (no_data), not 0% performance;
+    // the average only covers measured metrics (ADR-0067 56-1/O2).
+    const measured = coverage.filter((metric) => metric.status !== 'no_data');
+    if (measured.length === 0) return undefined;
+    const average = measured.reduce((total, metric) => total + metric.percent, 0) / measured.length;
     return `${Math.round(average)}%`;
   }, [summary.data?.coverage, summary.isError]);
 
@@ -260,15 +264,9 @@ function ManagedSystemOverview({
             const activeFinding = row.kpis?.active_finding;
             const tasksInFlight = row.kpis?.tasks_in_flight;
             const unassigned = row.action_queues?.['unassigned-voc'];
-            const coveragePercent = row.kpis?.coverage_percent;
-            const coverageTone =
-              coveragePercent === undefined
-                ? undefined
-                : coveragePercent > 65
-                  ? COVERAGE_TONE.good
-                  : coveragePercent > 45
-                    ? COVERAGE_TONE.warn
-                    : COVERAGE_TONE.bad;
+            // Consistent Coverage states: tone comes from the server's band
+            // status, not local thresholds; total zero is neutral no_data.
+            const coverageCell = row.coverage?.['voc-task'];
             const name =
               systemNameById.get(row.managed_system_id) ?? row.managed_system_id.slice(0, 8);
             return (
@@ -312,21 +310,25 @@ function ManagedSystemOverview({
                   className="px-3 py-2.5 text-right"
                   data-testid={`integration-managed-system-coverage-${row.managed_system_id}`}
                 >
-                  {coveragePercent === undefined || coverageTone === undefined ? (
+                  {coverageCell === undefined ? (
                     <span className="text-text-secondary">—</span>
+                  ) : coverageCell.status === 'no_data' ? (
+                    <span className="text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
                   ) : (
                     <span className="inline-flex items-center justify-end gap-2">
                       <ProgressMeter
                         clip
                         element="span"
-                        value={coveragePercent}
+                        value={coverageCell.percent}
                         semantics={{ role: 'meter', label: GLOSSARY.coverage }}
-                        tone={coverageTone.meter}
+                        tone={COVERAGE_TONE[coverageCell.status].meter}
                         className="inline-block w-14 align-middle"
                         trackTone="row-hover"
                       />
-                      <span className={`min-w-8 tabular-nums ${coverageTone.text}`}>
-                        {coveragePercent}%
+                      <span
+                        className={`min-w-8 tabular-nums ${COVERAGE_TONE[coverageCell.status].text}`}
+                      >
+                        {coverageCell.percent}%
                       </span>
                     </span>
                   )}

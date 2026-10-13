@@ -26,9 +26,12 @@ import { Activity, AlertTriangle, Filter, RefreshCw, Shield } from 'lucide-react
 import * as React from 'react';
 
 import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
-import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { useMe } from '@/lib/auth/useMe';
+import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { HOME_QUEUE_COPY } from '@/lib/copy/home';
+import { WORKSPACE_SETTINGS_COVERAGE_COPY } from '@/lib/copy/workspace-settings';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { InternalLink } from '@/lib/router/InternalLink';
 
 type ByManagedSystemRow = DashboardSummary['by_managed_system'][number];
@@ -86,24 +89,30 @@ function hopHref(
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
-// Absent key = em dash; a permitted empty result is present with zero.
+// Absent key = em dash; a permitted empty result is present with zero. A
+// total-zero cell is the neutral no-data state (ADR-0067 56-1/O2), not a red 0%.
 function coverageCellText(cell: PerSystemCoverageCell): string {
-  return cell === undefined ? '—' : `${cell.value} / ${cell.total} · ${cell.percent}%`;
+  if (cell === undefined) return '—';
+  return cell.status === 'no_data'
+    ? COVERAGE_NO_DATA_LABEL
+    : `${cell.value} / ${cell.total} · ${cell.percent}%`;
 }
 
 function queueCellText(count: number | undefined): string {
   return count === undefined ? '—' : String(count);
 }
 
-// The server's 75/40 good/warn/bad band maps directly to presentation.
-// No client-side thresholds (plan-513: direction C is out).
+// The server's 75/40 good/warn/bad bands map directly to presentation.
+// No client-side thresholds (plan-513: direction C is out). no_data keeps the
+// row neutral: an empty denominator is absence of work, not a failure color.
 const COVERAGE_STATUS_TONE: Record<
   DashboardSummary['coverage'][number]['status'],
-  { text: string; meter: 'success' | 'warning' | 'danger' }
+  { text: string; meter: 'success' | 'warning' | 'danger' | null }
 > = {
   good: { text: 'text-accent-success', meter: 'success' },
   warn: { text: 'text-accent-warn', meter: 'warning' },
   bad: { text: 'text-accent-danger', meter: 'danger' },
+  no_data: { text: 'text-text-muted', meter: null },
 };
 
 const SEVERITY_TONE: Record<
@@ -129,6 +138,14 @@ const SEVERITY_TONE: Record<
 
 export function CoverageRoute(): React.ReactElement {
   const search = useSearch({ strict: false }) as CoverageSearch;
+  const me = useMe();
+  // FE display hint only (ADR-0067 56-C): the settings route is server-gated by
+  // workspace.admin; the link shows only for an authorized Admin (ADR-0056
+  // capability-based Admin discovery) and stays hidden while the check is
+  // pending, failed, or denied.
+  const isAdmin = me.data?.actor.role_level === 'admin';
+  const workspaceAdminCheck = usePermissionCheck({ capability: 'workspace.admin' });
+  const canAccessWorkspaceAdmin = workspaceAdminCheck.data?.state === 'approved';
   // `from` is what types the search reducer (see LinksRoute: without it the
   // reducer gets the router-wide search union and stops assigning).
   const navigate = useNavigate({ from: '/integration/coverage' });
@@ -209,6 +226,13 @@ export function CoverageRoute(): React.ReactElement {
             <p className="mt-3 text-sm text-text-muted">{PARTIAL_COVERAGE_SUBTITLE}</p>
           </div>
           <div className="flex shrink-0 gap-2">
+            {isAdmin && canAccessWorkspaceAdmin && (
+              <Button asChild variant="subtle" size="sm">
+                <InternalLink href="/admin/settings" data-testid="coverage-settings-link">
+                  {WORKSPACE_SETTINGS_COVERAGE_COPY.editBands}
+                </InternalLink>
+              </Button>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="subtle" size="sm" data-testid="coverage-filter-button">
@@ -297,7 +321,7 @@ export function CoverageRoute(): React.ReactElement {
                     <ProgressMeter
                       data-testid={`coverage-bar-fill-${item.id}`}
                       value={item.percent}
-                      tone={tone.meter}
+                      {...(tone.meter !== null ? { tone: tone.meter } : {})}
                       className="w-full"
                       trackTone="row-selected"
                     />
@@ -305,7 +329,7 @@ export function CoverageRoute(): React.ReactElement {
                       data-testid={`coverage-percent-${item.id}`}
                       className={`text-right text-sm font-semibold tabular-nums ${tone.text}`}
                     >
-                      {item.percent}%
+                      {item.status === 'no_data' ? COVERAGE_NO_DATA_LABEL : `${item.percent}%`}
                     </div>
                   </CoverageRowLink>
                 );

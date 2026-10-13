@@ -1,4 +1,8 @@
-import { listActorsResponseSchema, permissionDecisionResultSchema } from '@fops/shared';
+import {
+  listActorsResponseSchema,
+  permissionDecisionResultSchema,
+  resolveCoverageThresholds,
+} from '@fops/shared';
 import { z } from 'zod';
 
 import type { AdminPermissionRequestRow } from '../../../src/lib/api';
@@ -7,6 +11,7 @@ import { adminSettingsFixtureSchema } from './admin-settings';
 // The permission-review visual scenario needs self-approval to remain decidable.
 // Admin-settings scenarios retain their explicit forbidden fixture instead.
 export const permissionSettingsFixture = adminSettingsFixtureSchema.parse({
+  coverage_thresholds: resolveCoverageThresholds(),
   permission_self_approval: 'allowed',
   survey_anonymity_threshold: 9,
 });

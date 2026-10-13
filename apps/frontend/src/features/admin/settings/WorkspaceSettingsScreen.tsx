@@ -1,5 +1,10 @@
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
+import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import {
+  WORKSPACE_SETTINGS_COVERAGE_COPY,
+  coverageBandFieldLabel,
+} from '@/lib/copy/workspace-settings';
 
 import {
   Button,
@@ -15,6 +20,13 @@ import {
 } from '@fops/ui';
 import { AlertTriangle, Check, LockKeyhole } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+
+import {
+  COVERAGE_METRIC_IDS,
+  type CoverageMetricId,
+  type CoverageThresholdPair,
+  type CoverageThresholds,
+} from '@fops/shared';
 
 import {
   type PermissionSelfApproval,
@@ -76,6 +88,7 @@ const subtitle =
   '권한 정책 · 익명성 임계값 · Managed System 간 연결 정책 등 워크스페이스 전역 동작을 정하는 설정입니다.';
 
 const settingLabels: Record<EditableKey, string> = {
+  coverage_thresholds: WORKSPACE_SETTINGS_COVERAGE_COPY.sectionTitle,
   permission_self_approval: '권한 요청 직접 승인',
   survey_anonymity_threshold: '익명성 임계값',
 };
@@ -91,11 +104,46 @@ function changedFields(
   if (saved.survey_anonymity_threshold !== draft.survey_anonymity_threshold) {
     patch.survey_anonymity_threshold = draft.survey_anonymity_threshold;
   }
+  const coverage = changedCoveragePairs(saved.coverage_thresholds, draft.coverage_thresholds);
+  if (coverage !== undefined) {
+    patch.coverage_thresholds = coverage;
+  }
   return patch;
+}
+
+// Only metric pairs that actually differ are sent; the server merges the
+// partial map under the singleton lock and audits effective from/to changes.
+function changedCoveragePairs(
+  saved: CoverageThresholds,
+  draft: CoverageThresholds,
+): UpdateWorkspaceSettings['coverage_thresholds'] {
+  const patch: Partial<CoverageThresholds> = {};
+  for (const metric of COVERAGE_METRIC_IDS) {
+    const before = saved[metric];
+    const after = draft[metric];
+    if (
+      before.good_min_percent !== after.good_min_percent ||
+      before.warn_min_percent !== after.warn_min_percent
+    ) {
+      patch[metric] = after;
+    }
+  }
+  return Object.keys(patch).length > 0 ? patch : undefined;
 }
 
 function isThresholdValid(value: number): boolean {
   return Number.isInteger(value) && value >= 5 && value <= 50;
+}
+
+// Mirrors coverageThresholdPairSchema: integer 0 <= warn < good <= 100.
+function isCoveragePairValid(pair: CoverageThresholdPair): boolean {
+  return (
+    Number.isInteger(pair.good_min_percent) &&
+    Number.isInteger(pair.warn_min_percent) &&
+    pair.warn_min_percent >= 0 &&
+    pair.warn_min_percent < pair.good_min_percent &&
+    pair.good_min_percent <= 100
+  );
 }
 
 export function WorkspaceSettingsScreen() {
@@ -132,7 +180,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const updateMutation = useUpdateWorkspaceSettings();
   const [saved, setSaved] = useState(initialSettings);
   const [draft, setDraft] = useState(initialSettings);
-  const [editing, setEditing] = useState<EditableKey | null>(null);
+  const [editing, setEditing] = useState<EditableKey | CoverageMetricId | null>(null);
 
   useEffect(() => {
     setSaved(initialSettings);
@@ -142,7 +190,11 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const patch = changedFields(saved, draft);
   const dirtyKeys = Object.keys(patch) as EditableKey[];
   const thresholdValid = isThresholdValid(draft.survey_anonymity_threshold);
-  const canSave = dirtyKeys.length > 0 && thresholdValid && !updateMutation.isPending;
+  const coverageValid = COVERAGE_METRIC_IDS.every((metric) =>
+    isCoveragePairValid(draft.coverage_thresholds[metric]),
+  );
+  const canSave =
+    dirtyKeys.length > 0 && thresholdValid && coverageValid && !updateMutation.isPending;
   const selfApprovalDirty = dirtyKeys.includes('permission_self_approval');
   const selfApprovalWarningTitle =
     draft.permission_self_approval === 'forbidden'
@@ -243,6 +295,37 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           />
           {lockedSurveySettings.map((setting) => (
             <LockedRow key={setting.label} {...setting} last />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <PanelSectionTitle>{WORKSPACE_SETTINGS_COVERAGE_COPY.sectionTitle}</PanelSectionTitle>
+        <p className="mb-2 text-xs text-text-muted">
+          {WORKSPACE_SETTINGS_COVERAGE_COPY.sectionDescription}
+        </p>
+        <div className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
+          {COVERAGE_METRIC_IDS.map((metric, index) => (
+            <CoverageBandRow
+              key={metric}
+              metric={metric}
+              editing={editing === metric}
+              isDirty={
+                saved.coverage_thresholds[metric].good_min_percent !==
+                  draft.coverage_thresholds[metric].good_min_percent ||
+                saved.coverage_thresholds[metric].warn_min_percent !==
+                  draft.coverage_thresholds[metric].warn_min_percent
+              }
+              value={draft.coverage_thresholds[metric]}
+              savedValue={saved.coverage_thresholds[metric]}
+              valid={isCoveragePairValid(draft.coverage_thresholds[metric])}
+              onChange={(pair) =>
+                updateDraft('coverage_thresholds', { ...draft.coverage_thresholds, [metric]: pair })
+              }
+              onEdit={() => setEditing(metric)}
+              onDone={() => setEditing(null)}
+              last={index === COVERAGE_METRIC_IDS.length - 1}
+            />
           ))}
         </div>
       </section>
@@ -434,6 +517,88 @@ function EditableThresholdRow({
           </>
         ) : (
           <span className="text-sm font-medium text-text-primary">응답 {value}건</span>
+        )}
+      </div>
+      <div className="flex h-5 items-center justify-end">
+        <Button variant="secondary" size="sm" onClick={editing ? onDone : onEdit}>
+          {editing ? '완료' : GLOSSARY.edit}
+        </Button>
+      </div>
+    </SettingRow>
+  );
+}
+
+function CoverageBandRow({
+  metric,
+  editing,
+  isDirty,
+  value,
+  savedValue,
+  valid,
+  onChange,
+  onEdit,
+  onDone,
+  last,
+}: {
+  metric: CoverageMetricId;
+  editing: boolean;
+  isDirty: boolean;
+  value: CoverageThresholdPair;
+  savedValue: CoverageThresholdPair;
+  valid: boolean;
+  onChange: (pair: CoverageThresholdPair) => void;
+  onEdit: () => void;
+  onDone: () => void;
+  last: boolean;
+}) {
+  return (
+    <SettingRow
+      label={COVERAGE_METRIC_LABELS[metric]}
+      description={WORKSPACE_SETTINGS_COVERAGE_COPY.rowDescription}
+      dirty={isDirty}
+      previousValue={WORKSPACE_SETTINGS_COVERAGE_COPY.savedPair(savedValue)}
+      last={last}
+    >
+      <div className="text-right">
+        {editing ? (
+          <>
+            <div className="flex items-center justify-end gap-2">
+              <Input
+                aria-label={coverageBandFieldLabel(metric, 'good')}
+                data-testid={`coverage-band-good-${metric}`}
+                type="number"
+                min={1}
+                max={100}
+                value={Number.isNaN(value.good_min_percent) ? '' : value.good_min_percent}
+                onChange={(event) =>
+                  onChange({ ...value, good_min_percent: Number(event.target.value) })
+                }
+              />
+              <Input
+                aria-label={coverageBandFieldLabel(metric, 'warn')}
+                data-testid={`coverage-band-warn-${metric}`}
+                type="number"
+                min={0}
+                max={99}
+                value={Number.isNaN(value.warn_min_percent) ? '' : value.warn_min_percent}
+                onChange={(event) =>
+                  onChange({ ...value, warn_min_percent: Number(event.target.value) })
+                }
+              />
+            </div>
+            <p
+              className={valid ? 'mt-1 text-xs text-text-muted' : 'mt-1 text-xs text-accent-danger'}
+            >
+              {WORKSPACE_SETTINGS_COVERAGE_COPY.invalidReason}
+            </p>
+          </>
+        ) : (
+          <span
+            className="text-sm font-medium text-text-primary"
+            data-testid={`coverage-band-value-${metric}`}
+          >
+            {WORKSPACE_SETTINGS_COVERAGE_COPY.savedPair(value)}
+          </span>
         )}
       </div>
       <div className="flex h-5 items-center justify-end">

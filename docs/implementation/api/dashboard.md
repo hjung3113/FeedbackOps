@@ -53,11 +53,13 @@ snapshot. Home, Coverage and Integration show the last successful timestamp and 
 an honest stale/error state on refetch failure. Summary remains bounded and operational;
 item details/history are fetched separately.
 
-Read resolved Coverage settings once per summary. Apply each metric's good/warn pair to
+The BE Coverage contract (#1087) reads resolved settings once per summary. Apply each metric's good/warn pair to
 roll-up/system/area cells with current rounding: good >= good cutoff, warn >= warn cutoff,
-otherwise bad. Total zero keeps value=0/total=0/percent=0 and proposed/new `status=no_data`,
+otherwise bad. Total zero keeps value=0/total=0/percent=0 and `status=no_data`,
 neutral `집계 대상 없음`. Permission-unavailable keys remain absent/`—`. Default pairs are
-75/40; exactly the five emitted metrics are editable in `/admin/settings`. Ratios,
+75/40; the five-pair `/admin/settings` editor and the neutral rendered consumers
+(Home rows, Coverage roll-up/cells, Integration system column and measured-only average)
+shipped with #1088 in the same PR as this contract. Ratios,
 released-update's non-skipped predicate, queue membership, and anonymity do not change.
 
 ## Recovery queue, detail, presentation and history (proposed/new, ADR-0067)

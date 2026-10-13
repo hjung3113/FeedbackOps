@@ -55,14 +55,17 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Direct workspace.admin grants require explicit governance mode/confirmation; self grants follow permission_self_approval. Server scope candidates, required reason, open-ask review and explicit deny-lift guidance are authoritative. Capability grants never imply Role Level promotion.
 - No client scores, email or restricted source text. Zero risk signals are shown only after successful calculation.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; Coverage editor shipped #1088, defaults pending)
 
-- ADR-0067 adds proposed/new five Coverage pair settings (75/40 defaults) and distinct
-  Managed System reviewer Actor/team defaults (#1089 implements registry/storage; creation
-  routing remains #1090/#1091). Respect server gates, audit and no-op semantics.
-- Invalidate all Dashboard summary scopes after save; failed refetch must not show stale bands
-  as current. Surface safe automatic-default configuration warnings. Known teams may render;
-  no team CRUD/candidate listing or automatic reassignment is introduced.
+- Shipped (#1088): the five Coverage band rows at `/admin/settings` (75/40 defaults,
+  integer `0 <= warn < good <= 100` validation, save/discard/error/retry) and all-scope
+  `dashboard-summary` invalidation after save; on a failed refetch Home and Coverage keep
+  cached rows under an explicit error indication, while Integration shows its own explicit
+  error state (system overview hidden, average stat omitted). Distinct Managed System
+  reviewer Actor/team defaults are registry/storage in #1089; creation routing remains
+  #1090/#1091. Respect server gates, audit and no-op semantics.
+- Surface safe automatic-default configuration warnings. Known teams may render; no team
+  CRUD/candidate listing or automatic reassignment is introduced.
 
 ## Suggestion opt-in (ADR-0068; proposed/new)
 

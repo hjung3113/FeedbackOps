@@ -31,7 +31,8 @@ Dashboard is not a passive reporting helper.
   pg-boss discovers/reconciles drift without invented action time. No source resolution writes.
 - Personal 1-day/7-day snooze/current-occurrence mute never changes counts; reopen resets hiding.
 - Outcome response presentation/history remains Survey-owned/personal-gated under ADR-0055.
-- Coverage reads resolved five metric pairs once; proposed `no_data` differs from absent keys.
+- Coverage (#1087) reads resolved five metric pairs once; `no_data` differs from absent keys.
+  Rendered consumer compatibility is #1088-owned; deliver atomically.
   Measure bounded API/UI and recorder fanout against ADR-0067's budget.
 
 ## Analytics Area report (ADR-0069; accepted, implementation pending)

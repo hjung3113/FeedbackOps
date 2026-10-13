@@ -26,7 +26,7 @@ import {
 } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
-import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
+import { COVERAGE_METRIC_LABELS, COVERAGE_NO_DATA_LABEL } from '@/lib/copy/coverage';
 import { TASK_REQUEST_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import {
   HOME_COPY,
@@ -423,21 +423,29 @@ function CoverageMetricRow({
   item,
   href,
 }: { item: DashboardSummary['coverage'][number]; href: string | undefined }): React.ReactElement {
+  // ADR-0067 56-1/O2: total zero is neutral 집계 대상 없음, not a green 0/0 · 0%.
+  const noData = item.status === 'no_data';
   const body = (
     <>
       <div className="flex justify-between gap-2 text-xs">
         <span className="text-text-primary">{COVERAGE_METRIC_LABELS[item.id]}</span>
-        <span className="shrink-0 tabular-nums text-text-muted">
-          {item.value} / {item.total} · {item.percent}%
-        </span>
+        {noData ? (
+          <span className="shrink-0 text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
+        ) : (
+          <span className="shrink-0 tabular-nums text-text-muted">
+            {item.value} / {item.total} · {item.percent}%
+          </span>
+        )}
       </div>
-      <ProgressMeter
-        value={item.percent}
-        size="thin"
-        tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
-        className="mt-2 w-full"
-        trackTone="row-selected"
-      />
+      {!noData && (
+        <ProgressMeter
+          value={item.percent}
+          size="thin"
+          tone={item.status === 'bad' ? 'danger' : item.status === 'warn' ? 'warning' : 'success'}
+          className="mt-2 w-full"
+          trackTone="row-selected"
+        />
+      )}
     </>
   );
   return href === undefined ? (

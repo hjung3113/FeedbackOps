@@ -260,6 +260,24 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
+  it('renders total-zero coverage as the neutral no_data state', async () => {
+    const coverage = [
+      { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+      { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+    ] as const;
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage }));
+    renderHome();
+
+    // ADR-0067 56-1/O2: an empty denominator is neutral absence of work, not a
+    // green 0/0 · 0%; measured metrics keep their ratio presentation.
+    const row = await screen.findByTestId('home-coverage-row-voc-task');
+    expect(row.textContent).toContain('집계 대상 없음');
+    expect(row.textContent).not.toContain('0 / 0');
+    expect(row.textContent).not.toContain('0%');
+    const measured = screen.getByTestId('home-coverage-row-finding-execution');
+    expect(measured.textContent).toContain('1 / 2 · 50%');
+  });
+
   it('links coverage rows to the shared one-hop routes', async () => {
     const coverage = [
       { id: 'voc-task', value: 2, total: 3, percent: 67, status: 'warn' },
@@ -608,7 +626,9 @@ describe('HomeScreen route content', () => {
 
     await screen.findByTestId('home-inbox-list');
     expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'),
+    );
   });
 
   it('caps the Inbox tab badge and hides it after its count refetch fails', async () => {

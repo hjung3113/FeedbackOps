@@ -31,13 +31,21 @@ caller receives `permission.denied` → `403`. The resolved response is always:
 ```json
 {
   "permission_self_approval": "allowed | forbidden",
-  "survey_anonymity_threshold": 5
+  "survey_anonymity_threshold": 5,
+  "coverage_thresholds": {
+    "voc-task": { "good_min_percent": 75, "warn_min_percent": 40 },
+    "finding-execution": { "good_min_percent": 75, "warn_min_percent": 40 },
+    "high-followup": { "good_min_percent": 75, "warn_min_percent": 40 },
+    "released-update": { "good_min_percent": 75, "warn_min_percent": 40 },
+    "analytics-area": { "good_min_percent": 75, "warn_min_percent": 40 }
+  }
 }
 ```
 
 When no `core.workspace_settings` row exists, GET returns the baseline defaults
-`{ "permission_self_approval": "allowed", "survey_anonymity_threshold": 5 }`.
-PATCH accepts a strict, non-empty partial of those two snake_case fields;
+`permission_self_approval=allowed`, `survey_anonymity_threshold=5`, and all five
+Coverage pairs at 75/40.
+PATCH accepts a strict, non-empty partial of those snake_case fields;
 `survey_anonymity_threshold` is an integer from 5 through 50. It creates and
 locks the workspace singleton in one transaction, updates only supplied
 effective changes, and returns the complete resolved settings. An effective
@@ -58,11 +66,11 @@ lists yield empty arrays. Response:
 }
 ```
 
-## Close-out settings and registry inputs (ADR-0067; implementation pending)
+## Close-out settings and registry inputs (ADR-0067; settings editor shipped #1088, registry inputs pending)
 
-The response/body examples above describe shipped fields. The accepted extension adds
-proposed/new `coverage_thresholds` to the full resolved settings response and strict
-nonempty partial PATCH. Its exact metric IDs and pairs are in
+The BE contract includes `coverage_thresholds` in the full resolved settings response and
+strict nonempty partial PATCH (#1087). The Settings editor and rendered consumer compatibility
+ship with #1088 in the same PR as #1087 so `no_data` is never exposed unhandled. Its exact metric IDs and pairs are in
 `docs/design/15-data-contracts.md`; unknown/reserved IDs, incomplete pairs, nonintegers,
 and cutoffs outside `0 <= warn < good <= 100` reject `validation.failed` without writes.
 Missing rows/keys resolve every pair to 75/40. Labels follow the shipped metric names;
@@ -73,8 +81,12 @@ merges supplied complete pairs under the existing singleton lock, preserves unre
 settings, and returns every effective pair. `workspace_settings_updated.detail.changes`
 adds per-metric effective `{ from, to }` pairs, once for changes and none for no-op.
 Bands only change presentation; ratios, queues, links, severity and anonymity are untouched.
-The Admin editor at `/admin/settings` validates/save/discard/error/retry and invalidates
-all `dashboard-summary` scopes on save; failed refetch must show stale/error state.
+The Admin editor (#1088) at `/admin/settings` renders the five labeled pairs, validates
+`0 <= warn < good <= 100` integers before save, supports save/discard/error/retry, invalidates
+all `dashboard-summary` scopes on save, and Coverage offers an authorized Admin the jump to it.
+On a failed summary refetch, Home and Coverage keep their cached rows under an explicit error
+indication, while Integration hides its Managed System overview, omits its average-coverage
+stat, and shows its explicit error (or permission-blocked) state instead of stale cells.
 
 Managed System POST/PATCH/read includes nullable `default_reviewer_actor_id` /
 `default_reviewer_team_id`, independent of owner and Survey operator. Each pair is
