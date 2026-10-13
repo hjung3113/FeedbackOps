@@ -179,6 +179,8 @@ Finding 상태는 `draft` → `active` → `converted`(실행으로 넘어감) �
 
 Finding 상세에서 **근거를 더 붙이거나**(Evidence 추가 / 기존 Evidence 연결) **연결된 VOC·Task로 바로 이동**할 수 있습니다.
 
+이미 저장한 근거를 찾을 때는 **Integration → Evidence** (`/integration/evidence`)를 엽니다. Admin 또는 Finding을 읽을 수 있는 범위의 Developer가 인용문, 출처의 안전한 정보, 부모 Finding 이름으로 검색할 수 있습니다. 출처와 Managed System 범위를 선택하고 행을 열면 상세가 표시됩니다. **Finding 보기**로 부모 Finding을 열고 뒤로 가면 검색 조건과 선택을 복원합니다. 원본 권한이나 승인이 사라진 내용은 가려집니다. Evidence 화면은 읽기 전용이며 추가·수정은 Finding 상세에서 합니다.
+
 > **신뢰도를 낮게 적는 걸 두려워하지 마세요.** `low`로 적힌 Finding은 "더 봐야 한다"는 정직한 신호이고, 나중에 근거가 쌓이면 올리면 됩니다.
 
 ---

@@ -11,11 +11,12 @@ import {
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
-import { Layers, Link2, RefreshCw } from 'lucide-react';
+import { FileText, Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
+import { EVIDENCE_COPY } from '@/lib/copy/evidence';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import {
   INTEGRATION_DASHBOARD_QUEUE_ORDER,
@@ -182,7 +183,14 @@ export function IntegrationDashboardRoute(): React.ReactElement {
 
         <div className="mb-9" data-testid="integration-surfaces">
           <PanelSectionTitle>연동 화면</PanelSectionTitle>
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+            <IntegrationJumpCard
+              href={`/integration/evidence${surfaceScopeSearch}`}
+              title={EVIDENCE_COPY.title}
+              description={EVIDENCE_COPY.description}
+              icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+              testId="integration-surface-evidence"
+            />
             <IntegrationJumpCard
               href={`/integration/coverage${surfaceScopeSearch}`}
               title={GLOSSARY.coverage}

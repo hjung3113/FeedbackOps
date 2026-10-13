@@ -33,6 +33,7 @@ describe('document screen titles', () => {
     ['/integration', {}, DOCUMENT_TITLE_COPY.integration.dashboard],
     ['/integration/coverage', {}, DOCUMENT_TITLE_COPY.integration.coverage],
     ['/integration/links', {}, DOCUMENT_TITLE_COPY.integration.links],
+    ['/integration/evidence', {}, 'Evidence'],
     ['/surveys', {}, DOCUMENT_TITLE_COPY.surveys.list],
     ['/surveys/survey-1', {}, DOCUMENT_TITLE_COPY.surveys.detail],
     ['/surveys/survey-1/results', {}, DOCUMENT_TITLE_COPY.surveys.results],

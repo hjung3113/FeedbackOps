@@ -12,6 +12,7 @@ import { createPermissionContextHandlers } from './mock-api/access';
 import { createAdminMutationHandlers, createWorkspaceSettingHandlers } from './mock-api/admin';
 import { createCommonHandlers, createDefaultActorHandlers } from './mock-api/common';
 import { createDashboardHandlers } from './mock-api/dashboard';
+import { createEvidenceHandlers } from './mock-api/evidence';
 import { createCommentHandlers, createFindingListFallbackHandlers } from './mock-api/fallback';
 import { createFindingHandlers } from './mock-api/finding';
 import { createHomeRequestHandlers } from './mock-api/home';
@@ -94,6 +95,7 @@ export async function installMockApi(
     ...createVocHandlers(context),
     ...createPermissionContextHandlers(),
     ...createFindingHandlers(context),
+    ...createEvidenceHandlers(context),
     ...createSurveyActorHandlers(context),
     ...createDefaultActorHandlers(),
     ...createAdminMutationHandlers(context),

@@ -174,6 +174,13 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       icon: <Activity className="h-4 w-4" />,
     },
     { id: 'integration-findings', label: 'Findings', href: '/findings', section: '연동', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
+    {
+      id: 'integration-evidence',
+      label: 'Evidence',
+      href: '/integration/evidence',
+      section: '연동',
+      icon: <FileBarChart className="h-4 w-4" />,
+    },
     { id: 'integration-links', label: GLOSSARY.entityLinks, href: '/integration/links', section: '연동', icon: <Link2 className="h-4 w-4" /> },
     { id: 'integration-coverage', label: GLOSSARY.coverage, href: '/integration/coverage', section: '연동', icon: <Layers className="h-4 w-4" /> },
   ],
@@ -396,9 +403,12 @@ function AuthedShell() {
         to: location.pathname as never,
         search: (previous: Record<string, unknown>) => {
           const { managedSystem: _managedSystem, ...remaining } = previous;
+          // Evidence cursors are bound to scope; keep selection for safe-detail reconciliation.
+          const { cursor: _cursor, ...withoutCursor } = remaining;
+          const scopedSearch = location.pathname === '/integration/evidence' ? withoutCursor : remaining;
           return managedSystemId === undefined
-            ? remaining
-            : { ...remaining, managedSystem: managedSystemId };
+            ? scopedSearch
+            : { ...scopedSearch, managedSystem: managedSystemId };
         },
       } as never);
     },

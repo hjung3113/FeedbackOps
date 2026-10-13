@@ -17,6 +17,11 @@ test.describe('/integration action dashboard visual harness', () => {
     await expect(page.getByRole('heading', { level: 1, name: '연동 액션 대시보드' })).toBeVisible();
     await expect(page.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     await expect(page.getByTestId('integration-managed-system-table')).toBeVisible();
+    await expect(page.getByTestId('integration-surface-evidence')).toHaveAttribute(
+      'href',
+      '/integration/evidence',
+    );
+    await expect(page.getByTestId('sidebar-nav-integration-evidence')).toBeVisible();
     await expect(page.getByTestId('sidebar-nav-integration-dashboard')).toHaveAttribute(
       'aria-current',
       'page',
