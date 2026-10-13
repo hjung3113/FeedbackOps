@@ -1,3 +1,4 @@
+import { RecoveryFreshness } from '@/features/integration/public';
 import {
   DASHBOARD_HOP_ROUTES,
   type DashboardSummary,
@@ -59,10 +60,12 @@ export function HomeScreen({
   managedSystemId,
   activeTab = 'dashboard',
   onTabChange,
+  recovery,
 }: {
   managedSystemId?: string;
   activeTab?: HomeTab;
   onTabChange?: (tab: HomeTab) => void;
+  recovery?: { queue: React.ReactNode; detailPanel: React.ReactNode };
 }): React.ReactElement {
   const me = useMe();
   const queryClient = useQueryClient();
@@ -121,7 +124,7 @@ export function HomeScreen({
         if (value === 'dashboard' || value === 'inbox') onTabChange?.(value);
       }}
     >
-      <PageShell contentClassName="max-w-none">
+      <PageShell contentClassName="max-w-none" detailPanel={activeTab === 'dashboard' ? recovery?.detailPanel : undefined}>
         <section data-testid="home-screen">
           <header className="mb-6 flex items-start justify-between gap-4">
             <div>
@@ -145,6 +148,13 @@ export function HomeScreen({
               </Button>
             </div>
           </header>
+          {activeTab === 'dashboard' && (
+            <RecoveryFreshness
+              computedAt={summary.data?.computed_at}
+              failed={summary.isError}
+              updatedAt={summary.dataUpdatedAt}
+            />
+          )}
           <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
             {/* oxlint-disable-next-line shadcn/no-restyle -- the Inbox tab keeps an 8px gap before its unread-count badge */}
@@ -184,6 +194,7 @@ export function HomeScreen({
             <div className="mt-9">
               <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
             </div>
+            {recovery?.queue}
             <div className="mt-9">
               <AnswerableSurveysPanel />
             </div>

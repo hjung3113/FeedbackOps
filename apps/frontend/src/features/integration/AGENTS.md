@@ -55,16 +55,17 @@ Code ownership and URL mount are not the same thing here:
 
 - Test missing-link queue behavior, coverage labels, link visibility states, and deep-link action restore when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; 56-I implemented)
 
-- ADR-0067 accepts proposed/new shared compact recovery UI/public seam for Home. Integration
+- ADR-0067 recovery composition lives in `recovery/`; `public.ts` exposes it to Home. Integration
   owns recovery composition, source routes own full workflows. Existing three shells remain.
 - Scope/category/selection/hidden/history/return intent restores via URL; readable resolved
   selection stays open. Render backend actions/visibility/hints without response identity leaks.
 - Offer personal snooze (1/7 days), current-occurrence mute, hidden view/restore; refresh shared
   queries after source repairs.
 - Shipped (#1088): Coverage renders server bands and the neutral `no_data` state — no local
-  rules. Server `computed_at` display (56-I) remains pending.
+  rules. Server `computed_at`, last successful refresh and stale display are implemented on
+  Coverage, Home and Integration; queue/detail clocks are independent.
 
 ## Analytics Area report (ADR-0069; accepted, implementation pending)
 

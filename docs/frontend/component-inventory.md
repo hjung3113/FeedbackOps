@@ -250,3 +250,17 @@ disabled while loading, and offers retry after a next-page failure without
 replacing loaded rows or counts. Copy reuses `HOME_INBOX_COPY`'s load-more,
 loading and retry strings. Ordinary Button keyboard focus remains available;
 permission-blocked and initial-error screens do not render the control.
+
+
+### Recovery composition (Integration-owned, ADR-0067)
+
+| Component/seam | Location | Contract |
+| --- | --- | --- |
+| `useRecoveryQueue` | `apps/frontend/src/features/integration/recovery/useRecoveryQueue.tsx` | ObjectRow/ListToolbar/ListLoadMore composition; bounded operational/actionable reads, hidden/history tabs and URL selection. |
+| `RecoveryPanel` | `apps/frontend/src/features/integration/recovery/RecoveryPanel.tsx` | Existing PageShell detail slot; backend safe summaries/actions, personal presentation, independent loading/error/resolved states and keyboard close/focus. |
+| `RecoveryFreshness` | `apps/frontend/src/features/integration/recovery/RecoveryFreshness.tsx` | One line for server computation time, last successful refresh and stale marker; queue/detail suppress matching page timestamps unless stale. `formatRecoveryTime` also formats resolution and snooze timestamps. Shared by Home, Integration and Coverage. |
+| Integration public seam | `apps/frontend/src/features/integration/public.ts` | Home consumes recovery composition/freshness only through this module; Home/Integration routes inject `RenderRecoveryAccess` so Integration internals remain Admin-free. |
+| Recovery invalidation | `apps/frontend/src/lib/query/recovery.ts` | Neutral recovery/summary query prefixes; presentation also refreshes owning source caches. Source mutation hooks own their source invalidation. |
+
+The host retains PageShell ownership. Inbox unregisters Home's slot, resolved selections
+stay readable, and late personal PATCH completion cannot close a newer selection.

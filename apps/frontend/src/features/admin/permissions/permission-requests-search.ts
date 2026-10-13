@@ -1,4 +1,5 @@
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { z } from 'zod';
 
@@ -7,6 +8,7 @@ import { z } from 'zod';
 // `pending` is the default tab and omitted from the URL.
 export const permissionRequestsSearchSchema = z
   .object({
+    returnTo: recoverySearchFields.returnTo,
     tab: z.enum(['needs_more_info', 'approved', 'rejected', 'all']).optional(),
     selected: z.string().uuid().optional(),
   })

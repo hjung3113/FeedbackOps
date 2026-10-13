@@ -8,6 +8,7 @@ import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { DirtyConfirmation, EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import {
@@ -20,7 +21,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
-const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
+const searchSchema = z
+  .object({ builder: z.boolean().optional(), returnTo: recoverySearchFields.returnTo })
+  .strict();
 
 export function validateSurveyDetailSearch(raw: unknown) {
   return parseRouteSearch(searchSchema, raw);

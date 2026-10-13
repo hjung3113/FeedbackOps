@@ -176,7 +176,7 @@ If it does, implement:
 - dashboard recovery signal when the next step is missing
 ```
 
-## Close-out routing and recovery (ADR-0067; backend G/H implemented, UI I pending)
+## Close-out routing and recovery (ADR-0067; backend G/H and UI I implemented)
 
 VOC, every Finding source, all three Task Request sources, and approved-request Task
 conversion resolve source-owned responsibility atomically with links/audit/idempotency.

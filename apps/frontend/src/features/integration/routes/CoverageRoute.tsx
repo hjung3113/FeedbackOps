@@ -24,6 +24,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Activity, AlertTriangle, Filter, RefreshCw, Shield } from 'lucide-react';
 import * as React from 'react';
+import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
 
 import { fetchAnalyticsAreas, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
@@ -268,6 +269,11 @@ export function CoverageRoute(): React.ReactElement {
             </Button>
           </div>
         </header>
+        <RecoveryFreshness
+          computedAt={summary.data?.computed_at}
+          failed={summary.isError}
+          updatedAt={summary.dataUpdatedAt}
+        />
         {summary.isError && (
           <p className="mb-5 text-sm text-accent-danger">커버리지 요약을 불러올 수 없습니다.</p>
         )}

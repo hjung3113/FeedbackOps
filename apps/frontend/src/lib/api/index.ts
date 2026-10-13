@@ -14,3 +14,5 @@ export * from './nav';
 export * from './saved-views';
 export * from './dashboard';
 export * from './notifications';
+
+export * from './recovery';

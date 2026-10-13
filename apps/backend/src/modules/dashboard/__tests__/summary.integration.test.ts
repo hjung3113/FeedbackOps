@@ -1397,6 +1397,31 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       );
       expect(page.total, category).toBe(queue(summary, category)?.count);
       expect(page.items).toHaveLength(page.total);
+      for (const item of page.items) {
+        const source = required(item.source);
+        const routes = {
+          voc: `/vocs?selected=${source.id}`,
+          task: `/tasks?param=${source.id}`,
+          finding: `/findings?selected=${source.id}`,
+          permission_request: `/admin/permissions/requests?selected=${source.id}`,
+          survey: `/surveys/${source.id}/follow-up`,
+        };
+        expect(source.route).toBe(routes[source.type]);
+        for (const action of item.next_actions) {
+          if (action.target.intent === 'triage') {
+            expect(action.target.route).toBe(
+              `/vocs?selected=${action.target.source_id}&view=triage&managedSystem=${item.managed_system_id}`,
+            );
+          } else if (action.target.source_type === source.type) {
+            expect(action.target.route).toBe(source.route);
+          } else if (action.target.intent === 'write_public_update') {
+            expect(action.target.route).toBe(`/vocs?selected=${action.target.source_id}`);
+          }
+        }
+        for (const affected of item.affected) {
+          expect(affected.route).toBe(`/vocs?selected=${affected.id}`);
+        }
+      }
       expect(new Set(page.items.map((item) => item.recovery_item_id)).size).toBe(page.total);
     }
     const surveys = await recoveryList(
@@ -1406,6 +1431,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(queue(summary, 'bad-outcome-no-followup')?.count).toBe(4);
     expect(surveys.total).toBe(1);
     expect(surveys.items[0]?.source?.type).toBe('survey');
+    expect(surveys.items[0]?.source?.route).toBe(`/surveys/${surveys.items[0]?.source?.id}/follow-up`);
     expect(surveys.items[0]?.next_actions).toEqual([]); // Admin has no personal grant.
     expect(JSON.stringify(surveys)).not.toMatch(
       /response_id|answer_value|respondent|response_count/,

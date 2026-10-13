@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; shared frontend navigation (56-I) remains pending. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; 56-I implements Integration-owned shared frontend navigation, personal presentation/history and independent freshness on Home, Integration and Coverage. Desktop-1440 visual baselines and the ~5k scale measurement (`recovery-scale.integration.test.ts`, opt-in `RECOVERY_SCALE=1`) were verified at delivery; every warm summary/list/detail/history p95 stayed within §4's 500 ms budget. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
@@ -391,7 +391,7 @@ fail closed, and generic holder/non-holder reads disclose no personal responses 
 Wire format, compatibility and action fields: `docs/implementation/api/dashboard.md`.
 
 The following occurrence/presentation/history capabilities are 56-H backend behavior; the
-rendered navigation, hiding controls and computation-time display are 56-I work.
+rendered navigation, hiding controls and computation-time display are implemented by 56-I through `features/integration/public.ts`. Source workflows retain mutation ownership; successful repairs refresh the shared recovery and summary queries.
 
 The six emitted queue IDs/grains are `unassigned-voc` (VOC), `high-severity-unlinked`
 (VOC), `actionable-finding-no-execution` (Finding), `released-task-unresolved-voc`
@@ -418,9 +418,9 @@ presentation/history stays Survey-owned behind personal access; non-holders only
 aggregate count and Survey-level safe navigation/booleans, never response-derived identities.
 
 Coverage has five Admin-editable 75/40 default pairs; empty denominator is neutral
-`집계 대상 없음` (`no_data`, proposed/new), whereas unreadable metrics stay omitted.
+`집계 대상 없음` (`no_data`), whereas unreadable metrics stay omitted.
 Changing colors does not change ratios, queues or anonymity. Show last successful server
-`computed_at` (proposed/new) on Home/Coverage/Integration, including failed refresh states.
+`computed_at` on Home/Coverage/Integration, including failed refresh states.
 Warm summary/list/detail p95 <=500ms and summary p95 <=develop ×1.2+50ms on the same
 5k-VOC/5k-Task throwaway dataset; UI criteria and mutation-fanout measurements are locked
-in ADR-0067. No performance check has run as part of this docs decision.
+in ADR-0067. FE implementation does not establish these budgets: the separate scale worker and conductor own API/fanout measurement, rendered review and the visual harness.

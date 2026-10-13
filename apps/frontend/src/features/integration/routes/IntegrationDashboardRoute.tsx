@@ -1,5 +1,6 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
+import { useMe } from '@/lib/auth/useMe';
 import type { DashboardSummary } from '@fops/shared';
 import {
   Button,
@@ -13,6 +14,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import { FileText, Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
+import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
+import type { RenderRecoveryAccess } from '../recovery/RecoveryPanel';
+import { useRecoveryQueue } from '../recovery/useRecoveryQueue';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
@@ -37,7 +41,11 @@ function isPermissionError(error: unknown): boolean {
   );
 }
 
-export function IntegrationDashboardRoute(): React.ReactElement {
+export function IntegrationDashboardRoute({
+  renderRequestAccess,
+}: { renderRequestAccess?: RenderRecoveryAccess } = {}): React.ReactElement {
+  const recovery = useRecoveryQueue('operational', true, renderRequestAccess);
+  const me = useMe();
   const search = useSearch({ strict: false }) as IntegrationDashboardSearch;
   const managedSystem = search.managedSystem;
   const managedSystemId =
@@ -98,13 +106,15 @@ export function IntegrationDashboardRoute(): React.ReactElement {
   }, [summary.data?.coverage, summary.isError]);
 
   const allQueuesPresent =
-    summary.isSuccess && queues.length === INTEGRATION_DASHBOARD_QUEUE_ORDER.length;
+    summary.isSuccess &&
+    (queues.length === INTEGRATION_DASHBOARD_QUEUE_ORDER.length ||
+      (me.data?.actor.role_level === 'developer' && queues.length > 0));
   const gapCount = allQueuesPresent
     ? queues.reduce((total, queue) => total + queue.count, 0)
     : undefined;
 
   return (
-    <PageShell contentClassName="max-w-none">
+    <PageShell contentClassName="max-w-none" detailPanel={recovery.detailPanel}>
       <section data-testid="integration-dashboard">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -129,6 +139,11 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             </Button>
           </div>
         </header>
+        <RecoveryFreshness
+          computedAt={summary.data?.computed_at}
+          failed={summary.isError}
+          updatedAt={summary.dataUpdatedAt}
+        />
 
         <div className="mb-9">
           <div className="mb-3.5 flex items-center justify-between">
@@ -235,6 +250,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             )}
           </div>
         )}
+        {recovery.queue}
       </section>
     </PageShell>
   );

@@ -48,16 +48,18 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/findings` | `managedSystem`, `selected`, `execution`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/surveys/:surveyId/follow-up` | `returnTo` | `returnTo` unless opened from a recovery queue |
 | `/surveys/participate` | — | No search state |
 | `/surveys/:surveyId/respond` | — | No search state; respondent surfaces do not carry Managed System scope |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/voc-clusters/:clusterId` | — | No search state; the cluster id is the path param and the cluster list stays as the list context |
-| `/tasks` | `view`, `param`, `managedSystem`, `public_update` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` unless filtering `view=board` to Tasks missing a public update (`missing` is the only value) |
-| `/integration` | `managedSystem` | `managedSystem` for the caller's effective scope union (`all` is also accepted) |
+| `/tasks` | `view`, `param`, `managedSystem`, `public_update`, `returnTo` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` unless filtering `view=board` to Tasks missing a public update (`missing` is the only value) |
+| `/home` | `managedSystem`, `tab`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | Dashboard tab, visible presentation, history=false and absent filters/selection/return/cursor; Home scope is a UUID when explicit |
+| `/integration` | `managedSystem`, `category`, `selected`, `presentation`, `history`, `returnTo`, `cursor` | `managedSystem` for the caller's effective scope union (`all` is also accepted); visible presentation, history=false and absent filters/selection/return/cursor |
 | `/integration/evidence` | `managedSystem`, `source`, `q`, `selected`, `cursor` | omit unfiltered defaults; selection uses a local highlight UUID; cursor is opaque |
 | `/integration/links` | `managedSystem`, `status`, `type` | `managedSystem` for the caller's effective scope union; `status` and `type` when unfiltered |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
-| `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
+| `/admin/permissions/requests` | `tab`, `selected`, `returnTo` | `tab` for the pending tab; `selected` when none is selected; `returnTo` unless opened from a recovery queue |
 | `/admin/permissions/grants` | `tab`, `selected` | `tab` for grants; `selected` when none is selected |
 
 Route naming rules:
@@ -450,13 +452,13 @@ Canonical copy owners are `apps/frontend/src/lib/copy/home.ts` and
 `apps/frontend/src/lib/copy/admin-permissions.ts`; update them in implementation.
 Verify desktop 1440, keyboard focus and existing visual fixtures before delivery.
 
-## Close-out recovery and responsibility URL contract (ADR-0067; proposed/new)
+## Close-out recovery and responsibility URL contract (ADR-0067)
 
-Extend existing `/integration` and `/home` search validation with `category`, `selected`
+Both `/integration` and `/home` validate `category`, `selected`
 (stable recovery ID), `presentation` (`visible` default/`hidden`), `history` (boolean,
 false default), and validated same-origin `returnTo`, preserving existing `managedSystem`
 and Home `tab`. Recovery selection opens the Integration-owned compact shared detail via
-a proposed/new public seam, even on Home; no new shell or duplicate source workflow.
+`features/integration/public.ts`, even on Home; no new shell or duplicate source workflow.
 Coverage may jump to `/integration` carrying category/scope/selected/return intent; only
 an authorized Admin gets a Settings link for bands.
 
@@ -465,9 +467,34 @@ unrecognized values follow the existing cleanup rule. Selection/Escape/back/refr
 preserves list scope/category/view and restores readable detail; close clears selection
 and returns focus. Resolved readable selection stays open with metadata; unknown/unreadable
 identity shows the standard not-found state. Source jumps preserve queue context in history.
+VOC, Task, Permission Request and Survey source URLs also accept bounded recovery queue
+`returnTo`; VOC repair
+opens `view=triage` with the repair Managed System, Task selection uses `param`, and Finding
+selection uses `selected`.
 Personal hiding offers 1-day/7-day snooze, current-occurrence mute, hidden-items and restore
 with Korean labels explaining `내 화면`; reopen returns the occurrence automatically.
 History is three calendar months, currently permission-filtered.
+
+`cursor` restores an opaque bounded page; category, Managed System, presentation and history
+navigation producers clear it when creating a new filter/scope/view URL; Back/Forward retains
+compatible cursor/filter pairs. Load-more appends pages within the current query. Recovery IDs
+validate the opaque `r1_` shape and are never decoded. Queue `returnTo` is limited to internal Home,
+Integration and Coverage URLs, at most 2048 characters; foreign, protocol-relative,
+backslash and control-character forms are discarded.
+
+Home registers the existing `PageShell.detailPanel` slot only on Dashboard. Inbox and
+unmount unregister it while retaining URL selection for Dashboard/Back restoration.
+Closing returns focus to the clicked row (including an individual history occurrence),
+then to the queue heading if that row disappeared. Escape respects nested overlays,
+prevented events and fullscreen. Hook-level pending PATCH completion invalidates queries
+after unmount without closing or focusing a newer selection or scope.
+
+Shared `lib/query/recovery.ts` invalidates recovery list/detail/history and all summary
+scopes after presentation or source repairs; each owning mutation also refreshes its source
+queries. Summary freshness is shown on Home, Integration and Coverage, with the last server
+`computed_at`, last successful browser refresh and a failed-refresh marker. Queue and detail
+show independent clocks; these reads do not form an atomic snapshot.
+
 
 Survey response selection/actions/history remain on `/surveys/:surveyId/follow-up` under
 ADR-0055's personal seam, never generic response-derived URL identities for non-holders.

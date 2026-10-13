@@ -5,6 +5,7 @@ import {
   listTasks,
   useIdempotencyKey,
 } from '@/lib/api';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { FindingDto } from '@fops/shared';
 import {
   Button,
@@ -51,6 +52,7 @@ export function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): R
     mutationFn: (taskId: string) =>
       linkTaskToFinding(finding.id, { task_id: taskId }, idempotencyKey),
     onSuccess: () => {
+      void invalidateRecovery(queryClient);
       markConsumed();
       toast.success('Task가 Finding에 연결되었습니다.');
       void queryClient.invalidateQueries({ queryKey: ['finding', finding.id] });

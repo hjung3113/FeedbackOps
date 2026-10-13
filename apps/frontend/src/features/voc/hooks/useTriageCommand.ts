@@ -1,3 +1,4 @@
+import { invalidateRecovery } from '@/lib/query/recovery';
 // useTriageCommand.ts — command hook for the triage panel (issue #481).
 // Owns the undo state machine: composes useUndoableMutation with the triage
 // transport, compensation policy, and error policy. TriagePanel calls only
@@ -106,6 +107,7 @@ export function useTriageCommand({
           countedRef.current.add(input);
           onProcessedRef.current?.(1);
         }
+        void invalidateRecovery(queryClient);
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
         return output;
@@ -155,6 +157,7 @@ export function useTriageCommand({
             }
           },
         });
+        void invalidateRecovery(queryClient);
         invalidateNavCounts(queryClient);
         invalidateTriageLists();
       } catch (err) {

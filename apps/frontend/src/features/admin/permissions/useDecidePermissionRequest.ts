@@ -1,4 +1,5 @@
 import { permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { ApprovePermissionRequest, PermissionDecisionResult } from "@fops/shared";
 import {
   type UseMutationResult,
@@ -69,7 +70,7 @@ export function useDecidePermissionRequest(
         queryClient.invalidateQueries({ queryKey: permissionRequestOwnerDetailKey(args.id) }),
         queryClient.invalidateQueries({ queryKey: permissionRequestsMineKey }),
         queryClient.invalidateQueries({ queryKey: ['permission-check'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        invalidateRecovery(queryClient),
         queryClient.invalidateQueries({ queryKey: ['managed-system-scope'] }),
       ]);
     },
@@ -84,7 +85,7 @@ export function useDecidePermissionRequest(
           queryClient.invalidateQueries({ queryKey: permissionRequestsMineKey }),
           queryClient.invalidateQueries({ queryKey: ['permission-check'] }),
           queryClient.invalidateQueries({ queryKey: ['managed-system-scope'] }),
-          queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+          invalidateRecovery(queryClient),
         ]);
       }
     },

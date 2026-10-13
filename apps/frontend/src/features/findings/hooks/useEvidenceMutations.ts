@@ -1,5 +1,6 @@
 import { type ApiError, apiClient, apiRequest } from '@/lib/api';
 import { EVIDENCE_INVENTORY_QUERY_KEY } from '@/lib/query/evidence-inventory-key';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import {
   type AddEvidenceHighlightRequest,
   type AttachSurveyEvidenceRequest,
@@ -35,6 +36,7 @@ export function useAddEvidenceHighlightMutation(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
       void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({
@@ -71,6 +73,7 @@ export function useLinkEvidenceMutation(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
       void queryClient.invalidateQueries({ queryKey: ['findings'] });
       void queryClient.invalidateQueries({
@@ -102,6 +105,7 @@ export function useAttachSurveyEvidenceMutation(findingId: string) {
         )
       ).data,
     onSuccess: async () => {
+      void invalidateRecovery(queryClient);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['finding', findingId], refetchType: 'all' }),
         queryClient.invalidateQueries({ queryKey: ['findings'], refetchType: 'all' }),
