@@ -212,7 +212,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       status: 'doing',
       source: null,
     });
-    const audit = await dbHandle.pool.query<{ detail: unknown }>(
+    const audit = await migrateHandle.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log where workspace_id = $1 and event_type = 'task_status_changed' and subject_id = $2`,
       [WORKSPACE_ID, task.id],
     );
@@ -624,7 +624,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       status: 'todo',
       updated_at: task.updatedAt,
     });
-    const audits = await dbHandle.pool.query<{ n: number }>(
+    const audits = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'task_status_changed' and subject_id = $2`,
       [WORKSPACE_ID, task.id],
     );

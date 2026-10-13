@@ -7,7 +7,8 @@ import {
 } from '../findings/authorization.js';
 import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
 import {
-  listDerivedFindingsForResponses,
+  listDerivedFindingsForSurvey,
+  readApprovedResultExcerpts,
   readApprovedResultExcerptsPersonal,
 } from './repo-evidence.js';
 import { findSurvey, listQuestions } from './repo-read.js';
@@ -38,13 +39,9 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
     return deps.db.transaction(async (tx) => {
       const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
       const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
-      // Response IDs stay payload-gated below; this internal projection only
-      // supplies the IDs needed to resolve already-derived Finding links.
-      const excerptRows: Promise<ResultExcerptRow[]> = readApprovedResultExcerptsPersonal(
-        tx,
-        actor.workspace_id,
-        survey.id,
-      );
+      const excerptRows: Promise<ResultExcerptRow[]> = holder
+        ? readApprovedResultExcerptsPersonal(tx, actor.workspace_id, survey.id)
+        : readApprovedResultExcerpts(tx, actor.workspace_id, survey.id);
       const [questions, responseCount, aggregateRows, approvedExcerpts, findingManage] =
         await Promise.all([
           listQuestions(tx, actor.workspace_id, survey.id),
@@ -55,10 +52,14 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
             requireElevatedRole: false,
           }),
         ]);
-      const derivedFindings = await listDerivedFindingsForResponses(
+      // Active approvals retain shipped action continuity even when question
+      // aggregates are suppressed. Approval-free discovery needs a visible cohort;
+      // personal access alone must not introduce new request_task actions.
+      const derivedFindings = await listDerivedFindingsForSurvey(
         tx,
         actor.workspace_id,
-        approvedExcerpts.flatMap((excerpt) => (excerpt.response_id ? [excerpt.response_id] : [])),
+        survey.id,
+        responseCount >= anonymityThreshold,
       );
       const findingReadScope = await actorFindingReadScope(tx, actor, {
         requireElevatedRole: true,

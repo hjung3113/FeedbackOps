@@ -297,7 +297,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
   }
 
   async function auditRows(responseId: string, eventType: string) {
-    const { rows } = await db.pool.query<{ actor_id: string; detail: Record<string, unknown> }>(
+    const { rows } = await migrateDb.pool.query<{
+      actor_id: string;
+      detail: Record<string, unknown>;
+    }>(
       'select actor_id, detail from core.audit_log where workspace_id = $1 and subject_id = $2 and event_type = $3',
       [WORKSPACE_ID, responseId, eventType],
     );

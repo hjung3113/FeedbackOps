@@ -278,7 +278,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ status: string }>().status).toBe('released');
 
-    const audits = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audits = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail from core.audit_log
         where workspace_id = $1 and subject_id = $2 and event_type = 'milestone_updated'`,
       [WORKSPACE_ID, milestone.id],
@@ -336,7 +336,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     expect(body.status).toBe('planning');
     expect(body.updated_at).not.toBe(ifMatch);
 
-    const audits = await dbHandle.pool.query<{
+    const audits = await migrateHandle.pool.query<{
       event_type: string;
       detail: Record<string, unknown>;
     }>(

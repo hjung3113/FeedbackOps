@@ -98,12 +98,9 @@ export async function readDefaultDiagnostics(
     FROM ${responsibilityDefaultFailures} f
     JOIN ${managedSystems} m ON m.id = f.managed_system_id AND m.workspace_id = f.workspace_id
     WHERE f.workspace_id = ${workspaceId} AND m.archived_at IS NULL AND NOT EXISTS (
-      SELECT 1 FROM core.audit_log a
-      WHERE a.workspace_id = m.workspace_id AND a.subject_id = m.id
-        AND a.event_type = 'managed_system_updated'
-        AND COALESCE((a.detail->>'configuration_changed_at')::timestamptz, a.created_at) >= f.created_at
-        AND (a.detail->'changes' ? ('default_' || f.responsibility || '_actor_id')
-          OR a.detail->'changes' ? ('default_' || f.responsibility || '_team_id'))
+      SELECT 1 FROM core.responsibility_configuration_changes(${workspaceId}::uuid) a
+      WHERE a.managed_system_id = m.id AND a.changed_at >= f.created_at
+        AND a.responsibility = f.responsibility
     )
     GROUP BY f.managed_system_id, f.workflow, f.responsibility, f.rule, f.category
     ORDER BY f.managed_system_id, f.workflow, f.responsibility, f.rule, f.category

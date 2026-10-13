@@ -49,11 +49,20 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
     const result = await appHandle.pool.query(
       `insert into core.audit_log
          (workspace_id, actor_id, event_type, subject_type, subject_id, summary)
-       values ($1, $2, 'test.app_insert', 'workspace', $1, 'role-grant test')
-       returning id`,
+       values ($1, $2, 'test.app_insert', 'workspace', $1, 'role-grant test')`,
       [WORKSPACE_ID, systemActor.rows[0]?.id],
     );
     expect(result.rowCount).toBe(1);
+  });
+
+  it('fops_app must NOT SELECT core.audit_log, including identifiers', async () => {
+    await expect(appHandle.pool.query('select id from core.audit_log')).rejects.toMatchObject({
+      code: '42501',
+    });
+    const history = await migrateHandle.pool.query(
+      "select actor_id, subject_id from core.audit_log where event_type = 'test.app_insert'",
+    );
+    expect(history.rowCount).toBeGreaterThan(0);
   });
 
   it('fops_app must NOT UPDATE core.audit_log', async () => {

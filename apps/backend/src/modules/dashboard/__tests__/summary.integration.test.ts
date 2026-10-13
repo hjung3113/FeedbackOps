@@ -519,13 +519,13 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const before = (await get(adminCookie)).json<Summary>();
     const seed = await createDashboardScope();
     await seedDashboard(seed);
-    const beforeAudit = await dbHandle.pool.query<{ count: string }>(
+    const beforeAudit = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [adminActorId],
     );
     const response = await get(adminCookie);
     const body = response.json<Summary>();
-    const afterAudit = await dbHandle.pool.query<{ count: string }>(
+    const afterAudit = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [adminActorId],
     );
@@ -831,12 +831,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const seed = await createDashboardScope();
     const before = (await get(seed.devCookie)).json<Summary>();
     await seedDashboard(seed);
-    const beforeAudit = await dbHandle.pool.query<{ count: string }>(
+    const beforeAudit = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [seed.devActorId],
     );
     const visible = (await get(seed.devCookie)).json<Summary>();
-    const afterAudit = await dbHandle.pool.query<{ count: string }>(
+    const afterAudit = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [seed.devActorId],
     );
@@ -966,11 +966,11 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         percent: 50,
         status: 'warn',
       });
-      const linksBefore = await dbHandle.pool.query(
+      const linksBefore = await migrateHandle.pool.query(
         'select * from core.entity_links where managed_system_id = $1 order by id',
         [seed.msA],
       );
-      const auditsBefore = await dbHandle.pool.query(
+      const auditsBefore = await migrateHandle.pool.query(
         "select * from core.audit_log where workspace_id = $1 and event_type <> 'workspace_settings_updated' order by id",
         [WORKSPACE_ID],
       );
@@ -999,7 +999,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         );
         expect(
           (
-            await dbHandle.pool.query(
+            await migrateHandle.pool.query(
               'select * from core.entity_links where managed_system_id = $1 order by id',
               [seed.msA],
             )
@@ -1007,7 +1007,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         ).toEqual(linksBefore.rows);
         expect(
           (
-            await dbHandle.pool.query(
+            await migrateHandle.pool.query(
               "select * from core.audit_log where workspace_id = $1 and event_type <> 'workspace_settings_updated' order by id",
               [WORKSPACE_ID],
             )
@@ -1269,12 +1269,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       `dashboard-217-no-grants-${uid('actor')}`,
     );
     const cookie = await loginAs(app, actor.externalId);
-    const before = await dbHandle.pool.query<{ count: string }>(
+    const before = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [actor.id],
     );
     const response = await get(cookie);
-    const after = await dbHandle.pool.query<{ count: string }>(
+    const after = await migrateHandle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.audit_log where actor_id = $1',
       [actor.id],
     );

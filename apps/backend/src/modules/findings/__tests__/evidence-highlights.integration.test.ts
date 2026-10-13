@@ -392,7 +392,7 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
     expect(res.statusCode).toBe(201);
     const linkId = res.json<{ id: string }>().id;
-    const links = await dbHandle.pool.query<{ id: string }>(
+    const links = await migrateHandle.pool.query<{ id: string }>(
       `select id
          from core.entity_links
         where workspace_id = $1
@@ -581,7 +581,7 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
-    const rows = await dbHandle.pool.query<{ n: number }>(
+    const rows = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where workspace_id = $1 and source_id = $2 and target_id = $3`,
       [WORKSPACE_ID, crossMs.vocId, finding.id],

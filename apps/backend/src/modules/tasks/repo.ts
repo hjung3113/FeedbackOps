@@ -305,7 +305,7 @@ function listPredicates(input: ListInput) {
       status = 'released'
       AND EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -319,7 +319,7 @@ function listPredicates(input: ListInput) {
       )
       AND NOT EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -460,7 +460,7 @@ export async function resolveTaskSource(
       f.source_type AS finding_source_type,
       f.source_id AS finding_source_id
     FROM task_request.task_requests tr
-    LEFT JOIN core.entity_links el
+    LEFT JOIN core.entity_links_app el
       ON el.workspace_id = tr.workspace_id
      AND el.source_type = 'finding'
      AND el.target_type = 'task_request'

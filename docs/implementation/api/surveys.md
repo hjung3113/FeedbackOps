@@ -573,8 +573,11 @@ Results uses a proposed/new Survey-owned workspace+Survey-ID reader that returns
 candidate Finding IDs and target scope only. Source Survey read/privacy and each
 Finding's target read gate remain independent, including different Managed
 Systems in the same workspace. No personal grant is required merely to discover
-already-derived accessible Findings. The raw `core.entity_links` response-ID join
-is removed; #740 revokes app raw link/audit reads without changing the existing
+already-derived accessible Findings. Active-approved responses retain the shipped
+Results action audience even when aggregates are suppressed. Approval-free discovery
+requires a cohort at or above the configured threshold; personal access alone does
+not enable it. These rules do not expose suppressed question counts or excerpts.
+The raw application `core.entity_links` response-ID join is removed; #740 revokes app raw link/audit reads without changing the existing
 personal result/follow-up response-ID gates. Linked quotes use the batch Survey
 projection with exact-active approval/source/target checks in one transaction
 snapshot. Existing attached-highlight audience is not tightened to picker suppression.

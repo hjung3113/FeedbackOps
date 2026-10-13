@@ -36,12 +36,13 @@ owns requester lifecycle/risk; Core must not import Permission or decide access.
 - Teams can be responsibility targets without new CRUD/membership or permission grants;
   defaults do not retroactively reassign records. Survey operator routing is independent.
 
-## Audit and cached Survey responses (ADR-0064; cutover pending)
+## Audit and cached Survey responses (ADR-0064; coordinated cutover)
 
 #740 revokes raw `core.audit_log` SELECT from `fops_app`, retaining INSERT and
 no UPDATE/DELETE. Preserve canonical Actor/subject/detail identifiers, append-only
 history and same-transaction accountability; controlled migrate/operator reads
-supply test observations. No broad app-readable audit definer. Inventory consumers
+supply test observations. Core exposes only the latest Permission Request question and responsibility
+configuration-change projections. No broad app-readable audit definer. Inventory consumers
 before cutover. ADR-0015 permits only targeted sanitization of confirmed legacy
 Survey-generated cached Finding responses, preserving Actor/key/hash/status and
 exactly-once side effects; no unrelated cache reset or authored-text rewrite.

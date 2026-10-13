@@ -13,7 +13,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 type FieldDetail = { path: string[]; code: string };
 
@@ -74,11 +74,13 @@ async function createAa(
 
 describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
   let dbHandle: DbHandle;
+  let canonicalHistory: DbHandle;
   let app: FastifyInstance;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    canonicalHistory = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
   });
@@ -103,6 +105,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     }
     await app?.close();
     await dbHandle?.close();
+    await canonicalHistory?.close();
   });
 
   beforeEach(async () => {
@@ -141,7 +144,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().managed_system_id).toBe(msId);
-    const audit = await dbHandle.pool.query(
+    const audit = await canonicalHistory.pool.query(
       `select detail from core.audit_log where event_type = 'analytics_area_registered'`,
     );
     expect(audit.rowCount).toBe(1);
@@ -291,7 +294,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { name: 'old' },
     });
     expect(noop.statusCode).toBe(200);
-    const noopAudit = await dbHandle.pool.query(
+    const noopAudit = await canonicalHistory.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_updated'`,
     );
     expect(noopAudit.rows[0]?.n).toBe(0);
@@ -304,7 +307,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('new');
-    const audit = await dbHandle.pool.query(
+    const audit = await canonicalHistory.pool.query(
       `select detail from core.audit_log where event_type = 'analytics_area_updated' and subject_id = $1`,
       [id],
     );
@@ -332,7 +335,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().archived_at).not.toBeNull();
-    const audit = await dbHandle.pool.query(
+    const audit = await canonicalHistory.pool.query(
       `select detail from core.audit_log where event_type = 'analytics_area_archived' and subject_id = $1`,
       [id],
     );
@@ -348,7 +351,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(second.statusCode).toBe(200);
-    const auditAfter = await dbHandle.pool.query(
+    const auditAfter = await canonicalHistory.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_archived' and subject_id = $1`,
       [id],
     );
@@ -381,7 +384,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     expect([...body.cascaded_analytics_area_ids].sort()).toEqual([...aaIds].sort());
 
     // Single MS archive audit row carrying the cascaded list.
-    const msAudit = await dbHandle.pool.query(
+    const msAudit = await canonicalHistory.pool.query(
       `select detail from core.audit_log where event_type = 'managed_system_archived' and subject_id = $1`,
       [msId],
     );
@@ -392,7 +395,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     ).toHaveLength(3);
 
     // 3 AA archive audit rows, each with cascade_source_managed_system_id = msId.
-    const aaAudit = await dbHandle.pool.query(
+    const aaAudit = await canonicalHistory.pool.query(
       `select subject_id, detail from core.audit_log where event_type = 'analytics_area_archived'`,
     );
     expect(aaAudit.rowCount).toBe(3);
@@ -626,7 +629,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       `select count(*)::int as n from core.analytics_areas where slug = 'it-h5-aa'`,
     );
     expect(aaCount.rows[0]?.n).toBe(0);
-    const audit = await dbHandle.pool.query(
+    const audit = await canonicalHistory.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_registered' and workspace_id = $1`,
       [WORKSPACE_ID],
     );

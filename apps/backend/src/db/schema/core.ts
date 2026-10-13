@@ -496,6 +496,36 @@ export const entityLinks = coreSchema.table(
   }),
 );
 
+// ADR-0064: keep the table mapping canonical for FKs/operator history.
+// Application SQL uses this separately owned, simple updatable projection.
+export const entityLinksApp = coreSchema
+  .view('entity_links_app')
+  .with({ securityBarrier: true, checkOption: 'cascaded' })
+  .as((qb) =>
+    qb
+      .select({
+        id: entityLinks.id,
+        workspaceId: entityLinks.workspaceId,
+        sourceType: entityLinks.sourceType,
+        sourceId: entityLinks.sourceId,
+        targetType: entityLinks.targetType,
+        targetId: entityLinks.targetId,
+        relationType: entityLinks.relationType,
+        visibility: entityLinks.visibility,
+        status: entityLinks.status,
+        managedSystemId: entityLinks.managedSystemId,
+        createdBy: entityLinks.createdBy,
+        createdAt: entityLinks.createdAt,
+        updatedAt: entityLinks.updatedAt,
+        detachedBy: entityLinks.detachedBy,
+        detachReason: entityLinks.detachReason,
+        detachedAt: entityLinks.detachedAt,
+      })
+      .from(entityLinks)
+      .where(sql`${entityLinks.sourceType} <> 'survey_response'
+    AND ${entityLinks.targetType} <> 'survey_response'`),
+  );
+
 export const idempotencyKeys = coreSchema.table(
   'idempotency_keys',
   {

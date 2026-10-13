@@ -155,29 +155,15 @@ export async function readApprovedResultExcerptsPersonal(
   return result.rows;
 }
 
-export async function listDerivedFindingsForResponses(
+export async function listDerivedFindingsForSurvey(
   tx: Tx,
   workspaceId: string,
-  responseIds: string[],
+  surveyId: string,
+  includeUnapproved: boolean,
 ): Promise<Array<{ finding_id: string; primary_managed_system_id: string }>> {
-  if (responseIds.length === 0) return [];
-  const ids = sql`ARRAY[${sql.join(
-    responseIds.map((id) => sql`${id}`),
-    sql`, `,
-  )}]::uuid[]`;
   const result = await tx.execute<{ finding_id: string; primary_managed_system_id: string }>(sql`
-    select distinct f.id as finding_id, f.primary_managed_system_id
-      from core.entity_links el
-      join finding.findings f
-        on f.id = el.target_id
-       and f.workspace_id = el.workspace_id
-     where el.workspace_id = ${workspaceId}
-       and el.source_type = 'survey_response'
-       and el.target_type = 'finding'
-       and el.relation_type = 'generated_finding'
-       and el.status = 'active'
-       and el.source_id = any(${ids})
-     order by f.id
+    SELECT * FROM survey.read_derived_findings(
+      ${workspaceId}::uuid, ${surveyId}::uuid, ${includeUnapproved}::boolean)
   `);
   return result.rows;
 }

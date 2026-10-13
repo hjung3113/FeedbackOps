@@ -186,7 +186,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     expect(body.name).toBe('Snowflake');
     expect(body.archived_at).toBeNull();
 
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select event_type, subject_id, detail from core.audit_log
         where workspace_id = $1 and event_type = 'managed_system_registered'`,
       [WORKSPACE_ID],
@@ -224,7 +224,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       `select count(*)::int as n from core.managed_systems where slug = 'it-bigquery'`,
     );
     expect(count.rows[0]?.n).toBe(0);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_registered' and workspace_id = $1`,
       [WORKSPACE_ID],
     );
@@ -305,7 +305,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       `select count(*)::int as n from core.managed_systems where slug = 'it-idem'`,
     );
     expect(count.rows[0]?.n).toBe(1);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_registered' and workspace_id = $1`,
       [WORKSPACE_ID],
     );
@@ -332,7 +332,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
     expect(body.code).toBe('validation.immutable_field');
     expectFields(body, [{ path: ['slug'], code: 'immutable_field' }]);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated'`,
     );
     expect(audit.rows[0]?.n).toBe(0);
@@ -354,7 +354,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { name: 'same' },
     });
     expect(res.statusCode).toBe(200);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated'`,
     );
     expect(audit.rows[0]?.n).toBe(0);
@@ -377,7 +377,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('after');
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select detail from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
       [id],
     );
@@ -417,7 +417,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(second.statusCode).toBe(200);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_archived' and subject_id = $1`,
       [id],
     );
@@ -623,7 +623,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
     expect(body.code).toBe('conflict.record_archived');
     expectFields(body, [{ path: ['id'], code: 'record_archived' }]);
-    const audit = await dbHandle.pool.query(
+    const audit = await ops.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
       [id],
     );
@@ -686,7 +686,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       expect(created.json()[actorKey]).toBe(adminId);
       expect(created.json()[teamKey]).toBeNull();
       const id = created.json().id;
-      const snapshot = await dbHandle.pool.query(
+      const snapshot = await ops.pool.query(
         'select detail from core.audit_log where subject_id = $1 and event_type = $2',
         [id, 'managed_system_registered'],
       );
@@ -722,7 +722,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
           headers,
         });
         expect(current.json().items[0]).toEqual(created.json());
-        const audits = await dbHandle.pool.query(
+        const audits = await ops.pool.query(
           'select id from core.audit_log where subject_id = $1 and event_type = $2',
           [id, 'managed_system_updated'],
         );
@@ -737,7 +737,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       expect(replace.statusCode).toBe(200);
       expect(replace.json()[actorKey]).toBeNull();
       expect(replace.json()[teamKey]).toBe(activeTeamId);
-      const audit = await dbHandle.pool.query(
+      const audit = await ops.pool.query(
         'select detail from core.audit_log where subject_id = $1 and event_type = $2',
         [id, 'managed_system_updated'],
       );
@@ -817,6 +817,50 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       expect(diagnostics.statusCode).toBe(403);
     },
   );
+
+  it('diagnostic audit projection preserves failures after unrelated configuration edits', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${cookie}` };
+    const created = await app.inject({
+      method: 'POST',
+      url: '/managed-systems',
+      headers,
+      payload: { slug: 'it-diagnostics-unrelated', name: 'Diagnostics unrelated' },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id;
+    await dbHandle.db.transaction((tx) =>
+      recordResponsibilityDefaultFailure(tx, {
+        workspace_id: WORKSPACE_ID,
+        managed_system_id: id,
+        workflow: 'voc',
+        responsibility: 'owner',
+        rule: 'managed_system_owner',
+        category: 'missing',
+      }),
+    );
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/managed-systems/${id}`,
+      headers,
+      payload: { name: 'Renamed diagnostics' },
+    });
+    expect(updated.statusCode).toBe(200);
+    const read = await app.inject({
+      method: 'GET',
+      url: '/managed-systems/default-diagnostics',
+      headers,
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().items).toContainEqual(
+      expect.objectContaining({
+        managed_system_id: id,
+        responsibility: 'owner',
+        origin: 'creation_failure',
+        count: 1,
+      }),
+    );
+  });
 
   it('56-D Admin diagnostics reads safe failures, rejects denied Admin, and refetch reflects edits', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');

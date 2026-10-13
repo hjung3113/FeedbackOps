@@ -281,7 +281,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate worker (#165)',
       `select id, voc_id from voc.public_update_review_candidates where source_task_id = $1`,
       [task.id],
     );
-    const audit = await appHandle.pool.query(
+    const audit = await migrateHandle.pool.query(
       `select * from core.audit_log where event_type = 'public_update_review_candidate_created' and subject_type = 'voc' and workspace_id = $1`,
       [WORKSPACE_ID],
     );

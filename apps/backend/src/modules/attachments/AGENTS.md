@@ -9,7 +9,7 @@ It is the implementation of Core's attachment governance (`docs/implementation/0
 ## Invariants
 
 - The storage `put` runs before the DB INSERT, so no row ever points at missing bytes. If the INSERT fails, the service makes a best-effort `storage.delete` and rethrows the INSERT error (`service.ts`).
-- The `attachment_uploaded` audit detail schema is `.strict()` and must never carry the filename: filenames can hold PII and the audit log is broadly readable (`packages/shared/src/audit/attachments.ts`).
+- The `attachment_uploaded` audit detail schema is `.strict()` and must never carry the filename: filenames can hold PII and controlled operator audit history retains attribution (app raw SELECT is revoked by ADR-0064) (`packages/shared/src/audit/attachments.ts`).
 - The MIME allowlist (`mime-allowlist.ts`) is a closed set checked against the declared Content-Type; anything else is `attachment.unsupported_type`. The size cap is `MAX_ATTACHMENT_BYTES` (25 MB).
 - Every filename passes `sanitizeFilename` (strips `/`, `\`, and control characters; clamps to 255 UTF-8 bytes; an empty result is rejected) before it enters the storage key `{workspace_id}/{uuid}/{filename}`.
 - `voc_attachments` has no `workspace_id` column. The storage-key prefix is the workspace gate on download, and a cross-workspace id returns 404, not 403.

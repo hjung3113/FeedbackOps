@@ -571,6 +571,83 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     }
   });
 
+  it('discovers zero-excerpt derived Findings without personal access under both system gates', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    await grant(adminId, 'survey.read_personal_responses', survey.msId);
+    const targetMsId = await insertMsDirectly(appHandle, WORKSPACE_ID, uid(SLUG), 'Target MS');
+    const created = await app.inject({
+      method: 'POST',
+      url: `/survey-responses/${responseId}/create-finding`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: {
+        severity: 'medium',
+        primary_managed_system_id: targetMsId,
+        approved_excerpt_ids: [],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const findingId = created.json<{ id: string }>().id;
+    const reader = await dev();
+    await grant(reader.id, 'survey.read', survey.msId);
+    await grant(reader.id, 'finding.read', targetMsId);
+    const visible = parse2xx(await get(survey.id, reader.cookie));
+    expect(visible.next_actions).toContainEqual(
+      expect.objectContaining({
+        id: 'request_task',
+        source_finding_id: findingId,
+        availability: 'blocked_requestable',
+      }),
+    );
+    expect(JSON.stringify(visible)).not.toContain(responseId);
+    const sourceOnly = await dev();
+    await grant(sourceOnly.id, 'survey.read', survey.msId);
+    expect(JSON.stringify(parse2xx(await get(survey.id, sourceOnly.cookie)))).not.toContain(
+      findingId,
+    );
+    const targetOnly = await dev();
+    await grant(targetOnly.id, 'finding.read', targetMsId);
+    expect((await get(survey.id, targetOnly.cookie)).statusCode).toBe(404);
+    const nonElevated = await user();
+    await grant(nonElevated.id, 'survey.read', survey.msId);
+    await grant(nonElevated.id, 'finding.read', targetMsId);
+    expect(JSON.stringify(parse2xx(await get(survey.id, nonElevated.cookie)))).not.toContain(
+      findingId,
+    );
+    await deny(adminId, 'survey.read', survey.msId);
+    expect((await get(survey.id)).statusCode).toBe(404);
+    // Losing the visible cohort suppresses discovery for a non-holder, independently of target scope.
+    const previous = await migrateHandle.pool.query<{ survey_anonymity_threshold: number }>(
+      'select survey_anonymity_threshold from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      'insert into core.workspace_settings (workspace_id, survey_anonymity_threshold) values ($1, 6) on conflict (workspace_id) do update set survey_anonymity_threshold = 6',
+      [WORKSPACE_ID],
+    );
+    try {
+      const hidden = parse2xx(await get(survey.id, reader.cookie));
+      expect(hidden.response_state).toBe('below_threshold');
+      expect(JSON.stringify(hidden)).not.toContain(findingId);
+    } finally {
+      if (previous.rows[0]) {
+        await migrateHandle.pool.query(
+          'update core.workspace_settings set survey_anonymity_threshold = $2 where workspace_id = $1',
+          [WORKSPACE_ID, previous.rows[0].survey_anonymity_threshold],
+        );
+      } else {
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id = $1',
+          [WORKSPACE_ID],
+        );
+      }
+    }
+  });
+
   it('emits request_task only for elevated actors who can read the derived Finding', async () => {
     const survey = await seed(full(5));
     const responseId = survey.responseIds[0];

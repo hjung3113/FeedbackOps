@@ -76,7 +76,7 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'survey.highlight_response_bindings': [],
   // Migration 0000 makes the audit log append-only so application writes retain
   // an immutable history.
-  'core.audit_log': ['SELECT', 'INSERT'],
+  'core.audit_log': ['INSERT'],
   // 0058: safe routing failures are append-only runtime diagnostic inputs.
   'core.responsibility_default_failures': ['SELECT', 'INSERT'],
   // Migration 0054 keeps inbox rows durable; only read/archive/email claim
@@ -87,7 +87,7 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'core.display_counters': ['SELECT'],
   // Migrations 0018 and 0019 record canonical link history by inserting and
   // soft-detaching links (status='detached'), never hard-deleting them.
-  'core.entity_links': ['SELECT', 'INSERT', 'UPDATE'],
+  'core.entity_links': [],
   // Migration 0009 revokes writes per ADR-0019 Section C: teams remain a
   // read-only placeholder until a team-management service ships.
   'core.teams': ['SELECT'],

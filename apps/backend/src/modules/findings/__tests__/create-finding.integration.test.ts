@@ -186,7 +186,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     );
     expect(persisted.rows[0]?.n).toBe(1);
 
-    const links = await dbHandle.pool.query<{ id: string }>(
+    const links = await migrateHandle.pool.query<{ id: string }>(
       `select id
          from core.entity_links
         where workspace_id = $1
@@ -201,7 +201,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     );
     expect(links.rowCount).toBe(1);
 
-    const audits = await dbHandle.pool.query<{ event_type: string }>(
+    const audits = await migrateHandle.pool.query<{ event_type: string }>(
       `select event_type
          from core.audit_log
         where workspace_id = $1
@@ -376,7 +376,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
       randomUUID(),
       linked,
     ]);
-    await dbHandle.pool.query(
+    await migrateHandle.pool.query(
       `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,
           relation_type, managed_system_id, created_by

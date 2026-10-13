@@ -22,7 +22,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -164,6 +164,7 @@ function postVoc(
 
 describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   let dbHandle: DbHandle;
+  let canonicalHistory: DbHandle;
   let app: FastifyInstance;
   let reporterActorId: string;
 
@@ -217,6 +218,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    canonicalHistory = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
 
@@ -236,6 +238,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     await cleanupAuditLog();
     await app?.close();
     await dbHandle?.close();
+    await canonicalHistory?.close();
   });
 
   beforeEach(async () => {
@@ -325,11 +328,11 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       description_rich_content: paragraphDoc('same'),
     };
     const r1 = await postVoc(app, reporter, body, key);
-    const auditBeforeReplay = await dbHandle.pool.query<{ n: number }>(
+    const auditBeforeReplay = await canonicalHistory.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
     );
     const r2 = await postVoc(app, reporter, body, key);
-    const auditAfterReplay = await dbHandle.pool.query<{ n: number }>(
+    const auditAfterReplay = await canonicalHistory.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
     );
     expect(r1.statusCode).toBe(201);
@@ -337,7 +340,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(r1.json().id).toBe(r2.json().id);
     expect(auditAfterReplay.rows[0]?.n).toBe(auditBeforeReplay.rows[0]?.n);
     const count = await dbHandle.pool.query<{ n: number }>(
-      `select count(*)::int as n from voc.vocs where primary_managed_system_id = $1`,
+      'select count(*)::int as n from voc.vocs where primary_managed_system_id = $1',
       [msId],
     );
     expect(count.rows[0]?.n).toBe(1);
@@ -588,7 +591,11 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     [
       string,
       () => unknown,
-      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node' | 'rich_content.invalid_attr_value',
+      (
+        | 'rich_content.external_image_forbidden'
+        | 'rich_content.disallowed_node'
+        | 'rich_content.invalid_attr_value'
+      ),
       string,
     ]
   >([
@@ -655,25 +662,28 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       'rich_content.disallowed_node',
       'disallowed_node',
     ],
-  ])('sanitizer rejects %s → 422 %s', async (_label, buildDoc, expectedCode, expectedFieldsCode) => {
-    const admin = await loginAs(app, 'mock-admin-1');
-    const msId = await createMs(app, admin, 'it-voc-san', 'San MS');
-    const reporter = await loginAs(app, 'mock-user-1');
-    const res = await postVoc(
-      app,
-      reporter,
-      {
-        primary_managed_system_id: msId,
-        title: 'x',
-        description_rich_content: buildDoc(),
-      },
-      randomUUID(),
-    );
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe(expectedCode);
-    expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
-    expect(res.json().detail?.fields?.[0]?.code).toBe(expectedFieldsCode);
-  });
+  ])(
+    'sanitizer rejects %s → 422 %s',
+    async (_label, buildDoc, expectedCode, expectedFieldsCode) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-voc-san', 'San MS');
+      const reporter = await loginAs(app, 'mock-user-1');
+      const res = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'x',
+          description_rich_content: buildDoc(),
+        },
+        randomUUID(),
+      );
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe(expectedCode);
+      expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
+      expect(res.json().detail?.fields?.[0]?.code).toBe(expectedFieldsCode);
+    },
+  );
 
   // ── 12b. Sanitizer attr-injection (#23) ─────────────────────────────────
   it('sanitizer rejects attachmentRef.attrs with disallowed_attr_key → 422', async () => {
@@ -732,18 +742,8 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     const reporter = await loginAs(app, 'mock-user-1');
 
     // Seed two unlinked attachment rows owned by the reporter.
-    const a1 = await seedAttachment(
-      dbHandle,
-      reporterActorId,
-      'attok-1',
-      'image/png',
-    );
-    const a2 = await seedAttachment(
-      dbHandle,
-      reporterActorId,
-      'attok-2',
-      'image/png',
-    );
+    const a1 = await seedAttachment(dbHandle, reporterActorId, 'attok-1', 'image/png');
+    const a2 = await seedAttachment(dbHandle, reporterActorId, 'attok-2', 'image/png');
 
     const res = await postVoc(
       app,
@@ -764,10 +764,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       id: string;
       voc_id: string;
       linked_at: Date | null;
-    }>(
-      `select id, voc_id, linked_at from voc.voc_attachments where id = any($1)`,
-      [[a1, a2]],
-    );
+    }>('select id, voc_id, linked_at from voc.voc_attachments where id = any($1)', [[a1, a2]]);
     expect(linked.rows.length).toBe(2);
     for (const r of linked.rows) {
       expect(r.voc_id).toBe(vocId);
@@ -788,12 +785,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     const adminActorId = adminActorRow.rows[0]?.id;
     if (!adminActorId) throw new Error('admin actor not seeded');
-    const aWrongOwner = await seedAttachment(
-      dbHandle,
-      adminActorId,
-      'attowner-1',
-      'image/png',
-    );
+    const aWrongOwner = await seedAttachment(dbHandle, adminActorId, 'attowner-1', 'image/png');
 
     const res = await postVoc(
       app,
@@ -813,7 +805,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
 
     // Row remains unlinked (tx rolled back).
     const after = await dbHandle.pool.query<{ voc_id: string | null; linked_at: Date | null }>(
-      `select voc_id, linked_at from voc.voc_attachments where id = $1`,
+      'select voc_id, linked_at from voc.voc_attachments where id = $1',
       [aWrongOwner],
     );
     expect(after.rows[0]?.voc_id).toBeNull();
@@ -827,12 +819,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     const reporter = await loginAs(app, 'mock-user-1');
 
     // Seed an attachment + first VOC creation links it.
-    const a = await seedAttachment(
-      dbHandle,
-      reporterActorId,
-      'attlinked-1',
-      'image/png',
-    );
+    const a = await seedAttachment(dbHandle, reporterActorId, 'attlinked-1', 'image/png');
     const first = await postVoc(
       app,
       reporter,

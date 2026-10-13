@@ -158,7 +158,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json<{ status: string; opened_at: string | null }>().status).toBe('open');
     expect(response.json<{ opened_at: string | null }>().opened_at).not.toBeNull();
-    const audit = await appHandle.pool.query<{
+    const audit = await migrateHandle.pool.query<{
       event_type: string;
       detail: { question_count: number };
     }>(
@@ -180,7 +180,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     const repeated = await transition(surveyId, 'open');
 
     expect(repeated.statusCode).toBe(200);
-    const audits = await appHandle.pool.query<{ count: number }>(
+    const audits = await migrateHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from core.audit_log where subject_id = $1 and event_type = 'survey_opened'`,
       [surveyId],
     );
@@ -196,7 +196,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     expect(closed.statusCode).toBe(200);
     expect(closed.json<{ status: string; closed_at: string | null }>().status).toBe('closed');
     expect(closed.json<{ closed_at: string | null }>().closed_at).not.toBeNull();
-    const closeAudit = await appHandle.pool.query<{
+    const closeAudit = await migrateHandle.pool.query<{
       event_type: string;
       detail: { survey_id: string };
     }>(

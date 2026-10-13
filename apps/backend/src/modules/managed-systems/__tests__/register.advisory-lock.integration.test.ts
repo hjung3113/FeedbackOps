@@ -26,7 +26,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
   if (!setCookie) return null;
@@ -52,6 +52,7 @@ async function loginAs(app: FastifyInstance, externalId: string): Promise<string
 
 describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retry (S-001)', () => {
   let dbHandle: DbHandle;
+  let canonicalHistory: DbHandle;
   let app: FastifyInstance;
   // Capture the suite's start timestamp so cleanup deletes only rows this
   // suite wrote, never another parallel suite's idempotency rows
@@ -61,6 +62,7 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    canonicalHistory = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
     suiteStartAt = new Date();
@@ -68,10 +70,9 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
 
   afterAll(async () => {
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query(
-      `delete from core.idempotency_keys where created_at >= $1`,
-      [suiteStartAt],
-    );
+    await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
+      suiteStartAt,
+    ]);
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
       await ops.pool.query(
@@ -82,6 +83,7 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
     }
     await app?.close();
     await dbHandle?.close();
+    await canonicalHistory?.close();
   });
 
   beforeEach(async () => {
@@ -89,10 +91,9 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query(
-      `delete from core.idempotency_keys where created_at >= $1`,
-      [suiteStartAt],
-    );
+    await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
+      suiteStartAt,
+    ]);
     await dbHandle.pool.query('delete from core.rate_limits');
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
@@ -129,12 +130,12 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
     expect(firstBody.slug).toBe(slug);
 
     const rows = await dbHandle.pool.query<{ n: number }>(
-      `select count(*)::int as n from core.managed_systems where workspace_id = $1 and slug = $2`,
+      'select count(*)::int as n from core.managed_systems where workspace_id = $1 and slug = $2',
       [WORKSPACE_ID, slug],
     );
     expect(rows.rows[0]?.n).toBe(1);
 
-    const audit = await dbHandle.pool.query<{ n: number }>(
+    const audit = await canonicalHistory.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log
         where event_type = 'managed_system_registered'
           and workspace_id = $1

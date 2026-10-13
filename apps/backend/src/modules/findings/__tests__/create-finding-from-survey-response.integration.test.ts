@@ -22,6 +22,7 @@ import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { createSurveyFindingLink } from '../../entity-links/index.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -341,6 +342,43 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     );
     return response.rows[0]?.id ?? '';
   }
+
+  it('Survey mutation returns only a local ID/outcome and preserves canonical replay history', async () => {
+    const source = await seed();
+    const creator = await actor();
+    for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+      await grant(creator.id, permission, source.msId);
+    const created = await post(creator.cookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [],
+    });
+    expect(created.statusCode).toBe(201);
+    const findingId = created.json<{ id: string }>().id;
+    const before = await counts(source.responseId);
+    const result = await appHandle.db.transaction((tx) =>
+      createSurveyFindingLink(tx, {
+        workspaceId: WORKSPACE_ID,
+        responseId: source.responseId,
+        findingId,
+        relationType: 'generated_finding',
+        managedSystemId: source.msId,
+        createdBy: creator.id,
+      }),
+    );
+    expect(result).toEqual({ id: expect.any(String), inserted: false });
+    expect(await counts(source.responseId)).toEqual(before);
+    const canonical = await migrateHandle.pool.query(
+      'select source_id, target_id, created_by from core.entity_links where id = $1',
+      [result.id],
+    );
+    expect(canonical.rows).toEqual([
+      {
+        source_id: source.responseId,
+        target_id: findingId,
+        created_by: creator.id,
+      },
+    ]);
+  });
 
   it('201 persists the Finding, generated_finding and evidence_of links, highlights, and exact audit counts', async () => {
     const source = await seed();

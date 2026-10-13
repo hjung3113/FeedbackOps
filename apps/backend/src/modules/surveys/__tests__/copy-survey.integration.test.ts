@@ -206,7 +206,7 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
     });
   }
   async function creationAuditCount() {
-    const rows = await appHandle.pool.query<{ count: number }>(
+    const rows = await migrateHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from core.audit_log where workspace_id=$1
        and actor_id=any($2::uuid[]) and event_type in ('survey_created','survey_question_created')`,
       [WORKSPACE_ID, [adminId, developerId, userId]],
@@ -301,7 +301,7 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       expect(graph.map(({ id: _id, survey_id: _survey, ...q }) => q)).toEqual(
         selected.questions.map(({ id: _id, ...q }) => q),
       );
-      const audits = await appHandle.pool.query<{
+      const audits = await migrateHandle.pool.query<{
         event_type: string;
         detail: Record<string, unknown>;
       }>(
@@ -576,7 +576,7 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       expect(actual).toEqual(expected);
       expect(selected.questions.map((x) => x.id)).not.toContain(graph[i]?.id);
     }
-    const audits = await appHandle.pool.query(
+    const audits = await migrateHandle.pool.query(
       "select detail from core.audit_log where event_type='survey_question_created' and detail->>'survey_id'=$1",
       [target.id],
     );

@@ -6,7 +6,10 @@ import {
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
+import {
+  createSurveyFindingLink,
+  createEntityLink as insertActiveEntityLink,
+} from '../entity-links/index.js';
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import {
@@ -227,21 +230,13 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             createdBy: actor.actor_id,
           });
           await recordSurveyFindingBinding(tx, actor, finding.id, subject.response_id);
-          const generated = registeredEntityLinkPairSchema.parse({
-            source_type: 'survey_response',
-            target_type: 'finding',
-            relation_type: 'generated_finding',
-          });
-          const sourceLink = await insertActiveEntityLink(tx, {
+          const sourceLink = await createSurveyFindingLink(tx, {
             workspaceId: actor.workspace_id,
-            sourceType: generated.source_type,
-            sourceId: subject.response_id,
-            targetType: generated.target_type,
-            targetId: finding.id,
-            relationType: generated.relation_type,
+            responseId: subject.response_id,
+            findingId: finding.id,
+            relationType: 'generated_finding',
             managedSystemId: subject.primary_managed_system_id,
             createdBy: actor.actor_id,
-            visibility: 'internal_only',
           });
           await deps.auditService.record(tx, {
             workspace_id: actor.workspace_id,
@@ -265,10 +260,10 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               actor_id: actor.actor_id,
               event_type: 'entity_link.created',
               subject_type: 'entity_link',
-              subject_id: sourceLink.row.id,
+              subject_id: sourceLink.id,
               summary: 'Entity link created',
               detail: {
-                link_id: sourceLink.row.id,
+                link_id: sourceLink.id,
                 source: { type: 'survey_response', id: subject.response_id },
                 target: { type: 'finding', id: finding.id },
                 relation_type: 'generated_finding',
@@ -300,21 +295,13 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               workspaceId: actor.workspace_id,
               findingId: finding.id,
             });
-            const evidenceOf = registeredEntityLinkPairSchema.parse({
-              source_type: 'survey_response',
-              target_type: 'finding',
-              relation_type: 'evidence_of',
-            });
-            const evidenceLink = await insertActiveEntityLink(tx, {
+            const evidenceLink = await createSurveyFindingLink(tx, {
               workspaceId: actor.workspace_id,
-              sourceType: evidenceOf.source_type,
-              sourceId: subject.response_id,
-              targetType: evidenceOf.target_type,
-              targetId: finding.id,
-              relationType: evidenceOf.relation_type,
+              responseId: subject.response_id,
+              findingId: finding.id,
+              relationType: 'evidence_of',
               managedSystemId: subject.primary_managed_system_id,
               createdBy: actor.actor_id,
-              visibility: 'internal_only',
             });
             if (evidenceLink.inserted)
               await deps.auditService.record(tx, {
@@ -322,10 +309,10 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
                 actor_id: actor.actor_id,
                 event_type: 'entity_link.created',
                 subject_type: 'entity_link',
-                subject_id: evidenceLink.row.id,
+                subject_id: evidenceLink.id,
                 summary: 'Entity link created',
                 detail: {
-                  link_id: evidenceLink.row.id,
+                  link_id: evidenceLink.id,
                   source: { type: 'survey_response', id: subject.response_id },
                   target: { type: 'finding', id: finding.id },
                   relation_type: 'evidence_of',

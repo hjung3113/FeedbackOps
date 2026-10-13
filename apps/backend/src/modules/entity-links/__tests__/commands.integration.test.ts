@@ -76,6 +76,32 @@ describe.skipIf(!runIntegration)('entity-links command seam (#391)', () => {
     ).rejects.toThrow(Rollback);
   }
 
+  it('concurrent ordinary creates return one canonical active ID and one inserted outcome', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Concurrent MS');
+    const input = {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc' as const,
+      sourceId: randomUUID(),
+      targetType: 'finding' as const,
+      targetId: randomUUID(),
+      relationType: 'created_finding' as const,
+      managedSystemId: msId,
+      createdBy: actorId,
+      visibility: 'internal_only' as const,
+    };
+    const results = await Promise.all([
+      dbHandle.db.transaction((tx) => createEntityLink(tx, input)),
+      dbHandle.db.transaction((tx) => createEntityLink(tx, input)),
+    ]);
+    expect(results.map((r) => r.inserted).sort()).toEqual([false, true]);
+    expect(results[0]?.row.id).toBe(results[1]?.row.id);
+    const canonical = await migrateHandle.pool.query(
+      'select id from core.entity_links where workspace_id = $1 and source_id = $2::uuid',
+      [WORKSPACE_ID, input.sourceId],
+    );
+    expect(canonical.rows).toEqual([{ id: results[0]?.row.id }]);
+  });
+
   it('create/find/detach round trip; detached link is no longer active', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Seam MS');
     const sourceId = randomUUID();
@@ -121,7 +147,7 @@ describe.skipIf(!runIntegration)('entity-links command seam (#391)', () => {
       expect(recreated.row.id).not.toBe(created.row.id);
     });
 
-    const persisted = await dbHandle.pool.query<{ count: string }>(
+    const persisted = await migrateHandle.pool.query<{ count: string }>(
       `select count(*)::text as count
          from core.entity_links
         where workspace_id = $1 and source_id = $2::uuid`,

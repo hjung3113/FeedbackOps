@@ -231,7 +231,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       primary_managed_system_id: input.msId,
     });
 
-    const link = await dbHandle.pool.query<{ id: string }>(
+    const link = await migrateHandle.pool.query<{ id: string }>(
       `select id
          from core.entity_links
         where workspace_id = $1
@@ -245,7 +245,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     );
     expect(link.rowCount).toBe(1);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
