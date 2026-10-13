@@ -1,5 +1,6 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { TASK_BOARD_COPY } from '@/lib/copy/task-board';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { useDraggable } from '@dnd-kit/core';
 import type { TaskDto } from '@fops/shared';
 import { SeverityBadge, UnassignedBadge, UserAvatar } from '@fops/ui';
@@ -106,7 +107,9 @@ function TaskBoardCardContent({
           {managedSystemName}
         </span>
         {task.assignee_team_id ? (
-          <span>{assigneeName}</span>
+          <span>
+            {RESPONSIBILITY_COPY.teamMark} · {assigneeName}
+          </span>
         ) : assigneeName ? (
           <UserAvatar user={{ display_name: assigneeName }} size="sm" />
         ) : (

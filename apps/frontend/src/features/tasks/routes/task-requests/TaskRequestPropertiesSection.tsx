@@ -50,6 +50,14 @@ export function TaskRequestPropertiesSection({
             actorId={item.assigned_reviewer_actor_id}
             teamId={item.assigned_reviewer_team_id}
             canEdit={canAssign}
+            teamCandidates={[
+              ...new Set(
+                [
+                  names.managedSystemsById[item.primary_managed_system_id]?.defaultReviewerTeamId,
+                  names.managedSystemsById[item.primary_managed_system_id]?.defaultOwnerTeamId,
+                ].filter((id): id is string => id !== undefined),
+              ),
+            ]}
             onSave={(actorId, teamId, key) =>
               assignTaskRequestReviewer(
                 item.id,
@@ -72,12 +80,16 @@ export function TaskRequestPropertiesSection({
           </span>
         )}
       </FieldRow>
-      <FieldRow label="검토자">
+      <FieldRow label={RESPONSIBILITY_COPY.decider}>
         {reviewer ? (
           <UserChip
             user={{ display_name: reviewer.display_name }}
             {...(reviewer.email !== undefined ? { sub: reviewer.email } : {})}
           />
+        ) : item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id ? (
+          <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
+            {RESPONSIBILITY_COPY.undecided}
+          </span>
         ) : (
           <UnassignedBadge label="검토자 없음" />
         )}

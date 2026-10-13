@@ -308,7 +308,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     });
   }
 
-  it.each(['owner', 'team', 'aa', 'queue', 'revoked', 'expired', 'denied'] as const)(
+  it.each(['owner', 'team', 'aa', 'queue', 'revoked', 'expired', 'denied', 'system'] as const)(
     'resolves reviewer through %s with discoverable skipped rules and no replay diagnostic duplication',
     async (mode) => {
       const seeded = await seedVocSource();
@@ -331,6 +331,19 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
           area.rows[0]?.id,
           seeded.id,
         ]);
+      }
+      if (mode === 'system') {
+        const sys = await dbHandle.pool.query<{ id: string }>(
+          `select id from core.actors
+            where external_id = 'system' and workspace_id = $1`,
+          [WORKSPACE_ID],
+        );
+        const systemActorId = sys.rows[0]?.id;
+        if (!systemActorId) throw new Error('seed system actor not found');
+        await migrateHandle.pool.query(
+          'update core.managed_systems set default_reviewer_actor_id = $1 where id = $2',
+          [systemActorId, seeded.msId],
+        );
       }
       if (['revoked', 'expired', 'denied'].includes(mode)) {
         const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
@@ -383,7 +396,7 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       );
       expect(diagnostics.rows).toHaveLength(resolved ? (mode === 'aa' ? 2 : 1) : 3);
       expect(new Set(diagnostics.rows.map((row) => row.rule)).size).toBe(diagnostics.rows.length);
-      if (['revoked', 'expired', 'denied'].includes(mode))
+      if (['revoked', 'expired', 'denied', 'system'].includes(mode))
         expect(diagnostics.rows).toContainEqual({
           rule: 'managed_system_reviewer',
           category: 'ineligible_actor',
@@ -561,6 +574,41 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       [seeded.msId],
     );
     expect(rows.rows).toHaveLength(1);
+    const diagnostics = await migrateHandle.pool.query(
+      'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(diagnostics.rows).toHaveLength(0);
+  });
+
+  it('rejects an explicit system Actor as assigned reviewer despite its admin Role Level', async () => {
+    const seeded = await seedVocSource();
+    const sys = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors
+        where external_id = 'system' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const systemActorId = sys.rows[0]?.id;
+    if (!systemActorId) throw new Error('seed system actor not found');
+
+    const rejected = await requestTask(adminCookie, 'voc', seeded.id, randomUUID(), {
+      assigned_reviewer_actor_id: systemActorId,
+    });
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['assigned_reviewer_actor_id'], code: 'ineligible_actor' }] },
+    });
+    const rows = await migrateHandle.pool.query(
+      'select 1 from task_request.task_requests where primary_managed_system_id = $1',
+      [seeded.msId],
+    );
+    expect(rows.rows).toHaveLength(0);
+    const audits = await migrateHandle.pool.query(
+      "select 1 from core.audit_log where event_type = 'task_request_created_from_voc' and detail->>'source_voc_id' = $1::text",
+      [seeded.id],
+    );
+    expect(audits.rows).toHaveLength(0);
     const diagnostics = await migrateHandle.pool.query(
       'select 1 from core.responsibility_default_failures where managed_system_id = $1',
       [seeded.msId],

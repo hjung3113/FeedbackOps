@@ -3,7 +3,22 @@ export const TASK_LINK_MISSING_MESSAGE =
 
 export const RESPONSIBILITY_COPY = {
   modes: { automatic: '자동 배정', unassigned: '미배정', actor: '사용자 지정', team: '팀 지정' },
-  edit: '배정 수정', mode: '배정 방식', actorId: '사용자 ID',
-  actor: '담당 사용자', selectActor: '사용자 선택', teamId: '팀 ID', reviewer: '배정된 검토자',
-  save: '배정 저장', saved: '배정을 저장했습니다.', allReviewers: '모든 검토자', mine: '내 검토 요청',
+  edit: '배정 수정',
+  mode: '배정 방식',
+  actor: '담당 사용자',
+  selectActor: '사용자 선택',
+  selectTeam: '팀 선택',
+  teamId: '팀 ID',
+  reviewer: '배정된 검토자',
+  save: '배정 저장',
+  saved: '배정을 저장했습니다.',
+  allReviewers: '모든 검토자',
+  mine: '내 검토 요청',
+  // Assigned reviewer vs actual decision Actor (ADR-0067 56-F) and team identity.
+  assignedShort: '검토 담당',
+  decider: '결정자',
+  decidedShort: '결정',
+  undecided: '미결정',
+  teamMark: '팀',
+  ineligible: '지정할 수 없음',
 };

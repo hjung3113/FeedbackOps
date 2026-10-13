@@ -172,7 +172,7 @@ describe('TaskListRoute display ids', () => {
     );
     try {
       renderWithClient(<TaskListRoute />);
-      expect(await screen.findByText('운영팀')).toBeInTheDocument();
+      expect(await screen.findByText(/팀 · 운영팀/)).toBeInTheDocument();
       expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();

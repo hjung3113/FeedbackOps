@@ -133,6 +133,11 @@ vi.mock('@/lib/api/managed-systems', () => ({
     items: [{ id: taskRequest.primary_managed_system_id, name: 'Billing Ops' }],
   })),
 }));
+// The reviewer picker's candidate read must not surface as an apiClient call
+// in this suite: it asserts submits make no API mutation at all.
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
 vi.mock('@/lib/api', () => ({
   apiClient: api.apiClient,
   approveTaskRequest: vi.fn(),

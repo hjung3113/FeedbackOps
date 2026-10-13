@@ -25,7 +25,7 @@ import * as React from 'react';
 import {
   resolveTaskAssignee,
   taskPriorityToSeverity,
-  taskTeamLabel,
+  taskTeamMark,
   useTaskManagedSystemNames,
   useTaskTeamNames,
 } from '../adapters/taskDisplayAdapters';
@@ -207,7 +207,7 @@ export function TaskListRoute({
                           GLOSSARY.unknownUser
                         )
                       ) : task.assignee_team_id ? (
-                        taskTeamLabel(task.assignee_team_id, teamNames)
+                        taskTeamMark(task.assignee_team_id, teamNames)
                       ) : (
                         <UnassignedBadge />
                       )}

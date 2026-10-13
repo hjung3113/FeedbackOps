@@ -50,6 +50,11 @@ export async function resolveTaskResponsibility<W extends Workflow>(args: {
     if (!actorId) return 'missing';
     const candidate = await lockWorkspaceActor(tx, { workspaceId, actorId });
     if (!candidate) return 'foreign_workspace';
+    // An Actor is an authenticated internal person (CONTEXT.md); the seeded
+    // `system` identity carries role_level=admin but cannot hold Task
+    // responsibility, so reject it before the capability check that would
+    // accept any Admin (mirrors Core's responsibility-target rule).
+    if (candidate.actor_type !== 'internal_member') return 'ineligible_actor';
     const allowed = await checkFindingManage(
       args.checkService,
       {

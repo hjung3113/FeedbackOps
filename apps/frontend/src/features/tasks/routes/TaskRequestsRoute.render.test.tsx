@@ -44,6 +44,10 @@ vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
 }));
 
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
+
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: vi.fn(async () => ({
     items: [{ id: '30000000-0000-0000-0000-000000000003', name: 'Billing Ops' }],
@@ -243,6 +247,37 @@ describe('TaskRequestsRoute display ids', () => {
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(vi.mocked(fetchTaskRequests).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
+  });
+
+  it('hides the reviewer filter while the queue is permission-blocked', async () => {
+    vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByText('Task Request queue');
+    expect(screen.queryByRole('combobox', { name: '검토자 필터' })).not.toBeInTheDocument();
+  });
+
+  it('shows the filtered-empty state on the pending tab for 내 검토 요청 and clears the filter', async () => {
+    vi.mocked(fetchTaskRequests).mockImplementation(async (options) =>
+      options?.reviewer === 'me'
+        ? taskRequestPage([], options)
+        : taskRequestPage([taskRequest], options),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByRole('button', { name: /REQ-42/ });
+    fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+    fireEvent.click(await screen.findByRole('option', { name: '내 검토 요청' }));
+    expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();
+    expect(screen.queryByText('검토 대기 중인 Task Request가 없습니다')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+    expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
+    expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
   });
 });
 

@@ -29,12 +29,12 @@ import {
   SeverityBadge,
   Skeleton,
   SkeletonBlocks,
-  UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
+import { useTaskManagedSystems } from '../adapters/taskDisplayAdapters';
 import { ResponsibilityEditor } from './ResponsibilityEditor';
 
 const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> =
@@ -173,6 +173,8 @@ export function TaskDetailPanel({
     staleTime: 30 * 1000,
   });
   const { data: me } = useMe();
+  // Team candidates for the assignee picker: Managed System defaults (ADR-0067).
+  const managedSystems = useTaskManagedSystems();
   // #377: backend gates Task comment GET+POST behind finding.manage + elevated
   // role on the Task's Managed System — same gate drives the composer hint.
   // Key resolves once the task loads; until then the check runs workspace-wide
@@ -227,6 +229,9 @@ export function TaskDetailPanel({
   const source = task.source;
   const sourceFinding = source?.finding;
   const sourceVoc = source?.voc;
+  const managedSystem = managedSystems.find(
+    (system) => system.id === task.primary_managed_system_id,
+  );
   return (
     <TaskDetailPanelFrame
       ariaLive="off"
@@ -281,6 +286,14 @@ export function TaskDetailPanel({
                 me?.actor.role_level === 'admin' ||
                 (me?.actor.role_level === 'developer' && canManageNotes)
               }
+              teamCandidates={[
+                ...new Set(
+                  [
+                    managedSystem?.default_owner_team_id,
+                    managedSystem?.default_reviewer_team_id,
+                  ].filter((id): id is string => id !== undefined),
+                ),
+              ]}
               onSave={(actorId, teamId, key) =>
                 assignTaskResponsibility(
                   task.id,

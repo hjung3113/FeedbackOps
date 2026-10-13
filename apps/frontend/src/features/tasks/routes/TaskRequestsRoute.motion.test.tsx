@@ -19,6 +19,11 @@ vi.mock('@/lib/auth/useMe', () => ({
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: async () => ({ items: [] }),
 }));
+// Motion tests await isFetching() === 0; the picker's candidate read must not
+// keep a query in flight.
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
 vi.mock('@fops/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@fops/ui')>()),
   ListShell: ({ list, detailPanel }: { list: ReactNode; detailPanel?: ReactNode }) => (

@@ -202,8 +202,8 @@ findings
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
-- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
-- owner_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null with owner Actor
+- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation/edit routing #1090)
+- owner_team_id: uuid, nullable (storage #1089; creation/edit routing #1090, ADR-0067); XOR-or-both-null with owner Actor
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required

@@ -2,10 +2,10 @@ import { resolveActors } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
 import {
   Button,
-  FieldLabel,
   Select,
   SelectContent,
   SelectItem,
@@ -14,37 +14,60 @@ import {
   UnassignedBadge,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+
+const NO_SELECTION = '__none__';
+
+type Mode = 'unassigned' | 'actor' | 'team';
+
+/** Names for the ids the pickers can select, resolved through /actors/resolve. */
+function useIdentityNames(actorId: string | null, teamIds: readonly string[]) {
+  const query = useQuery({
+    queryKey: ['actors-resolve', actorId ? [actorId] : [], [...teamIds].sort()] as const,
+    enabled: actorId !== null || teamIds.length > 0,
+    queryFn: ({ signal }) =>
+      resolveActors({ actorIds: actorId ? [actorId] : [], teamIds: [...teamIds] }, signal),
+    staleTime: 60_000,
+  });
+  return {
+    actorName: (id: string) => query.data?.actors.find((actor) => actor.id === id)?.display_name,
+    teamName: (id: string) => query.data?.teams.find((team) => team.id === id)?.name,
+  };
+}
 
 export function ResponsibilityEditor({
   actorId,
   teamId,
   canEdit,
-  onSave,
   label,
+  teamCandidates,
+  onSave,
 }: {
   actorId: string | null;
   teamId: string | null;
   canEdit: boolean;
   label: string;
+  /** Team ids already known in context (current value, Managed System defaults). */
+  teamCandidates?: readonly string[];
   onSave: (actorId: string | null, teamId: string | null, key: string) => Promise<unknown>;
 }) {
   const client = useQueryClient();
-  const inputId = useId();
   const [editing, setEditing] = useState(false);
-  const [mode, setMode] = useState<'unassigned' | 'actor' | 'team'>('unassigned');
+  const [mode, setMode] = useState<Mode>('unassigned');
   const [value, setValue] = useState('');
+  const [focusReturnPending, setFocusReturnPending] = useState(false);
   const submissionKey = useRef<string | null>(null);
-  const identity = useQuery({
-    queryKey: ['actors-resolve', actorId, teamId],
-    enabled: actorId !== null || teamId !== null,
-    queryFn: ({ signal }) =>
-      resolveActors(
-        { actorIds: actorId ? [actorId] : [], teamIds: teamId ? [teamId] : [] },
-        signal,
-      ),
-    staleTime: 60_000,
-  });
+  const editTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const modeSelectRef = useRef<HTMLButtonElement | null>(null);
+  const candidateTeamIds = [...new Set([...(teamCandidates ?? []), ...(teamId ? [teamId] : [])])];
+  const identity = useIdentityNames(actorId, candidateTeamIds);
+  const actorOptions = useWorkspaceActors({ enabled: editing && canEdit });
+  // Eligible responsibility targets: authenticated internal people with an
+  // elevated role. Scoped grant checks stay server-side (ADR-0067 56-F).
+  const eligibleActors = (actorOptions.actors ?? []).filter(
+    (actor) => actor.actor_type === 'internal_member' && actor.role_level !== 'user',
+  );
   const save = useMutation({
     mutationFn: () => {
       submissionKey.current ??= crypto.randomUUID();
@@ -65,7 +88,9 @@ export function ResponsibilityEditor({
       ]) {
         void client.invalidateQueries({ queryKey });
       }
+      toast.success(RESPONSIBILITY_COPY.saved);
       setEditing(false);
+      setFocusReturnPending(true);
       submissionKey.current = null;
     },
   });
@@ -74,19 +99,29 @@ export function ResponsibilityEditor({
     submissionKey.current = null;
     save.reset();
   };
+  const cancel = () => {
+    if (save.isPending) return;
+    setEditing(false);
+    setFocusReturnPending(true);
+  };
+  // The trigger button is unmounted while the editor is open; focus it after it remounts.
+  useEffect(() => {
+    if (!editing && focusReturnPending) {
+      editTriggerRef.current?.focus();
+      setFocusReturnPending(false);
+    }
+  }, [editing, focusReturnPending]);
+  useEffect(() => {
+    if (editing) modeSelectRef.current?.focus();
+  }, [editing]);
+
   if (!editing)
     return (
-      <div className="flex flex-col gap-1">
+      <span className="flex items-center gap-2">
         {actorId ? (
-          <span>
-            {identity.data?.actors.find((actor) => actor.id === actorId)?.display_name ??
-              GLOSSARY.unknownUser}
-          </span>
+          <span>{identity.actorName(actorId) ?? GLOSSARY.unknownUser}</span>
         ) : teamId ? (
-          <span>
-            {identity.data?.teams.find((team) => team.id === teamId)?.name ??
-              `팀 ${shortId(teamId)}`}
-          </span>
+          <span>{identity.teamName(teamId) ?? `팀 ${shortId(teamId)}`}</span>
         ) : (
           <UnassignedBadge
             label={label === RESPONSIBILITY_COPY.reviewer ? '미배정' : '담당자 없음'}
@@ -94,6 +129,7 @@ export function ResponsibilityEditor({
         )}
         {canEdit && (
           <Button
+            ref={editTriggerRef}
             variant="ghost"
             size="sm"
             onClick={() => {
@@ -105,11 +141,17 @@ export function ResponsibilityEditor({
             {RESPONSIBILITY_COPY.edit}
           </Button>
         )}
-      </div>
+      </span>
     );
   return (
     <form
       className="flex flex-col gap-2"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          cancel();
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         if (!save.isPending && (mode === 'unassigned' || value.trim())) save.mutate();
@@ -119,11 +161,11 @@ export function ResponsibilityEditor({
         value={mode}
         disabled={save.isPending}
         onValueChange={(next) => {
-          setMode(next as typeof mode);
+          setMode(next as Mode);
           changeDraft('');
         }}
       >
-        <SelectTrigger aria-label={RESPONSIBILITY_COPY.mode}>
+        <SelectTrigger ref={modeSelectRef} aria-label={RESPONSIBILITY_COPY.mode}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -134,19 +176,49 @@ export function ResponsibilityEditor({
           ))}
         </SelectContent>
       </Select>
-      {mode !== 'unassigned' && (
-        <>
-          <FieldLabel htmlFor={inputId}>
-            {mode === 'actor' ? RESPONSIBILITY_COPY.actorId : RESPONSIBILITY_COPY.teamId}
-          </FieldLabel>
-          <input
-            id={inputId}
-            className="rounded border border-border-subtle bg-surface-detail px-2 py-1 text-sm"
-            value={value}
-            disabled={save.isPending}
-            onChange={(event) => changeDraft(event.target.value)}
-          />
-        </>
+      {mode === 'actor' && (
+        <Select
+          value={value || NO_SELECTION}
+          disabled={save.isPending}
+          onValueChange={(next) => changeDraft(next === NO_SELECTION ? '' : next)}
+        >
+          <SelectTrigger aria-label={RESPONSIBILITY_COPY.actor}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectActor}</SelectItem>
+            {eligibleActors.map((actor) => (
+              <SelectItem key={actor.id} value={actor.id}>
+                {actor.display_name}
+              </SelectItem>
+            ))}
+            {actorId && !eligibleActors.some((actor) => actor.id === actorId) && (
+              <SelectItem value={actorId} disabled>
+                {identity.actorName(actorId) ?? GLOSSARY.unknownUser} ·{' '}
+                {RESPONSIBILITY_COPY.ineligible}
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      )}
+      {mode === 'team' && (
+        <Select
+          value={value || NO_SELECTION}
+          disabled={save.isPending}
+          onValueChange={(next) => changeDraft(next === NO_SELECTION ? '' : next)}
+        >
+          <SelectTrigger aria-label={RESPONSIBILITY_COPY.selectTeam}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectTeam}</SelectItem>
+            {candidateTeamIds.map((id) => (
+              <SelectItem key={id} value={id}>
+                {identity.teamName(id) ?? `팀 ${shortId(id)}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
       {save.isError && (
         <span role="alert" className="text-xs text-accent-danger">
@@ -162,13 +234,7 @@ export function ResponsibilityEditor({
         >
           {RESPONSIBILITY_COPY.save}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={save.isPending}
-          onClick={() => setEditing(false)}
-        >
+        <Button type="button" variant="ghost" size="sm" disabled={save.isPending} onClick={cancel}>
           취소
         </Button>
       </div>

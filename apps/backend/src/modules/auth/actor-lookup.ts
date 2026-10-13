@@ -14,6 +14,7 @@ import type { Tx } from '../../db/tx.js';
 export interface WorkspaceActor {
   id: string;
   role_level: 'admin' | 'developer' | 'user';
+  actor_type: 'internal_member' | 'system';
 }
 
 export async function findWorkspaceActor(
@@ -21,7 +22,7 @@ export async function findWorkspaceActor(
   input: { workspaceId: string; actorId: string },
 ): Promise<WorkspaceActor | null> {
   const rows = await db
-    .select({ id: actors.id, role_level: actors.roleLevel })
+    .select({ id: actors.id, role_level: actors.roleLevel, actor_type: actors.actorType })
     .from(actors)
     .where(and(eq(actors.workspaceId, input.workspaceId), eq(actors.id, input.actorId)))
     .limit(1);
@@ -30,7 +31,10 @@ export async function findWorkspaceActor(
   if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
     throw new Error(`unexpected role_level for actor ${row.id}: ${row.role_level}`);
   }
-  return { id: row.id, role_level: row.role_level };
+  if (row.actor_type !== 'internal_member' && row.actor_type !== 'system') {
+    throw new Error(`unexpected actor_type for actor ${row.id}: ${row.actor_type}`);
+  }
+  return { id: row.id, role_level: row.role_level, actor_type: row.actor_type };
 }
 
 export async function listWorkspaceAdminActorIds(tx: Tx, workspaceId: string): Promise<string[]> {
@@ -70,6 +74,9 @@ export async function lockWorkspaceActor(
   if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
     throw new Error(`unexpected role_level for actor ${row.id}: ${row.role_level}`);
   }
+  if (row.actor_type !== 'internal_member' && row.actor_type !== 'system') {
+    throw new Error(`unexpected actor_type for actor ${row.id}: ${row.actor_type}`);
+  }
   return { id: row.id, role_level: row.role_level, actor_type: row.actor_type };
 }
 
@@ -79,7 +86,12 @@ export async function findWorkspaceActorDisplay(
   input: { workspaceId: string; actorId: string },
 ): Promise<(WorkspaceActor & { display_name: string }) | null> {
   const rows = await db
-    .select({ id: actors.id, role_level: actors.roleLevel, display_name: actors.displayName })
+    .select({
+      id: actors.id,
+      role_level: actors.roleLevel,
+      actor_type: actors.actorType,
+      display_name: actors.displayName,
+    })
     .from(actors)
     .where(and(eq(actors.workspaceId, input.workspaceId), eq(actors.id, input.actorId)))
     .limit(1);
@@ -88,5 +100,13 @@ export async function findWorkspaceActorDisplay(
   if (row.role_level !== 'admin' && row.role_level !== 'developer' && row.role_level !== 'user') {
     throw new Error('unexpected requester Role Level');
   }
-  return { id: row.id, role_level: row.role_level, display_name: row.display_name };
+  if (row.actor_type !== 'internal_member' && row.actor_type !== 'system') {
+    throw new Error(`unexpected actor_type for actor ${row.id}: ${row.actor_type}`);
+  }
+  return {
+    id: row.id,
+    role_level: row.role_level,
+    actor_type: row.actor_type,
+    display_name: row.display_name,
+  };
 }

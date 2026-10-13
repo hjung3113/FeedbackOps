@@ -31,7 +31,15 @@ export function dot() {
 export interface NameMaps {
   teamsById?: Record<string, { name: string }>;
   actorsById: Record<string, { id: string; display_name: string; email?: string }>;
-  managedSystemsById: Record<string, { name: string }>;
+  managedSystemsById: Record<
+    string,
+    {
+      name: string;
+      /** Default reviewer/owner team ids (ADR-0067), for team pickers' known candidates. */
+      defaultReviewerTeamId?: string;
+      defaultOwnerTeamId?: string;
+    }
+  >;
 }
 
 // `exactOptionalPropertyTypes` is on: an optional property must spell `| undefined`
@@ -85,6 +93,23 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
       </>
     ),
   });
+  if (item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id) {
+    metaParts.push({
+      key: 'assigned-reviewer',
+      node: (
+        <span>
+          {RESPONSIBILITY_COPY.assignedShort}{' '}
+          {item.assigned_reviewer_actor_id
+            ? (names.actorsById[item.assigned_reviewer_actor_id]?.display_name ??
+              GLOSSARY.unknownUser)
+            : `${RESPONSIBILITY_COPY.teamMark} · ${
+                names.teamsById?.[item.assigned_reviewer_team_id as string]?.name ??
+                `팀 ${shortId(item.assigned_reviewer_team_id as string)}`
+              }`}
+        </span>
+      ),
+    });
+  }
   if (item.created_at) {
     metaParts.push({
       key: 'created-at',
@@ -129,15 +154,13 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
               </span>
             )}
           </span>
-          {(item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id) && <span className="text-xs text-text-muted">
-            {RESPONSIBILITY_COPY.reviewer}{' · '}
-            <span>{item.assigned_reviewer_actor_id
-              ? names.actorsById[item.assigned_reviewer_actor_id]?.display_name ?? GLOSSARY.unknownUser
-              : names.teamsById?.[item.assigned_reviewer_team_id as string]?.name ?? `팀 ${shortId(item.assigned_reviewer_team_id as string)}`}</span>
-          </span>}
           {reviewer ? (
             <span className="rounded border border-border-subtle px-2 py-1 text-xs text-text-muted">
-              {reviewer.display_name}
+              {RESPONSIBILITY_COPY.decidedShort} · {reviewer.display_name}
+            </span>
+          ) : item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id ? (
+            <span className="rounded border border-border-subtle px-2 py-1 text-xs text-text-muted">
+              {RESPONSIBILITY_COPY.undecided}
             </span>
           ) : (
             <UnassignedBadge label="검토자 없음" />

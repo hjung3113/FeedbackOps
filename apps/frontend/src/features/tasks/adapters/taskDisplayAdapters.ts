@@ -1,5 +1,6 @@
 import { resolveActors } from '@/lib/api/actors';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { type ManagedSystemDto, fetchManagedSystems } from '@/lib/api/managed-systems';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { shortId } from '@/lib/identity';
 import type { TaskDto } from '@fops/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +24,16 @@ export function useTaskManagedSystemNames(): ReadonlyMap<string, string> {
     () => new Map((systemsQuery.data?.items ?? []).map((system) => [system.id, system.name])),
     [systemsQuery.data?.items],
   );
+}
+
+/** Full registry read (same cache as the names hook) for team-picker candidates. */
+export function useTaskManagedSystems(): readonly ManagedSystemDto[] {
+  const systemsQuery = useQuery({
+    queryKey: ['managed-systems', 'all'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
+    staleTime: 10 * 60 * 1000,
+  });
+  return systemsQuery.data?.items ?? [];
 }
 
 export function resolveTaskAssignee(
@@ -59,4 +70,9 @@ export function useTaskTeamNames(tasks: readonly TaskDto[]): ReadonlyMap<string,
 
 export function taskTeamLabel(teamId: string, names: ReadonlyMap<string, string>): string {
   return names.get(teamId) ?? `팀 ${shortId(teamId)}`;
+}
+
+/** Row/card label that marks a team assignee as a team, never a person. */
+export function taskTeamMark(teamId: string, names: ReadonlyMap<string, string>): string {
+  return `${RESPONSIBILITY_COPY.teamMark} · ${taskTeamLabel(teamId, names)}`;
 }

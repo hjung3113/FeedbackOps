@@ -1,10 +1,21 @@
 import { ListLoadMore } from '@/components/ListLoadMore';
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_REQUEST_LINK_MISSING_MESSAGE } from '@/lib/copy/task-requests';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { shortId } from '@/lib/identity';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
-import { Button, FieldLabel, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@fops/ui';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@fops/ui';
 import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@fops/ui';
 import { useEffect, useState } from 'react';
 
@@ -41,8 +52,6 @@ export function TaskRequestsRoute({
   const [localFilter, setLocalFilter] = useState<{ reviewer?: string; team?: string }>({});
   const activeReviewer = onReviewerChange ? reviewer : localFilter.reviewer;
   const activeTeam = onReviewerChange ? reviewerTeam : localFilter.team;
-  const [filterMode, setFilterMode] = useState<'actor' | 'team' | null>(null);
-  const [filterId, setFilterId] = useState('');
   const changeReviewer = (actor: string | undefined, team: string | undefined) => {
     if (onReviewerChange) onReviewerChange(actor, team);
     else setLocalFilter({ ...(actor ? { reviewer: actor } : {}), ...(team ? { team } : {}) });
@@ -54,6 +63,43 @@ export function TaskRequestsRoute({
     reviewerTeam: activeTeam,
     onSelectionChange,
   });
+  // The reviewer filter is fully controlled by the committed search state
+  // (route props on history navigation), so Back/Forward always re-sync it.
+  const actorOptions = useWorkspaceActors();
+  const eligibleActors = (actorOptions.actors ?? []).filter(
+    (actor) => actor.actor_type === 'internal_member' && actor.role_level !== 'user',
+  );
+  const scopedSystem =
+    managedSystem !== undefined && managedSystem !== 'all'
+      ? queue.names.managedSystemsById[managedSystem]
+      : undefined;
+  const teamCandidateIds = [
+    ...new Set(
+      [
+        activeTeam,
+        scopedSystem?.defaultReviewerTeamId,
+        scopedSystem?.defaultOwnerTeamId,
+        ...Object.keys(queue.names.teamsById ?? {}),
+      ].filter((id): id is string => id !== undefined),
+    ),
+  ];
+  const reviewerFilterActive = activeReviewer !== undefined || activeTeam !== undefined;
+  // Reviewer filtering needs `finding.manage` (Admin or scoped Developer);
+  // the control stays hidden when the queue itself is permission-blocked.
+  const showReviewerFilter = !queue.permissionDeniedError && queue.currentRole !== 'user';
+  const applyFilterValue = (value: string) => {
+    if (value === 'all') changeReviewer(undefined, undefined);
+    else if (value === 'me') changeReviewer('me', undefined);
+    else if (value.startsWith('actor:')) changeReviewer(value.slice('actor:'.length), undefined);
+    else if (value.startsWith('team:')) changeReviewer(undefined, value.slice('team:'.length));
+  };
+  const filterValue = activeTeam
+    ? `team:${activeTeam}`
+    : activeReviewer === 'me'
+      ? 'me'
+      : activeReviewer
+        ? `actor:${activeReviewer}`
+        : 'all';
   const context = JSON.stringify([
     queue.activeTab,
     managedSystem ?? null,
@@ -87,9 +133,16 @@ export function TaskRequestsRoute({
 
   const activeTabLabel =
     queue.tabs.find((tab) => tab.value === queue.activeTab)?.label ?? queue.activeTab;
+  // A reviewer filter changes which branch a zero-page takes: the row exists in
+  // the scope-wide tab count but is not the viewer's — never call it empty.
+  const isReviewFilteredEmpty = reviewerFilterActive && queue.shown.length === 0 && queue.hasItems;
   const isPendingEmpty =
-    queue.shown.length === 0 && queue.hasItems && queue.activeTab === 'pending_review';
-  const isFilteredEmpty =
+    !reviewerFilterActive &&
+    queue.shown.length === 0 &&
+    queue.hasItems &&
+    queue.activeTab === 'pending_review';
+  const isStatusFilteredEmpty =
+    !reviewerFilterActive &&
     queue.shown.length === 0 &&
     queue.hasItems &&
     queue.activeTab !== 'pending_review' &&
@@ -103,69 +156,49 @@ export function TaskRequestsRoute({
             tabs={queue.tabs}
             activeTab={queue.activeTab}
             onTabChange={(next) => queue.setActiveTab(next as TaskRequestTab)}
+            action={
+              showReviewerFilter ? (
+                <Select value={filterValue} onValueChange={applyFilterValue}>
+                  <SelectTrigger aria-label="검토자 필터" className="h-8 w-44 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{RESPONSIBILITY_COPY.allReviewers}</SelectItem>
+                    <SelectItem value="me">{RESPONSIBILITY_COPY.mine}</SelectItem>
+                    <SelectGroup>
+                      <SelectLabel>{RESPONSIBILITY_COPY.modes.actor}</SelectLabel>
+                      {eligibleActors.map((actor) => (
+                        <SelectItem key={actor.id} value={`actor:${actor.id}`}>
+                          {actor.display_name}
+                        </SelectItem>
+                      ))}
+                      {activeReviewer !== undefined &&
+                        activeReviewer !== 'me' &&
+                        !eligibleActors.some((actor) => actor.id === activeReviewer) && (
+                          <SelectItem value={`actor:${activeReviewer}`} disabled>
+                            {(activeReviewer &&
+                              queue.names.actorsById[activeReviewer]?.display_name) ??
+                              GLOSSARY.unknownUser}{' '}
+                            · {RESPONSIBILITY_COPY.ineligible}
+                          </SelectItem>
+                        )}
+                    </SelectGroup>
+                    {teamCandidateIds.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>{RESPONSIBILITY_COPY.modes.team}</SelectLabel>
+                        {teamCandidateIds.map((id) => (
+                          <SelectItem key={id} value={`team:${id}`}>
+                            {RESPONSIBILITY_COPY.teamMark} ·{' '}
+                            {queue.names.teamsById?.[id]?.name ?? `팀 ${shortId(id)}`}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : undefined
+            }
           />
-          <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
-            <Select
-              value={
-                filterMode ??
-                (activeTeam
-                  ? 'team'
-                  : activeReviewer === 'me'
-                    ? 'me'
-                    : activeReviewer
-                      ? 'actor'
-                      : 'all')
-              }
-              onValueChange={(value) => {
-                setFilterMode(value === 'actor' || value === 'team' ? value : null);
-                setFilterId('');
-                if (value === 'all' || value === 'me')
-                  changeReviewer(value === 'me' ? 'me' : undefined, undefined);
-              }}
-            >
-              <SelectTrigger aria-label="검토자 필터">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{RESPONSIBILITY_COPY.allReviewers}</SelectItem>
-                <SelectItem value="me">{RESPONSIBILITY_COPY.mine}</SelectItem>
-                <SelectItem value="actor">{RESPONSIBILITY_COPY.modes.actor}</SelectItem>
-                <SelectItem value="team">{RESPONSIBILITY_COPY.modes.team}</SelectItem>
-              </SelectContent>
-            </Select>
-            {(filterMode || activeTeam || (activeReviewer && activeReviewer !== 'me')) && (
-              <form
-                className="flex items-center gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const mode = filterMode ?? (activeTeam ? 'team' : 'actor');
-                  const id = filterId.trim();
-                  if (id)
-                    changeReviewer(
-                      mode === 'actor' ? id : undefined,
-                      mode === 'team' ? id : undefined,
-                    );
-                }}
-              >
-                <FieldLabel htmlFor="reviewer-filter-id">
-                  {(filterMode ?? (activeTeam ? 'team' : 'actor')) === 'team'
-                    ? RESPONSIBILITY_COPY.teamId
-                    : RESPONSIBILITY_COPY.actorId}
-                </FieldLabel>
-                <input
-                  id="reviewer-filter-id"
-                  value={
-                    filterId || (filterMode === null ? (activeTeam ?? activeReviewer ?? '') : '')
-                  }
-                  onChange={(event) => setFilterId(event.target.value)}
-                  className="rounded border border-border-subtle bg-surface-detail px-2 py-1 text-sm"
-                />
-                <Button type="submit" size="sm">
-                  적용
-                </Button>
-              </form>
-            )}
-          </div>
           {queue.isLoading ? (
             <div className="p-4 text-sm text-text-muted">Task Request을 불러오는 중…</div>
           ) : queue.permissionDeniedError ? (
@@ -205,13 +238,23 @@ export function TaskRequestsRoute({
                 onLoadMore={queue.loadMore}
               />
               {queue.shown.length === 0 &&
-                (isPendingEmpty ? (
+                (isReviewFilteredEmpty ? (
+                  <ListStateMessage
+                    variant="filtered"
+                    title="현재 조건에 맞는 Task Request가 없습니다"
+                    body={`검토자 필터가 설정되어 있습니다. 선택한 상태: ${activeTabLabel}`}
+                    action={{
+                      label: '필터 초기화',
+                      onClick: () => changeReviewer(undefined, undefined),
+                    }}
+                  />
+                ) : isPendingEmpty ? (
                   <ListStateMessage
                     variant="filtered"
                     title="검토 대기 중인 Task Request가 없습니다"
                     body="다른 상태의 Task Request가 있습니다."
                   />
-                ) : isFilteredEmpty ? (
+                ) : isStatusFilteredEmpty ? (
                   <ListStateMessage
                     variant="filtered"
                     title="현재 조건에 맞는 Task Request가 없습니다"
