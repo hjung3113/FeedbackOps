@@ -5,11 +5,21 @@ import {
   SURVEY_TYPE_LABELS,
 } from '@/lib/copy/enum-labels';
 import { EVIDENCE_COPY } from '@/lib/copy/evidence';
+import { InternalLink } from '@/lib/router/InternalLink';
 import type { EvidenceInventoryItem } from '@fops/shared';
 
-export function EvidenceSource({ item }: { item: EvidenceInventoryItem }) {
+export function EvidenceSource({
+  item,
+  linked = false,
+}: { item: EvidenceInventoryItem; linked?: boolean }) {
   if (item.content_state === 'withheld') return null;
   if (item.source_type === 'voc' && item.source) {
+    if (linked)
+      return (
+        <InternalLink href={item.source.route} className="underline underline-offset-2">
+          {item.source.display_id} · {item.source.title}
+        </InternalLink>
+      );
     return (
       <span>
         {item.source.display_id} · {item.source.title}
@@ -30,21 +40,33 @@ export function EvidenceSource({ item }: { item: EvidenceInventoryItem }) {
 export function EvidenceContent({ item }: { item: EvidenceInventoryItem }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
-        {item.content_state === 'available' ? item.quote_or_summary : EVIDENCE_COPY.withheld}
-      </p>
-      <EvidenceMetadata item={item} />
+      {item.content_state === 'available' ? (
+        <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
+          {item.quote_or_summary}
+        </p>
+      ) : (
+        <p className="text-sm text-text-muted italic">{EVIDENCE_COPY.withheld}</p>
+      )}
+      <EvidenceMetadata item={item} linked />
     </div>
   );
 }
 
-export function EvidenceMetadata({ item }: { item: EvidenceInventoryItem }) {
+export function EvidenceMetadata({
+  item,
+  linked = false,
+}: { item: EvidenceInventoryItem; linked?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-2 text-xs text-text-muted">
+    <span className="text-xs text-text-muted">
       <span>{EVIDENCE_SOURCE_TYPE_LABELS[item.source_type]}</span>
-      <EvidenceSource item={item} />
-      {item.sentiment && <span>{EVIDENCE_SENTIMENT_LABELS[item.sentiment]}</span>}
-      {item.importance && <span>{EVIDENCE_IMPORTANCE_LABELS[item.importance]}</span>}
-    </div>
+      {item.content_state === 'available' && item.source_type !== 'note' && item.source && (
+        <>
+          {' '}
+          · <EvidenceSource item={item} linked={linked} />
+        </>
+      )}
+      {item.sentiment && <span> · {EVIDENCE_SENTIMENT_LABELS[item.sentiment]}</span>}
+      {item.importance && <span> · {EVIDENCE_IMPORTANCE_LABELS[item.importance]}</span>}
+    </span>
   );
 }

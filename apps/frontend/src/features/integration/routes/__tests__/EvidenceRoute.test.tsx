@@ -654,3 +654,118 @@ it('rejects a malformed inventory payload instead of rendering unparsed content'
   await screen.findByText('Evidence를 불러오지 못했습니다.');
   expect(screen.queryByText('숨겨진 서버 오류 텍스트')).toBeNull();
 });
+
+it('replaces a rejected first-page cursor with the first page and retains filters', async () => {
+  installFetch((url) =>
+    url.searchParams.has('cursor')
+      ? response(
+          {
+            code: 'validation.failed',
+            detail: {
+              fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+            },
+          },
+          422,
+        )
+      : response({ items: [item], page: { has_more: false } }),
+  );
+  const { router, history } = await mount(
+    `/integration/evidence?cursor=rejected&source=note&q=다운로드&managedSystem=${MS}&selected=${ID}`,
+  );
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  expect(router.state.location.search).toMatchObject({
+    source: 'note',
+    q: '다운로드',
+    managedSystem: MS,
+    selected: ID,
+  });
+  expect(router.state.location.search.cursor).toBeUndefined();
+  await act(async () => history.back());
+  expect(router.state.location.search.cursor).toBeUndefined();
+  expect(screen.queryByText('Evidence를 불러오지 못했습니다.')).toBeNull();
+});
+
+it('explains list permission denial and disables the source tabs, search and refresh', async () => {
+  installFetch(() => response({ code: 'permission.denied' }, 403));
+  await mount();
+  await screen.findByText(
+    'Evidence 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+  );
+  for (const tab of screen.getAllByRole('tab')) expect(tab).toBeDisabled();
+  expect(screen.getByRole('searchbox')).toBeDisabled();
+  expect(screen.getByRole('button', { name: '새로고침' })).toBeDisabled();
+});
+
+it.each(['voc', 'note', 'withheld'] as const)(
+  'offers a source jump only for readable VOC (%s)',
+  async (source) => {
+    const { quote_or_summary: _quote, ...metadata } = item;
+    const evidence = getEvidenceInventoryResponseSchema.parse(
+      source === 'voc'
+        ? {
+            ...item,
+            source_type: 'voc',
+            source: {
+              id: PARENT,
+              display_id: 'VOC-77',
+              title: '원본 VOC',
+              route: `/vocs?selected=${PARENT}`,
+            },
+          }
+        : source === 'withheld'
+          ? { ...metadata, source_type: 'voc', content_state: 'withheld' }
+          : item,
+    );
+    installFetch(
+      () => response({ items: [evidence], page: { has_more: false } }),
+      () => response(evidence),
+    );
+    await mount(`/integration/evidence?selected=${ID}`);
+    await screen.findByRole('link', { name: 'Finding 보기' });
+    const link = screen.queryByRole('link', { name: 'VOC-77 · 원본 VOC' });
+    if (source === 'voc') expect(link).toHaveAttribute('href', `/vocs?selected=${PARENT}`);
+    else expect(link).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(source === 'voc' ? 2 : 1);
+  },
+);
+
+it.each([false, true])(
+  'keeps rows during manual refresh and reconciles withdrawn content (selected=%s)',
+  async (selected) => {
+    let refreshing = false;
+    let settleList!: (value: Response) => void;
+    let settleDetail!: (value: Response) => void;
+    const { quote_or_summary: _quote, ...metadata } = item;
+    const safe = getEvidenceInventoryResponseSchema.parse({
+      ...metadata,
+      content_state: 'withheld',
+    });
+    installFetch(
+      () =>
+        refreshing
+          ? new Promise<Response>((resolve) => {
+              settleList = resolve;
+            })
+          : response({ items: [item], page: { has_more: false } }),
+      () =>
+        refreshing
+          ? new Promise<Response>((resolve) => {
+              settleDetail = resolve;
+            })
+          : response(item),
+    );
+    await mount(selected ? `/integration/evidence?selected=${ID}` : '/integration/evidence');
+    await screen.findByRole('button', { name: /월간 다운로드/ });
+    if (selected) await screen.findByRole('link', { name: 'Finding 보기' });
+    refreshing = true;
+    fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
+    await waitFor(() => expect(settleList).toBeTypeOf('function'));
+    expect(screen.getByRole('button', { name: /월간 다운로드/ })).toBeVisible();
+    await act(async () => {
+      settleList(response({ items: [safe], page: { has_more: false } }));
+      if (selected) settleDetail(response(safe));
+    });
+    await screen.findByRole('button', { name: /원본 접근 권한 또는 승인 상태가 변경/ });
+    expect(screen.queryByText(item.quote_or_summary as string)).toBeNull();
+  },
+);

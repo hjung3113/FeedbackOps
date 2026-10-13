@@ -15,6 +15,7 @@ import {
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
+import { RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   type EvidenceFilters,
@@ -63,7 +64,7 @@ export function EvidenceRoute() {
       <ListShell
         list={
           me.isError ? (
-            <PermissionBlockedPanel state="denied" category="Evidence" />
+            <PermissionBlockedPanel state="denied" category="Evidence" description={COPY.blocked} />
           ) : (
             <Skeleton className="h-32" role="status" aria-label={COPY.loading} />
           )
@@ -78,6 +79,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   const navigate = useNavigate({ from: '/integration/evidence' });
   const [draft, setDraft] = useState(search.q ?? '');
   const [refresh, setRefresh] = useState(0);
+  const [manualRefresh, setManualRefresh] = useState(false);
   const [pages, setPages] = useState<{
     refresh: number;
     entries: Map<
@@ -137,18 +139,18 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   const [wasFetching, setWasFetching] = useState(false);
   if (wasFetching !== list.isFetching) {
     setWasFetching(list.isFetching);
-    if (list.isFetching && list.data) setPages({ refresh, entries: new Map() });
+    if (list.isFetching && list.data && !manualRefresh) setPages({ refresh, entries: new Map() });
   }
   const pageKey = search.cursor ?? '';
   // Keep successful earlier pages for a load-more retry. No previous session/scope
   // state survives the keyed session, and failed reauthorization hides all content.
-  if (pages.refresh !== refresh) setPages({ refresh, entries: new Map() });
+  if (pages.refresh !== refresh && !manualRefresh) setPages({ refresh, entries: new Map() });
   else if (
     list.isSuccess &&
     !list.isFetching &&
     pages.entries.get(pageKey)?.response !== list.data
   ) {
-    const entries = new Map(pages.entries);
+    const entries = pages.refresh === refresh ? new Map(pages.entries) : new Map();
     entries.set(pageKey, { response: list.data, items: list.data.items });
     setPages({ refresh, entries });
   }
@@ -172,6 +174,30 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
       }
     }
   }
+  useEffect(() => {
+    const error = list.error;
+    const fields = error instanceof ApiError ? error.detail?.fields : undefined;
+    if (
+      pages.entries.size === 0 &&
+      search.cursor !== undefined &&
+      error instanceof ApiError &&
+      error.status === 422 &&
+      Array.isArray(fields) &&
+      fields.some(
+        (field) =>
+          field?.code === 'invalid_cursor' &&
+          Array.isArray(field.path) &&
+          field.path.length === 1 &&
+          field.path[0] === 'cursor',
+      )
+    ) {
+      void navigate({ search: (previous) => ({ ...previous, cursor: undefined }), replace: true });
+    }
+  }, [list.error, navigate, pages.entries.size, search.cursor]);
+  useEffect(() => {
+    if (manualRefresh && !list.isPending && !list.isFetching && !detail.isFetching)
+      setManualRefresh(false);
+  }, [manualRefresh, list.isPending, list.isFetching, detail.isFetching]);
   const blocked = denied(list.error) || denied(detail.error);
   useEffect(() => {
     if (!blocked) return;
@@ -185,7 +211,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
     if (cursor === pageKey) break;
   }
   const items =
-    blocked || pages.refresh !== refresh
+    blocked || (pages.refresh !== refresh && !manualRefresh)
       ? []
       : [
           ...new Map(
@@ -229,10 +255,11 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
           <ListToolbar
             title={COPY.title}
             tabs={[
-              { value: 'all', label: GLOSSARY.all },
+              { value: 'all', label: GLOSSARY.all, disabled: blocked },
               ...Object.entries(EVIDENCE_SOURCE_TYPE_LABELS).map(([value, label]) => ({
                 value,
                 label,
+                disabled: blocked,
               })),
             ]}
             tabsAriaLabel={COPY.sourceTabs}
@@ -244,29 +271,40 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
               })
             }
             action={
-              <div className="flex items-center gap-2">
+              <fieldset disabled={blocked} className="flex items-center gap-2">
                 <div ref={searchRef}>
                   <SearchInput
                     placeholder={COPY.search}
                     value={draft}
                     onValueChange={setDraft}
                     onCommit={() => {
+                      if (blocked) return;
                       const q = draft.trim().slice(0, 200);
                       if (q !== (search.q ?? '')) changeFilter({ ...search, q: q || undefined });
                     }}
                   />
                 </div>
-                <Button variant="subtle" size="sm" onClick={() => setRefresh((value) => value + 1)}>
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  spacing="compact"
+                  disabled={manualRefresh}
+                  onClick={() => {
+                    setManualRefresh(true);
+                    setRefresh((value) => value + 1);
+                  }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                   {GLOSSARY.refresh}
                 </Button>
-              </div>
+              </fieldset>
             }
           />
           <p className="border-b border-border-subtle px-5 py-3 text-xs text-text-muted">
             {COPY.description}
           </p>
           {blocked ? (
-            <PermissionBlockedPanel state="denied" category="Evidence" />
+            <PermissionBlockedPanel state="denied" category="Evidence" description={COPY.blocked} />
           ) : (list.isPending || list.isFetching) && items.length === 0 ? (
             <Skeleton className="h-32" role="status" aria-label={COPY.loading} />
           ) : list.isError && items.length === 0 ? (
@@ -307,6 +345,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
                   key={item.id}
                   item={item.id === search.selected && safeDetail ? safeDetail : item}
                   loading={
+                    !manualRefresh &&
                     item.id === search.selected &&
                     (detail.isPending || detail.isFetching || detail.isError)
                   }

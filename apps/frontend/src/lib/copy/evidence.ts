@@ -15,6 +15,7 @@ export const EVIDENCE_COPY = {
   filteredEmpty: '조건에 맞는 Evidence가 없습니다.',
   missing: '선택한 Evidence를 찾을 수 없습니다.',
   mismatch: '선택한 Evidence가 현재 조건에 맞지 않습니다.',
+  blocked: 'Evidence 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
   error: 'Evidence를 불러오지 못했습니다.',
   moreError: '다음 Evidence를 불러오지 못했습니다.',
   retry: '다시 시도',

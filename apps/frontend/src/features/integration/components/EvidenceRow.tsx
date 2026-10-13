@@ -21,22 +21,27 @@ export function EvidenceRow({
     <ObjectRow
       ref={rowRef}
       title={
-        loading
-          ? COPY.loading
-          : item.content_state === 'available'
-            ? item.quote_or_summary
-            : COPY.withheld
+        loading ? (
+          COPY.loading
+        ) : item.content_state === 'available' ? (
+          item.quote_or_summary
+        ) : (
+          <span className="text-text-muted italic">{COPY.withheld}</span>
+        )
       }
       meta={
-        <span>
+        <span className="min-w-0 truncate">
           {item.finding.display_id} · {item.finding.title}
+          {!loading && (
+            <>
+              {' '}
+              · <EvidenceMetadata item={item} />
+            </>
+          )}
         </span>
       }
-      density="expanded"
       selected={selected}
       onClick={onSelect}
-    >
-      {!loading && <EvidenceMetadata item={item} />}
-    </ObjectRow>
+    />
   );
 }

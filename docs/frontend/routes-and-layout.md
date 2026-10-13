@@ -540,7 +540,17 @@ Back restores Evidence context. Sidebar and dashboard entries preserve Managed S
 
 Render loading, permission block, genuinely empty, filtered-empty, withheld,
 selected-not-found, first-page failure and load-more failure distinctly; retry
-load-more without discarding successful rows. Explain `Finding에 저장된 Evidence를 찾습니다.`
+load-more without discarding successful rows. A first-page `422` with cursor field
+code `invalid_cursor` removes `cursor` with replace and reloads the first page,
+retaining filters and selection. Manual refresh keeps current rows visible while
+reads are pending, then reconciles the authorized responses; session/scope and
+permission invalidation still clears stale content. Blocked lists explain the
+workspace administrator request path and disable source tabs, search and refresh.
+Rows use the default compact Integration density: snippet title plus one truncated
+metadata line containing Finding identity, source and classification. Withheld
+row titles and panel text are muted and italic. A readable VOC's panel source label
+links to its authorized `source.route` as a secondary action; notes and withheld
+sources have no source jump. Explain `Finding에 저장된 Evidence를 찾습니다.`
 No editing, standalone creation, Unlinked tab, count/coverage KPI or execution
 control. Use ADR-0060's prototype reference only for this new surface and shipped
 Integration patterns for density/copy/scroll; verify desktop 1440 and keyboard focus.
