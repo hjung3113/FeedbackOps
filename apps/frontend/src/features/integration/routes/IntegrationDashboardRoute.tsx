@@ -83,6 +83,19 @@ export function IntegrationDashboardRoute(): React.ReactElement {
     return `${Math.round(average)}%`;
   }, [summary.data?.coverage, summary.isError]);
 
+  // #1087 UX: when every metric in scope lacks a denominator the card still
+  // explains itself — 평균 커버리지 · 집계 대상 없음, muted; the error path
+  // keeps the plain omission.
+  const coverageNoData = React.useMemo(() => {
+    if (summary.isError) return false;
+    const coverage = summary.data?.coverage;
+    return (
+      coverage !== undefined &&
+      coverage.length > 0 &&
+      coverage.every((metric) => metric.status === 'no_data')
+    );
+  }, [summary.data?.coverage, summary.isError]);
+
   const allQueuesPresent =
     summary.isSuccess && queues.length === INTEGRATION_DASHBOARD_QUEUE_ORDER.length;
   const gapCount = allQueuesPresent
@@ -176,9 +189,14 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               description="VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다."
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
-              {...(coveragePercent !== undefined
-                ? { stat: coveragePercent, statLabel: INTEGRATION_AVERAGE_COVERAGE_LABEL }
-                : {})}
+              {...(coverageNoData
+                ? {
+                    stat: `${INTEGRATION_AVERAGE_COVERAGE_LABEL} · ${COVERAGE_NO_DATA_LABEL}`,
+                    statMuted: true,
+                  }
+                : coveragePercent !== undefined
+                  ? { stat: coveragePercent, statLabel: INTEGRATION_AVERAGE_COVERAGE_LABEL }
+                  : {})}
             />
             <IntegrationJumpCard
               href={`/integration/links${surfaceScopeSearch}`}

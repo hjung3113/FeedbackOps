@@ -570,7 +570,11 @@ describe('integration action dashboard route', () => {
       if (url.includes('/managed-systems')) return managedSystemsResponse();
       return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
     });
-    // No measurable metric — no average that would read as a bad score.
-    expect(screen.queryByTestId('integration-surface-coverage-stat')).toBeNull();
+    // No measurable metric: the card explains itself instead of dropping the
+    // caption (#1087 UX) — 평균 커버리지 · 집계 대상 없음, muted.
+    const noDataStat = await screen.findByTestId('integration-surface-coverage-stat');
+    expect(noDataStat.textContent).toBe('평균 커버리지 · 집계 대상 없음');
+    expect(noDataStat.className).toContain('text-text-muted');
+    expect(noDataStat.className).not.toContain('text-accent-danger');
   });
 });

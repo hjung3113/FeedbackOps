@@ -336,6 +336,39 @@ describe('HomeScreen route content', () => {
     expect(pill).toHaveTextContent(COVERAGE_METRIC_LABELS['voc-task']);
   });
 
+  // #1087 UX: with an empty denominator the chip answers from the voc-task
+  // signal row like the panel below — 집계 대상 없음, never 0%.
+  it('renders the coverage KPI as neutral no-data when the voc-task signal has no denominator', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: { open_voc: 1, coverage_percent: 0 },
+      coverage: [
+        { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+        { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+      ],
+    });
+    installFetch(summary);
+    renderHome();
+
+    const pill = await screen.findByTestId('home-kpi-coverage_percent');
+    expect(pill.textContent).toContain('집계 대상 없음');
+    expect(pill.textContent).not.toContain('%');
+  });
+
+  it('keeps the coverage KPI percentage when the voc-task signal has a denominator', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: { open_voc: 1, coverage_percent: 18 },
+      coverage: [{ id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' }],
+    });
+    installFetch(summary);
+    renderHome();
+
+    const pill = await screen.findByTestId('home-kpi-coverage_percent');
+    expect(pill.textContent).toContain('18%');
+    expect(pill.textContent).not.toContain('집계 대상 없음');
+  });
+
   it('keeps the selected managed system on coverage hops', async () => {
     const systemId = '33333333-3333-4333-8333-333333333333';
     const coverage = [

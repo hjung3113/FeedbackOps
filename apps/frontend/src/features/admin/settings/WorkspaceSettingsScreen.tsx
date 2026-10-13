@@ -118,17 +118,34 @@ function changedCoveragePairs(
   draft: CoverageThresholds,
 ): UpdateWorkspaceSettings['coverage_thresholds'] {
   const patch: Partial<CoverageThresholds> = {};
-  for (const metric of COVERAGE_METRIC_IDS) {
-    const before = saved[metric];
-    const after = draft[metric];
-    if (
-      before.good_min_percent !== after.good_min_percent ||
-      before.warn_min_percent !== after.warn_min_percent
-    ) {
-      patch[metric] = after;
-    }
+  for (const metric of changedCoverageMetrics(saved, draft)) {
+    patch[metric] = draft[metric];
   }
   return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
+// The save bar counts dirty Coverage rows individually (#1087 UX): two edited
+// metrics read 커버리지 기준 (2), not one settings key.
+function changedCoverageMetrics(
+  saved: CoverageThresholds,
+  draft: CoverageThresholds,
+): CoverageMetricId[] {
+  return COVERAGE_METRIC_IDS.filter((metric) => {
+    const before = saved[metric];
+    const after = draft[metric];
+    return (
+      before.good_min_percent !== after.good_min_percent ||
+      before.warn_min_percent !== after.warn_min_percent
+    );
+  });
+}
+
+// Band inputs keep the raw string while editing (#1087 UX); a cleared field
+// parses as invalid instead of writing Number('') = 0 back into the draft.
+function parseBandPercent(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
 function isThresholdValid(value: number): boolean {
@@ -181,20 +198,57 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const [saved, setSaved] = useState(initialSettings);
   const [draft, setDraft] = useState(initialSettings);
   const [editing, setEditing] = useState<EditableKey | CoverageMetricId | null>(null);
+  // Raw input strings for the band row being edited; parsed on validate/save
+  // (#1087 UX) so an emptied field blocks saving instead of writing 0.
+  const [bandRaw, setBandRaw] = useState({ good: '', warn: '' });
 
   useEffect(() => {
     setSaved(initialSettings);
     setDraft(initialSettings);
   }, [initialSettings]);
 
+  // #1087 UX: 커버리지 기준 편집 links to /admin/settings#coverage; scroll the
+  // section into view after the settings data renders it.
+  useEffect(() => {
+    if (window.location.hash !== '#coverage') return;
+    document.getElementById('coverage')?.scrollIntoView();
+  }, []);
+
   const patch = changedFields(saved, draft);
   const dirtyKeys = Object.keys(patch) as EditableKey[];
   const thresholdValid = isThresholdValid(draft.survey_anonymity_threshold);
-  const coverageValid = COVERAGE_METRIC_IDS.every((metric) =>
-    isCoveragePairValid(draft.coverage_thresholds[metric]),
-  );
+  const editingMetric =
+    editing !== null && (COVERAGE_METRIC_IDS as readonly string[]).includes(editing)
+      ? (editing as CoverageMetricId)
+      : null;
+  const editingBandGood = parseBandPercent(bandRaw.good);
+  const editingBandWarn = parseBandPercent(bandRaw.warn);
+  const coverageEditingInvalid =
+    editingMetric !== null && (editingBandGood === null || editingBandWarn === null);
+  const coverageValid = COVERAGE_METRIC_IDS.every((metric) => {
+    if (metric === editingMetric) {
+      return (
+        editingBandGood !== null && editingBandWarn !== null && editingBandWarn < editingBandGood
+      );
+    }
+    return isCoveragePairValid(draft.coverage_thresholds[metric]);
+  });
   const canSave =
     dirtyKeys.length > 0 && thresholdValid && coverageValid && !updateMutation.isPending;
+  // A parse-invalid band edit keeps the save bar up (저장 disabled) even though
+  // the draft pair is unchanged; without it the bar would vanish mid-edit.
+  const barKeys: EditableKey[] =
+    coverageEditingInvalid && !dirtyKeys.includes('coverage_thresholds')
+      ? [...dirtyKeys, 'coverage_thresholds']
+      : dirtyKeys;
+  const dirtyCoverageCount = changedCoverageMetrics(
+    saved.coverage_thresholds,
+    draft.coverage_thresholds,
+  ).length;
+  const settingLabel = (key: EditableKey): string =>
+    key === 'coverage_thresholds' && dirtyCoverageCount > 1
+      ? `${settingLabels[key]} (${dirtyCoverageCount})`
+      : settingLabels[key];
   const selfApprovalDirty = dirtyKeys.includes('permission_self_approval');
   const selfApprovalWarningTitle =
     draft.permission_self_approval === 'forbidden'
@@ -223,6 +277,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
       setSaved(next);
       setDraft(next);
       setEditing(null);
+      setBandRaw({ good: '', warn: '' });
     } catch {
       // Keep the local draft intact so the Admin can retry or discard it.
     }
@@ -231,6 +286,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   function discard() {
     setDraft(saved);
     setEditing(null);
+    setBandRaw({ good: '', warn: '' });
   }
 
   return (
@@ -299,7 +355,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
         </div>
       </section>
 
-      <section>
+      <section id="coverage">
         <PanelSectionTitle>{WORKSPACE_SETTINGS_COVERAGE_COPY.sectionTitle}</PanelSectionTitle>
         <p className="mb-2 text-xs text-text-muted">
           {WORKSPACE_SETTINGS_COVERAGE_COPY.sectionDescription}
@@ -318,11 +374,29 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
               }
               value={draft.coverage_thresholds[metric]}
               savedValue={saved.coverage_thresholds[metric]}
-              valid={isCoveragePairValid(draft.coverage_thresholds[metric])}
-              onChange={(pair) =>
-                updateDraft('coverage_thresholds', { ...draft.coverage_thresholds, [metric]: pair })
-              }
-              onEdit={() => setEditing(metric)}
+              raw={bandRaw}
+              onChangeRaw={(raw) => {
+                setBandRaw(raw);
+                // The draft pair only takes parsed values; a cleared or
+                // non-integer field leaves the last parsed pair in place and
+                // blocks saving through coverageEditingInvalid (#1087 UX).
+                const good = parseBandPercent(raw.good);
+                const warn = parseBandPercent(raw.warn);
+                if (good !== null && warn !== null) {
+                  updateDraft('coverage_thresholds', {
+                    ...draft.coverage_thresholds,
+                    [metric]: { good_min_percent: good, warn_min_percent: warn },
+                  });
+                }
+              }}
+              onEdit={() => {
+                setEditing(metric);
+                const pair = draft.coverage_thresholds[metric];
+                setBandRaw({
+                  good: String(pair.good_min_percent),
+                  warn: String(pair.warn_min_percent),
+                });
+              }}
               onDone={() => setEditing(null)}
               last={index === COVERAGE_METRIC_IDS.length - 1}
             />
@@ -343,19 +417,19 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
         </div>
       </section>
 
-      {dirtyKeys.length > 0 && (
+      {barKeys.length > 0 && (
         <div
           className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-md border border-border-strong bg-surface-popover px-4 py-3 shadow-lg"
           data-testid="workspace-settings-save-bar"
         >
           <AlertTriangle className="h-4 w-4 text-text-warning" aria-hidden="true" />
           <span className="text-sm text-text-primary">
-            {dirtyKeys.length === 1
+            {barKeys.length === 1
               ? '저장되지 않은 변경 1건'
-              : `저장되지 않은 변경 ${dirtyKeys.length}건`}
+              : `저장되지 않은 변경 ${barKeys.length}건`}
           </span>
           <span className="text-xs text-text-muted">
-            {dirtyKeys.map((key) => settingLabels[key]).join(' · ')}
+            {barKeys.map((key) => settingLabel(key)).join(' · ')}
           </span>
           <Button variant="subtle" size="sm" onClick={discard}>
             버리기
@@ -534,8 +608,8 @@ function CoverageBandRow({
   isDirty,
   value,
   savedValue,
-  valid,
-  onChange,
+  raw,
+  onChangeRaw,
   onEdit,
   onDone,
   last,
@@ -545,16 +619,28 @@ function CoverageBandRow({
   isDirty: boolean;
   value: CoverageThresholdPair;
   savedValue: CoverageThresholdPair;
-  valid: boolean;
-  onChange: (pair: CoverageThresholdPair) => void;
+  raw: { good: string; warn: string };
+  onChangeRaw: (raw: { good: string; warn: string }) => void;
   onEdit: () => void;
   onDone: () => void;
   last: boolean;
 }) {
+  const hintId = `coverage-band-hint-${metric}`;
+  // Distinct invalid states (#1087 UX): name the broken rule, flag the
+  // offending input, and point both inputs at the hint.
+  const good = parseBandPercent(raw.good);
+  const warn = parseBandPercent(raw.warn);
+  const rangeInvalid = good === null || warn === null;
+  const orderInvalid = !rangeInvalid && warn >= good;
+  const hintText = rangeInvalid
+    ? WORKSPACE_SETTINGS_COVERAGE_COPY.rangeInvalid
+    : orderInvalid
+      ? WORKSPACE_SETTINGS_COVERAGE_COPY.orderInvalid
+      : WORKSPACE_SETTINGS_COVERAGE_COPY.hint;
   return (
     <SettingRow
       label={COVERAGE_METRIC_LABELS[metric]}
-      description={WORKSPACE_SETTINGS_COVERAGE_COPY.rowDescription}
+      description={WORKSPACE_SETTINGS_COVERAGE_COPY.rowDescription(metric)}
       dirty={isDirty}
       previousValue={WORKSPACE_SETTINGS_COVERAGE_COPY.savedPair(savedValue)}
       last={last}
@@ -562,34 +648,47 @@ function CoverageBandRow({
       <div className="text-right">
         {editing ? (
           <>
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-xs text-text-muted">
+                {WORKSPACE_SETTINGS_COVERAGE_COPY.goodPrefix}
+              </span>
               <Input
                 aria-label={coverageBandFieldLabel(metric, 'good')}
+                aria-describedby={hintId}
+                {...(good === null ? { 'aria-invalid': true } : {})}
                 data-testid={`coverage-band-good-${metric}`}
                 type="number"
                 min={1}
                 max={100}
-                value={Number.isNaN(value.good_min_percent) ? '' : value.good_min_percent}
-                onChange={(event) =>
-                  onChange({ ...value, good_min_percent: Number(event.target.value) })
-                }
+                value={raw.good}
+                onChange={(event) => onChangeRaw({ ...raw, good: event.target.value })}
               />
+              <span className="shrink-0 text-xs text-text-muted">%</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <span className="shrink-0 text-xs text-text-muted">
+                {WORKSPACE_SETTINGS_COVERAGE_COPY.warnPrefix}
+              </span>
               <Input
                 aria-label={coverageBandFieldLabel(metric, 'warn')}
+                aria-describedby={hintId}
+                {...(warn === null || orderInvalid ? { 'aria-invalid': true } : {})}
                 data-testid={`coverage-band-warn-${metric}`}
                 type="number"
                 min={0}
                 max={99}
-                value={Number.isNaN(value.warn_min_percent) ? '' : value.warn_min_percent}
-                onChange={(event) =>
-                  onChange({ ...value, warn_min_percent: Number(event.target.value) })
-                }
+                value={raw.warn}
+                onChange={(event) => onChangeRaw({ ...raw, warn: event.target.value })}
               />
+              <span className="shrink-0 text-xs text-text-muted">%</span>
             </div>
             <p
-              className={valid ? 'mt-1 text-xs text-text-muted' : 'mt-1 text-xs text-accent-danger'}
+              id={hintId}
+              className={`mt-1 break-keep text-xs ${
+                rangeInvalid || orderInvalid ? 'text-accent-danger' : 'text-text-muted'
+              }`}
             >
-              {WORKSPACE_SETTINGS_COVERAGE_COPY.invalidReason}
+              {hintText}
             </p>
           </>
         ) : (

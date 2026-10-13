@@ -228,7 +228,7 @@ export function CoverageRoute(): React.ReactElement {
           <div className="flex shrink-0 gap-2">
             {isAdmin && canAccessWorkspaceAdmin && (
               <Button asChild variant="subtle" size="sm">
-                <InternalLink href="/admin/settings" data-testid="coverage-settings-link">
+                <InternalLink href="/admin/settings#coverage" data-testid="coverage-settings-link">
                   {WORKSPACE_SETTINGS_COVERAGE_COPY.editBands}
                 </InternalLink>
               </Button>
@@ -294,46 +294,51 @@ export function CoverageRoute(): React.ReactElement {
               className="mb-8 overflow-hidden rounded-md border border-border-subtle bg-surface-card"
               data-testid="coverage-signals"
             >
-              {(summary.data?.coverage ?? []).map((item) => {
-                const href = hopHref(hopRoute(item.id), item.id, managedSystem);
-                const tone = COVERAGE_STATUS_TONE[item.status];
-                const CoverageRowLink: React.ElementType = href === undefined ? 'a' : InternalLink;
-                return (
-                  <CoverageRowLink
-                    key={item.id}
-                    {...(href !== undefined ? { href } : {})}
-                    data-testid={`coverage-row-${item.id}`}
-                    className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
-                    style={
-                      {
-                        '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 56px',
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {COVERAGE_METRIC_LABELS[item.id]}
-                      </div>
-                    </div>
-                    <div className="text-right text-xs tabular-nums text-text-muted">
-                      {item.value} / {item.total}
-                    </div>
-                    <ProgressMeter
-                      data-testid={`coverage-bar-fill-${item.id}`}
-                      value={item.percent}
-                      {...(tone.meter !== null ? { tone: tone.meter } : {})}
-                      className="w-full"
-                      trackTone="row-selected"
-                    />
-                    <div
-                      data-testid={`coverage-percent-${item.id}`}
-                      className={`text-right text-sm font-semibold tabular-nums ${tone.text}`}
+              {/* #1087 UX: no-data rows need no action, so they sort after rows
+              with a denominator; ties keep the server order (stable sort). */}
+              {[...(summary.data?.coverage ?? [])]
+                .sort((a, b) => Number(a.status === 'no_data') - Number(b.status === 'no_data'))
+                .map((item) => {
+                  const href = hopHref(hopRoute(item.id), item.id, managedSystem);
+                  const tone = COVERAGE_STATUS_TONE[item.status];
+                  const CoverageRowLink: React.ElementType =
+                    href === undefined ? 'a' : InternalLink;
+                  return (
+                    <CoverageRowLink
+                      key={item.id}
+                      {...(href !== undefined ? { href } : {})}
+                      data-testid={`coverage-row-${item.id}`}
+                      className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
+                      style={
+                        {
+                          '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 56px',
+                        } as React.CSSProperties
+                      }
                     >
-                      {item.status === 'no_data' ? COVERAGE_NO_DATA_LABEL : `${item.percent}%`}
-                    </div>
-                  </CoverageRowLink>
-                );
-              })}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-text-primary">
+                          {COVERAGE_METRIC_LABELS[item.id]}
+                        </div>
+                      </div>
+                      <div className="text-right text-xs tabular-nums text-text-muted">
+                        {item.value} / {item.total}
+                      </div>
+                      <ProgressMeter
+                        data-testid={`coverage-bar-fill-${item.id}`}
+                        value={item.percent}
+                        {...(tone.meter !== null ? { tone: tone.meter } : {})}
+                        className="w-full"
+                        trackTone="row-selected"
+                      />
+                      <div
+                        data-testid={`coverage-percent-${item.id}`}
+                        className={`whitespace-nowrap text-right text-sm font-semibold tabular-nums ${tone.text}`}
+                      >
+                        {item.status === 'no_data' ? COVERAGE_NO_DATA_LABEL : `${item.percent}%`}
+                      </div>
+                    </CoverageRowLink>
+                  );
+                })}
             </div>
 
             <PanelSectionTitle>연결 없음 항목</PanelSectionTitle>
@@ -428,7 +433,7 @@ export function CoverageRoute(): React.ReactElement {
                           <td
                             key={id}
                             data-testid={`coverage-cell-${row.managed_system_id}-${id}`}
-                            className="px-3 py-2.5 text-right tabular-nums text-text-secondary"
+                            className="break-keep px-3 py-2.5 text-right tabular-nums text-text-secondary"
                           >
                             {coverageCellText(row.coverage?.[id])}
                           </td>
@@ -463,7 +468,7 @@ export function CoverageRoute(): React.ReactElement {
                             <td
                               key={id}
                               data-testid={`coverage-cell-${area.analytics_area_id}-${id}`}
-                              className="px-3 py-2 text-right tabular-nums"
+                              className="break-keep px-3 py-2 text-right tabular-nums"
                             >
                               {coverageCellText(
                                 area.coverage?.[id as 'voc-task' | 'high-followup'],

@@ -488,13 +488,31 @@ describe('integration coverage route', () => {
     expect(screen.getByTestId(`coverage-cell-${MS_B}-finding-execution`).textContent).toBe('—');
   });
 
+  // #1087 UX: the action list leads with rows that need action — no-data rows
+  // sort after rows with a denominator, ties keep the server order.
+  test('sorts no-data coverage signals after rows with a denominator', async () => {
+    await renderCoverage('/integration/coverage', NO_DATA_SUMMARY);
+
+    const rows = screen
+      .getByTestId('coverage-signals')
+      .querySelectorAll('[data-testid^="coverage-row-"]');
+    const ids = Array.from(rows).map((row) => row.getAttribute('data-testid'));
+    expect(ids).toEqual([
+      'coverage-row-finding-execution',
+      'coverage-row-high-followup',
+      'coverage-row-released-update',
+      'coverage-row-analytics-area',
+      'coverage-row-voc-task',
+    ]);
+  });
+
   test('links an authorized Admin to the band editor and hides the link otherwise', async () => {
     await renderCoverage('/integration/coverage', SUMMARY, {
       meRole: 'admin',
       permissionCheck: 'approved',
     });
     expect(screen.getByTestId('coverage-settings-link').getAttribute('href')).toBe(
-      '/admin/settings',
+      '/admin/settings#coverage',
     );
     // Existing hops and URL behavior are untouched by the editor link.
     expect(screen.getByTestId('coverage-row-voc-task').getAttribute('href')).toBe(

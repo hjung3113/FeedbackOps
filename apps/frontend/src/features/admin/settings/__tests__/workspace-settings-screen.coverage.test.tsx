@@ -132,7 +132,7 @@ describe('WorkspaceSettingsForm Coverage bands (#1088)', () => {
     expect(apiClientMock).toHaveBeenCalledTimes(1);
   });
 
-  test('blocks saving a reversed pair and explains the band rule', () => {
+  test('blocks saving a reversed pair, names the ordering rule, and flags the warn input', () => {
     apiClientMock.mockReset();
     renderForm(settingsWith());
 
@@ -144,13 +144,98 @@ describe('WorkspaceSettingsForm Coverage bands (#1088)', () => {
       target: { value: '80' },
     });
 
-    expect(
-      screen.getByText(
-        '0에서 100 사이의 정수를 입력하세요. 주의 기준은 양호 기준보다 작아야 합니다.',
-      ),
-    ).toBeInTheDocument();
+    // The message names the broken rule, not the generic integer rule.
+    expect(screen.getByText('주의 기준은 양호 기준보다 작아야 합니다.')).toBeInTheDocument();
+    const good = screen.getByLabelText('VOC → Task 연결 양호 기준');
+    const warn = screen.getByLabelText('VOC → Task 연결 주의 기준');
+    // The offending input is the warn band; both inputs point at the hint.
+    expect(warn).toHaveAttribute('aria-invalid', 'true');
+    expect(good).not.toHaveAttribute('aria-invalid');
+    expect(good).toHaveAttribute('aria-describedby', 'coverage-band-hint-voc-task');
+    expect(warn).toHaveAttribute('aria-describedby', 'coverage-band-hint-voc-task');
     expect(screen.getByRole('button', { name: '변경사항 저장' })).toBeDisabled();
     expect(apiClientMock).not.toHaveBeenCalled();
+  });
+
+  test('blocks a non-integer band with the integer rule and flags the good input', () => {
+    apiClientMock.mockReset();
+    renderForm(settingsWith());
+
+    startCoverageEdit(VOC_TASK_EDIT_BUTTON_INDEX);
+    fireEvent.change(screen.getByLabelText('VOC → Task 연결 양호 기준'), {
+      target: { value: '80.5' },
+    });
+
+    expect(screen.getByText('0에서 100 사이의 정수를 입력하세요.')).toBeInTheDocument();
+    const good = screen.getByLabelText('VOC → Task 연결 양호 기준');
+    expect(good).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('VOC → Task 연결 주의 기준')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByRole('button', { name: '변경사항 저장' })).toBeDisabled();
+  });
+
+  // #1087 UX: clearing a field keeps the raw empty string while editing and
+  // blocks saving; Number('') = 0 must never reach the draft or the PATCH.
+  test('keeps a cleared band field raw and invalid instead of writing 0', () => {
+    apiClientMock.mockReset();
+    renderForm(settingsWith());
+
+    startCoverageEdit(VOC_TASK_EDIT_BUTTON_INDEX);
+    const good = screen.getByLabelText('VOC → Task 연결 양호 기준');
+    fireEvent.change(good, { target: { value: '' } });
+
+    expect(good).toHaveValue(null);
+    expect(good).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('0에서 100 사이의 정수를 입력하세요.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '변경사항 저장' })).toBeDisabled();
+    expect(apiClientMock).not.toHaveBeenCalled();
+
+    // Closing the editor keeps the saved pair — the cleared field never
+    // became a 0 write-back.
+    fireEvent.click(screen.getByRole('button', { name: '완료' }));
+    expect(screen.getByTestId('coverage-band-value-voc-task')).toHaveTextContent(
+      '양호 ≥ 75% · 주의 ≥ 40%',
+    );
+  });
+
+  // #1087 UX: the save bar counts dirty Coverage metrics individually.
+  test('counts two dirty coverage metrics individually in the save bar', () => {
+    apiClientMock.mockReset();
+    renderForm(settingsWith());
+
+    startCoverageEdit(VOC_TASK_EDIT_BUTTON_INDEX);
+    fireEvent.change(screen.getByLabelText('VOC → Task 연결 양호 기준'), {
+      target: { value: '80' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '완료' }));
+
+    // finding-execution is the second band row (edit buttons: self-approval,
+    // anonymity, then the five band rows in COVERAGE_METRIC_IDS order).
+    startCoverageEdit(VOC_TASK_EDIT_BUTTON_INDEX + 1);
+    fireEvent.change(screen.getByLabelText('실행 중인 Finding 양호 기준'), {
+      target: { value: '80' },
+    });
+
+    const saveBar = screen.getByTestId('workspace-settings-save-bar');
+    expect(saveBar).toHaveTextContent('커버리지 기준 (2)');
+    expect(saveBar).toHaveTextContent('저장되지 않은 변경 1건');
+  });
+
+  // #1087 UX: 커버리지 기준 편집 lands on /admin/settings#coverage and the
+  // settings screen scrolls the coverage section into view.
+  test('scrolls the coverage section into view for the #coverage anchor', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const originalHash = window.location.hash;
+    window.location.hash = 'coverage';
+    try {
+      apiClientMock.mockReset();
+      renderForm(settingsWith());
+
+      expect(document.getElementById('coverage')).not.toBeNull();
+      expect(scrollSpy).toHaveBeenCalled();
+    } finally {
+      window.location.hash = originalHash;
+      scrollSpy.mockRestore();
+    }
   });
 
   test('discard restores the saved band values', async () => {

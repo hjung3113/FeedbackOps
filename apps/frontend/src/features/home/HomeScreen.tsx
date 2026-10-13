@@ -230,6 +230,11 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
   const activeQueues = queues.filter((queue) => queue.count > 0);
   const zeroQueues = queues.filter((queue) => queue.count === 0);
   const kpiKeys = Object.keys(HOME_KPI_COPY) as Array<keyof typeof HOME_KPI_COPY>;
+  // #1087 UX: the chip answers from the same voc-task signal row the panel
+  // below uses — an empty denominator is 집계 대상 없음, never a 0%.
+  const vocTaskNoData = summary?.coverage.some(
+    (item) => item.id === 'voc-task' && item.status === 'no_data',
+  );
   return (
     <>
       <div className="mb-8 flex flex-wrap gap-2" data-testid="home-kpis">
@@ -237,6 +242,18 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
           kpiKeys.map((key) => {
             const value = kpis[key];
             if (value === undefined) return null;
+            if (key === 'coverage_percent' && vocTaskNoData === true) {
+              return (
+                <div
+                  key={key}
+                  className="rounded-full border border-border-subtle bg-surface-card px-2.5 py-1 text-xs text-text-secondary"
+                  data-testid={`home-kpi-${key}`}
+                >
+                  <span>{HOME_KPI_COPY[key]}</span>
+                  <span className="ml-1.5 text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
+                </div>
+              );
+            }
             return (
               <div
                 key={key}
@@ -419,6 +436,15 @@ function coverageHopHref(
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
+// #1087 UX: value text follows the band colour like Coverage does, so a real
+// red 0% never reads like the neutral no-data row.
+const HOME_COVERAGE_VALUE_TONE: Record<DashboardSummary['coverage'][number]['status'], string> = {
+  good: 'text-accent-success',
+  warn: 'text-accent-warn',
+  bad: 'text-accent-danger',
+  no_data: 'text-text-muted',
+};
+
 function CoverageMetricRow({
   item,
   href,
@@ -432,7 +458,7 @@ function CoverageMetricRow({
         {noData ? (
           <span className="shrink-0 text-text-muted">{COVERAGE_NO_DATA_LABEL}</span>
         ) : (
-          <span className="shrink-0 tabular-nums text-text-muted">
+          <span className={`shrink-0 tabular-nums ${HOME_COVERAGE_VALUE_TONE[item.status]}`}>
             {item.value} / {item.total} · {item.percent}%
           </span>
         )}
