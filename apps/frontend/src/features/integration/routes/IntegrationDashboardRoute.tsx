@@ -1,6 +1,6 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
-import { useMe } from '@/lib/auth/useMe';
 import { mapUnknownError } from '@/lib/api/errorMapper';
+import { useMe } from '@/lib/auth/useMe';
 import type { DashboardSummary } from '@fops/shared';
 import {
   Button,

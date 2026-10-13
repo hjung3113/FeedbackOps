@@ -1,8 +1,8 @@
-import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
