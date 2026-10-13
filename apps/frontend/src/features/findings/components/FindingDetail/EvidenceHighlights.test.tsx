@@ -80,6 +80,25 @@ describe('EvidenceHighlightsSection labels', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the safe Survey reference beside its source chip', () => {
+    useEvidenceHighlightsMock.mockReturnValue({
+      data: [
+        {
+          ...makeHighlight('survey_response', null),
+          source_meta: 'outcome · SRV-1001 · Identity protected',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceHighlightsSection findingId="finding-id" evidenceCount={1} />);
+
+    expect(screen.getByTestId('evidence-highlight-row')).toHaveTextContent(
+      'outcome · SRV-1001 · Identity protected',
+    );
+    expect(screen.queryByTestId('evidence-source-id')).not.toBeInTheDocument();
+  });
+
   it.each(evidenceHighlightSourceTypeSchema.options)(
     'renders evidence source kind %s with its shared label',
     (sourceType) => {

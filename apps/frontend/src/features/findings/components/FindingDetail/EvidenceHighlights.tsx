@@ -30,6 +30,9 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
         <FitBadge data-testid="evidence-source-type">
           {EVIDENCE_SOURCE_TYPE_LABELS[highlight.source_type]}
         </FitBadge>
+        {highlight.source_type === 'survey_response' && highlight.source_meta && (
+          <span className="text-xs text-text-muted">{highlight.source_meta}</span>
+        )}
         {highlight.source_type !== 'survey_response' && highlight.source_id !== null && (
           <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
             {highlight.source_id.slice(0, 8)}

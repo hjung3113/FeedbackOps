@@ -2,6 +2,7 @@ export const SURVEY_EVIDENCE_PICKER_COPY = {
   survey: 'Survey 선택',
   search: 'Survey 검색',
   catalogEmpty: '선택할 수 있는 Survey가 없습니다.',
+  catalogAccessHint: '접근 권한이 있는 Survey만 표시됩니다.',
   excerpt: '승인된 발췌 선택',
   loading: '불러오는 중…',
   none: '아직 응답이 없습니다.',

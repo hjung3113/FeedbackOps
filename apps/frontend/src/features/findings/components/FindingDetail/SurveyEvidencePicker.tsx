@@ -72,13 +72,17 @@ export function SurveyEvidencePicker({
         listboxLabel={COPY.survey}
         emptyText={catalog.isPending ? COPY.loading : COPY.catalogEmpty}
       />
-      {catalog.isPending && <output>{COPY.loading}</output>}
+      {catalog.isPending && <output className="text-xs text-text-muted">{COPY.loading}</output>}
       {catalog.isError && (
         <>
-          <p role="alert">{COPY.error}</p>
+          <p role="alert" className="text-xs text-text-danger">
+            {COPY.error}
+          </p>
           <Button
             type="button"
             variant="secondary"
+            size="sm"
+            className="self-start"
             disabled={disabled}
             onClick={() => void catalog.refetch()}
           >
@@ -86,16 +90,27 @@ export function SurveyEvidencePicker({
           </Button>
         </>
       )}
-      {catalog.isSuccess && catalog.data.length === 0 && <output>{COPY.catalogEmpty}</output>}
+      {catalog.isSuccess && catalog.data.length === 0 && (
+        <>
+          <output className="text-xs text-text-muted">{COPY.catalogEmpty}</output>
+          <p className="text-xs text-text-muted">{COPY.catalogAccessHint}</p>
+        </>
+      )}
       {surveyId !== null && (
         <>
-          {candidates.isPending && <output>{COPY.loading}</output>}
+          {candidates.isPending && (
+            <output className="text-xs text-text-muted">{COPY.loading}</output>
+          )}
           {candidates.isError && (
             <>
-              <p role="alert">{errorCopy}</p>
+              <p role="alert" className="text-xs text-text-danger">
+                {errorCopy}
+              </p>
               <Button
                 type="button"
                 variant="secondary"
+                size="sm"
+                className="self-start"
                 disabled={disabled || candidates.isFetching}
                 onClick={() =>
                   void (candidates.isFetchNextPageError
@@ -108,7 +123,9 @@ export function SurveyEvidencePicker({
             </>
           )}
           {state !== undefined && items.length === 0 && (
-            <output>{state === 'visible' ? COPY.empty : COPY[state]}</output>
+            <output className="text-xs text-text-muted">
+              {state === 'visible' ? COPY.empty : COPY[state]}
+            </output>
           )}
           {items.length > 0 && (
             <>
@@ -132,7 +149,7 @@ export function SurveyEvidencePicker({
                       />
                       <span className="flex flex-col gap-1">
                         <span className="text-xs text-text-muted">
-                          {item.survey_display_id} · {item.question_label}
+                          {item.question_label}
                           {item.identity_protected ? ` · ${COPY.protected}` : ''}
                         </span>
                         <span className="text-sm">{item.redacted_excerpt}</span>
@@ -147,6 +164,8 @@ export function SurveyEvidencePicker({
             <Button
               type="button"
               variant="secondary"
+              size="sm"
+              className="self-start"
               disabled={disabled || candidates.isFetching}
               onClick={() => void candidates.fetchNextPage()}
             >

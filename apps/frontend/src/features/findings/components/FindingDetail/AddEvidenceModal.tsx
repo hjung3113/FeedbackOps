@@ -96,6 +96,8 @@ export function AddEvidenceModal({
   const attempt = useRef<{ signature: string; key: string } | null>(null);
   const submitting = useRef(false);
   const session = useRef(0);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  const surveyErrorAlert = useRef<HTMLParagraphElement>(null);
 
   const form = useForm<AddEvidenceHighlightRequest>({
     resolver: zodResolver(addEvidenceHighlightRequestSchema, { errorMap: koreanZodErrorMap }),
@@ -215,6 +217,11 @@ export function AddEvidenceModal({
   }
 
   const isSubmitting = mutation.isPending || surveyPending;
+  useEffect(() => {
+    if (!open || isSubmitting) return;
+    if (surveyError) surveyErrorAlert.current?.focus();
+    else if (mutation.isError) submitButton.current?.focus();
+  }, [open, isSubmitting, surveyError, mutation.isError]);
 
   return (
     <Dialog
@@ -239,7 +246,7 @@ export function AddEvidenceModal({
             }
           }}
           noValidate
-          className="flex flex-col gap-4"
+          className="flex min-w-0 flex-col gap-4"
         >
           {/* Source type */}
           <div className="flex flex-col gap-1.5">
@@ -310,7 +317,12 @@ export function AddEvidenceModal({
                 onChange={changeSelection}
               />
               {surveyError && (
-                <p role="alert" className="text-xs text-text-danger">
+                <p
+                  ref={surveyErrorAlert}
+                  role="alert"
+                  tabIndex={-1}
+                  className="text-xs text-text-danger"
+                >
                   {surveyError}
                 </p>
               )}
@@ -397,6 +409,7 @@ export function AddEvidenceModal({
             취소
           </Button>
           <Button
+            ref={submitButton}
             type="submit"
             form="add-evidence-form"
             disabled={

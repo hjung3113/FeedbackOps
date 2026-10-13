@@ -13,6 +13,7 @@ import {
   FINDING_DETAIL_IDS as IDS,
   SURVEY_EVIDENCE_IDS as SURVEY,
   SURVEY_EVIDENCE_QUOTE,
+  findingSourceVoc,
   surveyEvidenceAttached,
   surveyEvidenceCandidates,
   surveyEvidenceCatalog,
@@ -175,6 +176,86 @@ async function chooseExcerpt() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('AddEvidenceModal approved Survey attachment', () => {
+  it('labels each excerpt with its question without repeating the chosen Survey ID', async () => {
+    setup();
+    await chooseSurvey();
+    const excerpt = await screen.findByRole('radio', { name: /로그인 과정/ });
+
+    expect(excerpt).toHaveAccessibleName(/로그인 경험/);
+    expect(excerpt).not.toHaveAccessibleName(/SRV-42/);
+  });
+
+  it('explains access limits when the Survey catalog is empty', async () => {
+    const context = setup();
+    const originalFetch = context.fetchMock.getMockImplementation();
+    context.fetchMock.mockImplementation(async (input, init) => {
+      if (new URL(String(input), 'http://localhost').pathname === '/surveys') return json([]);
+      return originalFetch?.(input, init) ?? json({});
+    });
+    fireEvent.click(screen.getByTestId('evidence-source-type-select'));
+    fireEvent.click(await screen.findByRole('option', { name: /^Survey$/ }));
+
+    expect(await screen.findByText('접근 권한이 있는 Survey만 표시됩니다.')).toBeInTheDocument();
+    expect(screen.getByText(COPY.catalogEmpty)).toBeInTheDocument();
+  });
+
+  it.each([500, 422])(
+    'focuses the submit error after a Survey attachment fails with %s',
+    async (status) => {
+      setup({ postStatus: status });
+      await chooseSurvey();
+      await chooseExcerpt();
+      const submit = screen.getByTestId('add-evidence-submit');
+      submit.focus();
+      fireEvent.click(submit);
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
+    },
+  );
+
+  it.each(['수동 메모', 'VOC'])(
+    'returns focus to 추가 after a failed %s submit',
+    async (source) => {
+      const context = setup();
+      const originalFetch = context.fetchMock.getMockImplementation();
+      let rejectPost = () => {};
+      const postGate = new Promise<void>((resolve) => {
+        rejectPost = resolve;
+      });
+      context.fetchMock.mockImplementation(async (input, init) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (init?.method === 'POST') {
+          await postGate;
+          return json({ code: 'internal.unexpected', message: 'failed' }, 500);
+        }
+        if (url.pathname === '/vocs')
+          return json({
+            items: [{ ...findingSourceVoc, review_postponed_at: null }],
+            page: { has_more: false },
+          });
+        return originalFetch?.(input, init) ?? json({});
+      });
+      if (source === 'VOC') {
+        fireEvent.click(screen.getByTestId('evidence-source-type-select'));
+        fireEvent.click(await screen.findByRole('option', { name: 'VOC' }));
+        fireEvent.click(await screen.findByRole('combobox', { name: 'VOC 선택' }));
+        fireEvent.click(await screen.findByRole('option', { name: /VOC-4410/ }));
+      }
+      fireEvent.change(screen.getByTestId('evidence-quote-input'), {
+        target: { value: '관찰 메모' },
+      });
+      const submit = screen.getByTestId('add-evidence-submit');
+      submit.focus();
+      fireEvent.click(submit);
+      await waitFor(() => expect(submit).toBeDisabled());
+      // Model the browser losing focus when its pending submit control is disabled.
+      screen.getByTestId('evidence-quote-input').focus();
+      rejectPost();
+      await waitFor(() => expect(submit).toBeEnabled());
+      await waitFor(() => expect(submit).toHaveFocus());
+    },
+  );
+
   it('attaches a cross-system returned selection and rereads highlights plus inactive inventory variants', async () => {
     const context = setup();
     const listRead = vi.fn(async () => ({ items: [] }));
