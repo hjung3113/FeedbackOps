@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -130,13 +131,17 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
       actorIds,
     ]);
     await migrateHandle.pool.query('delete from core.teams where id = $1', [teamId]);
-    await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
-      managedSystemId,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where id = $1',
+      [managedSystemId],
+    );
     await migrateHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [
       actorIds,
     ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+    await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
+      workspaceId,
+    ]);
     await shutdownBoss(boss).catch(() => {});
     await rollbackApp?.close();
     await app?.close();

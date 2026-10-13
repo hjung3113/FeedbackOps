@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -105,7 +106,8 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
       )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

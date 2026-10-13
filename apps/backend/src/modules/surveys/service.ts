@@ -2,12 +2,14 @@ import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { createMyAnswerableSurveys } from './answerable-surveys.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
 import { createSurveyEvidenceCandidates } from './evidence-candidates.js';
 import { createSurveyFollowUp } from './follow-up.js';
+import { createOutcomeRecoveryPresentation } from './recovery-presentation.js';
 import { createMySurveyResponseHistory } from './response-history.js';
 import { createSurveyResults } from './results.js';
 
@@ -20,6 +22,8 @@ export interface ResolvedSurveyWorkspaceSettings {
   survey_anonymity_threshold: number;
 }
 export interface SurveysServiceDeps {
+  recoveryClock?: () => Date;
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -32,6 +36,7 @@ export interface SurveysServiceDeps {
 
 export function createSurveysService(deps: SurveysServiceDeps) {
   return {
+    ...createOutcomeRecoveryPresentation(deps),
     ...createSurveyAuthoring(deps),
     ...createSurveyResults(deps),
     ...createSurveyEvidenceCandidates(deps),

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #514 A7 — owner_actor_id must be a workspace actor, elevated, holding
 // finding.manage on the Milestone's Managed System (requirement 3). The
 // omitted-owner-is-creator case is A4's; not duplicated here.
@@ -87,9 +88,11 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         otherWorkspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWorkspaceId],
+      );
       otherWorkspaceId = '';
     }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);

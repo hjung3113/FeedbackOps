@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -87,11 +88,15 @@ describe.skipIf(!runIntegration)('GET /vocs/pre-submit-peers (#293)', () => {
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
     if (!foreignWorkspaceId) return;
     await ops.pool.query('delete from voc.vocs where workspace_id = $1', [foreignWorkspaceId]);
-    await ops.pool.query('delete from core.managed_systems where workspace_id = $1', [
+    await deleteRecoveryFixtureParents(
+      ops,
+      'delete from core.managed_systems where workspace_id = $1',
+      [foreignWorkspaceId],
+    );
+    await ops.pool.query('delete from core.actors where workspace_id = $1', [foreignWorkspaceId]);
+    await deleteRecoveryFixtureParents(ops, 'delete from core.workspaces where id = $1', [
       foreignWorkspaceId,
     ]);
-    await ops.pool.query('delete from core.actors where workspace_id = $1', [foreignWorkspaceId]);
-    await ops.pool.query('delete from core.workspaces where id = $1', [foreignWorkspaceId]);
   }
 
   it('returns exactly the newest three authorized same-system peers in order with the strict wire fields', async () => {

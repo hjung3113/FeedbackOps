@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // VOC / VOC Cluster -> Task Request creation (#136).
 //
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The conductor runs
@@ -163,9 +164,11 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
     await migrateHandle.pool.query('delete from core.teams where id = any($1::uuid[])', [teamIds]);
     teamIds.length = 0;
-    await migrateHandle.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-      foreignWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [foreignWorkspaceIds],
+    );
     foreignWorkspaceIds.length = 0;
   }
 

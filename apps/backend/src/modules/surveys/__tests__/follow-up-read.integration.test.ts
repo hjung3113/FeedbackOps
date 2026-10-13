@@ -9,10 +9,11 @@
 // survey_response_personal_read row per exposed (response, low-answer
 // question) pair, exactly like a holder result read.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -113,6 +114,10 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     if (!grantorActorId) throw new Error('no admin actor found in seed workspace');
   });
 
+  beforeEach(async () => {
+    await migrateDb.pool.query('DELETE FROM core.rate_limits');
+  });
+
   afterAll(async () => {
     if (!migrateDb) return;
     const surveyTrees: Array<{ workspaceId: string; surveys: string[]; responses: string[] }> = [
@@ -176,12 +181,16 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
-    await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-      managedSystemIds,
-    ]);
-    await migrateDb.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-      secondaryWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.managed_systems where id = any($1::uuid[])',
+      [managedSystemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [secondaryWorkspaceIds],
+    );
     await app?.close();
     await db?.close();
     await migrateDb?.close();
@@ -504,6 +513,37 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     );
     return rows;
   }
+
+  it('denies personal recovery queue/history to non-personal Admin and foreign-workspace holders', async () => {
+    const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5] });
+    const admin = await createActor('admin');
+    const holder = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses'],
+      subject.msId,
+    );
+    const positive = await get(
+      `/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`,
+      holder,
+    );
+    expect(positive.statusCode).toBe(200);
+    expect(positive.json().items[0].response_id).toBe(subject.responseIds[0]);
+    for (const route of ['recovery-items', 'history']) {
+      const denied = await get(`/surveys/${subject.surveyId}/outcome-follow-up/${route}`, admin);
+      expect(denied.statusCode).toBe(404);
+      for (const responseId of subject.responseIds) expect(denied.body).not.toContain(responseId);
+    }
+    const foreign = await seedForeignSurvey();
+    for (const route of ['recovery-items', 'history']) {
+      const denied = await get(`/surveys/${foreign}/outcome-follow-up/${route}`, holder);
+      expect(denied.statusCode).toBe(404);
+      expect(denied.body).not.toContain(foreign);
+    }
+    const [response] = subject.responseIds;
+    const denied = await get(`/survey-responses/${response}/outcome-follow-up/presentation`, admin);
+    expect(denied.statusCode).toBe(404);
+    expect(denied.body).not.toContain(response);
+  });
 
   it('gives a non-holder only the survey-grain booleans', async () => {
     const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5] });

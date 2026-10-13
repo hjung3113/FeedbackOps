@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { surveyResultDtoSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -121,7 +122,8 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       'delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );
@@ -995,10 +997,14 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [
       foreignWorkspace,
     ]);
-    await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where workspace_id=$1',
+      [foreignWorkspace],
+    );
+    await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
       foreignWorkspace,
     ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id=$1', [foreignWorkspace]);
     const after = await migrateHandle.pool.query<{ count: string }>(
       'select count(*) from core.audit_log where workspace_id=$1',
       [WORKSPACE_ID],

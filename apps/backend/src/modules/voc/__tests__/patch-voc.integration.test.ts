@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // PATCH /vocs/:id integration tests — Slice 3 #14 acceptance coverage.
 //
@@ -250,7 +251,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
           select id from core.managed_systems where slug like 'it-patch-%'
         )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-patch-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-patch-%'`,
+    );
     // Tables that reference core.actors must be cleared BEFORE the actor rows
     // are deleted (FK constraints: sessions.actor_id, idempotency_keys.actor_id,
     // rate_limits.actor_id). The UA filter alone misses rows if a prior run

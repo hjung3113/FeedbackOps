@@ -155,6 +155,40 @@ Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs
 
 When adding or changing a checker rule, add a focused fixture case in `scripts/check-boundaries.test.mjs` for that rule; run it with `node scripts/check-boundaries.test.mjs` because `pnpm check:boundaries` runs only the checker. Rule 10 rejects raw SQL references to `core.managed_systems` and `core.analytics_areas`, and imports of the owner tables' Drizzle symbols (`managedSystems`, `analyticsAreas` from `db/schema/core`), outside their owner modules; tests and migrations are excluded, and `src/test-support` is also barred from importing those symbols.
 
+### Transactional recovery projection seams (56-H)
+
+Dashboard's `recorder.ts` exports a type-only injected transaction interface; source factories
+capture independent owner truth before mutation and finalize it after all owner/link writes
+inside the idempotency miss path. `truth.ts` composes leaf `recovery-read.ts` predicates from
+VOC, Findings, Tasks, Permissions and Surveys, Entity Linking's `readRecoveryDependencies`,
+and VOC Clusters' `readClusterRecoveryMembers`. It never imports a source command factory
+through a runtime barrel or enforces the acting Actor's disclosure scope as transition truth.
+
+Recovery writers first acquire the transaction-scoped workspace advisory lock via
+`db/recovery-command-lock.ts` (`hashtextextended('recovery-command:' || workspaceId, 0)`),
+before idempotency, owner row, response or recovery identity locks. This includes source/status
+commands, ordinary link create/detach, Task Request creation, Cluster conversions/link/unlink,
+private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation. It also covers VOC
+creation, Permission Request creation and each per-VOC transaction of a Cluster bulk public update.
+Nested recorder seams call `requireRecoveryCommandLock`, which fails the test run when the owning
+command reached the recorder without holding the lock; production still acquires it.
+Under that serialization, owner Finding locks precede expanded Finding rows (sorted UUIDs),
+then bound response advisory locks (sorted UUIDs), then recovery identities. Response-addressed
+Survey commands can lock their response before inserting a new Finding; they hold the same
+workspace lock first. Findings' leaf `lockFindingRecoverySubjects` owns expanded row locking;
+Survey's `readSurveyRecoveryDependencies` applies it before locking bound responses and returns
+only Survey IDs. Captures may reacquire the workspace lock inside the same transaction.
+Read paths never acquire it. Recovery writers in one workspace serialize until commit/rollback,
+a deliberate throughput tradeoff for the single-workspace MVP (~5k VOCs/5k Tasks over five years).
+Capture remains before domain mutation and finish after the last link write;
+response IDs stay inside Survey.
+`surveys/recovery-presentation.ts` owns the private response recorder/reconciler and personal
+queue/presentation/history adapter. Findings' response-derived creation and status commands
+use that transactional seam; public payloads still require the existing explicit personal gate.
+The private reconciler returns only a continuation cursor internally, never a generic response
+payload. Recorder writes are limited to the owner's recovery projection tables; domain links,
+source audits, decisions and permissions retain their existing owners.
+
 ### Evidence inventory source projections (#1106)
 
 Findings composes its own parent/highlight reader with Survey's

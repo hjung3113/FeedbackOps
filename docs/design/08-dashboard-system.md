@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. Presentation/history/occurrence tracking (56-H) and shared frontend navigation (56-I) remain pending. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; shared frontend navigation (56-I) remains pending. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
@@ -382,17 +382,16 @@ Acceptance Criteria:
 50/max 100) and `GET /dashboard/recovery-items/:id`, plus required server `computed_at` on
 summary/list/detail. Scope/category/current owner repair eligibility precede count and paging.
 G strict DTOs contain identity, state, reason/priority/severity, safe source/affected summaries,
-current repair intents and derived hints. They omit occurrence, presentation, hidden totals,
-resolution metadata and history. Deterministic opaque category/source addresses may return a
+current repair intents and derived hints. 56-H adds truthful occurrence, personal presentation, visible/hidden totals and safe
+resolution metadata, plus a separately paged history endpoint. Deterministic opaque category/source addresses may return a
 readable resolved selection without proof of an earlier gap; they grant no access. Unknown,
 foreign, incompatible or unreadable addresses share 404. G's Survey list counts Surveys while
 summary retains response counts; this is the explicit parity exception. Empty Survey scopes
 fail closed, and generic holder/non-holder reads disclose no personal responses or audits.
 Wire format, compatibility and action fields: `docs/implementation/api/dashboard.md`.
 
-The following occurrence/presentation/history capabilities are 56-H target behavior; the
-rendered navigation, hiding controls and computation-time display are 56-I work. Only G's
-live reads are implemented in this chunk.
+The following occurrence/presentation/history capabilities are 56-H backend behavior; the
+rendered navigation, hiding controls and computation-time display are 56-I work.
 
 The six emitted queue IDs/grains are `unassigned-voc` (VOC), `high-severity-unlinked`
 (VOC), `actionable-finding-no-execution` (Finding), `released-task-unresolved-voc`
@@ -408,7 +407,10 @@ and keeps readable resolved selections open. Responsibility hints derive from so
 assignment, including safe team/unassigned/multiple-responsible labels, never email or
 independent ownership. Integration owns the shared UI/public seam used by Home.
 
-History is three calendar months by resolution time, safe under current permissions.
+History is three UTC calendar months by resolution time: inclusive first instant of the
+current UTC month minus two whole months, with current permission filtering before count/LIMIT.
+Visible/hidden list selection also precedes cursor/LIMIT; their sum retains the same authorized
+category/System/view matched set, and cursors bind the presentation selector.
 Source/link commands atomically record real transitions through a Dashboard recorder;
 pg-boss discovers/reconciles drift with truthful observation time. No generic resolve or
 GET projection writes, fabricated historical repairs, or audit deletion. Survey response

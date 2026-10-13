@@ -4,6 +4,7 @@ import {
   type FindingDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import {
@@ -18,6 +19,7 @@ import {
   resolveApprovedSurveyResponseExcerpts,
   resolveSurveyResponseEvidenceAccess,
 } from '../surveys/evidence-access.js';
+import { captureOutcomeRecovery, finishOutcomeRecovery } from '../surveys/recovery-presentation.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import { incrementFindingEvidenceCount, insertEvidenceHighlight, insertFinding } from './repo.js';
 import { resolveOwner } from './responsibility.js';
@@ -35,12 +37,16 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
     const { actor, vocId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
         requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'voc', id: vocId },
+          ]);
           const sourceVoc = await selectVocForUpdate(tx, actor.workspace_id, vocId);
           if (!sourceVoc || sourceVoc.archivedAt !== null) {
             throw new HttpError('not_found.record', 'voc not found');
@@ -166,6 +172,13 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             });
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              actor.actor_id,
+              'createFindingFromVoc',
+            );
           return {
             status: 201,
             body: {
@@ -191,8 +204,9 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: FindingDto }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
-    return deps.db.transaction(async (tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -206,6 +220,15 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             'create_finding',
           );
           const subject = access.subject;
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'survey', id: subject.survey_id },
+          ]);
+          const responseRecovery = await captureOutcomeRecovery(
+            tx,
+            actor.workspace_id,
+            responseId,
+            subject.survey_id,
+          );
           const targetManagedSystemId =
             input.primary_managed_system_id ?? subject.primary_managed_system_id;
           const targetMs = await lockManagedSystem(tx, actor.workspace_id, targetManagedSystemId);
@@ -361,13 +384,26 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               },
             });
           }
+          await finishOutcomeRecovery(
+            tx,
+            responseRecovery,
+            actor.actor_id,
+            'createFindingFromSurveyResponse',
+          );
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              actor.actor_id,
+              'createFindingFromSurveyResponse',
+            );
           return {
             status: 201,
             body: { ...owner, ...toDto({ ...finding, evidence_count: safeExcerpts.length }) },
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   return {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -74,7 +75,8 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Analytics Area write path (Slice 2 #11) + MS archive cascade activation.
 
 import { randomUUID } from 'node:crypto';
@@ -94,7 +95,10 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
           select id from core.managed_systems where slug like 'it-%'
         )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
@@ -117,7 +121,10 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
         where managed_system_id in (select id from core.managed_systems where slug like 'it-%')`,
     );
     await dbHandle.pool.query(`delete from core.analytics_areas where slug like 'it-%'`);
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
     if (MIGRATE_URL) {

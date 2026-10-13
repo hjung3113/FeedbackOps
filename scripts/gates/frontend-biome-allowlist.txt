@@ -337,6 +337,8 @@ apps/backend/migrations/meta/0051_snapshot.json format -- drizzle-kit generated 
 apps/backend/migrations/meta/0052_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
 apps/backend/migrations/meta/0053_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
 apps/backend/migrations/meta/0054_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (release gate vs main, 2026-10-01)
+apps/backend/migrations/meta/0068_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1093, 2026-10-13)
+apps/backend/migrations/meta/0069_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1093, 2026-10-13)
 apps/backend/src/modules/dashboard/service.ts lint/style/noNonNullAssertion -- pre-existing; values are defined inside the openVoc/vocScope guard, and a lint chore must not change the coverage math (release gate vs main, 2026-10-01)
 packages/ui/src/components/shadcn/avatar.tsx organizeImports -- pre-existing on develop (measured 2026-10-01); #671 only changes the AvatarFallback class
 packages/ui/src/identity/__tests__/UserAvatar.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-01); #671 appends one it() block
@@ -459,3 +461,12 @@ packages/ui/src/feedback/__tests__/UndoToast.test.tsx format -- pre-existing on 
 packages/ui/src/feedback/__tests__/UndoToast.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (measured 2026-10-11 with biome-cmp); #960 appends pause/resume tests
 packages/ui/src/feedback/__tests__/UndoToast.test.tsx organizeImports -- pre-existing on develop (measured 2026-10-11 with biome-cmp); #960 appends pause/resume tests
 apps/backend/src/modules/dashboard/routes.ts format -- pre-existing on develop (measured 2026-10-13 with biome-cmp); #1092 adds the recovery list/detail routes
+apps/backend/src/db/__tests__/voc-embeddings.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/db/__tests__/voc-embeddings.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/auth/__tests__/auth.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/db/__tests__/display-id-migration.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/auth/__tests__/auth.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/voc-clusters/__tests__/create-cluster-display-id.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/voc-clusters/__tests__/create-cluster-display-id.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/voc/recommendations/__tests__/recommendations.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/voc/recommendations/__tests__/recommendations.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file

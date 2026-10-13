@@ -7,10 +7,11 @@
 // Rejected commands additionally assert that no state row and no audit row
 // were written, so a regression cannot silently mutate on denial.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -76,6 +77,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     if (!grantorActorId) throw new Error('no admin actor found in seed workspace');
   });
 
+  beforeEach(async () => {
+    await migrateDb.pool.query('DELETE FROM core.rate_limits');
+  });
+
   afterAll(async () => {
     if (!migrateDb) return;
     const surveyTrees: Array<{ workspaceId: string; surveys: string[]; responses: string[] }> = [
@@ -86,7 +91,25 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         responses: secondaryResponseIds[index] ? [secondaryResponseIds[index]] : [],
       })),
     ];
-    for (const { workspaceId, responses } of surveyTrees) {
+    for (const { workspaceId, surveys, responses } of surveyTrees) {
+      for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+        await migrateDb.pool.query(
+          `DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
+          SELECT i.recovery_item_id FROM dashboard.recovery_identities i WHERE i.workspace_id=$1::uuid
+          AND (i.source_id=ANY($2::uuid[]) OR i.source_id=ANY($3::uuid[])))`,
+          [workspaceId, surveys, findingIds],
+        );
+      }
+      for (const table of [
+        'outcome_recovery_history',
+        'outcome_recovery_presentations',
+        'outcome_recovery_identities',
+      ]) {
+        await migrateDb.pool.query(
+          `DELETE FROM survey.${table} WHERE workspace_id=$1::uuid AND outcome_recovery_item_id::uuid=ANY($2::uuid[])`,
+          [workspaceId, responses],
+        );
+      }
       await migrateDb.pool.query(
         'delete from survey.outcome_follow_up_decisions where response_id = any($1::uuid[])',
         [responses],
@@ -139,12 +162,16 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
-    await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-      managedSystemIds,
-    ]);
-    await migrateDb.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-      secondaryWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.managed_systems where id = any($1::uuid[])',
+      [managedSystemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [secondaryWorkspaceIds],
+    );
     await app?.close();
     await db?.close();
     await migrateDb?.close();
@@ -328,6 +355,270 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     expect(await auditRows(responseId, 'survey_outcome_no_follow_up_marked')).toEqual([]);
     expect(await auditRows(responseId, 'survey_outcome_follow_up_reopened')).toEqual([]);
   }
+
+  it('keeps response occurrence/hiding personal while the Survey stays aggregate-active', async () => {
+    const subject = await seedSubject({ respondentCount: 6 });
+    const extra = (
+      await migrateDb.pool.query<{ id: string }>(
+        `SELECT id FROM survey.survey_responses
+        WHERE survey_id=$1::uuid AND id<>$2::uuid ORDER BY id LIMIT 1`,
+        [subject.surveyId, subject.responseId],
+      )
+    ).rows[0]?.id;
+    await migrateDb.pool.query(
+      "UPDATE survey.survey_response_answers SET answer_value='2'::jsonb WHERE response_id=$1::uuid",
+      [extra],
+    );
+    const holder = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses', 'finding.manage'],
+      subject.msId,
+    );
+    const other = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses'],
+      subject.msId,
+    );
+    const admin = await createActor('admin');
+    const get = (url: string, actor: Actor) =>
+      app.inject({
+        method: 'GET',
+        url,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${actor.cookie}` },
+      });
+    const presentation = (actor: Actor, payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/survey-responses/${subject.responseId}/outcome-follow-up/presentation`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${actor.cookie}` },
+        payload,
+      });
+    const historyUrl = `/surveys/${subject.surveyId}/outcome-follow-up/history`;
+    expect((await presentation(holder, { action: 'mute', actor_id: other.id })).statusCode).toBe(
+      422,
+    );
+    expect((await presentation(holder, { action: 'mute' })).statusCode).toBe(200);
+    const personalList = await get(
+      `/surveys/${subject.surveyId}/outcome-follow-up/recovery-items?limit=1`,
+      holder,
+    );
+    expect(personalList.json()).toMatchObject({ total: 1, visible_total: 1, hidden_total: 1 });
+    expect(personalList.json().items[0].response_id).toBe(extra);
+    expect(
+      (
+        await get(
+          `/surveys/${subject.surveyId}/outcome-follow-up/recovery-items?presentation=hidden`,
+          holder,
+        )
+      ).json().items[0].response_id,
+    ).toBe(subject.responseId);
+    expect(
+      (await get(`/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`, admin))
+        .statusCode,
+    ).toBe(404);
+    expect(
+      (
+        await get(`/survey-responses/${subject.responseId}/outcome-follow-up/presentation`, other)
+      ).json().presentation.state,
+    ).toBe('visible');
+    expect((await get(historyUrl, admin)).statusCode).toBe(404);
+    expect((await presentation(admin, { action: 'mute' })).statusCode).toBe(404);
+    const privateReason = `private-decision-${randomUUID()}`;
+    const key = randomUUID();
+    const repaired = await post(
+      `/survey-responses/${subject.responseId}/mark-no-follow-up`,
+      holder,
+      { reason: privateReason },
+      key,
+    );
+    expect(repaired.statusCode).toBe(200);
+    expect(
+      (
+        await post(
+          `/survey-responses/${subject.responseId}/mark-no-follow-up`,
+          holder,
+          { reason: privateReason },
+          key,
+        )
+      ).json(),
+    ).toEqual(repaired.json());
+    const auditsBeforeHistory = (
+      await auditRows(subject.responseId, 'survey_response_personal_read')
+    ).length;
+    const history = await get(historyUrl, holder);
+    expect(history.statusCode).toBe(200);
+    expect(history.json().total).toBe(1);
+    expect(history.body).not.toContain(privateReason);
+    expect(history.json().items[0]).toMatchObject({
+      response_id: subject.responseId,
+      occurrence: 1,
+      outcome: 'resolved',
+      evidence: 'command',
+    });
+    expect(
+      (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+        auditsBeforeHistory,
+    ).toBe(1);
+    const settings = (
+      await migrateDb.pool.query<{ survey_anonymity_threshold: number }>(
+        'SELECT survey_anonymity_threshold FROM core.workspace_settings WHERE workspace_id=$1::uuid',
+        [WORKSPACE_ID],
+      )
+    ).rows[0];
+    try {
+      await migrateDb.pool.query(
+        `INSERT INTO core.workspace_settings(workspace_id,survey_anonymity_threshold)
+          VALUES ($1::uuid,50) ON CONFLICT (workspace_id) DO UPDATE SET survey_anonymity_threshold=50`,
+        [WORKSPACE_ID],
+      );
+      const beforeWithdrawnHistory = (
+        await auditRows(subject.responseId, 'survey_response_personal_read')
+      ).length;
+      const withdrawnHistory = await get(historyUrl, holder);
+      expect(withdrawnHistory.statusCode).toBe(200);
+      expect(withdrawnHistory.json()).toMatchObject({ total: 0, items: [] });
+      expect(withdrawnHistory.body).not.toContain(subject.responseId);
+      expect(
+        (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+          beforeWithdrawnHistory,
+      ).toBe(0);
+      const beforeWithdrawnPoint = (
+        await auditRows(subject.responseId, 'survey_response_personal_read')
+      ).length;
+      const withdrawnPoint = await get(
+        `/survey-responses/${subject.responseId}/outcome-follow-up/presentation`,
+        holder,
+      );
+      expect(withdrawnPoint.statusCode).toBe(404);
+      expect(withdrawnPoint.body).not.toContain(subject.responseId);
+      expect(
+        (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+          beforeWithdrawnPoint,
+      ).toBe(0);
+    } finally {
+      if (settings)
+        await migrateDb.pool.query(
+          'UPDATE core.workspace_settings SET survey_anonymity_threshold=$2 WHERE workspace_id=$1::uuid',
+          [WORKSPACE_ID, settings.survey_anonymity_threshold],
+        );
+      else
+        await migrateDb.pool.query(
+          'DELETE FROM core.workspace_settings WHERE workspace_id=$1::uuid',
+          [WORKSPACE_ID],
+        );
+    }
+    expect(
+      (
+        await post(`/survey-responses/${subject.responseId}/reopen-follow-up`, holder, {
+          reason: 'Reopened',
+        })
+      ).statusCode,
+    ).toBe(200);
+    const reopened = await get(
+      `/survey-responses/${subject.responseId}/outcome-follow-up/presentation`,
+      holder,
+    );
+    expect(reopened.json()).toMatchObject({
+      state: 'active',
+      occurrence: 2,
+      presentation: { state: 'visible', snoozed_until: null },
+    });
+    const safe = await get(
+      `/dashboard/recovery-items?category=bad-outcome-no-followup&managed_system_id=${subject.msId}`,
+      holder,
+    );
+    expect(safe.statusCode).toBe(200);
+    expect(safe.json().items).toHaveLength(1);
+    for (const forbidden of [subject.responseId, extra, privateReason, holder.id])
+      expect(safe.body).not.toContain(forbidden);
+    await migrateDb.pool.query(
+      `INSERT INTO permission.permission_denies(workspace_id,actor_id,capability,managed_system_id,created_by_actor_id,reason)
+        VALUES ($1::uuid,$2::uuid,'survey.read_personal_responses',$3::uuid,$4::uuid,'revoked personal history')`,
+      [WORKSPACE_ID, holder.id, subject.msId, grantorActorId],
+    );
+    const denied = await get(historyUrl, holder);
+    expect(denied.statusCode).toBe(404);
+    expect(denied.body).not.toContain(subject.responseId);
+    expect(denied.body).not.toContain(privateReason);
+    await migrateDb.pool.query('DELETE FROM permission.permission_denies WHERE actor_id=$1::uuid', [
+      holder.id,
+    ]);
+  });
+
+  it('records response-derived Finding repair and resets its hiding when the Finding becomes not actionable', async () => {
+    const subject = await seedSubject();
+    const actor = await createActor('admin', ['survey.read_personal_responses'], subject.msId);
+    const hdr = { cookie: `${SESSION_COOKIE_NAME}=${actor.cookie}` };
+    const presentationUrl = `/survey-responses/${subject.responseId}/outcome-follow-up/presentation`;
+    expect(
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: presentationUrl,
+          headers: hdr,
+          payload: { action: 'mute' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const key = randomUUID();
+    const input = { severity: 'high', approved_excerpt_ids: [] };
+    const created = await post(
+      `/survey-responses/${subject.responseId}/create-finding`,
+      actor,
+      input,
+      key,
+    );
+    expect(created.statusCode).toBe(201);
+    const finding = created.json<{ id: string; updated_at: string }>();
+    findingIds.push(finding.id);
+    expect(
+      (
+        await post(`/survey-responses/${subject.responseId}/create-finding`, actor, input, key)
+      ).json(),
+    ).toEqual(created.json());
+    const history = await app.inject({
+      method: 'GET',
+      url: `/surveys/${subject.surveyId}/outcome-follow-up/history`,
+      headers: hdr,
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().items).toHaveLength(1);
+    expect(history.json().items[0]).toMatchObject({
+      occurrence: 1,
+      outcome: 'resolved',
+      action: 'createFindingFromSurveyResponse',
+    });
+    const generic = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=bad-outcome-no-followup&managed_system_id=${subject.msId}`,
+      headers: hdr,
+    });
+    expect(generic.statusCode).toBe(200);
+    expect(generic.json().items).toHaveLength(1);
+    expect(generic.json().items[0].item.source.id).toBe(subject.surveyId);
+    const respondent = (
+      await migrateDb.pool.query<{ respondent_actor_id: string }>(
+        'SELECT respondent_actor_id FROM survey.survey_responses WHERE id=$1::uuid',
+        [subject.responseId],
+      )
+    ).rows[0]?.respondent_actor_id;
+    for (const forbidden of [subject.responseId, respondent])
+      expect(generic.body).not.toContain(forbidden);
+    expect(generic.body).not.toMatch(/response_id|answer_value|decision_reason|respondent/);
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/findings/${finding.id}`,
+      headers: { ...hdr, 'idempotency-key': randomUUID(), 'if-match': finding.updated_at },
+      payload: { status: 'not_actionable', reason: 'Withdraw generated follow-up' },
+    });
+    expect(patched.statusCode).toBe(200);
+    const reopened = await app.inject({ method: 'GET', url: presentationUrl, headers: hdr });
+    expect(reopened.json()).toMatchObject({
+      state: 'active',
+      occurrence: 2,
+      presentation: { state: 'visible', snoozed_until: null },
+    });
+  });
 
   it('marks a poor response, writes the state row and one audit row', async () => {
     const subject = await seedSubject();

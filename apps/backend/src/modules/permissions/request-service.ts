@@ -1,3 +1,5 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { RECOVERY_PERMISSION_ACTIVE_STATUSES } from './recovery-read.js';
 // Permission-request application service. Owns permission request commands and
 // permission_requests read models per
@@ -85,6 +87,7 @@ export interface SubmitMoreInfoPermissionRequestResultEnvelope {
 }
 
 export interface RequestServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -138,6 +141,7 @@ export function createRequestService(deps: RequestServiceDeps) {
     const requestHash = hashRequestBody({ action: 'create', ...body });
 
     return await db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       // (1) Idempotency lookup.
       if (options.idempotencyKey) {
@@ -246,6 +250,9 @@ export function createRequestService(deps: RequestServiceDeps) {
         throw err;
       }
 
+      await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [
+        { type: 'permission_request', id: insertedId },
+      ]);
       // (4) Audit row, same transaction.
       await auditService.record(tx, {
         workspace_id: actor.workspace_id,
@@ -318,6 +325,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       : undefined;
 
     return await db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       // Owner authorization precedes replay, including Admin callers.
       const owned = await tx
@@ -332,6 +340,9 @@ export function createRequestService(deps: RequestServiceDeps) {
         );
       if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
       const run = async (): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const requests = await tx
           .select()
           .from(permissionRequests)
@@ -354,7 +365,9 @@ export function createRequestService(deps: RequestServiceDeps) {
           throw new HttpError(
             'conflict.stale_write',
             'permission request status or revision changed',
-            { current_revision: request.revision },
+            {
+              current_revision: request.revision,
+            },
           );
         }
         if (!isCapability(request.requestedCapability)) {
@@ -511,7 +524,13 @@ export function createRequestService(deps: RequestServiceDeps) {
                   },
                 },
         });
-
+        if (recovery)
+          await deps.recoveryRecorder?.finish(
+            tx,
+            recovery,
+            actor.actor_id,
+            'submitMoreInfoRequest',
+          );
         return {
           status: 200,
           body: {
@@ -541,6 +560,7 @@ export function createRequestService(deps: RequestServiceDeps) {
     options: CreatePermissionRequestOptions = {},
   ): Promise<{ status: number; body: CancelPermissionRequestResult }> {
     return db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       const owned = await tx
         .select()
@@ -554,6 +574,9 @@ export function createRequestService(deps: RequestServiceDeps) {
         );
       if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
       const run = async (): Promise<{ status: number; body: CancelPermissionRequestResult }> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const rows = await tx
           .select()
           .from(permissionRequests)
@@ -574,7 +597,9 @@ export function createRequestService(deps: RequestServiceDeps) {
           throw new HttpError(
             'conflict.stale_write',
             'permission request status or revision changed',
-            { current_revision: request.revision },
+            {
+              current_revision: request.revision,
+            },
           );
         }
         const revision = request.revision + 1;
@@ -606,6 +631,8 @@ export function createRequestService(deps: RequestServiceDeps) {
             ...(reason ? { reason } : {}),
           },
         });
+        if (recovery)
+          await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'cancelRequest');
         return {
           status: 200,
           body: {

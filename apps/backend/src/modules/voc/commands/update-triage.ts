@@ -27,6 +27,9 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
     input: PatchVocRequest;
   }): Promise<VocEnvelope> {
     const { tx, actor, vocId, ifMatch, input } = args;
+    const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+      { type: 'voc', id: vocId },
+    ]);
     const workspaceId = actor.workspace_id;
 
     // 1. FOR UPDATE lock on the VOC row.
@@ -430,6 +433,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       updated.reporterFacingStatus as ReporterFacingStatus,
       tx,
     );
+    if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'updateVoc');
     return composeEnvelope(updatedLockedVoc, nextStates);
   }
   async function updateVocCommand(args: {
@@ -448,6 +452,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       idempotencyKey,
       requestHash,
       status: 200,
+      recoveryWorkspaceId: actor.workspace_id,
       work: (tx) => updateVoc({ tx, actor, vocId, ifMatch, input }),
     });
   }

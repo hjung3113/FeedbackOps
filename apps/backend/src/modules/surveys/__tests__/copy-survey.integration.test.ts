@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import {
   AUDIT_EVENT_DETAIL_SCHEMAS,
@@ -143,12 +144,16 @@ describe.skipIf(!runIntegration)('Saved Survey definition reuse (#1074)', () => 
       'delete from core.analytics_areas where managed_system_id=any($1::uuid[])',
       [systemIds],
     );
-    await migrateHandle.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [
-      systemIds,
-    ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id=any($1::uuid[])', [
-      foreignWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where id=any($1::uuid[])',
+      [systemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.workspaces where id=any($1::uuid[])',
+      [foreignWorkspaceIds],
+    );
     await migrateHandle.pool.query(
       "delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'",
       [WORKSPACE_ID],

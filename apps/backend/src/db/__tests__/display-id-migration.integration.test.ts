@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 
 import { type DbHandle, createDb } from '../client.js';
 
@@ -25,7 +26,8 @@ describe.skipIf(!runIntegration)('0027 display-id scheme', () => {
       await handle.pool.query('delete from task.tasks where workspace_id = any($1::uuid[])', [
         transientWorkspaceIds,
       ]);
-      await handle.pool.query(
+      await deleteRecoveryFixtureParents(
+        handle,
         'delete from core.managed_systems where workspace_id = any($1::uuid[])',
         [transientWorkspaceIds],
       );
@@ -36,9 +38,11 @@ describe.skipIf(!runIntegration)('0027 display-id scheme', () => {
         'delete from core.display_counters where workspace_id = any($1::uuid[])',
         [transientWorkspaceIds],
       );
-      await handle.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-        transientWorkspaceIds,
-      ]);
+      await deleteRecoveryFixtureParents(
+        handle,
+        'delete from core.workspaces where id = any($1::uuid[])',
+        [transientWorkspaceIds],
+      );
     }
     await handle?.close();
   });

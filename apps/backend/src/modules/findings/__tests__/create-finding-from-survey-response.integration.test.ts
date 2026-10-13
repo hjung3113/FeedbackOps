@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { waitForResponseEvidenceWaiters } from '../../../test-support/response-evidence-barrier.js';
 // Route-level contract for the only permitted Survey Response -> Finding command.
 // It deliberately uses the fops_app server path and the fops_migrate handle only
@@ -174,10 +175,11 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       `delete from core.analytics_areas where managed_system_id in (${systems})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
-    await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
-      WORKSPACE_ID,
-      `${SLUG}%`,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      `delete from core.managed_systems where id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query('delete from core.teams where id=any($1::uuid[])', [teamIds]);
     teamIds.length = 0;
     for (const workspaceId of foreignWorkspaceIds) {
@@ -207,10 +209,14 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
         'delete from core.responsibility_default_failures where workspace_id=$1',
         [workspaceId],
       );
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id=$1',
+        [workspaceId],
+      );
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id=$1', [workspaceId]);
     }
     foreignWorkspaceIds.clear();
   }
@@ -1983,6 +1989,79 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       }
     }
     expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+  });
+
+  it('Finding status and approved excerpt attachment serialize Finding before its bound response', async () => {
+    const source = await safeAttachmentSource();
+    const creator = await attachmentActor();
+    for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+      await grant(creator.id, permission, source.msId);
+    const parent = await post(creator.cookie, source.responseId, {
+      severity: 'high',
+      approved_excerpt_ids: [],
+    });
+    expect(parent.statusCode).toBe(201);
+    const finding = parent.json();
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    const blocker = await appHandle.pool.connect();
+    let patch: Promise<{ statusCode: number; body: string }> | undefined;
+    let attachment: ReturnType<typeof attach> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+        source.responseId,
+      ]);
+      patch = app
+        .inject({
+          method: 'PATCH',
+          url: `/findings/${finding.id}`,
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}`,
+            'idempotency-key': randomUUID(),
+            'if-match': finding.updated_at,
+          },
+          payload: { status: 'active' },
+        })
+        .then((r) => r);
+      await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, patch);
+      attachment = attach(reader.cookie, finding.id, {
+        approved_excerpt_id: source.approvalId,
+      }).then((r) => r);
+      // Observe a second live connection blocked on the first command, not a timer race.
+      const deadline = Date.now() + 1500;
+      let findingWaiter = false;
+      while (Date.now() < deadline) {
+        const queue = await migrateHandle.pool.query<{ found: boolean }>(
+          `
+            SELECT EXISTS (SELECT 1 FROM pg_locks r
+              JOIN pg_locks w ON NOT w.granted AND w.pid<>r.pid AND r.pid=ANY(pg_blocking_pids(w.pid))
+              WHERE r.locktype='advisory' AND NOT r.granted
+                AND r.objsubid=1 AND r.classid=((hashtextextended($1,0)>>32)&4294967295)::oid
+                AND r.objid=(hashtextextended($1,0)&4294967295)::oid) AS found`,
+          [source.responseId],
+        );
+        if (queue.rows[0]?.found) {
+          findingWaiter = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(findingWaiter, 'attachment must wait on status command holding Finding').toBe(true);
+      await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, patch);
+      await blocker.query('commit');
+      const [status, attached] = await Promise.all([patch, attachment]);
+      expect(status.body).not.toContain('40P01');
+      expect(attached.body).not.toContain('40P01');
+      expect(status.statusCode).toBe(200);
+      expect(attached.statusCode).toBe(201);
+      expect((await attachmentResidue(finding.id, reader.id)).highlights).toBe(1);
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      await Promise.allSettled([patch, attachment].filter((p) => p !== undefined));
+    }
   });
 
   it.each(['attach-first', 'revoke-first'] as const)(

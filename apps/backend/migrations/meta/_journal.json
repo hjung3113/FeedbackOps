@@ -477,6 +477,20 @@
       "when": 1791886996564,
       "tag": "0067_recovery_read_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791891701641,
+      "tag": "0068_recovery_presentation_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791893462040,
+      "tag": "0069_recovery_durable_references",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -82,7 +83,8 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
       `delete from permission.permission_grants where workspace_id = $1 and managed_system_id in (${managedSystems})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

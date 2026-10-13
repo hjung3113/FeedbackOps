@@ -1,3 +1,5 @@
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Task Requests application seam (#391) — lockTaskRequestForUpdate and
 // markTaskRequestConverted — exercised inside db.transaction directly (not
 // via HTTP).
@@ -8,10 +10,15 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { sql } from 'drizzle-orm';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
+import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
+import { createEntityLink } from '../../entity-links/commands.js';
 import { lockTaskRequestForUpdate, markTaskRequestConverted } from '../commands.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
 
@@ -47,6 +54,14 @@ describe.skipIf(!runIntegration)('task-requests command seam (#391)', () => {
     if (!migrateHandle) return;
     // FK-safe order: children before parents.
     await migrateHandle.pool.query(
+      `DELETE FROM core.entity_links WHERE workspace_id=$1::uuid AND managed_system_id IN (SELECT id FROM core.managed_systems WHERE workspace_id=$1::uuid AND slug LIKE $2::text)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `DELETE FROM finding.findings WHERE workspace_id=$1::uuid AND primary_managed_system_id IN (SELECT id FROM core.managed_systems WHERE workspace_id=$1::uuid AND slug LIKE $2::text)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from task_request.task_requests
         where workspace_id = $1
           and primary_managed_system_id in (
@@ -54,7 +69,8 @@ describe.skipIf(!runIntegration)('task-requests command seam (#391)', () => {
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -63,6 +79,83 @@ describe.skipIf(!runIntegration)('task-requests command seam (#391)', () => {
       [WORKSPACE_ID, `mock-dev-read-${ACTOR_SUFFIX}%`],
     );
   }
+
+  it('does not reopen a Finding solely because a linked Task Request changes status', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Requested execution MS',
+    );
+    const finding = await insertFindingRow(dbHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceId: randomUUID(),
+      status: 'active',
+      createdBy: actorId,
+    });
+    const request = await insertTaskRequestRow(dbHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceId: finding.id,
+      requesterActorId: actorId,
+      status: 'approved',
+      decided: true,
+    });
+    const token = recoveryIdentity('actionable-finding-no-execution', finding.id);
+    const recorder = createOwnerRecoveryRecorder();
+    await expect(
+      dbHandle.db.transaction(async (tx) => {
+        await lockRecoveryCommand(tx, WORKSPACE_ID);
+        const captured = await recorder.capture(tx, WORKSPACE_ID, [
+          { type: 'finding', id: finding.id },
+        ]);
+        await createEntityLink(tx, {
+          workspaceId: WORKSPACE_ID,
+          sourceType: 'finding',
+          sourceId: finding.id,
+          targetType: 'task_request',
+          targetId: request.id,
+          relationType: 'requested_task',
+          managedSystemId: msId,
+          createdBy: actorId,
+          visibility: 'internal_only',
+        });
+        await recorder.finish(tx, captured, actorId, 'createFromFinding');
+        const beforeStatus = await recorder.capture(tx, WORKSPACE_ID, [
+          { type: 'task_request', id: request.id },
+        ]);
+        await markTaskRequestConverted(tx, {
+          workspaceId: WORKSPACE_ID,
+          taskRequestId: request.id,
+        });
+        await recorder.finish(tx, beforeStatus, actorId, 'markTaskRequestConverted');
+        expect(
+          (
+            await tx.execute(
+              sql`SELECT occurrence,state FROM dashboard.recovery_identities WHERE workspace_id=${WORKSPACE_ID}::uuid AND recovery_item_id=${token}`,
+            )
+          ).rows,
+        ).toEqual([{ occurrence: 1, state: 'resolved' }]);
+        expect(
+          (
+            await tx.execute(
+              sql`SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=${WORKSPACE_ID}::uuid AND recovery_item_id=${token}`,
+            )
+          ).rows,
+        ).toEqual([{ occurrence: 1 }]);
+        throw new Error('recovery rollback');
+      }),
+    ).rejects.toThrow('recovery rollback');
+    expect(
+      (
+        await dbHandle.pool.query(
+          'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+          [WORKSPACE_ID, token],
+        )
+      ).rows,
+    ).toEqual([]);
+  });
 
   async function seedTaskRequest(): Promise<{ id: string }> {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Seam MS');

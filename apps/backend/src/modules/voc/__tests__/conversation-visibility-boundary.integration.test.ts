@@ -4,8 +4,10 @@
 // checks use fops_migrate; the append-only assertions use fops_app directly.
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID.
 
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -13,6 +15,10 @@ import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  cleanupSystemRecoveryFixtures,
+  deleteRecoveryFixtureParents,
+} from '../../../test-support/recovery-fixtures.js';
 import { insertPublicUpdate, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertInternalComment, insertReporterReply } from './_seed-helpers.js';
 
@@ -101,6 +107,7 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     // Conversation rows are explicitly first: the test proves their grants make
     // the app role unable to perform this teardown itself.
     for (const table of ['voc_internal_comments', 'voc_reporter_replies', 'voc_public_updates']) {
@@ -129,7 +136,8 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
         )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -191,6 +199,42 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
   function cookie(value: string): Record<string, string> {
     return { cookie: `${SESSION_COOKIE_NAME}=${value}` };
   }
+
+  it('a rejected public-update command stores no recovery projection or history', async () => {
+    const { vocId } = await seedConversation();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/vocs/${vocId}/public-updates`,
+      headers: { ...cookie(outOfScopeCookie), 'idempotency-key': randomUUID() },
+      payload: {
+        skip_public_update: false,
+        body_rich_content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Denied update' }] }],
+        },
+        next_reporter_facing_status: 'reviewing',
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().code).toBe('permission.scope_required');
+    const token = recoveryIdentity('unassigned-voc', vocId);
+    expect(
+      (
+        await appHandle.pool.query(
+          'SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+          [WORKSPACE_ID, token],
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await appHandle.pool.query(
+          'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+          [WORKSPACE_ID, token],
+        )
+      ).rows,
+    ).toEqual([]);
+  });
 
   it('reporter receives public/reply rows but zero internal comments on conversation and inline-detail reads', async () => {
     const { vocId, ids } = await seedConversation();

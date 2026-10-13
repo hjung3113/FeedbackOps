@@ -131,7 +131,11 @@ survey
 - survey_response_answers
 - survey_response_excerpt_approvals
 - survey_results (computed read projection; not a table)
+- outcome_recovery_identities / outcome_recovery_history / outcome_recovery_presentations (56-H private response projections)
 - outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
+
+dashboard
+- recovery_identities / recovery_history / recovery_presentations (56-H owner-derived projections)
 
 permission
 - permission_requests
@@ -446,12 +450,21 @@ SQL/generated metadata/grants in implementation chunks. Preserve existing null a
 completed reviewer attribution and Survey operator behavior; no provenance/assignment backfill.
 XOR-or-both-null constraints and service workspace/active-team/Actor eligibility apply.
 
-Dashboard-owned stable identity/occurrence/history and Actor/occurrence presentation storage
-is proposed/new, not part of the current namespace list. Index workspace/scope/category,
+56-H registers `dashboard.recovery_identities`, `dashboard.recovery_history` and
+`dashboard.recovery_presentations`, plus Survey-owned `survey.outcome_recovery_identities`,
+`survey.outcome_recovery_history` and `survey.outcome_recovery_presentations`. Runtime identity
+and presentation grants are SELECT/INSERT/UPDATE; histories are SELECT/INSERT only. The
+journaled migration precreates `dashboard.recovery_reconcile` (5 retries, 30 seconds, backoff)
+and adds narrow Survey definer readers using the existing protected owner column grants.
+No existing table grants widen. Owner source/Actor/System IDs in these projections are
+durable logical references, preserving evidence across owner lifecycle; only workspace
+references are physical FKs. The generated follow-up migration removes the initial owner
+reference FKs without deleting projection data. Index workspace/scope/category,
 history `(workspace_id, resolved_at, id)`, source/Actor identity. Exact transitions commit
 with source/link mutations via an injected recorder; pg-boss discovery/reconciliation is
 idempotent and marks observation-only evidence honestly. Seed current identities without
-inventing past repairs. Read history for three calendar months; pruning never deletes
+inventing past repairs. Read history from the inclusive first instant of the current UTC month minus two calendar
+months, ordered by resolution time/UUID and filtered by current permission before count/LIMIT; pruning never deletes
 `core.audit_log` or stable/current-occurrence identity needed to prevent preference drift.
 Survey response presentation/history remains a personal-gated Survey-owned adapter and
 retains ADR-0055 state/definer/grant protections, not duplicated Dashboard resolution state.

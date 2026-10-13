@@ -1,4 +1,5 @@
 import type { DbHandle } from '../db/client.js';
+import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 
 type VocClusterFixtureIds = {
   workspaceId: string;
@@ -72,16 +73,20 @@ export async function cleanupVocClusterFixtures(
     'delete from core.responsibility_default_failures where workspace_id=$1 and managed_system_id=any($2::uuid[])',
     [input.workspaceId, input.managedSystemIds],
   );
-  await dbHandle.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-    input.managedSystemIds,
-  ]);
+  await deleteRecoveryFixtureParents(
+    dbHandle,
+    'delete from core.managed_systems where id = any($1::uuid[])',
+    [input.managedSystemIds],
+  );
   await dbHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [input.actorIds]);
 
   if (input.deleteWorkspace) {
     await dbHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
       input.workspaceId,
     ]);
-    await dbHandle.pool.query('delete from core.workspaces where id = $1', [input.workspaceId]);
+    await deleteRecoveryFixtureParents(dbHandle, 'delete from core.workspaces where id = $1', [
+      input.workspaceId,
+    ]);
   }
 }
 

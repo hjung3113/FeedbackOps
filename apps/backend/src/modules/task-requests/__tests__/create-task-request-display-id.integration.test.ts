@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -107,7 +108,8 @@ describe.skipIf(!runIntegration)('task request display_id assignment (#142)', ()
         'delete from core.responsibility_default_failures where workspace_id = $1',
         [workspaceId],
       );
-      await migrateHandle.pool.query(
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
         `delete from core.managed_systems where workspace_id = $1`,
         [workspaceId],
       );
@@ -117,7 +119,9 @@ describe.skipIf(!runIntegration)('task request display_id assignment (#142)', ()
       await migrateHandle.pool.query(`delete from core.display_counters where workspace_id = $1`, [
         workspaceId,
       ]);
-      await migrateHandle.pool.query(`delete from core.workspaces where id = $1`, [workspaceId]);
+      await deleteRecoveryFixtureParents(migrateHandle, `delete from core.workspaces where id = $1`, [
+        workspaceId,
+      ]);
     }
     await dbHandle?.close();
     await migrateHandle?.close();

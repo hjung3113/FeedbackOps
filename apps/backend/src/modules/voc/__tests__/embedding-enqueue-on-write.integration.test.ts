@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #168 step 3 — enqueue-on-write (ADR-0034 D6) through the real HTTP routes.
 //
 // The load-bearing assertion is the *failure* one: a throwing `boss.send` must
@@ -96,7 +97,8 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${scope}`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

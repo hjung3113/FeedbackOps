@@ -1,6 +1,7 @@
 import { type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
+import type { Tx } from '../../db/tx.js';
 import { managedSystemIsLiveSql } from '../managed-systems/read-projections.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
@@ -49,4 +50,16 @@ export function findingRecoveryProjection(
     CASE WHEN ${repairable} THEN f.id END AS repair_id, f.primary_managed_system_id AS repair_system_id
     FROM finding.findings f WHERE f.workspace_id = ${workspaceId}::uuid AND ${readable}
       AND ${sourceId ? sql`f.id = ${sourceId}::uuid` : sql`true`}`;
+}
+
+/** Finding rows precede bound responses and both recovery identity families. */
+export async function lockFindingRecoverySubjects(
+  tx: Tx,
+  workspaceId: string,
+  findingIds: string[],
+) {
+  if (findingIds.length === 0) return;
+  await tx.execute(sql`SELECT id FROM finding.findings
+    WHERE workspace_id=${workspaceId}::uuid AND id=ANY(${sqlUuidArray(findingIds)})
+    ORDER BY id FOR UPDATE`);
 }

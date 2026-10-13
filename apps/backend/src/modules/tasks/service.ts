@@ -18,7 +18,9 @@ import {
 import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { resolveTaskResponsibility } from './responsibility.js';
 
 import type { Db } from '../../db/client.js';
@@ -83,6 +85,7 @@ export interface TasksActor {
 }
 
 export interface TasksServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -584,12 +587,16 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'task_request', id: args.taskRequestId },
+          ]);
           const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
@@ -722,6 +729,13 @@ export function createTasksService(deps: TasksServiceDeps) {
             });
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'convertTaskRequest',
+            );
           return {
             status: 201,
             body: {
@@ -744,12 +758,17 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'task_request', id: args.taskRequestId },
+            { type: 'task', id: args.input.task_id },
+          ]);
           const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
@@ -814,6 +833,13 @@ export function createTasksService(deps: TasksServiceDeps) {
             },
           });
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'linkExistingTask',
+            );
           return { status: 200, body: taskToDto(task) };
         },
       );
@@ -829,12 +855,16 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDetailDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'task', id: args.taskId },
+          ]);
           const task = await lockTaskById(tx, {
             workspaceId: args.actor.workspace_id,
             taskId: args.taskId,
@@ -868,6 +898,13 @@ export function createTasksService(deps: TasksServiceDeps) {
                 })
               : null;
             await attachSourceVoc(args.actor, resolved);
+            if (recovery)
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'patchTaskStatus',
+              );
             return { status: 200, body: { ...taskToDto(task), source: resolved?.source ?? null } };
           }
 
@@ -931,6 +968,13 @@ export function createTasksService(deps: TasksServiceDeps) {
               })
             : null;
           await attachSourceVoc(args.actor, resolved);
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'patchTaskStatus',
+            );
           return {
             status: 200,
             body: { ...taskToDto(updatedTask), source: resolved?.source ?? null },

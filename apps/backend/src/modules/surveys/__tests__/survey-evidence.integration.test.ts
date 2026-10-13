@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { waitForResponseEvidenceWaiters } from '../../../test-support/response-evidence-barrier.js';
 
 import {
@@ -218,7 +219,8 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       'delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)',
       [WORKSPACE_ID, `${SLUG}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );
@@ -305,10 +307,14 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id=$1',
+        [workspaceId],
+      );
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id=$1', [workspaceId]);
       if (assertTeardown) {
         for (const [table, count] of Object.entries(await foreignCounts()))
           expect(count, `foreign ${table} rows after cleanup`).toBe(0);

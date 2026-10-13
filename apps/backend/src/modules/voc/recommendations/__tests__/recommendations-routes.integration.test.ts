@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // HTTP seam for the ADR-0034 recommendation resource.  The service suite
 // owns ranking arithmetic; this suite deliberately boots the real server and
 // observes the wire contract, auth middleware, audit rows, and writes.
@@ -175,7 +176,8 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
               or managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2))`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );
-    await ops.pool.query(
+    await deleteRecoveryFixtureParents(
+      ops,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );

@@ -34,10 +34,12 @@ Dashboard is not a passive reporting helper.
   and safe linked VOC hydration. Restricted linked identities/owners/routes/actions never leak.
   Generic Survey reads use only the safe batch adapter, fail closed on empty scopes, and never
   call personal readers or write domain audits. Required personal source audits are unchanged.
-- G strict schemas omit occurrence, resolution metadata, presentation and hidden totals.
-  56-H owns proposed storage/recorder/pg-boss, presentation PATCH and history; GETs write no
-  source/projection state. H extends G rather than exposing placeholder fields now.
-- H's personal 1-day/7-day snooze/current-occurrence mute never changes counts; reopen resets
+- H extends G strict schemas with truthful nullable occurrence/resolution, personal presentation
+  and visible/hidden totals. Dashboard owns storage/recorder/pg-boss, presentation PATCH and
+  history; GETs write no source/projection state. History starts at the first instant of the
+  current UTC month minus two calendar months, inclusive; current permission filtering precedes
+  count/LIMIT. Runtime history is append-only; reconciliation uses observation evidence.
+- H's personal 1-day/7-day snooze/current-occurrence mute never changes operational summary counts; reopen resets
   hiding. Outcome response presentation/history remains Survey-owned/personal-gated (ADR-0055).
 - Coverage (#1087) reads resolved five metric pairs once; `no_data` differs from absent keys.
   Rendered consumer compatibility is #1088-owned; deliver atomically.

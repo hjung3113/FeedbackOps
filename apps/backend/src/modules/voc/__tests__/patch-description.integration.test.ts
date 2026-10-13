@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // PATCH /vocs/:id/description integration tests — Slice 3 #17 acceptance coverage.
 //
@@ -255,7 +256,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
           select id from core.managed_systems where slug like 'it-pd-%'
         )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-pd-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-pd-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
     await dbHandle.pool.query(

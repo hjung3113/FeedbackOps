@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import {
   AUDIT_EVENT_DETAIL_SCHEMAS,
@@ -118,7 +119,8 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
       'delete from core.analytics_areas where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -237,8 +239,12 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     if (!foreignId) throw new Error('foreign managed system seed failed');
     const foreignResponse = await postSurvey(adminCookie, surveyBody(foreignId));
     expect(foreignResponse.statusCode).toBe(404);
-    await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [foreignId]);
-    await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where id = $1',
+      [foreignId],
+    );
+    await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
       foreignWorkspaceId,
     ]);
   });
@@ -633,12 +639,16 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
       'delete from core.analytics_areas where managed_system_id=any($1::uuid[])',
       [systemIds],
     );
-    await migrateHandle.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [
-      systemIds,
-    ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id=any($1::uuid[])', [
-      foreignWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where id=any($1::uuid[])',
+      [systemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.workspaces where id=any($1::uuid[])',
+      [foreignWorkspaceIds],
+    );
     await migrateHandle.pool.query(
       "delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'",
       [WORKSPACE_ID],
@@ -981,7 +991,7 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
         WORKSPACE_ID,
         userCookie,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id=$1', [
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
         foreignWorkspaceId,
       ]);
     }

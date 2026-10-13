@@ -1,3 +1,5 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // Permission-request decision application service. Decisions mint the actual
 // grant/deny rows consumed by check-service; they never execute the originally
 // blocked domain action.
@@ -34,6 +36,7 @@ import { writePermissionGrant } from './grant-command.js';
 import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface DecisionServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -83,6 +86,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
     });
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       // Gate before idempotency replay as well: a cached response never
       // bypasses the authoritative workspace.admin capability check.
       const admin = await deps.checkService.checkCapability(
@@ -112,6 +116,9 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         status: number;
         body: PermissionDecisionResult;
       }> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const rows = await tx
           .select()
           .from(permissionRequests)
@@ -131,7 +138,9 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           throw new HttpError(
             'conflict.stale_write',
             'permission request status or revision changed',
-            { current_revision: request.revision },
+            {
+              current_revision: request.revision,
+            },
           );
         }
         if (!isCapability(request.requestedCapability)) {
@@ -358,7 +367,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
             params: { outcome: action === 'approve' ? 'approved' : 'rejected' },
           });
         }
-
+        if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'decide');
         return {
           status: 200,
           body: {

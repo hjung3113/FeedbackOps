@@ -6,6 +6,7 @@ import {
   type PatchFindingRequest,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { HttpError } from '../../lib/errors.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
@@ -173,6 +174,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const { actor, findingId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
@@ -185,6 +187,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
           });
           if (!finding) throw new HttpError('not_found.record', 'finding not found');
 
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'finding', id: findingId },
+          ]);
+          const responseRecoveries = await deps.outcomeRecoveryRecorder?.captureFinding(
+            tx,
+            actor.workspace_id,
+            findingId,
+          );
           const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
             tx,
           });
@@ -240,6 +250,15 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
               workspaceId: actor.workspace_id,
               findingId: finding.id,
             });
+            if (responseRecoveries)
+              await deps.outcomeRecoveryRecorder?.finish(
+                tx,
+                responseRecoveries,
+                actor.actor_id,
+                'patchFinding',
+              );
+            if (recovery)
+              await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -257,6 +276,15 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
           });
 
           if (input.status === finding.status) {
+            if (responseRecoveries)
+              await deps.outcomeRecoveryRecorder?.finish(
+                tx,
+                responseRecoveries,
+                actor.actor_id,
+                'patchFinding',
+              );
+            if (recovery)
+              await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -309,6 +337,15 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             detail,
           });
 
+          if (responseRecoveries)
+            await deps.outcomeRecoveryRecorder?.finish(
+              tx,
+              responseRecoveries,
+              actor.actor_id,
+              'patchFinding',
+            );
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
           return { status: 200, body: toDto(updated, source) };
         },
       );
@@ -325,12 +362,17 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const { actor, findingId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
         requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'finding', id: findingId },
+            { type: 'task', id: input.task_id },
+          ]);
           const finding = await lockFindingById(tx, {
             workspaceId: actor.workspace_id,
             findingId,
@@ -359,6 +401,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
                 workspaceId: actor.workspace_id,
                 findingId: finding.id,
               });
+              if (recovery)
+                await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
               return { status: 200, body: toDto(finding, source) };
             }
             throw new HttpError('validation.failed', 'finding is already linked to a task', {
@@ -425,6 +469,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             },
           });
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
           return { status: 200, body: toDto(updated, source) };
         },
       );

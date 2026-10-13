@@ -1,6 +1,7 @@
 import {
   createFindingFromSurveyResponseRequestSchema,
   outcomeFollowUpDecisionRequestSchema,
+  recoveryPresentationPatchSchema,
   surveyEvidenceCandidatesQuerySchema,
   surveyQuestionKindSchema,
   surveyResponseSubmissionSchema,
@@ -240,6 +241,90 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/outcome-follow-up/recovery-items',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = z
+        .object({
+          presentation: z.enum(['visible', 'hidden']).default('visible'),
+          limit: z.coerce.number().int().min(1).max(100).default(50),
+          cursor: z.string().min(1).max(4096).optional(),
+        })
+        .strict()
+        .safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid recovery query', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.listOutcomeRecovery(actor(req), id, parsed.data));
+    },
+  );
+  app.get(
+    '/surveys/:id/outcome-follow-up/history',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).default(50),
+          cursor: z.string().min(1).max(4096).optional(),
+        })
+        .strict()
+        .safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid history query', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getOutcomeRecoveryHistory(actor(req), id, parsed.data));
+    },
+  );
+  app.get(
+    '/survey-responses/:id/outcome-follow-up/presentation',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const parsed = emptyQuery.safeParse(req.query);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getOutcomeRecoveryPresentation(actor(req), id));
+    },
+  );
+  app.patch(
+    '/survey-responses/:id/outcome-follow-up/presentation',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const query = emptyQuery.safeParse(req.query);
+      if (!query.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(query.error.issues),
+        });
+      const parsed = recoveryPresentationPatchSchema.safeParse(req.body);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid presentation', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(
+          await opts.surveysService.patchOutcomeRecoveryPresentation(actor(req), id, parsed.data),
+        );
+    },
+  );
   app.get(
     '/surveys/:id/outcome-follow-up',
     { preHandler: pre, ...rate('read') },

@@ -6,6 +6,7 @@ import type {
   LinkEvidenceRequest,
   ListEvidenceHighlightsResponse,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
@@ -210,8 +211,9 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: AttachSurveyEvidenceResponse }> {
     const { actor, findingId, input } = args;
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         args.idempotencyKey,
@@ -304,8 +306,8 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
             body: { evidence_highlight_id: highlight.id, finding_id: finding.id },
           };
         },
-      ),
-    );
+      );
+    });
   }
   async function canReadEvidenceHighlightSource(args: {
     actor: FindingsActor;
@@ -416,6 +418,7 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     const { actor, findingId, input } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       const finding = await lockFindingById(tx, {
         workspaceId: actor.workspace_id,
         findingId,
@@ -428,6 +431,11 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
       if (!canManage) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
+
+      const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+        { type: 'finding', id: finding.id },
+        { type: 'voc', id: input.source_id },
+      ]);
 
       const result = await deps.entityLinksService
         .createLink({
@@ -444,6 +452,9 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
           }
           throw err;
         });
+
+      if (recovery)
+        await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkEvidence');
 
       return {
         status: result.status,

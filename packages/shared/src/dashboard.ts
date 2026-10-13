@@ -174,7 +174,7 @@ export const DASHBOARD_HOP_ROUTES = {
   'permission-requests-pending': DASHBOARD_PERMISSION_REQUESTS_ROUTE,
 } as const satisfies Record<DashboardHopId, string>;
 
-// 56-G only: no occurrence, presentation or history fields until 56-H.
+// Stable addresses are shared by the live queue and personal presentation/history.
 export const RECOVERY_CATEGORIES = [
   'unassigned-voc',
   'high-severity-unlinked',
@@ -190,11 +190,43 @@ export const recoveryListQuerySchema = z
     category: recoveryCategorySchema.optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     view: z.enum(['operational', 'actionable']).default('operational'),
+    presentation: z.enum(['visible', 'hidden']).default('visible'),
     limit: z.coerce.number().int().min(1).max(100).default(50),
     cursor: z.string().min(1).max(4096).optional(),
   })
   .strict();
 export type RecoveryListQuery = z.infer<typeof recoveryListQuerySchema>;
+export const recoveryPresentationPatchSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('snooze'), days: z.union([z.literal(1), z.literal(7)]) }).strict(),
+  z.object({ action: z.literal('mute') }).strict(),
+  z.object({ action: z.literal('restore') }).strict(),
+]);
+export type RecoveryPresentationPatch = z.infer<typeof recoveryPresentationPatchSchema>;
+export const recoveryPresentationSchema = z
+  .object({
+    state: z.enum(['visible', 'snoozed', 'muted']),
+    snoozed_until: z.string().datetime().nullable(),
+  })
+  .strict()
+  .refine((value) => (value.state === 'snoozed') === (value.snoozed_until !== null), {
+    path: ['snoozed_until'],
+    message: 'snoozed state requires an expiry; other states forbid it',
+  });
+export const recoveryResolutionSchema = z
+  .object({
+    resolved_at: z.string().datetime(),
+    outcome: z.enum(['resolved', 'withdrawn']),
+    evidence: z.enum(['command', 'observation']),
+    action: z.string().nullable(),
+  })
+  .strict();
+export const recoveryHistoryQuerySchema = recoveryListQuerySchema
+  .omit({
+    view: true,
+    presentation: true,
+  })
+  .strict();
+export type RecoveryHistoryQuery = z.infer<typeof recoveryHistoryQuerySchema>;
 const internalRouteSchema = z.string().regex(/^\/(?!\/)[^\\]*$/);
 export const recoveryActionSchema = z
   .object({
@@ -290,6 +322,9 @@ export const recoveryItemSchema = z
     recovery_item_id: z.string().regex(/^r1_[A-Za-z0-9_-]{23}$/),
     category: recoveryCategorySchema,
     state: z.enum(['active', 'resolved', 'withdrawn']),
+    occurrence: z.number().int().positive().nullable(),
+    presentation: recoveryPresentationSchema,
+    resolution: recoveryResolutionSchema.nullable(),
     reason_code: recoveryCategorySchema,
     reason: z.string(),
     priority: z.number().int().nonnegative(),
@@ -307,6 +342,8 @@ export const recoveryListSchema = z
     computed_at: z.string().datetime(),
     items: z.array(recoveryItemSchema).max(100),
     total: z.number().int().nonnegative(),
+    visible_total: z.number().int().nonnegative(),
+    hidden_total: z.number().int().nonnegative(),
     page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
   })
   .strict();
@@ -315,3 +352,16 @@ export const recoveryDetailSchema = recoveryItemSchema
   .extend({ computed_at: z.string().datetime() })
   .strict();
 export type RecoveryDetail = z.infer<typeof recoveryDetailSchema>;
+export const recoveryHistorySchema = z.object({
+  computed_at: z.string().datetime(),
+  window_start: z.string().datetime(),
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    item: recoveryItemSchema,
+    occurrence: z.number().int().positive(),
+    resolution: recoveryResolutionSchema,
+  }).strict()).max(100),
+  total: z.number().int().nonnegative(),
+  page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
+}).strict();
+export type RecoveryHistory = z.infer<typeof recoveryHistorySchema>;

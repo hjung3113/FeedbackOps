@@ -14,6 +14,7 @@
 // under test are called through the app handle so EXECUTE for fops_app is
 // itself part of the proof.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { getRatingBandForValue } from '@fops/shared';
@@ -328,13 +329,17 @@ describe.skipIf(!runIntegration)('Outcome follow-up gap predicate (0052, ADR-005
     await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-      workspaceId,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where workspace_id = $1',
+      [workspaceId],
+    );
     await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+    await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
+      workspaceId,
+    ]);
     await appHandle?.close();
     await migrateHandle.close();
   });

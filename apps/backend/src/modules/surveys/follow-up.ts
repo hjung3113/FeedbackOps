@@ -1,3 +1,5 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
+import { captureOutcomeRecovery, finishOutcomeRecovery } from './recovery-presentation.js';
 // Outcome follow-up decisions (ADR-0055, issue #510 part B). The surveys
 // module owns the mark-no-follow-up / reopen-follow-up commands; the
 // classification itself runs inside the SECURITY DEFINER function
@@ -16,8 +18,8 @@
 //      detail.failure_code 'action_no_longer_available'; already resolved →
 //      409 conflict.stale_write detail.failure_code 'recovery_item_resolved'.
 //   5. Upsert the single current state row and audit the transition in the
-//      same transaction. History lives in core.audit_log, never in a second
-//      domain row.
+//      same transaction. Immutable decision history remains in core.audit_log;
+//      recovery occurrence history is a separate projection, not decision truth.
 
 import {
   type OutcomeFollowUpDecisionRequest,
@@ -66,8 +68,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
   }): Promise<{ status: number; body: OutcomeFollowUpMarkedResult }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
     const reason = input.reason.trim();
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -79,6 +82,15 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             actor,
             responseId,
             'follow_up_decision',
+          );
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'survey', id: subject.survey_id },
+          ]);
+          const responseRecovery = await captureOutcomeRecovery(
+            tx,
+            actor.workspace_id,
+            responseId,
+            subject.survey_id,
           );
           const manage = await checkFindingManage(
             deps.checkService,
@@ -138,6 +150,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
               reason,
             },
           });
+          await finishOutcomeRecovery(tx, responseRecovery, actor.actor_id, 'markNoFollowUp');
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'markNoFollowUp');
           return {
             status: 200,
             body: outcomeFollowUpMarkedResultSchema.parse({
@@ -147,8 +162,8 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             }),
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   async function reopenFollowUp(args: {
@@ -160,8 +175,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
   }): Promise<{ status: number; body: OutcomeFollowUpReopenedResult }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
     const reason = input.reason.trim();
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -173,6 +189,15 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             actor,
             responseId,
             'follow_up_decision',
+          );
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'survey', id: subject.survey_id },
+          ]);
+          const responseRecovery = await captureOutcomeRecovery(
+            tx,
+            actor.workspace_id,
+            responseId,
+            subject.survey_id,
           );
           const manage = await checkFindingManage(
             deps.checkService,
@@ -231,6 +256,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
               previous_reason: current.reason,
             },
           });
+          await finishOutcomeRecovery(tx, responseRecovery, actor.actor_id, 'reopenFollowUp');
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'reopenFollowUp');
           return {
             status: 200,
             body: outcomeFollowUpReopenedResultSchema.parse({
@@ -240,8 +268,8 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             }),
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   // #510 part C read model (ADR-0055). Mirrors the results read path

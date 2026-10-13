@@ -1,4 +1,5 @@
 import { type DbHandle, createDb } from '../db/client.js';
+import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 import { cleanupResponsibilityFailures } from './responsibility-fixtures.js';
 import { paragraphDoc } from './rich-content-fixtures.js';
 
@@ -201,7 +202,8 @@ export async function cleanupReadTestTables(
       )`,
     [`${msSlugPrefix}%`, workspaceId],
   );
-  await dbHandle.pool.query(
+  await deleteRecoveryFixtureParents(
+    dbHandle,
     `delete from core.managed_systems where slug like $1 and workspace_id = $2`,
     [`${msSlugPrefix}%`, workspaceId],
   );

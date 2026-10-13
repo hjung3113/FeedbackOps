@@ -18,6 +18,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { IdempotencyService } from './idempotency-service.js';
@@ -30,6 +31,8 @@ export interface IdempotentCommandArgs<TBody> {
   requestHash: string;
   /** HTTP status recorded with the response and returned on replay. */
   status: number;
+  /** Recovery writers serialize before the idempotency lock as well. */
+  recoveryWorkspaceId?: string;
   work: (tx: Tx) => Promise<TBody>;
 }
 
@@ -39,6 +42,7 @@ export async function runIdempotentCommand<TBody>(
   const { db, idempotencyService, actorId, idempotencyKey, requestHash, status, work } = args;
 
   return db.transaction(async (tx) => {
+    if (args.recoveryWorkspaceId) await lockRecoveryCommand(tx, args.recoveryWorkspaceId);
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${actorId}), hashtext(${idempotencyKey}))`,
     );

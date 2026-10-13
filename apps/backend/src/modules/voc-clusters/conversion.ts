@@ -6,6 +6,7 @@ import {
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
@@ -58,12 +59,16 @@ export function createVocClusterConversion(
     requestHash: string;
   }) {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc_cluster', id: args.clusterId },
+          ]);
           const cluster = await lockVocClusterById(tx, {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
@@ -197,6 +202,13 @@ export function createVocClusterConversion(
             });
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'createFindingFromCluster',
+            );
           return {
             status: 201,
             body: {
@@ -247,12 +259,17 @@ export function createVocClusterConversion(
     body: NonNullable<VocClusterDto['linked_findings']>[number];
   }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc_cluster', id: args.clusterId },
+            { type: 'finding', id: args.input.finding_id },
+          ]);
           const cluster = await lockVocClusterById(tx, {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
@@ -380,6 +397,13 @@ export function createVocClusterConversion(
             });
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'linkExistingFinding',
+            );
           return {
             status: link.inserted ? 201 : 200,
             body: { id: finding.id, display_id: finding.display_id, status: finding.status },
@@ -397,12 +421,17 @@ export function createVocClusterConversion(
     requestHash: string;
   }): Promise<{ status: number; body: Record<string, never> }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc_cluster', id: args.clusterId },
+            { type: 'finding', id: args.input.finding_id },
+          ]);
           const cluster = await lockVocClusterById(tx, {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
@@ -490,7 +519,16 @@ export function createVocClusterConversion(
           });
           // Idempotency records are JSONB NOT NULL. Keep the transport response
           // empty (the route calls send() without a payload), while caching an empty object.
-          if (!activeLink) return { status: 204 as const, body: {} };
+          if (!activeLink) {
+            if (recovery)
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'unlinkExistingFinding',
+              );
+            return { status: 204 as const, body: {} };
+          }
 
           const detached = await detachEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
@@ -498,7 +536,16 @@ export function createVocClusterConversion(
             actorId: args.actor.actor_id,
             reason: args.input.reason,
           });
-          if (!detached) return { status: 204 as const, body: {} };
+          if (!detached) {
+            if (recovery)
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'unlinkExistingFinding',
+              );
+            return { status: 204 as const, body: {} };
+          }
 
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
@@ -531,6 +578,13 @@ export function createVocClusterConversion(
               reason: args.input.reason,
             },
           });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'unlinkExistingFinding',
+            );
           return { status: 204 as const, body: {} };
         },
       );

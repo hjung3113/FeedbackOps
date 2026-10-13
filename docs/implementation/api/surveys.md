@@ -485,16 +485,27 @@ POST /survey-responses/:id/create-voc
 
 If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response. Issue #185 pins the unregistered route to Fastify's `404` behavior with an integration test.
 
-## Close-out responsibility (ADR-0067; implementation pending)
+## Close-out responsibility (ADR-0067)
 
 Survey operator resolution/validation is unchanged. Survey-response-derived Finding
 creation gains permitted proposed/new owner Actor/team input and safe default-resolution
 metadata through the Finding command, using the destination system and its `finding.manage`
 gate only after the Survey personal source seam. No target-owner disclosure bypasses source
 visibility. Outcome Dashboard integration preserves ADR-0055's aggregate count/safe Survey
-navigation and personal-response audits. Proposed/new response presentation/history adapter
+navigation and personal-response audits. The implemented response presentation/history adapter
 is Survey-owned, personal-gated with no Admin bypass, and does not duplicate decisions or
-expose response-derived identities/counts to non-holders.
+expose response-derived identities/counts to non-holders. The personal routes are
+`GET /surveys/:id/outcome-follow-up/recovery-items`,
+`GET /surveys/:id/outcome-follow-up/history`, and
+`GET|PATCH /survey-responses/:id/outcome-follow-up/presentation`. See
+[Dashboard API — Outcome Survey adapter exception](dashboard.md#outcome-survey-adapter-exception)
+for strict bodies, visible/hidden pagination, occurrence reset and UTC history-window rules.
+Personal recovery GETs disclose response identities only while the personal classifier can
+provide the response/low-answer question pairs required for `survey_response_personal_read`.
+After withdrawal (including a raised anonymity threshold), history omits those response rows
+before count/paging, and point presentation GET returns `404 not_found.record`. Such GETs
+write no personal-read audit because they disclose no response identity. Stored immutable
+history is retained; each disclosed pair on an eligible read still audits in that transaction.
 
 ## Analytics Area report destination extension (ADR-0069)
 

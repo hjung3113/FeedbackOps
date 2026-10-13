@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Integration tests for the Managed System write path (Slice 2 #10).
 //
 // Covers: create, duplicate slug, immutable slug, archive (with cascade
@@ -120,7 +121,10 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     await ops.pool.query(
       `delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where slug like 'it-%')`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
@@ -139,7 +143,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     await ops.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [foreignActorId, systemActorId, developerActorId, deniedAdminActorId],
     ]);
-    await ops.pool.query('delete from core.workspaces where id = $1', [foreignWorkspaceId]);
+    await deleteRecoveryFixtureParents(ops, 'delete from core.workspaces where id = $1', [
+      foreignWorkspaceId,
+    ]);
     await ops.close();
     await app?.close();
     await dbHandle?.close();
@@ -159,7 +165,10 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     await ops.pool.query(
       `delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where slug like 'it-%')`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
     if (MIGRATE_URL) {

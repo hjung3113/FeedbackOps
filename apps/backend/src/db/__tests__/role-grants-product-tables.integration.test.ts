@@ -42,6 +42,7 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 const PRODUCT_SCHEMAS = [
   'core',
+  'dashboard',
   'finding',
   'permission',
   'survey',
@@ -150,6 +151,13 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Migration 0052 (ADR-0055): the current follow-up decision is updated in
   // place, never deleted. UPDATE is column-scoped and asserted below.
   'survey.outcome_follow_up_decisions': ['SELECT', 'INSERT'],
+  // Migration 0068: mutable identity/preferences, append-only immutable history.
+  'dashboard.recovery_identities': ['SELECT', 'INSERT', 'UPDATE'],
+  'dashboard.recovery_presentations': ['SELECT', 'INSERT', 'UPDATE'],
+  'dashboard.recovery_history': ['SELECT', 'INSERT'],
+  'survey.outcome_recovery_identities': ['SELECT', 'INSERT', 'UPDATE'],
+  'survey.outcome_recovery_presentations': ['SELECT', 'INSERT', 'UPDATE'],
+  'survey.outcome_recovery_history': ['SELECT', 'INSERT'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
@@ -186,6 +194,21 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
       `product schemas without discovered base tables: ${schemasWithoutTables.join(', ')}`,
     ).toEqual([]);
     expect(tables.length, 'should discover at least 38 product tables').toBeGreaterThanOrEqual(38);
+    expect(
+      tables
+        .filter(
+          (t) =>
+            t.table_name.startsWith('recovery_') || t.table_name.startsWith('outcome_recovery_'),
+        )
+        .map((t) => `${t.table_schema}.${t.table_name}`),
+    ).toEqual([
+      'dashboard.recovery_history',
+      'dashboard.recovery_identities',
+      'dashboard.recovery_presentations',
+      'survey.outcome_recovery_history',
+      'survey.outcome_recovery_identities',
+      'survey.outcome_recovery_presentations',
+    ]);
 
     const failures: string[] = [];
     for (const t of tables) {

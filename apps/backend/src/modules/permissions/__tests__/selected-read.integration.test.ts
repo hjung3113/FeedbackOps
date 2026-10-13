@@ -22,6 +22,7 @@ import {
   revokeDeny,
   seedPermissionSelectedReadScale,
 } from '../../../test-support/permissions-fixtures.js';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { createRecordingNotificationDispatcher } from '../../notifications/index.js';
@@ -123,12 +124,16 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
       ]);
       await resetRateLimits();
       await migrate.pool.query('delete from core.actors where id = any($1::uuid[])', [actorIds]);
-      await migrate.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-        msIds,
-      ]);
-      await migrate.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-        workspaceIds,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrate,
+        'delete from core.managed_systems where id = any($1::uuid[])',
+        [msIds],
+      );
+      await deleteRecoveryFixtureParents(
+        migrate,
+        'delete from core.workspaces where id = any($1::uuid[])',
+        [workspaceIds],
+      );
     } finally {
       await app?.close();
       await db?.close();

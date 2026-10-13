@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // VOC application command integration tests — issue #392.
 //
 // The six VOC mutation commands (createVocCommand, updateVocCommand,
@@ -20,9 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
+import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import { type ConversationService, createConversationService } from '../conversation-service.js';
@@ -145,6 +149,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       auditService,
       checkService,
       idempotencyService,
+      recoveryRecorder: createOwnerRecoveryRecorder(),
       notify: async () => {},
     });
     conversationService = createConversationService({
@@ -152,6 +157,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       auditService,
       checkService,
       idempotencyService,
+      recoveryRecorder: createOwnerRecoveryRecorder(),
       notify: async () => {},
       vocReadService,
     });
@@ -198,6 +204,12 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
 
   afterAll(async () => {
     if (migrateHandle) {
+      for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+        await migrateHandle.pool.query(
+          `DELETE FROM dashboard.${table} WHERE workspace_id=$1::uuid`,
+          [workspaceId],
+        );
+      }
       // FK-safe order: audit + idempotency first, then VOCs (conversation
       // rows cascade), then reference/seed tables, then the workspace.
       await migrateHandle.pool.query('delete from core.audit_log where workspace_id = $1', [
@@ -209,24 +221,116 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
          )`,
         [workspaceId],
       );
+      await migrateHandle.pool.query('delete from core.entity_links where workspace_id=$1::uuid', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from task.tasks where workspace_id=$1::uuid', [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query('delete from voc.vocs where workspace_id = $1', [workspaceId]);
       await migrateHandle.pool.query(
         'delete from core.responsibility_default_failures where workspace_id=$1',
         [workspaceId],
       );
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [workspaceId],
+      );
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         workspaceId,
       ]);
       await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     }
     await dbHandle?.close();
     await migrateHandle?.close();
+  });
+
+  it('commits owner repair/history together and replays without a second occurrence', async () => {
+    const voc = await seedVoc('Recovery owner seam');
+    const input = { owner_user_id: adminActorId };
+    const key = randomUUID();
+    const args = {
+      actor: adminActor(),
+      vocId: voc.id,
+      input,
+      ifMatch: voc.updated_at,
+      idempotencyKey: key,
+      requestHash: hashRequestBody(input),
+    };
+    const result = await vocService.updateVocCommand(args);
+    expect(result.status).toBe(200);
+    expect(await vocService.updateVocCommand(args)).toEqual(result);
+    const rows = await dbHandle.pool.query(
+      'SELECT occurrence,outcome,evidence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [workspaceId, recoveryIdentity('unassigned-voc', voc.id)],
+    );
+    expect(rows.rows).toEqual([{ occurrence: 1, outcome: 'resolved', evidence: 'command' }]);
+  });
+
+  it('public reporter resolution records every linked released Task in the source transaction', async () => {
+    const voc = await seedVoc('Recovery Task fanout');
+    await migrateHandle.pool.query(
+      "UPDATE voc.vocs SET reporter_facing_status='progress', owner_user_id=$2::uuid WHERE id=$1::uuid",
+      [voc.id, adminActorId],
+    );
+    const tasks = await Promise.all(
+      [1, 2].map(() =>
+        insertTaskRow(migrateHandle, {
+          workspaceId,
+          primaryManagedSystemId: managedSystemId,
+          createdBy: adminActorId,
+          status: 'released',
+        }),
+      ),
+    );
+    for (const task of tasks)
+      await migrateHandle.pool.query(
+        `INSERT INTO core.entity_links(workspace_id,source_type,source_id,target_type,target_id,relation_type,managed_system_id,created_by,visibility)
+              VALUES ($1::uuid,'voc',$2::uuid,'task',$3::uuid,'evidence_of',$4::uuid,$5::uuid,'internal_only')`,
+        [workspaceId, voc.id, task.id, managedSystemId, adminActorId],
+      );
+    const input = {
+      skip_public_update: false as const,
+      body_rich_content: paragraphDoc('Resolved'),
+      next_reporter_facing_status: 'resolved' as const,
+    };
+    const args = {
+      actor: adminActor(),
+      vocId: voc.id,
+      input,
+      idempotencyKey: randomUUID(),
+      requestHash: hashRequestBody(input),
+    };
+    const first = await conversationService.postPublicUpdateCommand(args);
+    expect(first.status).toBe(201);
+    expect(await conversationService.postPublicUpdateCommand(args)).toEqual(first);
+    const histories = await dbHandle.pool.query(
+      'SELECT recovery_item_id,occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=ANY($2::text[]) ORDER BY recovery_item_id',
+      [workspaceId, tasks.map((t) => recoveryIdentity('released-task-unresolved-voc', t.id))],
+    );
+    expect(histories.rows).toEqual(
+      tasks
+        .map((t) => ({
+          recovery_item_id: recoveryIdentity('released-task-unresolved-voc', t.id),
+          occurrence: 1,
+          outcome: 'resolved',
+        }))
+        .sort((a, b) =>
+          a.recovery_item_id < b.recovery_item_id
+            ? -1
+            : a.recovery_item_id > b.recovery_item_id
+              ? 1
+              : 0,
+        ),
+    );
   });
 
   it('createVocCommand: 201 → replay with same key+hash is identical with one row; key+hash mismatch → conflict', async () => {

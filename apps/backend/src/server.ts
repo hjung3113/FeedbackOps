@@ -1,3 +1,5 @@
+import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
+import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
 import type { NotificationSubjectReference } from '@fops/shared';
 
 import cookie from '@fastify/cookie';
@@ -109,6 +111,7 @@ import {
 } from './modules/workspace-settings/index.js';
 
 export interface BuildServerOptions {
+  recoveryClock?: () => Date;
   config: AppConfig;
   dbHandle: DbHandle;
   /**
@@ -386,6 +389,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Permissions module — slice 1 issue #4 ───────────────────────────────
   // Registered AFTER auth so requireSession is available on its routes.
+  const recoveryRecorder = createOwnerRecoveryRecorder();
   const checkService = createCheckService({ db: dbHandle.db });
   const auditService = createAuditService();
   const idempotencyService = createIdempotencyService();
@@ -394,6 +398,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     (boss ? createPgBossNotificationDispatcher(boss) : createNoopNotificationDispatcher());
   const notify = createNotificationNotifier(notificationDispatcher);
   const requestService = createRequestService({
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -401,6 +406,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     notify,
   });
   const decisionService = createDecisionService({
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -478,6 +484,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Entity Links module — Slice 4.1 issue #112 ────────────────────────────
   const entityLinksService = createEntityLinksService({
+    recoveryRecorder,
     db: dbHandle.db,
     checkService,
     auditService,
@@ -495,6 +502,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Findings module — Slice 5 issue #122 ─────────────────────────────────
   const findingsService = createFindingsService({
+    outcomeRecoveryRecorder: createOutcomeRecoveryRecorder(),
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -512,6 +521,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   const surveysService = createSurveysService({
+    ...(opts.recoveryClock ? { recoveryClock: opts.recoveryClock } : {}),
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -528,6 +539,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
   const taskRequestsService = createTaskRequestsService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -554,6 +566,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Tasks module — Slice 6 issue #134 ────────────────────────────────────
   const tasksService = createTasksService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -592,6 +605,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // VOC conversation command is constructed here so cluster candidate apply can
   // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -606,6 +620,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     }),
   });
   const conversationService = createConversationService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -691,6 +706,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
   const vocClustersService = createVocClustersService({
+    recoveryRecorder,
     db: dbHandle.db,
     auditService,
     checkService,
@@ -731,6 +747,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });
   const dashboardService = createDashboardService({
+    ...(opts.recoveryClock ? { recoveryClock: opts.recoveryClock } : {}),
     recoveryReaders: {
       vocRecoveryProjection,
       vocRecoveryRepairScope,
@@ -750,7 +767,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     dashboardService,
     workspaceId,
-    rateLimitConfig: { read: app.rateLimitConfig.read },
+    rateLimitConfig: { read: app.rateLimitConfig.read, mutation: app.rateLimitConfig.mutation },
   });
   await app.register(notificationRoutes, {
     sessionService,
@@ -780,6 +797,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     embeddingEnabled: isEmbeddingEnabled(config),
     createClustersService: (db) =>
       createVocClustersService({
+    recoveryRecorder,
         db,
         auditService,
         checkService,

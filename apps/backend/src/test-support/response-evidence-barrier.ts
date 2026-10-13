@@ -16,11 +16,19 @@ export async function waitForResponseEvidenceWaiters(
   while (Date.now() < deadline) {
     // pg supports a per-query timeout; its QueryConfig typings omit this option.
     const query = {
-      text: `select count(*)::text as count from pg_locks
-       where locktype='advisory' and not granted and objsubid=1
-         and classid=((hashtextextended($1,0)>>32)&4294967295)::oid
-         and objid=(hashtextextended($1,0)&4294967295)::oid`,
-      values: [responseId],
+      // A recovery writer can queue behind the workspace lock held by the
+      // response waiter. Multi-command barriers count that real blocking chain;
+      // single-waiter assertions still pin the direct response queue.
+      text: `WITH RECURSIVE evidence_waiters(pid) AS (
+        SELECT pid FROM pg_locks
+         WHERE locktype='advisory' AND NOT granted AND objsubid=1
+           AND classid=((hashtextextended($1,0)>>32)&4294967295)::oid
+           AND objid=(hashtextextended($1,0)&4294967295)::oid
+        UNION
+        SELECT w.pid FROM pg_locks w JOIN evidence_waiters r
+          ON r.pid=ANY(pg_blocking_pids(w.pid)) WHERE NOT w.granted AND $2::int>1
+      ) SELECT count(*)::text AS count FROM evidence_waiters`,
+      values: [responseId, count],
       query_timeout: 500,
     };
     const result = await Promise.race([completed, operator.pool.query<{ count: string }>(query)]);

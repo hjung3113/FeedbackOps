@@ -1,5 +1,6 @@
 // VOC creation command and its idempotent entry point.
 import { randomUUID } from 'node:crypto';
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 
 import type { CreateVocRequest } from '@fops/shared';
 import type { Tx } from '../../../db/tx.js';
@@ -181,6 +182,7 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       row.reporterFacingStatus as ReporterFacingStatus,
       tx,
     );
+    await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [{ type: 'voc', id: row.id }]);
     return {
       id: row.id,
       display_id: row.displayId,
@@ -218,8 +220,9 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: VocEnvelope }> {
     const { actor, input, idempotencyKey, requestHash } = args;
-    return deps.db.transaction(async (tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -228,8 +231,8 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
           const envelope = await createVoc({ tx, actor, input });
           return { status: 201, body: envelope };
         },
-      ),
-    );
+      );
+    });
   }
   return { createVoc, createVocCommand, assertCreateOwnerOverride };
 }

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // POST /vocs blank required-field contract (#327).
 
@@ -87,7 +88,8 @@ describe.skipIf(!runIntegration)('POST /vocs blank required fields (#327)', () =
         select id from core.managed_systems where slug = 'it-voc-blank-fields'
       )`,
     );
-    await dbHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      dbHandle,
       `delete from core.managed_systems where slug = 'it-voc-blank-fields'`,
     );
     await dbHandle.pool.query('delete from core.idempotency_keys');

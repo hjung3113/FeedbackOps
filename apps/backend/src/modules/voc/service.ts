@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // apps/backend/src/modules/voc/service.ts
 // VOC application service. Owns transactions, sanitization,
 // FOR-UPDATE-guarded parent checks, INSERT, and audit emission per
@@ -55,6 +56,7 @@ export interface VocEnvelope {
 }
 
 export interface VocServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;

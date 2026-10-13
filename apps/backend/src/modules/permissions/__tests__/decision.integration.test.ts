@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 import {
   NOTIFICATION_DISPATCH_QUEUE,
   createRecordingNotificationDispatcher,
@@ -126,6 +128,14 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const actorIds = `select id from core.actors
                        where workspace_id = $1 and ${actorPattern}`;
 
+    for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+      await migrateDb.pool.query(
+        `DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
+        SELECT i.recovery_item_id FROM dashboard.recovery_identities i JOIN permission.permission_requests r ON r.id=i.source_id
+        WHERE i.workspace_id=$1::uuid AND r.requester_actor_id IN (${actorIds}))`,
+        [WORKSPACE_ID],
+      );
+    }
     await db.pool.query(
       `delete from permission.permission_requests
         where workspace_id = $1 and requester_actor_id in (${actorIds})`,
@@ -162,10 +172,11 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     await db.pool.query(`delete from core.actors where workspace_id = $1 and ${actorPattern}`, [
       WORKSPACE_ID,
     ]);
-    await db.pool.query(
+    await deleteRecoveryFixtureParents(
+      db,
       `delete from core.managed_systems
-        where workspace_id = $1
-          and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
+          where workspace_id = $1
+            and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
       [WORKSPACE_ID],
     );
   }
@@ -513,6 +524,56 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     },
   );
 
+  it('keeps needs-more-info active, records cancellation as withdrawal and approval replay once', async () => {
+    const request = await seedRequest();
+    const requesterCookie = await loginAs(app, requesterExternalId);
+    const history = () =>
+      db.pool.query(
+        'SELECT occurrence,outcome,evidence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+        [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', request)],
+      );
+    expect((await decide(request, 'need-more-info', { note: 'Explain the work' })).statusCode).toBe(
+      200,
+    );
+    expect((await history()).rows).toEqual([]);
+    const more = await app.inject({
+      method: 'POST',
+      url: `/permission-requests/${request}/submit-more-info`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${requesterCookie}`,
+        'idempotency-key': randomUUID(),
+      },
+      payload: { expected_revision: 2, reason: 'More context' },
+    });
+    expect(more.statusCode).toBe(200);
+    expect((await history()).rows).toEqual([]);
+    const cancelled = await app.inject({
+      method: 'POST',
+      url: `/permission-requests/${request}/cancel`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${requesterCookie}`,
+        'idempotency-key': randomUUID(),
+      },
+      payload: { expected_revision: 3 },
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect((await history()).rows).toEqual([
+      { occurrence: 1, outcome: 'withdrawn', evidence: 'command' },
+    ]);
+    const approved = await seedRequest();
+    const key = randomUUID();
+    const first = await decide(approved, 'approve', {}, adminCookie, key);
+    expect(first.statusCode).toBe(200);
+    expect(JSON.parse((await decide(approved, 'approve', {}, adminCookie, key)).body)).toEqual(
+      JSON.parse(first.body),
+    );
+    const resolved = await db.pool.query(
+      'SELECT occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', approved)],
+    );
+    expect(resolved.rows).toEqual([{ occurrence: 1, outcome: 'resolved' }]);
+  });
+
   it('rolls back permission approval and audit after successful notification enqueue', async () => {
     const requestId = await seedRequest();
     const response = await rollbackApp.inject({
@@ -536,6 +597,16 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       subject_id: requestId,
     });
 
+    const projection = await db.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', requestId)],
+    );
+    expect(projection.rows).toEqual([]);
+    const history = await db.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', requestId)],
+    );
+    expect(history.rows).toEqual([]);
     expect(await requestStatus(requestId)).toBe('pending');
     const audits = await migrateDb.pool.query(
       `select 1 from core.audit_log
@@ -1685,7 +1756,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       ).toBe(0);
     } finally {
       await migrateDb.pool.query('delete from core.actors where id = $1', [foreign.id]);
-      await migrateDb.pool.query('delete from core.workspaces where id = $1', [foreignWorkspace]);
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.workspaces where id = $1', [
+        foreignWorkspace,
+      ]);
     }
     const externalId = `perm-self-user-${randomUUID()}`;
     const user = await insertActorRow(db, {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -116,7 +117,8 @@ describe.skipIf(!runIntegration)('released Task review-candidate worker (#165)',
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

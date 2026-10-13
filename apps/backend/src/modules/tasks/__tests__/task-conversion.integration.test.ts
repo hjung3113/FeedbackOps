@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Task conversion and link-existing flow (#134).
 //
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The conductor runs
@@ -171,9 +172,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       foreignActorIds.length = 0;
     }
     if (foreignWorkspaceIds.length > 0) {
-      await migrateHandle.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-        foreignWorkspaceIds,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = any($1::uuid[])',
+        [foreignWorkspaceIds],
+      );
       foreignWorkspaceIds.length = 0;
     }
     // Milestones before their Managed Systems; after tasks (FK RESTRICT).
@@ -1846,7 +1849,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       await expectNoConversionSideEffects(request.id);
     } finally {
       await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
-      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherMsId],
+      );
     }
   });
 
@@ -1887,8 +1894,14 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       await expectNoConversionSideEffects(request.id);
     } finally {
       await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
-      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherWsMsId]);
-      await dbHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherWsMsId],
+      );
+      await deleteRecoveryFixtureParents(dbHandle, 'delete from core.workspaces where id = $1', [
+        otherWsId,
+      ]);
     }
   });
 
@@ -2134,10 +2147,16 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     } finally {
       // fops_app has no DELETE on task.milestones: use the migrate role.
       await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
-      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
-        otherWsMsId,
-      ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherWsMsId],
+      );
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWsId],
+      );
     }
   });
 
@@ -2165,7 +2184,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       await expectNoConversionSideEffects(request.id);
     } finally {
       await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
-      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherMsId],
+      );
     }
   });
 
