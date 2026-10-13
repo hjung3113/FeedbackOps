@@ -11,6 +11,7 @@
 //
 // No application code reads these tables yet (Slice 1 foundation only).
 
+import type { CoverageThresholds } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -65,6 +66,10 @@ export const workspaceSettings = coreSchema.table(
       .references(() => workspaces.id),
     permissionSelfApproval: text('permission_self_approval').notNull().default('allowed'),
     surveyAnonymityThreshold: integer('survey_anonymity_threshold').notNull().default(5),
+    coverageThresholds: jsonb('coverage_thresholds')
+      .$type<Partial<CoverageThresholds>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

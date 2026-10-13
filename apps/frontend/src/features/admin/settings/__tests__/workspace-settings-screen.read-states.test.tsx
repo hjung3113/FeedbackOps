@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveCoverageThresholds } from '@fops/shared';
+
 import { WorkspaceSettingsScreen } from '../WorkspaceSettingsScreen.js';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
@@ -14,7 +16,11 @@ describe('WorkspaceSettingsScreen read retry (#609)', () => {
   it('retries a failed read in place and renders the form after recovery', async () => {
     apiClientMock.mockRejectedValueOnce(new Error('temporary read failure')).mockResolvedValueOnce({
       status: 200,
-      data: { permission_self_approval: 'allowed', survey_anonymity_threshold: 5 },
+      data: {
+        coverage_thresholds: resolveCoverageThresholds(),
+        permission_self_approval: 'allowed',
+        survey_anonymity_threshold: 5,
+      },
       etag: undefined,
       requestId: undefined,
     });

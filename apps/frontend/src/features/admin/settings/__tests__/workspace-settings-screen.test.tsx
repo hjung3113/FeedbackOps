@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { resolveCoverageThresholds } from '@fops/shared';
+
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 
 vi.mock('../use-workspace-settings.js', () => ({
@@ -13,6 +15,7 @@ import { WorkspaceSettingsForm } from '../WorkspaceSettingsScreen.js';
 
 beforeEach(() => {
   mutateAsync.mockReset().mockResolvedValue({
+    coverage_thresholds: resolveCoverageThresholds(),
     permission_self_approval: 'forbidden',
     survey_anonymity_threshold: 5,
   });
@@ -23,7 +26,11 @@ describe('WorkspaceSettingsForm', () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkspaceSettingsForm
-          initialSettings={{ permission_self_approval: 'allowed', survey_anonymity_threshold: 5 }}
+          initialSettings={{
+            coverage_thresholds: resolveCoverageThresholds(),
+            permission_self_approval: 'allowed',
+            survey_anonymity_threshold: 5,
+          }}
         />
       </QueryClientProvider>,
     );
@@ -40,7 +47,11 @@ describe('WorkspaceSettingsForm', () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <WorkspaceSettingsForm
-          initialSettings={{ permission_self_approval: 'allowed', survey_anonymity_threshold: 5 }}
+          initialSettings={{
+            coverage_thresholds: resolveCoverageThresholds(),
+            permission_self_approval: 'allowed',
+            survey_anonymity_threshold: 5,
+          }}
         />
       </QueryClientProvider>,
     );

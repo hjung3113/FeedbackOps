@@ -42,7 +42,7 @@ type CoverageCell = {
   value: number;
   total: number;
   percent: number;
-  status: 'good' | 'warn' | 'bad';
+  status: 'good' | 'warn' | 'bad' | 'no_data';
 };
 type SystemKpis = NonNullable<Summary['by_managed_system'][number]['kpis']>;
 type SystemRow = {
@@ -128,6 +128,10 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   });
 
   beforeEach(async () => cleanupFixtures());
+
+  beforeEach(async () => {
+    await migrateHandle.pool.query('delete from core.rate_limits');
+  });
 
   afterAll(async () => {
     await cleanupFixtures();
@@ -653,13 +657,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     await createVoc(seed.msA, null, 'A without area', 'low', false);
     await createVoc(seed.msB, areaB1, 'B1 high unlinked', 'high', true);
     const vocB1Task = await createVoc(seed.msB, areaB1, 'B1 task assigned', 'low', true);
-    await createVoc(
-      seed.msB,
-      areaB2,
-      'B2 critical unassigned',
-      'critical',
-      false,
-    );
+    await createVoc(seed.msB, areaB2, 'B2 critical unassigned', 'critical', false);
     const vocB2Task = await createVoc(seed.msB, areaB2, 'B2 task unassigned', 'low', false);
     await createVoc(seed.msB, null, 'B without area', 'low', true);
     const taskA = await insertTaskRow(migrateHandle, {
@@ -944,15 +942,176 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(rowB?.kpis).toEqual({ active_finding: 1 });
   });
 
+  it.each([
+    { good: 50, warn: 25, status: 'good' },
+    { good: 90, warn: 50, status: 'warn' },
+    { good: 90, warn: 51, status: 'bad' },
+  ] as const)(
+    'uses configured inclusive cutoffs at roll-up/system/Area: %j',
+    async ({ good, warn, status }) => {
+      const seed = await createDashboardScope();
+      const vocs = await seedVocs(seed.msA, 4, 0, 4, 4);
+      const task = await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: seed.msA,
+        status: 'done',
+        createdBy: adminActorId,
+      });
+      for (const id of vocs.all.slice(0, 2))
+        await link('voc', id, 'task', task.id, 'evidence_of', seed.msA);
+      const before = (await get(seed.devCookie, seed.msA)).json<Summary>();
+      expect(coverage(before, 'voc-task')).toMatchObject({
+        value: 2,
+        total: 4,
+        percent: 50,
+        status: 'warn',
+      });
+      const linksBefore = await dbHandle.pool.query(
+        'select * from core.entity_links where managed_system_id = $1 order by id',
+        [seed.msA],
+      );
+      const auditsBefore = await dbHandle.pool.query(
+        "select * from core.audit_log where workspace_id = $1 and event_type <> 'workspace_settings_updated' order by id",
+        [WORKSPACE_ID],
+      );
+      try {
+        const edit = await app.inject({
+          method: 'PATCH',
+          url: '/workspace/settings',
+          headers: headers(adminCookie),
+          payload: {
+            coverage_thresholds: { 'voc-task': { good_min_percent: good, warn_min_percent: warn } },
+          },
+        });
+        expect(edit.statusCode).toBe(200);
+        const after = (await get(seed.devCookie, seed.msA)).json<Summary>();
+        const expected = { value: 2, total: 4, percent: 50, status };
+        expect(coverage(after, 'voc-task')).toMatchObject(expected);
+        expect(systemRow(after, seed.msA)?.coverage?.['voc-task']).toEqual(expected);
+        expect(systemRow(after, seed.msA)?.analytics_areas?.[0]?.coverage?.['voc-task']).toEqual(
+          expected,
+        );
+        expect(coverage(after, 'high-followup')).toEqual(coverage(before, 'high-followup'));
+        expect(after.kpis).toEqual(before.kpis);
+        expect(after.action_queues).toEqual(before.action_queues);
+        expect(after.coverage.map(({ status: _status, ...counts }) => counts)).toEqual(
+          before.coverage.map(({ status: _status, ...counts }) => counts),
+        );
+        expect(
+          (
+            await dbHandle.pool.query(
+              'select * from core.entity_links where managed_system_id = $1 order by id',
+              [seed.msA],
+            )
+          ).rows,
+        ).toEqual(linksBefore.rows);
+        expect(
+          (
+            await dbHandle.pool.query(
+              "select * from core.audit_log where workspace_id = $1 and event_type <> 'workspace_settings_updated' order by id",
+              [WORKSPACE_ID],
+            )
+          ).rows,
+        ).toEqual(auditsBefore.rows);
+      } finally {
+        await migrateHandle.pool.query(
+          "delete from core.audit_log where workspace_id = $1 and event_type = 'workspace_settings_updated'",
+          [WORKSPACE_ID],
+        );
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id = $1',
+          [WORKSPACE_ID],
+        );
+      }
+    },
+  );
+
+  it('uses each configured band on all five nonempty system and roll-up metrics', async () => {
+    const seed = await createDashboardScope();
+    const vocs = await seedVocs(seed.msA, 4, 0, 4, 2);
+    await seedFindings(seed.msA, vocs.all[0]!, 4, 2);
+    const linked = await seedTasks(seed.msA, vocs.all, 0, 2, 2);
+    await seedPublicUpdate(linked[0]!, false);
+    const before = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    const ids = [
+      'voc-task',
+      'finding-execution',
+      'high-followup',
+      'released-update',
+      'analytics-area',
+    ] as const;
+    for (const id of ids)
+      expect(coverage(before, id)).toMatchObject({ percent: 50, status: 'warn' });
+    try {
+      const edit = await app.inject({
+        method: 'PATCH',
+        url: '/workspace/settings',
+        headers: headers(adminCookie),
+        payload: {
+          coverage_thresholds: Object.fromEntries(
+            ids.map((id) => [id, { good_min_percent: 50, warn_min_percent: 25 }]),
+          ),
+        },
+      });
+      expect(edit.statusCode).toBe(200);
+      const after = (await get(seed.devCookie, seed.msA)).json<Summary>();
+      for (const id of ids) {
+        expect(coverage(after, id)).toMatchObject({ percent: 50, status: 'good' });
+        expect(systemRow(after, seed.msA)?.coverage?.[id]).toMatchObject({
+          percent: 50,
+          status: 'good',
+        });
+      }
+      expect(
+        systemRow(after, seed.msA)?.analytics_areas?.[0]?.coverage?.['high-followup'],
+      ).toMatchObject({ percent: 0, status: 'bad' });
+    } finally {
+      await migrateHandle.pool.query(
+        "delete from core.audit_log where workspace_id = $1 and event_type = 'workspace_settings_updated'",
+        [WORKSPACE_ID],
+      );
+      await migrateHandle.pool.query(
+        'delete from core.workspace_settings where workspace_id = $1',
+        [WORKSPACE_ID],
+      );
+    }
+  });
+
+  it('keeps nonempty zero bad and authorized empty no_data independently of unavailable keys', async () => {
+    const seed = await createDashboardScope();
+    await seedVocs(seed.msA, 1, 0, 0, 0);
+    const body = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    expect(coverage(body, 'voc-task')).toMatchObject({
+      value: 0,
+      total: 1,
+      percent: 0,
+      status: 'bad',
+    });
+    expect(coverage(body, 'high-followup')).toMatchObject({
+      value: 0,
+      total: 0,
+      percent: 0,
+      status: 'no_data',
+    });
+    // finding.manage makes released-update authorized; with no released Tasks it is no_data.
+    expect(coverage(body, 'released-update')).toMatchObject({
+      value: 0,
+      total: 0,
+      percent: 0,
+      status: 'no_data',
+    });
+    expect(coverage(body, 'milestone-outcome')).toBeUndefined();
+  });
+
   it('keeps VOC metrics present at zero for a system in voc.read with no VOCs', async () => {
     const seed = await createDashboardScope();
     const body = (await get(seed.devCookie)).json<Summary>();
     const row = systemRow(body, seed.msA);
 
     expect(row?.coverage).toMatchObject({
-      'voc-task': { value: 0, total: 0, percent: 0 },
-      'analytics-area': { value: 0, total: 0, percent: 0 },
-      'high-followup': { value: 0, total: 0, percent: 0 },
+      'voc-task': { value: 0, total: 0, percent: 0, status: 'no_data' },
+      'analytics-area': { value: 0, total: 0, percent: 0, status: 'no_data' },
+      'high-followup': { value: 0, total: 0, percent: 0, status: 'no_data' },
     });
     expect(row?.kpis).toEqual({
       open_voc: 0,

@@ -260,6 +260,24 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
+  it('renders total-zero coverage as the neutral no_data state', async () => {
+    const coverage = [
+      { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+      { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+    ] as const;
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage }));
+    renderHome();
+
+    // ADR-0067 56-1/O2: an empty denominator is neutral absence of work, not a
+    // green 0/0 · 0%; measured metrics keep their ratio presentation.
+    const row = await screen.findByTestId('home-coverage-row-voc-task');
+    expect(row.textContent).toContain('집계 대상 없음');
+    expect(row.textContent).not.toContain('0 / 0');
+    expect(row.textContent).not.toContain('0%');
+    const measured = screen.getByTestId('home-coverage-row-finding-execution');
+    expect(measured.textContent).toContain('1 / 2 · 50%');
+  });
+
   it('links coverage rows to the shared one-hop routes', async () => {
     const coverage = [
       { id: 'voc-task', value: 2, total: 3, percent: 67, status: 'warn' },
@@ -316,6 +334,39 @@ describe('HomeScreen route content', () => {
 
     const pill = await screen.findByTestId('home-kpi-coverage_percent');
     expect(pill).toHaveTextContent(COVERAGE_METRIC_LABELS['voc-task']);
+  });
+
+  // #1087 UX: with an empty denominator the chip answers from the voc-task
+  // signal row like the panel below — 집계 대상 없음, never 0%.
+  it('renders the coverage KPI as neutral no-data when the voc-task signal has no denominator', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: { open_voc: 1, coverage_percent: 0 },
+      coverage: [
+        { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+        { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+      ],
+    });
+    installFetch(summary);
+    renderHome();
+
+    const pill = await screen.findByTestId('home-kpi-coverage_percent');
+    expect(pill.textContent).toContain('집계 대상 없음');
+    expect(pill.textContent).not.toContain('%');
+  });
+
+  it('keeps the coverage KPI percentage when the voc-task signal has a denominator', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      kpis: { open_voc: 1, coverage_percent: 18 },
+      coverage: [{ id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' }],
+    });
+    installFetch(summary);
+    renderHome();
+
+    const pill = await screen.findByTestId('home-kpi-coverage_percent');
+    expect(pill.textContent).toContain('18%');
+    expect(pill.textContent).not.toContain('집계 대상 없음');
   });
 
   it('keeps the selected managed system on coverage hops', async () => {
@@ -608,7 +659,9 @@ describe('HomeScreen route content', () => {
 
     await screen.findByTestId('home-inbox-list');
     expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /^수신함/ })).toHaveTextContent('3'),
+    );
   });
 
   it('caps the Inbox tab badge and hides it after its count refetch fails', async () => {

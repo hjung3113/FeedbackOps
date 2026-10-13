@@ -133,6 +133,7 @@ export interface IntegrationJumpCardProps {
   icon: React.ReactNode;
   stat?: string;
   statLabel?: string;
+  statMuted?: boolean;
   testId: string;
 }
 
@@ -143,6 +144,7 @@ export function IntegrationJumpCard({
   icon,
   stat,
   statLabel,
+  statMuted,
   testId,
 }: IntegrationJumpCardProps): React.ReactElement {
   return (
@@ -163,7 +165,11 @@ export function IntegrationJumpCard({
         </span>
         {stat !== undefined && (
           <span
-            className="text-lg font-semibold tabular-nums text-text-primary"
+            className={
+              statMuted === true
+                ? 'text-sm font-medium text-text-muted'
+                : 'text-lg font-semibold tabular-nums text-text-primary'
+            }
             data-testid={`${testId}-stat`}
           >
             {stat}

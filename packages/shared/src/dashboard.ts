@@ -7,6 +7,60 @@ export const DASHBOARD_RELEASED_TASKS_ROUTE = '/tasks?view=board';
 export const DASHBOARD_OUTCOME_SURVEYS_ROUTE = '/surveys';
 export const DASHBOARD_PERMISSION_REQUESTS_ROUTE = '/admin/permissions/requests';
 
+export const COVERAGE_METRIC_IDS = [
+  'voc-task',
+  'finding-execution',
+  'high-followup',
+  'released-update',
+  'analytics-area',
+] as const;
+export type CoverageMetricId = (typeof COVERAGE_METRIC_IDS)[number];
+
+export const coverageThresholdPairSchema = z
+  .object({
+    good_min_percent: z.number().int().min(1).max(100),
+    warn_min_percent: z.number().int().min(0).max(99),
+  })
+  .strict()
+  .refine((pair) => pair.warn_min_percent < pair.good_min_percent, {
+    message: 'warn_min_percent must be less than good_min_percent',
+  });
+export type CoverageThresholdPair = z.infer<typeof coverageThresholdPairSchema>;
+
+export const coverageThresholdsSchema = z
+  .object({
+    'voc-task': coverageThresholdPairSchema,
+    'finding-execution': coverageThresholdPairSchema,
+    'high-followup': coverageThresholdPairSchema,
+    'released-update': coverageThresholdPairSchema,
+    'analytics-area': coverageThresholdPairSchema,
+  })
+  .strict();
+export const coverageThresholdsPatchSchema = coverageThresholdsSchema
+  .partial()
+  .refine((bands) => Object.keys(bands).length > 0, {
+    message: 'at least one Coverage metric is required',
+  });
+export type CoverageThresholds = z.infer<typeof coverageThresholdsSchema>;
+
+export function resolveCoverageThresholds(
+  stored?: Partial<CoverageThresholds> | null,
+): CoverageThresholds {
+  return {
+    'voc-task': stored?.['voc-task'] ?? { good_min_percent: 75, warn_min_percent: 40 },
+    'finding-execution': stored?.['finding-execution'] ?? {
+      good_min_percent: 75,
+      warn_min_percent: 40,
+    },
+    'high-followup': stored?.['high-followup'] ?? { good_min_percent: 75, warn_min_percent: 40 },
+    'released-update': stored?.['released-update'] ?? {
+      good_min_percent: 75,
+      warn_min_percent: 40,
+    },
+    'analytics-area': stored?.['analytics-area'] ?? { good_min_percent: 75, warn_min_percent: 40 },
+  };
+}
+
 const dashboardActionSchema = z.object({
   label: z.string(),
   route: z.string(),
@@ -17,7 +71,7 @@ const dashboardCoverageCellSchema = z.object({
   value: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
   percent: z.number().int().min(0).max(100),
-  status: z.enum(['good', 'warn', 'bad']),
+  status: z.enum(['good', 'warn', 'bad', 'no_data']),
 }).strict();
 
 export const dashboardSummarySchema = z.object({

@@ -642,7 +642,8 @@ See `docs/implementation/04-database-and-migrations.md` for rollout and rollback
 
 ## Coverage settings and recovery projections (ADR-0067; proposed/new)
 
-`core.workspace_settings.coverage_thresholds`: JSON object with exactly `voc-task`,
+`core.workspace_settings.coverage_thresholds` (BE/shared #1087; editor and rendered
+consumers shipped #1088 in the same PR): JSON object with exactly `voc-task`,
 `finding-execution`, `high-followup`, `released-update`, `analytics-area`; each pair has
 integer `good_min_percent`/`warn_min_percent`, 75/40 defaults, `0 <= warn < good <= 100`.
 Resolved missing row/keys default; PATCH accepts partial maps of complete pairs.

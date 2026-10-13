@@ -1,3 +1,4 @@
+import { coverageThresholdsPatchSchema, coverageThresholdsSchema } from '@fops/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -10,6 +11,7 @@ import type { WorkspaceSettingsService } from './service.js';
 
 export const workspaceSettingsSchema = z
   .object({
+    coverage_thresholds: coverageThresholdsSchema,
     permission_self_approval: z.enum(['allowed', 'forbidden']),
     survey_anonymity_threshold: z.number().int().min(5).max(50),
   })
@@ -17,6 +19,7 @@ export const workspaceSettingsSchema = z
 
 const patchWorkspaceSettingsSchema = workspaceSettingsSchema
   .partial()
+  .extend({ coverage_thresholds: coverageThresholdsPatchSchema.optional() })
   .refine((body) => Object.keys(body).length > 0, { message: 'at least one setting is required' });
 
 export interface WorkspaceSettingsRoutesOptions {

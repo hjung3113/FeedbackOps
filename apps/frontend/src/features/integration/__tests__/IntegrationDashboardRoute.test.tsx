@@ -274,28 +274,25 @@ describe('integration action dashboard route', () => {
     expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`).textContent).toBe(
       '0',
     );
-    expect(screen.getByTestId(`integration-managed-system-coverage-${MS_A}`).textContent).toBe(
-      '66%',
-    );
     expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_B}`).textContent).toBe('4');
     expect(screen.getByTestId(`integration-managed-system-findings-${MS_B}`).textContent).toBe('3');
     expect(screen.getByTestId(`integration-managed-system-tasks-${MS_B}`).textContent).toBe('2');
-    expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_B}`).textContent).toBe(
-      '5',
+    expect(screen.getByTestId(`integration-managed-system-coverage-${MS_A}`).textContent).toBe(
+      '18%',
     );
     expect(screen.getByTestId(`integration-managed-system-coverage-${MS_B}`).textContent).toBe(
-      '46%',
+      '90%',
     );
     expect(
       screen
         .getByTestId(`integration-managed-system-coverage-${MS_A}`)
         .querySelector('[role="meter"] > span'),
-    ).toHaveClass('bg-accent-success');
+    ).toHaveClass('bg-accent-danger');
     expect(
       screen
         .getByTestId(`integration-managed-system-coverage-${MS_B}`)
         .querySelector('[role="meter"] > span'),
-    ).toHaveClass('bg-accent-warn');
+    ).toHaveClass('bg-accent-success');
   });
 
   test.each(['__proto__', 'constructor', 'unrecognized_intent'] as const)(
@@ -377,14 +374,16 @@ describe('integration action dashboard route', () => {
     expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`)).toHaveTextContent(
       '0',
     );
+    // The coverage column renders the server's voc-task cell; without one the
+    // metric is unavailable, not zero.
     expect(screen.getByTestId(`integration-managed-system-coverage-${MS_A}`)).toHaveTextContent(
-      '45%',
+      '—',
     );
     expect(
       screen
         .getByTestId(`integration-managed-system-coverage-${MS_A}`)
-        .querySelector('[role="meter"] > span'),
-    ).toHaveClass('bg-accent-danger');
+        .querySelector('[role="meter"]'),
+    ).toBeNull();
   });
 
   test.each([
@@ -526,5 +525,56 @@ describe('integration action dashboard route', () => {
     });
     expect(() => integrationDashboardSearchSchema.parse({ managedSystem: 'invalid' })).toThrow();
     expect(() => integrationDashboardSearchSchema.parse({ unknown: 'value' })).toThrow();
+  });
+
+  test('renders total-zero system coverage as neutral no_data and averages measured metrics only', async () => {
+    const summary = dashboardSummarySchema.parse({
+      ...SUMMARY,
+      coverage: [
+        { id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' },
+        { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'warn' },
+      ],
+      by_managed_system: [
+        {
+          managed_system_id: MS_A,
+          kpis: { open_voc: 0 },
+          coverage: { 'voc-task': { value: 0, total: 0, percent: 0, status: 'no_data' } },
+          action_queues: { 'unassigned-voc': 0 },
+        },
+      ],
+    });
+    await renderDashboard('/integration', async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/dashboard/summary')) return response(summary);
+      if (url.includes('/managed-systems')) return managedSystemsResponse();
+      return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+    });
+
+    await screen.findByTestId('integration-managed-system-table');
+    // ADR-0067 56-1/O2: the empty denominator is neutral, not a red 0%.
+    const cell = screen.getByTestId(`integration-managed-system-coverage-${MS_A}`);
+    expect(cell).toHaveTextContent('집계 대상 없음');
+    expect(cell.querySelector('[role="meter"]')).toBeNull();
+    // The average covers measured metrics only (74, excluding the no_data 0).
+    const surfaces = within(screen.getByTestId('integration-surfaces'));
+    expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('74%');
+
+    const allNoData = dashboardSummarySchema.parse({
+      ...SUMMARY,
+      coverage: [{ id: 'voc-task', value: 0, total: 0, percent: 0, status: 'no_data' }],
+    });
+    cleanup();
+    await renderDashboard('/integration', async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/dashboard/summary')) return response(allNoData);
+      if (url.includes('/managed-systems')) return managedSystemsResponse();
+      return response({ code: 'internal.unexpected', message: 'not mocked' }, 500);
+    });
+    // No measurable metric: the card explains itself instead of dropping the
+    // caption (#1087 UX) — 평균 커버리지 · 집계 대상 없음, muted.
+    const noDataStat = await screen.findByTestId('integration-surface-coverage-stat');
+    expect(noDataStat.textContent).toBe('평균 커버리지 · 집계 대상 없음');
+    expect(noDataStat.className).toContain('text-text-muted');
+    expect(noDataStat.className).not.toContain('text-accent-danger');
   });
 });

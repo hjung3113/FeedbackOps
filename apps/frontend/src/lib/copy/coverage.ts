@@ -13,3 +13,8 @@ export const COVERAGE_METRIC_LABELS = {
 export const COVERAGE_METRIC_IDS = Object.keys(COVERAGE_METRIC_LABELS) as DashboardCoverageId[];
 
 export const INTEGRATION_AVERAGE_COVERAGE_LABEL = '평균 커버리지';
+
+// ADR-0067 56-1/O2: an empty denominator is neutral absence of work, not a red
+// zero; permission-unavailable metrics stay omitted (—). The server still keeps
+// value/total/percent at 0 for the total-zero cell.
+export const COVERAGE_NO_DATA_LABEL = '집계 대상 없음';
