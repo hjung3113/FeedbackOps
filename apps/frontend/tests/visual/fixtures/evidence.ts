@@ -3,7 +3,12 @@ import {
   listEvidenceInventoryResponseSchema,
 } from '@fops/shared';
 
-export type EvidenceVisualScenario = 'normal' | 'withheld' | 'empty' | 'error';
+export type EvidenceVisualScenario =
+  | 'normal'
+  | 'withheld'
+  | 'empty'
+  | 'error'
+  | 'scoped-search-empty';
 export const EVIDENCE_VISUAL_ID = 'a1111111-1111-4111-8111-111111111111';
 const base = {
   id: EVIDENCE_VISUAL_ID,
@@ -34,6 +39,13 @@ export const evidenceVisualItem = getEvidenceInventoryResponseSchema.parse({
 export const evidenceWithheldItem = getEvidenceInventoryResponseSchema.parse({
   ...base,
   content_state: 'withheld',
+});
+/** A different-source row the widened all-source search returns for the same query. */
+export const evidenceVisualNoteItem = getEvidenceInventoryResponseSchema.parse({
+  ...base,
+  source_type: 'note',
+  content_state: 'available',
+  quote_or_summary: '다운로드 실패는 월간 리포트 생성 지연과 함께 반복되었습니다.',
 });
 export function evidenceVisualList(scenario: EvidenceVisualScenario = 'normal') {
   return listEvidenceInventoryResponseSchema.parse({

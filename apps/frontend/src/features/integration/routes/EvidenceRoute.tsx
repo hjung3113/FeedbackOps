@@ -343,22 +343,53 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
               action={{ label: COPY.retry, onClick: () => void list.refetch() }}
             />
           ) : items.length === 0 ? (
-            <ListStateMessage
-              variant={filtered ? 'filtered' : 'empty'}
-              title={filtered ? COPY.filteredEmpty : COPY.empty}
-              {...(filtered
-                ? {
-                    action: {
-                      label: COPY.clear,
-                      onClick: () =>
+            filtered && search.source && search.q ? (
+              <ListStateMessage
+                variant="filtered"
+                title={COPY.filteredEmpty}
+                actionContent={
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => changeFilter({ ...search, source: undefined })}
+                    >
+                      {COPY.searchAll}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="subtle"
+                      size="sm"
+                      onClick={() =>
                         changeFilter({
                           managedSystem: search.managedSystem,
                           selected: search.selected,
-                        }),
-                    },
-                  }
-                : {})}
-            />
+                        })
+                      }
+                    >
+                      {COPY.clear}
+                    </Button>
+                  </div>
+                }
+              />
+            ) : (
+              <ListStateMessage
+                variant={filtered ? 'filtered' : 'empty'}
+                title={filtered ? COPY.filteredEmpty : COPY.empty}
+                {...(filtered
+                  ? {
+                      action: {
+                        label: COPY.clear,
+                        onClick: () =>
+                          changeFilter({
+                            managedSystem: search.managedSystem,
+                            selected: search.selected,
+                          }),
+                      },
+                    }
+                  : {})}
+              />
+            )
           ) : (
             items
               .filter(

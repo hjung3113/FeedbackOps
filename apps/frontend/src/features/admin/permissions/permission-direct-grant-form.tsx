@@ -393,6 +393,11 @@ function DirectGrantFields({
         <p className="-mt-2 text-xs text-text-muted" data-testid="direct-grant-recipient">
           {options.recipient.display_name} · {roleLevelLabel(options.recipient.role_level)}
         </p>
+        {options.recipient.role_level === 'admin' ? (
+          <p className="text-sm text-text-secondary" data-testid="direct-grant-admin-note">
+            {DIRECT_GRANT_COPY.adminRoleNote}
+          </p>
+        ) : null}
         <label
           className="flex flex-col gap-2 text-sm text-text-secondary"
           htmlFor="permission-direct-grant-candidate"

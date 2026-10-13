@@ -115,6 +115,7 @@ const DENY_ID = '33333333-3333-4333-8333-333333333333';
 const MANAGED_SYSTEM_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const RECIPIENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const SELF_ACTOR_ID = '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ADMIN_RECIPIENT_ID = 'd0d0d0d0-d0d0-4d0d-8d0d-d0d0d0d0d0d0';
 const CREATED_GRANT_ID = '44444444-4444-4444-8444-444444444444';
 const SECOND_CREATED_GRANT_ID = '55555555-5555-4555-8555-555555555555';
 const THIRD_CREATED_GRANT_ID = '88888888-8888-4888-8888-888888888888';
@@ -135,15 +136,22 @@ function grantOptionsFor(
     selfPolicy?: 'allowed' | 'forbidden';
     selfApprovalRequired?: boolean;
     candidates?: unknown[];
+    roleLevel?: 'admin' | 'developer' | 'user';
   } = {},
 ) {
   const actorName =
-    actorId === RECIPIENT_ID ? 'Actor One' : actorId === SELF_ACTOR_ID ? 'Admin One' : 'Actor Two';
+    actorId === RECIPIENT_ID
+      ? 'Actor One'
+      : actorId === SELF_ACTOR_ID
+        ? 'Admin One'
+        : actorId === ADMIN_RECIPIENT_ID
+          ? 'Admin Two'
+          : 'Actor Two';
   return permissionGrantOptionsSchema.parse({
     recipient: {
       id: actorId,
       display_name: actorName,
-      role_level: actorId === SELF_ACTOR_ID ? 'admin' : 'user',
+      role_level: overrides.roleLevel ?? (actorId === SELF_ACTOR_ID ? 'admin' : 'user'),
     },
     self_policy: overrides.selfPolicy ?? 'allowed',
     self_approval_required: overrides.selfApprovalRequired ?? actorId === SELF_ACTOR_ID,
@@ -732,6 +740,75 @@ describe('/admin/permissions/grants screen', () => {
       reason: '워크스페이스 운영을 맡깁니다.',
     });
     expect(post?.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  test('notes an Admin recipient already holds every permission but keeps the grant possible', async () => {
+    const api = installApi({
+      grantOptionsByActor: {
+        [ADMIN_RECIPIENT_ID]: grantOptionsFor(ADMIN_RECIPIENT_ID, { roleLevel: 'admin' }),
+      },
+    });
+    workspaceActorsMock.actors = [
+      {
+        id: RECIPIENT_ID,
+        display_name: 'Actor One',
+        email: 'actor-one@example.com',
+        actor_type: 'internal_member',
+      },
+      {
+        id: ADMIN_RECIPIENT_ID,
+        display_name: 'Admin Two',
+        email: 'admin-two@example.com',
+        actor_type: 'internal_member',
+      },
+    ];
+    renderScreen();
+
+    const dialog = await openDirectGrantDialog();
+    await chooseSelectOption('대상자', /^Admin Two/);
+    await waitFor(() =>
+      expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent('Admin Two'),
+    );
+    expect(within(dialog).getByTestId('direct-grant-admin-note')).toHaveTextContent(
+      'Admin은 이미 모든 권한을 가지고 있어서 이 부여로 바뀌는 권한은 없습니다.',
+    );
+
+    await chooseSelectOption('대상자', /^Actor One/);
+    await waitFor(() =>
+      expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent('Actor One'),
+    );
+    expect(screen.queryByTestId('direct-grant-admin-note')).toBeNull();
+
+    await chooseSelectOption('대상자', /^Admin Two/);
+    await waitFor(() =>
+      expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent('Admin Two'),
+    );
+    expect(within(dialog).getByTestId('direct-grant-admin-note')).toBeInTheDocument();
+
+    await chooseSelectOption('부여 권한 및 범위', /Finding 관리.*Payments/);
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: '관리자가 확인한 권한을 부여합니다.' },
+    });
+    const submit = within(dialog).getByTestId('direct-grant-submit');
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.method === 'POST' && request.path === '/permissions/grants',
+        ),
+      ).toBe(true),
+    );
+    const post = api.requests.find(
+      (request) => request.method === 'POST' && request.path === '/permissions/grants',
+    );
+    expect(directPermissionGrantSchema.parse(post?.body)).toEqual({
+      actor_id: ADMIN_RECIPIENT_ID,
+      capability: 'finding.manage',
+      managed_system_id: MANAGED_SYSTEM_ID,
+      reason: '관리자가 확인한 권한을 부여합니다.',
+    });
   });
 
   test('blocks malformed expiration drafts from empty and previously valid dates', async () => {

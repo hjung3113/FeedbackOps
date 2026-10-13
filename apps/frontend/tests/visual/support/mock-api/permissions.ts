@@ -12,6 +12,7 @@ import {
 } from '@fops/shared';
 import {
   PERMISSION_GRANTS_IDS,
+  adminDirectGrantPermissionOptions,
   directGrantPermissionOptions,
 } from '../../fixtures/permission-grants';
 import {
@@ -113,13 +114,25 @@ export function createPermissionGrantHandlers(): MockApiHandler[] {
       path: '/permissions/grant-options',
       handle: (route, context, url) => {
         const actorId = url.searchParams.get('actor_id');
-        if (
-          context.options.permissionGrantsScenario !== 'direct-grant-form' ||
-          actorId !== PERMISSION_GRANTS_IDS.actor
-        ) {
+        const scenario = context.options.permissionGrantsScenario;
+        const expected =
+          scenario === 'direct-grant-form'
+            ? PERMISSION_GRANTS_IDS.actor
+            : scenario === 'direct-grant-admin-form'
+              ? PERMISSION_GRANTS_IDS.adminRecipient
+              : undefined;
+        if (expected === undefined || actorId !== expected) {
           return json(route, 404, { code: 'not_found.record', message: 'actor not found' });
         }
-        return json(route, 200, permissionGrantOptionsSchema.parse(directGrantPermissionOptions));
+        return json(
+          route,
+          200,
+          permissionGrantOptionsSchema.parse(
+            scenario === 'direct-grant-form'
+              ? directGrantPermissionOptions
+              : adminDirectGrantPermissionOptions,
+          ),
+        );
       },
     },
     {

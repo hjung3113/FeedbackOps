@@ -64,3 +64,21 @@ for (const scenario of ['withheld', 'empty', 'error'] as const) {
     await expectVisual(page, page.locator('[data-app-frame]'), `evidence-${scenario}.png`);
   });
 }
+
+test('Evidence scoped-search-empty offers the all-source search', async ({ page }) => {
+  await installMockApi(page, { evidence: 'scoped-search-empty' });
+  await page.goto('/integration/evidence?source=voc&q=다운로드');
+
+  await expect(page.getByText('조건에 맞는 Evidence가 없습니다.')).toBeVisible();
+  const searchAll = page.getByRole('button', { name: '전체에서 검색' });
+  await expect(searchAll).toBeVisible();
+  await expect(page.getByRole('button', { name: '조건 초기화' })).toBeVisible();
+  await expectVisual(page, page.locator('[data-app-frame]'), 'evidence-scoped-search-empty.png');
+
+  // The action reruns the same query without source_type instead of being a dead control.
+  await searchAll.click();
+  await expect(
+    page.getByRole('button', { name: /다운로드 실패는 월간 리포트 생성 지연/ }),
+  ).toBeVisible();
+  await expect(page.getByText('조건에 맞는 Evidence가 없습니다.')).toBeHidden();
+});
