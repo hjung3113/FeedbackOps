@@ -187,10 +187,10 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     expect(response.statusCode).toBe(201);
     const created = response.json<{ id: string; kind: string }>();
     expect(created.kind).toBe('single_choice');
-    const audit = await migrateHandle.pool.query<{ event_type: string; detail: { survey_id: string } }>(
-      'select event_type, detail from core.audit_log where subject_id = $1',
-      [created.id],
-    );
+    const audit = await migrateHandle.pool.query<{
+      event_type: string;
+      detail: { survey_id: string };
+    }>('select event_type, detail from core.audit_log where subject_id = $1', [created.id]);
     expect(audit.rows).toEqual([
       expect.objectContaining({
         event_type: 'survey_question_created',
@@ -568,10 +568,10 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     });
 
     expect(deleted.statusCode).toBe(200);
-    const audit = await migrateHandle.pool.query<{ event_type: string; detail: { survey_id: string } }>(
-      'select event_type, detail from core.audit_log where subject_id = $1',
-      [questionId],
-    );
+    const audit = await migrateHandle.pool.query<{
+      event_type: string;
+      detail: { survey_id: string };
+    }>('select event_type, detail from core.audit_log where subject_id = $1', [questionId]);
     expect(audit.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

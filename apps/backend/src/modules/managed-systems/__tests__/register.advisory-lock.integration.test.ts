@@ -70,10 +70,9 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
 
   afterAll(async () => {
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query(
-      `delete from core.idempotency_keys where created_at >= $1`,
-      [suiteStartAt],
-    );
+    await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
+      suiteStartAt,
+    ]);
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
       await ops.pool.query(
@@ -92,10 +91,9 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query(
-      `delete from core.idempotency_keys where created_at >= $1`,
-      [suiteStartAt],
-    );
+    await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
+      suiteStartAt,
+    ]);
     await dbHandle.pool.query('delete from core.rate_limits');
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
@@ -132,7 +130,7 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
     expect(firstBody.slug).toBe(slug);
 
     const rows = await dbHandle.pool.query<{ n: number }>(
-      `select count(*)::int as n from core.managed_systems where workspace_id = $1 and slug = $2`,
+      'select count(*)::int as n from core.managed_systems where workspace_id = $1 and slug = $2',
       [WORKSPACE_ID, slug],
     );
     expect(rows.rows[0]?.n).toBe(1);
