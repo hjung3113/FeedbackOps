@@ -19,7 +19,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,10 +32,12 @@ vi.mock('@fops/ui', async () => {
     ...actual,
     ListShell: ({
       toolbar,
+      tabs,
       list,
       detailPanel,
     }: {
       toolbar?: { title: string; subtitle?: string; actions?: React.ReactNode };
+      tabs?: React.ReactNode;
       list: React.ReactNode;
       detailPanel?: React.ReactNode;
     }) => (
@@ -47,6 +49,7 @@ vi.mock('@fops/ui', async () => {
             <div>{toolbar.actions}</div>
           </header>
         )}
+        {tabs && <div data-testid="list-shell-tabs">{tabs}</div>}
         <main>{list}</main>
         <aside data-testid="list-shell-detail-slot">{detailPanel}</aside>
       </div>
@@ -126,6 +129,8 @@ const findings = [
     summary: '결제 실패 VOC가 반복됩니다.',
     source_type: 'voc_cluster' as const,
     source_id: '22222222-2222-2222-2222-222222222222',
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 3,
     severity: 'high' as const,
     confidence: 'medium' as const,
@@ -147,6 +152,8 @@ const findings = [
     summary: '배송 지연 문의가 증가했습니다.',
     source_type: 'manual' as const,
     source_id: null,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'medium' as const,
     confidence: null,
@@ -345,6 +352,18 @@ describe('FindingsListPage', () => {
   });
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {
+    useFindingsListMock.mockReturnValue({
+      data: {
+        items: findings.map((finding, index) =>
+          index === 0 ? { ...finding, owner_actor_id: finding.created_by } : finding,
+        ),
+      },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      error: null,
+    });
     await renderFindingsPage();
 
     const richRow = screen.getByTestId('finding-row-FND-101');
@@ -383,6 +402,50 @@ describe('FindingsListPage', () => {
     const row = await renderFindingRow({ severity: 'medium' });
 
     expect(within(row).getByText('중간')).toBeInTheDocument();
+  });
+
+  it('renders a team owner by its resolved name, falling back to the short id', async () => {
+    const originalFetch = globalThis.fetch;
+    const teamId = '50000000-0000-0000-0000-000000000005';
+    let resolveTeams: ((response: Response) => void) | undefined;
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveTeams = resolve;
+        }),
+    );
+    try {
+      const row = await renderFindingRow({ owner_team_id: teamId });
+
+      // Unresolved (resolve query pending): short-id fallback.
+      expect(row).toHaveTextContent(`팀 · ${teamId.slice(0, 8)}`);
+
+      await act(async () => {
+        resolveTeams?.(
+          new Response(
+            JSON.stringify({
+              actors: [],
+              teams: [{ id: teamId, name: '[seed] VOC owner team' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      });
+
+      await waitFor(() => expect(row).toHaveTextContent('[seed] VOC owner team'));
+      expect(row).not.toHaveTextContent(`팀 · ${teamId.slice(0, 8)}`);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('gives the assignment filter a visible 담당자 label next to its value', async () => {
+    await renderFindingsPage();
+
+    const tabs = screen.getByTestId('list-shell-tabs');
+    const trigger = within(tabs).getByRole('combobox', { name: '담당자 필터' });
+    expect(within(trigger).getByText('담당자:')).toBeInTheDocument();
+    expect(within(trigger).getByText('전체')).toBeInTheDocument();
   });
 
   it.each(findingConfidenceSchema.options)(

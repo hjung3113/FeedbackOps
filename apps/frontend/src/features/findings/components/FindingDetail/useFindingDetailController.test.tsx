@@ -12,6 +12,8 @@ import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { VocDetailResult } from '@/lib/cross-system/useVocDetail';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import type { UseWorkspaceActorsResult } from '@/lib/cross-system/useWorkspaceActors';
 import type { FindingDto, TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -70,6 +72,8 @@ const FINDING_LINKED: FindingDto = {
   summary: '쿼리 플랜 개선 필요',
   source_type: 'manual',
   source_id: null,
+  owner_actor_id: null,
+  owner_team_id: null,
   evidence_count: 0,
   severity: 'high',
   confidence: 'medium',
@@ -230,5 +234,47 @@ describe('useFindingDetailController', () => {
       expect.objectContaining({ id: IDS.finding }),
     );
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('eligibleOwners keeps Admin/Developer actors and drops User-level and the System audit actor', () => {
+    const adminId = '41000000-0000-4000-8000-000000000001';
+    const developerId = '41000000-0000-4000-8000-000000000002';
+    const userId = '41000000-0000-4000-8000-000000000003';
+    const systemId = '41000000-0000-4000-8000-000000000004';
+    vi.mocked(useWorkspaceActors).mockReturnValue({
+      actors: [
+        {
+          id: adminId,
+          display_name: 'Mock Admin',
+          email: 'admin@feedbackops.local',
+          role_level: 'admin',
+        },
+        {
+          id: developerId,
+          display_name: 'Mock Developer',
+          email: 'dev@feedbackops.local',
+          role_level: 'developer',
+        },
+        {
+          id: userId,
+          display_name: 'Mock User',
+          email: 'user@feedbackops.local',
+          role_level: 'user',
+        },
+        {
+          id: systemId,
+          display_name: 'System',
+          email: 'system@feedbackops.local',
+          role_level: 'admin',
+        },
+      ],
+    } as UseWorkspaceActorsResult);
+
+    const { result } = renderController(FINDING_LINKED);
+
+    expect(result.current.eligibleOwners).toEqual([
+      { id: adminId, name: 'Mock Admin' },
+      { id: developerId, name: 'Mock Developer' },
+    ]);
   });
 });

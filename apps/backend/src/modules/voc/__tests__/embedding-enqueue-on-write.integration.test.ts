@@ -73,7 +73,13 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
   // Children before parents: voc_embeddings → vocs → managed_systems.
   async function cleanup(): Promise<void> {
     if (!migrateHandle) return;
-    const scope = `(select id from core.managed_systems where workspace_id = $1 and slug like $2)`;
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures
+      where workspace_id=$1 and managed_system_id in
+        (select id from core.managed_systems where workspace_id=$1 and slug like $2)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    const scope = '(select id from core.managed_systems where workspace_id = $1 and slug like $2)';
     await migrateHandle.pool.query(
       `delete from voc.voc_embeddings where voc_id in (
          select id from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${scope}
@@ -91,14 +97,14 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     // Every test here registers a Managed System as the same seed admin, and
     // that route is rate limited per actor. Without this the suite passes once
     // and then fails for ~a minute on any rerun — see the same reset in
     // analytics-areas and tasks. `fileParallelism: false` keeps it local.
-    await migrateHandle.pool.query(`delete from core.rate_limits`);
+    await migrateHandle.pool.query('delete from core.rate_limits');
   }
 
   async function build(opts: {
@@ -148,7 +154,7 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
   }
 
   async function vocExists(vocId: string): Promise<boolean> {
-    const res = await appHandle.pool.query(`select 1 from voc.vocs where id = $1`, [vocId]);
+    const res = await appHandle.pool.query('select 1 from voc.vocs where id = $1', [vocId]);
     return res.rowCount === 1;
   }
 

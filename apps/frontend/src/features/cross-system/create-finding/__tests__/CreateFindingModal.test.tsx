@@ -219,6 +219,43 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     expect(client.getQueryState(findingsListKey)?.isInvalidated).toBe(true);
   });
 
+  it('pins returnTo to the source VOC after the Triage queue advanced its selection', async () => {
+    // Opening the modal optimistically removes the source VOC and advances the
+    // queue, so the router location already points at the NEXT item by submit time.
+    const nextVocId = '10000000-0000-4000-8000-000000000099';
+    useLocation.mockReturnValue({
+      pathname: '/vocs',
+      href: `/vocs?view=triage&selected=${nextVocId}&tab=untriaged`,
+    });
+    renderModal(null);
+    submitValidForm();
+
+    await submittedBody();
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/findings',
+        search: {
+          selected: '10000000-0000-4000-8000-000000000050',
+          returnTo: `/vocs?view=triage&selected=${IDS.voc}&tab=untriaged`,
+        },
+      }),
+    );
+  });
+
+  it('omits returnTo when the modal is not mounted on a VOC list URL', async () => {
+    useLocation.mockReturnValue({ pathname: '/', href: 'http://localhost/' });
+    renderModal(null);
+    submitValidForm();
+
+    await submittedBody();
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/findings',
+        search: { selected: '10000000-0000-4000-8000-000000000050' },
+      }),
+    );
+  });
+
   it('keeps pristine fields clear and shows Korean errors after empty submit', async () => {
     renderModal(null);
     await screen.findByTestId('create-finding-aa-picker');

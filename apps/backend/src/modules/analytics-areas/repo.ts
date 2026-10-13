@@ -8,6 +8,7 @@ export interface LockedAnalyticsArea {
   workspace_id: string;
   managed_system_id: string;
   archived_at: Date | null;
+  owner_team_id: string | null;
 }
 
 export async function lockAnalyticsArea(
@@ -20,8 +21,9 @@ export async function lockAnalyticsArea(
     workspace_id: string;
     managed_system_id: string;
     archived_at: Date | null;
+    owner_team_id: string | null;
   }>(sql`
-    select id, workspace_id, managed_system_id, archived_at
+    select id, workspace_id, managed_system_id, archived_at, owner_team_id
     from ${analyticsAreas}
     where id = ${analyticsAreaId}
       and workspace_id = ${workspaceId}
@@ -34,6 +36,7 @@ export async function lockAnalyticsArea(
         workspace_id: row.workspace_id,
         managed_system_id: row.managed_system_id,
         archived_at: row.archived_at,
+        owner_team_id: row.owner_team_id,
       }
     : null;
 }

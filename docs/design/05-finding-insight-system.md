@@ -277,9 +277,9 @@ Existing Task.
 - Automatic priority scoring
 ```
 
-## Creation responsibility (ADR-0067; implementation pending)
+## Creation responsibility (ADR-0067; implemented by #1090)
 
-VOC-, Cluster-, and Survey-response-derived Findings persist the proposed/new nullable
+VOC-, Cluster-, and Survey-response-derived Findings persist the nullable
 Actor/team owner pair in the destination Finding module. `created_by` is provenance,
 never implicit ownership. Explicit/null/omitted and MS/AA/fallback resolution follows
 ADR-0067 and `09-permission-access.md`; target-system eligibility and source visibility

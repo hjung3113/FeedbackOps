@@ -31,6 +31,13 @@ const sourceContextSchema = z.enum([
 
 // ── voc_created ────────────────────────────────────────────────────────────
 export const vocCreatedDetailSchema = z.object({
+  owner_user_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   voc_id: uuid(),
   workspace_id: uuid(),
   primary_managed_system_id: uuid(),
@@ -38,6 +45,7 @@ export const vocCreatedDetailSchema = z.object({
   reporter_id: uuid(),
   source_context: sourceContextSchema,
 });
+
 export type VocCreatedDetail = z.infer<typeof vocCreatedDetailSchema>;
 
 // ── voc_triage_committed ───────────────────────────────────────────────────

@@ -34,6 +34,29 @@ describe('createFindingRequestSchema', () => {
     expect(result.confidence).toBe('medium');
   });
 
+  it.each([{}, { owner_actor_id: null }, { owner_actor_id: U1 }, { owner_team_id: U2 }])(
+    'preserves explicit owner keys without fabricating omitted keys: %j',
+    (owner) => {
+      const voc = createFindingRequestSchema.parse({
+        title: 'Finding',
+        summary: 'Synthesis',
+        severity: 'high',
+        ...owner,
+      });
+      const survey = createFindingFromSurveyResponseRequestSchema.parse({
+        severity: 'high',
+        approved_excerpt_ids: [],
+        ...owner,
+      });
+      expect(
+        Object.fromEntries(Object.entries(voc).filter(([key]) => key.startsWith('owner_'))),
+      ).toEqual(owner);
+      expect(
+        Object.fromEntries(Object.entries(survey).filter(([key]) => key.startsWith('owner_'))),
+      ).toEqual(owner);
+    },
+  );
+
   it('rejects source fields because source is route-shaped', () => {
     expect(() =>
       createFindingRequestSchema.parse({
@@ -83,6 +106,14 @@ describe('createFindingRequestSchema', () => {
 });
 
 describe('patchFindingRequestSchema', () => {
+  it('accepts an owner-only patch while rejecting an empty patch', () => {
+    expect(patchFindingRequestSchema.parse({ owner_actor_id: null, owner_team_id: null })).toEqual({
+      owner_actor_id: null,
+      owner_team_id: null,
+    });
+    expect(patchFindingRequestSchema.safeParse({}).success).toBe(false);
+  });
+
   it('rejects a whitespace-only reason', () => {
     expect(() =>
       patchFindingRequestSchema.parse({ status: 'not_actionable', reason: '   ' }),
@@ -95,6 +126,8 @@ describe('findingDtoSchema', () => {
     id: U1,
     workspace_id: U2,
     display_id: 'FIN-1000',
+    owner_actor_id: null,
+    owner_team_id: null,
     primary_managed_system_id: U3,
     title: 'Export failures',
     summary: 'VOC evidence needs synthesis.',

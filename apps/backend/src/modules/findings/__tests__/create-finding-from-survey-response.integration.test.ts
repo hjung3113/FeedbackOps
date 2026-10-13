@@ -19,7 +19,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { createAa, insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { createSurveyFindingLink } from '../../entity-links/index.js';
@@ -46,6 +46,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   let adminId: string;
   let adminCookie: string;
   const foreignWorkspaceIds = new Set<string>();
+  const teamIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -91,7 +92,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
             or subject_id in (${findings})
             or subject_id in (${approvals})
             or subject_id in (${links})
-            or actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2))`,
+            or actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2))`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
@@ -137,26 +138,40 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     await migrateHandle.pool.query(
       `delete from core.rate_limits where key in (
          select workspace_id::text || ':' || id::text from core.actors
-         where workspace_id=$1 and external_id like $2
+         where workspace_id=$1 and external_id like 'mock-dev-read-' || $2
        )`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
-      'delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
+      "delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2)",
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
-      'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
+      "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2)",
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
-      'delete from core.actors where workspace_id=$1 and external_id like $2',
+      `update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2",
       [WORKSPACE_ID, `${SLUG}-%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.analytics_areas where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
       WORKSPACE_ID,
       `${SLUG}%`,
     ]);
+    await migrateHandle.pool.query('delete from core.teams where id=any($1::uuid[])', [teamIds]);
+    teamIds.length = 0;
     for (const workspaceId of foreignWorkspaceIds) {
       await migrateHandle.pool.query('delete from core.audit_log where workspace_id=$1', [
         workspaceId,
@@ -180,6 +195,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [
         workspaceId,
       ]);
+      await migrateHandle.pool.query(
+        'delete from core.responsibility_default_failures where workspace_id=$1',
+        [workspaceId],
+      );
       await migrateHandle.pool.query('delete from core.managed_systems where workspace_id=$1', [
         workspaceId,
       ]);
@@ -379,6 +398,159 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       },
     ]);
   });
+
+  it('checks the complete personal source gate before disclosing invalid owner or target, with no diagnostic side effects', async () => {
+    const source = await seed();
+    const creator = await actor();
+    await grant(creator.id, 'finding.manage', source.msId);
+    const hidden = await post(creator.cookie, source.responseId, {
+      severity: 'high',
+      approved_excerpt_ids: [],
+      primary_managed_system_id: randomUUID(),
+      owner_actor_id: randomUUID(),
+    });
+    const missing = await post(creator.cookie, randomUUID(), {
+      severity: 'high',
+      approved_excerpt_ids: [],
+      primary_managed_system_id: randomUUID(),
+      owner_actor_id: randomUUID(),
+    });
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json()).toEqual(missing.json());
+    expect(await counts(source.responseId)).toEqual({
+      findings: 0,
+      links: 0,
+      highlights: 0,
+      audits: 0,
+    });
+    expect(
+      (
+        await migrateHandle.pool.query(
+          'select id from core.responsibility_default_failures where managed_system_id=$1',
+          [source.msId],
+        )
+      ).rows,
+    ).toHaveLength(0);
+  });
+
+  it.each(['omitted', 'actor', 'team', 'aa', 'fallback', 'null', 'invalid'] as const)(
+    'Survey responsibility %s preserves the approved-excerpt body and atomic replay',
+    async (variant) => {
+      const source = await seed();
+      const creator = await actor();
+      await grant(creator.id, 'survey.read', source.msId);
+      await grant(creator.id, 'survey.read_personal_responses', source.msId);
+      await grant(creator.id, 'survey.manage', source.msId);
+      await grant(creator.id, 'finding.manage', source.msId);
+      const approvedId = await approve(source, creator.cookie);
+      await migrateHandle.pool.query(
+        'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
+        [adminId, source.msId],
+      );
+      let teamId: string | undefined;
+      let aaId: string | undefined;
+      if (variant === 'team' || variant === 'aa') {
+        const team = await migrateHandle.pool.query<{ id: string }>(
+          'insert into core.teams (workspace_id,name) values ($1,$2) returning id',
+          [WORKSPACE_ID, uid('Survey owner team')],
+        );
+        teamId = team.rows[0]?.id ?? '';
+        teamIds.push(teamId);
+        if (variant === 'aa') {
+          aaId = await createAa(app, adminCookie, {
+            managed_system_id: source.msId,
+            slug: uid(SLUG),
+            name: 'Survey Owner AA',
+          });
+          await migrateHandle.pool.query(
+            'update core.analytics_areas set owner_team_id=$1 where id=$2',
+            [teamId, aaId],
+          );
+        }
+      }
+      if (variant === 'aa' || variant === 'fallback')
+        await migrateHandle.pool.query(
+          'update core.managed_systems set default_owner_actor_id=null where id=$1',
+          [source.msId],
+        );
+      const automatic = variant === 'omitted' || variant === 'aa' || variant === 'fallback';
+      const rule =
+        variant === 'omitted'
+          ? 'managed_system_owner'
+          : variant === 'aa'
+            ? 'analytics_area_owner'
+            : variant === 'fallback'
+              ? 'workspace_fallback_queue'
+              : 'explicit';
+      const body = {
+        severity: 'high',
+        approved_excerpt_ids: [approvedId],
+        ...(aaId ? { analytics_area_id: aaId } : {}),
+        ...(automatic
+          ? {}
+          : variant === 'team'
+            ? { owner_team_id: teamId }
+            : {
+                owner_actor_id:
+                  variant === 'actor' ? adminId : variant === 'null' ? null : randomUUID(),
+              }),
+      };
+      const key = randomUUID();
+      const created = await post(creator.cookie, source.responseId, body, key);
+      if (variant === 'invalid') {
+        expect(created.statusCode).toBe(422);
+        expect(await counts(source.responseId)).toEqual({
+          findings: 0,
+          links: 0,
+          highlights: 0,
+          audits: 0,
+        });
+      } else {
+        expect(created.statusCode).toBe(201);
+        expect(created.json()).toMatchObject({
+          owner_actor_id:
+            variant === 'null' || variant === 'team' || variant === 'aa' || variant === 'fallback'
+              ? null
+              : adminId,
+          owner_team_id: variant === 'team' || variant === 'aa' ? teamId : null,
+          default_resolved: variant === 'omitted' || variant === 'aa',
+          source_rule: rule,
+          source_type: 'survey_response',
+        });
+        expect(created.json().source_id).toBeUndefined();
+        expect(JSON.stringify(created.json())).not.toContain(RAW_ANSWER);
+        expect((await post(creator.cookie, source.responseId, body, key)).json()).toEqual(
+          created.json(),
+        );
+        expect(await counts(source.responseId)).toEqual({
+          findings: 1,
+          links: 2,
+          highlights: 1,
+          audits: 1,
+        });
+        const audit = await migrateHandle.pool.query<{ detail: unknown }>(
+          'select detail from core.audit_log where subject_id=$1 and event_type=$2',
+          [created.json().id, 'finding_created_from_survey_response'],
+        );
+        expect(audit.rows).toHaveLength(1);
+        expect(audit.rows[0]?.detail).toMatchObject({
+          owner_actor_id:
+            variant === 'null' || variant === 'team' || variant === 'aa' || variant === 'fallback'
+              ? null
+              : adminId,
+          source_rule: rule,
+        });
+      }
+      expect(
+        (
+          await migrateHandle.pool.query(
+            'select id from core.responsibility_default_failures where managed_system_id=$1',
+            [source.msId],
+          )
+        ).rows,
+      ).toHaveLength(variant === 'aa' ? 1 : variant === 'fallback' ? 2 : 0);
+    },
+  );
 
   it('201 persists the Finding, generated_finding and evidence_of links, highlights, and exact audit counts', async () => {
     const source = await seed();

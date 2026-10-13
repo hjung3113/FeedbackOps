@@ -9,6 +9,8 @@ import type { FindingReadRow } from './repo-read.js';
 import { mapFindingRow } from './repo-read.js';
 
 export interface InsertFindingInput {
+  ownerActorId?: string | null;
+  ownerTeamId?: string | null;
   workspaceId: string;
   primaryManagedSystemId: string;
   title: string;
@@ -34,17 +36,17 @@ export async function insertFinding(tx: Tx, input: InsertFindingInput): Promise<
     INSERT INTO finding.findings (
       workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status,
-      analytics_area_id, created_by
+      analytics_area_id, created_by, owner_actor_id, owner_team_id
     )
     VALUES (
       ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
       ${input.summary}, ${input.sourceType}, ${input.sourceId}, 0, ${input.severity},
-      ${input.confidence}, 'draft', ${input.analyticsAreaId}, ${input.createdBy}
+      ${input.confidence}, 'draft', ${input.analyticsAreaId}, ${input.createdBy}, ${input.ownerActorId ?? null}, ${input.ownerTeamId ?? null}
     )
     RETURNING
       id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+      owner_actor_id, owner_team_id, linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);
   const row = result.rows[0];
   if (!row) throw new Error('insertFinding returned no row');
@@ -126,7 +128,7 @@ export async function lockFindingById(
     SELECT
       id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+      owner_actor_id, owner_team_id, linked_task_id, linked_milestone_id, created_by, created_at, updated_at
     FROM finding.findings
     WHERE id = ${input.findingId}
       AND workspace_id = ${input.workspaceId}
@@ -206,7 +208,7 @@ export async function updateFindingStatus(
     RETURNING
       id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+      owner_actor_id, owner_team_id, linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);
   const row = result.rows[0];
   if (!row) throw new Error('updateFindingStatus returned no row');
@@ -289,7 +291,7 @@ export async function updateFindingLinkedTask(
     RETURNING
       id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+      owner_actor_id, owner_team_id, linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);
   const row = result.rows[0];
   if (!row) throw new Error('updateFindingLinkedTask returned no row');
@@ -358,3 +360,22 @@ export async function listVocSourceMeta(
 
 export { findFindingById } from './repo-read.js';
 export type { FindingReadRow } from './repo-read.js';
+
+export async function updateFindingOwner(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    findingId: string;
+    ownerActorId: string | null;
+    ownerTeamId: string | null;
+  },
+): Promise<FindingReadRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE finding.findings SET owner_actor_id=${input.ownerActorId}, owner_team_id=${input.ownerTeamId}, updated_at=now()
+    WHERE workspace_id=${input.workspaceId} AND id=${input.findingId}
+    RETURNING *
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateFindingOwner returned no row');
+  return mapFindingRow(row);
+}

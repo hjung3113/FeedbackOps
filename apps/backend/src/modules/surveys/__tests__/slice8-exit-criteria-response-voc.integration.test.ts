@@ -89,7 +89,7 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(
-        'delete from finding.evidence_highlights where finding_id in (' + findings + ')',
+        `delete from finding.evidence_highlights where finding_id in (${findings})`,
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(`delete from finding.findings where id in (${findings})`, [
@@ -131,6 +131,10 @@ describe.skipIf(!runIntegration)(
       await migrateHandle.pool.query(
         'delete from core.actors where workspace_id=$1 and external_id like $2',
         [WORKSPACE_ID, `${SLUG}-%`],
+      );
+      await migrateHandle.pool.query(
+        `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+        [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
         WORKSPACE_ID,

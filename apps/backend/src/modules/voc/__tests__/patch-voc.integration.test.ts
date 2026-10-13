@@ -1,3 +1,4 @@
+import { cleanupResponsibilityFailures } from '../../../test-support/responsibility-fixtures.js';
 // PATCH /vocs/:id integration tests — Slice 3 #14 acceptance coverage.
 //
 // Mirrors create-voc.integration.test.ts harness:
@@ -26,7 +27,7 @@ import {
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -218,6 +219,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   let adminActorId: string;
 
   async function cleanupProductTables() {
+    await cleanupResponsibilityFailures(WORKSPACE_ID, 'it-patch-');
     // Remove permission grants for test actors before removing the actors.
     await dbHandle.pool.query(
       `delete from permission.permission_grants

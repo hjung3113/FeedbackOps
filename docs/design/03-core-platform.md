@@ -98,7 +98,7 @@ Managed System may be used as:
 - Analytics Area grouping context
 ```
 
-Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (only the Survey operator default is built; ADR-0067 accepts the other defaults for close-out, implementation pending); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
+Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided (Survey operator and ADR-0067 VOC/Finding owner defaults are built; Task Request/Task routing remains the separate 56-F item); they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
 
 Project language in older docs is superseded for MVP. If needed later, use Work Initiative for execution grouping instead of scope, permissions, and defaults.
 
@@ -141,7 +141,7 @@ Acceptance Criteria:
 
 ```text
 - Managed Systems are managed inside the workspace, not as separate app shells.
-- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators. (Only the Survey operator default is built; the remaining routing is accepted by ADR-0067, implementation pending.)
+- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators. (Survey operator and VOC/Finding owner routing are built; Task Request/Task routing remains the separate 56-F item.)
 - Default owner or team may prefill the actual owner field, but does not mean the record is triaged.
 - Authorized users can override defaults on individual records.
 - Managed System filters are available on managed-system-scoped lists and dashboards.

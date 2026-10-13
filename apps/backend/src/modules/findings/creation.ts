@@ -20,6 +20,7 @@ import {
 } from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import { incrementFindingEvidenceCount, insertEvidenceHighlight, insertFinding } from './repo.js';
+import { resolveOwner } from './responsibility.js';
 import { canManageFinding, canReadSourceVoc, toDto } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
 
@@ -81,16 +82,26 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             },
           );
 
-          if (input.analytics_area_id) {
-            await assertActiveAnalyticsAreaForManagedSystem(
-              tx,
-              actor.workspace_id,
-              targetManagedSystemId,
-              input.analytics_area_id,
-            );
-          }
+          const area = input.analytics_area_id
+            ? await assertActiveAnalyticsAreaForManagedSystem(
+                tx,
+                actor.workspace_id,
+                targetManagedSystemId,
+                input.analytics_area_id,
+              )
+            : null;
 
+          const owner = await resolveOwner(
+            tx,
+            deps,
+            actor.workspace_id,
+            targetMs,
+            area?.owner_team_id ?? null,
+            input,
+          );
           const finding = await insertFinding(tx, {
+            ownerActorId: owner.owner_actor_id,
+            ownerTeamId: owner.owner_team_id,
             workspaceId: actor.workspace_id,
             primaryManagedSystemId: targetManagedSystemId,
             title: input.title,
@@ -129,6 +140,7 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             subject_id: finding.id,
             summary: 'Finding created from VOC',
             detail: {
+              ...owner,
               finding_id: finding.id,
               source_voc_id: sourceVoc.id,
               primary_managed_system_id: targetManagedSystemId,
@@ -156,12 +168,15 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
 
           return {
             status: 201,
-            body: toDto(finding, {
-              link_id: link.row.id,
-              source_type: 'voc',
-              source_id: sourceVoc.id,
-              relation_type: 'created_finding',
-            }),
+            body: {
+              ...owner,
+              ...toDto(finding, {
+                link_id: link.row.id,
+                source_type: 'voc',
+                source_id: sourceVoc.id,
+                relation_type: 'created_finding',
+              }),
+            },
           };
         },
       );
@@ -201,14 +216,14 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             });
           if (!(await canManageFinding(deps, actor, targetManagedSystemId, { tx })))
             throw new HttpError('permission.denied', 'finding.manage capability required');
-          if (input.analytics_area_id) {
-            await assertActiveAnalyticsAreaForManagedSystem(
-              tx,
-              actor.workspace_id,
-              targetManagedSystemId,
-              input.analytics_area_id,
-            );
-          }
+          const area = input.analytics_area_id
+            ? await assertActiveAnalyticsAreaForManagedSystem(
+                tx,
+                actor.workspace_id,
+                targetManagedSystemId,
+                input.analytics_area_id,
+              )
+            : null;
           const safeExcerpts = await resolveApprovedSurveyResponseExcerpts(
             tx,
             actor,
@@ -217,7 +232,17 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
           );
           const label = safeExcerpts[0]?.question_label ?? 'Survey response';
           const safeMeta = `${subject.survey_type} · ${subject.survey_display_id}`;
+          const owner = await resolveOwner(
+            tx,
+            deps,
+            actor.workspace_id,
+            targetMs,
+            area?.owner_team_id ?? null,
+            input,
+          );
           const finding = await insertFinding(tx, {
+            ownerActorId: owner.owner_actor_id,
+            ownerTeamId: owner.owner_team_id,
             workspaceId: actor.workspace_id,
             primaryManagedSystemId: targetManagedSystemId,
             title: `${label} · ${safeMeta}`,
@@ -246,6 +271,7 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             subject_id: finding.id,
             summary: 'Finding created from survey response',
             detail: {
+              ...owner,
               finding_id: finding.id,
               source_survey_response_id: subject.response_id,
               source_survey_id: subject.survey_id,
@@ -335,7 +361,10 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               },
             });
           }
-          return { status: 201, body: toDto({ ...finding, evidence_count: safeExcerpts.length }) };
+          return {
+            status: 201,
+            body: { ...owner, ...toDto({ ...finding, evidence_count: safeExcerpts.length }) },
+          };
         },
       ),
     );

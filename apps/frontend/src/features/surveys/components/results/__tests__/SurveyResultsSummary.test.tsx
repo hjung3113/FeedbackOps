@@ -71,6 +71,8 @@ function makeFinding(id: string, summary: string) {
     primary_managed_system_id: ids.system,
     title: 'Survey follow-up',
     summary,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'high',
     confidence: null,

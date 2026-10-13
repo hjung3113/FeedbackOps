@@ -17,11 +17,19 @@ import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
 import type { ReporterFacingStatus } from './transitions.js';
 
 export interface CreateVocActor {
+  role_level?: 'admin' | 'developer' | 'user';
   actor_id: string;
   workspace_id: string;
 }
 
 export interface VocEnvelope {
+  default_resolved?: boolean;
+  source_rule?:
+    | 'explicit'
+    | 'managed_system_owner'
+    | 'analytics_area_owner'
+    | 'workspace_fallback_queue';
+  managed_system_id?: string;
   id: string;
   display_id: string;
   workspace_id: string;
@@ -73,6 +81,7 @@ export function createVocService(deps: VocServiceDeps) {
 
   return {
     createVoc: createCommands.createVoc,
+    assertCreateOwnerOverride: createCommands.assertCreateOwnerOverride,
     updateVoc: updateCommands.updateVoc,
     editVocDescription: editDescriptionCommands.editVocDescription,
     createVocCommand: createCommands.createVocCommand,

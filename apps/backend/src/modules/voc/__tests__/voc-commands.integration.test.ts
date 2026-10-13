@@ -98,27 +98,27 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
   }
 
   const vocRowCount = (vocId: string) =>
-    scalarCount(`select count(*)::int as count from voc.vocs where id = $1`, [vocId]);
+    scalarCount('select count(*)::int as count from voc.vocs where id = $1', [vocId]);
 
   const idempotencyRowCount = (actorId: string, key: string) =>
     scalarCount(
-      `select count(*)::int as count from core.idempotency_keys where actor_id = $1 and key = $2`,
+      'select count(*)::int as count from core.idempotency_keys where actor_id = $1 and key = $2',
       [actorId, key],
     );
 
   const publicUpdateCount = (vocId: string) =>
-    scalarCount(`select count(*)::int as count from voc.voc_public_updates where voc_id = $1`, [
+    scalarCount('select count(*)::int as count from voc.voc_public_updates where voc_id = $1', [
       vocId,
     ]);
 
   const internalCommentCount = (vocId: string) =>
-    scalarCount(`select count(*)::int as count from voc.voc_internal_comments where voc_id = $1`, [
+    scalarCount('select count(*)::int as count from voc.voc_internal_comments where voc_id = $1', [
       vocId,
     ]);
 
   async function auditEventTypes(vocId: string): Promise<string[]> {
     const res = await migrateHandle.pool.query<{ event_type: string }>(
-      `select event_type from core.audit_log where subject_id = $1 and workspace_id = $2`,
+      'select event_type from core.audit_log where subject_id = $1 and workspace_id = $2',
       [vocId, workspaceId],
     );
     return res.rows.map((r) => r.event_type);
@@ -156,7 +156,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       vocReadService,
     });
 
-    await migrateHandle.pool.query(`insert into core.workspaces (id, name) values ($1, $2)`, [
+    await migrateHandle.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [
       workspaceId,
       'VOC Commands Test Workspace',
     ]);
@@ -200,7 +200,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
     if (migrateHandle) {
       // FK-safe order: audit + idempotency first, then VOCs (conversation
       // rows cascade), then reference/seed tables, then the workspace.
-      await migrateHandle.pool.query(`delete from core.audit_log where workspace_id = $1`, [
+      await migrateHandle.pool.query('delete from core.audit_log where workspace_id = $1', [
         workspaceId,
       ]);
       await migrateHandle.pool.query(
@@ -209,17 +209,21 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
          )`,
         [workspaceId],
       );
-      await migrateHandle.pool.query(`delete from voc.vocs where workspace_id = $1`, [workspaceId]);
-      await migrateHandle.pool.query(`delete from core.managed_systems where workspace_id = $1`, [
+      await migrateHandle.pool.query('delete from voc.vocs where workspace_id = $1', [workspaceId]);
+      await migrateHandle.pool.query(
+        'delete from core.responsibility_default_failures where workspace_id=$1',
+        [workspaceId],
+      );
+      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query(`delete from core.actors where workspace_id = $1`, [
+      await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query(`delete from core.display_counters where workspace_id = $1`, [
+      await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query(`delete from core.workspaces where id = $1`, [workspaceId]);
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
     }
     await dbHandle?.close();
     await migrateHandle?.close();

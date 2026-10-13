@@ -81,6 +81,27 @@ export function CreateFindingModal({
   const [editedFields, setEditedFields] = React.useState(INITIAL_TEXT_FIELD_INTERACTION);
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
+  // The Triage queue advances its selection the moment Finding 만들기 opens
+  // this modal, so location.href at submit time already points at the NEXT
+  // queue item, not the source VOC. Snapshot the return link when the modal
+  // opens and pin `selected` to the source vocId; off /vocs there is no
+  // return link. (The /findings side re-validates this URL on render.)
+  const returnToRef = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!open) return;
+    try {
+      const url = new URL(location.href, 'http://feedbackops.local');
+      if (url.pathname !== '/vocs' || url.hash) {
+        returnToRef.current = undefined;
+        return;
+      }
+      url.searchParams.set('selected', vocId);
+      returnToRef.current = `${url.pathname}${url.search}`;
+    } catch {
+      returnToRef.current = undefined;
+    }
+  }, [open, location.href, vocId]);
+
   const mutation = useCreateFindingFromVocMutation({ idempotencyKey });
 
   const form = useForm<CreateFindingRequest>({
@@ -164,7 +185,7 @@ export function CreateFindingModal({
           mutation.reset();
           onCreated?.();
           onClose();
-          const returnTo = location.pathname === '/vocs' ? location.href : undefined;
+          const returnTo = returnToRef.current;
           void navigate({
             to: '/findings',
             search: {

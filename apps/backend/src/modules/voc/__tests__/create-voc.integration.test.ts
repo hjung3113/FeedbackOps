@@ -169,6 +169,19 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   let reporterActorId: string;
 
   async function cleanupProductTables() {
+    if (MIGRATE_URL) {
+      const ops = createDb(MIGRATE_URL);
+      try {
+        await ops.pool.query(
+          `delete from core.responsibility_default_failures
+          where workspace_id = $1 and managed_system_id in
+            (select id from core.managed_systems where slug like 'it-voc-%')`,
+          [WORKSPACE_ID],
+        );
+      } finally {
+        await ops.close();
+      }
+    }
     // Order matters: voc_attachments first (FKs to vocs via voc_id),
     // then vocs, then AA, then MS.
     await dbHandle.pool.query(
@@ -281,6 +294,254 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(body.display_id).toMatch(/^VOC-\d+$/);
     expect(body.next_reporter_states?.allowed).toContain('reviewing');
+  });
+
+  it('automatically assigns the configured owner without performing triage, and replays once', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-owner', 'Owner MS');
+    const owner = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where workspace_id = $1 and external_id = 'mock-admin-1'`,
+      [WORKSPACE_ID],
+    );
+    const ownerId = owner.rows[0]?.id;
+    await dbHandle.pool.query(
+      'update core.managed_systems set default_owner_actor_id = $1 where id = $2',
+      [ownerId, msId],
+    );
+    const reporter = await loginAs(app, 'mock-user-1');
+    const input = {
+      primary_managed_system_id: msId,
+      title: 'Assigned intake',
+      description_rich_content: paragraphDoc('Still awaiting triage'),
+    };
+    const key = randomUUID();
+    const created = await postVoc(app, reporter, input, key);
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      owner_user_id: ownerId,
+      owner_team_id: null,
+      triage_state: 'untriaged',
+      severity: null,
+      reporter_facing_status: 'received',
+      default_resolved: true,
+      source_rule: 'managed_system_owner',
+      managed_system_id: msId,
+    });
+    const replay = await postVoc(app, reporter, input, key);
+    expect(replay.json()).toEqual(created.json());
+    if (MIGRATE_URL) {
+      const ops = createDb(MIGRATE_URL);
+      try {
+        const audit = await ops.pool.query<{ detail: Record<string, unknown> }>(
+          `select detail from core.audit_log where subject_id = $1 and event_type = 'voc_created'`,
+          [created.json().id],
+        );
+        expect(audit.rows).toHaveLength(1);
+        expect(audit.rows[0]?.detail).toMatchObject({
+          owner_user_id: ownerId,
+          default_resolved: true,
+          source_rule: 'managed_system_owner',
+        });
+      } finally {
+        await ops.close();
+      }
+    }
+  });
+
+  it.each(['actor', 'null', 'denied_admin', 'aa_team', 'archived_team', 'rollback'] as const)(
+    'VOC responsibility %s keeps User intake separate from privileged override',
+    async (variant) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const reporter = await loginAs(app, 'mock-user-1');
+      const msId = await createMs(app, admin, 'it-voc-owner-matrix', 'Owner MS');
+      const actors = await dbHandle.pool.query<{ id: string }>(
+        "select id from core.actors where workspace_id=$1 and external_id='mock-admin-1'",
+        [WORKSPACE_ID],
+      );
+      const ownerId = actors.rows[0]?.id ?? '';
+      const ops = createDb(MIGRATE_URL);
+      let teamId: string | undefined;
+      let denyId: string | undefined;
+      try {
+        await ops.pool.query(
+          'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
+          [ownerId, msId],
+        );
+        let aaId: string | undefined;
+        if (variant === 'aa_team' || variant === 'archived_team') {
+          const team = await ops.pool.query<{ id: string }>(
+            'insert into core.teams (workspace_id,name) values ($1,$2) returning id',
+            [WORKSPACE_ID, `it-voc-team-${randomUUID()}`],
+          );
+          teamId = team.rows[0]?.id ?? '';
+          aaId = await createAa(app, admin, {
+            managed_system_id: msId,
+            slug: 'it-voc-owner-aa',
+            name: 'Owner AA',
+          });
+          await ops.pool.query('update core.analytics_areas set owner_team_id=$1 where id=$2', [
+            teamId,
+            aaId,
+          ]);
+          await ops.pool.query(
+            'update core.managed_systems set default_owner_actor_id=null where id=$1',
+            [msId],
+          );
+          if (variant === 'archived_team')
+            await ops.pool.query(
+              'update core.teams set archived_at=now(),archived_by_actor_id=$1 where id=$2',
+              [ownerId, teamId],
+            );
+        }
+        if (variant === 'denied_admin') {
+          const deny = await ops.pool.query<{ id: string }>(
+            `insert into permission.permission_denies (workspace_id,actor_id,capability,managed_system_id,reason,created_by_actor_id)
+          values ($1,$2,'voc.triage',$3,'test',$2) returning id`,
+            [WORKSPACE_ID, ownerId, msId],
+          );
+          denyId = deny.rows[0]?.id;
+        }
+        if (variant === 'rollback')
+          await ops.pool.query(
+            'update core.managed_systems set default_owner_actor_id=null where id=$1',
+            [msId],
+          );
+        const body = {
+          primary_managed_system_id: msId,
+          title: 'Responsibility',
+          description_rich_content: paragraphDoc('Intake'),
+          ...(aaId ? { analytics_area_id: aaId } : {}),
+          ...(variant === 'actor'
+            ? { owner_user_id: ownerId }
+            : variant === 'null'
+              ? { owner_user_id: null }
+              : {}),
+          ...(variant === 'rollback' ? { attachment_ids: [randomUUID()] } : {}),
+        };
+        const key = randomUUID();
+        const created = await postVoc(
+          app,
+          variant === 'actor' || variant === 'null' ? admin : reporter,
+          body,
+          key,
+        );
+        if (variant === 'rollback') {
+          expect(created.statusCode).toBe(422);
+          expect(
+            (
+              await ops.pool.query('select id from voc.vocs where primary_managed_system_id=$1', [
+                msId,
+              ])
+            ).rows,
+          ).toHaveLength(0);
+          expect(
+            (
+              await ops.pool.query(
+                'select id from core.responsibility_default_failures where managed_system_id=$1',
+                [msId],
+              )
+            ).rows,
+          ).toHaveLength(0);
+        } else {
+          expect(created.statusCode).toBe(201);
+          const replay = await postVoc(
+            app,
+            variant === 'actor' || variant === 'null' ? admin : reporter,
+            body,
+            key,
+          );
+          expect(replay.json()).toEqual(created.json());
+          expect(created.json()).toMatchObject({
+            owner_user_id: variant === 'actor' ? ownerId : null,
+            owner_team_id: variant === 'aa_team' ? teamId : null,
+            triage_state: 'untriaged',
+            severity: null,
+            default_resolved: variant === 'aa_team',
+            source_rule:
+              variant === 'actor' || variant === 'null'
+                ? 'explicit'
+                : variant === 'aa_team'
+                  ? 'analytics_area_owner'
+                  : 'workspace_fallback_queue',
+          });
+          const failures = await ops.pool.query<{ rule: string; category: string }>(
+            'select rule,category from core.responsibility_default_failures where managed_system_id=$1',
+            [msId],
+          );
+          expect(failures.rows).toHaveLength(
+            variant === 'actor' || variant === 'null' ? 0 : variant === 'aa_team' ? 1 : 2,
+          );
+          if (variant === 'denied_admin')
+            expect(failures.rows).toContainEqual({
+              rule: 'managed_system_owner',
+              category: 'ineligible_actor',
+            });
+        }
+      } finally {
+        if (denyId)
+          await ops.pool.query('delete from permission.permission_denies where id=$1', [denyId]);
+        // These per-case teams must outlive their source references.
+        if (teamId) {
+          await cleanupProductTables();
+          await ops.pool.query('delete from core.teams where id=$1', [teamId]);
+        }
+        await ops.close();
+      }
+    },
+  );
+
+  it('privileged explicit team replaces automatic Actor defaults without performing triage', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-explicit-team', 'Owner MS');
+    const ops = createDb(MIGRATE_URL);
+    let teamId = '';
+    try {
+      const actor = await ops.pool.query<{ id: string }>(
+        "select id from core.actors where workspace_id=$1 and external_id='mock-admin-1'",
+        [WORKSPACE_ID],
+      );
+      await ops.pool.query(
+        'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
+        [actor.rows[0]?.id, msId],
+      );
+      const team = await ops.pool.query<{ id: string }>(
+        'insert into core.teams (workspace_id,name) values ($1,$2) returning id',
+        [WORKSPACE_ID, `it-voc-team-${randomUUID()}`],
+      );
+      teamId = team.rows[0]?.id ?? '';
+      const response = await postVoc(
+        app,
+        admin,
+        {
+          primary_managed_system_id: msId,
+          title: 'Team intake',
+          description_rich_content: paragraphDoc('Intake'),
+          owner_team_id: teamId,
+        },
+        randomUUID(),
+      );
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({
+        owner_user_id: null,
+        owner_team_id: teamId,
+        default_resolved: false,
+        source_rule: 'explicit',
+        triage_state: 'untriaged',
+        severity: null,
+      });
+      expect(
+        (
+          await ops.pool.query(
+            'select id from core.responsibility_default_failures where managed_system_id=$1',
+            [msId],
+          )
+        ).rows,
+      ).toHaveLength(0);
+    } finally {
+      await cleanupProductTables();
+      if (teamId) await ops.pool.query('delete from core.teams where id=$1', [teamId]);
+      await ops.close();
+    }
   });
 
   // ── 2. display_id sequencing ──────────────────────────────────────────
@@ -438,6 +699,57 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(res.json().code).toBe('validation.unexpected_field');
     expect(res.json().detail?.fields).toEqual([{ path: [field], code: 'unexpected_field' }]);
   });
+
+  it.each([null, 'not-a-uuid', 123])(
+    'Reporter owner presence remains forbidden before owner schema validation: %j',
+    async (owner) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-voc-forged-owner-shape', 'Owner MS');
+      const reporter = await loginAs(app, 'mock-user-1');
+      const response = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'Intake',
+          description_rich_content: paragraphDoc('Intake'),
+          owner_user_id: owner,
+        },
+        randomUUID(),
+      );
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.unexpected_field',
+        detail: { fields: [{ path: ['owner_user_id'], code: 'unexpected_field' }] },
+      });
+    },
+  );
+
+  it.each([null, '00000000-0000-4000-8000-000000000001'])(
+    'Reporter owner %j keeps the owner field ahead of a later forbidden display_id',
+    async (owner) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-voc-owner-precedence', 'Owner MS');
+      const reporter = await loginAs(app, 'mock-user-1');
+      const response = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'Intake',
+          description_rich_content: paragraphDoc('Intake'),
+          owner_user_id: owner,
+          display_id: 'VOC-9999',
+        },
+        randomUUID(),
+      );
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.unexpected_field',
+        detail: { fields: [{ path: ['owner_user_id'], code: 'unexpected_field' }] },
+      });
+    },
+  );
 
   // ── 7. severity in body → dedicated code ──────────────────────────────
   it('severity in body → 422 voc.severity_not_user_settable', async () => {

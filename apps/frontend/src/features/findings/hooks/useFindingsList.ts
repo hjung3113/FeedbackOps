@@ -39,14 +39,19 @@ export function useFindingsList(
 }
 
 const PAGE_SIZE = 50;
-export function useFindingsPages(managedSystemId?: string, execution?: 'none') {
+export function useFindingsPages(
+  managedSystemId?: string,
+  execution?: 'none',
+  assignment?: 'assigned' | 'unassigned',
+) {
   return useInfiniteQuery({
-    queryKey: ['findings', 'pages', { managedSystemId, execution }] as const,
+    queryKey: ['findings', 'pages', { managedSystemId, execution, assignment }] as const,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (managedSystemId !== undefined) params.set('managed_system_id', managedSystemId);
       if (execution !== undefined) params.set('execution', execution);
+      if (assignment !== undefined) params.set('assignment', assignment);
       if (pageParam !== undefined) params.set('cursor', pageParam);
       return (
         await apiRequest('GET', `/findings?${params}`, listFindingsResponseSchema, { signal })

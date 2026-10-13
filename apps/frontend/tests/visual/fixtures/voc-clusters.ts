@@ -67,6 +67,8 @@ export const existingFinding: FindingDto = findingDtoSchema.parse({
   analytics_area_id: null,
   linked_task_id: null,
   linked_milestone_id: null,
+  owner_actor_id: null,
+  owner_team_id: null,
   created_by: IDS.actor,
   created_at: dates.created,
   updated_at: dates.updated,

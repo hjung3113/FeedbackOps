@@ -93,6 +93,8 @@ const F1 = {
   summary: '결제 실패 VOC가 반복됩니다.',
   source_type: 'voc_cluster' as const,
   source_id: '22222222-2222-2222-2222-222222222222',
+  owner_actor_id: null,
+  owner_team_id: null,
   evidence_count: 3,
   severity: 'high' as const,
   confidence: 'medium' as const,
@@ -116,6 +118,8 @@ const FINDINGS = [
     title: '배송 지연 문의 증가',
     source_type: 'manual' as const,
     source_id: null,
+    owner_actor_id: null,
+    owner_team_id: null,
     evidence_count: 1,
     severity: 'medium' as const,
     confidence: null,
@@ -206,6 +210,30 @@ function renderUrlState(
 describe('/findings URL state', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  test('restores assignment in the URL and sends the owner predicate while keeping the source return URL', async () => {
+    const requested: string[] = [];
+    const returnTo = '/vocs?view=my';
+    const router = renderUrlState(
+      { requested },
+      `/findings?assignment=unassigned&selected=${F1_ID}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+    expect(await screen.findByRole('combobox', { name: '담당자 필터' })).toHaveTextContent(
+      '미배정',
+    );
+    await waitFor(() =>
+      expect(
+        requested.some(
+          (url) => new URL(url, 'http://localhost').searchParams.get('assignment') === 'unassigned',
+        ),
+      ).toBe(true),
+    );
+    expect(router.state.location.search).toMatchObject({
+      assignment: 'unassigned',
+      selected: F1_ID,
+      returnTo,
+    });
   });
 
   test('AC-981 loads 50 rows, appends cursor page and keeps page-two selected detail with returnTo', async () => {

@@ -13,12 +13,14 @@ export interface FindingReadRow {
   primary_managed_system_id: string;
   title: string;
   summary: string;
-  source_type: 'voc' | 'voc_cluster' | 'survey' | 'manual';
+  source_type: 'voc' | 'voc_cluster' | 'survey' | 'survey_response' | 'manual';
   source_id: string | null;
   evidence_count: number;
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high' | null;
   status: 'draft' | 'active' | 'not_actionable' | 'converted' | 'archived';
+  owner_actor_id: string | null;
+  owner_team_id: string | null;
   analytics_area_id: string | null;
   linked_task_id: string | null;
   linked_milestone_id: string | null;
@@ -46,6 +48,8 @@ export function mapFindingRow(row: Record<string, unknown>): FindingReadRow {
     severity: row.severity as FindingReadRow['severity'],
     confidence: (row.confidence as FindingReadRow['confidence']) ?? null,
     status: row.status as FindingReadRow['status'],
+    owner_actor_id: (row.owner_actor_id as string | null) ?? null,
+    owner_team_id: (row.owner_team_id as string | null) ?? null,
     analytics_area_id: (row.analytics_area_id as string | null) ?? null,
     linked_task_id: (row.linked_task_id as string | null) ?? null,
     linked_milestone_id: (row.linked_milestone_id as string | null) ?? null,
@@ -63,7 +67,7 @@ export async function findFindingById(
     SELECT
       id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+      owner_actor_id, owner_team_id, linked_task_id, linked_milestone_id, created_by, created_at, updated_at
     FROM ${findings}
     WHERE id = ${input.findingId}
       AND workspace_id = ${input.workspaceId}
@@ -98,6 +102,9 @@ interface ListInput {
   workspaceId: string;
   managedSystemId?: string;
   execution?: 'none';
+  ownerActorId?: string;
+  ownerTeamId?: string;
+  assignment?: 'assigned' | 'unassigned';
   allowedSystemIds?: string[];
   limit?: number;
   cursor?: ListCursor;
@@ -129,6 +136,13 @@ function listPredicates(input: ListInput) {
     managedSystemPredicate,
     executionPredicate,
   ];
+  if (input.ownerActorId !== undefined)
+    predicates.push(sql`f.owner_actor_id = ${input.ownerActorId}`);
+  if (input.ownerTeamId !== undefined) predicates.push(sql`f.owner_team_id = ${input.ownerTeamId}`);
+  if (input.assignment === 'unassigned')
+    predicates.push(sql`f.owner_actor_id IS NULL AND f.owner_team_id IS NULL`);
+  if (input.assignment === 'assigned')
+    predicates.push(sql`(f.owner_actor_id IS NOT NULL OR f.owner_team_id IS NOT NULL)`);
   if (input.allowedSystemIds !== undefined)
     predicates.push(
       sql`f.primary_managed_system_id = ANY(${sql.param(input.allowedSystemIds)}::uuid[])`,
@@ -150,7 +164,7 @@ export async function listFindingsByWorkspace(
       f.created_at::text AS cursor_timestamp,
       f.id, f.workspace_id, f.display_id, f.primary_managed_system_id, f.title, f.summary, f.source_type,
       f.source_id, f.evidence_count, f.severity, f.confidence, f.status, f.analytics_area_id,
-      f.linked_task_id, f.linked_milestone_id, f.created_by, f.created_at, f.updated_at
+      f.owner_actor_id, f.owner_team_id, f.linked_task_id, f.linked_milestone_id, f.created_by, f.created_at, f.updated_at
     FROM ${findings} f
     WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY f.created_at DESC, f.id DESC

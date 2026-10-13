@@ -52,6 +52,13 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
           ? { managedSystemId: parsed.data.managed_system_id }
           : {}),
         ...(parsed.data.execution !== undefined ? { execution: parsed.data.execution } : {}),
+        ...(parsed.data.owner_actor_id === undefined
+          ? {}
+          : { ownerActorId: parsed.data.owner_actor_id }),
+        ...(parsed.data.owner_team_id === undefined
+          ? {}
+          : { ownerTeamId: parsed.data.owner_team_id }),
+        ...(parsed.data.assignment === undefined ? {} : { assignment: parsed.data.assignment }),
         ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
         ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }),
       });

@@ -118,6 +118,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
       'delete from core.managed_systems where workspace_id=$1 and slug like $2',
       [WORKSPACE_ID, `${SLUG}%`],
     );

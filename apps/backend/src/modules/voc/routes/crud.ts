@@ -49,9 +49,31 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
         });
       }
 
+      // Owner input keeps its forbidden-field slot ahead of display_id whenever the
+      // request would be rejected before the transactional owner check runs.
+      const ownerInputNeedsPreflight =
+        ('owner_user_id' in rawBody || 'owner_team_id' in rawBody) &&
+        (!createVocRequestSchema.safeParse(rawBody).success ||
+          FORBIDDEN_CREATE_FIELDS.some((f) => f !== 'severity' && f in rawBody));
+
       // 2. Other forbidden server-resolved fields → validation.unexpected_field.
       for (const f of FORBIDDEN_CREATE_FIELDS) {
         if (f === 'severity') continue;
+        if (f === 'display_id' && ownerInputNeedsPreflight) {
+          await vocService.assertCreateOwnerOverride({
+            actor: {
+              actor_id: sess.actor_id,
+              workspace_id: sess.workspace_id,
+              role_level: sess.role_level,
+            },
+            managedSystemId:
+              typeof rawBody.primary_managed_system_id === 'string' &&
+              UUID_REGEX.test(rawBody.primary_managed_system_id)
+                ? rawBody.primary_managed_system_id
+                : undefined,
+            field: 'owner_user_id' in rawBody ? 'owner_user_id' : 'owner_team_id',
+          });
+        }
         if (f in rawBody) {
           return sendError(reply, 'validation.unexpected_field', `${f} is server-resolved`, {
             fields: [{ path: [f], code: 'unexpected_field' }],
@@ -72,7 +94,11 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
       // idempotency frame are owned by the application command.
       const hash = hashRequestBody(rawBody);
       const result = await vocService.createVocCommand({
-        actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
         input,
         idempotencyKey,
         requestHash: hash,

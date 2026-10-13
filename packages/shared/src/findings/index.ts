@@ -23,6 +23,8 @@ export type EvidenceHighlightImportance = z.infer<typeof evidenceHighlightImport
 
 export const createFindingRequestSchema = z
   .object({
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
     title: z.string().trim().min(1).max(200),
     summary: z.string().trim().min(1),
     severity: findingSeveritySchema,
@@ -35,10 +37,20 @@ export type CreateFindingRequest = z.infer<typeof createFindingRequestSchema>;
 
 export const patchFindingRequestSchema = z
   .object({
-    status: findingStatusSchema,
+    status: findingStatusSchema.optional(),
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
     reason: z.string().trim().min(1).max(1000).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (input) =>
+      input.status !== undefined ||
+      input.owner_actor_id !== undefined ||
+      input.owner_team_id !== undefined,
+    { message: 'status or responsibility is required', path: ['status'] },
+  );
+
 export type PatchFindingRequest = z.infer<typeof patchFindingRequestSchema>;
 
 export const linkTaskRequestSchema = z
@@ -77,6 +89,13 @@ const findingDtoBaseSchema = {
   severity: findingSeveritySchema,
   confidence: findingConfidenceSchema.nullable(),
   status: findingStatusSchema,
+  owner_actor_id: z.string().uuid().nullable(),
+  owner_team_id: z.string().uuid().nullable(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   analytics_area_id: z.string().uuid().nullable(),
   linked_task_id: z.string().uuid().nullable(),
   linked_milestone_id: z.string().uuid().nullable(),
@@ -216,6 +235,9 @@ export const listFindingsQuerySchema = z
   .object({
     managed_system_id: z.string().uuid().optional(),
     execution: z.literal('none').optional(),
+    owner_actor_id: z.string().uuid().optional(),
+    owner_team_id: z.string().uuid().optional(),
+    assignment: z.enum(['assigned', 'unassigned']).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })

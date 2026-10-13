@@ -23,10 +23,13 @@ import {
   insertFindingComment,
   lockFindingById,
   updateFindingLinkedTask,
+  updateFindingOwner,
   updateFindingStatus,
 } from './repo.js';
 import { canManageFinding, canReadFinding, sanitizeCommentBody, toDto } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
+
+import { validateOwner } from './responsibility.js';
 
 const USER_DIRECTED_STATUS_TARGETS = ['draft', 'active', 'not_actionable'] as const;
 const ALLOWED_STATUS_TRANSITIONS: Record<
@@ -94,6 +97,9 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     actor: FindingsActor;
     managedSystemId?: string;
     execution?: 'none';
+    ownerActorId?: string;
+    ownerTeamId?: string;
+    assignment?: 'assigned' | 'unassigned';
     cursor?: string;
     limit?: number;
   }): Promise<ListFindingsResponse> {
@@ -121,6 +127,9 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
       ...(args.execution !== undefined ? { execution: args.execution } : {}),
+      ...(args.ownerActorId === undefined ? {} : { ownerActorId: args.ownerActorId }),
+      ...(args.ownerTeamId === undefined ? {} : { ownerTeamId: args.ownerTeamId }),
+      ...(args.assignment === undefined ? {} : { assignment: args.assignment }),
       ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),
     };
     const empty = allowedSystemIds?.length === 0;
@@ -170,7 +179,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
         idempotencyKey,
         requestHash,
         async () => {
-          const finding = await lockFindingById(tx, {
+          let finding = await lockFindingById(tx, {
             workspaceId: actor.workspace_id,
             findingId,
           });
@@ -181,6 +190,57 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
           });
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (input.owner_actor_id !== undefined || input.owner_team_id !== undefined) {
+            const ownerActorId =
+              input.owner_actor_id === undefined ? finding.owner_actor_id : input.owner_actor_id;
+            const ownerTeamId =
+              input.owner_team_id === undefined ? finding.owner_team_id : input.owner_team_id;
+            const failure = await validateOwner(
+              tx,
+              deps,
+              actor.workspace_id,
+              { id: finding.primary_managed_system_id },
+              ownerActorId,
+              ownerTeamId,
+            );
+            if (failure)
+              throw new HttpError('validation.failed', 'invalid owner', {
+                fields: [
+                  { path: [ownerTeamId ? 'owner_team_id' : 'owner_actor_id'], code: failure },
+                ],
+              });
+            if (ownerActorId !== finding.owner_actor_id || ownerTeamId !== finding.owner_team_id) {
+              const previous = finding;
+              finding = await updateFindingOwner(tx, {
+                workspaceId: actor.workspace_id,
+                findingId: finding.id,
+                ownerActorId,
+                ownerTeamId,
+              });
+              await deps.auditService.record(tx, {
+                workspace_id: actor.workspace_id,
+                actor_id: actor.actor_id,
+                event_type: 'finding_owner_assigned',
+                subject_type: 'finding',
+                subject_id: finding.id,
+                summary: 'Finding owner assigned',
+                detail: {
+                  finding_id: finding.id,
+                  primary_managed_system_id: finding.primary_managed_system_id,
+                  from: { actor_id: previous.owner_actor_id, team_id: previous.owner_team_id },
+                  to: { actor_id: ownerActorId, team_id: ownerTeamId },
+                },
+              });
+            }
+          }
+          if (input.status === undefined) {
+            const source = await findCreatedFindingSourceLink(tx, {
+              workspaceId: actor.workspace_id,
+              findingId: finding.id,
+            });
+            return { status: 200, body: toDto(finding, source) };
           }
 
           if (!isUserDirectedStatusTarget(input.status)) {

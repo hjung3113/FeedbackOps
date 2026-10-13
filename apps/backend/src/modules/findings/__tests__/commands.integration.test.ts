@@ -15,6 +15,7 @@ import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
+import { createCheckService } from '../../permissions/check-service.js';
 import {
   createFindingFromVocCluster,
   linkTaskToFinding,
@@ -72,11 +73,11 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.actors where workspace_id = $1 and external_id like $2`,
+      'delete from core.actors where workspace_id = $1 and external_id like $2',
       [WORKSPACE_ID, `mock-dev-read-${ACTOR_SUFFIX}%`],
     );
   }
@@ -94,17 +95,21 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Seam MS');
 
     await inRolledBackTx(async (tx) => {
-      const finding = await createFindingFromVocCluster(tx, {
-        workspaceId: WORKSPACE_ID,
-        primaryManagedSystemId: msId,
-        title: 'Seam finding',
-        summary: 'Finding created through the #391 seam',
-        sourceId: randomUUID(),
-        severity: 'high',
-        confidence: 'medium',
-        analyticsAreaId: null,
-        createdBy: actorId,
-      });
+      const finding = await createFindingFromVocCluster(
+        tx,
+        {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: msId,
+          title: 'Seam finding',
+          summary: 'Finding created through the #391 seam',
+          sourceId: randomUUID(),
+          severity: 'high',
+          confidence: 'medium',
+          analyticsAreaId: null,
+          createdBy: actorId,
+        },
+        { checkService: createCheckService({ db: dbHandle.db }) },
+      );
       expect(finding.workspace_id).toBe(WORKSPACE_ID);
       expect(finding.source_type).toBe('voc_cluster');
       expect(finding.status).toBe('draft');
@@ -173,7 +178,7 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
     });
 
     const persisted = await dbHandle.pool.query<{ linked_task_id: string | null }>(
-      `select linked_task_id::text from finding.findings where id = $1::uuid`,
+      'select linked_task_id::text from finding.findings where id = $1::uuid',
       [seeded.id],
     );
     expect(persisted.rows[0]?.linked_task_id).toBeNull();

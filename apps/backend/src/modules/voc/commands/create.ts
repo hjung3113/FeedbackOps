@@ -13,16 +13,60 @@ import {
 } from '../../attachments/index.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import { insertVoc } from '../repo.js';
+import { resolveOwner } from '../responsibility.js';
 import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 
 export function createVocCreateCommands(deps: VocServiceDeps) {
+  async function assertOwnerOverride(
+    tx: Tx,
+    actor: CreateVocActor,
+    managedSystemId: string | undefined,
+    field: 'owner_user_id' | 'owner_team_id',
+  ) {
+    const decision = await deps.checkService.checkCapability(
+      { ...actor, role_level: actor.role_level ?? 'user' },
+      'voc.triage',
+      {
+        workspace_id: actor.workspace_id,
+        ...(managedSystemId ? { managed_system_id: managedSystemId } : {}),
+      },
+      { tx },
+    );
+    if (!decision.allow)
+      throw new HttpError('validation.unexpected_field', `${field} is server-resolved`, {
+        fields: [{ path: [field], code: 'unexpected_field' }],
+      });
+  }
+
+  // Parsing preflight preserves Reporter's forbidden-field precedence for every
+  // raw owner shape. The creation transaction rechecks before any owner write.
+  async function assertCreateOwnerOverride(args: {
+    actor: CreateVocActor;
+    managedSystemId: string | undefined;
+    field: 'owner_user_id' | 'owner_team_id';
+  }) {
+    await deps.db.transaction((tx) =>
+      assertOwnerOverride(tx, args.actor, args.managedSystemId, args.field),
+    );
+  }
+
   async function createVoc(args: {
     tx: Tx;
     actor: CreateVocActor;
     input: CreateVocRequest;
   }): Promise<VocEnvelope> {
     const { tx, actor, input } = args;
+
+    const explicitOwner = input.owner_user_id !== undefined || input.owner_team_id !== undefined;
+    if (explicitOwner) {
+      await assertOwnerOverride(
+        tx,
+        actor,
+        input.primary_managed_system_id,
+        input.owner_user_id !== undefined ? 'owner_user_id' : 'owner_team_id',
+      );
+    }
 
     // 1. FOR UPDATE on parent MS (cross-workspace + archive race).
     const ms = await lockManagedSystem(tx, actor.workspace_id, input.primary_managed_system_id);
@@ -34,14 +78,22 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
     }
 
     // 2. FOR UPDATE on AA (if supplied) — verify MS match + not archived.
-    if (input.analytics_area_id) {
-      await assertActiveAnalyticsAreaForManagedSystem(
-        tx,
-        actor.workspace_id,
-        ms.id,
-        input.analytics_area_id,
-      );
-    }
+    const area = input.analytics_area_id
+      ? await assertActiveAnalyticsAreaForManagedSystem(
+          tx,
+          actor.workspace_id,
+          ms.id,
+          input.analytics_area_id,
+        )
+      : null;
+    const owner = await resolveOwner(
+      tx,
+      deps,
+      actor.workspace_id,
+      ms,
+      area?.owner_team_id ?? null,
+      input,
+    );
 
     // 3. Sanitize rich content.
     const sanitized = sanitizeRichContentOrThrow({
@@ -63,6 +115,8 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       title: input.title,
       descriptionRichContent: sanitized,
       sourceContext: input.source_context,
+      ownerUserId: owner.owner_user_id,
+      ownerTeamId: owner.owner_team_id,
     });
     if (!row) {
       throw new Error('insertVoc returned no row');
@@ -99,6 +153,7 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       subject_id: row.id,
       summary: `VOC ${row.displayId} created`,
       detail: {
+        ...owner,
         voc_id: row.id,
         workspace_id: actor.workspace_id,
         primary_managed_system_id: row.primaryManagedSystemId,
@@ -138,8 +193,9 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       severity: null,
       reporter_facing_status: row.reporterFacingStatus as ReporterFacingStatus,
       triage_state: 'untriaged',
-      owner_user_id: null,
-      owner_team_id: null,
+      ...owner,
+      owner_user_id: row.ownerUserId,
+      owner_team_id: row.ownerTeamId,
       source_context: row.sourceContext,
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
@@ -175,5 +231,5 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       ),
     );
   }
-  return { createVoc, createVocCommand };
+  return { createVoc, createVocCommand, assertCreateOwnerOverride };
 }

@@ -18,6 +18,7 @@ export const FINDING_LIFECYCLE_AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
   'finding_status_changed',
   'finding_comment_created',
+  'finding_owner_assigned',
 ] as const;
 
 export const FINDING_TASK_LINKED_AUDIT_EVENT_TYPES = ['finding_task_linked'] as const;
@@ -27,15 +28,35 @@ export const FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_TYPES = [
 ] as const;
 
 export const findingCreatedFromVocDetailSchema = z.object({
+  owner_actor_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum(['explicit', 'managed_system_owner', 'analytics_area_owner', 'workspace_fallback_queue'])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
   finding_id: z.string().uuid(),
   source_voc_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
   source_type: z.literal('voc'),
 });
+
 export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
 
 export const findingCreatedFromSurveyResponseDetailSchema = z
   .object({
+    owner_actor_id: z.string().uuid().nullable().optional(),
+    owner_team_id: z.string().uuid().nullable().optional(),
+    default_resolved: z.boolean().optional(),
+    source_rule: z
+      .enum([
+        'explicit',
+        'managed_system_owner',
+        'analytics_area_owner',
+        'workspace_fallback_queue',
+      ])
+      .optional(),
+    managed_system_id: z.string().uuid().optional(),
     finding_id: z.string().uuid(),
     source_survey_response_id: z.string().uuid(),
     source_survey_id: z.string().uuid(),
@@ -44,6 +65,7 @@ export const findingCreatedFromSurveyResponseDetailSchema = z
     source_type: z.literal('survey_response'),
   })
   .strict();
+
 export type FindingCreatedFromSurveyResponseDetail = z.infer<
   typeof findingCreatedFromSurveyResponseDetailSchema
 >;
@@ -65,6 +87,13 @@ export const findingStatusChangedDetailSchema = z.object({
   reason: z.string().min(1).max(1000).optional(),
 });
 export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
+
+export const findingOwnerAssignedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  from: z.object({ actor_id: z.string().uuid().nullable(), team_id: z.string().uuid().nullable() }),
+  to: z.object({ actor_id: z.string().uuid().nullable(), team_id: z.string().uuid().nullable() }),
+});
 
 export const findingCommentCreatedDetailSchema = z.object({
   finding_id: z.string().uuid(),
@@ -94,6 +123,7 @@ export const FINDING_LIFECYCLE_AUDIT_EVENT_DETAIL_SCHEMAS = {
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
   finding_status_changed: findingStatusChangedDetailSchema,
   finding_comment_created: findingCommentCreatedDetailSchema,
+  finding_owner_assigned: findingOwnerAssignedDetailSchema,
 } as const satisfies Record<(typeof FINDING_LIFECYCLE_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const FINDING_TASK_LINKED_AUDIT_EVENT_DETAIL_SCHEMAS = {

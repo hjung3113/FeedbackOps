@@ -136,6 +136,10 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       'delete from core.actors where workspace_id=$1 and external_id like $2',
       [WORKSPACE_ID, `${SLUG}-%`],
     );
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
       WORKSPACE_ID,
       `${SLUG}%`,
@@ -250,7 +254,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       highlight_type: string;
       highlight_id: string;
     }>(
-      `select f.source_type,f.source_id,h.source_type as highlight_type,h.source_id as highlight_id from finding.findings f join finding.evidence_highlights h on h.finding_id=f.id where f.id=$1`,
+      'select f.source_type,f.source_id,h.source_type as highlight_type,h.source_id as highlight_id from finding.findings f join finding.evidence_highlights h on h.finding_id=f.id where f.id=$1',
       [findingId],
     );
     expect(persisted.rows).toEqual([
@@ -318,6 +322,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         'id',
         'linked_milestone_id',
         'linked_task_id',
+        'owner_actor_id',
+        'owner_team_id',
         'primary_managed_system_id',
         'severity',
         'source_type',

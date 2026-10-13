@@ -30,9 +30,9 @@ Provider, ingestion, threshold, and the recommendation HTTP surface are ADR-0034
 
 - Test reporter-facing status transitions, public update behavior, VOC-to-Finding creation, cluster-to-Finding creation, and forbidden Survey Response-to-VOC paths when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; VOC/Finding responsibility implemented by #1090)
 
-- ADR-0067 accepts real creation-time owner routing (implementation pending). Ordinary
+- ADR-0067 creation-time owner routing is implemented by #1090. Ordinary
   reporters cannot supply owner fields; privileged overrides require server `voc.triage`.
 - Explicit invalid values reject; absent/invalid automatic defaults fall through to visible
   scoped unassigned queue with Admin warning. Authorized null opts out; omission requests defaults.
