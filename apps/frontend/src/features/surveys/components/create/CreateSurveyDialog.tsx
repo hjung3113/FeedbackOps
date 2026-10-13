@@ -120,7 +120,10 @@ export function CreateSurveyDialog({
     pinnedStart.current = null;
   }, []);
   React.useEffect(() => {
-    if (definition) {
+    // While an attempt is pinned (uncertain outcome) a background refetch must
+    // not alter what the next unchanged retry sends (ADR-0070: one explicit key
+    // for an unchanged pending/uncertain attempt).
+    if (definition && !pinnedStart.current) {
       setType(definition.type);
       if (!titleEdited) setTitle(definition.title);
     }
@@ -143,6 +146,16 @@ export function CreateSurveyDialog({
     setSourceId('');
     pinnedStart.current = null;
   }, [sourceReadDenied]);
+  React.useEffect(() => {
+    // Selected Managed System leaving the manageable scope latches like a read
+    // denial: source data and submission block until explicit 새로고침 or
+    // reselection; an automatic scope refresh restores neither (ADR-0070).
+    if (!system || systemInScope) return;
+    setBlocked(true);
+    setTemplateId('');
+    setSourceId('');
+    pinnedStart.current = null;
+  }, [system, systemInScope]);
   const resetCreate = create.reset;
   const reset = React.useCallback(() => {
     setTitle('');
@@ -512,7 +525,7 @@ export function CreateSurveyDialog({
               </div>
             </fieldset>
           )}
-          {(blocked || (Boolean(system) && !systemInScope && mode === 'blank')) && (
+          {blocked && !(mode !== 'blank' && Boolean(system) && !systemInScope) && (
             <p role="alert">{COPY.reselect}</p>
           )}
           {create.isError && (

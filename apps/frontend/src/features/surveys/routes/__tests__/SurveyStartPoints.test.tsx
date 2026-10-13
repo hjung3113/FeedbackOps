@@ -572,8 +572,16 @@ it('fails closed when the selected system leaves the manageable scope, keeping i
   await act(async () => {
     await client.refetchQueries({ queryKey: ['permission-scope'] });
   });
+  // Automatic scope recovery must not restore the preview or source submission;
+  // only explicit 새로고침 and reselection do (ADR-0070).
+  await waitFor(() => expect(screen.queryByText(/분기:/)).not.toBeInTheDocument());
+  expect(screen.getByTestId('survey-create-submit')).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: '새로고침' }));
+  await user.click(await screen.findByRole('radio', { name: /지난 라운드 문항/ }));
   expect(await screen.findByText(/분기:/)).toBeVisible();
   expect(screen.getByTestId('survey-create-submit')).toBeEnabled();
+  expect(screen.getByLabelText('제목')).toHaveValue('직접 작성');
+  expect(screen.getByLabelText('설명 (선택)')).toHaveValue('직접 작성한 설명');
 });
 
 it('latches a 403 from 더 보기 while a snapshot is shown until refresh and reselection', async () => {
@@ -630,6 +638,7 @@ it('replays the pinned token and key when a background snapshot refetch changes 
   const user = userEvent.setup();
   const posts: RequestInit[] = [];
   let token = 'saved-definition-v1';
+  let refetched = false;
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchOnWindowFocus: false },
@@ -646,7 +655,11 @@ it('replays the pinned token and key when a background snapshot refetch changes 
       }
       if (path.includes('/copy-source') && !path.includes('/copy-sources?'))
         return new Response(
-          JSON.stringify({ ...surveyCopySourceVisualFixture, definition_token: token }),
+          JSON.stringify({
+            ...surveyCopySourceVisualFixture,
+            definition_token: token,
+            ...(refetched ? { title: '출처 제목이 변경된 문항' } : {}),
+          }),
         );
       return new Response(JSON.stringify(surveyCopySourcesVisualFixture));
     }),
@@ -663,9 +676,13 @@ it('replays the pinned token and key when a background snapshot refetch changes 
   await user.click(screen.getByTestId('survey-create-submit'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Survey를 만들지 못했습니다.');
   token = 'refetched-definition-v2';
+  refetched = true;
   await act(async () => {
     await client.refetchQueries({ queryKey: ['survey-copy-source'] });
   });
+  // Automatic suggestions freeze while an attempt is pinned; an unchanged retry
+  // replays the exact submitted body and key (ADR-0070).
+  expect(screen.getByLabelText('제목')).toHaveValue('지난 라운드 문항');
   await user.click(screen.getByTestId('survey-create-submit'));
   await waitFor(() => expect(posts).toHaveLength(2));
   const key = (request: RequestInit | undefined) =>
@@ -675,6 +692,7 @@ it('replays the pinned token and key when a background snapshot refetch changes 
     survey_id: surveyVisualFixture.id,
     definition_token: 'saved-definition-v1',
   });
+  expect(posts[1]?.body).toBe(posts[0]?.body);
   expect(key(posts[1])).toBe(key(posts[0]));
   expect(new Set(posts.map(key)).size).toBe(1);
 });
