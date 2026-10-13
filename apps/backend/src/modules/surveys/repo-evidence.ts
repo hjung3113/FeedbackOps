@@ -159,9 +159,11 @@ export async function listDerivedFindingsForSurvey(
   tx: Tx,
   workspaceId: string,
   surveyId: string,
+  includeUnapproved: boolean,
 ): Promise<Array<{ finding_id: string; primary_managed_system_id: string }>> {
   const result = await tx.execute<{ finding_id: string; primary_managed_system_id: string }>(sql`
-    SELECT * FROM survey.read_derived_findings(${workspaceId}::uuid, ${surveyId}::uuid)
+    SELECT * FROM survey.read_derived_findings(
+      ${workspaceId}::uuid, ${surveyId}::uuid, ${includeUnapproved}::boolean)
   `);
   return result.rows;
 }

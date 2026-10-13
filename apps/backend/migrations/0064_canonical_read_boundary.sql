@@ -4,7 +4,7 @@ DECLARE owner_name text;
 BEGIN
   FOREACH owner_name IN ARRAY ARRAY['fops_entity_links_view_owner',
     'fops_entity_links_survey_mutator_owner', 'fops_core_audit_reader_owner',
-    'fops_survey_evidence_reader_owner'] LOOP
+    'fops_survey_derived_finding_reader_owner'] LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = owner_name
       AND NOT rolcanlogin AND NOT rolinherit AND NOT rolsuper AND NOT rolcreaterole
       AND NOT rolcreatedb AND NOT rolbypassrls)
@@ -22,7 +22,7 @@ CREATE VIEW "core"."entity_links_app" WITH (check_option = cascaded, security_ba
     AND "core"."entity_links"."target_type" <> 'survey_response');
 GRANT USAGE ON SCHEMA core TO fops_entity_links_view_owner,
   fops_entity_links_survey_mutator_owner, fops_core_audit_reader_owner,
-  fops_survey_evidence_reader_owner;
+  fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON core.entity_links TO fops_entity_links_view_owner;
 --> statement-breakpoint
@@ -96,12 +96,22 @@ BEGIN
 END $$;
 --> statement-breakpoint
 GRANT SELECT (workspace_id,source_type,source_id,target_type,target_id,relation_type,status)
-  ON core.entity_links TO fops_survey_evidence_reader_owner;
+  ON core.entity_links TO fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
 GRANT SELECT (id,workspace_id,primary_managed_system_id) ON finding.findings
-  TO fops_survey_evidence_reader_owner;
+  TO fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
-CREATE FUNCTION survey.read_derived_findings(p_workspace uuid, p_survey uuid)
+GRANT USAGE ON SCHEMA survey, finding TO fops_survey_derived_finding_reader_owner;
+--> statement-breakpoint
+GRANT SELECT (id,workspace_id,survey_id) ON survey.survey_responses
+  TO fops_survey_derived_finding_reader_owner;
+--> statement-breakpoint
+GRANT SELECT (workspace_id,survey_id,response_id,revoked_at)
+  ON survey.survey_response_excerpt_approvals TO fops_survey_derived_finding_reader_owner;
+--> statement-breakpoint
+CREATE FUNCTION survey.read_derived_findings(
+  p_workspace uuid, p_survey uuid, p_include_unapproved boolean
+)
 RETURNS TABLE (finding_id uuid, primary_managed_system_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog AS $$
   SELECT DISTINCT f.id, f.primary_managed_system_id
@@ -111,6 +121,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog AS $$
     AND l.relation_type = 'generated_finding' AND l.status = 'active'
   JOIN finding.findings f ON f.workspace_id = l.workspace_id AND f.id = l.target_id
   WHERE r.workspace_id = p_workspace AND r.survey_id = p_survey
+    AND (p_include_unapproved OR EXISTS (
+      SELECT 1 FROM survey.survey_response_excerpt_approvals a
+      WHERE a.workspace_id = r.workspace_id AND a.survey_id = r.survey_id
+        AND a.response_id = r.id AND a.revoked_at IS NULL
+    ))
   ORDER BY f.id
 $$;
 --> statement-breakpoint
@@ -140,12 +155,12 @@ $$;
 --> statement-breakpoint
 GRANT CREATE ON SCHEMA core TO fops_entity_links_survey_mutator_owner, fops_core_audit_reader_owner;
 --> statement-breakpoint
-GRANT CREATE ON SCHEMA survey TO fops_survey_evidence_reader_owner;
+GRANT CREATE ON SCHEMA survey TO fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
 ALTER FUNCTION core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid)
   OWNER TO fops_entity_links_survey_mutator_owner;
 --> statement-breakpoint
-ALTER FUNCTION survey.read_derived_findings(uuid,uuid) OWNER TO fops_survey_evidence_reader_owner;
+ALTER FUNCTION survey.read_derived_findings(uuid,uuid,boolean) OWNER TO fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
 ALTER FUNCTION core.latest_permission_request_question(uuid,uuid) OWNER TO fops_core_audit_reader_owner;
 --> statement-breakpoint
@@ -153,7 +168,7 @@ ALTER FUNCTION core.responsibility_configuration_changes(uuid) OWNER TO fops_cor
 --> statement-breakpoint
 REVOKE CREATE ON SCHEMA core FROM fops_entity_links_survey_mutator_owner, fops_core_audit_reader_owner;
 --> statement-breakpoint
-REVOKE CREATE ON SCHEMA survey FROM fops_survey_evidence_reader_owner;
+REVOKE CREATE ON SCHEMA survey FROM fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
 SET ROLE fops_entity_links_survey_mutator_owner;
 --> statement-breakpoint
@@ -163,11 +178,11 @@ GRANT EXECUTE ON FUNCTION core.create_survey_finding_link(uuid,uuid,uuid,text,uu
 --> statement-breakpoint
 RESET ROLE;
 --> statement-breakpoint
-SET ROLE fops_survey_evidence_reader_owner;
+SET ROLE fops_survey_derived_finding_reader_owner;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION survey.read_derived_findings(uuid,uuid) FROM PUBLIC, fops_app;
+REVOKE ALL ON FUNCTION survey.read_derived_findings(uuid,uuid,boolean) FROM PUBLIC, fops_app;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION survey.read_derived_findings(uuid,uuid) TO fops_app;
+GRANT EXECUTE ON FUNCTION survey.read_derived_findings(uuid,uuid,boolean) TO fops_app;
 --> statement-breakpoint
 RESET ROLE;
 --> statement-breakpoint

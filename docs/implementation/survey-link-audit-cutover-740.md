@@ -29,13 +29,21 @@ It neither returns raw endpoints nor exposes detach. Findings authorizes both sy
 before calling it and retains exact same-transaction audits/counters/idempotent replay.
 This is not the deferred #816 existing-Finding attachment command.
 
-Survey's `survey.read_derived_findings(uuid,uuid)` is addressed by workspace and Survey
-ID and returns only Finding ID/target Managed System. Existing
-`fops_survey_evidence_reader_owner` owns it with required column reads; no new aggregate
-owner writes. Results checks source Survey read/draft/cohort privacy, then independently
-checks elevated target Finding read/manage. Zero-excerpt parents are discoverable without
-personal access when the cohort is visible. Non-holders use the non-personal approved
-excerpt projection; holder payload and per-row personal-read audits remain intact.
+Survey's `survey.read_derived_findings(uuid,uuid,boolean)` is addressed by workspace
+and Survey ID and returns only Finding ID/target Managed System. The boolean enables
+approval-free discovery only when the response cohort meets the configured threshold.
+Otherwise, only responses with an active approval contribute derived Findings, preserving
+shipped Results action continuity even while question aggregates remain suppressed.
+Personal access alone does not enable approval-free discovery. This still discovers
+zero-highlight parents without personal access for a visible cohort.
+
+Dedicated `fops_survey_derived_finding_reader_owner` owns this reader. It has only schema
+USAGE and the needed SELECT columns on canonical links, response Survey binding, active
+approval binding and Finding ID/target scope; it cannot write any table or read answers,
+respondent identity or excerpt text. The existing evidence reader gains no `core` usage
+or link/Finding reads. Results independently checks source Survey read/draft and elevated
+target Finding read/manage. Non-holders use the non-personal approved excerpt projection;
+holder payload and per-row personal-read audits remain intact.
 
 Core's `core.latest_permission_request_question(uuid,uuid)` returns only note/timestamp
 for the latest matching workspace/request/subject/event (timestamp then ID order).
@@ -57,9 +65,11 @@ migrate memberships before this migration on an existing database (fresh bootstr
 CREATE ROLE fops_entity_links_view_owner WITH NOLOGIN NOINHERIT;
 CREATE ROLE fops_entity_links_survey_mutator_owner WITH NOLOGIN NOINHERIT;
 CREATE ROLE fops_core_audit_reader_owner WITH NOLOGIN NOINHERIT;
+CREATE ROLE fops_survey_derived_finding_reader_owner WITH NOLOGIN NOINHERIT;
 GRANT fops_entity_links_view_owner TO fops_migrate;
 GRANT fops_entity_links_survey_mutator_owner TO fops_migrate;
 GRANT fops_core_audit_reader_owner TO fops_migrate;
+GRANT fops_survey_derived_finding_reader_owner TO fops_migrate;
 ```
 
 Migration rejects privileged/inheriting/login owners, missing migrate membership,

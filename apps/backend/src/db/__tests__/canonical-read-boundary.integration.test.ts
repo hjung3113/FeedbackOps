@@ -77,6 +77,7 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
       'fops_entity_links_view_owner',
       'fops_entity_links_survey_mutator_owner',
       'fops_core_audit_reader_owner',
+      'fops_survey_derived_finding_reader_owner',
     ];
     for (const owner of owners) {
       const roles = await migrate.pool.query(
@@ -106,7 +107,12 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
       ['fops_entity_links_view_owner', 'core.entity_links', [true, true, true, false]],
       ['fops_entity_links_survey_mutator_owner', 'core.entity_links', [true, true, false, false]],
       ['fops_core_audit_reader_owner', 'core.audit_log', [true, false, false, false]],
-      ['fops_survey_evidence_reader_owner', 'core.entity_links', [true, false, false, false]],
+      ['fops_survey_evidence_reader_owner', 'core.entity_links', [false, false, false, false]],
+      [
+        'fops_survey_derived_finding_reader_owner',
+        'core.entity_links',
+        [true, false, false, false],
+      ],
     ] as const) {
       const grants = await migrate.pool.query<{
         read: boolean;
@@ -153,7 +159,7 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
     expect(functions.rows.map((r) => [r.proname, r.owner])).toEqual([
       ['create_survey_finding_link', 'fops_entity_links_survey_mutator_owner'],
       ['latest_permission_request_question', 'fops_core_audit_reader_owner'],
-      ['read_derived_findings', 'fops_survey_evidence_reader_owner'],
+      ['read_derived_findings', 'fops_survey_derived_finding_reader_owner'],
       ['responsibility_configuration_changes', 'fops_core_audit_reader_owner'],
     ]);
   });

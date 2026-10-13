@@ -13,6 +13,7 @@
 --                    Finding/highlight binding writers and consistency triggers.
 --   * fops_entity_links_view_owner — owns the ordinary filtered link view.
 --   * fops_entity_links_survey_mutator_owner — owns the narrow Survey link writer.
+--   * fops_survey_derived_finding_reader_owner — owns only the safe Results Finding reader.
 --   * fops_core_audit_reader_owner — owns allowlisted scoped audit projections.
 --
 -- This file runs once when the Postgres container initialises an empty
@@ -20,7 +21,7 @@
 -- per-table GRANT/REVOKE work; this file only creates the roles, the
 -- database, and ensures `fops_migrate` owns it.
 -- Existing databases must provision the matching role and one-way membership
--- before applying migrations 0038, 0039, 0046, 0059, or 0062.
+-- before applying migrations 0038, 0039, 0046, 0059, or 0064.
 --
 -- The superuser bootstrap user comes from POSTGRES_USER/POSTGRES_PASSWORD on
 -- the container; the Drizzle CLI and the app both connect as the two roles
@@ -49,6 +50,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_entity_links_survey_mutator_owner') THEN
     CREATE ROLE fops_entity_links_survey_mutator_owner WITH NOLOGIN NOINHERIT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_survey_derived_finding_reader_owner') THEN
+    CREATE ROLE fops_survey_derived_finding_reader_owner WITH NOLOGIN NOINHERIT;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_core_audit_reader_owner') THEN
     CREATE ROLE fops_core_audit_reader_owner WITH NOLOGIN NOINHERIT;
   END IF;
@@ -64,6 +68,7 @@ GRANT fops_survey_provenance_mutator_owner TO fops_migrate;
 GRANT fops_entity_links_view_owner TO fops_migrate;
 GRANT fops_entity_links_survey_mutator_owner TO fops_migrate;
 GRANT fops_core_audit_reader_owner TO fops_migrate;
+GRANT fops_survey_derived_finding_reader_owner TO fops_migrate;
 
 
 -- CREATE DATABASE cannot run inside a DO block; the dollar-quoted shell entry

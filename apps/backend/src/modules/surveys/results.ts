@@ -52,10 +52,15 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
             requireElevatedRole: false,
           }),
         ]);
-      const derivedFindings =
-        holder || responseCount >= anonymityThreshold
-          ? await listDerivedFindingsForSurvey(tx, actor.workspace_id, survey.id)
-          : [];
+      // Active approvals retain shipped action continuity even when question
+      // aggregates are suppressed. Approval-free discovery needs a visible cohort;
+      // personal access alone must not introduce new request_task actions.
+      const derivedFindings = await listDerivedFindingsForSurvey(
+        tx,
+        actor.workspace_id,
+        survey.id,
+        responseCount >= anonymityThreshold,
+      );
       const findingReadScope = await actorFindingReadScope(tx, actor, {
         requireElevatedRole: true,
       });
