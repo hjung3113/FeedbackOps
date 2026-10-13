@@ -205,11 +205,21 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
     rows.current.clear();
     origin.current = null;
   }, [blocked]);
-  const visiblePages: { items: EvidenceInventoryItem[] }[] = [];
-  for (const [cursor, page] of pages.entries) {
+  const visiblePages: {
+    response: ListEvidenceInventoryResponse;
+    items: EvidenceInventoryItem[];
+  }[] = [];
+  const visited = new Set<string>();
+  let cursor: string | undefined = pages.entries.has('') ? '' : pageKey;
+  while (cursor !== undefined && !visited.has(cursor)) {
+    const page = pages.entries.get(cursor);
+    if (!page) break;
+    visited.add(cursor);
     visiblePages.push(page);
     if (cursor === pageKey) break;
+    cursor = page.response.page.cursor;
   }
+  const lastPage = visiblePages.at(-1)?.response.page;
   const items =
     blocked || (pages.refresh !== refresh && !manualRefresh)
       ? []
@@ -303,6 +313,20 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
           <p className="border-b border-border-subtle px-5 py-3 text-xs text-text-muted">
             {COPY.description}
           </p>
+          {!blocked && search.cursor && !pages.entries.has('') && items.length > 0 && (
+            <div className="px-5 py-2">
+              <Button
+                variant="subtle"
+                size="sm"
+                spacing="compact"
+                onClick={() =>
+                  void navigate({ search: (previous) => ({ ...previous, cursor: undefined }) })
+                }
+              >
+                {COPY.startOver}
+              </Button>
+            </div>
+          )}
           {blocked ? (
             <PermissionBlockedPanel state="denied" category="Evidence" description={COPY.blocked} />
           ) : (list.isPending || list.isFetching) && items.length === 0 ? (
@@ -368,14 +392,14 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
               action={{ label: COPY.retry, onClick: () => void list.refetch() }}
             />
           )}
-          {!blocked && items.length > 0 && list.data?.page.has_more && (
+          {!blocked && items.length > 0 && !list.isError && lastPage?.has_more && (
             <div className="p-4">
               <Button
                 variant="subtle"
                 size="sm"
                 disabled={list.isFetching}
                 onClick={() =>
-                  void navigate({ search: (prev) => ({ ...prev, cursor: list.data?.page.cursor }) })
+                  void navigate({ search: (prev) => ({ ...prev, cursor: lastPage?.cursor }) })
                 }
               >
                 {COPY.more}

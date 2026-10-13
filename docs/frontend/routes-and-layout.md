@@ -529,7 +529,9 @@ ListShell detail-panel slot. Strict URL keys: `managedSystem` (UUID or `all`), `
 highlight UUID), `cursor` (opaque). Omit unfiltered defaults; drop invalid keys
 independently. Clients map scope/source to `managed_system_id`/`source_type`.
 
-Refresh/Back/Forward restores filters, page and selected safe detail. Scope/source/
+Refresh/Back/Forward restores filters, page and selected safe detail. A later-page URL
+opened without a cached first-page chain offers compact `처음부터 보기` above the rows;
+it pushes the same filters and selection without `cursor`. Scope/source/
 search changes clear cursor and reconcile selection against safe detail/current
 filters. Resolve explicit selection directly via `GET /evidence-highlights/:id`;
 page absence alone never clears it. Missing/unreadable selection shows not-found

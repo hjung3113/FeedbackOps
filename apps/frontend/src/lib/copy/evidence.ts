@@ -20,6 +20,7 @@ export const EVIDENCE_COPY = {
   moreError: '다음 Evidence를 불러오지 못했습니다.',
   retry: '다시 시도',
   more: '더 보기',
+  startOver: '처음부터 보기',
   parent: 'Finding 보기',
   clear: '조건 초기화',
 } as const;

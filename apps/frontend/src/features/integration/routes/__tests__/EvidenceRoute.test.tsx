@@ -152,9 +152,71 @@ it('resolves a later-page selection independently, saves cursor, and restores it
   await screen.findByRole('link', { name: 'Finding 보기' });
   expect(router.state.location.href).toBe(saved);
   unmount();
-  await mount(saved);
+  const reloaded = await mount(saved);
   await screen.findByRole('button', { name: /월간 다운로드/ });
   await screen.findByRole('link', { name: 'Finding 보기' });
+  reloaded.unmount();
+  const beforeReload = await mount('/integration/evidence?source=note');
+  fireEvent.click(await screen.findByRole('button', { name: '더 보기' }));
+  fireEvent.click(await screen.findByRole('button', { name: /월간 다운로드/ }));
+  await screen.findByRole('link', { name: 'Finding 보기' });
+  beforeReload.unmount();
+  const reloadClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={reloadClient}>
+      <RouterProvider router={beforeReload.router} />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  await screen.findByRole('link', { name: 'Finding 보기' });
+  await act(async () => beforeReload.history.back());
+  await waitFor(() => expect(screen.queryByTestId('evidence-panel')).toBeNull());
+  await act(async () => beforeReload.history.back());
+  await screen.findByRole('button', { name: /첫 페이지 메모/ });
+  expect(screen.queryByRole('button', { name: /월간 다운로드/ })).toBeNull();
+  fireEvent.click(await screen.findByRole('button', { name: '더 보기' }));
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  expect(
+    screen
+      .getAllByRole('button', { name: /첫 페이지 메모|월간 다운로드/ })
+      .map((row) => (row.textContent?.includes('첫 페이지 메모') ? 'first' : 'second')),
+  ).toEqual(['first', 'second']);
+  expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+});
+it('offers a fresh later-page URL a first-page action that pushes and keeps filters and selection', async () => {
+  const first = { ...item, id: PARENT, quote_or_summary: '첫 페이지 다운로드 메모' };
+  installFetch((url) =>
+    response(
+      url.searchParams.has('cursor')
+        ? { items: [item], page: { has_more: false } }
+        : { items: [first], page: { has_more: true, cursor: 'next' } },
+    ),
+  );
+  const { router, history } = await mount(
+    `/integration/evidence?managedSystem=${MS}&source=note&q=다운로드&cursor=next&selected=${ID}`,
+  );
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  await screen.findByRole('link', { name: 'Finding 보기' });
+  const start = screen.getByRole('button', { name: '처음부터 보기' });
+  expect(
+    start.compareDocumentPosition(screen.getByRole('button', { name: /월간 다운로드/ })) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  fireEvent.click(start);
+  await screen.findByRole('button', { name: /첫 페이지 다운로드 메모/ });
+  expect(router.state.location.search).toEqual({
+    managedSystem: MS,
+    source: 'note',
+    q: '다운로드',
+    selected: ID,
+  });
+  expect(screen.queryByRole('button', { name: '처음부터 보기' })).toBeNull();
+  await screen.findByRole('link', { name: 'Finding 보기' });
+  await act(async () => history.back());
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  expect(router.state.location.search.cursor).toBe('next');
+  expect(screen.queryByRole('button', { name: '처음부터 보기' })).toBeNull();
+  expect(screen.getByRole('button', { name: /첫 페이지 다운로드 메모/ })).toBeVisible();
 });
 it('keeps first-page rows on page-two failure and retries the failed cursor', async () => {
   let fail = true;
