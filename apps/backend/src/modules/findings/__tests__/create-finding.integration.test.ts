@@ -17,10 +17,10 @@ import { createAa, insertMsDirectly } from '../../../test-support/core-fixtures.
 import { uid } from '../../../test-support/ids.js';
 import {
   denyCapability,
-  grantCapability,
-  revokeDeny,
-  revokeCapabilityGrant,
   expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+  revokeDeny,
 } from '../../../test-support/permissions-fixtures.js';
 import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
@@ -78,6 +78,15 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    // Includes Admin denies, which the shared Developer-cohort cleanup cannot remove.
+    await migrateHandle.pool.query(
+      `delete from permission.permission_denies
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
@@ -119,12 +128,17 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(`delete from core.responsibility_default_failures
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures
       where workspace_id=$1 and managed_system_id in
         (select id from core.managed_systems where workspace_id=$1 and slug like $2)`,
-      [WORKSPACE_ID, `${SLUG_PREFIX}%`]);
-    await migrateHandle.pool.query(`delete from voc_cluster.voc_clusters where workspace_id=$1
-      and primary_managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)`, [WORKSPACE_ID, `${SLUG_PREFIX}%`]);
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from voc_cluster.voc_clusters where workspace_id=$1
+      and primary_managed_system_id in (select id from core.managed_systems where workspace_id=$1 and slug like $2)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
     await migrateHandle.pool.query('delete from core.teams where id=any($1::uuid[])', [teamIds]);
     teamIds.length = 0;
@@ -400,7 +414,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
   it('persists the target owner on omitted input, detail and list, and replays its audit once', async () => {
     const { msId, vocId } = await seedSource();
     await dbHandle.pool.query(
-      `update core.managed_systems set default_owner_actor_id=$1 where id=$2`,
+      'update core.managed_systems set default_owner_actor_id=$1 where id=$2',
       [adminActorId, msId],
     );
     const input = { title: 'Owned Finding', summary: 'Synthesis', severity: 'high' };
