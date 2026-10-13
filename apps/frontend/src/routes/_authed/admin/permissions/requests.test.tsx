@@ -294,12 +294,57 @@ describe("/admin/permissions/requests", () => {
     expect(review).toHaveTextContent('권한 없음');
     expect(review).toHaveTextContent('검토 권한');
     expect(review).toHaveTextContent('워크스페이스 관리자 권한');
-    expect(review).toHaveTextContent('요청한 권한: 워크스페이스 전체 읽기');
+    expect(review).toHaveTextContent('민감한 권한 · 워크스페이스 전체 읽기');
     expect(review).toHaveTextContent('워크스페이스 전체 범위');
     expect(review).toHaveTextContent('요청 만료일 없음');
     expect(review).toHaveTextContent('겹치는 활성 차단 1건');
-    expect(review).toHaveTextContent('차단 범위: 워크스페이스 전체');
+    expect(review).toHaveTextContent('겹치는 활성 차단 1건 · 워크스페이스 전체');
   });
+
+  test.each(['new decision', 'another request'] as const)(
+    'detail revision refetch exposes the discarded reason until %s, without posting',
+    async (dismissal) => {
+      let revision = 7;
+      installFetch({ detail: (row) => adminDetailFixture({ ...row, revision }) });
+      const { router, queryClient } = buildHarness();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+      await screen.findByTestId('permission-decision-section');
+      fireEvent.click(screen.getByRole('button', { name: '거절' }));
+      fireEvent.change(screen.getByLabelText(/^사유/), {
+        target: { value: 'discarded Admin reason' },
+      });
+      revision = 8;
+      await act(async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+        });
+      });
+      const notice = await screen.findByTestId('permission-decision-reset-notice');
+      expect(screen.getByTestId('permission-decision-section')).toContainElement(notice);
+      expect(notice).toHaveTextContent(
+        '다른 곳에서 요청이 변경되어 작성 중이던 결정을 초기화했습니다.',
+      );
+      expect(notice).toHaveTextContent('discarded Admin reason');
+      expect(screen.getByLabelText(/^사유/)).toHaveValue('');
+      expect(screen.getByRole('button', { name: '거절' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByTestId('permission-decision-submit')).toBeDisabled();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(decisionPosts()).toHaveLength(0);
+      if (dismissal === 'new decision') {
+        fireEvent.click(screen.getByRole('button', { name: '거절' }));
+      } else {
+        fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+        await screen.findByText(REQUESTS[1].reason);
+      }
+      expect(screen.queryByTestId('permission-decision-reset-notice')).not.toBeInTheDocument();
+    },
+  );
 
   test('same-ID revision updates its server risk evidence and clears the review draft', async () => {
     let revision = 7;
@@ -338,7 +383,7 @@ describe("/admin/permissions/requests", () => {
       });
     });
 
-    await screen.findByText('겹치는 활성 차단 1건');
+    await screen.findByText('겹치는 활성 차단 1건 · 워크스페이스 전체');
     const review = screen.getByTestId('permission-request-risk-review');
     expect(review).toHaveTextContent('겹치는 활성 차단 1건');
     expect(screen.queryByText('워크스페이스 전체 범위')).not.toBeInTheDocument();

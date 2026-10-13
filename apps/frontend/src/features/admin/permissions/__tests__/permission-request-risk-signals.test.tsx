@@ -62,14 +62,12 @@ describe('permission request risk review', () => {
       const signals =
         riskIndicators.length === 0
           ? review.getByText('추가 확인 사항 없음')
-          : review.getByText('민감한 권한');
+          : review.getByText('민감한 권한 · 워크스페이스 관리자 권한');
       const access = review.getByText('요청 범위의 현재 권한');
       expect(
         signals.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
-      expect(access.parentElement).toHaveTextContent(
-        '권한 없음 · 현재 보유 범위: 유효 범위 없음 · 해당 없음',
-      );
+      expect(access.parentElement).toHaveTextContent('권한 없음');
       expect(review.queryByText('본인 요청')).not.toBeInTheDocument();
       expect(review.queryByText('본인 승인 정책')).not.toBeInTheDocument();
       expect(review.queryByText('본인 승인 사유 필요')).not.toBeInTheDocument();
@@ -123,7 +121,7 @@ describe('permission request risk review', () => {
     expect(review).toHaveTextContent('허용 · 직접 부여');
     expect(review).toHaveTextContent('현재 보유 범위:');
     expect(review).toHaveTextContent('Payments Ops · Analytics Ops');
-    expect(review).toHaveTextContent(/2100/);
+    expect(review).toHaveTextContent('만료 2099. 12. 31.');
     expect(review).toHaveTextContent('검토 권한');
     expect(review).toHaveTextContent('워크스페이스 관리자 권한');
 
@@ -131,12 +129,13 @@ describe('permission request risk review', () => {
     expect(requestInfo).toHaveTextContent('요청 만료일');
     expect(requestInfo).toHaveTextContent('만료 없음');
     expect(review).toHaveTextContent('민감한 권한');
-    expect(review).toHaveTextContent('요청한 권한: 워크스페이스 관리자 권한');
+    expect(review).toHaveTextContent('민감한 권한 · 워크스페이스 관리자 권한');
     expect(review).toHaveTextContent('워크스페이스 전체 범위');
     expect(review).toHaveTextContent('요청 만료일 없음');
     expect(review).toHaveTextContent('겹치는 활성 차단 2건');
-    expect(review).toHaveTextContent('차단 범위: 워크스페이스 전체');
-    expect(review).toHaveTextContent('차단 범위: Managed System (50000000)');
+    expect(review).toHaveTextContent(
+      '겹치는 활성 차단 2건 · 워크스페이스 전체 · Managed System (50000000)',
+    );
   });
 
   // Decision-control suppression for terminal requests is covered with the real form in
@@ -150,7 +149,7 @@ describe('permission request risk review', () => {
     render(<PermissionRequestDetail request={request} onClose={() => undefined} />);
 
     expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
-      '요청한 권한: 워크스페이스 관리자 권한',
+      '민감한 권한 · 워크스페이스 관리자 권한',
     );
     const requestInfo = screen.getByText('요청 정보').closest('section');
     if (!requestInfo) throw new Error('Request info section is missing');
@@ -180,10 +179,56 @@ describe('permission request risk review', () => {
       />,
     );
     const review = within(screen.getByTestId('permission-request-risk-review'));
-    expect(review.getByText('본인 요청').parentElement).toHaveTextContent('예');
-    expect(review.getByText('본인 승인 정책').parentElement).toHaveTextContent('허용');
-    expect(review.getByText('본인 승인 사유 필요').parentElement).toHaveTextContent('예');
+    expect(review.getByText('본인 요청').parentElement).toHaveTextContent(
+      '본인 요청본인 승인 허용 · 사유 필요',
+    );
+    expect(review.queryByText('본인 승인 정책')).not.toBeInTheDocument();
+    expect(review.queryByText('본인 승인 사유 필요')).not.toBeInTheDocument();
   });
+
+  it.each([
+    {
+      allow: true,
+      expiry: '2026-12-31T00:00:00.000Z',
+      scope: [CURRENT_SYSTEM_ID],
+      expected: '허용 · Role Level · 현재 보유 범위: Power BI · 만료 2026. 12. 31.',
+    },
+    {
+      allow: true,
+      expiry: null,
+      scope: [CURRENT_SYSTEM_ID],
+      expected: '허용 · Role Level · 현재 보유 범위: Power BI · 만료 없음',
+    },
+    {
+      allow: false,
+      expiry: null,
+      scope: [CURRENT_SYSTEM_ID],
+      expected: '명시적 차단 · 현재 보유 범위: Power BI',
+    },
+    { allow: false, expiry: null, scope: [], expected: '명시적 차단' },
+  ])(
+    'shows only applicable access scope and labelled expiry ($expected)',
+    ({ allow, expiry, scope, expected }) => {
+      render(
+        <PermissionRequestDetail
+          request={adminDetailFixture(REQUEST, false, 'allowed', {
+            effective_access: {
+              decision: allow
+                ? { allow: true, via: 'role' }
+                : { allow: false, reason: 'explicit_deny', requestable: null },
+              scope: { kind: 'scoped', managed_system_ids: scope },
+              expires_at: expiry,
+              granted_managed_system_id: null,
+            },
+          })}
+          managedSystemNames={{ [CURRENT_SYSTEM_ID]: 'Power BI' }}
+          onClose={() => undefined}
+        />,
+      );
+      const row = screen.getByText('요청 범위의 현재 권한').parentElement;
+      expect(row?.textContent).toBe(`요청 범위의 현재 권한${expected}`);
+    },
+  );
 
   it('explains constant-evidence signals once through their titles', () => {
     render(

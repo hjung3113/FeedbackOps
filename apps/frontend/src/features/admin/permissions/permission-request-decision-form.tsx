@@ -95,6 +95,8 @@ export function PermissionRequestDecisionForm({
   request,
   managedSystemName,
   staleNoticeShown,
+  discardedReason,
+  onDraftChanged,
   onStaleConflict,
   onActionPicked,
   onReviewCompleted,
@@ -102,6 +104,8 @@ export function PermissionRequestDecisionForm({
   request: PermissionRequestAdminDetail;
   managedSystemName?: string | undefined;
   staleNoticeShown?: boolean;
+  discardedReason?: string;
+  onDraftChanged?: (draft: { revision: number; nonEmpty: boolean; reason: string }) => void;
   onStaleConflict?: () => void;
   onActionPicked?: () => void;
   onReviewCompleted?: () => void;
@@ -121,6 +125,32 @@ export function PermissionRequestDecisionForm({
   const intent = React.useRef<{ fingerprint: string; key: string } | null>(null);
   const submitting = React.useRef(false);
   const [scope, setScope] = React.useState(request.requested_managed_system_id ?? 'workspace');
+  React.useEffect(() => {
+    onDraftChanged?.({
+      revision: request.revision,
+      nonEmpty:
+        action !== null ||
+        reason !== '' ||
+        policyCitation !== '' ||
+        peerReviewerAbsence !== '' ||
+        expirationMode !== 'keep' ||
+        expirationDate !== (request.requested_expiration?.slice(0, 10) ?? '') ||
+        scope !== (request.requested_managed_system_id ?? 'workspace'),
+      reason,
+    });
+  }, [
+    onDraftChanged,
+    request.revision,
+    request.requested_expiration,
+    request.requested_managed_system_id,
+    action,
+    reason,
+    policyCitation,
+    peerReviewerAbsence,
+    expirationMode,
+    expirationDate,
+    scope,
+  ]);
   const mutation = useDecidePermissionRequest(
     (succeeded) => {
       submitting.current = false;
@@ -249,7 +279,24 @@ export function PermissionRequestDecisionForm({
     mutation.mutate({ ...args, idempotencyKey: intent.current.key });
   }
 
-  if (!decidable || request.allowed_actions.length === 0) return null;
+  const resetNotice =
+    discardedReason !== undefined ? (
+      <output
+        className="text-sm text-text-secondary"
+        data-testid="permission-decision-reset-notice"
+      >
+        <span className="block">{ADMIN_PERMISSIONS_COPY.decisionDraftReset}</span>
+        {discardedReason ? (
+          <span className="block whitespace-pre-wrap">
+            {ADMIN_PERMISSIONS_COPY.discardedDecisionReason}: {discardedReason}
+          </span>
+        ) : null}
+      </output>
+    ) : null;
+  if (!decidable || request.allowed_actions.length === 0)
+    return resetNotice ? (
+      <section data-testid="permission-decision-section">{resetNotice}</section>
+    ) : null;
 
   return (
     <section
@@ -257,7 +304,8 @@ export function PermissionRequestDecisionForm({
       data-testid="permission-decision-section"
     >
       <PanelSectionTitle>결정</PanelSectionTitle>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="결정 선택">
+      {resetNotice}
+      <fieldset className="flex flex-wrap gap-2" aria-label="결정 선택">
         {ACTIONS.filter((candidate) =>
           request.allowed_actions.includes(
             candidate.value === 'need-more-info' ? 'need_more_info' : candidate.value,
@@ -286,7 +334,7 @@ export function PermissionRequestDecisionForm({
             {candidate.label}
           </Button>
         ))}
-      </div>
+      </fieldset>
       {selfApprovalBlockedByPolicy ? (
         <p className="text-xs text-accent-danger">
           워크스페이스 정책에서 직접 승인을 금지합니다. 다른 관리자가 이 요청을 승인해야 합니다.
@@ -302,7 +350,10 @@ export function PermissionRequestDecisionForm({
           disabled={mutation.isPending || reviewBlocked}
           maxLength={2000}
           value={reason}
-          onChange={(event) => setReason(event.target.value)}
+          onChange={(event) => {
+            setReason(event.target.value);
+            onActionPicked?.();
+          }}
           placeholder="검토 사유 또는 요청할 정보를 입력하세요."
         />
       </label>
