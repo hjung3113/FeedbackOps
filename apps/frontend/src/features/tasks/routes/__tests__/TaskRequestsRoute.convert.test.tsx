@@ -1,3 +1,5 @@
+import { resolveActors } from '@/lib/api';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
@@ -29,6 +31,14 @@ const api = vi.hoisted(() => ({
   convertTaskRequest: vi.fn(),
   fetchAnalyticsAreas: vi.fn(),
   useFindingDetail: vi.fn(),
+  // Options the conversion pickers read through useWorkspaceActors.
+  workspaceActors: [] as Array<{
+    id: string;
+    display_name: string;
+    email: string;
+    role_level: 'admin' | 'developer' | 'user';
+    actor_type: 'internal_member' | 'system';
+  }>,
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 const requestedOutcome225 = `핵심 결과 ${'x'.repeat(219)}`;
@@ -52,6 +62,8 @@ const taskRequest = {
   requested_outcome: requestedOutcome225,
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'approved' as const,
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -130,6 +142,12 @@ vi.mock('@/lib/api/managed-systems', () => ({
     items: [{ id: taskRequest.primary_managed_system_id, name: 'Billing Ops' }],
   })),
 }));
+// The conversion pickers and the reviewer filter read their candidate actors
+// through useWorkspaceActors; mocking it keeps the suite's "no API mutation"
+// assertions free of candidate reads.
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: api.workspaceActors }),
+}));
 vi.mock('@/lib/api', () => ({
   apiClient: api.apiClient,
   approveTaskRequest: vi.fn(),
@@ -176,6 +194,7 @@ beforeEach(() => {
     isSuccess: true,
     isError: false,
   });
+  api.workspaceActors = [];
   vi.mocked(listMilestones).mockReset();
   toast.success.mockReset();
   vi.mocked(listMilestones).mockImplementation(async (options) => ({
@@ -244,6 +263,59 @@ describe('TaskRequestsRoute conversion priority labels', () => {
     },
   );
 
+  it.each([
+    ['자동 배정', {}],
+    ['미배정', { assignee_actor_id: null, assignee_team_id: null }],
+  ])('submits %s responsibility without conflating omission and null', async (label, expected) => {
+    api.convertTaskRequest.mockClear();
+    await openConvertForm();
+    await chooseOption('담당자', label as string);
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
+    const body = api.convertTaskRequest.mock.calls[0]?.[1];
+    expect(body).toMatchObject(expected);
+    if (label === '자동 배정') {
+      expect(body).not.toHaveProperty('assignee_actor_id');
+      expect(body).not.toHaveProperty('assignee_team_id');
+    }
+  });
+
+  it.each(['actor', 'team'] as const)(
+    'submits an explicit %s assignment with the other destination null',
+    async (mode) => {
+      const id = '60000000-0000-0000-0000-000000000006';
+      if (mode === 'actor') {
+        api.workspaceActors = [
+          {
+            id,
+            display_name: '담당 운영자',
+            email: 'operator@example.test',
+            role_level: 'admin',
+            actor_type: 'internal_member',
+          },
+        ];
+      } else {
+        // First call feeds the queue's known-team candidates, second the picker's name lookup.
+        const resolvedTeam = { actors: [], teams: [{ id, name: '담당팀' }] };
+        vi.mocked(resolveActors).mockResolvedValueOnce(resolvedTeam);
+        vi.mocked(resolveActors).mockResolvedValueOnce(resolvedTeam);
+      }
+      api.convertTaskRequest.mockClear();
+      await openConvertForm();
+      await chooseOption('담당자', mode === 'actor' ? '사용자 지정' : '팀 지정');
+      expect(screen.getByTestId('task-request-convert-submit')).toBeDisabled();
+      if (mode === 'actor') await chooseOption('담당 사용자', '담당 운영자');
+      else await chooseOption('팀 선택', '담당팀');
+      expect(screen.queryByRole('textbox', { name: '팀 ID' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+      await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
+      expect(api.convertTaskRequest.mock.calls[0]?.[1]).toMatchObject({
+        assignee_actor_id: mode === 'actor' ? id : null,
+        assignee_team_id: mode === 'team' ? id : null,
+      });
+    },
+  );
+
   it('submits the selected shared priority, due date, and milestone values unchanged', async () => {
     await openConvertForm();
     await chooseOption('우선순위', TASK_PRIORITY_LABELS.urgent);
@@ -259,7 +331,6 @@ describe('TaskRequestsRoute conversion priority labels', () => {
         {
           title: `${requestedOutcome225.slice(0, taskTitleMaxLength - truncationMarker.length)}${truncationMarker}`,
           priority: 'urgent',
-          assignee_actor_id: null,
           due_date: '2026-09-30',
           milestone_id: milestoneForRequestSystem.id,
           analytics_area_id: null,
@@ -816,3 +887,30 @@ async function openConvertFormReturnsClient() {
   await screen.findByTestId('task-request-convert-title-input');
   return { queryClient };
 }
+
+it('names a default team candidate absent from every queue row', async () => {
+  const id = '80000000-0000-4000-8000-000000000008';
+  const resolve = vi.mocked(resolveActors).getMockImplementation();
+  vi.mocked(fetchManagedSystems).mockResolvedValueOnce({
+    total: 1,
+    items: [
+      {
+        id: taskRequest.primary_managed_system_id,
+        name: 'Billing Ops',
+        default_owner_team_id: id,
+      } as Awaited<ReturnType<typeof fetchManagedSystems>>['items'][number],
+    ],
+  });
+  vi.mocked(resolveActors).mockImplementation(async ({ teamIds }) => ({
+    actors: [],
+    teams: teamIds?.includes(id) ? [{ id, name: '후보 운영팀' }] : [],
+  }));
+  try {
+    await openConvertForm();
+    await chooseOption('담당자', '팀 지정');
+    fireEvent.click(screen.getByRole('combobox', { name: '팀 선택' }));
+    expect(await screen.findByRole('option', { name: '후보 운영팀' })).toBeInTheDocument();
+  } finally {
+    if (resolve) vi.mocked(resolveActors).mockImplementation(resolve);
+  }
+});

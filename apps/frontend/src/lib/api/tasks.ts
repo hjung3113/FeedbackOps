@@ -1,4 +1,6 @@
+import { taskDtoSchema } from '@fops/shared';
 import type { ListTasksResponse } from '@fops/shared';
+import { apiRequest } from './client';
 export type { ListTasksResponse } from '@fops/shared';
 import type {
   ConvertTaskRequestRequest,
@@ -16,6 +18,7 @@ export async function listTasks(
   options: {
     status?: TaskStatus;
     assignee?: string;
+    assignee_team_id?: string;
     managed_system_id?: string;
     public_update?: 'missing';
     milestone_id?: string;
@@ -29,6 +32,7 @@ export async function listTasks(
   if (options.cursor !== undefined) qs.set('cursor', options.cursor);
   if (options.status !== undefined) qs.set('status', options.status);
   if (options.assignee !== undefined) qs.set('assignee', options.assignee);
+  if (options.assignee_team_id !== undefined) qs.set('assignee_team_id', options.assignee_team_id);
   if (options.managed_system_id !== undefined) {
     qs.set('managed_system_id', options.managed_system_id);
   }
@@ -97,4 +101,18 @@ export async function linkTaskToFinding(
     idempotencyKey,
   });
   return res.data;
+}
+
+export async function assignTaskResponsibility(
+  id: string,
+  body: import('@fops/shared').AssignTaskResponsibilityRequest,
+  idempotencyKey: string,
+  ifMatch: string,
+) {
+  const response = await apiRequest('POST', `/tasks/${id}/responsibility`, taskDtoSchema, {
+    body,
+    idempotencyKey,
+    ifMatch,
+  });
+  return response.data;
 }

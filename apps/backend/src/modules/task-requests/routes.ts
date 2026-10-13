@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import {
   approveTaskRequestRequestSchema,
+  assignTaskRequestReviewerRequestSchema,
   createTaskRequestFromFindingRequestSchema,
   listTaskRequestsQuerySchema,
   rejectTaskRequestRequestSchema,
@@ -30,6 +31,45 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
   const { sessionService, taskRequestsService, workspaceId, rateLimitConfig } = opts;
 
   app.route({
+    method: 'POST',
+    url: '/task-requests/:id/reviewer',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id))
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      const rawBody = req.body ?? {};
+      const parsed = assignTaskRequestReviewerRequestSchema.safeParse(rawBody);
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+
+      const result = await taskRequestsService.assignReviewer({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        taskRequestId: id,
+        input: parsed.data,
+        idempotencyKey,
+
+        requestHash: hashRequestBody({ ...parsed.data, id, route: 'assignReviewer' }),
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
     method: 'GET',
     url: '/task-requests',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
@@ -49,6 +89,10 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
           workspace_id: sess.workspace_id,
           role_level: sess.role_level,
         },
+        ...(parsed.data.reviewer === undefined ? {} : { reviewer: parsed.data.reviewer }),
+        ...(parsed.data.reviewer_team_id === undefined
+          ? {}
+          : { reviewer_team_id: parsed.data.reviewer_team_id }),
         ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
         ...(parsed.data.managed_system_id !== undefined
           ? { managed_system_id: parsed.data.managed_system_id }

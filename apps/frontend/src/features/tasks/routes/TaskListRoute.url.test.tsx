@@ -60,6 +60,7 @@ const first: TaskDetailDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: actor,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,
@@ -242,6 +243,7 @@ it.each(['404', 'scope', 'assignee'] as const)(
       ...second,
       primary_managed_system_id: cause === 'scope' ? B : A,
       assignee_actor_id: cause === 'assignee' ? null : actor,
+      assignee_team_id: null,
     };
     mockTasks([first, inaccessible]);
     const view = cause === 'assignee' ? 'my' : 'backlog';

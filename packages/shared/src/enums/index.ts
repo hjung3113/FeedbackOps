@@ -7,6 +7,12 @@
 export const ROLE_LEVEL_VALUES = ['admin', 'developer', 'user'] as const;
 export type RoleLevel = (typeof ROLE_LEVEL_VALUES)[number];
 
+// Storage form. DB CHECK constraint on core.actors.actor_type matches this
+// list verbatim. `system` is the audit-authorship identity (seed), never an
+// interactive person or a responsibility target.
+export const ACTOR_TYPE_VALUES = ['internal_member', 'system'] as const;
+export type ActorType = (typeof ACTOR_TYPE_VALUES)[number];
+
 // Display form. CONTEXT.md prose uses Title-case for the *concept*; UI
 // dropdowns and labels render through this map. Never compare against
 // these strings — they are not the storage form.

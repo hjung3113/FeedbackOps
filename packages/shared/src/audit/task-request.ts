@@ -7,6 +7,25 @@
 // AUDIT_EVENT_DETAIL_SCHEMAS.
 
 import { z } from 'zod';
+const resolution = {
+  default_resolved: z.boolean().optional(),
+  source_rule: z
+    .enum([
+      'explicit',
+      'explicit_null',
+      'managed_system_reviewer',
+      'managed_system_owner',
+      'analytics_area_owner',
+      'workspace_fallback_queue',
+    ])
+    .optional(),
+  managed_system_id: z.string().uuid().optional(),
+};
+const reviewerAssignment = {
+  ...resolution,
+  assigned_reviewer_actor_id: z.string().uuid().nullable().optional(),
+  assigned_reviewer_team_id: z.string().uuid().nullable().optional(),
+};
 
 export const TASK_REQUEST_AUDIT_EVENT_TYPES = [
   'task_request_created_from_finding',
@@ -18,9 +37,11 @@ export const TASK_REQUEST_AUDIT_EVENT_TYPES = [
   'task_request_self_approval_denied',
   'task_created_from_request',
   'task_linked_to_request',
+  'task_request_reviewer_assigned',
 ] as const;
 
 export const taskRequestCreatedFromFindingDetailSchema = z.object({
+  ...reviewerAssignment,
   task_request_id: z.string().uuid(),
   source_finding_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
@@ -31,6 +52,7 @@ export type TaskRequestCreatedFromFindingDetail = z.infer<
 >;
 
 export const taskRequestCreatedFromVocDetailSchema = z.object({
+  ...reviewerAssignment,
   task_request_id: z.string().uuid(),
   source_voc_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
@@ -39,6 +61,7 @@ export const taskRequestCreatedFromVocDetailSchema = z.object({
 export type TaskRequestCreatedFromVocDetail = z.infer<typeof taskRequestCreatedFromVocDetailSchema>;
 
 export const taskRequestCreatedFromVocClusterDetailSchema = z.object({
+  ...reviewerAssignment,
   task_request_id: z.string().uuid(),
   source_voc_cluster_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
@@ -81,6 +104,9 @@ export type TaskRequestSelfApprovalDeniedDetail = z.infer<
 >;
 
 export const taskCreatedFromRequestDetailSchema = z.object({
+  ...resolution,
+  assignee_actor_id: z.string().uuid().nullable().optional(),
+  assignee_team_id: z.string().uuid().nullable().optional(),
   task_id: z.string().uuid(),
   source_task_request_id: z.string().uuid(),
   primary_managed_system_id: z.string().uuid(),
@@ -94,6 +120,15 @@ export const taskLinkedToRequestDetailSchema = z.object({
 });
 export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
 
+export const taskRequestReviewerAssignedDetailSchema = z
+  .object({
+    from_actor_id: z.string().uuid().nullable(),
+    from_team_id: z.string().uuid().nullable(),
+    to_actor_id: z.string().uuid().nullable(),
+    to_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
+
 export const TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
   task_request_created_from_voc: taskRequestCreatedFromVocDetailSchema,
@@ -104,4 +139,5 @@ export const TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
   task_created_from_request: taskCreatedFromRequestDetailSchema,
   task_linked_to_request: taskLinkedToRequestDetailSchema,
+  task_request_reviewer_assigned: taskRequestReviewerAssignedDetailSchema,
 } as const satisfies Record<(typeof TASK_REQUEST_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

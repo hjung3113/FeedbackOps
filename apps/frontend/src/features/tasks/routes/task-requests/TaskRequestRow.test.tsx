@@ -16,6 +16,8 @@ const REQUEST: TaskRequestDto = {
   requested_outcome: 'Task 전환 검토',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -127,4 +129,72 @@ describe('TaskRequestRow identity', () => {
       expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
     },
   );
+});
+
+it.each(['actor', 'team'] as const)(
+  'displays assigned %s separately from the actual decision Actor',
+  (mode) => {
+    const id = '60000000-0000-0000-0000-000000000006';
+    const actual = '70000000-0000-0000-0000-000000000007';
+    render(
+      <TaskRequestRow
+        selected={false}
+        onSelect={() => undefined}
+        item={{
+          ...REQUEST,
+          assigned_reviewer_actor_id: mode === 'actor' ? id : null,
+          assigned_reviewer_team_id: mode === 'team' ? id : null,
+          reviewer_actor_id: actual,
+        }}
+        names={{
+          actorsById: {
+            [id]: { id, display_name: '배정 운영자' },
+            [actual]: { id: actual, display_name: '실제 검토자' },
+          },
+          teamsById: { [id]: { name: '검토팀' } },
+          managedSystemsById: {},
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(mode === 'actor' ? /검토 담당 배정 운영자/ : /검토 담당 팀 · 검토팀/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/결정 · 실제 검토자/)).toBeInTheDocument();
+  },
+);
+
+it('renders a pending assigned reviewer as 검토 담당 in the meta line with a neutral undecided chip', () => {
+  const id = '60000000-0000-0000-0000-000000000006';
+  render(
+    <TaskRequestRow
+      selected={false}
+      onSelect={() => undefined}
+      item={{ ...REQUEST, assigned_reviewer_actor_id: id }}
+      names={{
+        actorsById: { [id]: { id, display_name: '배정 운영자' } },
+        managedSystemsById: {},
+      }}
+    />,
+  );
+  expect(screen.getByText(/검토 담당/)).toBeInTheDocument();
+  expect(screen.getByText('미결정')).toBeInTheDocument();
+  expect(screen.queryByText('검토자 없음')).not.toBeInTheDocument();
+});
+
+it('labels the decided row with 결정 and renders no unrouted chip once a decider exists', () => {
+  const actual = '70000000-0000-0000-0000-000000000007';
+  render(
+    <TaskRequestRow
+      selected={false}
+      onSelect={() => undefined}
+      item={{ ...REQUEST, reviewer_actor_id: actual }}
+      names={{
+        actorsById: { [actual]: { id: actual, display_name: '실제 검토자' } },
+        managedSystemsById: {},
+      }}
+    />,
+  );
+  expect(screen.getByText(/결정 · 실제 검토자/)).toBeInTheDocument();
+  expect(screen.queryByText('검토자 없음')).not.toBeInTheDocument();
+  expect(screen.queryByText('미결정')).not.toBeInTheDocument();
 });

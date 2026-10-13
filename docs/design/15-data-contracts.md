@@ -31,7 +31,7 @@ core.managed_systems
 - default_owner_actor_id: uuid, nullable
 - default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
 - default_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
-- default_reviewer_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with reviewer Actor
+- default_reviewer_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null with reviewer Actor
 - default_survey_operator_actor_id: uuid, nullable
 - archived_at: timestamp, nullable
 - archived_by_actor_id: uuid, nullable
@@ -202,8 +202,8 @@ findings
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
-- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
-- owner_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with owner Actor
+- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation/edit routing #1090)
+- owner_team_id: uuid, nullable (storage #1089; creation/edit routing #1090, ADR-0067); XOR-or-both-null with owner Actor
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
@@ -355,8 +355,8 @@ task_requests
 - requested_outcome: text, required
 - requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- assigned_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
-- assigned_reviewer_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null
+- assigned_reviewer_actor_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067)
+- assigned_reviewer_team_id: uuid, nullable (storage #1089; creation/edit routing #1091, ADR-0067); XOR-or-both-null
 - reviewer_actor_id: uuid, nullable; actual deciding Actor, never a routing default
 - decision_reason: text, nullable
 - decided_at: timestamp, nullable
@@ -395,7 +395,7 @@ tasks
 - status: enum(backlog, todo, doing, review, done, released, reopened), required
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
-- assignee_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with assignee Actor
+- assignee_team_id: uuid, nullable (storage #1089; conversion/edit routing #1091, ADR-0067); XOR-or-both-null with assignee Actor
 - due_date: date, nullable
 - milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable

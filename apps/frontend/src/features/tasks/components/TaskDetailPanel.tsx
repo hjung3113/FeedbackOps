@@ -3,6 +3,7 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { getTask } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getMilestone } from '@/lib/api/milestones';
+import { assignTaskResponsibility } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -28,12 +29,13 @@ import {
   SeverityBadge,
   Skeleton,
   SkeletonBlocks,
-  UnassignedBadge,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
+import { useTaskManagedSystems } from '../adapters/taskDisplayAdapters';
+import { ResponsibilityEditor } from './ResponsibilityEditor';
 
 const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> =
   {
@@ -171,6 +173,8 @@ export function TaskDetailPanel({
     staleTime: 30 * 1000,
   });
   const { data: me } = useMe();
+  // Team candidates for the assignee picker: Managed System defaults (ADR-0067).
+  const managedSystems = useTaskManagedSystems();
   // #377: backend gates Task comment GET+POST behind finding.manage + elevated
   // role on the Task's Managed System — same gate drives the composer hint.
   // Key resolves once the task loads; until then the check runs workspace-wide
@@ -225,6 +229,9 @@ export function TaskDetailPanel({
   const source = task.source;
   const sourceFinding = source?.finding;
   const sourceVoc = source?.voc;
+  const managedSystem = managedSystems.find(
+    (system) => system.id === task.primary_managed_system_id,
+  );
   return (
     <TaskDetailPanelFrame
       ariaLive="off"
@@ -270,13 +277,35 @@ export function TaskDetailPanel({
             />
           </FieldRow>
           <FieldRow label="담당자">
-            {task.assignee_actor_id ? (
-              <span className="text-sm text-text-primary">
-                {actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser}
-              </span>
-            ) : (
-              <UnassignedBadge />
-            )}
+            <ResponsibilityEditor
+              key={task.id}
+              label="담당자"
+              actorId={task.assignee_actor_id}
+              teamId={task.assignee_team_id}
+              canEdit={
+                me?.actor.role_level === 'admin' ||
+                (me?.actor.role_level === 'developer' && canManageNotes)
+              }
+              teamCandidates={[
+                ...new Set(
+                  [
+                    managedSystem?.default_owner_team_id,
+                    managedSystem?.default_reviewer_team_id,
+                  ].filter((id): id is string => id != null),
+                ),
+              ]}
+              onSave={(actorId, teamId, key) =>
+                assignTaskResponsibility(
+                  task.id,
+                  {
+                    assignee_actor_id: actorId,
+                    assignee_team_id: teamId,
+                  },
+                  key,
+                  task.updated_at,
+                )
+              }
+            />
           </FieldRow>
           <FieldRow label="마감일">
             {task.due_date ?? <span className="text-text-muted">-</span>}

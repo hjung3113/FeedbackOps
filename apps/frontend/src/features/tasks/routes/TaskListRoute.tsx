@@ -25,7 +25,9 @@ import * as React from 'react';
 import {
   resolveTaskAssignee,
   taskPriorityToSeverity,
+  taskTeamMark,
   useTaskManagedSystemNames,
+  useTaskTeamNames,
 } from '../adapters/taskDisplayAdapters';
 import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
@@ -86,6 +88,7 @@ export function TaskListRoute({
     () => tasksQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [tasksQuery.data],
   );
+  const teamNames = useTaskTeamNames(items);
   const { selectedId, linkMissing, selectRow, closePanel, markLinkMissing } = useTaskPanelSelection(
     {
       selectedParam,
@@ -203,6 +206,8 @@ export function TaskListRoute({
                         ) : (
                           GLOSSARY.unknownUser
                         )
+                      ) : task.assignee_team_id ? (
+                        taskTeamMark(task.assignee_team_id, teamNames)
                       ) : (
                         <UnassignedBadge />
                       )}

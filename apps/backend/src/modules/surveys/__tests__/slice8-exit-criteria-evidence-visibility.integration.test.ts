@@ -349,6 +349,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         'workspace_id',
       ],
       taskRequest: [
+        'assigned_reviewer_actor_id',
+        'assigned_reviewer_team_id',
         'created_at',
         'decision_reason',
         'decided_at',
@@ -369,6 +371,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       task: [
         'analytics_area_id',
         'assignee_actor_id',
+        'assignee_team_id',
         'created_at',
         'created_by',
         'display_id',
@@ -441,9 +444,15 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
       [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
     );
+    // 56-F creation responses add the safe responsibility resolution (api/tasks.md).
     expect(Object.keys(taskRequest).sort()).toEqual(
       [
+        'assigned_reviewer_actor_id',
+        'assigned_reviewer_team_id',
         'created_at',
+        'default_resolved',
+        'managed_system_id',
+        'source_rule',
         'decision_reason',
         'decided_at',
         'display_id',

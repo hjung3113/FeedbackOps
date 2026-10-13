@@ -162,6 +162,10 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
+    await migrateHandle.pool.query(
+      `delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 

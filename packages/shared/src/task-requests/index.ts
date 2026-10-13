@@ -17,6 +17,8 @@ export const createTaskRequestFromFindingRequestSchema = z
   .object({
     evidence_summary: z.string().trim().min(1).max(4000),
     requested_outcome: z.string().trim().min(1).max(4000),
+    assigned_reviewer_actor_id: z.string().uuid().nullable().optional(),
+    assigned_reviewer_team_id: z.string().uuid().nullable().optional(),
   })
   .strict();
 export type CreateTaskRequestFromFindingRequest = z.infer<
@@ -32,6 +34,8 @@ export type CreateTaskRequestFromVocClusterRequest = CreateTaskRequestRequest;
 export const listTaskRequestsQuerySchema = z
   .object({
     status: taskRequestStatusSchema.optional(),
+    reviewer: z.union([z.string().uuid(), z.literal('me')]).optional(),
+    reviewer_team_id: z.string().uuid().optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -74,11 +78,25 @@ export const taskRequestDtoSchema = z
     requested_outcome: z.string(),
     requester_actor_id: z.string().uuid(),
     status: taskRequestStatusSchema,
+    assigned_reviewer_actor_id: z.string().uuid().nullable(),
+    assigned_reviewer_team_id: z.string().uuid().nullable(),
     reviewer_actor_id: z.string().uuid().nullable(),
     decision_reason: z.string().nullable(),
     decided_at: z.string().datetime().nullable(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
+    default_resolved: z.boolean().optional(),
+    source_rule: z
+      .enum([
+        'explicit',
+        'explicit_null',
+        'managed_system_reviewer',
+        'managed_system_owner',
+        'analytics_area_owner',
+        'workspace_fallback_queue',
+      ])
+      .optional(),
+    managed_system_id: z.string().uuid().optional(),
     source: z
       .object({
         type: taskRequestSourceTypeSchema,
@@ -115,3 +133,13 @@ export const listTaskRequestsResponseSchema = z
   })
   .strict();
 export type ListTaskRequestsResponse = z.infer<typeof listTaskRequestsResponseSchema>;
+
+export const assignTaskRequestReviewerRequestSchema = z
+  .object({
+    assigned_reviewer_actor_id: z.string().uuid().nullable(),
+    assigned_reviewer_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type AssignTaskRequestReviewerRequest = z.infer<
+  typeof assignTaskRequestReviewerRequestSchema
+>;

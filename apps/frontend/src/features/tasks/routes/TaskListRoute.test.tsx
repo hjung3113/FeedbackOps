@@ -70,6 +70,7 @@ vi.mock('@/lib/api', () => {
     status: 'backlog',
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+    assignee_team_id: null,
     due_date: null,
     milestone_id: null,
     analytics_area_id: null,
@@ -115,6 +116,7 @@ function priorityTask(priority: TaskDto['priority']): TaskDto {
     status: 'backlog',
     priority,
     assignee_actor_id: null,
+    assignee_team_id: null,
     due_date: null,
     milestone_id: null,
     analytics_area_id: null,
@@ -137,6 +139,7 @@ describe('TaskListRoute display ids', () => {
       id: '10000000-0000-0000-0000-000000000002',
       display_id: 'TASK-1001',
       assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+      assignee_team_id: null,
     };
     vi.mocked(listTasks).mockResolvedValueOnce({ items: [unassigned, unresolved] });
     renderWithClient(<TaskListRoute />);
@@ -149,6 +152,31 @@ describe('TaskListRoute display ids', () => {
     expect(screen.getByText(GLOSSARY.unknownUser)).toBeInTheDocument();
     expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
     expect(screen.queryByText('Assigned')).not.toBeInTheDocument();
+  });
+
+  it('shows team responsibility in the list without labeling it unassigned or choosing a member', async () => {
+    const task = {
+      ...priorityTask('high'),
+      assignee_team_id: '60000000-0000-0000-0000-000000000006',
+    };
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [task] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ actors: [], teams: [{ id: task.assignee_team_id, name: '운영팀' }] }),
+            { status: 200 },
+          ),
+      ),
+    );
+    try {
+      renderWithClient(<TaskListRoute />);
+      expect(await screen.findByText(/팀 · 운영팀/)).toBeInTheDocument();
+      expect(screen.queryByText('담당자 없음')).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('uses the shared unassigned badge in Task detail properties', async () => {
@@ -172,6 +200,7 @@ describe('TaskListRoute display ids', () => {
     vi.mocked(getTask).mockResolvedValueOnce({
       ...priorityTaskDetail('high'),
       assignee_actor_id: '60000000-0000-0000-0000-000000000006',
+      assignee_team_id: null,
     });
     renderWithClient(
       <TaskDetailPanel
@@ -389,6 +418,7 @@ function taskDetailFixture(
     status: 'backlog',
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+    assignee_team_id: null,
     due_date: null,
     milestone_id: milestoneId,
     analytics_area_id: null,

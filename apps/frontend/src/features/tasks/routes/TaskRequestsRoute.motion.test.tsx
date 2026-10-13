@@ -19,6 +19,11 @@ vi.mock('@/lib/auth/useMe', () => ({
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: async () => ({ items: [] }),
 }));
+// Motion tests await isFetching() === 0; the picker's candidate read must not
+// keep a query in flight.
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
 vi.mock('@fops/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@fops/ui')>()),
   ListShell: ({ list, detailPanel }: { list: ReactNode; detailPanel?: ReactNode }) => (
@@ -58,6 +63,8 @@ const rows: TaskRequestDto[] = [1, 2, 3].map((n) => ({
   requested_outcome: `Request ${n}`,
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,

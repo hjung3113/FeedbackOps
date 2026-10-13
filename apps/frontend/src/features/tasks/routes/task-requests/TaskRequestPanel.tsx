@@ -1,6 +1,7 @@
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
+import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import {
@@ -41,6 +42,7 @@ export function buildTaskRequestSections(
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
   names: NameMaps;
+  eligibleActors?: readonly WorkspaceActor[];
   currentActorId: string | null;
   currentRole: string | null;
   onClose: () => void;
@@ -50,6 +52,7 @@ interface TaskRequestPanelProps {
 export function TaskRequestPanel({
   item,
   names,
+  eligibleActors = [],
   currentActorId,
   currentRole,
   onClose,
@@ -72,6 +75,17 @@ export function TaskRequestPanel({
   const { sourceFindingQuery, conversion, link, resultingTask, taskForOutcome } =
     useTaskRequestPanelController({ item, currentRole });
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
+  // Known-team candidates for the conversion form's team picker: the Managed
+  // System defaults plus every team the queue context already names (ADR-0067).
+  const conversionTeamCandidates = [
+    ...new Set(
+      [
+        names.managedSystemsById[item.primary_managed_system_id]?.defaultReviewerTeamId,
+        names.managedSystemsById[item.primary_managed_system_id]?.defaultOwnerTeamId,
+        ...Object.keys(names.teamsById ?? {}),
+      ].filter((id): id is string => id !== undefined),
+    ),
+  ];
   const sections = buildTaskRequestSections(showDecisionSummary, item.source_type === 'finding');
 
   // Task Request has no impact field; omit the prototype's status-derived row (#585).
@@ -126,6 +140,8 @@ export function TaskRequestPanel({
             decision={decision}
             conversion={conversion}
             link={link}
+            teamCandidates={conversionTeamCandidates}
+            eligibleActors={eligibleActors}
           />
         )}
 
@@ -133,7 +149,12 @@ export function TaskRequestPanel({
           <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
         )}
 
-        <TaskRequestPropertiesSection item={item} names={names} reviewer={reviewer} />
+        <TaskRequestPropertiesSection
+          item={item}
+          names={names}
+          reviewer={reviewer}
+          {...(conversion.canAssign === undefined ? {} : { canAssign: conversion.canAssign })}
+        />
 
         <section data-anchor="audit" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>이력</PanelSectionTitle>

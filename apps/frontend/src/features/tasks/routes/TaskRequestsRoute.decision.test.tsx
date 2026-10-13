@@ -36,6 +36,8 @@ const taskRequest: TaskRequestDto = {
   requested_outcome: 'Review the candidate task',
   requester_actor_id: requesterId,
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -505,6 +507,8 @@ describe('TaskRequestsRoute decision dialogs', () => {
     const approvedItem: TaskRequestDto = {
       ...taskRequest,
       status: 'approved',
+      assigned_reviewer_actor_id: null,
+      assigned_reviewer_team_id: null,
       reviewer_actor_id: reviewerId,
       decided_at: '2026-07-10T01:00:00.000Z',
     };

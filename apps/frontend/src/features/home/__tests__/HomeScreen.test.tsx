@@ -1421,6 +1421,55 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('sidebar-nav-my-work')).not.toBeInTheDocument();
   });
 
+  it('requests only the current Actor assigned-reviewer queue and keeps scope-wide summary', async () => {
+    const base = installFetch();
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.startsWith('/task-requests')) {
+        const query = new URL(url, 'http://localhost').searchParams;
+        return new Response(
+          JSON.stringify({
+            items:
+              query.get('reviewer') === 'me'
+                ? [
+                    {
+                      id: 'req-personal',
+                      display_id: 'REQ-777',
+                      requested_outcome: '내 검토 요청',
+                      status: 'pending_review',
+                      assigned_reviewer_actor_id: '11111111-1111-4111-8111-111111111111',
+                      assigned_reviewer_team_id: null,
+                    },
+                  ]
+                : [
+                    {
+                      id: 'req-other',
+                      display_id: 'REQ-778',
+                      requested_outcome: '다른 검토 요청',
+                      status: 'pending_review',
+                    },
+                  ],
+          }),
+          { status: 200 },
+        );
+      }
+      return base(input, init);
+    }) as typeof globalThis.fetch;
+    renderHome();
+    expect(await screen.findByText('REQ-777 — 내 검토 요청')).toBeInTheDocument();
+    expect(screen.queryByText('REQ-778 — 다른 검토 요청')).not.toBeInTheDocument();
+    expect(
+      requested.some((url) => url.startsWith('/task-requests') && url.includes('reviewer=me')),
+    ).toBe(true);
+    expect(
+      requested
+        .filter((url) => url.startsWith('/dashboard/summary'))
+        .every((url) => !url.includes('reviewer=')),
+    ).toBe(true);
+  });
+
   it('AC-E3b keeps the assigned Task and pending Request rows linking to real routes', async () => {
     // The shared installFetch() returns empty lists, which would render the
     // "nothing assigned" copy and leave this assertion nothing to beat. Seed
@@ -1437,7 +1486,10 @@ describe('HomeScreen route content', () => {
           }),
           { status: 200 },
         );
-      if (url.startsWith('/task-requests'))
+      if (
+        url.startsWith('/task-requests') &&
+        new URL(url, 'http://localhost').searchParams.get('reviewer') === 'me'
+      )
         return new Response(
           JSON.stringify({
             items: [
@@ -1445,6 +1497,8 @@ describe('HomeScreen route content', () => {
                 id: 'req-b2',
                 display_id: 'REQ-902',
                 requested_outcome: '재인증 흐름 개선',
+                assigned_reviewer_actor_id: '11111111-1111-4111-8111-111111111111',
+                assigned_reviewer_team_id: null,
                 status: 'pending_review',
               },
             ],

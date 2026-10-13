@@ -15,11 +15,16 @@ import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertMsDirectly, insertTeamDirectly } from '../../../test-support/core-fixtures.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  denyCapability,
+  expireCapabilityGrant,
+  grantCapability,
+  revokeCapabilityGrant,
+} from '../../../test-support/permissions-fixtures.js';
 import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import {
@@ -48,6 +53,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   let userActorId: string;
   let notifications: RecordingNotificationDispatcher;
   let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
+  const teamIds: string[] = [];
   const foreignActorIds: string[] = [];
   const foreignWorkspaceIds: string[] = [];
 
@@ -123,6 +129,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           and event_type in (
             'task_created_from_request',
             'task_linked_to_request',
+            'task_responsibility_assigned',
             'task_request_approved',
             'entity_link.created'
           )`,
@@ -230,7 +237,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
+    await migrateHandle.pool.query(
+      'delete from core.responsibility_default_failures where workspace_id = $1 and managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)',
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    await migrateHandle.pool.query('delete from core.teams where id = any($1::uuid[])', [teamIds]);
+    teamIds.length = 0;
   }
 
   async function seedFinding(msId: string, title = 'Seed finding'): Promise<string> {
@@ -469,7 +482,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     const res = await convert(adminCookie, request.id, {
       title: 'Stabilize export pipeline task',
       priority: 'high',
-      assignee_actor_id: userActorId,
+      assignee_actor_id: adminActorId,
       due_date: '2026-08-15',
       milestone_id: null,
       analytics_area_id: null,
@@ -481,7 +494,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       title: 'Stabilize export pipeline task',
       status: 'backlog',
       priority: 'high',
-      assignee_actor_id: userActorId,
+      assignee_actor_id: adminActorId,
       due_date: '2026-08-15',
       primary_managed_system_id: request.msId,
       source_task_request_id: request.id,
@@ -489,7 +502,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(notifications.jobs).toEqual([
       expect.objectContaining({
         workspace_id: WORKSPACE_ID,
-        actor_id: userActorId,
+        actor_id: adminActorId,
         event_type: 'task.assigned_to_me',
         subject_type: 'task',
         subject_id: body.id,
@@ -541,6 +554,235 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     });
   });
 
+  it.each(['automatic', 'explicit-null'] as const)(
+    'conversion %s preserves Backlog and provenance and replays one concrete notification',
+    async (mode) => {
+      const request = await seedApprovedTaskRequest();
+      await migrateHandle.pool.query(
+        'update core.managed_systems set default_owner_actor_id = $1 where id = $2',
+        [adminActorId, request.msId],
+      );
+      const key = randomUUID();
+      const input = {
+        title: 'Responsibility conversion',
+        ...(mode === 'explicit-null' ? { assignee_actor_id: null, assignee_team_id: null } : {}),
+      };
+      const first = await convert(adminCookie, request.id, input, key);
+      expect(first.statusCode).toBe(201);
+      expect(first.json()).toMatchObject({
+        status: 'backlog',
+        created_by: adminActorId,
+        assignee_actor_id: mode === 'automatic' ? adminActorId : null,
+        assignee_team_id: null,
+        default_resolved: mode === 'automatic',
+        source_rule: mode === 'automatic' ? 'managed_system_owner' : 'explicit_null',
+        managed_system_id: request.msId,
+      });
+      const replay = await convert(adminCookie, request.id, input, key);
+      expect(replay.json()).toEqual(first.json());
+      expect(notifications.jobs).toHaveLength(mode === 'automatic' ? 1 : 0);
+      const audits = await migrateHandle.pool.query(
+        `select detail from core.audit_log where subject_id = $1 and event_type = 'task_created_from_request'`,
+        [first.json().id],
+      );
+      expect(audits.rows).toHaveLength(1);
+      expect(audits.rows[0]?.detail).toMatchObject({
+        default_resolved: mode === 'automatic',
+        assignee_actor_id: mode === 'automatic' ? adminActorId : null,
+        assignee_team_id: null,
+      });
+    },
+  );
+
+  it.each(['explicit', 'default', 'aa', 'archived', 'xor'] as const)(
+    'converts %s team responsibility with atomic diagnostics, replay and no team notification',
+    async (mode) => {
+      const request = await seedApprovedTaskRequest();
+      const teamId = await insertTeamDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+      teamIds.push(teamId);
+      if (mode === 'archived')
+        await migrateHandle.pool.query('update core.teams set archived_at = now() where id = $1', [
+          teamId,
+        ]);
+      if (mode === 'default')
+        await migrateHandle.pool.query(
+          'update core.managed_systems set default_owner_team_id = $1 where id = $2',
+          [teamId, request.msId],
+        );
+      const areaId = mode === 'aa' ? await seedAnalyticsArea({ msId: request.msId }) : undefined;
+      if (areaId)
+        await migrateHandle.pool.query(
+          'update core.analytics_areas set owner_team_id = $1 where id = $2',
+          [teamId, areaId],
+        );
+      const input = {
+        title: 'Team conversion',
+        ...(areaId ? { analytics_area_id: areaId } : {}),
+        ...(['explicit', 'archived', 'xor'].includes(mode)
+          ? {
+              assignee_actor_id: mode === 'xor' ? adminActorId : null,
+              assignee_team_id: teamId,
+            }
+          : {}),
+      };
+      const key = randomUUID();
+      const first = await convert(adminCookie, request.id, input, key);
+      if (mode === 'archived' || mode === 'xor') {
+        expect(first.statusCode).toBe(422);
+        expect(first.json().code).toBe('validation.failed');
+        await expectNoConversionSideEffects(request.id);
+      } else {
+        expect(first.statusCode).toBe(201);
+        expect(first.json()).toMatchObject({
+          status: 'backlog',
+          assignee_actor_id: null,
+          assignee_team_id: teamId,
+          default_resolved: mode !== 'explicit',
+          source_rule:
+            mode === 'aa'
+              ? 'analytics_area_owner'
+              : mode === 'default'
+                ? 'managed_system_owner'
+                : 'explicit',
+        });
+        expect((await convert(adminCookie, request.id, input, key)).json()).toEqual(first.json());
+        const audits = await migrateHandle.pool.query(
+          "select detail from core.audit_log where subject_id = $1 and event_type = 'task_created_from_request'",
+          [first.json().id],
+        );
+        expect(audits.rows).toHaveLength(1);
+        expect(audits.rows[0]?.detail).toMatchObject({
+          assignee_actor_id: null,
+          assignee_team_id: teamId,
+        });
+        const diagnostics = await migrateHandle.pool.query(
+          'select rule from core.responsibility_default_failures where managed_system_id = $1',
+          [request.msId],
+        );
+        expect(diagnostics.rows).toHaveLength(mode === 'aa' ? 1 : 0);
+      }
+      expect(notifications.jobs).toHaveLength(0);
+    },
+  );
+
+  it('source Task responsibility edit preserves workflow, audits once and rejects stale/unauthorized edits', async () => {
+    const request = await seedApprovedTaskRequest();
+    const task = await convert(adminCookie, request.id, {
+      title: 'Editable responsibility',
+      assignee_actor_id: null,
+    });
+    expect(task.statusCode).toBe(201);
+    const teamId = await insertTeamDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+    teamIds.push(teamId);
+    const key = randomUUID();
+    const send = (cookie: string, version = task.json().updated_at, requestKey = key) =>
+      app.inject({
+        method: 'POST',
+        url: `/tasks/${task.json().id}/responsibility`,
+        payload: { assignee_actor_id: null, assignee_team_id: teamId },
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+          'Idempotency-Key': requestKey,
+          'If-Match': version,
+        },
+      });
+    const first = await send(adminCookie);
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      status: 'backlog',
+      created_by: adminActorId,
+      assignee_actor_id: null,
+      assignee_team_id: teamId,
+    });
+    expect((await send(adminCookie)).json()).toEqual(first.json());
+    expect((await send(userCookie, first.json().updated_at, randomUUID())).statusCode).toBe(403);
+    expect((await send(adminCookie, '2000-01-01T00:00:00.000Z', randomUUID())).statusCode).toBe(
+      409,
+    );
+    const audits = await migrateHandle.pool.query(
+      "select detail from core.audit_log where subject_id = $1 and event_type = 'task_responsibility_assigned'",
+      [task.json().id],
+    );
+    expect(audits.rows).toHaveLength(1);
+    expect(audits.rows[0]?.detail).toMatchObject({ from_actor_id: null, to_team_id: teamId });
+    expect(notifications.jobs).toHaveLength(0);
+  });
+
+  it.each(['revoked', 'expired', 'denied'] as const)(
+    'rejects %s explicit Actor but automatically falls back without replay duplication',
+    async (mode) => {
+      const request = await seedApprovedTaskRequest();
+      const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+      const grant = await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        dev.id,
+        'finding.manage',
+        request.msId,
+        adminActorId,
+      );
+      if (mode === 'revoked') await revokeCapabilityGrant(dbHandle, grant, adminActorId);
+      if (mode === 'expired') await expireCapabilityGrant(dbHandle, grant);
+      if (mode === 'denied')
+        await denyCapability(
+          dbHandle,
+          WORKSPACE_ID,
+          dev.id,
+          'finding.manage',
+          request.msId,
+          adminActorId,
+        );
+      await migrateHandle.pool.query(
+        'update core.managed_systems set default_owner_actor_id = $1 where id = $2',
+        [dev.id, request.msId],
+      );
+      const invalid = await convert(adminCookie, request.id, {
+        title: 'Explicit rejected',
+        assignee_actor_id: dev.id,
+      });
+      expect(invalid.statusCode).toBe(422);
+      expect(invalid.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['assignee_actor_id'], code: 'ineligible_actor' }] },
+      });
+      await expectNoConversionSideEffects(request.id);
+      const key = randomUUID();
+      const input = { title: 'Automatic fallback' };
+      const fallback = await convert(adminCookie, request.id, input, key);
+      expect(fallback.statusCode).toBe(201);
+      expect(fallback.json()).toMatchObject({
+        assignee_actor_id: null,
+        assignee_team_id: null,
+        default_resolved: false,
+        source_rule: 'workspace_fallback_queue',
+        status: 'backlog',
+      });
+      expect((await convert(adminCookie, request.id, input, key)).json()).toEqual(fallback.json());
+      const diagnostics = await migrateHandle.pool.query(
+        'select rule, category from core.responsibility_default_failures where managed_system_id = $1 order by rule',
+        [request.msId],
+      );
+      expect(diagnostics.rows).toHaveLength(2);
+      expect(diagnostics.rows).toContainEqual({
+        rule: 'managed_system_owner',
+        category: 'ineligible_actor',
+      });
+      expect(notifications.jobs).toHaveLength(0);
+    },
+  );
+
+  it('rejects explicit User responsibility without granting Task management', async () => {
+    const request = await seedApprovedTaskRequest();
+    const response = await convert(adminCookie, request.id, {
+      title: 'Ineligible assignment',
+      assignee_actor_id: userActorId,
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('validation.failed');
+    await expectNoConversionSideEffects(request.id);
+    expect(notifications.jobs).toEqual([]);
+  });
+
   it('conversion without an assignee creates no assignment notification', async () => {
     const request = await seedApprovedTaskRequest();
 
@@ -551,7 +793,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(notifications.jobs).toEqual([]);
   });
 
-  it('convert rejects an assignee from another workspace with not_found and persists nothing (#554)', async () => {
+  it('convert rejects an assignee from another workspace with validation.failed and persists nothing (#554)', async () => {
     const foreignWorkspace = await migrateHandle.pool.query<{ id: string }>(
       'insert into core.workspaces (name) values ($1) returning id',
       [`${SLUG_PREFIX}-foreign-${randomUUID()}`],
@@ -580,13 +822,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       assignee_actor_id: foreignActorId,
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.json<{ code: string }>().code).toBe('not_found.record');
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ code: string }>().code).toBe('validation.failed');
     await expectNoConversionSideEffects(request.id);
     expect(notifications.jobs).toEqual([]);
   });
 
-  it('convert rejects an unknown assignee with not_found and persists nothing (#554)', async () => {
+  it('convert rejects an unknown assignee with validation.failed and persists nothing (#554)', async () => {
     const request = await seedApprovedTaskRequest();
 
     const response = await convert(adminCookie, request.id, {
@@ -594,8 +836,8 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       assignee_actor_id: randomUUID(),
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.json<{ code: string }>().code).toBe('not_found.record');
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ code: string }>().code).toBe('validation.failed');
     await expectNoConversionSideEffects(request.id);
     expect(notifications.jobs).toEqual([]);
   });
@@ -606,7 +848,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     const response = await convert(
       adminCookie,
       request.id,
-      { title: 'Transactional assignment', assignee_actor_id: userActorId },
+      { title: 'Transactional assignment', assignee_actor_id: adminActorId },
       randomUUID(),
       rollbackApp,
     );
@@ -617,7 +859,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     const [payload] = failAfterEnqueue.attemptedPayloads;
     if (!payload) throw new Error('notification enqueue payload missing');
     expect(payload).toMatchObject({
-      actor_id: userActorId,
+      actor_id: adminActorId,
       event_type: 'task.assigned_to_me',
       subject_type: 'task',
     });
@@ -629,6 +871,47 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
     );
     expect(jobs.rowCount).toBe(0);
+  });
+
+  it('rolls back automatic owner conversion when its concrete notification fails', async () => {
+    const request = await seedApprovedTaskRequest();
+    await migrateHandle.pool.query(
+      'update core.managed_systems set default_owner_actor_id = $1 where id = $2',
+      [adminActorId, request.msId],
+    );
+    const key = randomUUID();
+    const response = await convert(
+      adminCookie,
+      request.id,
+      { title: 'Automatic transactional assignment' },
+      key,
+      rollbackApp,
+    );
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    await expectNoConversionSideEffects(request.id);
+    const [payload] = failAfterEnqueue.attemptedPayloads;
+    if (!payload) throw new Error('automatic notification enqueue payload missing');
+    expect(payload.actor_id).toBe(adminActorId);
+    const jobs = await migrateHandle.pool.query(
+      `select 1 from pgboss.job where name = $1 and data ->> 'correlation_id' = $2`,
+      [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
+    );
+    expect(jobs.rows).toHaveLength(0);
+    const diagnostics = await migrateHandle.pool.query(
+      'select 1 from core.responsibility_default_failures where managed_system_id = $1',
+      [request.msId],
+    );
+    expect(diagnostics.rows).toHaveLength(0);
+    // A failed transaction must not cache a success; retry on the normal route can complete.
+    const retry = await convert(
+      adminCookie,
+      request.id,
+      { title: 'Automatic transactional assignment' },
+      key,
+    );
+    expect(retry.statusCode).toBe(201);
+    expect(retry.json().assignee_actor_id).toBe(adminActorId);
   });
 
   it('AC-C7a: conversion projects the exact new task id onto its Finding', async () => {

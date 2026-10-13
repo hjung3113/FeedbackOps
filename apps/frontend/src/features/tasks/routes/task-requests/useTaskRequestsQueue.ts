@@ -60,13 +60,18 @@ export interface UseTaskRequestsQueueResult {
 export function useTaskRequestsQueue({
   selectedParam,
   managedSystem,
+  reviewer,
+  reviewerTeam,
   onSelectionChange,
 }: {
+  reviewer?: string | undefined;
+  reviewerTeam?: string | undefined;
   selectedParam?: string | undefined;
   managedSystem?: string | undefined;
   onSelectionChange?: ((id: string | null, replace: boolean) => void) | undefined;
 }): UseTaskRequestsQueueResult {
   const queryClient = useQueryClient();
+  const meQuery = useMe();
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
   const [decisionSelection, setDecisionSelection] = React.useState<string | null>(null);
   const scope = managedSystem === undefined ? {} : { managed_system_id: managedSystem };
@@ -75,12 +80,22 @@ export function useTaskRequestsQueue({
     queryFn: ({ signal }) => fetchTaskRequests({ ...scope, signal, limit: 1 }),
   });
   const taskRequestsQuery = useInfiniteQuery({
-    queryKey: ['task-requests', managedSystem, 'pages', activeTab] as const,
+    queryKey: [
+      'task-requests',
+      managedSystem,
+      'pages',
+      activeTab,
+      ...(reviewer === undefined && reviewerTeam === undefined
+        ? []
+        : [reviewer, reviewerTeam, reviewer === 'me' ? meQuery.data?.actor.id : null]),
+    ] as const,
     staleTime: 30_000,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ signal, pageParam }) =>
       fetchTaskRequests({
         ...scope,
+        ...(reviewer === undefined ? {} : { reviewer }),
+        ...(reviewerTeam === undefined ? {} : { reviewer_team_id: reviewerTeam }),
         signal,
         limit: PAGE_SIZE,
         ...(activeTab === 'all' ? {} : { status: activeTab }),
@@ -96,7 +111,7 @@ export function useTaskRequestsQueue({
     useTaskPanelSelection({
       selectedParam,
       items,
-      context: [activeTab, managedSystem],
+      context: [JSON.stringify([activeTab, reviewer, reviewerTeam]), managedSystem],
       onSelectionChange,
     });
   if (decisionSelection !== null) {
@@ -167,7 +182,6 @@ export function useTaskRequestsQueue({
     if (activeTab !== 'all' && activeTab !== destination) setActiveTab(destination);
   }, [selectedParam, selectedId, restoredDetail, managedSystem, activeTab]);
 
-  const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
@@ -178,7 +192,7 @@ export function useTaskRequestsQueue({
     () => [
       ...new Set(
         [...items, ...(selected ? [selected] : [])].flatMap((item) =>
-          [item.requester_actor_id, item.reviewer_actor_id].filter(
+          [item.requester_actor_id, item.reviewer_actor_id, item.assigned_reviewer_actor_id].filter(
             (id): id is string => id !== null,
           ),
         ),
@@ -186,10 +200,26 @@ export function useTaskRequestsQueue({
     ],
     [items, selected],
   );
+  const teamIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of [...items, ...(selected ? [selected] : [])]) {
+      if (item.assigned_reviewer_team_id) ids.add(item.assigned_reviewer_team_id);
+    }
+    // The reviewer filter's team picker offers teams already known in context:
+    // the current value and the scoped Managed System defaults.
+    if (reviewerTeam) ids.add(reviewerTeam);
+    const scoped =
+      managedSystem !== undefined && managedSystem !== 'all'
+        ? managedSystemsQuery.data?.items.find((system) => system.id === managedSystem)
+        : undefined;
+    if (scoped?.default_reviewer_team_id) ids.add(scoped.default_reviewer_team_id);
+    if (scoped?.default_owner_team_id) ids.add(scoped.default_owner_team_id);
+    return [...ids];
+  }, [items, selected, reviewerTeam, managedSystem, managedSystemsQuery.data?.items]);
   const actorsQuery = useQuery({
-    queryKey: ['actors-resolve', actorIds, []] as const,
-    queryFn: ({ signal }) => resolveActors({ actorIds }, signal),
-    enabled: actorIds.length > 0,
+    queryKey: ['actors-resolve', actorIds, teamIds] as const,
+    queryFn: ({ signal }) => resolveActors({ actorIds, teamIds }, signal),
+    enabled: actorIds.length > 0 || teamIds.length > 0,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -200,10 +230,23 @@ export function useTaskRequestsQueue({
     }
     const managedSystemsById: NameMaps['managedSystemsById'] = {};
     for (const ms of managedSystemsQuery.data?.items ?? []) {
-      managedSystemsById[ms.id] = { name: ms.name };
+      managedSystemsById[ms.id] = {
+        name: ms.name,
+        ...(ms.default_reviewer_team_id
+          ? { defaultReviewerTeamId: ms.default_reviewer_team_id }
+          : {}),
+        ...(ms.default_owner_team_id ? { defaultOwnerTeamId: ms.default_owner_team_id } : {}),
+      };
     }
-    return { actorsById, managedSystemsById };
-  }, [actorsQuery.data?.actors, managedSystemsQuery.data?.items]);
+    const teamsById = Object.fromEntries(
+      (actorsQuery.data?.teams ?? []).map((team) => [team.id, { name: team.name }]),
+    );
+    return {
+      actorsById,
+      managedSystemsById,
+      ...(Object.keys(teamsById).length > 0 ? { teamsById } : {}),
+    };
+  }, [actorsQuery.data?.actors, actorsQuery.data?.teams, managedSystemsQuery.data?.items]);
 
   const tabs = React.useMemo<ListToolbarTab[]>(
     () =>

@@ -1,4 +1,5 @@
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { formatShortDateTime } from '@/lib/format/datetime';
 import type { TaskRequestDto } from '@fops/shared';
 import { PanelSectionTitle } from '@fops/ui';
@@ -27,7 +28,7 @@ export function TaskRequestOutcomeSection({
         <div className="flex flex-wrap items-center gap-2">
           <TaskRequestBadge status={item.status} />
           <span className="text-xs text-text-muted">
-            검토자{' '}
+            {RESPONSIBILITY_COPY.decider}{' '}
             <strong className="text-text-secondary">{reviewerName ?? GLOSSARY.unknownUser}</strong>
             {item.decided_at && <> · {formatShortDateTime(item.decided_at)}</>}
           </span>

@@ -2,7 +2,7 @@ import { useDroppable } from '@dnd-kit/core';
 import type { TaskDto, TaskStatus } from '@fops/shared';
 import { InternalTaskBadge } from '@fops/ui';
 
-import { resolveTaskAssignee } from '../../adapters/taskDisplayAdapters';
+import { resolveTaskAssignee, taskTeamLabel } from '../../adapters/taskDisplayAdapters';
 import { TaskBoardCard } from './TaskBoardCard';
 import type { TaskBoardGroupBy } from './TaskBoardGroupByButton';
 
@@ -22,7 +22,11 @@ export function TaskBoardColumn({
   groupBy: TaskBoardGroupBy;
   selectedId: string | null;
   selectTask: (id: string) => void;
-  names: { systems: ReadonlyMap<string, string>; actors: ReadonlyMap<string, string> };
+  names: {
+    systems: ReadonlyMap<string, string>;
+    actors: ReadonlyMap<string, string>;
+    teams?: ReadonlyMap<string, string>;
+  };
   enabled: boolean;
 }) {
   const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
@@ -56,7 +60,13 @@ export function TaskBoardColumn({
                 managedSystemName={
                   names.systems.get(task.primary_managed_system_id) ?? 'Managed System'
                 }
-                assigneeName={assignee.kind === 'resolved' ? assignee.displayName : undefined}
+                assigneeName={
+                  task.assignee_team_id
+                    ? taskTeamLabel(task.assignee_team_id, names.teams ?? new Map())
+                    : assignee.kind === 'resolved'
+                      ? assignee.displayName
+                      : undefined
+                }
               />
             );
           })}

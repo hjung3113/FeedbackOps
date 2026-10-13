@@ -1,4 +1,7 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
+import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
+import { shortId } from '@/lib/identity';
 import type { TaskPriority } from '@fops/shared';
 import {
   Button,
@@ -11,6 +14,8 @@ import {
   SelectValue,
 } from '@fops/ui';
 
+import { useResponsibilityIdentityNames } from '../../components/ResponsibilityEditor';
+
 import type { NameMaps } from './TaskRequestRow';
 import { TASK_PRIORITIES, type UseTaskRequestConversionResult } from './useTaskRequestConversion';
 
@@ -18,13 +23,30 @@ const NO_SELECTION = '__none__';
 const UNRESOLVED_ANALYTICS_AREA = '__analytics_area_unresolved__';
 const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
 
+function CandidateTeamOptions({ ids, names }: { ids: readonly string[]; names: NameMaps }) {
+  const identity = useResponsibilityIdentityNames(null, ids);
+  return ids.map((id) => (
+    <SelectItem key={id} value={id}>
+      {identity.teamName(id) ?? names.teamsById?.[id]?.name ?? `팀 ${shortId(id)}`}
+    </SelectItem>
+  ));
+}
+
 export function TaskRequestConversionForm({
   conversion,
+  teamCandidates,
   names,
+  eligibleActors,
 }: {
   conversion: UseTaskRequestConversionResult;
+  /** Team ids already known in context (Managed System defaults, queue teams). */
+  teamCandidates: readonly string[];
   names: NameMaps;
+  eligibleActors: readonly WorkspaceActor[];
 }) {
+  const candidateTeamIds = [
+    ...new Set([...teamCandidates, ...(conversion.teamId ? [conversion.teamId] : [])]),
+  ];
   const analyticsAreaValue =
     conversion.analyticsAreaSelection.kind === 'active'
       ? conversion.analyticsAreaSelection.id
@@ -110,21 +132,56 @@ export function TaskRequestConversionForm({
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor="task-request-convert-assignee">담당자</FieldLabel>
         <Select
-          value={conversion.assigneeId || NO_SELECTION}
-          onValueChange={(value) => conversion.setAssigneeId(value === NO_SELECTION ? '' : value)}
+          value={conversion.responsibilityMode}
+          onValueChange={(value) =>
+            conversion.setResponsibilityMode(value as typeof conversion.responsibilityMode)
+          }
         >
           <SelectTrigger id="task-request-convert-assignee" aria-label="담당자">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NO_SELECTION}>미배정</SelectItem>
-            {Object.values(names.actorsById).map((actor) => (
-              <SelectItem key={actor.id} value={actor.id}>
-                {actor.display_name}
+            {Object.entries(RESPONSIBILITY_COPY.modes).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {conversion.responsibilityMode === 'actor' && (
+          <Select
+            value={conversion.assigneeId || NO_SELECTION}
+            onValueChange={(value) => conversion.setAssigneeId(value === NO_SELECTION ? '' : value)}
+          >
+            <SelectTrigger aria-label={RESPONSIBILITY_COPY.actor}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectActor}</SelectItem>
+              {eligibleActors.map((actor) => (
+                <SelectItem key={actor.id} value={actor.id}>
+                  {actor.display_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {conversion.responsibilityMode === 'team' && (
+          <Select
+            value={conversion.teamId || NO_SELECTION}
+            onValueChange={(value) => conversion.setTeamId(value === NO_SELECTION ? '' : value)}
+          >
+            <SelectTrigger aria-label={RESPONSIBILITY_COPY.selectTeam}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectTeam}</SelectItem>
+              {candidateTeamIds.length > 0 && (
+                <CandidateTeamOptions ids={candidateTeamIds} names={names} />
+              )}
+            </SelectContent>
+          </Select>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor="task-request-convert-analytics-area">Analytics Area</FieldLabel>

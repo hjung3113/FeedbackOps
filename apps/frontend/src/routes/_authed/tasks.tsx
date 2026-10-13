@@ -12,6 +12,8 @@ export const tasksSearchSchema = z
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     public_update: z.literal('missing').optional(),
+    reviewer: z.union([z.string().uuid(), z.literal('me')]).optional(),
+    reviewerTeam: z.string().uuid().optional(),
   })
   .strict();
 
@@ -31,7 +33,14 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
     search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
   const selectedParamProps = search.param !== undefined ? { selectedParam: search.param } : {};
   if (search.view === 'requests') {
-    return <TaskRequestsUrlRoute {...managedSystemProps} {...selectedParamProps} />;
+    return (
+      <TaskRequestsUrlRoute
+        {...managedSystemProps}
+        {...selectedParamProps}
+        {...(search.reviewer === undefined ? {} : { reviewer: search.reviewer })}
+        {...(search.reviewerTeam === undefined ? {} : { reviewerTeam: search.reviewerTeam })}
+      />
+    );
   }
   if (search.view === 'board') {
     return (
@@ -53,11 +62,30 @@ function TasksRouteShell() {
   return <TasksRouteView search={Route.useSearch()} />;
 }
 
-function TaskRequestsUrlRoute(props: { managedSystem?: string; selectedParam?: string }) {
+function TaskRequestsUrlRoute(props: {
+  managedSystem?: string;
+  selectedParam?: string;
+  reviewer?: string;
+  reviewerTeam?: string;
+}) {
   const navigate = useNavigate();
   return (
     <TaskRequestsRoute
       {...props}
+      onReviewerChange={(reviewer, reviewerTeam) => {
+        void navigate({
+          to: '/tasks',
+          search: (previous) => {
+            const { reviewer: _reviewer, reviewerTeam: _team, param: _param, ...rest } = previous;
+            return {
+              ...rest,
+              view: 'requests',
+              ...(reviewer ? { reviewer } : {}),
+              ...(reviewerTeam ? { reviewerTeam } : {}),
+            };
+          },
+        });
+      }}
       onSelectionChange={(id, replace) => {
         void navigate({
           to: '/tasks',

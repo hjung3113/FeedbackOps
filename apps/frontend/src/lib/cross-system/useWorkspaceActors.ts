@@ -11,7 +11,7 @@
 // every row to `'user'` at the call site.
 
 import { apiClient } from '@/lib/api';
-import type { ListActorsResponse, RoleLevel } from '@fops/shared';
+import type { ActorType, ListActorsResponse, RoleLevel } from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
 export const workspaceActorsQueryKey = ['actors', 'workspace', 'current'] as const;
@@ -21,6 +21,7 @@ export interface WorkspaceActor {
   display_name: string;
   email: string;
   role_level: RoleLevel;
+  actor_type: ActorType;
 }
 
 export interface WorkspaceActorsPage {
@@ -57,6 +58,7 @@ export function useWorkspaceActors(
           display_name: actor.display_name,
           email: actor.email,
           role_level: actor.role_level,
+          actor_type: actor.actor_type,
         })),
       };
     },

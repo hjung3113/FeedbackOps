@@ -36,3 +36,20 @@ export async function createAa(
   if (res.statusCode !== 201) throw new Error(`createAa failed: ${res.statusCode} ${res.body}`);
   return res.json().id as string;
 }
+
+/** Teams are fixture-only writes with fops_migrate; fops_app retains SELECT only. */
+export async function insertTeamDirectly(
+  dbHandle: DbHandle,
+  workspaceId: string,
+  name: string,
+  archived = false,
+): Promise<string> {
+  const result = await dbHandle.pool.query<{ id: string }>(
+    `insert into core.teams (workspace_id, name, archived_at)
+     values ($1, $2, ${archived ? 'now()' : 'null'}) returning id`,
+    [workspaceId, name],
+  );
+  const id = result.rows[0]?.id;
+  if (!id) throw new Error('insertTeamDirectly returned no row');
+  return id;
+}

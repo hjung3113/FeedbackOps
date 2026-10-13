@@ -4,7 +4,7 @@ import { taskRequestPage } from '@/test/task-request-pages';
 import type { ListTaskRequestsQuery } from '@fops/shared';
 import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +44,10 @@ vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
 }));
 
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({ actors: [] }),
+}));
+
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: vi.fn(async () => ({
     items: [{ id: '30000000-0000-0000-0000-000000000003', name: 'Billing Ops' }],
@@ -62,6 +66,8 @@ const { taskRequest } = vi.hoisted(() => ({
     requested_outcome: 'Task 전환 검토',
     requester_actor_id: '20000000-0000-0000-0000-000000000002',
     status: 'pending_review',
+    assigned_reviewer_actor_id: null,
+    assigned_reviewer_team_id: null,
     reviewer_actor_id: null,
     decision_reason: null,
     decided_at: null,
@@ -242,4 +248,64 @@ describe('TaskRequestsRoute display ids', () => {
     expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(vi.mocked(fetchTaskRequests).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
+
+  it('hides the reviewer filter while the queue is permission-blocked', async () => {
+    vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByText('Task Request queue');
+    expect(screen.queryByRole('combobox', { name: '검토자 필터' })).not.toBeInTheDocument();
+  });
+
+  it('shows the filtered-empty state on the pending tab for 내 검토 요청 and clears the filter', async () => {
+    vi.mocked(fetchTaskRequests).mockImplementation(async (options) =>
+      options?.reviewer === 'me'
+        ? taskRequestPage([], options)
+        : taskRequestPage([taskRequest], options),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByRole('button', { name: /REQ-42/ });
+    fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+    fireEvent.click(await screen.findByRole('option', { name: '내 검토 요청' }));
+    expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();
+    expect(screen.queryByText('검토 대기 중인 Task Request가 없습니다')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+    expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
+    expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
+  });
+});
+
+it('filters assigned reviewers before loading rows while leaving operational tab counts unchanged', async () => {
+  const other = {
+    ...taskRequest,
+    id: '10000000-0000-0000-0000-000000000099',
+    display_id: 'REQ-99',
+    assigned_reviewer_actor_id: '60000000-0000-0000-0000-000000000006',
+  };
+  vi.mocked(fetchTaskRequests).mockImplementation(async (options) => {
+    const page = taskRequestPage([taskRequest, other], options);
+    return options?.reviewer === 'me'
+      ? { ...page, items: [other], page: { ...page.page, total: 1 } }
+      : page;
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <TaskRequestsRoute />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole('button', { name: /REQ-42/ });
+  fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+  fireEvent.click(await screen.findByRole('option', { name: '내 검토 요청' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: /REQ-42/ })).not.toBeInTheDocument(),
+  );
+  expect(await screen.findByRole('button', { name: /REQ-99/ })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: /^검토 대기/ })).toHaveTextContent('2');
 });
