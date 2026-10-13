@@ -2035,12 +2035,11 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       while (Date.now() < deadline) {
         const queue = await migrateHandle.pool.query<{ found: boolean }>(
           `
-            SELECT EXISTS (SELECT 1 FROM pg_stat_activity a
-              WHERE a.wait_event_type='Lock' AND EXISTS (
-                SELECT 1 FROM pg_locks r WHERE r.locktype='advisory' AND NOT r.granted
-                  AND r.objsubid=1 AND r.classid=((hashtextextended($1,0)>>32)&4294967295)::oid
-                  AND r.objid=(hashtextextended($1,0)&4294967295)::oid
-                  AND r.pid=ANY(pg_blocking_pids(a.pid)))) AS found`,
+            SELECT EXISTS (SELECT 1 FROM pg_locks r
+              JOIN pg_locks w ON NOT w.granted AND w.pid<>r.pid AND r.pid=ANY(pg_blocking_pids(w.pid))
+              WHERE r.locktype='advisory' AND NOT r.granted
+                AND r.objsubid=1 AND r.classid=((hashtextextended($1,0)>>32)&4294967295)::oid
+                AND r.objid=(hashtextextended($1,0)&4294967295)::oid) AS found`,
           [source.responseId],
         );
         if (queue.rows[0]?.found) {

@@ -1046,7 +1046,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       });
     }
     expect((await history()).items.map((h) => h.occurrence)).toEqual([2, 1]);
-    const invalid = await patch({ owner_user_id: randomUUID() });
+    const invalid = await patch({ owner_user_id: adminActorId, owner_team_id: randomUUID() });
     expect(invalid.statusCode).toBe(422);
     expect((await history()).total).toBe(2);
     const stale = await app.inject({

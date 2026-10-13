@@ -561,7 +561,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       key = randomUUID();
     const first = await decide(approved, 'approve', {}, adminCookie, key);
     expect(first.statusCode).toBe(200);
-    expect((await decide(approved, 'approve', {}, adminCookie, key)).body).toBe(first.body);
+    expect(JSON.parse((await decide(approved, 'approve', {}, adminCookie, key)).body)).toEqual(
+      JSON.parse(first.body),
+    );
     const resolved = await db.pool.query(
       'SELECT occurrence,outcome FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
       [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', approved)],

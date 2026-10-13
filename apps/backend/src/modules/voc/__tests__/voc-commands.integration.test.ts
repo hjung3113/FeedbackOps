@@ -269,7 +269,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
   it('public reporter resolution records every linked released Task in the source transaction', async () => {
     const voc = await seedVoc('Recovery Task fanout');
     await migrateHandle.pool.query(
-      "UPDATE voc.vocs SET reporter_facing_status='reviewing', owner_user_id=$2::uuid WHERE id=$1::uuid",
+      "UPDATE voc.vocs SET reporter_facing_status='progress', owner_user_id=$2::uuid WHERE id=$1::uuid",
       [voc.id, adminActorId],
     );
     const tasks = await Promise.all(
