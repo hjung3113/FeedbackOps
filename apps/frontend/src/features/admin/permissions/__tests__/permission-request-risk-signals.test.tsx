@@ -101,7 +101,7 @@ describe('permission request risk review', () => {
     expect(review).toHaveTextContent('아니요');
     expect(review).toHaveTextContent('본인 승인 정책');
     expect(review).toHaveTextContent('금지');
-    expect(review).toHaveTextContent('동료 검토 필요');
+    expect(review).toHaveTextContent('본인 승인 사유 필요');
     expect(review).toHaveTextContent('예');
 
     const requestInfo = screen.getByText('요청 정보').closest('section');
@@ -118,7 +118,9 @@ describe('permission request risk review', () => {
     expect(review).toHaveTextContent('차단 범위: Managed System (50000000)');
   });
 
-  it('keeps server risk visible on a terminal request without decision controls', () => {
+  // Decision-control suppression for terminal requests is covered with the real form in
+  // routes/_authed/admin/permissions/requests.test.tsx ("cancelled history … no decision controls").
+  it('keeps server risk visible on a terminal request', () => {
     const request = adminDetailFixture({ ...REQUEST, status: 'approved' }, false, 'allowed', {
       risk_indicators: [SENSITIVE_SIGNAL],
       allowed_actions: [],
@@ -132,6 +134,5 @@ describe('permission request risk review', () => {
     const requestInfo = screen.getByText('요청 정보').closest('section');
     if (!requestInfo) throw new Error('Request info section is missing');
     expect(within(requestInfo).getByText('승인됨')).toBeInTheDocument();
-    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
   });
 });

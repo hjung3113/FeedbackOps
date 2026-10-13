@@ -47,7 +47,7 @@ export const ADMIN_PERMISSIONS_COPY = {
     reviewAuthority: '검토 권한',
     selfRequest: '본인 요청',
     selfApprovalPolicy: '본인 승인 정책',
-    selfApprovalRequired: '본인 승인 시 동료 검토 필요',
+    selfApprovalRequired: '본인 승인 사유 필요',
     allowed: '허용',
     forbidden: '금지',
     yes: '예',
