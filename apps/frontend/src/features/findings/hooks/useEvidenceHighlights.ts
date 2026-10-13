@@ -1,6 +1,6 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
-import type { EvidenceHighlightDto, ListEvidenceHighlightsResponse } from '@fops/shared';
+import { apiRequest } from '@/lib/api';
+import { type EvidenceHighlightDto, listEvidenceHighlightsResponseSchema } from '@fops/shared';
+import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
 export function useEvidenceHighlights(
   findingId: string | null | undefined,
@@ -8,9 +8,10 @@ export function useEvidenceHighlights(
   return useQuery({
     queryKey: ['finding', findingId, 'evidence-highlights'] as const,
     queryFn: async ({ signal }) => {
-      const res = await apiClient<ListEvidenceHighlightsResponse>(
+      const res = await apiRequest(
         'GET',
         `/findings/${findingId as string}/evidence-highlights`,
+        listEvidenceHighlightsResponseSchema,
         { signal },
       );
       return res.data.items;

@@ -5,12 +5,15 @@ import {
   type ListFindingsResponse,
   type TaskDetailDto,
   type TaskRequestDto,
+  attachSurveyEvidenceResponseSchema,
   createTaskRequestFromFindingRequestSchema,
   evidenceHighlightDtoSchema,
   findingDtoSchema,
   listActorsResponseSchema,
   listEvidenceHighlightsResponseSchema,
   listFindingsResponseSchema,
+  listSurveysResponseSchema,
+  surveyEvidenceCandidatesResponseSchema,
   taskDetailDtoSchema,
   taskRequestDtoSchema,
   vocDetailEnvelopeSchema,
@@ -294,4 +297,111 @@ export const requestTaskSuccess: TaskRequestDto = taskRequestDtoSchema.parse({
   decided_at: null,
   created_at: dates.findingUpdated,
   updated_at: dates.findingUpdated,
+});
+
+// Safe Survey catalog/candidate/attachment shapes for #1110.
+export const SURVEY_EVIDENCE_IDS = {
+  survey: 'd1000000-0000-4000-8000-00000000000b',
+  otherSurvey: 'd1000000-0000-4000-8000-00000000000c',
+  sourceSystem: 'd1000000-0000-4000-8000-00000000000d',
+  excerpt: 'd1000000-0000-4000-8000-00000000000e',
+  otherExcerpt: 'd1000000-0000-4000-8000-00000000000f',
+  highlight: 'd1000000-0000-4000-8000-000000000010',
+} as const;
+
+export const surveyEvidenceCatalog = listSurveysResponseSchema.parse([
+  {
+    id: SURVEY_EVIDENCE_IDS.survey,
+    display_id: 'SRV-42',
+    type: 'discovery',
+    status: 'closed',
+    title: '로그인 경험 조사',
+    primary_managed_system_id: SURVEY_EVIDENCE_IDS.sourceSystem,
+    analytics_area_id: null,
+    operator_actor_id: null,
+    responses_identity_protected: true,
+    created_by: FINDING_DETAIL_IDS.actor,
+    opened_at: dates.registry,
+    closed_at: dates.findingUpdated,
+    created_at: dates.registry,
+    updated_at: dates.findingUpdated,
+  },
+]);
+export const SURVEY_EVIDENCE_QUOTE = '로그인 과정에서 인증을 반복해야 했습니다.';
+export const surveyEvidenceCandidates = surveyEvidenceCandidatesResponseSchema.parse({
+  response_state: 'visible',
+  items: [
+    {
+      approved_excerpt_id: SURVEY_EVIDENCE_IDS.excerpt,
+      redacted_excerpt: SURVEY_EVIDENCE_QUOTE,
+      question_label: '로그인 경험',
+      survey_type: 'discovery',
+      survey_display_id: 'SRV-42',
+      identity_protected: true,
+    },
+  ],
+  page: { has_more: false },
+});
+export const surveyEvidenceStates = {
+  none: surveyEvidenceCandidatesResponseSchema.parse({
+    response_state: 'none',
+    items: [],
+    page: { has_more: false },
+  }),
+  suppressed: surveyEvidenceCandidatesResponseSchema.parse({
+    response_state: 'below_threshold',
+    items: [],
+    page: { has_more: false },
+  }),
+  empty: surveyEvidenceCandidatesResponseSchema.parse({
+    response_state: 'visible',
+    items: [],
+    page: { has_more: false },
+  }),
+};
+export const surveyEvidenceAttached = attachSurveyEvidenceResponseSchema.parse({
+  evidence_highlight_id: SURVEY_EVIDENCE_IDS.highlight,
+  finding_id: FINDING_DETAIL_IDS.finding,
+});
+export const surveyEvidenceHighlight = evidenceHighlightDtoSchema.parse({
+  id: SURVEY_EVIDENCE_IDS.highlight,
+  workspace_id: FINDING_DETAIL_IDS.workspace,
+  finding_id: FINDING_DETAIL_IDS.finding,
+  primary_managed_system_id: FINDING_DETAIL_IDS.managedSystem,
+  source_type: 'survey_response',
+  source_title: 'Survey response',
+  source_meta: 'discovery · SRV-42 · Identity protected',
+  quote_or_summary: SURVEY_EVIDENCE_QUOTE,
+  analytics_area_id: null,
+  sentiment: null,
+  importance: null,
+  created_by: FINDING_DETAIL_IDS.actor,
+  created_at: dates.evidenceNote,
+});
+
+export const surveyEvidenceManagedSystems = z
+  .object({
+    items: z.array(managedSystemDtoSchema),
+    total: z.number().int().nonnegative(),
+  })
+  .strict()
+  .parse({
+    items: [
+      ...findingManagedSystems.items,
+      {
+        ...findingManagedSystems.items[0],
+        id: SURVEY_EVIDENCE_IDS.sourceSystem,
+        slug: 'research-hub',
+        name: 'Research Hub',
+      },
+    ],
+    total: 2,
+  });
+
+export const findingAfterSurveyAttachment = findingDtoSchema.parse({
+  ...populatedFinding,
+  evidence_count: 3,
+});
+export const findingListAfterSurveyAttachment = listFindingsResponseSchema.parse({
+  items: [findingAfterSurveyAttachment],
 });

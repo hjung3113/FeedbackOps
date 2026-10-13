@@ -9,7 +9,6 @@
 features/admin/settings/use-workspace-settings.ts 3
 features/cross-system/create-finding/useCreateFindingFromVocMutation.ts 2
 features/integration/hooks/useEntityLinkInventory.ts 2
-features/findings/hooks/useEvidenceHighlights.ts 2
 features/findings/hooks/useEvidenceMutations.ts 3
 features/findings/hooks/useFindingStatusMutation.ts 2
 features/findings/hooks/useRequestTaskFromFinding.ts 2
