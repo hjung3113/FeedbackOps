@@ -12,7 +12,7 @@
 // - Grill Q5 followup: the original partial unique predicate referenced
 //   `now()` against `expires_at`. now() is not IMMUTABLE so Postgres rejects
 //   it inside a partial index predicate. Decision: drop the expires_at
-//   condition from the predicate; uniqueness is enforced over non-revoked
+//   condition from the predicate; uniqueness is enforced over non-revoked, non-superseded
 //   rows and expiry is enforced at write time in the permission service.
 
 import { sql } from 'drizzle-orm';
@@ -45,6 +45,7 @@ export const permissionGrants = permissionSchema.table(
     grantedByActorId: uuid('granted_by_actor_id').notNull(),
     grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     revokedByActorId: uuid('revoked_by_actor_id'),
     revokedReason: text('revoked_reason'),
@@ -55,14 +56,14 @@ export const permissionGrants = permissionSchema.table(
       t.workspaceId,
       t.capability,
     ),
-    // Partial unique on the effective scope of a non-revoked grant.
+    // Partial unique on the effective scope of a non-revoked, non-superseded grant.
     // Predicate cannot reference now() (not IMMUTABLE) — expiry filtered at
     // write time in the permission service.
     // NOTE: Drizzle 0.38 does not encode COALESCE expressions on partial
     // indexes; this index is replaced/normalised by hand in the generated SQL.
     activeUniq: uniqueIndex('permission_grants_active_uq')
       .on(t.workspaceId, t.actorId, t.capability)
-      .where(sql`${t.revokedAt} is null`),
+      .where(sql`${t.revokedAt} is null AND ${t.supersededAt} is null`),
   }),
 );
 

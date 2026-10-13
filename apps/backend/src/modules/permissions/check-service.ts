@@ -156,7 +156,7 @@ export function createCheckService(deps: CheckServiceDeps) {
     }
 
     // (3) direct capability grant. Active = NOT revoked AND (expires_at NULL
-    // OR expires_at > now()). We fetch all rows for (actor, capability) and
+    // OR expires_at > now()). We fetch unsuperseded rows for (actor, capability) and
     // classify rather than filtering in SQL so we can distinguish
     // grant_expired / grant_revoked from no_grant in a single round-trip.
     const grantRows = await db
@@ -172,6 +172,7 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionGrants.workspaceId, actor.workspace_id),
           eq(permissionGrants.actorId, actor.actor_id),
           eq(permissionGrants.capability, capability),
+          isNull(permissionGrants.supersededAt),
         ),
       );
 
@@ -291,6 +292,7 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionGrants.workspaceId, actor.workspace_id),
           eq(permissionGrants.actorId, actor.actor_id),
           eq(permissionGrants.capability, capability),
+          isNull(permissionGrants.supersededAt),
         ),
       );
     const rightNow = now();

@@ -628,7 +628,7 @@ Detail additionally includes `similar.items`, capped at three and ordered by
 Peer visibility is `voc.read` scope or reporter ownership of that peer. A
 triage-only summary envelope includes neither field. See ADR-0031.
 
-## Permission Grant reissue (ADR-0066; proposed/new)
+## Permission Grant reissue (ADR-0066 / #1085)
 
 `permission.permission_grants` remains the existing Permission-owned table.
 Add nullable timestamp `superseded_at`, set only on an expired, unrevoked exact-scope

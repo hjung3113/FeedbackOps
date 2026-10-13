@@ -7,7 +7,9 @@ What the default user can do, and the capability matrix, live in docs/design/09-
 
 ADR-0066 (accepted 2026-10-13) adds proposed/new revision, withdrawal/edit,
 supported narrowing, selected risk detail, direct-grant and superseded-row behavior.
-These accepted contracts are implementation work; this docs change ships none of them.
+#1080/#1081 implement requester revisions and selected reads; #1085 implements
+governed direct grants and superseded-row behavior. Runtime integration and release
+checks remain conductor-owned.
 
 ## Role Level And Capability
 

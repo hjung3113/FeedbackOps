@@ -7,8 +7,9 @@ Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This file
 ADR-0066 (accepted 2026-10-13) amends this contract. #1080 implements requester
 edit/cancel/supplement revisions, required revisions for all Admin decisions,
 supported-scope narrowing, and corresponding audits. #1081 implements selected
-owner/Admin detail and explained risk; direct-grant options/writes and
-superseded-grant filtering remain pending.
+owner/Admin detail and explained risk. #1085 implements direct-grant options/writes
+and superseded-grant filtering; its migration and runtime verification remain
+conductor release checks.
 Deploy migration 0058 before these writers and roll out the #1083 revision
 consumers together, refreshing old clients. DB verification and the migration
 snapshot refresh remain conductor release checks.
@@ -40,7 +41,7 @@ GET /permissions/grants
 GET /permissions/denies
 POST /permissions/grants/:id/revoke
 POST /permissions/denies/:id/revoke
-# Proposed/new under ADR-0066:
+# ADR-0066 lifecycle and direct-grant endpoints:
 GET /permission-requests/:id      # requester-owned selected detail
 PATCH /permission-requests/:id    # pending edit
 POST /permission-requests/:id/cancel
@@ -506,9 +507,9 @@ response readers. Selected context uses a repeatable-read, read-only transaction
 without recipient/request mutation locks. The Core question projection is called
 only after owner authorization; Auth owns the email-free display-name projection.
 
-## Proposed direct-grant contracts (ADR-0066)
+## Direct-grant contracts (ADR-0066 / #1085)
 
-### `GET /permissions/grant-options?actor_id={uuid}` (proposed/new)
+### `GET /permissions/grant-options?actor_id={uuid}`
 
 Admin capability gate before data; invalid/missing UUID is 422 validation.failed;
 unknown/foreign recipient is 404 not_found.record. Return 200 recipient ID/display
@@ -518,7 +519,33 @@ route, overlapping deny IDs/lift destination, or available. All references are
 workspace-filtered Admin-safe; no email. Workspace comes from session. Read has
 no mutation tier, idempotency, writes/audits/links/notifications/queue/default effects.
 
-### `POST /permissions/grants` (proposed/new)
+The strict response is `permissionGrantOptionsSchema` in
+`packages/shared/src/permissions/admin.ts`:
+
+```ts
+{
+  recipient: { id: uuid, display_name: string, role_level: 'admin' | 'developer' | 'user' },
+  self_policy: 'allowed' | 'forbidden',
+  self_approval_required: boolean,
+  candidates: [{
+    capability: known_capability,
+    managed_system_id: uuid | null,
+    governance_required: boolean, // true only for workspace.admin
+    preflight:
+      | { state: 'available' }
+      | { state: 'request_review', request_id: uuid, review_route: string }
+      | { state: 'deny_lift', deny_ids: uuid[], lift_route: string }
+  }]
+}
+```
+
+`available` means no matching open ask or overlapping active deny; it is advisory,
+and submission still checks active duplicates and all write-time rules. Review links
+use `/admin/permissions/requests?selected={request_id}`; deny lift links use
+`/admin/permissions/grants?tab=denies&selected={first_deny_id}`. Deny IDs sort by ID.
+Workspace governance confirmation belongs to the form, with no extra backend body key.
+
+### `POST /permissions/grants`
 
 Strict body `{ actor_id: uuid, capability: known_capability,
 managed_system_id?: uuid, expires_at?: iso8601, reason: string,

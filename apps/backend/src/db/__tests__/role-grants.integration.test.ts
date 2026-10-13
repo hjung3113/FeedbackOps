@@ -300,4 +300,20 @@ describe.skipIf(!runIntegration)('Index conventions (ADR-0015:55-61)', () => {
       );
     }
   });
+
+  it('final permission grant index retains every COALESCE scope column and excludes superseded rows', async () => {
+    const result = await handle.pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where schemaname = 'permission'
+       and indexname = 'permission_grants_active_uq'`,
+    );
+    expect(result.rows).toHaveLength(1);
+    const definition = result.rows[0]?.indexdef;
+    expect(definition).toMatch(/COALESCE\(managed_system_id/i);
+    expect(definition).toMatch(/COALESCE\(object_type/i);
+    expect(definition).toMatch(/COALESCE\(object_id/i);
+    expect(definition).toMatch(/revoked_at IS NULL/i);
+    expect(definition).toMatch(/superseded_at IS NULL/i);
+    expect(definition).not.toMatch(/expires_at|now\(\)/i);
+  });
+
 });

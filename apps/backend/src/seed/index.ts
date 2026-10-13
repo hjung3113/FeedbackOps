@@ -309,6 +309,7 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
             eq(permissionGrants.actorId, actorId),
             eq(permissionGrants.capability, grant.capability),
             isNull(permissionGrants.revokedAt),
+            isNull(permissionGrants.supersededAt),
           ),
         );
       if (existing.length > 0) continue;
