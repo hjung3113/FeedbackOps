@@ -1,5 +1,6 @@
 import { ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { FindingDto, PatchFindingRequest } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -25,6 +26,7 @@ export function useFindingStatusMutation(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       invalidateNavCounts(queryClient);
       queryClient.setQueryData(['finding', findingId], data);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });

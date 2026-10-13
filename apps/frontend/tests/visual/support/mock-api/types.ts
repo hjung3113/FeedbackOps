@@ -10,6 +10,7 @@ import type {
   PermissionScenarioName,
   createPermissionRequestsScenario,
 } from '../../fixtures/permissions';
+import type { RecoveryVisualScenario } from '../../fixtures/recovery';
 import type { SurveyParticipationVisualScenario } from '../../fixtures/survey-participation';
 import type { SurveyResultsVisualScenario } from '../../fixtures/survey-results';
 import type { SurveyVisualScenario } from '../../fixtures/surveys';
@@ -23,6 +24,7 @@ import type {
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
+  recovery?: RecoveryVisualScenario;
   evidence?: EvidenceVisualScenario;
   permissionScenario?: PermissionScenarioName;
   /** Serves a grant-options candidate for the direct-grant form visual state. */

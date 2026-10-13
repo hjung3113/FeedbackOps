@@ -1,5 +1,6 @@
 import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
 import type { CreateTaskRequestFromFindingRequest, TaskRequestDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -25,6 +26,7 @@ export function useRequestTaskFromFinding(
       return res.data;
     },
     onSuccess: (data) => {
+      void invalidateRecovery(queryClient);
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
       void queryClient.invalidateQueries({ queryKey: ['findings'] });

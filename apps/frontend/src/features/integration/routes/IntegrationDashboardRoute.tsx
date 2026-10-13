@@ -13,6 +13,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import { FileText, Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
+import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
+import { useRecoveryQueue } from '../recovery/useRecoveryQueue';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { COVERAGE_NO_DATA_LABEL, INTEGRATION_AVERAGE_COVERAGE_LABEL } from '@/lib/copy/coverage';
@@ -38,6 +40,7 @@ function isPermissionError(error: unknown): boolean {
 }
 
 export function IntegrationDashboardRoute(): React.ReactElement {
+  const recovery = useRecoveryQueue('operational');
   const search = useSearch({ strict: false }) as IntegrationDashboardSearch;
   const managedSystem = search.managedSystem;
   const managedSystemId =
@@ -104,7 +107,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
     : undefined;
 
   return (
-    <PageShell contentClassName="max-w-none">
+    <PageShell contentClassName="max-w-none" detailPanel={recovery.detailPanel}>
       <section data-testid="integration-dashboard">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -129,6 +132,11 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             </Button>
           </div>
         </header>
+        <RecoveryFreshness
+          computedAt={summary.data?.computed_at}
+          failed={summary.isError}
+          updatedAt={summary.dataUpdatedAt}
+        />
 
         <div className="mb-9">
           <div className="mb-3.5 flex items-center justify-between">
@@ -235,6 +243,7 @@ export function IntegrationDashboardRoute(): React.ReactElement {
             )}
           </div>
         )}
+        {recovery.queue}
       </section>
     </PageShell>
   );

@@ -1,12 +1,15 @@
+import { useRecoveryQueue } from '@/features/integration/public';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
 import { z } from 'zod';
 
 import { HomeScreen, type HomeTab } from '@/features/home/HomeScreen';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 
 const homeSearchSchema = z
   .object({
+    ...recoverySearchFields,
     managedSystem: z.string().uuid().optional(),
     tab: z.enum(['dashboard', 'inbox']).optional(),
   })
@@ -31,6 +34,7 @@ export function HomeRoute(): React.ReactElement {
     managedSystem?: string;
     tab?: HomeTab;
   };
+  const recovery = useRecoveryQueue('actionable', tab !== 'inbox');
   const navigate = useNavigate({ from: '/home' });
   const onTabChange = (nextTab: HomeTab): void => {
     void navigate({
@@ -43,6 +47,7 @@ export function HomeRoute(): React.ReactElement {
   return (
     <HomeScreen
       {...(managedSystem !== undefined ? { managedSystemId: managedSystem } : {})}
+      recovery={recovery}
       activeTab={tab ?? 'dashboard'}
       onTabChange={onTabChange}
     />

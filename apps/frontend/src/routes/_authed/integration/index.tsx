@@ -1,10 +1,12 @@
 import { IntegrationDashboardRoute } from '@/features/integration/routes/IntegrationDashboardRoute';
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
 export const integrationDashboardSearchSchema = z
   .object({
+    ...recoverySearchFields,
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
   })
   .strict();

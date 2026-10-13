@@ -8,7 +8,7 @@ import {
 import type { MinePermissionRequestRow } from '@/lib/api/permissions';
 
 export const homeSummaryFixture = dashboardSummarySchema.parse({
-  computed_at: '2026-10-13T00:00:00.000Z',
+  computed_at: '2026-07-20T08:00:00.000Z',
   kpis: {
     open_voc: 47,
     active_finding: 14,
