@@ -97,6 +97,15 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
           and source_type in ('voc', 'voc_cluster')`,
       [WORKSPACE_ID],
     );
+    // Responsibility cases also create other link kinds on the fixture systems.
+    await migrateHandle.pool.query(
+      `delete from core.entity_links
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await migrateHandle.pool.query(
       `delete from task_request.task_requests
         where workspace_id = $1
