@@ -8,10 +8,10 @@ import {
   PanelSectionTitle,
 } from '@fops/ui';
 
-import type { AdminPermissionRequestRow } from '@/lib/api';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
+import type { PermissionRequestAdminDetail } from '@fops/shared';
 
 import { PermissionRequestDecisionForm } from './permission-request-decision-form.js';
 import { permissionRequestStatusLabel } from './permission-requests-search.js';
@@ -22,7 +22,7 @@ export function PermissionRequestDetail({
   managedSystemName,
   onClose,
 }: {
-  request: AdminPermissionRequestRow;
+  request: PermissionRequestAdminDetail;
   actorName?: string | undefined;
   managedSystemName?: string | undefined;
   onClose: () => void;
@@ -105,7 +105,7 @@ export function PermissionRequestDetail({
             <p className="whitespace-pre-wrap text-sm text-text-primary">{request.reason}</p>
           </section>
           <PermissionRequestDecisionForm
-            key={request.id}
+            key={`${request.id}:${request.revision}`}
             request={request}
             managedSystemName={managedSystemName}
           />

@@ -5,15 +5,24 @@
 
 import {
   type ApprovePermissionRequest,
+  type CancelPermissionRequest,
+  type EditPermissionRequest,
   type PermissionDecisionResult,
+  cancelPermissionRequestResultSchema,
+  cancelPermissionRequestSchema,
+  editPermissionRequestSchema,
   listPermissionDeniesResponseSchema,
   listPermissionGrantsResponseSchema,
+  permissionDecisionResultSchema,
+  permissionRequestAdminDetailSchema,
+  permissionRequestOwnerDetailSchema,
   revokePermissionBodySchema,
   revokePermissionResultSchema,
+  submitMoreInfoPermissionRequestResultSchema,
 } from '@fops/shared';
 
 import { UnauthenticatedError } from './auth';
-import { apiClient, apiRequest } from './client';
+import { apiRequest } from './client';
 import { ApiError, type ApiErrorEnvelope } from './types';
 
 export type FrontendPermissionState =
@@ -88,6 +97,10 @@ export interface MinePermissionRequestRow {
   source_object_type: string | null;
   source_object_id: string | null;
   source_action_id: string | null;
+  revision: number;
+  requested_expiration: string | null;
+  updated_at: string;
+  return_route_intent: string | null;
   status: 'pending' | 'needs_more_info';
   created_at: string;
 }
@@ -154,7 +167,14 @@ export interface AdminPermissionRequestRow {
   requested_managed_system_id: string | null;
   requested_expiration: string | null;
   reason: string;
-  status: 'pending' | 'needs_more_info' | 'approved' | 'rejected';
+  status:
+    | 'pending'
+    | 'needs_more_info'
+    | 'approved'
+    | 'rejected'
+    | 'cancelled'
+    | 'expired'
+    | 'revoked';
   created_at: string;
 }
 
@@ -229,20 +249,81 @@ export async function decidePermissionRequest(
   expectedRevision: number,
   selfApproval?: ApprovePermissionRequest['self_approval'],
   expiration?: ApprovePermissionRequest['expiration'],
+  grantedManagedSystemId?: ApprovePermissionRequest['granted_managed_system_id'],
 ): Promise<PermissionDecisionResult> {
   const body =
     action === 'need-more-info'
-      ? { expected_revision: expectedRevision, note: reason || undefined }
+      ? { expected_revision: expectedRevision, ...(reason ? { note: reason } : {}) }
       : {
           expected_revision: expectedRevision,
-          reason: reason || undefined,
+          ...(reason ? { reason } : {}),
+          ...(action === 'approve' && grantedManagedSystemId !== undefined
+            ? { granted_managed_system_id: grantedManagedSystemId } : {}),
           ...(action === 'approve' && expiration !== undefined ? { expiration } : {}),
-          ...(action === 'approve' && selfApproval !== undefined ? { self_approval: selfApproval } : {}),
+          ...(action === 'approve' && selfApproval !== undefined
+            ? { self_approval: selfApproval }
+            : {}),
         };
-  const response = await apiClient<PermissionDecisionResult>(
+  const response = await apiRequest(
     'POST',
     `/permissions/requests/${id}/${action}`,
+    permissionDecisionResultSchema,
     { body, idempotencyKey },
   );
   return response.data;
+}
+
+export const permissionRequestOwnerDetailKey = (id: string) =>
+  ['permission-requests', 'owner-detail', id] as const;
+export const permissionRequestAdminDetailKey = (id: string) =>
+  ['permission-requests', 'admin-detail', id] as const;
+
+export async function fetchPermissionRequestOwnerDetail(id: string, signal?: AbortSignal) {
+  return (
+    await apiRequest(
+      'GET',
+      `/permission-requests/${id}`,
+      permissionRequestOwnerDetailSchema,
+      signal ? { signal } : {},
+    )
+  ).data;
+}
+export async function fetchPermissionRequestAdminDetail(id: string, signal?: AbortSignal) {
+  return (
+    await apiRequest(
+      'GET',
+      `/permissions/requests/${id}`,
+      permissionRequestAdminDetailSchema,
+      signal ? { signal } : {},
+    )
+  ).data;
+}
+export async function updateOwnPermissionRequest(
+  id: string,
+  action: 'edit' | 'supplement',
+  body: EditPermissionRequest,
+  idempotencyKey: string,
+) {
+  return (
+    await apiRequest(
+      action === 'edit' ? 'PATCH' : 'POST',
+      `/permission-requests/${id}${action === 'supplement' ? '/submit-more-info' : ''}`,
+      submitMoreInfoPermissionRequestResultSchema,
+      { body: editPermissionRequestSchema.parse(body), idempotencyKey },
+    )
+  ).data;
+}
+export async function withdrawPermissionRequest(
+  id: string,
+  body: CancelPermissionRequest,
+  idempotencyKey: string,
+) {
+  return (
+    await apiRequest(
+      'POST',
+      `/permission-requests/${id}/cancel`,
+      cancelPermissionRequestResultSchema,
+      { body: cancelPermissionRequestSchema.parse(body), idempotencyKey },
+    )
+  ).data;
 }

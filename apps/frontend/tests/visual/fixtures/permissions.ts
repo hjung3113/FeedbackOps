@@ -1,6 +1,7 @@
 import {
   listActorsResponseSchema,
   permissionDecisionResultSchema,
+  permissionRequestAdminDetailSchema,
   resolveCoverageThresholds,
 } from '@fops/shared';
 import { z } from 'zod';
@@ -155,6 +156,8 @@ export const permissionDecisionResultTemplates = {
 };
 
 export type PermissionScenarioName =
+  | 'stale-review'
+  | 'cancelled-history'
   | 'populated'
   | 'empty'
   | 'permission-request-detail-named'
@@ -169,6 +172,10 @@ export function createPermissionRequestsScenario(
   name: PermissionScenarioName = 'populated',
 ): AdminPermissionRequestRow[] {
   const requests = structuredClone(name === 'empty' ? emptyPermissionRequests : permissionRequests);
+  if (name === 'cancelled-history') {
+    const row = requests.find((candidate) => candidate.id === PERMISSION_IDS.rejected);
+    if (row) row.status = 'cancelled';
+  }
   if (name === 'requested-expiration') {
     const request = requests.find((candidate) => candidate.id === PERMISSION_IDS.pendingRead);
     if (!request) throw new Error('Requested-expiration visual fixture is missing its request');
@@ -176,4 +183,45 @@ export function createPermissionRequestsScenario(
     request.requested_expiration = PERMISSION_EXPIRATION_VISUAL_DATE;
   }
   return requests;
+}
+
+export function permissionAdminDetailFixture(row: AdminPermissionRequestRow) {
+  return permissionRequestAdminDetailSchema.parse({
+    ...row,
+    updated_at: row.created_at,
+    requested_object_type: null,
+    requested_object_id: null,
+    source_object_type: null,
+    source_object_id: null,
+    source_action_id: null,
+    source_summary: null,
+    return_route_intent: null,
+    requester: {
+      id: row.requester_actor_id,
+      display_name:
+        workspaceActorsFixture.actors.find((actor) => actor.id === row.requester_actor_id)
+          ?.display_name ?? '',
+      role_level: 'user',
+    },
+    effective_access: {
+      decision: { allow: false, reason: 'no_grant', requestable: null },
+      scope: { kind: 'scoped', managed_system_ids: [] },
+      expires_at: null,
+      granted_managed_system_id: null,
+    },
+    administrative_authority: {
+      capability: 'workspace.admin',
+      allowed: true,
+      is_requester: row.requester_actor_id === '22222222-2222-4222-8222-222222222222',
+      permission_self_approval: 'allowed',
+      self_approval_required: row.requester_actor_id === '22222222-2222-4222-8222-222222222222',
+    },
+    approval_scope_candidates: [{ managed_system_id: row.requested_managed_system_id }],
+    matching_denies: [],
+    risk_indicators: [],
+    allowed_actions:
+      row.status === 'pending' || row.status === 'needs_more_info'
+        ? ['approve', 'reject', 'need_more_info', 'deny']
+        : [],
+  });
 }

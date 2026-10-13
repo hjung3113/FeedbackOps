@@ -15,7 +15,8 @@ import {
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
+import { OwnerPermissionRequestDialog } from './OwnerPermissionRequestDialog';
 
 import {
   type MinePermissionRequestRow,
@@ -192,8 +193,10 @@ export function HomeScreen({
 function OpenRequestsPanel({
   requests,
 }: { requests: MinePermissionRequestRow[] }): React.ReactElement {
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   return (
     <section>
+      {selectedId ? <OwnerPermissionRequestDialog key={selectedId} id={selectedId} onClose={() => setSelectedId(null)} /> : null}
       <PanelHeading title={HOME_COPY.openRequests} />
       {requests.length === 0 ? (
         <div className="rounded-md border border-border-subtle bg-surface-card">
@@ -209,9 +212,9 @@ function OpenRequestsPanel({
               key={request.id}
               className="border-b border-border-subtle px-4 py-3 last:border-b-0"
             >
-              <p className="text-sm font-medium text-text-primary">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedId(request.id)}>
                 {getCapabilityDisplayLabel(request.requested_capability)}
-              </p>
+              </Button>
               <p className="text-xs text-text-muted">
                 {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]} ·{' '}
                 {formatRelativeTime(request.created_at)}

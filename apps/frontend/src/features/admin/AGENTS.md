@@ -50,7 +50,7 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 
 ## Permission close-out contract
 
-- ADR-0066 accepts selected-detail revision-safe review, four explained server risk signals, and direct grants on the existing active-grants screen (implementation pending).
+- ADR-0066 selected-detail revision-safe review uses `selected-permission-request-detail.tsx` and the shared-schema API adapter. Explained risk presentation (#1084) and direct-grant UI (#1086) remain separate implementation items.
 - Clear decision drafts on request ID/revision changes; stale errors require refetch and fresh review, never auto-submit. Preserve tab/selected and Back restoration; cancelled history has no decision controls.
 - Direct workspace.admin grants require explicit governance mode/confirmation; self grants follow permission_self_approval. Server scope candidates, required reason, open-ask review and explicit deny-lift guidance are authoritative. Capability grants never imply Role Level promotion.
 - No client scores, email or restricted source text. Zero risk signals are shown only after successful calculation.
