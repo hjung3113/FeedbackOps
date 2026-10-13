@@ -1,3 +1,4 @@
+import { resolveCoverageThresholds } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -16,6 +17,7 @@ import { AdminSettingsPage } from './settings';
 const resolvedSettings = {
   permission_self_approval: 'forbidden' as const,
   survey_anonymity_threshold: 9,
+  coverage_thresholds: resolveCoverageThresholds(),
 };
 
 type PermissionResponse =
