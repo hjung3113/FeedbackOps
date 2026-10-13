@@ -65,6 +65,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // #1106 Evidence inventory API (ADR-0065 54-2); HTML navigations stay with the SPA.
+      '/evidence-highlights': {
+        target: 'http://127.0.0.1:3011',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
+      },
       '/permission-requests': {
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
