@@ -7,6 +7,7 @@ import {
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FINDING_DETAIL_IDS as IDS,
@@ -280,6 +281,77 @@ describe('AddEvidenceModal approved Survey attachment', () => {
     expect(await screen.findByRole('radio', { name: /로그인 과정/ })).toBeInTheDocument();
   });
 
+  it.each([
+    [403, 'server'],
+    [404, 'server'],
+    [409, 'server'],
+    [422, 'server'],
+    [404, 'network'],
+  ] as const)(
+    'discards loaded excerpts after %s and keeps them hidden through a %s retry until a fresh first page succeeds',
+    async (status, retryFailure) => {
+      const context = setup({ paged: true });
+      const transport = context.fetchMock.getMockImplementation();
+      if (!transport) throw new Error('Missing candidate transport');
+      let readState: 'visible' | 'denied' | 'failed' | 'recovered' = 'visible';
+      const candidateReads: URL[] = [];
+      context.fetchMock.mockImplementation(async (input, init) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname.endsWith('/evidence-candidates')) {
+          candidateReads.push(url);
+          if (readState === 'denied')
+            return json({ code: 'not_found.record', message: 'denied' }, status);
+          if (readState === 'failed') {
+            if (retryFailure === 'network') throw new TypeError('Network unavailable');
+            return json({ code: 'internal.unexpected', message: 'failed' }, 500);
+          }
+          if (readState === 'recovered')
+            return json(
+              surveyEvidenceCandidatesResponseSchema.parse({
+                ...surveyEvidenceCandidates,
+                items: [
+                  {
+                    ...surveyEvidenceCandidates.items[0],
+                    approved_excerpt_id: SURVEY.otherExcerpt,
+                    redacted_excerpt: '현재 승인 발췌',
+                  },
+                ],
+              }),
+            );
+        }
+        return transport(input, init);
+      });
+      await chooseSurvey();
+      await chooseExcerpt();
+      expect(screen.getByTestId('add-evidence-submit')).toBeEnabled();
+      readState = 'denied';
+      fireEvent.click(screen.getByRole('button', { name: COPY.more }));
+      await screen.findByRole('alert');
+      expect(screen.queryByText(SURVEY_EVIDENCE_QUOTE)).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.getByTestId('add-evidence-submit')).toBeDisabled();
+      readState = 'failed';
+      fireEvent.click(screen.getByRole('button', { name: COPY.retry }));
+      await waitFor(() => {
+        expect(candidateReads).toHaveLength(3);
+        expect(screen.getByRole('button', { name: COPY.retry })).toBeEnabled();
+        expect(screen.getByRole('alert')).toHaveTextContent(COPY.error);
+      });
+      expect(screen.queryByText(SURVEY_EVIDENCE_QUOTE)).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.getByTestId('add-evidence-submit')).toBeDisabled();
+      expect(candidateReads[2]?.searchParams.has('cursor')).toBe(false);
+      readState = 'recovered';
+      fireEvent.click(screen.getByRole('button', { name: COPY.retry }));
+      expect(await screen.findByRole('radio', { name: /현재 승인 발췌/ })).not.toBeChecked();
+      expect(screen.queryByText(SURVEY_EVIDENCE_QUOTE)).not.toBeInTheDocument();
+      expect(candidateReads[3]?.searchParams.has('cursor')).toBe(false);
+      expect(screen.getByTestId('add-evidence-submit')).toBeDisabled();
+      fireEvent.click(screen.getByRole('radio', { name: /현재 승인 발췌/ }));
+      expect(screen.getByTestId('add-evidence-submit')).toBeEnabled();
+    },
+  );
+
   it('keeps a denied catalog separate from an empty catalog', async () => {
     setup({ catalogDenied: true });
     fireEvent.click(screen.getByTestId('evidence-source-type-select'));
@@ -321,32 +393,41 @@ describe('AddEvidenceModal approved Survey attachment', () => {
     'resets Survey draft on %s close and reopens as a note',
     async (way) => {
       const context = setup({ postStatus: 500 });
+      function ControlledHost() {
+        const [open, setOpen] = useState(true);
+        return (
+          <QueryClientProvider client={context.client}>
+            <button type="button" onClick={() => setOpen(false)}>
+              외부 닫기
+            </button>
+            <button type="button" onClick={() => setOpen(true)}>
+              다시 열기
+            </button>
+            <AddEvidenceModal
+              findingId={IDS.finding}
+              managedSystemId={IDS.managedSystem}
+              open={open}
+              onClose={() => {
+                context.close();
+                setOpen(false);
+              }}
+            />
+          </QueryClientProvider>
+        );
+      }
+      context.view.rerender(<ControlledHost />);
       await chooseSurvey();
       await chooseExcerpt();
       fireEvent.click(screen.getByTestId('add-evidence-submit'));
       await screen.findByText(COPY.attachError);
       if (way === 'cancel') fireEvent.click(screen.getByRole('button', { name: '취소' }));
       if (way === 'Escape') fireEvent.keyDown(document.body, { key: 'Escape' });
-      context.view.rerender(
-        <QueryClientProvider client={context.client}>
-          <AddEvidenceModal
-            findingId={IDS.finding}
-            managedSystemId={IDS.managedSystem}
-            open={false}
-            onClose={context.close}
-          />
-        </QueryClientProvider>,
-      );
-      context.view.rerender(
-        <QueryClientProvider client={context.client}>
-          <AddEvidenceModal
-            findingId={IDS.finding}
-            managedSystemId={IDS.managedSystem}
-            open
-            onClose={context.close}
-          />
-        </QueryClientProvider>,
-      );
+      if (way === 'external')
+        fireEvent.click(screen.getByRole('button', { name: '외부 닫기', hidden: true }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      if (way === 'external') expect(context.close).not.toHaveBeenCalled();
+      else expect(context.close).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByRole('button', { name: '다시 열기' }));
       expect(screen.getByTestId('evidence-source-type-select')).toHaveTextContent('수동 메모');
       expect(screen.getByTestId('evidence-quote-input')).toHaveValue('');
       fireEvent.click(screen.getByTestId('evidence-source-type-select'));

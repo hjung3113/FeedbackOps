@@ -63,7 +63,10 @@ Source and target Managed Systems may differ; show the source context without
 filtering discovery by the target scope. Source/Survey changes and close reset
 selection; retryable attachment errors retain selection/classification and attempt
 key, while changed payloads get a new UUIDv4 key. Ineligible selections clear and
-refresh safe candidates. Backend target manage and source/suppression checks remain
+refresh safe candidates. Candidate reads returning 403/404/409/422 discard all loaded
+pages and cursors for that Survey and clear selection. Retry starts at page one;
+later transport failures cannot restore excerpts before a successful authorized read.
+Backend target manage and source/suppression checks remain
 authoritative.
 
 `useAttachSurveyEvidenceMutation` posts only the selection/classifications to
