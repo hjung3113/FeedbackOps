@@ -278,8 +278,8 @@ function FindingsListShell({
               });
             }}
           >
-            <SelectTrigger density="compact" className="w-fit gap-1" aria-label={OWNER_COPY.filter}>
-              <span className="text-text-muted">{GLOSSARY.owner}:</span>
+            <SelectTrigger density="compact" className="w-fit" aria-label={OWNER_COPY.filter}>
+              <span className="mr-1 text-text-muted">{GLOSSARY.owner}:</span>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
