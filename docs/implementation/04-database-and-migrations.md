@@ -524,3 +524,16 @@ or audit tables. Enforce expiry in reads even when cleanup lags. Provider I/O is
 outside short reservation/completion transactions. Generate/register migrations,
 constraints/indexes/grants and metadata by existing migration discipline; verify
 as app/migrate roles in conductor-owned throwaway DBs before activation.
+
+## Responsibility storage (#1089 / ADR-0067 56-D)
+
+Migration `0060_responsibility_defaults.sql` adds nullable Finding owner, Task Request
+assigned-reviewer, Task team-assignee and Managed System reviewer columns with FKs and
+XOR-or-both-null checks. It performs no source UPDATE/backfill and leaves actual decision
+Actor/provenance and Survey operator fields intact. Existing table grants already cover
+these columns; no table-wide privilege widening or bootstrap-role change is needed.
+The new Core diagnostic input table has runtime SELECT/INSERT only; `core.teams` stays
+SELECT-only and `core.audit_log` immutable. Generated SQL/journal/snapshot ship together.
+Workspace/active-team and Actor eligibility checks apply to explicit registry defaults;
+source-creation validation/routing remain #1090/#1091. The failure-input/read contract is
+`docs/implementation/api/core.md`.

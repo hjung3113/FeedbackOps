@@ -63,6 +63,8 @@ export function createAdminMutationHandlers(context: MockApiContext): MockApiHan
             external_key: body.external_key ?? null,
             default_owner_actor_id: body.default_owner_actor_id ?? null,
             default_owner_team_id: body.default_owner_team_id ?? null,
+            default_reviewer_actor_id: body.default_reviewer_actor_id ?? null,
+            default_reviewer_team_id: body.default_reviewer_team_id ?? null,
             archived_at: null,
             archived_by_actor_id: null,
             created_at: '2026-08-03T09:30:00.000Z',

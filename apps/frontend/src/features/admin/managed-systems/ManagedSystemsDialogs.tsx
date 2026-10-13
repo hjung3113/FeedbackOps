@@ -1,5 +1,6 @@
 import {
   Button,
+  Callout,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,6 +11,7 @@ import {
   Input,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -18,12 +20,18 @@ import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import type {
   ManagedSystemDto,
   RegisterManagedSystemBody,
   UpdateManagedSystemBody,
 } from '../../../lib/api';
-import { archiveManagedSystem, registerManagedSystem, updateManagedSystem } from '../../../lib/api';
+import {
+  ApiError,
+  archiveManagedSystem,
+  registerManagedSystem,
+  updateManagedSystem,
+} from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 
 import { useKnownOwnerTeam, useRegistryActorOptions } from './useManagedSystemsRegistry.js';
@@ -33,7 +41,15 @@ type OwnerSelection =
   | { kind: 'actor'; id: string }
   | { kind: 'team'; id: string };
 
-function ownerSelection(row?: ManagedSystemDto): OwnerSelection {
+function ownerSelection(
+  row?: ManagedSystemDto,
+  kind: 'owner' | 'reviewer' = 'owner',
+): OwnerSelection {
+  if (kind === 'reviewer') {
+    if (row?.default_reviewer_actor_id) return { kind: 'actor', id: row.default_reviewer_actor_id };
+    if (row?.default_reviewer_team_id) return { kind: 'team', id: row.default_reviewer_team_id };
+    return { kind: 'none' };
+  }
   if (row?.default_owner_actor_id) return { kind: 'actor', id: row.default_owner_actor_id };
   if (row?.default_owner_team_id) return { kind: 'team', id: row.default_owner_team_id };
   return { kind: 'none' };
@@ -51,11 +67,35 @@ function parseOwnerSelection(value: string): OwnerSelection {
   return kind === 'team' ? { kind: 'team', id } : { kind: 'actor', id };
 }
 
+type DefaultErrors = Partial<Record<'owner' | 'reviewer', string>>;
+
+function defaultFieldErrors(error: unknown): DefaultErrors {
+  if (!(error instanceof ApiError) || !Array.isArray(error.detail?.fields)) return {};
+  const result: DefaultErrors = {};
+  for (const field of error.detail.fields as { path?: unknown; code?: unknown }[]) {
+    if (!Array.isArray(field.path) || typeof field.code !== 'string') continue;
+    if (!(field.code in MANAGED_SYSTEM_COPY.categories)) continue;
+    const message =
+      MANAGED_SYSTEM_COPY.categories[field.code as keyof typeof MANAGED_SYSTEM_COPY.categories];
+    for (const kind of ['owner', 'reviewer'] as const) {
+      if (
+        field.path[0] === `default_${kind}_actor_id` ||
+        field.path[0] === `default_${kind}_team_id`
+      )
+        result[kind] = message;
+    }
+  }
+  return result;
+}
+
 function OwnerSelect({
   value,
   onChange,
   knownTeamId,
   testId,
+  reviewer = false,
+  managedSystemId,
+  error,
 }: {
   value: OwnerSelection;
   onChange: (value: OwnerSelection) => void;
@@ -63,34 +103,81 @@ function OwnerSelect({
   // with no team owner, so the property must accept an explicit undefined.
   knownTeamId?: string | undefined;
   testId: string;
+  reviewer?: boolean;
+  managedSystemId?: string;
+  error?: string;
 }) {
-  const actorOptions = useRegistryActorOptions();
+  const actorOptions = useRegistryActorOptions(managedSystemId, reviewer);
   const knownTeam = useKnownOwnerTeam(knownTeamId);
 
   return (
     <div className="space-y-1">
       <FieldLabel htmlFor={testId} tone="secondary">
-        기본 담당자 (선택)
+        {reviewer ? MANAGED_SYSTEM_COPY.reviewerOptional : MANAGED_SYSTEM_COPY.ownerOptional}
       </FieldLabel>
       <Select
         value={ownerSelectionValue(value)}
         onValueChange={(next) => onChange(parseOwnerSelection(next))}
       >
-        <SelectTrigger id={testId} data-testid={testId}>
+        <SelectTrigger
+          id={testId}
+          data-testid={testId}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${testId}-error` : reviewer ? `${testId}-hint` : undefined}
+        >
           <SelectValue placeholder="(미지정)" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">(미지정)</SelectItem>
-          {knownTeam ? (
-            <SelectItem value={`team:${knownTeam.id}`}>{knownTeam.name}</SelectItem>
-          ) : null}
-          {(actorOptions ?? []).map((actor) => (
-            <SelectItem key={actor.id} value={`actor:${actor.id}`}>
-              {actor.display_name}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectItem value="none">(미지정)</SelectItem>
+            {knownTeam ? (
+              <SelectItem value={`team:${knownTeam.id}`}>{knownTeam.name}</SelectItem>
+            ) : null}
+            {(actorOptions.data ?? []).map((actor) => (
+              <SelectItem key={actor.id} value={`actor:${actor.id}`} disabled={!actor.eligible}>
+                {actor.display_name}
+                {!actor.eligible ? ` · ${MANAGED_SYSTEM_COPY.categories.ineligible_actor}` : ''}
+              </SelectItem>
+            ))}
+            {actorOptions.isSuccess &&
+            value.kind === 'actor' &&
+            !actorOptions.data?.some((actor) => actor.id === value.id) ? (
+              <SelectItem value={`actor:${value.id}`} disabled>
+                {MANAGED_SYSTEM_COPY.currentActor} ·{' '}
+                {MANAGED_SYSTEM_COPY.categories.ineligible_actor}
+              </SelectItem>
+            ) : null}
+          </SelectGroup>
         </SelectContent>
       </Select>
+      {reviewer ? (
+        <p id={`${testId}-hint`} className="text-xs text-text-muted">
+          {MANAGED_SYSTEM_COPY.reviewerHint}
+        </p>
+      ) : null}
+      {error ? (
+        <p id={`${testId}-error`} className="text-xs text-accent-danger">
+          {error}
+        </p>
+      ) : null}
+      {actorOptions.isError ? (
+        <Callout
+          tone="red"
+          title={MANAGED_SYSTEM_COPY.candidatesError}
+          action={
+            <Button
+              type="button"
+              variant="subtle"
+              size="sm"
+              onClick={() => void actorOptions.refetch()}
+            >
+              {MANAGED_SYSTEM_COPY.retry}
+            </Button>
+          }
+        >
+          {MANAGED_SYSTEM_COPY.candidatesErrorHint}
+        </Callout>
+      ) : null}
     </div>
   );
 }
@@ -111,7 +198,9 @@ function RegisterDialog({
   const [name, setName] = useState(prefill?.name ?? '');
   const [externalKey, setExternalKey] = useState(prefill?.external_key ?? '');
   const [owner, setOwner] = useState<OwnerSelection>({ kind: 'none' });
+  const [reviewer, setReviewer] = useState<OwnerSelection>({ kind: 'none' });
   const [error, setError] = useState<string | null>(null);
+  const [defaultErrors, setDefaultErrors] = useState<DefaultErrors>({});
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'slug' | 'name', string>>>({});
   const slugRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -123,10 +212,14 @@ function RegisterDialog({
       setName('');
       setExternalKey('');
       setOwner({ kind: 'none' });
+      setReviewer({ kind: 'none' });
       setError(null);
       await onSaved();
     },
-    onError: (err) => setError(envelopeMessage(err)),
+    onError: (err) => {
+      setDefaultErrors(defaultFieldErrors(err));
+      setError(envelopeMessage(err));
+    },
   });
 
   return (
@@ -147,6 +240,7 @@ function RegisterDialog({
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
+            setDefaultErrors({});
             const nextErrors: Partial<Record<'slug' | 'name', string>> = {};
             if (!slug.trim()) nextErrors.slug = '슬러그를 입력해 주세요.';
             if (!name.trim()) nextErrors.name = '이름을 입력해 주세요.';
@@ -160,6 +254,8 @@ function RegisterDialog({
             if (externalKey.length > 0) body.external_key = externalKey;
             if (owner.kind === 'actor') body.default_owner_actor_id = owner.id;
             if (owner.kind === 'team') body.default_owner_team_id = owner.id;
+            if (reviewer.kind === 'actor') body.default_reviewer_actor_id = reviewer.id;
+            if (reviewer.kind === 'team') body.default_reviewer_team_id = reviewer.id;
             mutation.mutate(body);
           }}
         >
@@ -214,7 +310,19 @@ function RegisterDialog({
               data-testid="create-external-key"
             />
           </div>
-          <OwnerSelect value={owner} onChange={setOwner} testId="create-default-owner" />
+          <OwnerSelect
+            value={owner}
+            onChange={setOwner}
+            testId="create-default-owner"
+            {...(defaultErrors.owner ? { error: defaultErrors.owner } : {})}
+          />
+          <OwnerSelect
+            value={reviewer}
+            onChange={setReviewer}
+            {...(defaultErrors.reviewer ? { error: defaultErrors.reviewer } : {})}
+            testId="create-default-reviewer"
+            reviewer
+          />
           {error && (
             <p data-testid="create-error" className="text-sm text-accent-danger">
               {error}
@@ -274,7 +382,11 @@ function EditForm({
   const [name, setName] = useState(target.name);
   const [externalKey, setExternalKey] = useState(target.external_key ?? '');
   const [owner, setOwner] = useState<OwnerSelection>(() => ownerSelection(target));
+  const [reviewer, setReviewer] = useState<OwnerSelection>(() =>
+    ownerSelection(target, 'reviewer'),
+  );
   const [error, setError] = useState<string | null>(null);
+  const [defaultErrors, setDefaultErrors] = useState<DefaultErrors>({});
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -286,13 +398,22 @@ function EditForm({
         body.default_owner_actor_id = owner.kind === 'actor' ? owner.id : null;
         body.default_owner_team_id = owner.kind === 'team' ? owner.id : null;
       }
+      if (
+        ownerSelectionValue(reviewer) !== ownerSelectionValue(ownerSelection(target, 'reviewer'))
+      ) {
+        body.default_reviewer_actor_id = reviewer.kind === 'actor' ? reviewer.id : null;
+        body.default_reviewer_team_id = reviewer.kind === 'team' ? reviewer.id : null;
+      }
       return updateManagedSystem(target.id, body);
     },
     onSuccess: async () => {
       setError(null);
       await onSaved();
     },
-    onError: (err) => setError(envelopeMessage(err)),
+    onError: (err) => {
+      setDefaultErrors(defaultFieldErrors(err));
+      setError(envelopeMessage(err));
+    },
   });
 
   const archiveMutation = useMutation({
@@ -301,7 +422,10 @@ function EditForm({
       setError(null);
       await onSaved();
     },
-    onError: (err) => setError(envelopeMessage(err)),
+    onError: (err) => {
+      setDefaultErrors(defaultFieldErrors(err));
+      setError(envelopeMessage(err));
+    },
   });
 
   return (
@@ -318,6 +442,7 @@ function EditForm({
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
+          setDefaultErrors({});
           updateMutation.mutate();
         }}
       >
@@ -337,7 +462,18 @@ function EditForm({
           value={owner}
           onChange={setOwner}
           knownTeamId={target.default_owner_team_id ?? undefined}
+          managedSystemId={target.id}
+          {...(defaultErrors.owner ? { error: defaultErrors.owner } : {})}
           testId={`edit-default-owner-${target.slug}`}
+        />
+        <OwnerSelect
+          value={reviewer}
+          onChange={setReviewer}
+          knownTeamId={target.default_reviewer_team_id ?? undefined}
+          managedSystemId={target.id}
+          {...(defaultErrors.reviewer ? { error: defaultErrors.reviewer } : {})}
+          testId={`edit-default-reviewer-${target.slug}`}
+          reviewer
         />
         <div className="space-y-1">
           <FieldLabel htmlFor={`ms-edit-key-${target.slug}`} tone="secondary">

@@ -21,10 +21,10 @@
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
-import type { AuditEventType } from '@fops/shared';
+import type { AuditEventType, ManagedSystemDefaultCandidates } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { managedSystems } from '../../db/schema/core.js';
+import { actors, managedSystems } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { cascadeArchiveActiveChildren } from '../analytics-areas/analytics-area-service.js';
@@ -32,6 +32,11 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { ActorContext, CheckService } from '../permissions/check-service.js';
+import { readDefaultDiagnostics } from './default-diagnostics.js';
+import {
+  responsibilityTargetFailure,
+  validateResponsibilityDefault,
+} from './responsibility-target.js';
 
 // ADR-0017 slug shape: lower-kebab, must start with a letter.
 export const MS_SLUG_REGEX = /^[a-z][a-z0-9-]*$/;
@@ -46,6 +51,8 @@ export interface RegisterManagedSystemBody {
   external_key?: string | null | undefined;
   default_owner_actor_id?: string | null | undefined;
   default_owner_team_id?: string | null | undefined;
+  default_reviewer_actor_id?: string | null | undefined;
+  default_reviewer_team_id?: string | null | undefined;
 }
 
 export interface UpdateManagedSystemBody {
@@ -53,6 +60,8 @@ export interface UpdateManagedSystemBody {
   external_key?: string | null | undefined;
   default_owner_actor_id?: string | null | undefined;
   default_owner_team_id?: string | null | undefined;
+  default_reviewer_actor_id?: string | null | undefined;
+  default_reviewer_team_id?: string | null | undefined;
 }
 
 export interface ManagedSystemDto {
@@ -63,6 +72,8 @@ export interface ManagedSystemDto {
   external_key: string | null;
   default_owner_actor_id: string | null;
   default_owner_team_id: string | null;
+  default_reviewer_actor_id: string | null;
+  default_reviewer_team_id: string | null;
   archived_at: string | null;
   archived_by_actor_id: string | null;
   created_at: string;
@@ -108,6 +119,8 @@ function toDto(row: Row): ManagedSystemDto {
     external_key: row.externalKey,
     default_owner_actor_id: row.defaultOwnerActorId,
     default_owner_team_id: row.defaultOwnerTeamId,
+    default_reviewer_actor_id: row.defaultReviewerActorId,
+    default_reviewer_team_id: row.defaultReviewerTeamId,
     archived_at: row.archivedAt ? row.archivedAt.toISOString() : null,
     archived_by_actor_id: row.archivedByActorId,
     created_at: row.createdAt.toISOString(),
@@ -190,6 +203,24 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
 
       await requireWorkspaceAdmin(checkService, actor, tx);
 
+      await validateResponsibilityDefault(
+        tx,
+        checkService,
+        actor.workspace_id,
+        undefined,
+        'owner',
+        body.default_owner_actor_id,
+        body.default_owner_team_id,
+      );
+      await validateResponsibilityDefault(
+        tx,
+        checkService,
+        actor.workspace_id,
+        undefined,
+        'reviewer',
+        body.default_reviewer_actor_id,
+        body.default_reviewer_team_id,
+      );
       let inserted: Row;
       try {
         const rows = await tx
@@ -201,6 +232,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
             externalKey: body.external_key ?? null,
             defaultOwnerActorId: body.default_owner_actor_id ?? null,
             defaultOwnerTeamId: body.default_owner_team_id ?? null,
+            defaultReviewerActorId: body.default_reviewer_actor_id ?? null,
+            defaultReviewerTeamId: body.default_reviewer_team_id ?? null,
           })
           .returning();
         const row = rows[0];
@@ -231,6 +264,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
           external_key: inserted.externalKey,
           default_owner_actor_id: inserted.defaultOwnerActorId,
           default_owner_team_id: inserted.defaultOwnerTeamId,
+          default_reviewer_actor_id: inserted.defaultReviewerActorId,
+          default_reviewer_team_id: inserted.defaultReviewerTeamId,
         },
       });
 
@@ -285,7 +320,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         .select()
         .from(managedSystems)
         .where(and(eq(managedSystems.workspaceId, actor.workspace_id), eq(managedSystems.id, id)))
-        .limit(1);
+        .limit(1)
+        .for('update');
       const existing = existingRows[0];
       if (!existing) {
         throw new HttpError('not_found.record', 'managed_system not found');
@@ -311,6 +347,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         externalKey: string | null;
         defaultOwnerActorId: string | null;
         defaultOwnerTeamId: string | null;
+        defaultReviewerActorId: string | null;
+        defaultReviewerTeamId: string | null;
       }> = {};
 
       if (body.name !== undefined && body.name !== existing.name) {
@@ -340,6 +378,60 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
           to: body.default_owner_team_id ?? null,
         };
         patch.defaultOwnerTeamId = body.default_owner_team_id ?? null;
+      }
+
+      if (
+        body.default_reviewer_actor_id !== undefined &&
+        body.default_reviewer_actor_id !== existing.defaultReviewerActorId
+      ) {
+        changes.default_reviewer_actor_id = {
+          from: existing.defaultReviewerActorId,
+          to: body.default_reviewer_actor_id ?? null,
+        };
+        patch.defaultReviewerActorId = body.default_reviewer_actor_id ?? null;
+      }
+      if (
+        body.default_reviewer_team_id !== undefined &&
+        body.default_reviewer_team_id !== existing.defaultReviewerTeamId
+      ) {
+        changes.default_reviewer_team_id = {
+          from: existing.defaultReviewerTeamId,
+          to: body.default_reviewer_team_id ?? null,
+        };
+        patch.defaultReviewerTeamId = body.default_reviewer_team_id ?? null;
+      }
+      if (body.default_owner_actor_id !== undefined || body.default_owner_team_id !== undefined) {
+        await validateResponsibilityDefault(
+          tx,
+          checkService,
+          actor.workspace_id,
+          id,
+          'owner',
+          body.default_owner_actor_id !== undefined
+            ? body.default_owner_actor_id
+            : existing.defaultOwnerActorId,
+          body.default_owner_team_id !== undefined
+            ? body.default_owner_team_id
+            : existing.defaultOwnerTeamId,
+        );
+      }
+      if (
+        body.default_reviewer_actor_id !== undefined ||
+        body.default_reviewer_team_id !== undefined
+      ) {
+        await validateResponsibilityDefault(
+          tx,
+          checkService,
+          actor.workspace_id,
+          id,
+          'reviewer',
+          body.default_reviewer_actor_id !== undefined
+            ? body.default_reviewer_actor_id
+            : existing.defaultReviewerActorId,
+          body.default_reviewer_team_id !== undefined
+            ? body.default_reviewer_team_id
+            : existing.defaultReviewerTeamId,
+        );
       }
 
       if (Object.keys(changes).length === 0) {
@@ -391,6 +483,12 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError('internal.unexpected', 'managed_systems update returned no row');
       }
 
+      // The row is exclusively locked until commit. Do not use transaction-start now().
+      const changedAt = await tx.execute<{ changed_at: string }>(
+        sql`select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as changed_at`,
+      );
+      const configurationChangedAt = changedAt.rows[0]?.changed_at;
+      if (!configurationChangedAt) throw new HttpError('internal.unexpected', 'DB clock missing');
       await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
@@ -398,7 +496,11 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         subject_type: 'managed_system',
         subject_id: id,
         summary: `Managed System updated: ${updated.slug}`,
-        detail: { managed_system_id: id, changes },
+        detail: {
+          managed_system_id: id,
+          changes,
+          configuration_changed_at: configurationChangedAt,
+        },
       });
 
       const dto = toDto(updated);
@@ -554,7 +656,63 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     return { items: rows.map(toDto), total };
   }
 
+  async function getDefaultCandidates(actor: ActorContext, managedSystemId?: string) {
+    return db.transaction(async (tx): Promise<ManagedSystemDefaultCandidates> => {
+      await requireWorkspaceAdmin(checkService, actor, tx);
+      let system: Row | undefined;
+      if (managedSystemId) {
+        [system] = await tx
+          .select()
+          .from(managedSystems)
+          .where(
+            and(
+              eq(managedSystems.id, managedSystemId),
+              eq(managedSystems.workspaceId, actor.workspace_id),
+            ),
+          )
+          .limit(1);
+        if (!system) throw new HttpError('not_found.record', 'managed_system not found');
+      }
+      const candidates = await tx
+        .select({ id: actors.id, display_name: actors.displayName })
+        .from(actors)
+        .where(
+          and(eq(actors.workspaceId, actor.workspace_id), eq(actors.actorType, 'internal_member')),
+        )
+        .orderBy(asc(actors.displayName), asc(actors.id));
+      const result: ManagedSystemDefaultCandidates = { owners: [], reviewers: [] };
+      for (const candidate of candidates) {
+        for (const kind of ['owner', 'reviewer'] as const) {
+          const eligible = !(await responsibilityTargetFailure(
+            tx,
+            checkService,
+            actor.workspace_id,
+            managedSystemId,
+            kind,
+            candidate.id,
+            null,
+          ));
+          const current =
+            kind === 'owner' ? system?.defaultOwnerActorId : system?.defaultReviewerActorId;
+          if (eligible || candidate.id === current) {
+            result[kind === 'owner' ? 'owners' : 'reviewers'].push({ ...candidate, eligible });
+          }
+        }
+      }
+      return result;
+    });
+  }
+
+  async function getDefaultDiagnostics(actor: ActorContext) {
+    return db.transaction(async (tx) => {
+      await requireWorkspaceAdmin(checkService, actor, tx);
+      return readDefaultDiagnostics(tx, checkService, actor.workspace_id);
+    });
+  }
+
   return {
+    getDefaultCandidates,
+    getDefaultDiagnostics,
     registerManagedSystem,
     updateManagedSystem,
     archiveManagedSystem,

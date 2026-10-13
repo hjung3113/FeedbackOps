@@ -356,6 +356,8 @@ export const managedSystems = coreSchema.table(
     externalKey: text('external_key'),
     defaultOwnerActorId: uuid('default_owner_actor_id').references(() => actors.id),
     defaultOwnerTeamId: uuid('default_owner_team_id').references(() => teams.id),
+    defaultReviewerActorId: uuid('default_reviewer_actor_id').references(() => actors.id),
+    defaultReviewerTeamId: uuid('default_reviewer_team_id').references(() => teams.id),
     defaultSurveyOperatorActorId: uuid('default_survey_operator_actor_id').references(
       () => actors.id,
     ),
@@ -372,6 +374,11 @@ export const managedSystems = coreSchema.table(
     defaultOwnerXorCheck: check(
       'managed_systems_default_owner_xor_check',
       sql`${t.defaultOwnerActorId} is null or ${t.defaultOwnerTeamId} is null`,
+    ),
+
+    defaultReviewerXorCheck: check(
+      'managed_systems_default_reviewer_xor_check',
+      sql`${t.defaultReviewerActorId} IS NULL OR ${t.defaultReviewerTeamId} IS NULL`,
     ),
   }),
 );
@@ -495,5 +502,45 @@ export const idempotencyKeys = coreSchema.table(
   (t) => ({
     pk: primaryKey({ columns: [t.actorId, t.key] }),
     createdAtIdx: index('idempotency_keys_created_at_idx').on(t.createdAt),
+  }),
+);
+
+// Safe, transaction-owned diagnostic inputs; never candidate or private source IDs.
+export const responsibilityDefaultFailures = coreSchema.table(
+  'responsibility_default_failures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    managedSystemId: uuid('managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    workflow: text('workflow').notNull(),
+    responsibility: text('responsibility').notNull(),
+    rule: text('rule').notNull(),
+    category: text('category').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceSystemCreatedIdx: index(
+      'responsibility_default_failures_workspace_system_created_idx',
+    ).on(t.workspaceId, t.managedSystemId, t.createdAt),
+    workflowCheck: check(
+      'responsibility_default_failures_workflow_check',
+      sql`${t.workflow} IN ('voc','finding','task_request','task')`,
+    ),
+    responsibilityCheck: check(
+      'responsibility_default_failures_responsibility_check',
+      sql`${t.responsibility} IN ('owner','reviewer')`,
+    ),
+    ruleCheck: check(
+      'responsibility_default_failures_rule_check',
+      sql`${t.rule} IN ('managed_system_owner','managed_system_reviewer','analytics_area_owner')`,
+    ),
+    categoryCheck: check(
+      'responsibility_default_failures_category_check',
+      sql`${t.category} IN ('missing','invalid_pair','foreign_workspace','archived_team','ineligible_actor')`,
+    ),
   }),
 );

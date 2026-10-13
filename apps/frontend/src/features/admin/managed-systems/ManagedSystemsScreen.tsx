@@ -14,6 +14,7 @@
 
 import {
   Button,
+  Callout,
   Checkbox,
   ManagedSystemMark,
   OutlineBadge,
@@ -29,6 +30,7 @@ import type * as React from 'react';
 import { useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 import { scopeMark } from '../lib/scopeMark.js';
@@ -38,7 +40,7 @@ import { EditDialog, RegisterDialog } from './ManagedSystemsDialogs.js';
 import { useManagedSystemsRegistry } from './useManagedSystemsRegistry.js';
 
 const SUBTITLE =
-  'Managed System은 권한과 집계의 기준 단위입니다. 프로젝트와는 다릅니다. 시스템별 기본 담당자, Analytics Area 매핑, 활성 상태를 관리합니다.';
+  'Managed System은 권한과 집계의 기준 단위입니다. 기본 담당자·검토자, Analytics Area 매핑, 활성 상태를 관리합니다.';
 
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -93,8 +95,16 @@ function ManagedSystemsBody({
   // slug (ADR-0017), so Configure hands the archived row's fields to Register.
   const [reregisterFrom, setReregisterFrom] = useState<ManagedSystemDto | null>(null);
 
-  const { systems, areasByMs, renderedAreaCount, resolved, listQuery, requestsCount, invalidate } =
-    useManagedSystemsRegistry(includeArchived);
+  const {
+    systems,
+    areasByMs,
+    renderedAreaCount,
+    resolved,
+    listQuery,
+    diagnosticsQuery,
+    requestsCount,
+    invalidate,
+  } = useManagedSystemsRegistry(includeArchived);
 
   return (
     <section className="space-y-8">
@@ -134,12 +144,67 @@ function ManagedSystemsBody({
                 areas={areasByMs.get(m.id) ?? []}
                 resolved={resolved}
                 last={i === systems.length - 1}
+                warning={Boolean(
+                  diagnosticsQuery.data?.items.some((item) => item.managed_system_id === m.id),
+                )}
                 onConfigure={() => setEditTarget(m)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {diagnosticsQuery.isPending ? (
+        <output className="block text-sm text-text-muted">
+          {MANAGED_SYSTEM_COPY.diagnosticsLoading}
+        </output>
+      ) : diagnosticsQuery.isError ? (
+        <Callout
+          tone="red"
+          title={MANAGED_SYSTEM_COPY.diagnostics}
+          action={
+            <Button variant="subtle" size="sm" onClick={() => void diagnosticsQuery.refetch()}>
+              {MANAGED_SYSTEM_COPY.retry}
+            </Button>
+          }
+        >
+          <p role="alert">{MANAGED_SYSTEM_COPY.diagnosticsError}</p>
+        </Callout>
+      ) : diagnosticsQuery.data.items.length > 0 ? (
+        <Callout tone="amber" title={MANAGED_SYSTEM_COPY.diagnostics}>
+          <p className="mb-2">{MANAGED_SYSTEM_COPY.diagnosticsHint}</p>
+          <ul className="flex flex-col gap-2">
+            {diagnosticsQuery.data.items.map((warning) => (
+              <li
+                key={`${warning.managed_system_id}-${warning.workflow}-${warning.rule}-${warning.category}-${warning.origin}`}
+              >
+                {systems.find((system) => system.id === warning.managed_system_id)?.name ??
+                  'Managed System'}
+                {' · '}
+                {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
+                {' · '}
+                {MANAGED_SYSTEM_COPY.roles[warning.responsibility]}
+                {' · '}
+                <span>{MANAGED_SYSTEM_COPY.categories[warning.category]}</span>
+                {warning.origin === 'creation_failure' ? ` (${warning.count})` : ''}
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => {
+                    const target = systems.find(
+                      (system) => system.id === warning.managed_system_id,
+                    );
+                    if (target) setEditTarget(target);
+                  }}
+                  aria-label={`${systems.find((system) => system.id === warning.managed_system_id)?.name ?? 'Managed System'} 설정 열기`}
+                >
+                  설정
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Callout>
+      ) : null}
 
       {/* ── Permission requests ───────────────────────────────────── */}
       <div>
@@ -264,22 +329,27 @@ function RegistryRow({
   areas,
   resolved,
   last,
+  warning,
   onConfigure,
 }: {
   row: ManagedSystemDto;
   areas: AnalyticsAreaDto[];
   resolved: ResolveActorsResponse | undefined;
   last: boolean;
+  warning: boolean;
   onConfigure: () => void;
 }) {
   const mark = scopeMark(row.slug, row.name);
   const owner = ownerUser(row, resolved);
+  const reviewer = row.default_reviewer_actor_id
+    ? resolved?.actors.find((actor) => actor.id === row.default_reviewer_actor_id)?.display_name
+    : resolved?.teams.find((team) => team.id === row.default_reviewer_team_id)?.name;
   return (
     <div
       data-testid={`managed-system-row-${row.slug}`}
       className={`grid grid-cols-(--managed-system-row-columns) items-center gap-3 px-4 py-3${last ? '' : ' border-b border-border-subtle'}`}
       style={
-        { '--managed-system-row-columns': '40px 1.6fr 1.1fr 1.4fr 110px' } as React.CSSProperties
+        { '--managed-system-row-columns': '40px 1.2fr 1.6fr 1.5fr 110px' } as React.CSSProperties
       }
     >
       <ManagedSystemMark label={mark.label} color={mark.color} size={28} />
@@ -287,16 +357,27 @@ function RegistryRow({
         <div className="flex items-center gap-1.5">
           <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
           {row.archived_at !== null ? <OutlineBadge>보관됨</OutlineBadge> : null}
+          {warning ? <OutlineBadge>{MANAGED_SYSTEM_COPY.rowWarning}</OutlineBadge> : null}
         </div>
         <div className="truncate font-mono text-xs text-text-muted">managed-system/{row.slug}</div>
       </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-text-muted">기본 담당자</span>
-        {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
-          <span className="text-xs text-text-muted">(미지정)</span>
-        ) : (
-          <UserChip user={owner} size="sm" />
-        )}
+      <div className="grid min-w-0 grid-cols-2 gap-4">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-xs text-text-muted">기본 담당자</span>
+          {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
+            <span className="text-xs text-text-muted">(미지정)</span>
+          ) : (
+            <UserChip user={owner} size="sm" />
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-xs text-text-muted">{MANAGED_SYSTEM_COPY.reviewer}</span>
+          {!row.default_reviewer_actor_id && !row.default_reviewer_team_id ? (
+            <span className="text-xs text-text-muted">(미지정)</span>
+          ) : (
+            <UserChip user={reviewer ? { display_name: reviewer } : null} size="sm" />
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {areas.map((a) => (

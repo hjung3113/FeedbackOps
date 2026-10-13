@@ -36,6 +36,7 @@ test.describe('permission request composition and Managed System owner', () => {
 
     const dialog = page.getByTestId('ms-register-dialog');
     await expect(dialog.getByTestId('create-default-owner')).toBeVisible();
+    await expect(dialog.getByTestId('create-default-reviewer')).toBeVisible();
 
     await expectVisual(page, dialog, 'ms-register-with-owner.png');
   });

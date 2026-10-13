@@ -174,6 +174,8 @@ export const integrationDashboardManagedSystemsFixture = {
     external_key: null,
     default_owner_actor_id: null,
     default_owner_team_id: null,
+    default_reviewer_actor_id: null,
+    default_reviewer_team_id: null,
     archived_at: null,
     archived_by_actor_id: null,
     created_at: '2026-07-10T00:00:00.000Z',

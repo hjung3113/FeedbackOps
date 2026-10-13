@@ -1,4 +1,4 @@
-import { listActorsResponseSchema } from '@fops/shared';
+import { listActorsResponseSchema, managedSystemDefaultCandidatesSchema } from '@fops/shared';
 import { z } from 'zod';
 
 export const managedSystemOwnerVisualScenario = z
@@ -21,13 +21,19 @@ export const registerManagedSystemVisualBodySchema = z
     slug: z.string().min(1),
     name: z.string().min(1),
     external_key: z.string().nullable().optional(),
-    default_owner_actor_id: z.string().uuid().optional(),
-    default_owner_team_id: z.string().uuid().optional(),
+    default_owner_actor_id: z.string().uuid().nullable().optional(),
+    default_owner_team_id: z.string().uuid().nullable().optional(),
+    default_reviewer_actor_id: z.string().uuid().nullable().optional(),
+    default_reviewer_team_id: z.string().uuid().nullable().optional(),
   })
   .strict()
   .refine(
     (body) => !(body.default_owner_actor_id && body.default_owner_team_id),
     'default owner actor and team are mutually exclusive',
+  )
+  .refine(
+    (body) => !(body.default_reviewer_actor_id && body.default_reviewer_team_id),
+    'default reviewer actor and team are mutually exclusive',
   );
 
 export const managedSystemVisualSchema = z
@@ -39,6 +45,8 @@ export const managedSystemVisualSchema = z
     external_key: z.string().nullable(),
     default_owner_actor_id: z.string().uuid().nullable(),
     default_owner_team_id: z.string().uuid().nullable(),
+    default_reviewer_actor_id: z.string().uuid().nullable(),
+    default_reviewer_team_id: z.string().uuid().nullable(),
     archived_at: z.string().datetime().nullable(),
     archived_by_actor_id: z.string().uuid().nullable(),
     created_at: z.string().datetime(),
@@ -56,3 +64,16 @@ export const managedSystemOwnerList = z
     items: [],
     total: 0,
   });
+
+export const managedSystemOwnerCandidates = managedSystemDefaultCandidatesSchema.parse({
+  owners: managedSystemOwnerActors.actors.map(({ id, display_name }) => ({
+    id,
+    display_name,
+    eligible: true,
+  })),
+  reviewers: managedSystemOwnerActors.actors.map(({ id, display_name }) => ({
+    id,
+    display_name,
+    eligible: true,
+  })),
+});

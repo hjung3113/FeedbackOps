@@ -30,8 +30,8 @@ core.managed_systems
 - external_key: text, nullable
 - default_owner_actor_id: uuid, nullable
 - default_owner_team_id: uuid, nullable; at most one of default_owner_actor_id and default_owner_team_id is set
-- default_reviewer_actor_id: uuid, nullable (proposed/new, ADR-0067)
-- default_reviewer_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with reviewer Actor
+- default_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
+- default_reviewer_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with reviewer Actor
 - default_survey_operator_actor_id: uuid, nullable
 - archived_at: timestamp, nullable
 - archived_by_actor_id: uuid, nullable
@@ -202,8 +202,8 @@ findings
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
-- owner_actor_id: uuid, nullable (proposed/new, ADR-0067)
-- owner_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with owner Actor
+- owner_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
+- owner_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with owner Actor
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
@@ -355,8 +355,8 @@ task_requests
 - requested_outcome: text, required
 - requester_actor_id: uuid, required
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
-- assigned_reviewer_actor_id: uuid, nullable (proposed/new, ADR-0067)
-- assigned_reviewer_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null
+- assigned_reviewer_actor_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending)
+- assigned_reviewer_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null
 - reviewer_actor_id: uuid, nullable; actual deciding Actor, never a routing default
 - decision_reason: text, nullable
 - decided_at: timestamp, nullable
@@ -395,7 +395,7 @@ tasks
 - status: enum(backlog, todo, doing, review, done, released, reopened), required
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
-- assignee_team_id: uuid, nullable (proposed/new, ADR-0067); XOR-or-both-null with assignee Actor
+- assignee_team_id: uuid, nullable (storage implemented by #1089, ADR-0067; creation routing pending); XOR-or-both-null with assignee Actor
 - due_date: date, nullable
 - milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable
@@ -787,3 +787,14 @@ In-flight/version-incompatible/expired replay cannot redispatch and exposes an
 explicit unavailable reason. Candidate DTO is only `{id,display_id,title,created_at}`
 with the availability union in `docs/implementation/api/voc.md`. There is no
 persisted source VOC, recommendation decision, Entity Link or domain audit row.
+
+## Automatic-default diagnostic inputs (#1089)
+
+Core owns `core.responsibility_default_failures`: UUID id, workspace/system FKs,
+workflow, responsibility, skipped rule, safe category, created_at. Closed values and
+Admin-only response contract live in `docs/implementation/api/core.md` and
+`packages/shared/src/managed-system-diagnostics.ts`. No candidate or source identity,
+private content, or membership is stored. Runtime SELECT/INSERT is append-only;
+configuration edits supersede earlier observations through the registry audit diff,
+without deleting historical input or changing assignments. Creation producers remain
+#1090/#1091; these diagnostic observations are not Dashboard recovery items.

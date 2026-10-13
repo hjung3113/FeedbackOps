@@ -30,7 +30,7 @@ owns requester lifecycle/risk; Core must not import Permission or decide access.
 
 ## Close-out contract (ADR-0067; implementation pending)
 
-- ADR-0067 accepts proposed/new Managed System reviewer Actor/team inputs alongside owner.
+- ADR-0067 Managed System reviewer Actor/team inputs alongside owner are implemented by #1089.
   Core-owned registry/Analytics Area seams provide transaction-aware inputs, not destination
   eligibility or assignment writes. No runtime import of Dashboard/source commands.
 - Teams can be responsibility targets without new CRUD/membership or permission grants;
