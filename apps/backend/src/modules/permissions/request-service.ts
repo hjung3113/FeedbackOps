@@ -141,6 +141,7 @@ export function createRequestService(deps: RequestServiceDeps) {
     const requestHash = hashRequestBody({ action: 'create', ...body });
 
     return await db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       // (1) Idempotency lookup.
       if (options.idempotencyKey) {

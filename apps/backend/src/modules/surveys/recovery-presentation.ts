@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { RecoveryPresentationPatch } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
+import { lockRecoveryCommand, requireRecoveryCommandLock } from '../../db/recovery-command-lock.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -39,7 +39,7 @@ export async function captureOutcomeRecovery(
   responseId: string,
   surveyId: string,
 ): Promise<OutcomeRecoveryCapture> {
-  await lockRecoveryCommand(tx, workspaceId);
+  await requireRecoveryCommandLock(tx, workspaceId);
   // Response evidence lock follows workspace command serialization.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${responseId}::text,0))`);
   await tx.execute(
@@ -89,7 +89,7 @@ export async function captureFindingOutcomeRecovery(
   workspaceId: string,
   findingId: string,
 ) {
-  await lockRecoveryCommand(tx, workspaceId);
+  await requireRecoveryCommandLock(tx, workspaceId);
   await lockFindingRecoverySubjects(tx, workspaceId, [findingId]);
   const rows = (
     await tx.execute<{ response_id: string; survey_id: string }>(

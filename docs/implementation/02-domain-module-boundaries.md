@@ -168,7 +168,10 @@ Recovery writers first acquire the transaction-scoped workspace advisory lock vi
 `db/recovery-command-lock.ts` (`hashtextextended('recovery-command:' || workspaceId, 0)`),
 before idempotency, owner row, response or recovery identity locks. This includes source/status
 commands, ordinary link create/detach, Task Request creation, Cluster conversions/link/unlink,
-private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation.
+private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation. It also covers VOC
+creation, Permission Request creation and each per-VOC transaction of a Cluster bulk public update.
+Nested recorder seams call `requireRecoveryCommandLock`, which fails the test run when the owning
+command reached the recorder without holding the lock; production still acquires it.
 Under that serialization, owner Finding locks precede expanded Finding rows (sorted UUIDs),
 then bound response advisory locks (sorted UUIDs), then recovery identities. Response-addressed
 Survey commands can lock their response before inserting a new Finding; they hold the same

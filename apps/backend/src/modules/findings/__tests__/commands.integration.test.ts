@@ -1,3 +1,4 @@
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Findings application seam (#391) — createFindingFromVocCluster,
 // lockFindingForUpdate, linkTaskToFinding — exercised inside db.transaction
@@ -90,6 +91,8 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
   async function inRolledBackTx(fn: (tx: Tx) => Promise<void>): Promise<void> {
     await expect(
       dbHandle.db.transaction(async (tx) => {
+        // Caller contract: the owning command takes the workspace recovery lock first.
+        await lockRecoveryCommand(tx, WORKSPACE_ID);
         await fn(tx);
         throw new Rollback('rollback');
       }),

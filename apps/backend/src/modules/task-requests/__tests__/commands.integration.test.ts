@@ -1,3 +1,4 @@
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Task Requests application seam (#391) — lockTaskRequestForUpdate and
 // markTaskRequestConverted — exercised inside db.transaction directly (not
@@ -105,6 +106,7 @@ describe.skipIf(!runIntegration)('task-requests command seam (#391)', () => {
     const recorder = createOwnerRecoveryRecorder();
     await expect(
       dbHandle.db.transaction(async (tx) => {
+        await lockRecoveryCommand(tx, WORKSPACE_ID);
         const captured = await recorder.capture(tx, WORKSPACE_ID, [
           { type: 'finding', id: finding.id },
         ]);

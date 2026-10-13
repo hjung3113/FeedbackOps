@@ -10,6 +10,7 @@ import type {
   VocClusterPublicUpdateCandidateRequest,
   VocClusterPublicUpdateOutcome,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 
 import type { Db } from '../../db/client.js';
@@ -691,14 +692,15 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         continue;
       }
       try {
-        await deps.db.transaction((tx) =>
-          postPublicUpdate({
+        await deps.db.transaction(async (tx) => {
+          await lockRecoveryCommand(tx, args.actor.workspace_id);
+          await postPublicUpdate({
             tx,
             actor: args.actor,
             vocId,
             input: args.input.public_update,
-          }),
-        );
+          });
+        });
         outcomes.push({ voc_id: vocId, status: 'applied' });
       } catch (error) {
         if (error instanceof HttpError) {
