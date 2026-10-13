@@ -1192,8 +1192,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
   }
-  async function attachedInventory(source: Source) {
-    await grant(adminId, 'survey.read_personal_responses', source.msId);
+  // The personal-response grant is unique per active tuple: grant it once per source.
+  async function attachedInventory(source: Source, grantPersonal = true) {
+    if (grantPersonal) await grant(adminId, 'survey.read_personal_responses', source.msId);
     const approval = await approve(source, adminCookie);
     const created = await post(adminCookie, source.responseId, {
       severity: 'medium',
@@ -1217,7 +1218,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   it('inventory keeps below-threshold attached Survey audience and suppresses exact revoked approvals between pages', async () => {
     const source = await seed(); // one respondent, below result-picker threshold
     const older = await attachedInventory(source);
-    const newer = await attachedInventory(source);
+    const newer = await attachedInventory(source, false);
     const reader = await actor();
     await grant(reader.id, 'finding.read', source.msId);
     await grant(reader.id, 'survey.read', source.msId);
