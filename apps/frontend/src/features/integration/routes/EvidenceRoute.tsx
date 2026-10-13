@@ -82,11 +82,12 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   const [manualRefresh, setManualRefresh] = useState(false);
   const [pages, setPages] = useState<{
     refresh: number;
+    root: string;
     entries: Map<
       string,
       { response: ListEvidenceInventoryResponse; items: EvidenceInventoryItem[] }
     >;
-  }>({ refresh, entries: new Map() });
+  }>({ refresh, root: search.cursor ?? '', entries: new Map() });
   const [withdrawn, setWithdrawn] = useState(
     new Map<string, { item: EvidenceInventoryItem | 'gone'; updatedAt: number }>(),
   );
@@ -139,12 +140,14 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   const [wasFetching, setWasFetching] = useState(false);
   if (wasFetching !== list.isFetching) {
     setWasFetching(list.isFetching);
-    if (list.isFetching && list.data && !manualRefresh) setPages({ refresh, entries: new Map() });
+    if (list.isFetching && list.data && !manualRefresh)
+      setPages({ refresh, root: search.cursor ?? '', entries: new Map() });
   }
   const pageKey = search.cursor ?? '';
   // Keep successful earlier pages for a load-more retry. No previous session/scope
   // state survives the keyed session, and failed reauthorization hides all content.
-  if (pages.refresh !== refresh && !manualRefresh) setPages({ refresh, entries: new Map() });
+  if (pages.refresh !== refresh && !manualRefresh)
+    setPages({ refresh, root: pageKey, entries: new Map() });
   else if (
     list.isSuccess &&
     !list.isFetching &&
@@ -152,7 +155,7 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
   ) {
     const entries = pages.refresh === refresh ? new Map(pages.entries) : new Map();
     entries.set(pageKey, { response: list.data, items: list.data.items });
-    setPages({ refresh, entries });
+    setPages({ refresh, root: pages.refresh === refresh ? pages.root : pageKey, entries });
   }
   // Withdrawal outlives selection and page responses, but resets with this keyed
   // session/scope. Only a newer successful detail read may restore available text.
@@ -210,7 +213,9 @@ function EvidenceSession({ search, viewer }: { search: Search; viewer: string })
     items: EvidenceInventoryItem[];
   }[] = [];
   const visited = new Set<string>();
-  let cursor: string | undefined = pages.entries.has('') ? '' : pageKey;
+  // Keep the loaded chain's root as load more advances the URL; a loaded first
+  // page takes precedence. The root shares the existing page-cache lifetime.
+  let cursor: string | undefined = pages.entries.has('') ? '' : pages.root;
   while (cursor !== undefined && !visited.has(cursor)) {
     const page = pages.entries.get(cursor);
     if (!page) break;

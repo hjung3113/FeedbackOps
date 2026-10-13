@@ -218,6 +218,58 @@ it('offers a fresh later-page URL a first-page action that pushes and keeps filt
   expect(screen.queryByRole('button', { name: '처음부터 보기' })).toBeNull();
   expect(screen.getByRole('button', { name: /첫 페이지 다운로드 메모/ })).toBeVisible();
 });
+it.each(['success', 'failure'] as const)(
+  'keeps a fresh page-two chain while loading page three (%s)',
+  async (outcome) => {
+    const third = {
+      ...item,
+      id: '44444444-4444-4444-8444-444444444444',
+      quote_or_summary: '세 번째 페이지 메모',
+    };
+    let settle!: (value: Response) => void;
+    installFetch((url) =>
+      url.searchParams.get('cursor') === 'page-two'
+        ? response({ items: [item], page: { has_more: true, cursor: 'page-three' } })
+        : new Promise<Response>((resolve) => {
+            settle = resolve;
+          }),
+    );
+    const { router } = await mount('/integration/evidence?cursor=page-two');
+    await screen.findByRole('button', { name: /월간 다운로드/ });
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    await waitFor(() => expect(settle).toBeTypeOf('function'));
+    expect(router.state.location.search.cursor).toBe('page-three');
+    expect(screen.getByRole('button', { name: /월간 다운로드/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: '더 보기' })).toBeDisabled();
+    await act(async () => {
+      settle(
+        outcome === 'failure'
+          ? response({ code: 'internal.unexpected' }, 500)
+          : response({ items: [third], page: { has_more: false } }),
+      );
+    });
+    if (outcome === 'failure') {
+      await screen.findByText('다음 Evidence를 불러오지 못했습니다.');
+      expect(screen.getByRole('button', { name: /월간 다운로드/ })).toBeVisible();
+      expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+      const failedRequest = settle;
+      fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+      await waitFor(() => expect(settle).not.toBe(failedRequest));
+      expect(router.state.location.search.cursor).toBe('page-three');
+      expect(screen.getByRole('button', { name: /월간 다운로드/ })).toBeVisible();
+      await act(async () => {
+        settle(response({ items: [third], page: { has_more: false } }));
+      });
+    }
+    await screen.findByRole('button', { name: /세 번째 페이지 메모/ });
+    expect(screen.getAllByRole('button', { name: /월간 다운로드|세 번째 페이지 메모/ })).toEqual([
+      screen.getByRole('button', { name: /월간 다운로드/ }),
+      screen.getByRole('button', { name: /세 번째 페이지 메모/ }),
+    ]);
+    expect(screen.queryByText('다음 Evidence를 불러오지 못했습니다.')).toBeNull();
+    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+  },
+);
 it('keeps first-page rows on page-two failure and retries the failed cursor', async () => {
   let fail = true;
   const second = {
