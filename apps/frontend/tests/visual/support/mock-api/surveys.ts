@@ -109,6 +109,12 @@ export function createSurveyHandlers(context: MockApiContext): MockApiHandler[] 
         path: `/surveys/${surveyVisualFixture.id}/copy-source`,
         handle: (route) => json(route, 200, surveyCopySourceVisualFixture),
       },
+      {
+        // The create dialog reads the selected system's Analytics Areas.
+        method: 'GET',
+        path: '/analytics-areas',
+        handle: (route) => json(route, 200, { items: [], total: 0 }),
+      },
     );
     handlers.push({
       method: 'GET',
