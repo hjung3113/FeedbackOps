@@ -1,4 +1,5 @@
 import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
+import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
   type AnswerableSurveysResponse,
@@ -8,12 +9,17 @@ import {
   answerableSurveysResponseSchema,
   listSurveysResponseSchema,
   mySurveyResponsesResponseSchema,
+  surveyCopySourceResponseSchema,
+  surveyCopySourcesResponseSchema,
   surveyDetailDtoSchema,
+  surveyDtoSchema,
   surveyRespondentFormDtoSchema,
   surveyResponseSubmittedDtoSchema,
   surveyResultDtoSchema,
+  surveyTemplatesResponseSchema,
 } from '@fops/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef } from 'react';
 import { surveyResultsReadDenialKeys } from '../policy/resultsReadDenial';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
@@ -155,15 +161,33 @@ export function useSurvey(id: string) {
 
 export function useCreateSurvey() {
   const queryClient = useQueryClient();
-  return useMutation<Survey, ApiError, CreateSurveyInput>({
-    mutationFn: async (body) => (await apiClient<Survey>('POST', '/surveys', { body })).data,
+  const attempt = useRef<{ serialized: string; key: string } | null>(null);
+  const mutation = useMutation<Survey, ApiError, CreateSurveyInput>({
+    mutationFn: async (body) => {
+      const serialized = JSON.stringify(body);
+      if (attempt.current?.serialized !== serialized) {
+        attempt.current = { serialized, key: mintIdempotencyKey() };
+      }
+      return (
+        await apiRequest('POST', '/surveys', surveyDtoSchema, {
+          body,
+          idempotencyKey: attempt.current.key,
+        })
+      ).data;
+    },
     onSuccess: () => {
+      attempt.current = null;
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: surveyKeys.list });
     },
   });
+  const resetMutation = mutation.reset;
+  const reset = useCallback(() => {
+    attempt.current = null;
+    resetMutation();
+  }, [resetMutation]);
+  return { ...mutation, reset };
 }
-
 type SurveyQuestionResponse = { id: string };
 
 function useSurveyStatusMutation(surveyId: string, target: 'open' | 'close') {
@@ -223,4 +247,60 @@ export function useSurveyQuestionMutations(surveyId: string) {
     onSuccess: invalidate,
   });
   return { create, update, remove, updateSurvey, reorder };
+}
+
+export function useSurveyTemplates(system: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['survey-templates', system],
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest(
+          'GET',
+          `/surveys/templates?managed_system_id=${encodeURIComponent(system)}`,
+          surveyTemplatesResponseSchema,
+          { signal },
+        )
+      ).data,
+    enabled: enabled && Boolean(system),
+    retry: false,
+    gcTime: 0,
+    staleTime: 0,
+  });
+}
+
+export function useSurveyCopySources(system: string, search: string, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ['survey-copy-sources', system, search],
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const query = new URLSearchParams({ managed_system_id: system, q: search.trim() });
+      if (pageParam) query.set('cursor', pageParam);
+      return (
+        await apiRequest('GET', `/surveys/copy-sources?${query}`, surveyCopySourcesResponseSchema, {
+          signal,
+        })
+      ).data;
+    },
+    getNextPageParam: (last) => (last.page.has_more ? last.page.cursor : undefined),
+    enabled: enabled && Boolean(system),
+    retry: false,
+    gcTime: 0,
+    staleTime: 0,
+  });
+}
+
+export function useSurveyCopySource(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['survey-copy-source', id],
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest('GET', `/surveys/${id}/copy-source`, surveyCopySourceResponseSchema, {
+          signal,
+        })
+      ).data,
+    enabled: enabled && Boolean(id),
+    retry: false,
+    gcTime: 0,
+    staleTime: 0,
+  });
 }

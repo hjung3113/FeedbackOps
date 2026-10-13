@@ -1,3 +1,5 @@
+import { VOC_SEARCH_EMPTY_LABEL } from './voc';
+
 export const SURVEY_BUILDER_COPY = {
   addOption: '옵션 추가',
   addQuestionBeforeLaunch: '시작하려면 질문을 하나 이상 추가하세요.',
@@ -30,4 +32,30 @@ export const SURVEY_BUILDER_COPY = {
   ratingMin: '최소 점수',
   ratingRange: '점수 범위는 0~10 사이의 정수이며, 최소 점수는 최대 점수보다 작아야 합니다.',
   titleRequired: 'Survey 제목을 입력하세요.',
+} as const;
+
+export const SURVEY_START_COPY = {
+  mode: '시작 방법',
+  intro: '빈 Survey로 시작하거나 템플릿·기존 Survey 문항을 재사용하세요.',
+  blank: '빈 Survey',
+  builtin: '기본 템플릿',
+  existing: '기존 Survey 문항 사용',
+  chooseSystem: 'Managed System을 먼저 선택하세요.',
+  search: '기존 Survey 검색',
+  more: '더 보기',
+  loading: '문항을 불러오는 중입니다.',
+  loadFailed: '시작 문항을 불러오지 못했습니다.',
+  previewFailed: '미리보기를 불러오지 못했습니다. 다시 선택하세요.',
+  empty: '사용할 수 있는 Survey가 없습니다.',
+  searchEmpty: VOC_SEARCH_EMPTY_LABEL,
+  sourceSetsType: 'Survey 유형은 선택한 Survey를 따릅니다.',
+  retry: '새로고침',
+  preview: '문항 미리보기',
+  required: '필수',
+  optional: '선택',
+  createFailed: 'Survey를 만들지 못했습니다. 입력을 확인하고 다시 시도하세요.',
+  reselect: '문항이 변경되었거나 접근 권한이 없습니다. 새로고침 후 다시 선택하세요.',
+  pending: 'Survey를 만드는 중입니다. 완료될 때까지 기다려 주세요.',
+  questions: (count: number) => `문항 ${count}개`,
+  branch: (parent: string, option: string) => `분기: ${parent} · ${option}`,
 } as const;

@@ -38,5 +38,6 @@ focused creation dialog with built-in starters and existing Survey question
 reuse. Explicit Managed System and privacy choices and navigation using the
 persisted server ID remain required; selecting a source never fills these
 choices silently. #1073 delivers the built-in backend/shared contract and
-#1074 adds existing-definition reuse. Visible dialog selection (#1075) remains
-pending; these backend contracts do not complete #1047's user-visible acceptance. Blank creation remains the initial dialog mode.
+#1074 adds existing-definition reuse. Dialog selection (#1075) offers these sources after explicit system selection,
+with editable title/type suggestions and read-only previews. Blank creation remains
+the initial dialog mode; backend contracts alone do not complete #1047's acceptance.

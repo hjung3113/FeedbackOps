@@ -7,9 +7,9 @@ Amends [ADR-0039](0039-survey-creation-requires-a-dialog.md) and narrows
 [ADR-0059 D2](0059-deferred-mvp-requirements-from-doc-audit.md).
 
 Delivery is split: #1073 supplies the built-in backend/shared contract;
-#1074 supplies existing-definition reuse; visible dialog selection (#1075)
-remains pending. #1073 alone does not complete #1047's
-user-visible acceptance.
+#1074 supplies existing-definition reuse; visible dialog selection (#1075) extends the existing creation dialog with
+blank, built-in and saved-question modes. #1073 alone does not complete #1047's
+user-visible acceptance; conductor verification owns final delivery.
 
 ## Context
 
@@ -135,7 +135,7 @@ context and navigate only with the returned persisted server ID.
 
 ADR-0059 D2 is narrowed only as each delivered slice lands. The built-in backend
 contract is #1073; existing-source backend/shared reuse is #1074 and the dialog
-(#1075) remains pending. An editable template library and
+(#1075) consumes these contracts in the existing creation dialog. An editable template library and
 advanced logic stay outside this scope. ADR-0039's explicit system/privacy,
 persisted-ID navigation, focused dialog and keyboard reorder requirements remain
 in force. ADR-0033 anonymity and ADR-0055 Finding-first follow-up stay unchanged.
