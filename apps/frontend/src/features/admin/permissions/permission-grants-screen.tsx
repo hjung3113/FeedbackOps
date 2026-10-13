@@ -42,6 +42,11 @@ export function PermissionGrantsScreen() {
     handleClose,
   } = usePermissionGrantsConsole();
   const [directGrantOpen, setDirectGrantOpen] = React.useState(false);
+  const [focusGrantIdAfterClose, setFocusGrantIdAfterClose] = React.useState<{
+    id: string;
+    navigationAttempted: boolean;
+  } | null>(null);
+  const directGrantTriggerRef = React.useRef<HTMLButtonElement | null>(null);
   const selectionContext = `${activeTab}:${selectedId ?? ''}`;
   const currentSelectionContext = React.useRef(selectionContext);
   const screenMounted = React.useRef(false);
@@ -60,11 +65,34 @@ export function PermissionGrantsScreen() {
     item: PermissionGrantAdminItem,
     submittedContext: string,
   ): void {
-    if (screenMounted.current && currentSelectionContext.current === submittedContext) {
+    const navigationAttempted =
+      screenMounted.current && currentSelectionContext.current === submittedContext;
+    if (navigationAttempted) {
       handleCreatedGrant(item.id);
     }
+    setFocusGrantIdAfterClose({ id: item.id, navigationAttempted });
     setDirectGrantOpen(false);
   }
+
+  React.useEffect(() => {
+    const pending = focusGrantIdAfterClose;
+    if (directGrantOpen || pending === null) return;
+    // The dialog has no Radix trigger (opened by a plain toolbar button), so the
+    // library has nothing to restore focus to. The navigation to the created
+    // grant settles asynchronously: wait for it, then return focus to the
+    // selected row, falling back to the trigger while no row is mounted.
+    const settled = pending.navigationAttempted ? pending.id === selectedId : true;
+    if (!settled) return;
+    setFocusGrantIdAfterClose(null);
+    const panel = document.getElementById(PERMISSION_GRANTS_PANEL_ID);
+    const selectedBar = panel?.querySelector('[data-testid="object-row-selected-bar"]');
+    const selectedRow = selectedBar?.closest<HTMLElement>('[role="button"]');
+    if (selectedRow) {
+      selectedRow.focus();
+      return;
+    }
+    directGrantTriggerRef.current?.focus();
+  }, [directGrantOpen, focusGrantIdAfterClose, selectedId]);
 
   const tabs: ListToolbarTab[] = permissionGrantTabs.map((tab) => ({
     value: tab.value,
@@ -82,13 +110,19 @@ export function PermissionGrantsScreen() {
         subtitle: ADMIN_PERMISSIONS_COPY.listSubtitle,
         actions: (
           <>
-            <Button type="button" onClick={() => setDirectGrantOpen(true)}>
+            <Button
+              ref={directGrantTriggerRef}
+              type="button"
+              size="sm"
+              onClick={() => setDirectGrantOpen(true)}
+            >
               {ADMIN_PERMISSIONS_COPY.directGrant.action}
             </Button>
             <PermissionDirectGrantForm
               open={directGrantOpen}
               selectionContext={selectionContext}
               managedSystemNames={managedSystemNames}
+              activeGrants={grants}
               cacheReturnedGrant={cacheReturnedGrant}
               onOpenChange={setDirectGrantOpen}
               onCreated={handleDirectGrantCreated}

@@ -106,6 +106,7 @@ export function PermissionDirectGrantForm({
   open,
   selectionContext,
   managedSystemNames,
+  activeGrants,
   cacheReturnedGrant,
   onOpenChange,
   onCreated,
@@ -113,6 +114,7 @@ export function PermissionDirectGrantForm({
   open: boolean;
   selectionContext: string;
   managedSystemNames: Record<string, string>;
+  activeGrants: PermissionGrantAdminItem[];
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
   onOpenChange: (open: boolean) => void;
   onCreated: (item: PermissionGrantAdminItem, submittedContext: string) => void;
@@ -136,6 +138,7 @@ export function PermissionDirectGrantForm({
       ? grantOptionsQuery.data
       : undefined;
   const optionsUnconfirmed = grantOptionsQuery.isFetching || grantOptionsQuery.isError;
+  const recipientActors = (actors.actors ?? []).filter((actor) => actor.actor_type !== 'system');
 
   React.useEffect(() => {
     if (open) return;
@@ -180,9 +183,9 @@ export function PermissionDirectGrantForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {(actors.actors ?? []).map((actor) => (
+                    {recipientActors.map((actor) => (
                       <SelectItem key={actor.id} value={actor.id}>
-                        {actor.display_name}
+                        {actor.display_name} · {actor.email}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -200,7 +203,7 @@ export function PermissionDirectGrantForm({
                 </Button>
               </div>
             ) : null}
-            {!actors.isPending && !actors.isError && actors.actors?.length === 0 ? (
+            {!actors.isPending && !actors.isError && recipientActors.length === 0 ? (
               <p className="text-xs text-text-muted">{DIRECT_GRANT_COPY.actorEmpty}</p>
             ) : null}
             {actorId !== '' && grantOptionsQuery.isPending ? (
@@ -214,35 +217,30 @@ export function PermissionDirectGrantForm({
                 </Button>
               </div>
             ) : null}
-            {grantOptions ? (
-              grantOptions.candidates.length === 0 ? (
-                <p className="text-xs text-text-muted">{DIRECT_GRANT_COPY.optionEmpty}</p>
-              ) : (
-                <>
-                  <p className="-mt-2 text-xs text-text-muted" data-testid="direct-grant-recipient">
-                    {grantOptions.recipient.display_name} ·{' '}
-                    {roleLevelLabel(grantOptions.recipient.role_level)}
-                  </p>
-                  <DirectGrantFields
-                    key={grantOptions.recipient.id}
-                    options={grantOptions}
-                    managedSystemNames={managedSystemNames}
-                    selectionContext={selectionContext}
-                    optionsUnconfirmed={optionsUnconfirmed}
-                    cacheReturnedGrant={cacheReturnedGrant}
-                    onClose={() => onOpenChange(false)}
-                    onCreated={onCreated}
-                    onPendingChange={setBusy}
-                  />
-                </>
-              )
+            {grantOptions && grantOptions.candidates.length === 0 ? (
+              <p className="text-xs text-text-muted">{DIRECT_GRANT_COPY.optionEmpty}</p>
             ) : null}
           </div>
-          <DialogFooter spacing="compact">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              {DIRECT_GRANT_COPY.cancel}
-            </Button>
-          </DialogFooter>
+          {grantOptions && grantOptions.candidates.length > 0 ? (
+            <DirectGrantFields
+              key={grantOptions.recipient.id}
+              options={grantOptions}
+              managedSystemNames={managedSystemNames}
+              activeGrants={activeGrants}
+              selectionContext={selectionContext}
+              optionsUnconfirmed={optionsUnconfirmed}
+              cacheReturnedGrant={cacheReturnedGrant}
+              onClose={() => onOpenChange(false)}
+              onCreated={onCreated}
+              onPendingChange={setBusy}
+            />
+          ) : (
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                {DIRECT_GRANT_COPY.cancel}
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       ) : null}
     </Dialog>
@@ -252,6 +250,7 @@ export function PermissionDirectGrantForm({
 function DirectGrantFields({
   options,
   managedSystemNames,
+  activeGrants,
   selectionContext,
   optionsUnconfirmed,
   cacheReturnedGrant,
@@ -261,6 +260,7 @@ function DirectGrantFields({
 }: {
   options: PermissionGrantOptions;
   managedSystemNames: Record<string, string>;
+  activeGrants: PermissionGrantAdminItem[];
   selectionContext: string;
   optionsUnconfirmed: boolean;
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
@@ -297,6 +297,16 @@ function DirectGrantFields({
   const selectedCandidate = options.candidates.find(
     (candidate) => candidateKey(candidate) === selectedCandidateKey,
   );
+  // Held = an active (non-expired) grant the screen already loaded for this recipient.
+  const heldEntries = options.candidates.flatMap((candidate) => {
+    const grant = activeGrants.find(
+      (item) =>
+        item.actor_id === options.recipient.id &&
+        (item.expires_at === null || Date.parse(item.expires_at) > Date.now()) &&
+        `${item.capability}|${item.managed_system_id ?? 'workspace'}` === candidateKey(candidate),
+    );
+    return grant ? [{ grant, candidate }] : [];
+  });
   const isSelfGrant = actorId !== null && options.recipient.id === actorId;
   const selfGrantForbidden = isSelfGrant && options.self_policy === 'forbidden';
   const selfPolicyUnconfirmed =
@@ -378,178 +388,216 @@ function DirectGrantFields({
   }
 
   return (
-    <section className="flex flex-col gap-4" data-testid="direct-grant-fields">
-      <label
-        className="flex flex-col gap-2 text-sm text-text-secondary"
-        htmlFor="permission-direct-grant-candidate"
-      >
-        {DIRECT_GRANT_COPY.optionLabel}
-        <Select
-          value={selectedCandidateKey}
-          onValueChange={(value) =>
-            clearErrorAndUpdate(() => {
-              setSelectedCandidateKey(value);
-              setGovernanceConfirmed(false);
-              setPolicyCitation('');
-              setPeerReviewerAbsence('');
-            })
-          }
-          disabled={mutation.isPending}
+    <>
+      <section className="flex flex-col gap-4" data-testid="direct-grant-fields">
+        <p className="-mt-2 text-xs text-text-muted" data-testid="direct-grant-recipient">
+          {options.recipient.display_name} · {roleLevelLabel(options.recipient.role_level)}
+        </p>
+        <label
+          className="flex flex-col gap-2 text-sm text-text-secondary"
+          htmlFor="permission-direct-grant-candidate"
         >
-          <SelectTrigger
-            id="permission-direct-grant-candidate"
-            aria-label={DIRECT_GRANT_COPY.optionLabel}
+          {DIRECT_GRANT_COPY.optionLabel}
+          <Select
+            value={selectedCandidateKey}
+            onValueChange={(value) =>
+              clearErrorAndUpdate(() => {
+                setSelectedCandidateKey(value);
+                setGovernanceConfirmed(false);
+                setPolicyCitation('');
+                setPeerReviewerAbsence('');
+              })
+            }
+            disabled={mutation.isPending}
           >
-            <SelectValue placeholder={DIRECT_GRANT_COPY.optionPlaceholder} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {options.candidates.map((candidate) => (
-                <SelectItem key={candidateKey(candidate)} value={candidateKey(candidate)}>
-                  {candidateLabel(candidate, managedSystemNames)}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </label>
-      {selectedCandidate?.preflight.state === 'request_review' ? (
-        <div className="flex flex-col gap-1 text-sm text-text-secondary">
-          <p>{DIRECT_GRANT_COPY.preflightReview}</p>
-          <InternalLink
-            className="w-fit text-accent-primary underline underline-offset-2"
-            href={selectedCandidate.preflight.review_route}
+            <SelectTrigger
+              id="permission-direct-grant-candidate"
+              aria-label={DIRECT_GRANT_COPY.optionLabel}
+            >
+              <SelectValue placeholder={DIRECT_GRANT_COPY.optionPlaceholder} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {options.candidates.map((candidate) => {
+                  const held = heldEntries.some((entry) => entry.candidate === candidate);
+                  return (
+                    <SelectItem
+                      key={candidateKey(candidate)}
+                      value={candidateKey(candidate)}
+                      disabled={held}
+                    >
+                      {candidateLabel(candidate, managedSystemNames)}
+                      {held ? ` · ${DIRECT_GRANT_COPY.alreadyGranted}` : null}
+                    </SelectItem>
+                  );
+                })}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </label>
+        {heldEntries.length > 0 ? (
+          <div
+            className="flex flex-col gap-1 text-sm text-text-secondary"
+            data-testid="direct-grant-held"
           >
-            {DIRECT_GRANT_COPY.reviewLink}
-          </InternalLink>
-        </div>
-      ) : null}
-      {selectedCandidate?.preflight.state === 'deny_lift' ? (
-        <div className="flex flex-col gap-1 text-sm text-text-secondary">
-          <p>{DIRECT_GRANT_COPY.preflightDeny}</p>
-          <InternalLink
-            className="w-fit text-accent-primary underline underline-offset-2"
-            href={selectedCandidate.preflight.lift_route}
-            onClick={onClose}
-          >
-            {DIRECT_GRANT_COPY.denyLink}
-          </InternalLink>
-        </div>
-      ) : null}
-      <label className="flex flex-col gap-2 text-sm text-text-secondary" htmlFor={reasonId}>
-        {DIRECT_GRANT_COPY.reasonLabel}
-        <Textarea
-          id={reasonId}
-          maxLength={2000}
-          value={reason}
-          onChange={(event) => clearErrorAndUpdate(() => setReason(event.target.value))}
-          placeholder={DIRECT_GRANT_COPY.reasonPlaceholder}
-          disabled={mutation.isPending}
-        />
-      </label>
-      <label className="flex flex-col gap-2 text-sm text-text-secondary" htmlFor={expirationId}>
-        {DIRECT_GRANT_COPY.expirationLabel}
-        <DatePicker
-          id={expirationId}
-          aria-label={DIRECT_GRANT_COPY.expirationLabel}
-          value={expirationDate}
-          onChange={(value) => clearErrorAndUpdate(() => setExpirationDate(value ?? ''))}
-          onValidityChange={setExpirationDraftValid}
-          min={minimumExpirationDate()}
-          showValidation={expirationInvalid}
-          aria-invalid={expirationInvalid}
-          disabled={mutation.isPending}
-        />
-        <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.expirationHelp}</span>
-        <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.reissueHelp}</span>
-      </label>
-      {governanceRequired ? (
-        <section className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3">
-          <p className="text-xs leading-5 text-text-secondary">
-            {DIRECT_GRANT_COPY.governanceDescription}
-          </p>
-          <div className="flex items-start gap-2 text-sm text-text-secondary">
-            <Checkbox
-              id={governanceId}
-              checked={governanceConfirmed}
-              onCheckedChange={(checked) =>
-                clearErrorAndUpdate(() => setGovernanceConfirmed(checked === true))
-              }
-              disabled={mutation.isPending}
-            />
-            <label htmlFor={governanceId} className="cursor-pointer">
-              {DIRECT_GRANT_COPY.governanceConfirm}
-            </label>
+            <p>{DIRECT_GRANT_COPY.alreadyGrantedNote}</p>
+            {heldEntries.map(({ grant, candidate }) => (
+              <InternalLink
+                key={grant.id}
+                className="w-fit text-accent-primary underline underline-offset-2"
+                href={`/admin/permissions/grants?selected=${grant.id}`}
+              >
+                {candidateLabel(candidate, managedSystemNames)} ·{' '}
+                {DIRECT_GRANT_COPY.alreadyGrantedLink}
+              </InternalLink>
+            ))}
           </div>
-        </section>
-      ) : null}
-      {selfGrantForbidden ? (
-        <p className="text-sm text-accent-danger">{DIRECT_GRANT_COPY.selfForbidden}</p>
-      ) : null}
-      {selfPolicyUnconfirmed ? (
-        <p className="text-sm text-accent-danger">{DIRECT_GRANT_COPY.selfPolicyUnavailable}</p>
-      ) : null}
-      {selfEnvelopeRequired ? (
-        <section className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3">
-          <p className="text-xs font-semibold text-text-primary">
-            {DIRECT_GRANT_COPY.selfEnvelopeTitle}
-          </p>
-          <label
-            className="flex flex-col gap-2 text-sm text-text-secondary"
-            htmlFor={policyCitationId}
-          >
-            {DIRECT_GRANT_COPY.policyCitationLabel}
-            <Input
-              id={policyCitationId}
-              value={policyCitation}
-              onChange={(event) => clearErrorAndUpdate(() => setPolicyCitation(event.target.value))}
-              disabled={mutation.isPending || selfGrantForbidden}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-2 text-sm text-text-secondary"
-            htmlFor={peerReviewerAbsenceId}
-          >
-            {DIRECT_GRANT_COPY.peerReviewerAbsenceLabel}
-            <Textarea
-              id={peerReviewerAbsenceId}
-              value={peerReviewerAbsence}
-              onChange={(event) =>
-                clearErrorAndUpdate(() => setPeerReviewerAbsence(event.target.value))
-              }
-              disabled={mutation.isPending || selfGrantForbidden}
-              rows={2}
-            />
-          </label>
-        </section>
-      ) : null}
-      {actorId === null ? (
-        <p className="text-xs text-text-muted">{DIRECT_GRANT_COPY.sessionLoading}</p>
-      ) : null}
-      {mappedError ? (
-        <div role="alert" className="flex flex-col gap-1 text-sm text-accent-danger">
-          <p>{mappedError}</p>
-          {submitErrorDestination ? (
+        ) : null}
+        {selectedCandidate?.preflight.state === 'request_review' ? (
+          <div className="flex flex-col gap-1 text-sm text-text-secondary">
+            <p>{DIRECT_GRANT_COPY.preflightReview}</p>
             <InternalLink
               className="w-fit text-accent-primary underline underline-offset-2"
-              href={submitErrorDestination.href}
-              {...(submitErrorDestination.closesDialog ? { onClick: onClose } : {})}
+              href={selectedCandidate.preflight.review_route}
             >
-              {submitErrorDestination.label}
+              {DIRECT_GRANT_COPY.reviewLink}
             </InternalLink>
-          ) : null}
-        </div>
-      ) : null}
-      <Button
-        type="button"
-        onClick={submit}
-        loading={mutation.isPending}
-        disabled={!canSubmit}
-        data-testid="direct-grant-submit"
-      >
-        {DIRECT_GRANT_COPY.submit}
-      </Button>
-    </section>
+          </div>
+        ) : null}
+        {selectedCandidate?.preflight.state === 'deny_lift' ? (
+          <div className="flex flex-col gap-1 text-sm text-text-secondary">
+            <p>{DIRECT_GRANT_COPY.preflightDeny}</p>
+            <InternalLink
+              className="w-fit text-accent-primary underline underline-offset-2"
+              href={selectedCandidate.preflight.lift_route}
+              onClick={onClose}
+            >
+              {DIRECT_GRANT_COPY.denyLink}
+            </InternalLink>
+          </div>
+        ) : null}
+        <label className="flex flex-col gap-2 text-sm text-text-secondary" htmlFor={reasonId}>
+          {DIRECT_GRANT_COPY.reasonLabel}
+          <Textarea
+            id={reasonId}
+            maxLength={2000}
+            value={reason}
+            onChange={(event) => clearErrorAndUpdate(() => setReason(event.target.value))}
+            placeholder={DIRECT_GRANT_COPY.reasonPlaceholder}
+            disabled={mutation.isPending}
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm text-text-secondary" htmlFor={expirationId}>
+          {DIRECT_GRANT_COPY.expirationLabel}
+          <DatePicker
+            id={expirationId}
+            aria-label={DIRECT_GRANT_COPY.expirationLabel}
+            value={expirationDate}
+            onChange={(value) => clearErrorAndUpdate(() => setExpirationDate(value ?? ''))}
+            onValidityChange={setExpirationDraftValid}
+            min={minimumExpirationDate()}
+            showValidation={expirationInvalid}
+            aria-invalid={expirationInvalid}
+            disabled={mutation.isPending}
+          />
+          <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.expirationHelp}</span>
+          <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.reissueHelp}</span>
+        </label>
+        {governanceRequired ? (
+          <section className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3">
+            <p className="text-xs leading-5 text-text-secondary">
+              {DIRECT_GRANT_COPY.governanceDescription}
+            </p>
+            <div className="flex items-start gap-2 text-sm text-text-secondary">
+              <Checkbox
+                id={governanceId}
+                checked={governanceConfirmed}
+                onCheckedChange={(checked) =>
+                  clearErrorAndUpdate(() => setGovernanceConfirmed(checked === true))
+                }
+                disabled={mutation.isPending}
+              />
+              <label htmlFor={governanceId} className="cursor-pointer">
+                {DIRECT_GRANT_COPY.governanceConfirm}
+              </label>
+            </div>
+          </section>
+        ) : null}
+        {selfGrantForbidden ? (
+          <p className="text-sm text-accent-danger">{DIRECT_GRANT_COPY.selfForbidden}</p>
+        ) : null}
+        {selfPolicyUnconfirmed ? (
+          <p className="text-sm text-accent-danger">{DIRECT_GRANT_COPY.selfPolicyUnavailable}</p>
+        ) : null}
+        {selfEnvelopeRequired ? (
+          <section className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3">
+            <p className="text-xs font-semibold text-text-primary">
+              {DIRECT_GRANT_COPY.selfEnvelopeTitle}
+            </p>
+            <label
+              className="flex flex-col gap-2 text-sm text-text-secondary"
+              htmlFor={policyCitationId}
+            >
+              {DIRECT_GRANT_COPY.policyCitationLabel}
+              <Input
+                id={policyCitationId}
+                value={policyCitation}
+                onChange={(event) =>
+                  clearErrorAndUpdate(() => setPolicyCitation(event.target.value))
+                }
+                disabled={mutation.isPending || selfGrantForbidden}
+              />
+            </label>
+            <label
+              className="flex flex-col gap-2 text-sm text-text-secondary"
+              htmlFor={peerReviewerAbsenceId}
+            >
+              {DIRECT_GRANT_COPY.peerReviewerAbsenceLabel}
+              <Textarea
+                id={peerReviewerAbsenceId}
+                value={peerReviewerAbsence}
+                onChange={(event) =>
+                  clearErrorAndUpdate(() => setPeerReviewerAbsence(event.target.value))
+                }
+                disabled={mutation.isPending || selfGrantForbidden}
+                rows={2}
+              />
+            </label>
+          </section>
+        ) : null}
+        {actorId === null ? (
+          <p className="text-xs text-text-muted">{DIRECT_GRANT_COPY.sessionLoading}</p>
+        ) : null}
+        {mappedError ? (
+          <div role="alert" className="flex flex-col gap-1 text-sm text-accent-danger">
+            <p>{mappedError}</p>
+            {submitErrorDestination ? (
+              <InternalLink
+                className="w-fit text-accent-primary underline underline-offset-2"
+                href={submitErrorDestination.href}
+                {...(submitErrorDestination.closesDialog ? { onClick: onClose } : {})}
+              >
+                {submitErrorDestination.label}
+              </InternalLink>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+      <DialogFooter>
+        <Button type="button" variant="secondary" onClick={onClose}>
+          {DIRECT_GRANT_COPY.cancel}
+        </Button>
+        <Button
+          type="button"
+          onClick={submit}
+          loading={mutation.isPending}
+          disabled={!canSubmit}
+          data-testid="direct-grant-submit"
+        >
+          {DIRECT_GRANT_COPY.submit}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }
 

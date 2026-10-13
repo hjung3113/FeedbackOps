@@ -29,6 +29,14 @@ const fetchManagedSystemsMock = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const useMeMock = vi.hoisted(() => vi.fn());
 const useWorkspaceSettingsMock = vi.hoisted(() => vi.fn());
+const workspaceActorsMock = vi.hoisted(() => ({
+  actors: null as Array<{
+    id: string;
+    display_name: string;
+    email: string;
+    actor_type: 'internal_member' | 'system';
+  }> | null,
+}));
 
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: useMeMock }));
@@ -75,10 +83,25 @@ vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     isPending: false,
     isError: false,
-    actors: [
-      { id: RECIPIENT_ID, display_name: 'Actor One' },
-      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', display_name: 'Actor Two' },
-      { id: SELF_ACTOR_ID, display_name: 'Admin One' },
+    actors: workspaceActorsMock.actors ?? [
+      {
+        id: RECIPIENT_ID,
+        display_name: 'Actor One',
+        email: 'actor-one@example.com',
+        actor_type: 'internal_member',
+      },
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        display_name: 'Actor Two',
+        email: 'actor-two@example.com',
+        actor_type: 'internal_member',
+      },
+      {
+        id: SELF_ACTOR_ID,
+        display_name: 'Admin One',
+        email: 'admin-one@example.com',
+        actor_type: 'internal_member',
+      },
     ],
   }),
 }));
@@ -424,7 +447,7 @@ async function selectDirectGrantTargetAndScope(
   actorName = 'Actor One',
   scopeName: string | RegExp = /Finding 관리.*Payments/,
 ) {
-  await chooseSelectOption('대상자', actorName);
+  await chooseSelectOption('대상자', new RegExp(`^${actorName}`));
   await waitFor(() =>
     expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent(actorName),
   );
@@ -461,6 +484,7 @@ describe('/admin/permissions/grants screen', () => {
     vi.restoreAllMocks();
     useMeMock.mockReset();
     useWorkspaceSettingsMock.mockReset();
+    workspaceActorsMock.actors = null;
     toast.success.mockReset();
     toast.error.mockReset();
   });
@@ -1381,7 +1405,9 @@ describe('/admin/permissions/grants screen', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
     const nextDialog = await openDirectGrantDialog();
-    await selectDirectGrantTargetAndScope();
+    // The first body is now a held candidate for this recipient, so the rotation
+    // step grants the same capability×scope to a different recipient instead.
+    await selectDirectGrantTargetAndScope('Actor Two');
     fireEvent.change(within(nextDialog).getByLabelText('사유 · 필수'), {
       target: { value: 'Changed normalized intent' },
     });
@@ -1419,7 +1445,7 @@ describe('/admin/permissions/grants screen', () => {
     });
     renderScreen();
     const dialog = await openDirectGrantDialog();
-    await chooseSelectOption('대상자', 'Actor One');
+    await chooseSelectOption('대상자', /^Actor One/);
     await waitFor(() =>
       expect(
         api.requests.some(
@@ -1431,7 +1457,7 @@ describe('/admin/permissions/grants screen', () => {
     );
     expect(within(dialog).queryByTestId('direct-grant-submit')).not.toBeInTheDocument();
 
-    await chooseSelectOption('대상자', 'Admin One');
+    await chooseSelectOption('대상자', /^Admin One/);
     await waitFor(() =>
       expect(
         api.requests.some(
@@ -1453,5 +1479,144 @@ describe('/admin/permissions/grants screen', () => {
     expect(
       screen.queryByRole('option', { name: /Finding 관리.*Payments/ }),
     ).not.toBeInTheDocument();
+  });
+
+  test('disables an already-held candidate and links to the existing grant', async () => {
+    const api = installApi({
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            {
+              capability: 'voc.triage',
+              managed_system_id: MANAGED_SYSTEM_ID,
+              governance_required: false,
+              preflight: { state: 'available' },
+            },
+            DEFAULT_GRANT_CANDIDATE,
+          ],
+        }),
+      },
+    });
+    renderScreen();
+
+    const dialog = await openDirectGrantDialog();
+    await chooseSelectOption('대상자', /^Actor One/);
+    await waitFor(() =>
+      expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent('Actor One'),
+    );
+    fireEvent.click(within(dialog).getByRole('combobox', { name: '부여 권한 및 범위' }));
+
+    const heldOption = await screen.findByRole('option', {
+      name: /VOC Triage.*Payments.*이미 부여됨/,
+    });
+    expect(heldOption).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(heldOption);
+    // The listbox stays open over a disabled option; Escape closes the select
+    // only, and the trigger still shows the placeholder (nothing was selected).
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+    expect(within(dialog).getByRole('combobox', { name: '부여 권한 및 범위' })).toHaveTextContent(
+      '권한과 범위를 선택하세요.',
+    );
+    expect(within(dialog).getByTestId('direct-grant-submit')).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: '이미 보유한 권한을 다시 부여합니다.' },
+    });
+    expect(within(dialog).getByTestId('direct-grant-submit')).toBeDisabled();
+    expect(
+      api.requests.some(
+        (request) => request.method === 'POST' && request.path === '/permissions/grants',
+      ),
+    ).toBe(false);
+
+    const link = within(dialog).getByRole('link', { name: /VOC Triage.*기존 권한 보기/ });
+    expect(link).toHaveAttribute('href', `/admin/permissions/grants?selected=${GRANT_ID}`);
+  });
+
+  test('filters the system actor from recipients and shows emails for same names', async () => {
+    workspaceActorsMock.actors = [
+      {
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        display_name: 'Actor One',
+        email: 'actor-one@example.com',
+        actor_type: 'internal_member',
+      },
+      {
+        id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        display_name: 'System',
+        email: 'system@example.com',
+        actor_type: 'system',
+      },
+      {
+        id: 'abababab-abab-4bab-8bab-abababababab',
+        display_name: 'Actor One',
+        email: 'actor-two@example.com',
+        actor_type: 'internal_member',
+      },
+    ];
+    installApi();
+    renderScreen();
+
+    const dialog = await openDirectGrantDialog();
+    fireEvent.click(within(dialog).getByRole('combobox', { name: '대상자' }));
+    const options = await screen.findAllByRole('option');
+
+    expect(screen.queryByRole('option', { name: /^System/ })).not.toBeInTheDocument();
+    expect(options).toHaveLength(2);
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Actor One · actor-one@example.com',
+      'Actor One · actor-two@example.com',
+    ]);
+  });
+
+  test('returns focus to the newly selected row after a successful grant', async () => {
+    installApi();
+    renderScreen();
+
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope();
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: '새 담당자에게 Finding 운영을 맡깁니다.' },
+    });
+    fireEvent.click(within(dialog).getByTestId('direct-grant-submit'));
+
+    const list = screen.getByTestId('permission-grants-list');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    const createdRow = await within(list).findByRole('button', {
+      name: /Actor One · Finding 관리/,
+    });
+    await waitFor(() => expect(document.activeElement).toBe(createdRow));
+  });
+
+  test('returns focus to the trigger when the granted row is not mounted', async () => {
+    const api = installApi({ deferLists: true, deferDirectGrant: true, initialGrants: [] });
+    const { router } = renderScreen(`/admin/permissions/grants?tab=denies&selected=${DENY_ID}`);
+
+    const dialog = await openDirectGrantDialog();
+    await selectDirectGrantTargetAndScope();
+    fireEvent.change(within(dialog).getByLabelText('사유 · 필수'), {
+      target: { value: '목록이 아직 비어 있는 상태에서 부여합니다.' },
+    });
+    fireEvent.click(within(dialog).getByTestId('direct-grant-submit'));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.method === 'POST' && request.path === '/permissions/grants',
+        ),
+      ).toBe(true),
+    );
+
+    // Changing the selection while the grant is in flight invalidates the submit
+    // context: the dialog does not navigate to the created grant, and the pending
+    // denies list keeps every row unmounted.
+    await act(async () =>
+      router.navigate({
+        to: '/admin/permissions/grants',
+        search: { tab: 'denies', selected: GRANT_ID },
+      }),
+    );
+    await act(async () => api.releaseDirectGrant());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '권한 부여' }));
   });
 });
