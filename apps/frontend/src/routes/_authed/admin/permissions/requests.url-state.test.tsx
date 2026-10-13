@@ -225,9 +225,11 @@ describe('/admin/permissions/requests URL state', () => {
         selected: APPROVED_ID,
       });
     });
-    await waitFor(() => expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
-    ));
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        'workspace.admin',
+      ),
+    );
     expect(router.history.length).toBe(lengthBefore + 1);
   });
 
@@ -322,9 +324,11 @@ describe('/admin/permissions/requests URL state', () => {
     });
     // Replaced, not pushed: history did not grow.
     expect(router.history.length).toBe(1);
-    await waitFor(() => expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
-    ));
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        'workspace.admin',
+      ),
+    );
     expect(
       within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
     ).toBeInTheDocument();

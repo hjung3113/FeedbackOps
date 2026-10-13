@@ -46,7 +46,9 @@ describe('PermissionRequestDetail identity', () => {
   });
 
   it('uses safe labels when actor and Managed System names are unavailable', () => {
-    render(<PermissionRequestDetail request={adminDetailFixture(REQUEST)} onClose={() => undefined} />);
+    render(
+      <PermissionRequestDetail request={adminDetailFixture(REQUEST)} onClose={() => undefined} />,
+    );
 
     expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
     expect(screen.getByText('Managed System')).toBeInTheDocument();

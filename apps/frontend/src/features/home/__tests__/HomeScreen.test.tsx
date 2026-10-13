@@ -544,7 +544,10 @@ describe('HomeScreen route content', () => {
             requests: [
               {
                 id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-                revision: 7, requested_expiration: null, updated_at: '2026-10-13T00:00:00.000Z', return_route_intent: '/home',
+                revision: 7,
+                requested_expiration: null,
+                updated_at: '2026-10-13T00:00:00.000Z',
+                return_route_intent: '/home',
                 requested_capability: 'workspace.admin',
                 requested_managed_system_id: null,
                 reason: 'Need admin',
@@ -558,7 +561,10 @@ describe('HomeScreen route content', () => {
               },
               {
                 id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-                revision: 7, requested_expiration: null, updated_at: '2026-10-13T00:00:00.000Z', return_route_intent: '/home',
+                revision: 7,
+                requested_expiration: null,
+                updated_at: '2026-10-13T00:00:00.000Z',
+                return_route_intent: '/home',
                 requested_capability: 'finding.manage',
                 requested_managed_system_id: null,
                 reason: 'Need write',
@@ -677,7 +683,8 @@ describe('HomeScreen route content', () => {
             }),
           );
         }
-        if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+        if (url === `/permission-requests/${detail.id}`)
+          return new Response(JSON.stringify(detail));
         return base(input, init);
       }) as typeof fetch;
       renderHome();
@@ -857,8 +864,8 @@ describe('HomeScreen route content', () => {
         expect(input).toHaveFocus();
         fireEvent.click(screen.getByRole('button', { name: '수정' }));
         await waitFor(() => expect(writes).toHaveLength(2));
-        expect(writes[1]!.body).toEqual({ expected_revision: 8, reason: 'unsaved input' });
-        expect(writes[1]!.key).not.toBe(writes[0]!.key);
+        expect(writes[1]?.body).toEqual({ expected_revision: 8, reason: 'unsaved input' });
+        expect(writes[1]?.key).not.toBe(writes[0]?.key);
       }
     },
   );

@@ -50,7 +50,8 @@ export function createHomeRequestHandlers(context: MockApiContext): MockApiHandl
 
   return [
     {
-      method: 'GET', path: /^\/permission-requests\/([^/]+)$/,
+      method: 'GET',
+      path: /^\/permission-requests\/([^/]+)$/,
       handle: async (route, _context, _url, match) => {
         const detail = details.find((row) => match !== true && row.id === match[1]);
         await json(
@@ -104,10 +105,11 @@ export function createHomeRequestHandlers(context: MockApiContext): MockApiHandl
           detail.revision += 1;
           detail.allowed_actions = action === 'withdraw' ? [] : ['edit', 'withdraw'];
           const index = mine.findIndex((row) => row.id === detail.id);
+          const current = mine[index];
           if (action === 'withdraw') mine.splice(index, 1);
-          else if (index >= 0)
+          else if (current)
             mine[index] = {
-              ...mine[index]!,
+              ...current,
               reason: detail.reason,
               requested_expiration: detail.requested_expiration,
               requested_managed_system_id: detail.requested_managed_system_id,

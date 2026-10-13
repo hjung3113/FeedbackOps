@@ -11,7 +11,12 @@ import {
   PanelSectionTitle,
   RadioGroup,
   RadioGroupItem,
-  Select, SelectContent, SelectGroup, SelectItem,SelectTrigger, SelectValue, 
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@fops/ui';
 import * as React from 'react';
@@ -116,26 +121,29 @@ export function PermissionRequestDecisionForm({
   const intent = React.useRef<{ fingerprint: string; key: string } | null>(null);
   const submitting = React.useRef(false);
   const [scope, setScope] = React.useState(request.requested_managed_system_id ?? 'workspace');
-  const mutation = useDecidePermissionRequest((succeeded) => {
-    submitting.current = false;
-    if (succeeded) {
+  const mutation = useDecidePermissionRequest(
+    (succeeded) => {
+      submitting.current = false;
+      if (succeeded) {
+        intent.current = null;
+        onReviewCompleted?.();
+      }
+    },
+    () => {
+      setReviewBlocked(true);
+      setAction(null);
+      setReason('');
+      setPolicyCitation('');
+      setPeerReviewerAbsence('');
+      setExpirationMode('keep');
+      setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
+      setExpirationValidationAttempted(false);
+      setExpirationFieldTouched(false);
+      setExpirationDraftValid(true);
       intent.current = null;
-      onReviewCompleted?.();
-    }
-  }, () => {
-    setReviewBlocked(true);
-    setAction(null);
-    setReason('');
-    setPolicyCitation('');
-    setPeerReviewerAbsence('');
-    setExpirationMode('keep');
-    setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
-    setExpirationValidationAttempted(false);
-    setExpirationFieldTouched(false);
-    setExpirationDraftValid(true);
-    intent.current = null;
-    onStaleConflict?.();
-  });
+      onStaleConflict?.();
+    },
+  );
   const me = useMe();
   const workspaceSettings = useWorkspaceSettings();
   const minExpirationDate = localDateInputValue(new Date());
@@ -199,10 +207,7 @@ export function PermissionRequestDecisionForm({
     setExpirationFieldTouched(false);
     setExpirationDraftValid(true);
     setExpirationDate(request.requested_expiration?.slice(0, 10) ?? '');
-  }, [
-    request.requested_expiration,
-    request.requested_managed_system_id,
-  ]);
+  }, [request.requested_expiration, request.requested_managed_system_id]);
 
   function submit() {
     if (action === null || submitDisabled || submitting.current || (needsReason && !reason.trim()))
