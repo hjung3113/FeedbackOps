@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; 56-I implements Integration-owned shared frontend navigation, personal presentation/history and independent freshness on Home, Integration and Coverage. Conductor visual and scale verification remain pending. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. 56-H adds backend presentation/history/occurrence tracking; 56-I implements Integration-owned shared frontend navigation, personal presentation/history and independent freshness on Home, Integration and Coverage. Desktop-1440 visual baselines and the ~5k scale measurement (`recovery-scale.integration.test.ts`, opt-in `RECOVERY_SCALE=1`) were verified at delivery; every warm summary/list/detail/history p95 stayed within §4's 500 ms budget. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
