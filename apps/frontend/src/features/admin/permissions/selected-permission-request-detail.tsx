@@ -1,5 +1,6 @@
 import { Button } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
 
 import { fetchPermissionRequestAdminDetail, permissionRequestAdminDetailKey } from '@/lib/api';
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
@@ -22,6 +23,11 @@ export function SelectedPermissionRequestDetail({
     retry: false,
     staleTime: 0,
   });
+  // Draft identity is ID + revision only: an unchanged background refetch must
+  // not remount the form. A stale conflict latches an inline notice above the
+  // keyed form until the Admin picks a new action — the refetch remount would
+  // otherwise lose the transient form-level alert and the toast fades.
+  const [staleReview, setStaleReview] = React.useState(false);
   const detail = query.data;
   if (query.isError || !detail || !query.isFetchedAfterMount)
     return (
@@ -41,7 +47,7 @@ export function SelectedPermissionRequestDetail({
     );
   return (
     <PermissionRequestDetail
-      key={`${id}:${detail.revision}:${query.dataUpdatedAt}`}
+      key={`${id}:${detail.revision}`}
       request={detail}
       actorName={detail.requester.display_name || actorNames[detail.requester_actor_id]}
       managedSystemName={
@@ -49,6 +55,9 @@ export function SelectedPermissionRequestDetail({
           ? managedSystemNames[detail.requested_managed_system_id]
           : undefined
       }
+      {...(staleReview ? { staleNotice: true } : {})}
+      onStaleConflict={() => setStaleReview(true)}
+      onActionPicked={() => setStaleReview(false)}
       onClose={onClose}
     />
   );

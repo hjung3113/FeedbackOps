@@ -160,4 +160,10 @@ export const HOME_PERMISSION_COPY = {
   closedRequest: '이 요청은 이미 종료되었습니다.',
   invalidReason: '사유를 입력하세요.',
   invalidExpiration: '만료일은 현재 시각보다 이후여야 합니다.',
+  cancel: GLOSSARY.cancel,
+  noChanges: '변경 사항이 없습니다.',
+  questionHint: '답변은 사유에 작성한 뒤 보완 제출하세요.',
+  editSaved: '요청이 수정되었습니다.',
+  supplementSent: '보완 답변이 제출되었습니다.',
+  withdrawn: '요청이 철회되었습니다.',
 } as const;

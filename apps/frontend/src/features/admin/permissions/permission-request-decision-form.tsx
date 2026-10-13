@@ -89,9 +89,17 @@ function hasExpirationFieldError(error: unknown): boolean {
 export function PermissionRequestDecisionForm({
   request,
   managedSystemName,
+  staleNoticeShown,
+  onStaleConflict,
+  onActionPicked,
+  onReviewCompleted,
 }: {
   request: PermissionRequestAdminDetail;
   managedSystemName?: string | undefined;
+  staleNoticeShown?: boolean;
+  onStaleConflict?: () => void;
+  onActionPicked?: () => void;
+  onReviewCompleted?: () => void;
 }) {
   const [reviewBlocked, setReviewBlocked] = React.useState(false);
   const [action, setAction] = React.useState<PermissionRequestDecisionAction | null>(null);
@@ -110,7 +118,10 @@ export function PermissionRequestDecisionForm({
   const [scope, setScope] = React.useState(request.requested_managed_system_id ?? 'workspace');
   const mutation = useDecidePermissionRequest((succeeded) => {
     submitting.current = false;
-    if (succeeded) intent.current = null;
+    if (succeeded) {
+      intent.current = null;
+      onReviewCompleted?.();
+    }
   }, () => {
     setReviewBlocked(true);
     setAction(null);
@@ -123,6 +134,7 @@ export function PermissionRequestDecisionForm({
     setExpirationFieldTouched(false);
     setExpirationDraftValid(true);
     intent.current = null;
+    onStaleConflict?.();
   });
   const me = useMe();
   const workspaceSettings = useWorkspaceSettings();
@@ -263,6 +275,7 @@ export function PermissionRequestDecisionForm({
               setAction(candidate.value);
               setExpirationValidationAttempted(false);
               mutation.reset();
+              onActionPicked?.();
             }}
           >
             {candidate.label}
@@ -288,7 +301,7 @@ export function PermissionRequestDecisionForm({
           placeholder="검토 사유 또는 요청할 정보를 입력하세요."
         />
       </label>
-      {reviewBlocked || mutation.error?.code === 'conflict.stale_write' ? (
+      {!staleNoticeShown && (reviewBlocked || mutation.error?.code === 'conflict.stale_write') ? (
         <p role="alert" className="text-sm text-accent-danger">
           {ADMIN_PERMISSIONS_COPY.reviewAgain}
         </p>

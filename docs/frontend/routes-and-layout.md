@@ -413,10 +413,13 @@ use explicit null to clear expiry; neither command changes capability/source/ret
 `/admin/permissions/requests` keeps `tab`/`selected` and Back/Forward restoration,
 but fetches selected detail rather than relying only on list rows. `cancelled`
 belongs in all-history with label `철회` and no decisions. Selection or revision
-changes clear decision/risk drafts; stale conflicts refetch and require fresh
-review. `selected-permission-request-detail.tsx` uses a per-ID selected query;
+changes clear decision/risk drafts; stale conflicts refetch, latch an inline
+review notice above the form until the Admin picks a new action, and require fresh
+review, never auto-submit. `selected-permission-request-detail.tsx` uses a per-ID selected query;
 loading/error has no decision controls and retains URL selection. Drafts, mutation
-state and intent keys start fresh on ID/revision change or successful review refresh.
+state and intent keys start fresh on ID or revision change; an unchanged
+background refetch (same ID and revision) must preserve them. A successful review
+refreshes to a new revision, which starts the next draft fresh.
 Identical retries reuse a key; a changed reviewed body/revision uses a new key.
 Completion invalidates the submitted ID even if selection changed during the call.
 No client-side risk computation and no source/privacy bypass. Risk presentation

@@ -1,3 +1,4 @@
+import { adminDetailFixture } from '@/test/permission-details';
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -8,10 +9,11 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import type { AdminPermissionRequestRow } from '@/lib/api';
 import { PermissionRequestsConsolePage } from '../permissions/requests.js';
 
 const requester = {
@@ -21,8 +23,20 @@ const requester = {
   role_level: 'developer',
 };
 
-function response(body: unknown) {
-  return new Response(JSON.stringify(body), { status: 200 });
+const requestRow: AdminPermissionRequestRow = {
+  id: '11111111-1111-4111-8111-111111111111',
+  revision: 7,
+  requester_actor_id: requester.id,
+  requested_capability: 'workspace.read',
+  requested_managed_system_id: null,
+  requested_expiration: null,
+  reason: 'Need access',
+  status: 'pending',
+  created_at: '2026-08-02T00:00:00.000Z',
+};
+
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status });
 }
 
 function DetailPanelHost({ children }: { children: ReactNode }) {
@@ -61,6 +75,8 @@ function renderPage() {
   );
 }
 
+// The selected GET must satisfy the strict permissionRequestAdminDetailSchema;
+// a collection-only payload fails the parser and the panel never loads.
 function installFetch(actors = [requester]) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
@@ -80,20 +96,11 @@ function installFetch(actors = [requester]) {
     if (url === '/workspace/settings')
       return response({ permission_self_approval: 'allowed', survey_anonymity_threshold: 5 });
     if (url.startsWith('/actors')) return response({ actors });
-    return response({
-      requests: [
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          requester_actor_id: requester.id,
-          requested_capability: 'workspace.read',
-          requested_managed_system_id: null,
-          reason: 'Need access',
-          status: 'pending',
-          created_at: '2026-08-02T00:00:00.000Z',
-        },
-      ],
-      count: 1,
-    });
+    if (url === '/permissions/requests?status=all')
+      return response({ requests: [requestRow], count: 1 });
+    if (/^\/permissions\/requests\/[0-9a-f-]+$/.test(url))
+      return response(adminDetailFixture(requestRow));
+    return response({ code: 'internal.unexpected', message: 'unmocked' }, 500);
   });
 }
 
@@ -103,7 +110,9 @@ describe('Permission Requests public page', () => {
   test('AC-D8a renders Permission Request header and never renders TASK', async () => {
     installFetch();
     renderPage();
-    const panel = await screen.findByTestId('permission-request-detail-panel');
+    // The loading aside shares the panel test ID; wait for the loaded detail.
+    await screen.findByText('Need access');
+    const panel = screen.getByTestId('permission-request-detail-panel');
     expect(panel).toHaveTextContent('권한 요청');
     expect(screen.queryByText('Task', { exact: true })).not.toBeInTheDocument();
   });
@@ -111,18 +120,14 @@ describe('Permission Requests public page', () => {
   test('AC-D8b renders requester name but never its fixture email', async () => {
     installFetch();
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByText(requester.display_name, { exact: true })).toBeInTheDocument(),
-    );
+    await screen.findByText(requester.display_name, { exact: true });
     expect(screen.queryByText(requester.email, { exact: true })).not.toBeInTheDocument();
   });
 
   test('AC-D8c renders the unknown-requester fallback when no matching actor is returned', async () => {
     installFetch([]);
     renderPage();
-    await waitFor(() =>
-      // #589: Korean-first fallback copy (#580); not prototype copy.
-      expect(screen.getByText('알 수 없는 사용자', { exact: true })).toBeInTheDocument(),
-    );
+    // #589: Korean-first fallback copy; not prototype copy.
+    await screen.findByText('알 수 없는 사용자', { exact: true });
   });
 });

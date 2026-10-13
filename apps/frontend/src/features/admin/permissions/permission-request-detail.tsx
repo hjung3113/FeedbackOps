@@ -7,7 +7,9 @@ import {
   OutlineBadge,
   PanelSectionTitle,
 } from '@fops/ui';
+import * as React from 'react';
 
+import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
@@ -20,13 +22,30 @@ export function PermissionRequestDetail({
   request,
   actorName,
   managedSystemName,
+  staleNotice,
+  onStaleConflict,
+  onActionPicked,
   onClose,
 }: {
   request: PermissionRequestAdminDetail;
   actorName?: string | undefined;
   managedSystemName?: string | undefined;
+  staleNotice?: boolean;
+  onStaleConflict?: () => void;
+  onActionPicked?: () => void;
   onClose: () => void;
 }) {
+  const staleAlertRef = React.useRef<HTMLParagraphElement>(null);
+  // Explicit success boundary: a completed review remounts the decision form
+  // with a clean draft even when the refetched detail keeps the same revision.
+  // ID/revision changes remount via the panel key; unchanged reads never bump
+  // the epoch, so an ordinary background refetch preserves the draft.
+  const [reviewEpoch, setReviewEpoch] = React.useState(0);
+  // Focus follows the latched stale notice, including right after the
+  // revision-change remount this panel performs.
+  React.useEffect(() => {
+    if (staleNotice) staleAlertRef.current?.focus();
+  }, [staleNotice]);
   return (
     <aside
       className="flex h-full min-h-0 flex-col bg-surface-detail"
@@ -51,6 +70,17 @@ export function PermissionRequestDetail({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-5">
+          {staleNotice ? (
+            <p
+              ref={staleAlertRef}
+              role="alert"
+              tabIndex={-1}
+              className="text-sm text-accent-danger outline-hidden"
+              data-testid="permission-request-stale-alert"
+            >
+              {ADMIN_PERMISSIONS_COPY.reviewAgain}
+            </p>
+          ) : null}
           <section className="flex flex-col gap-2">
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
             <FieldRow label="요청자" inset="none">
@@ -105,9 +135,13 @@ export function PermissionRequestDetail({
             <p className="whitespace-pre-wrap text-sm text-text-primary">{request.reason}</p>
           </section>
           <PermissionRequestDecisionForm
-            key={`${request.id}:${request.revision}`}
+            key={`${request.id}:${request.revision}:${reviewEpoch}`}
             request={request}
             managedSystemName={managedSystemName}
+            {...(staleNotice ? { staleNoticeShown: true } : {})}
+            {...(onStaleConflict ? { onStaleConflict } : {})}
+            {...(onActionPicked ? { onActionPicked } : {})}
+            onReviewCompleted={() => setReviewEpoch((epoch) => epoch + 1)}
           />
         </div>
       </div>

@@ -21,6 +21,7 @@ import type React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { type AdminPermissionRequestRow, errorMapper } from "@/lib/api";
+import { ADMIN_PERMISSIONS_COPY } from "@/lib/copy/admin-permissions";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -262,6 +263,35 @@ describe("/admin/permissions/requests", () => {
     expect(screen.getByLabelText('새 만료일')).toHaveValue('');
   });
 
+  test('an unchanged background refetch keeps the decision draft intact', async () => {
+    installFetch();
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'kept review' } });
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^사유/)).toHaveValue('kept review'),
+    );
+    expect(screen.getByRole('button', { name: '승인' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('permission-decision-submit')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+    expect(JSON.parse(decisionPosts()[0]![1].body as string)).toEqual({
+      expected_revision: 7,
+      reason: 'kept review',
+    });
+  });
+
   test.each([false, true])(
     'stale conflict refetches selected detail and never resubmits (failed refetch: %s)',
     async (failedRead) => {
@@ -311,6 +341,119 @@ describe("/admin/permissions/requests", () => {
       expect(decisionPosts()).toHaveLength(1);
     },
   );
+
+  test('an unchanged background refetch during a pending decision neither resets the lock nor duplicates the POST', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let finish: ((value: Response) => void) | undefined;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : base(input, init),
+    ) as typeof fetch;
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(decisionPosts()).toHaveLength(1);
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(decisionPosts()).toHaveLength(1);
+    await act(async () => {
+      finish?.(
+        response({
+          id: REQUESTS[0].id,
+          revision: 8,
+          status: 'approved',
+          updated_at: '2026-10-13T00:00:00.000Z',
+        }),
+      );
+    });
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(decisionPosts()).toHaveLength(1);
+  });
+
+  test('an unchanged background refetch does not rotate the identical retry key', async () => {
+    installFetch({
+      detail: (row) => adminDetailFixture({ ...row, revision: 7 }),
+      decision: { status: 500, body: { code: 'internal.unexpected', message: 'uncertain' } },
+    });
+    const { router, queryClient } = buildHarness();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-requests', 'admin-detail', REQUESTS[0].id],
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-decision-submit')).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await waitFor(() => expect(decisionPosts()).toHaveLength(2));
+    expect(new Headers(decisionPosts()[1]![1].headers).get('Idempotency-Key')).toBe(
+      new Headers(decisionPosts()[0]![1].headers).get('Idempotency-Key'),
+    );
+  });
+
+  test('stale review latches a persistent focused inline notice until a new action is picked', async () => {
+    let reads = 0;
+    installFetch({
+      detail: (row) => {
+        reads += 1;
+        return adminDetailFixture({
+          ...row,
+          revision: reads === 1 ? 7 : 8,
+          reason: reads === 1 ? row.reason : 'latest ask',
+        });
+      },
+      decision: {
+        status: 409,
+        body: { code: 'conflict.stale_write', message: 'stale', detail: { current_revision: 8 } },
+      },
+    });
+    renderRoute();
+    await screen.findByTestId('permission-decision-section');
+    fireEvent.click(screen.getByRole('button', { name: '승인' }));
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+    await screen.findByText('latest ask');
+    const alerts = screen.getAllByText(ADMIN_PERMISSIONS_COPY.reviewAgain);
+    expect(alerts).toHaveLength(1);
+    const alert = screen.getByTestId('permission-request-stale-alert');
+    await waitFor(() => expect(alert).toHaveFocus());
+    // The notice persists after the refetch-triggered remount has settled.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('permission-request-stale-alert')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    expect(screen.queryByTestId('permission-request-stale-alert')).not.toBeInTheDocument();
+  });
 
   test('stale stays blocked while selected refetch is pending even if expiry controls reset mutation errors', async () => {
     let reads = 0;

@@ -1,5 +1,6 @@
 import {
   ApiError,
+  fetchManagedSystems,
   fetchPermissionRequestOwnerDetail,
   permissionRequestAdminDetailKey,
   permissionRequestOwnerDetailKey,
@@ -36,14 +37,32 @@ import {
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
+import { toast } from 'sonner';
 
-export function OwnerPermissionRequestDialog({ id, onClose }: { id: string; onClose: () => void }) {
+export function OwnerPermissionRequestDialog({
+  id,
+  onClose,
+}: {
+  id: string;
+  onClose: (options?: { removed?: boolean }) => void;
+}) {
   const query = useQuery({
     queryKey: permissionRequestOwnerDetailKey(id),
     queryFn: ({ signal }) => fetchPermissionRequestOwnerDetail(id, signal),
     retry: false,
     staleTime: 0,
   });
+  // UX: requesters read scope as system names elsewhere (sidebar, Admin detail);
+  // the shipped ['managed-systems', 'all'] lookup resolves them, short ID only as fallback.
+  const managedSystems = useQuery({
+    queryKey: ['managed-systems', 'all'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  });
+  const managedSystemNames = Object.fromEntries(
+    (managedSystems.data?.items ?? []).map((system) => [system.id, system.name]),
+  );
   const [pending, setPending] = React.useState(false);
   return (
     <Dialog
@@ -63,6 +82,7 @@ export function OwnerPermissionRequestDialog({ id, onClose }: { id: string; onCl
         {query.data && query.isFetchedAfterMount ? (
           <OwnerForm
             detail={query.data}
+            managedSystemNames={managedSystemNames}
             readFailed={query.isError}
             refreshing={query.isFetching}
             refresh={() => query.refetch()}
@@ -86,6 +106,7 @@ export function OwnerPermissionRequestDialog({ id, onClose }: { id: string; onCl
 
 function OwnerForm({
   detail,
+  managedSystemNames,
   readFailed,
   refreshing,
   refresh,
@@ -93,10 +114,11 @@ function OwnerForm({
   onPending,
 }: {
   detail: PermissionRequestOwnerDetail;
+  managedSystemNames: Record<string, string>;
   readFailed: boolean;
   refreshing: boolean;
   refresh: () => Promise<unknown>;
-  onClose: () => void;
+  onClose: (options?: { removed?: boolean }) => void;
   onPending: (pending: boolean) => void;
 }) {
   const qc = useQueryClient();
@@ -109,11 +131,19 @@ function OwnerForm({
   const [withdrawReason, setWithdrawReason] = React.useState('');
   const [withdrawConfirm, setWithdrawConfirm] = React.useState(false);
   const [stale, setStale] = React.useState(false);
-  const [validation, setValidation] = React.useState<string | null>(null);
+  const [validation, setValidation] = React.useState<{
+    field: 'reason' | 'expiration';
+    message: string;
+  } | null>(null);
   const focusTarget = React.useRef<HTMLElement | null>(null);
+  const reasonRef = React.useRef<HTMLTextAreaElement>(null);
+  const withdrawReasonRef = React.useRef<HTMLTextAreaElement>(null);
+  const staleAlertRef = React.useRef<HTMLParagraphElement>(null);
   const intent = React.useRef<{ fingerprint: string; key: string } | null>(null);
   const submitting = React.useRef(false);
   const mounted = React.useRef(true);
+  const systemName = (managedSystemId: string): string =>
+    managedSystemNames[managedSystemId] ?? `Managed System · ${shortId(managedSystemId)}`;
   React.useEffect(() => {
     mounted.current = true;
     return () => {
@@ -136,12 +166,19 @@ function OwnerForm({
       args.action === 'withdraw'
         ? withdrawPermissionRequest(detail.id, args.body, args.key)
         : updateOwnPermissionRequest(detail.id, args.action, args.body, args.key),
-    onSuccess: async (result) => {
+    onSuccess: async (result, variables) => {
+      toast.success(
+        variables.action === 'edit'
+          ? COPY.editSaved
+          : variables.action === 'supplement'
+            ? COPY.supplementSent
+            : COPY.withdrawn,
+      );
       if (result.status === 'cancelled')
         qc.setQueryData<{ requests: Array<{ id: string }> }>(permissionRequestsMineKey, (old) =>
           old ? { ...old, requests: old.requests.filter((row) => row.id !== result.id) } : old,
         );
-      if (mounted.current) onClose();
+      if (mounted.current) onClose(result.status === 'cancelled' ? { removed: true } : undefined);
       await Promise.all([
         qc.invalidateQueries({ queryKey: permissionRequestsMineKey }),
         qc.invalidateQueries({ queryKey: permissionRequestOwnerDetailKey(detail.id) }),
@@ -154,7 +191,8 @@ function OwnerForm({
     },
     onError: async (error) => {
       if (!mounted.current) return;
-      focusTarget.current?.focus();
+      // Focus is restored by the effect below once the error render has
+      // cleared `isPending`; calling .focus() here hits a still-disabled field.
       if (error instanceof ApiError && error.code === 'conflict.stale_write') {
         setStale(true);
         await Promise.all([
@@ -175,27 +213,48 @@ function OwnerForm({
   });
   const blocked =
     reconcileRequired || readFailed || refreshing || mutation.isPending || mutation.isSuccess;
+  // CR: a committed server error arrives after `isPending` cleared, so the
+  // edited field can receive focus again; stale conflicts focus the stale
+  // notice instead (effect below).
+  React.useEffect(() => {
+    if (mutation.error === undefined) return;
+    if (mutation.error instanceof ApiError && mutation.error.code === 'conflict.stale_write')
+      return;
+    focusTarget.current?.focus();
+  }, [mutation.error]);
+  // Focus the stale notice when reconciliation becomes required.
+  React.useEffect(() => {
+    if (reconcileRequired) staleAlertRef.current?.focus();
+  }, [reconcileRequired]);
+  // Focus the withdrawal reason when the confirmation opens.
+  React.useEffect(() => {
+    if (withdrawConfirm) withdrawReasonRef.current?.focus();
+  }, [withdrawConfirm]);
+  const editable =
+    baseline.allowed_actions.includes('edit') || baseline.allowed_actions.includes('supplement');
+  const expirationDraft =
+    expirationMode === 'clear'
+      ? null
+      : expirationMode === 'change'
+        ? `${date}T23:59:59.000Z`
+        : baseline.requested_expiration;
   function submit(action: 'edit' | 'supplement' | 'withdraw') {
     if (blocked || submitting.current || !detail.allowed_actions.includes(action)) return;
     if (action !== 'withdraw' && !reason.trim()) {
-      setValidation(COPY.invalidReason);
+      setValidation({ field: 'reason', message: COPY.invalidReason });
+      reasonRef.current?.focus();
       return;
     }
-    const expiration =
-      expirationMode === 'clear'
-        ? null
-        : expirationMode === 'change'
-          ? `${date}T23:59:59.000Z`
-          : baseline.requested_expiration;
     if (
       action !== 'withdraw' &&
       expirationMode === 'change' &&
       (!dateValid ||
         !date ||
-        !Number.isFinite(Date.parse(expiration ?? '')) ||
-        Date.parse(expiration ?? '') <= Date.now())
+        !Number.isFinite(Date.parse(expirationDraft ?? '')) ||
+        Date.parse(expirationDraft ?? '') <= Date.now())
     ) {
-      setValidation(COPY.invalidExpiration);
+      setValidation({ field: 'expiration', message: COPY.invalidExpiration });
+      document.getElementById('owner-request-expiry')?.focus();
       return;
     }
     const body = {
@@ -207,8 +266,8 @@ function OwnerForm({
       ...(action !== 'withdraw' && scope !== (baseline.requested_managed_system_id ?? 'workspace')
         ? { requested_managed_system_id: scope === 'workspace' ? null : scope }
         : {}),
-      ...(action !== 'withdraw' && expiration !== baseline.requested_expiration
-        ? { requested_expiration: expiration }
+      ...(action !== 'withdraw' && expirationDraft !== baseline.requested_expiration
+        ? { requested_expiration: expirationDraft }
         : {}),
     };
     const fingerprint = JSON.stringify({ id: detail.id, action, body });
@@ -219,8 +278,17 @@ function OwnerForm({
     setValidation(null);
     mutation.mutate({ action, body, key: intent.current.key });
   }
-  const editable =
-    baseline.allowed_actions.includes('edit') || baseline.allowed_actions.includes('supplement');
+  // A no-op command must not reach the server: it would bump the revision and
+  // wipe every Admin draft on this request for a change that never happened.
+  const dirty =
+    reason.trim() !== baseline.reason ||
+    scope !== (baseline.requested_managed_system_id ?? 'workspace') ||
+    expirationDraft !== baseline.requested_expiration;
+  // One stale message at a time: while the stale section renders, the generic
+  // conflict error line is suppressed in its favour.
+  const validationMessage =
+    validation?.message ??
+    (mutation.error && !reconcileRequired ? mapUnknownError(mutation.error).message : null);
   return (
     <div
       className="space-y-3"
@@ -242,20 +310,27 @@ function OwnerForm({
           : COPY.clear}
       </p>
       {detail.latest_admin_question ? (
-        <section>
+        <section className="rounded-md border border-border-subtle bg-surface-card p-3">
           <h3 className="text-sm font-medium">{COPY.question}</h3>
-          <p className="whitespace-pre-wrap text-sm">{detail.latest_admin_question.note}</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm">{detail.latest_admin_question.note}</p>
+          {detail.allowed_actions.includes('supplement') ? (
+            <p className="mt-2 text-xs text-text-muted">{COPY.questionHint}</p>
+          ) : null}
         </section>
       ) : null}
-      {editable ? (
+      {editable && !withdrawConfirm ? (
         <>
           <Label htmlFor="owner-request-reason">{COPY.reason}</Label>
           <Textarea
             id="owner-request-reason"
+            ref={reasonRef}
             value={reason}
             maxLength={2000}
             onChange={(event) => setReason(event.target.value)}
             disabled={mutation.isPending}
+            {...(validation?.field === 'reason'
+              ? { 'aria-invalid': true, 'aria-describedby': 'owner-request-validation' }
+              : {})}
           />
           <Label htmlFor="owner-request-scope">{COPY.scope}</Label>
           <Select value={scope} onValueChange={setScope} disabled={mutation.isPending}>
@@ -270,7 +345,7 @@ function OwnerForm({
                     value={candidate.managed_system_id ?? 'workspace'}
                   >
                     {candidate.managed_system_id
-                      ? `Managed System · ${shortId(candidate.managed_system_id)}`
+                      ? systemName(candidate.managed_system_id)
                       : '워크스페이스 전체'}
                   </SelectItem>
                 ))}
@@ -291,11 +366,15 @@ function OwnerForm({
             ))}
           </RadioGroup>
           <DatePicker
+            id="owner-request-expiry"
             aria-label={COPY.newExpiration}
             value={date}
             onChange={(value) => setDate(value ?? '')}
             onValidityChange={setDateValid}
             disabled={expirationMode !== 'change' || mutation.isPending}
+            {...(validation?.field === 'expiration'
+              ? { 'aria-invalid': true, 'aria-describedby': 'owner-request-validation' }
+              : {})}
           />
         </>
       ) : null}
@@ -303,21 +382,23 @@ function OwnerForm({
         <output className="block">{COPY.closedRequest}</output>
       ) : null}
       {readFailed ? <p role="alert">{COPY.loadError}</p> : null}
-      {validation || mutation.error ? (
-        <p role="alert" className="text-sm text-accent-danger">
-          {validation ?? mapUnknownError(mutation.error).message}
+      {validationMessage ? (
+        <p id="owner-request-validation" role="alert" className="text-sm text-accent-danger">
+          {validationMessage}
         </p>
       ) : null}
       {reconcileRequired ? (
         <section className="space-y-2">
-          <p role="alert">{COPY.stale}</p>
+          <p ref={staleAlertRef} role="alert" tabIndex={-1} className="outline-hidden">
+            {COPY.stale}
+          </p>
           <p className="whitespace-pre-wrap text-sm">
             {COPY.latestReason} · {detail.reason}
           </p>
           <p className="text-sm">
             {COPY.scope} ·{' '}
             {detail.requested_managed_system_id
-              ? `Managed System · ${shortId(detail.requested_managed_system_id)}`
+              ? systemName(detail.requested_managed_system_id)
               : '워크스페이스 전체'}
           </p>
           <Button
@@ -328,6 +409,7 @@ function OwnerForm({
               setWithdrawConfirm(false);
               intent.current = null;
               mutation.reset();
+              reasonRef.current?.focus();
             }}
           >
             {COPY.reconcile}
@@ -342,29 +424,35 @@ function OwnerForm({
           <Label htmlFor="owner-withdraw-reason">{COPY.withdrawReason}</Label>
           <Textarea
             id="owner-withdraw-reason"
+            ref={withdrawReasonRef}
             value={withdrawReason}
             maxLength={2000}
             disabled={mutation.isPending}
             onChange={(event) => setWithdrawReason(event.target.value)}
           />
-          <Button
-            variant="secondary"
-            disabled={mutation.isPending}
-            onClick={() => setWithdrawConfirm(false)}
-          >
-            {COPY.close}
-          </Button>
-          <Button disabled={blocked} onClick={() => submit('withdraw')}>
-            {COPY.withdraw}
-          </Button>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => setWithdrawConfirm(false)}
+            >
+              {COPY.cancel}
+            </Button>
+            <Button disabled={blocked} onClick={() => submit('withdraw')}>
+              {COPY.withdraw}
+            </Button>
+          </DialogFooter>
         </section>
       ) : (
         <DialogFooter>
+          {editable && !dirty ? (
+            <span className="mr-auto self-center text-xs text-text-muted">{COPY.noChanges}</span>
+          ) : null}
           <Button
             data-testid="owner-request-close"
             variant="secondary"
             disabled={mutation.isPending}
-            onClick={onClose}
+            onClick={() => onClose()}
           >
             {COPY.close}
           </Button>
@@ -374,12 +462,20 @@ function OwnerForm({
             </Button>
           ) : null}
           {detail.allowed_actions.includes('edit') ? (
-            <Button disabled={blocked} onClick={() => submit('edit')}>
+            <Button
+              variant={reconcileRequired ? 'secondary' : 'primary'}
+              disabled={blocked || !dirty}
+              onClick={() => submit('edit')}
+            >
               {COPY.edit}
             </Button>
           ) : null}
           {detail.allowed_actions.includes('supplement') ? (
-            <Button disabled={blocked} onClick={() => submit('supplement')}>
+            <Button
+              variant={reconcileRequired ? 'secondary' : 'primary'}
+              disabled={blocked || !dirty}
+              onClick={() => submit('supplement')}
+            >
               {COPY.supplement}
             </Button>
           ) : null}
