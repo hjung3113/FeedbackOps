@@ -40,19 +40,20 @@ export async function registerDashboardJobs(
           ...job.data,
           correlation_id: job.data.correlation_id === 'cron' ? job.id : job.data.correlation_id,
         };
-        if (payload.outcome) {
+        const outcome = payload.outcome;
+        if (outcome) {
           const afterResponse = await deps.db.transaction((tx) =>
             observeOutcomeRecovery(
               tx,
               payload.workspace_id,
-              payload.outcome!.surveyId,
-              payload.outcome!.afterResponse,
+              outcome.surveyId,
+              outcome.afterResponse,
             ),
           );
           if (afterResponse)
             await boss.send(RECOVERY_RECONCILE_QUEUE, {
               ...payload,
-              outcome: { surveyId: payload.outcome.surveyId, afterResponse },
+              outcome: { surveyId: outcome.surveyId, afterResponse },
             });
         } else {
           const { next, outcomeSurveys } = await reconcileRecoveryPage(deps, payload);

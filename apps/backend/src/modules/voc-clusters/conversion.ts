@@ -395,7 +395,12 @@ export function createVocClusterConversion(
           }
 
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'linkExistingFinding');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'linkExistingFinding',
+            );
           return {
             status: link.inserted ? 201 : 200,
             body: { id: finding.id, display_id: finding.display_id, status: finding.status },
@@ -511,9 +516,14 @@ export function createVocClusterConversion(
           // Idempotency records are JSONB NOT NULL. Keep the transport response
           // empty (the route calls send() without a payload), while caching an empty object.
           if (!activeLink) {
-          if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'unlinkExistingFinding');
-          return { status: 204 as const, body: {} };
+            if (recovery)
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'unlinkExistingFinding',
+              );
+            return { status: 204 as const, body: {} };
           }
 
           const detached = await detachEntityLink(tx, {
@@ -523,9 +533,14 @@ export function createVocClusterConversion(
             reason: args.input.reason,
           });
           if (!detached) {
-          if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'unlinkExistingFinding');
-          return { status: 204 as const, body: {} };
+            if (recovery)
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'unlinkExistingFinding',
+              );
+            return { status: 204 as const, body: {} };
           }
 
           await deps.auditService.record(tx, {
@@ -560,7 +575,12 @@ export function createVocClusterConversion(
             },
           });
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'unlinkExistingFinding');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'unlinkExistingFinding',
+            );
           return { status: 204 as const, body: {} };
         },
       );

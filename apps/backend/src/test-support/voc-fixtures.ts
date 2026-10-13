@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 import { type DbHandle, createDb } from '../db/client.js';
+import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 import { cleanupResponsibilityFailures } from './responsibility-fixtures.js';
 import { paragraphDoc } from './rich-content-fixtures.js';
 

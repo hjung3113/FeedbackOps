@@ -1,4 +1,3 @@
-import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type {
   AddVocClusterMemberRequest,
   ApplyVocClusterPublicUpdateRequest,
@@ -11,6 +10,7 @@ import type {
   VocClusterPublicUpdateCandidateRequest,
   VocClusterPublicUpdateOutcome,
 } from '@fops/shared';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';

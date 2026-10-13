@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,10 +8,10 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
-import { recoveryIdentity } from '../../dashboard/identity.js';
 import { buildServer } from '../../../server.js';
 import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 import {
   NOTIFICATION_DISPATCH_QUEUE,
   createRecordingNotificationDispatcher,
@@ -128,10 +128,13 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const actorIds = `select id from core.actors
                        where workspace_id = $1 and ${actorPattern}`;
 
-    for (const table of ['recovery_history','recovery_presentations','recovery_identities']) {
-      await migrateDb.pool.query(`DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
+    for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+      await migrateDb.pool.query(
+        `DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
         SELECT i.recovery_item_id FROM dashboard.recovery_identities i JOIN permission.permission_requests r ON r.id=i.source_id
-        WHERE i.workspace_id=$1::uuid AND r.requester_actor_id IN (${actorIds}))`,[WORKSPACE_ID]);
+        WHERE i.workspace_id=$1::uuid AND r.requester_actor_id IN (${actorIds}))`,
+        [WORKSPACE_ID],
+      );
     }
     await db.pool.query(
       `delete from permission.permission_requests
@@ -557,8 +560,8 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect((await history()).rows).toEqual([
       { occurrence: 1, outcome: 'withdrawn', evidence: 'command' },
     ]);
-    const approved = await seedRequest(),
-      key = randomUUID();
+    const approved = await seedRequest();
+    const key = randomUUID();
     const first = await decide(approved, 'approve', {}, adminCookie, key);
     expect(first.statusCode).toBe(200);
     expect(JSON.parse((await decide(approved, 'approve', {}, adminCookie, key)).body)).toEqual(
@@ -594,9 +597,15 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       subject_id: requestId,
     });
 
-    const projection=await db.pool.query('SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,recoveryIdentity('permission-requests-pending',requestId)]);
+    const projection = await db.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', requestId)],
+    );
     expect(projection.rows).toEqual([]);
-    const history=await db.pool.query('SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,recoveryIdentity('permission-requests-pending',requestId)]);
+    const history = await db.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', requestId)],
+    );
     expect(history.rows).toEqual([]);
     expect(await requestStatus(requestId)).toBe('pending');
     const audits = await migrateDb.pool.query(

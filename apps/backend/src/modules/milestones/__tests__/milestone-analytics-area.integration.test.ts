@@ -90,9 +90,11 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
         'delete from core.managed_systems where workspace_id = $1',
         [otherWorkspaceId],
       );
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWorkspaceId],
+      );
       otherWorkspaceId = '';
     }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);

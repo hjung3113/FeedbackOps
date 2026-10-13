@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

@@ -1,4 +1,3 @@
-import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 // #510 part B (ADR-0055): DB-level verification of the outcome follow-up
 // classifier and the replaced gap predicate.
 //
@@ -15,6 +14,7 @@ import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtur
 // under test are called through the app handle so EXECUTE for fops_app is
 // itself part of the proof.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { getRatingBandForValue } from '@fops/shared';

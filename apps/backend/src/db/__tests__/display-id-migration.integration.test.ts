@@ -1,6 +1,6 @@
-import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 
 import { type DbHandle, createDb } from '../client.js';
 

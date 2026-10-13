@@ -1,6 +1,6 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { navResolveResponseSchema } from '@fops/shared';
 

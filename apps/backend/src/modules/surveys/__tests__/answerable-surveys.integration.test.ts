@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { answerableSurveysResponseSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -111,9 +111,11 @@ describe.skipIf(!runIntegration)('my answerable surveys route (#718)', () => {
         await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
           workspaceId,
         ]);
-        await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-          workspaceId,
-        ]);
+        await deleteRecoveryFixtureParents(
+          migrateHandle,
+          'delete from core.workspaces where id = $1',
+          [workspaceId],
+        );
       }
       foreignWorkspaceIds.clear();
     }

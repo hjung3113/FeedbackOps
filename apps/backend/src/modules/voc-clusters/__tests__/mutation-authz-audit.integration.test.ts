@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -166,9 +166,11 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
       await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
         workspaceId,
       ]);
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     }
     await dbHandle?.close();
     await migrateHandle?.close();

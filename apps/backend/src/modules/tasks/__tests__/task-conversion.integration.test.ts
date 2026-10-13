@@ -1849,9 +1849,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       await expectNoConversionSideEffects(request.id);
     } finally {
       await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
-      await deleteRecoveryFixtureParents(dbHandle, 'delete from core.managed_systems where id = $1', [
-        otherMsId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherMsId],
+      );
     }
   });
 
@@ -1892,9 +1894,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       await expectNoConversionSideEffects(request.id);
     } finally {
       await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
-      await deleteRecoveryFixtureParents(dbHandle, 'delete from core.managed_systems where id = $1', [
-        otherWsMsId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        'delete from core.managed_systems where id = $1',
+        [otherWsMsId],
+      );
       await deleteRecoveryFixtureParents(dbHandle, 'delete from core.workspaces where id = $1', [
         otherWsId,
       ]);
@@ -2148,9 +2152,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
         'delete from core.managed_systems where id = $1',
         [otherWsMsId],
       );
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        otherWsId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWsId],
+      );
     }
   });
 

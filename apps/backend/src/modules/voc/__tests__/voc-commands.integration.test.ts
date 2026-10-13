@@ -21,12 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
-import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
-import { recoveryIdentity } from '../../dashboard/identity.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
+import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import { type ConversationService, createConversationService } from '../conversation-service.js';
@@ -204,8 +204,11 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
 
   afterAll(async () => {
     if (migrateHandle) {
-      for (const table of ['recovery_history','recovery_presentations','recovery_identities']) {
-        await migrateHandle.pool.query(`DELETE FROM dashboard.${table} WHERE workspace_id=$1::uuid`,[workspaceId]);
+      for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+        await migrateHandle.pool.query(
+          `DELETE FROM dashboard.${table} WHERE workspace_id=$1::uuid`,
+          [workspaceId],
+        );
       }
       // FK-safe order: audit + idempotency first, then VOCs (conversation
       // rows cascade), then reference/seed tables, then the workspace.
@@ -218,8 +221,12 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
          )`,
         [workspaceId],
       );
-      await migrateHandle.pool.query('delete from core.entity_links where workspace_id=$1::uuid',[workspaceId]);
-      await migrateHandle.pool.query('delete from task.tasks where workspace_id=$1::uuid',[workspaceId]);
+      await migrateHandle.pool.query('delete from core.entity_links where workspace_id=$1::uuid', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from task.tasks where workspace_id=$1::uuid', [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query('delete from voc.vocs where workspace_id = $1', [workspaceId]);
       await migrateHandle.pool.query(
         'delete from core.responsibility_default_failures where workspace_id=$1',
@@ -236,9 +243,11 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
         workspaceId,
       ]);
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     }
     await dbHandle?.close();
     await migrateHandle?.close();

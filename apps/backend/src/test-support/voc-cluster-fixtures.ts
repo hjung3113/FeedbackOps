@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 import type { DbHandle } from '../db/client.js';
+import { deleteRecoveryFixtureParents } from './recovery-fixtures.js';
 
 type VocClusterFixtureIds = {
   workspaceId: string;

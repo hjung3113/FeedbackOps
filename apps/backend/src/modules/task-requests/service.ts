@@ -1,7 +1,7 @@
-import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { randomUUID } from 'node:crypto';
 import type { ListTaskRequestsResponse } from '@fops/shared';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { resolveTaskResponsibility } from '../tasks/responsibility.js';
 
 import {
@@ -420,7 +420,12 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             input: args.input,
           });
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromFinding');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'createFromFinding',
+            );
           return { status: 201, body };
         },
       );
@@ -537,7 +542,12 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             input: args.input,
           });
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVocCluster');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'createFromVocCluster',
+            );
           return { status: 201, body };
         },
       );

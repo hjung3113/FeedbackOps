@@ -41,7 +41,7 @@ export async function captureOutcomeRecovery(
   // Same first lock as the existing evidence-access/provenance seam.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${responseId}::text,0))`);
   await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}),hashtext(${'outcome:' + responseId}))`,
+    sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}),hashtext(${`outcome:${responseId}`}))`,
   );
   return { workspaceId, responseId, surveyId, state: await state(tx, workspaceId, responseId) };
 }
@@ -309,9 +309,9 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
           COALESCE((SELECT jsonb_agg(jsonb_build_object('response_id',response_id,'occurrence',occurrence,'presentation',
             jsonb_build_object('state',presentation_state,'snoozed_until',snoozed_until)) ORDER BY response_id) FROM page),'[]'::jsonb) AS items`)
       ).rows[0];
-      const items = (data?.items ?? []).slice(0, query.limit),
-        last = items.at(-1),
-        more = (data?.items.length ?? 0) > query.limit;
+      const items = (data?.items ?? []).slice(0, query.limit);
+      const last = items.at(-1);
+      const more = (data?.items.length ?? 0) > query.limit;
       await auditPersonalMetadata(
         tx,
         actor,
@@ -409,9 +409,9 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
             'resolved_at',to_char(resolved_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'outcome',outcome,'evidence',evidence,'action',action)
             ORDER BY resolved_at DESC,id DESC) FROM page),'[]'::jsonb) AS items`)
       ).rows[0];
-      const items = (data?.items ?? []).slice(0, query.limit),
-        last = items.at(-1),
-        more = (data?.items.length ?? 0) > query.limit;
+      const items = (data?.items ?? []).slice(0, query.limit);
+      const last = items.at(-1);
+      const more = (data?.items.length ?? 0) > query.limit;
       await auditPersonalMetadata(tx, actor, surveyId, [
         ...new Set(items.map((r) => r.response_id)),
       ]);

@@ -1,4 +1,3 @@
-import { captureOutcomeRecovery, finishOutcomeRecovery } from '../surveys/recovery-presentation.js';
 import {
   type CreateFindingFromSurveyResponseRequest,
   type CreateFindingRequest,
@@ -19,6 +18,7 @@ import {
   resolveApprovedSurveyResponseExcerpts,
   resolveSurveyResponseEvidenceAccess,
 } from '../surveys/evidence-access.js';
+import { captureOutcomeRecovery, finishOutcomeRecovery } from '../surveys/recovery-presentation.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import { incrementFindingEvidenceCount, insertEvidenceHighlight, insertFinding } from './repo.js';
 import { resolveOwner } from './responsibility.js';
@@ -171,7 +171,12 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
           }
 
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'createFindingFromVoc');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              actor.actor_id,
+              'createFindingFromVoc',
+            );
           return {
             status: 201,
             body: {
@@ -215,7 +220,12 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
           const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
             { type: 'survey', id: subject.survey_id },
           ]);
-          const responseRecovery = await captureOutcomeRecovery(tx,actor.workspace_id,responseId,subject.survey_id);
+          const responseRecovery = await captureOutcomeRecovery(
+            tx,
+            actor.workspace_id,
+            responseId,
+            subject.survey_id,
+          );
           const targetManagedSystemId =
             input.primary_managed_system_id ?? subject.primary_managed_system_id;
           const targetMs = await lockManagedSystem(tx, actor.workspace_id, targetManagedSystemId);
@@ -371,7 +381,12 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
               },
             });
           }
-          await finishOutcomeRecovery(tx,responseRecovery,actor.actor_id,'createFindingFromSurveyResponse');
+          await finishOutcomeRecovery(
+            tx,
+            responseRecovery,
+            actor.actor_id,
+            'createFindingFromSurveyResponse',
+          );
           if (recovery)
             await deps.recoveryRecorder?.finish(
               tx,

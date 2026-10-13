@@ -282,7 +282,8 @@ export function createConversationService(deps: {
       vocId,
     });
 
-    if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'postPublicUpdate');
+    if (recovery)
+      await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'postPublicUpdate');
     return {
       public_update: {
         id: inserted.id,

@@ -1,4 +1,3 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import {
@@ -23,6 +22,7 @@ import {
   revokeDeny,
   seedPermissionSelectedReadScale,
 } from '../../../test-support/permissions-fixtures.js';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { createRecordingNotificationDispatcher } from '../../notifications/index.js';

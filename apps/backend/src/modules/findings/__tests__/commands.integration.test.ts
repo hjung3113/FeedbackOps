@@ -11,14 +11,14 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { sql } from 'drizzle-orm';
-import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
-import { recoveryIdentity } from '../../dashboard/identity.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
+import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import {
   createFindingFromVocCluster,
@@ -97,7 +97,12 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
   }
 
   it('keeps the lower-level Task-link repair and its projection in the caller transaction', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Recovery seam MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Recovery seam MS',
+    );
     const finding = await insertFindingRow(dbHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msId,
@@ -113,7 +118,9 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
     const recorder = createOwnerRecoveryRecorder();
     const token = recoveryIdentity('actionable-finding-no-execution', finding.id);
     await inRolledBackTx(async (tx) => {
-      const before = await recorder.capture(tx, WORKSPACE_ID, [{ type: 'finding', id: finding.id }]);
+      const before = await recorder.capture(tx, WORKSPACE_ID, [
+        { type: 'finding', id: finding.id },
+      ]);
       await linkTaskToFinding(tx, {
         workspaceId: WORKSPACE_ID,
         findingId: finding.id,

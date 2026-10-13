@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../test-support/survey-finding-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -177,9 +177,11 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
       workspaceId,
     ]);
     if (migrateHandle)
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     const remaining = await migrateHandle?.pool.query<{ count: string }>(
       'select count(*)::text as count from survey.survey_response_excerpt_approvals where workspace_id = $1',
       [workspaceId],

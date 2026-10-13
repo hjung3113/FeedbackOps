@@ -1,4 +1,3 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #510 part C (ADR-0055): route-level contracts for the outcome follow-up
 // READ endpoint. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -10,6 +9,7 @@ import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fix
 // survey_response_personal_read row per exposed (response, low-answer
 // question) pair, exactly like a holder result read.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
@@ -114,7 +114,9 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     if (!grantorActorId) throw new Error('no admin actor found in seed workspace');
   });
 
-  beforeEach(async()=>{await migrateDb.pool.query('DELETE FROM core.rate_limits');});
+  beforeEach(async () => {
+    await migrateDb.pool.query('DELETE FROM core.rate_limits');
+  });
 
   afterAll(async () => {
     if (!migrateDb) return;
@@ -512,25 +514,35 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     return rows;
   }
 
-  it('denies personal recovery queue/history to non-personal Admin and foreign-workspace holders',async()=>{
-    const subject=await seedSurvey({ratings:[2,5,5,5,5]});
-    const admin=await createActor('admin');
-    const holder=await createActor('developer',['survey.read','survey.read_personal_responses'],subject.msId);
-    const positive=await get(`/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`,holder);
-    expect(positive.statusCode).toBe(200);expect(positive.json().items[0].response_id).toBe(subject.responseIds[0]);
-    for(const route of ['recovery-items','history']) {
-      const denied=await get(`/surveys/${subject.surveyId}/outcome-follow-up/${route}`,admin);
+  it('denies personal recovery queue/history to non-personal Admin and foreign-workspace holders', async () => {
+    const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5] });
+    const admin = await createActor('admin');
+    const holder = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses'],
+      subject.msId,
+    );
+    const positive = await get(
+      `/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`,
+      holder,
+    );
+    expect(positive.statusCode).toBe(200);
+    expect(positive.json().items[0].response_id).toBe(subject.responseIds[0]);
+    for (const route of ['recovery-items', 'history']) {
+      const denied = await get(`/surveys/${subject.surveyId}/outcome-follow-up/${route}`, admin);
       expect(denied.statusCode).toBe(404);
-      for(const responseId of subject.responseIds) expect(denied.body).not.toContain(responseId);
+      for (const responseId of subject.responseIds) expect(denied.body).not.toContain(responseId);
     }
-    const foreign=await seedForeignSurvey();
-    for(const route of ['recovery-items','history']) {
-      const denied=await get(`/surveys/${foreign}/outcome-follow-up/${route}`,holder);
-      expect(denied.statusCode).toBe(404);expect(denied.body).not.toContain(foreign);
+    const foreign = await seedForeignSurvey();
+    for (const route of ['recovery-items', 'history']) {
+      const denied = await get(`/surveys/${foreign}/outcome-follow-up/${route}`, holder);
+      expect(denied.statusCode).toBe(404);
+      expect(denied.body).not.toContain(foreign);
     }
-    const response=subject.responseIds[0]!;
-    const denied=await get(`/survey-responses/${response}/outcome-follow-up/presentation`,admin);
-    expect(denied.statusCode).toBe(404);expect(denied.body).not.toContain(response);
+    const [response] = subject.responseIds;
+    const denied = await get(`/survey-responses/${response}/outcome-follow-up/presentation`, admin);
+    expect(denied.statusCode).toBe(404);
+    expect(denied.body).not.toContain(response);
   });
 
   it('gives a non-holder only the survey-grain booleans', async () => {

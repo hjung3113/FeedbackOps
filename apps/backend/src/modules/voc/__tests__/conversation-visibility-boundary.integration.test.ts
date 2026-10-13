@@ -5,17 +5,20 @@
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID.
 
 import { randomUUID } from 'node:crypto';
-import { recoveryIdentity } from '../../dashboard/identity.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { cleanupSystemRecoveryFixtures, deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  cleanupSystemRecoveryFixtures,
+  deleteRecoveryFixtureParents,
+} from '../../../test-support/recovery-fixtures.js';
 import { insertPublicUpdate, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertInternalComment, insertReporterReply } from './_seed-helpers.js';
 
@@ -104,7 +107,7 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
-    await cleanupSystemRecoveryFixtures(migrateHandle,WORKSPACE_ID,`${SLUG_PREFIX}%`);
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     // Conversation rows are explicitly first: the test proves their grants make
     // the app role unable to perform this teardown itself.
     for (const table of ['voc_internal_comments', 'voc_reporter_replies', 'voc_public_updates']) {

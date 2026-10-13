@@ -197,7 +197,8 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
     expect(
       tables
         .filter(
-          (t) => t.table_name.startsWith('recovery_') || t.table_name.startsWith('outcome_recovery_'),
+          (t) =>
+            t.table_name.startsWith('recovery_') || t.table_name.startsWith('outcome_recovery_'),
         )
         .map((t) => `${t.table_schema}.${t.table_name}`),
     ).toEqual([

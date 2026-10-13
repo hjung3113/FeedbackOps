@@ -1,4 +1,3 @@
-import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { randomUUID } from 'node:crypto';
 import type { ListTasksResponse } from '@fops/shared';
 import {
@@ -20,6 +19,7 @@ import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { resolveTaskResponsibility } from './responsibility.js';
 
 import type { Db } from '../../db/client.js';
@@ -728,7 +728,12 @@ export function createTasksService(deps: TasksServiceDeps) {
           }
 
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'convertTaskRequest');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'convertTaskRequest',
+            );
           return {
             status: 201,
             body: {
@@ -826,7 +831,12 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
 
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'linkExistingTask');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'linkExistingTask',
+            );
           return { status: 200, body: taskToDto(task) };
         },
       );
@@ -885,7 +895,12 @@ export function createTasksService(deps: TasksServiceDeps) {
               : null;
             await attachSourceVoc(args.actor, resolved);
             if (recovery)
-              await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'patchTaskStatus');
+              await deps.recoveryRecorder?.finish(
+                tx,
+                recovery,
+                args.actor.actor_id,
+                'patchTaskStatus',
+              );
             return { status: 200, body: { ...taskToDto(task), source: resolved?.source ?? null } };
           }
 
@@ -950,7 +965,12 @@ export function createTasksService(deps: TasksServiceDeps) {
             : null;
           await attachSourceVoc(args.actor, resolved);
           if (recovery)
-            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'patchTaskStatus');
+            await deps.recoveryRecorder?.finish(
+              tx,
+              recovery,
+              args.actor.actor_id,
+              'patchTaskStatus',
+            );
           return {
             status: 200,
             body: { ...taskToDto(updatedTask), source: resolved?.source ?? null },

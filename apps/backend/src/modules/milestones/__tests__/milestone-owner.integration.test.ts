@@ -88,9 +88,11 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         otherWorkspaceId,
       ]);
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        otherWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [otherWorkspaceId],
+      );
       otherWorkspaceId = '';
     }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);

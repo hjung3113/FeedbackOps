@@ -5,12 +5,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { cleanupSystemRecoveryFixtures, deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
-import { recoveryIdentity } from '../../dashboard/identity.js';
 import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
+import {
+  cleanupSystemRecoveryFixtures,
+  deleteRecoveryFixtureParents,
+} from '../../../test-support/recovery-fixtures.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -46,7 +49,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
-    await cleanupSystemRecoveryFixtures(migrateHandle,WORKSPACE_ID,`${SLUG_PREFIX}%`);
+    await cleanupSystemRecoveryFixtures(migrateHandle, WORKSPACE_ID, `${SLUG_PREFIX}%`);
     const managedSystems =
       'select id from core.managed_systems where workspace_id = $1 and slug like $2';
     const surveys = `select id from survey.surveys where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
@@ -146,13 +149,21 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     });
   }
 
-  it('does not fabricate an outcome recovery episode for a validation Survey lifecycle',async()=>{
-    const id=await createSurvey();await addQuestion(id);
-    expect((await transition(id,'open')).statusCode).toBe(200);
-    expect((await transition(id,'close')).statusCode).toBe(200);
-    const identity=await appHandle.pool.query('SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,recoveryIdentity('bad-outcome-no-followup',id)]);
-    const history=await appHandle.pool.query('SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,recoveryIdentity('bad-outcome-no-followup',id)]);
-    expect(identity.rows).toEqual([]);expect(history.rows).toEqual([]);
+  it('does not fabricate an outcome recovery episode for a validation Survey lifecycle', async () => {
+    const id = await createSurvey();
+    await addQuestion(id);
+    expect((await transition(id, 'open')).statusCode).toBe(200);
+    expect((await transition(id, 'close')).statusCode).toBe(200);
+    const identity = await appHandle.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('bad-outcome-no-followup', id)],
+    );
+    const history = await appHandle.pool.query(
+      'SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
+      [WORKSPACE_ID, recoveryIdentity('bad-outcome-no-followup', id)],
+    );
+    expect(identity.rows).toEqual([]);
+    expect(history.rows).toEqual([]);
   });
 
   it('requires at least one question before opening', async () => {

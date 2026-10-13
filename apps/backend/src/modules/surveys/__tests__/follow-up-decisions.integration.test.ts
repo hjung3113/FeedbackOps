@@ -1,4 +1,3 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #510 part B (ADR-0055): route-level contracts for the outcome follow-up
 // commands. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -8,6 +7,7 @@ import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fix
 // Rejected commands additionally assert that no state row and no audit row
 // were written, so a regression cannot silently mutate on denial.
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { insertSurveyFindingFixture } from '../../../test-support/survey-finding-fixtures.js';
 
 import type { FastifyInstance } from 'fastify';
@@ -77,7 +77,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     if (!grantorActorId) throw new Error('no admin actor found in seed workspace');
   });
 
-  beforeEach(async () => { await migrateDb.pool.query('DELETE FROM core.rate_limits'); });
+  beforeEach(async () => {
+    await migrateDb.pool.query('DELETE FROM core.rate_limits');
+  });
 
   afterAll(async () => {
     if (!migrateDb) return;
@@ -90,13 +92,23 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       })),
     ];
     for (const { workspaceId, surveys, responses } of surveyTrees) {
-      for (const table of ['recovery_history','recovery_presentations','recovery_identities']) {
-        await migrateDb.pool.query(`DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
+      for (const table of ['recovery_history', 'recovery_presentations', 'recovery_identities']) {
+        await migrateDb.pool.query(
+          `DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid AND p.recovery_item_id IN (
           SELECT i.recovery_item_id FROM dashboard.recovery_identities i WHERE i.workspace_id=$1::uuid
-          AND (i.source_id=ANY($2::uuid[]) OR i.source_id=ANY($3::uuid[])))`,[workspaceId,surveys,findingIds]);
+          AND (i.source_id=ANY($2::uuid[]) OR i.source_id=ANY($3::uuid[])))`,
+          [workspaceId, surveys, findingIds],
+        );
       }
-      for (const table of ['outcome_recovery_history','outcome_recovery_presentations','outcome_recovery_identities']) {
-        await migrateDb.pool.query(`DELETE FROM survey.${table} WHERE workspace_id=$1::uuid AND outcome_recovery_item_id::uuid=ANY($2::uuid[])`,[workspaceId,responses]);
+      for (const table of [
+        'outcome_recovery_history',
+        'outcome_recovery_presentations',
+        'outcome_recovery_identities',
+      ]) {
+        await migrateDb.pool.query(
+          `DELETE FROM survey.${table} WHERE workspace_id=$1::uuid AND outcome_recovery_item_id::uuid=ANY($2::uuid[])`,
+          [workspaceId, responses],
+        );
       }
       await migrateDb.pool.query(
         'delete from survey.outcome_follow_up_decisions where response_id = any($1::uuid[])',
@@ -352,7 +364,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         WHERE survey_id=$1::uuid AND id<>$2::uuid ORDER BY id LIMIT 1`,
         [subject.surveyId, subject.responseId],
       )
-    ).rows[0]!.id;
+    ).rows[0]?.id;
     await migrateDb.pool.query(
       "UPDATE survey.survey_response_answers SET answer_value='2'::jsonb WHERE response_id=$1::uuid",
       [extra],
@@ -382,7 +394,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         payload,
       });
     const historyUrl = `/surveys/${subject.surveyId}/outcome-follow-up/history`;
-    expect((await presentation(holder, { action: 'mute', actor_id: other.id })).statusCode).toBe(422);
+    expect((await presentation(holder, { action: 'mute', actor_id: other.id })).statusCode).toBe(
+      422,
+    );
     expect((await presentation(holder, { action: 'mute' })).statusCode).toBe(200);
     const personalList = await get(
       `/surveys/${subject.surveyId}/outcome-follow-up/recovery-items?limit=1`,
@@ -399,7 +413,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       ).json().items[0].response_id,
     ).toBe(subject.responseId);
     expect(
-      (await get(`/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`, admin)).statusCode,
+      (await get(`/surveys/${subject.surveyId}/outcome-follow-up/recovery-items`, admin))
+        .statusCode,
     ).toBe(404);
     expect(
       (
@@ -427,8 +442,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         )
       ).json(),
     ).toEqual(repaired.json());
-    const auditsBeforeHistory = (await auditRows(subject.responseId, 'survey_response_personal_read'))
-      .length;
+    const auditsBeforeHistory = (
+      await auditRows(subject.responseId, 'survey_response_personal_read')
+    ).length;
     const history = await get(historyUrl, holder);
     expect(history.statusCode).toBe(200);
     expect(history.json().total).toBe(1);
@@ -544,8 +560,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
         })
       ).statusCode,
     ).toBe(200);
-    const key = randomUUID(),
-      input = { severity: 'high', approved_excerpt_ids: [] };
+    const key = randomUUID();
+    const input = { severity: 'high', approved_excerpt_ids: [] };
     const created = await post(
       `/survey-responses/${subject.responseId}/create-finding`,
       actor,
@@ -556,7 +572,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     const finding = created.json<{ id: string; updated_at: string }>();
     findingIds.push(finding.id);
     expect(
-      (await post(`/survey-responses/${subject.responseId}/create-finding`, actor, input, key)).json(),
+      (
+        await post(`/survey-responses/${subject.responseId}/create-finding`, actor, input, key)
+      ).json(),
     ).toEqual(created.json());
     const history = await app.inject({
       method: 'GET',
@@ -570,11 +588,22 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       outcome: 'resolved',
       action: 'createFindingFromSurveyResponse',
     });
-    const generic=await app.inject({method:'GET',url:`/dashboard/recovery-history?category=bad-outcome-no-followup&managed_system_id=${subject.msId}`,headers:hdr});
-    expect(generic.statusCode).toBe(200);expect(generic.json().items).toHaveLength(1);
+    const generic = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=bad-outcome-no-followup&managed_system_id=${subject.msId}`,
+      headers: hdr,
+    });
+    expect(generic.statusCode).toBe(200);
+    expect(generic.json().items).toHaveLength(1);
     expect(generic.json().items[0].item.source.id).toBe(subject.surveyId);
-    const respondent=(await migrateDb.pool.query<{respondent_actor_id:string}>('SELECT respondent_actor_id FROM survey.survey_responses WHERE id=$1::uuid',[subject.responseId])).rows[0]!.respondent_actor_id;
-    for(const forbidden of [subject.responseId,respondent]) expect(generic.body).not.toContain(forbidden);
+    const respondent = (
+      await migrateDb.pool.query<{ respondent_actor_id: string }>(
+        'SELECT respondent_actor_id FROM survey.survey_responses WHERE id=$1::uuid',
+        [subject.responseId],
+      )
+    ).rows[0]?.respondent_actor_id;
+    for (const forbidden of [subject.responseId, respondent])
+      expect(generic.body).not.toContain(forbidden);
     expect(generic.body).not.toMatch(/response_id|answer_value|decision_reason|respondent/);
     const patched = await app.inject({
       method: 'PATCH',

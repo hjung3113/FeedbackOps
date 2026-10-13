@@ -104,9 +104,11 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
       foreignManagedSystemId = null;
     }
     if (foreignWorkspaceId) {
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        foreignWorkspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [foreignWorkspaceId],
+      );
       foreignWorkspaceId = null;
     }
     await migrateHandle.pool.query(

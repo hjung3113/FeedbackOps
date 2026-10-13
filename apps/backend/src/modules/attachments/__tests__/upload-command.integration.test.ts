@@ -214,9 +214,11 @@ describe.skipIf(!runIntegration)('uploadAttachmentCommand (#393)', () => {
       await migrateHandle.pool.query(`delete from core.actors where workspace_id = $1`, [
         workspaceId,
       ]);
-      await deleteRecoveryFixtureParents(migrateHandle, `delete from core.workspaces where id = $1`, [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        `delete from core.workspaces where id = $1`,
+        [workspaceId],
+      );
     }
     await dbHandle?.close();
     await migrateHandle?.close();

@@ -2026,9 +2026,9 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
         })
         .then((r) => r);
       await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, patch);
-      attachment = attach(reader.cookie, finding.id, { approved_excerpt_id: source.approvalId }).then(
-        (r) => r,
-      );
+      attachment = attach(reader.cookie, finding.id, {
+        approved_excerpt_id: source.approvalId,
+      }).then((r) => r);
       // Observe a second live connection blocked on the first command, not a timer race.
       const deadline = Date.now() + 1500;
       let findingWaiter = false;

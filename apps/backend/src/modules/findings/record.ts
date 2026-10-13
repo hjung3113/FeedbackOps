@@ -255,7 +255,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
                 actor.actor_id,
                 'patchFinding',
               );
-          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
+            if (recovery)
+              await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -280,7 +281,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
                 actor.actor_id,
                 'patchFinding',
               );
-          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
+            if (recovery)
+              await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -340,7 +342,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
               actor.actor_id,
               'patchFinding',
             );
-          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
           return { status: 200, body: toDto(updated, source) };
         },
       );
@@ -395,7 +398,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
                 workspaceId: actor.workspace_id,
                 findingId: finding.id,
               });
-              if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
+              if (recovery)
+                await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
               return { status: 200, body: toDto(finding, source) };
             }
             throw new HttpError('validation.failed', 'finding is already linked to a task', {
@@ -462,7 +466,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             },
           });
 
-          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
           return { status: 200, body: toDto(updated, source) };
         },
       );

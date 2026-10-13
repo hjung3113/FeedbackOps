@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 
 import type { NotificationDto, NotificationEventType } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -157,15 +157,19 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     await cleanupNotifications();
     await cleanupNotificationSubjects();
     if (subjectManagedSystemId) {
-      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
-        subjectManagedSystemId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.managed_systems where id = $1',
+        [subjectManagedSystemId],
+      );
       subjectManagedSystemId = '';
     }
     if (foreignSubjectManagedSystemId) {
-      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
-        foreignSubjectManagedSystemId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.managed_systems where id = $1',
+        [foreignSubjectManagedSystemId],
+      );
       foreignSubjectManagedSystemId = '';
     }
   });
@@ -175,14 +179,18 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     await cleanupNotificationSubjects();
     await app?.close();
     if (subjectManagedSystemId) {
-      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
-        subjectManagedSystemId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.managed_systems where id = $1',
+        [subjectManagedSystemId],
+      );
     }
     if (foreignSubjectManagedSystemId) {
-      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
-        foreignSubjectManagedSystemId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.managed_systems where id = $1',
+        [foreignSubjectManagedSystemId],
+      );
     }
     if (actorIds.length > 0) {
       await migrateDb.pool.query('delete from core.sessions where id = any($1::text[])', [

@@ -1,4 +1,3 @@
-import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
@@ -12,6 +11,7 @@ import type {
   TaskReporterSummary,
 } from '@fops/shared';
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -626,9 +626,11 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         managedSystemId: sourceRow.managed_system_id,
         createdBy: actor.actor_id,
         visibility,
-        ...(args.internalWritePath !== undefined ? { internalWritePath: args.internalWritePath } : {}),
+        ...(args.internalWritePath !== undefined
+          ? { internalWritePath: args.internalWritePath }
+          : {}),
       });
-    
+
       if (inserted.inserted) {
         await deps.auditService.record(tx, {
           workspace_id: actor.workspace_id,
@@ -646,7 +648,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
           },
         });
       }
-    
+
       if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'createLink');
       return inserted;
     };
@@ -891,7 +893,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       if (!updated) {
         throw new HttpError('conflict.stale_write', 'entity link is no longer active');
       }
-    
+
       await deps.auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
@@ -907,7 +909,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
           reason,
         },
       });
-    
+
       if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'detachLink');
       return updated;
     });

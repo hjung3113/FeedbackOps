@@ -1,9 +1,9 @@
+import { type DashboardSummary, recoveryDetailSchema, recoveryHistorySchema, recoveryListSchema } from '@fops/shared';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { recoveryIdentity } from '../identity.js';
 import { reconcileRecoveryPage } from '../jobs/index.js';
-import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema, recoveryHistorySchema } from '@fops/shared';
-import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -1015,8 +1015,8 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       expect(response.statusCode).toBe(200);
       return recoveryHistorySchema.parse(response.json());
     };
-    const key = randomUUID(),
-      match = await stamp();
+    const key = randomUUID();
+    const match = await stamp();
     const repaired = await patch({ owner_user_id: adminActorId }, key, match);
     expect(repaired.statusCode).toBe(200);
     expect((await history()).items.map((h) => h.occurrence)).toEqual([1]);

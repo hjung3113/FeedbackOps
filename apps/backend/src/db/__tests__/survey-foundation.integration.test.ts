@@ -1,5 +1,5 @@
-import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -77,9 +77,11 @@ describe.skipIf(!runIntegration)('Survey foundation migration 0036', () => {
       workspaceId,
     ]);
     if (migrateHandle)
-      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.workspaces where id = $1',
+        [workspaceId],
+      );
     await appHandle?.close();
     await migrateHandle?.close();
   });

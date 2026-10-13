@@ -1,14 +1,14 @@
-import { readClusterRecoveryMembers } from '../voc-clusters/recovery-read.js';
 import { sql } from 'drizzle-orm';
 import { readRecoveryDependencies } from '../entity-links/commands.js';
-import { vocRecoveryProjection } from '../voc/recovery-read.js';
 import { findingRecoveryProjection } from '../findings/recovery-read.js';
-import { taskRecoveryProjection } from '../tasks/recovery-read.js';
 import { permissionRecoveryTruth } from '../permissions/recovery-read.js';
-import { surveyRecoveryTruth, readSurveyRecoveryDependencies } from '../surveys/recovery-read.js';
+import { readSurveyRecoveryDependencies, surveyRecoveryTruth } from '../surveys/recovery-read.js';
+import { taskRecoveryProjection } from '../tasks/recovery-read.js';
+import { readClusterRecoveryMembers } from '../voc-clusters/recovery-read.js';
+import { vocRecoveryProjection } from '../voc/recovery-read.js';
 import {
-  type RecoveryTruthReaders,
   type RecoveryTruth,
+  type RecoveryTruthReaders,
   createRecoveryRecorder,
 } from './recorder.js';
 
@@ -113,8 +113,8 @@ export async function readRecoveryDiscoveryPage(
     SELECT * FROM (${union}) sources WHERE ${after ? sql`(category,source_id)>(${after.category}::text,${after.sourceId}::uuid)` : sql`true`}
     ORDER BY category,source_id LIMIT ${limit + 1}`)
   ).rows;
-  const page = rows.slice(0, limit),
-    last = page.at(-1);
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
   return {
     subjects: page.map((r) => ({
       type:

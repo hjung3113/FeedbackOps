@@ -12,7 +12,6 @@
 // only drizzle-kit and the seed script touch it (ADR-0008).
 
 import { loadConfig } from './config.js';
-import { registerDashboardJobs } from './modules/dashboard/jobs/index.js';
 import { createDb } from './db/client.js';
 import { RuntimeRoleError, assertRuntimeDbRole } from './db/runtime-role.js';
 import { toJobLog } from './lib/job-log.js';
@@ -21,15 +20,16 @@ import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
+import { registerDashboardJobs } from './modules/dashboard/jobs/index.js';
 import {
   createNotificationEmailChannel,
   createNotificationNotifier,
   createPgBossNotificationDispatcher,
   registerNotificationJobs,
 } from './modules/notifications/index.js';
-import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import { registerVocJobs } from './modules/voc/index.js';
+import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
@@ -66,7 +66,11 @@ const logger = createRootLogger(config);
 const jobLog = toJobLog(logger);
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL, log: jobLog });
-await registerDashboardJobs(boss,{db:dbHandle.db,workspaceId:config.WORKSPACE_ID,log:jobLog});
+await registerDashboardJobs(boss, {
+  db: dbHandle.db,
+  workspaceId: config.WORKSPACE_ID,
+  log: jobLog,
+});
 const notificationDispatcher = createPgBossNotificationDispatcher(boss);
 const notify = createNotificationNotifier(notificationDispatcher);
 await registerCoreJobs(boss, {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createDb, type DbHandle } from '../../../../db/client.js';
+import { type DbHandle, createDb } from '../../../../db/client.js';
 import type { JobLog } from '../../../../lib/job-log.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { RECOVERY_RECONCILE_QUEUE, registerDashboardJobs } from '../index.js';
