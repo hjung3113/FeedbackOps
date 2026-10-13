@@ -279,3 +279,17 @@ export async function readFindingHighlightEvidence(
   `);
   return result.rows;
 }
+
+/** Bounded cross-Finding reader; locks the entire batch's responses in UUID order. */
+export async function readInventoryHighlightEvidence(
+  tx: Tx,
+  workspaceId: string,
+  highlightIds: string[],
+): Promise<FindingHighlightEvidence[]> {
+  if (highlightIds.length === 0) return [];
+  const result = await tx.execute<FindingHighlightEvidence>(sql`
+    select * from survey.read_inventory_highlight_evidence(
+      ${workspaceId}, ${sqlUuidArray(highlightIds)})
+  `);
+  return result.rows;
+}

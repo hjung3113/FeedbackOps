@@ -10,6 +10,7 @@ import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/in
 import { resolveVocEndpoint } from '../entity-links/index.js';
 import { resolveFindingSurveyHighlights } from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
+import { createEvidenceInventory } from './evidence-inventory.js';
 import { findFindingById } from './repo-read.js';
 import {
   type EvidenceHighlightRow,
@@ -341,6 +342,7 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
   }
 
   return {
+    ...createEvidenceInventory(deps),
     addEvidenceHighlight,
     listEvidenceHighlights,
     linkEvidence,

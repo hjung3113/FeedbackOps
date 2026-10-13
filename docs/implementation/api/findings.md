@@ -295,10 +295,11 @@ Accepted target contract; the existing generic raw Survey attachment stays rejec
   Use existing mutation rate limiting. Concurrent revoke/attach follows the
   shared response-lock ordering; preview eligibility never authorizes later submit.
 
-## Evidence inventory — ADR-0065 (accepted, implementation pending)
+## Evidence inventory — ADR-0065 (#1106; runtime verification pending)
 
-All endpoints/DTO extensions below are **proposed/new**, Findings-owned reads of
-stored highlights, not a standalone Evidence resource. ADR-0064 owns the Survey
+The endpoints and independent strict inventory schemas are implemented by #1106;
+real-role runtime verification remains conductor-owned. These are Findings-owned
+reads of stored highlights, not a standalone Evidence resource. ADR-0064 owns the Survey
 projection/read boundary; do not restore raw binding/link/audit access.
 
 ### GET /evidence-highlights

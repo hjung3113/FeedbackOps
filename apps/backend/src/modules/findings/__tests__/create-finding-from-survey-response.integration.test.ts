@@ -8,7 +8,9 @@ import { randomUUID } from 'node:crypto';
 import {
   entityLinkDtoSchema,
   evidenceHighlightDtoSchema,
+  evidenceInventoryItemSchema,
   findingDtoSchema,
+  listEvidenceInventoryResponseSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
@@ -1183,4 +1185,322 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       audits: 0,
     });
   });
+  function inventoryRead(cookie: string, suffix = '') {
+    return app.inject({
+      method: 'GET',
+      url: `/evidence-highlights${suffix}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+  // The personal-response grant is unique per active tuple: grant it once per source.
+  async function attachedInventory(source: Source, grantPersonal = true) {
+    if (grantPersonal) await grant(adminId, 'survey.read_personal_responses', source.msId);
+    const approval = await approve(source, adminCookie);
+    const created = await post(adminCookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [approval],
+    });
+    expect(created.statusCode).toBe(201);
+    const findingId = created.json<{ id: string }>().id;
+    const nested = await app.inject({
+      method: 'GET',
+      url: `/findings/${findingId}/evidence-highlights`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(nested.statusCode).toBe(200);
+    return {
+      approval,
+      findingId,
+      id: nested.json<{ items: Array<{ id: string }> }>().items[0]?.id ?? '',
+    };
+  }
+
+  it('inventory keeps below-threshold attached Survey audience and suppresses exact revoked approvals between pages', async () => {
+    const source = await seed(); // one respondent, below result-picker threshold
+    const older = await attachedInventory(source);
+    const newer = await attachedInventory(source, false);
+    const reader = await actor();
+    await grant(reader.id, 'finding.read', source.msId);
+    await grant(reader.id, 'survey.read', source.msId);
+    const before = await migrateHandle.pool.query(
+      'select count(*)::int as count from core.audit_log where workspace_id=$1',
+      [WORKSPACE_ID],
+    );
+    const first = await inventoryRead(reader.cookie, `?managed_system_id=${source.msId}&limit=1`);
+    expect(first.statusCode).toBe(200);
+    const parsed = listEvidenceInventoryResponseSchema.parse(first.json());
+    expect(parsed.items[0]).toMatchObject({
+      id: newer.id,
+      content_state: 'available',
+      quote_or_summary: APPROVED,
+      source: {
+        survey_type: 'outcome',
+        question_label: 'What needs improvement?',
+        identity_protected: true,
+      },
+    });
+    const firstItem = parsed.items[0];
+    if (!firstItem || firstItem.source_type !== 'survey_response')
+      throw new Error('Survey item missing');
+    expect(Object.keys(firstItem.source ?? {}).sort()).toEqual([
+      'identity_protected',
+      'question_label',
+      'survey_display_id',
+      'survey_type',
+    ]);
+    for (const secret of [
+      source.responseId,
+      older.approval,
+      newer.approval,
+      RAW_ANSWER,
+      'Private survey',
+    ])
+      expect(first.body).not.toContain(secret);
+    // Direct detail must work for an item absent from the loaded page.
+    const detail = await inventoryRead(reader.cookie, `/${older.id}`);
+    expect(detail.statusCode).toBe(200);
+    expect(evidenceInventoryItemSchema.parse(detail.json()).id).toBe(older.id);
+    expect(
+      (
+        await migrateHandle.pool.query(
+          'select count(*)::int as count from core.audit_log where workspace_id=$1',
+          [WORKSPACE_ID],
+        )
+      ).rows,
+    ).toEqual(before.rows);
+    const revoke = await app.inject({
+      method: 'DELETE',
+      url: `/survey-responses/${source.responseId}/approved-excerpts/${older.approval}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(revoke.statusCode).toBe(200);
+    const next = await inventoryRead(
+      reader.cookie,
+      `?managed_system_id=${source.msId}&limit=1&cursor=${encodeURIComponent(parsed.page.cursor ?? '')}`,
+    );
+    expect(next.statusCode).toBe(200);
+    expect(next.json().items[0]).toMatchObject({ id: older.id, content_state: 'withheld' });
+    expect(next.json().items[0]).not.toHaveProperty('source');
+    expect(next.json().items[0]).not.toHaveProperty('quote_or_summary');
+    expect((await inventoryRead(reader.cookie, `/${older.id}`)).json().content_state).toBe(
+      'withheld',
+    );
+    const searched = await inventoryRead(
+      reader.cookie,
+      `?managed_system_id=${source.msId}&q=${encodeURIComponent(APPROVED)}&limit=1`,
+    );
+    expect(searched.json().items.map((item: { id: string }) => item.id)).toEqual([newer.id]);
+    expect(searched.json().page).toEqual({ has_more: false });
+  });
+
+  it('inventory withholds Survey text and source labels from an explicitly denied Admin', async () => {
+    const source = await seed();
+    const attached = await attachedInventory(source);
+    await migrateHandle.pool.query(
+      `insert into permission.permission_denies
+       (workspace_id,actor_id,capability,managed_system_id,created_by_actor_id,reason)
+       values ($1,$2,'survey.read',$3,$2,'inventory source denied')`,
+      [WORKSPACE_ID, adminId, source.msId],
+    );
+    const selected = await inventoryRead(adminCookie, `/${attached.id}`);
+    expect(selected.statusCode).toBe(200);
+    expect(selected.json().content_state).toBe('withheld');
+    expect(selected.json()).not.toHaveProperty('source');
+    const searched = await inventoryRead(
+      adminCookie,
+      `?managed_system_id=${source.msId}&q=${encodeURIComponent(APPROVED)}`,
+    );
+    expect(searched.json()).toEqual({ items: [], page: { has_more: false } });
+    const parent = await migrateHandle.pool.query<{ title: string }>(
+      'select title from finding.findings where id=$1',
+      [attached.findingId],
+    );
+    const safe = await inventoryRead(
+      adminCookie,
+      `?managed_system_id=${source.msId}&q=${encodeURIComponent(parent.rows[0]?.title ?? '')}`,
+    );
+    expect(safe.json().items.map((item: { id: string }) => item.id)).toEqual([attached.id]);
+  });
+
+  it.each([
+    ['list', 'read-first'],
+    ['list', 'revoke-first'],
+    ['detail', 'read-first'],
+    ['detail', 'revoke-first'],
+  ] as const)('inventory %s serializes exact-approval revoke: %s', async (surface, order) => {
+    const source = await seed();
+    const attached = await attachedInventory(source);
+    const blocker = await appHandle.pool.connect();
+    const read = () =>
+      inventoryRead(
+        adminCookie,
+        surface === 'detail' ? `/${attached.id}` : `?managed_system_id=${source.msId}`,
+      );
+    const revoke = () =>
+      app.inject({
+        method: 'DELETE',
+        url: `/survey-responses/${source.responseId}/approved-excerpts/${attached.approval}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+    let first: ReturnType<typeof read> | undefined;
+    let second: ReturnType<typeof read> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+        source.responseId,
+      ]);
+      first = (order === 'read-first' ? read() : revoke()).then((r) => r);
+      await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, first);
+      second = (order === 'read-first' ? revoke() : read()).then((r) => r);
+      await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 2, second);
+      await blocker.query('commit');
+      const [a, b] = await Promise.all([first, second]);
+      const result = order === 'read-first' ? a : b;
+      expect(result.statusCode).toBe(200);
+      expect((order === 'read-first' ? b : a).statusCode).toBe(200);
+      const item = surface === 'detail' ? result.json() : result.json().items[0];
+      expect(item.quote_or_summary).toBe(order === 'read-first' ? APPROVED : undefined);
+      expect(item.content_state).toBe(order === 'read-first' ? 'available' : 'withheld');
+      expect((await read()).body).not.toContain(APPROVED);
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      await Promise.allSettled([first, second].filter((p) => p !== undefined));
+    }
+  });
+
+  it('inventory hides foreign workspace highlights and rejects foreign cursor context', async () => {
+    const responseId = await seedForeignResponse();
+    const foreign = await migrateHandle.pool.query<{
+      workspace_id: string;
+      primary_managed_system_id: string;
+      created_by: string;
+    }>(
+      `select s.workspace_id,s.primary_managed_system_id,s.created_by from survey.surveys s
+      join survey.survey_responses r on r.survey_id=s.id where r.id=$1`,
+      [responseId],
+    );
+    const subject = foreign.rows[0];
+    if (!subject) throw new Error('foreign fixture absent');
+    const findingId = randomUUID();
+    const highlightId = randomUUID();
+    try {
+      await migrateHandle.pool.query(
+        `insert into finding.findings (id,workspace_id,display_id,primary_managed_system_id,
+          title,summary,source_type,severity,status,created_by)
+         values ($1,$2,'FIN-FOREIGN',$3,'foreign hidden title','foreign summary','manual','medium','draft',$4)`,
+        [findingId, subject.workspace_id, subject.primary_managed_system_id, subject.created_by],
+      );
+      await migrateHandle.pool.query(
+        `insert into finding.evidence_highlights (id,workspace_id,finding_id,primary_managed_system_id,
+          source_type,quote_or_summary,created_by)
+         values ($1,$2,$3,$4,'note','foreign hidden quote',$5)`,
+        [
+          highlightId,
+          subject.workspace_id,
+          findingId,
+          subject.primary_managed_system_id,
+          subject.created_by,
+        ],
+      );
+      expect((await inventoryRead(adminCookie, `/${highlightId}`)).statusCode).toBe(404);
+      expect((await inventoryRead(adminCookie, '?q=foreign hidden')).json()).toEqual({
+        items: [],
+        page: { has_more: false },
+      });
+      const cursor = Buffer.from(
+        JSON.stringify({
+          timestamp: '2026-10-13T00:00:00Z',
+          id: highlightId,
+          workspace: subject.workspace_id,
+          actor: adminId,
+          scope: 'all',
+          source: 'all',
+          q: '',
+        }),
+      ).toString('base64url');
+      expect((await inventoryRead(adminCookie, `?cursor=${cursor}`)).statusCode).toBe(422);
+    } finally {
+      await migrateHandle.pool.query('delete from finding.evidence_highlights where id=$1', [
+        highlightId,
+      ]);
+      await migrateHandle.pool.query('delete from finding.findings where id=$1', [findingId]);
+    }
+  });
+
+  it('measures cross-Finding Survey batch hydration and stable continuation', async () => {
+    const scopeIds: string[] = [];
+    for (let index = 0; index < 4; index++) {
+      const source = await seed();
+      scopeIds.push(source.msId);
+      const creator = await actor(); // one Actor per sensitive-tier burst
+      for (const capability of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+        await grant(creator.id, capability, source.msId);
+      const approvals = await migrateHandle.pool.query<{ id: string }>(
+        `insert into survey.survey_response_excerpt_approvals
+          (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+         select $1::uuid,$2::uuid,$3::uuid,$4::uuid,'inventory-fanout excerpt',$5::uuid
+         from generate_series(1,75) n returning id`,
+        [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, adminId],
+      );
+      const created = await post(creator.cookie, source.responseId, {
+        severity: 'medium',
+        approved_excerpt_ids: approvals.rows.map((row) => row.id),
+      });
+      expect(created.statusCode).toBe(201);
+    }
+    const url = '?source_type=survey_response&q=inventory-fanout&limit=100';
+    const start = performance.now();
+    const first = await inventoryRead(adminCookie, url);
+    const firstMs = performance.now() - start;
+    expect(first.statusCode).toBe(200);
+    let page = listEvidenceInventoryResponseSchema.parse(first.json());
+    const sourcePlan = await appHandle.pool.query(
+      'explain (analyze,buffers,format json) select * from survey.read_inventory_highlight_evidence($1::uuid,$2::uuid[])',
+      [WORKSPACE_ID, page.items.map((item) => item.id)],
+    );
+    const continuationStart = performance.now();
+    const next = await inventoryRead(
+      adminCookie,
+      `${url}&cursor=${encodeURIComponent(page.page.cursor ?? '')}`,
+    );
+    const continuationMs = performance.now() - continuationStart;
+    expect(next.statusCode).toBe(200);
+    const replay = await inventoryRead(
+      adminCookie,
+      `${url}&cursor=${encodeURIComponent(page.page.cursor ?? '')}`,
+    );
+    expect(replay.json()).toEqual(next.json());
+    const seen = new Set<string>();
+    let pages = 0;
+    while (true) {
+      expect(page.items.length).toBeLessThanOrEqual(100);
+      for (const item of page.items) {
+        expect(item.content_state).toBe('available');
+        expect(seen.has(item.id)).toBe(false);
+        seen.add(item.id);
+      }
+      pages++;
+      if (!page.page.has_more) break;
+      const continued = await inventoryRead(
+        adminCookie,
+        `${url}&cursor=${encodeURIComponent(page.page.cursor ?? '')}`,
+      );
+      expect(continued.statusCode).toBe(200);
+      page = listEvidenceInventoryResponseSchema.parse(continued.json());
+    }
+    expect(seen.size).toBe(300);
+    expect(pages).toBe(3);
+    console.info('W-1106 Survey pagination measurement', {
+      surveys: 4,
+      responses: 4,
+      findings: 4,
+      highlights: seen.size,
+      scopes: scopeIds.length,
+      sourcePlan: sourcePlan.rows,
+      firstMs,
+      continuationMs,
+      pages,
+    });
+  }, 60_000);
 });

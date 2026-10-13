@@ -240,4 +240,48 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
       await migrate.pool.query('delete from core.entity_links where id = $1', [id]);
     }
   });
+  it('pins the bounded inventory definer ACL without restoring private app reads', async () => {
+    const metadata = await migrate.pool.query(
+      `select pg_get_userbyid(p.proowner) as owner,p.prosecdef,p.proconfig,
+        has_function_privilege('fops_app',p.oid,'EXECUTE') as app_execute,
+        exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          where a.grantee=0 and a.privilege_type='EXECUTE') as public_execute,
+        has_schema_privilege('fops_survey_evidence_reader_owner','survey','CREATE') as owner_create,
+        pg_has_role('fops_app','fops_survey_evidence_reader_owner','MEMBER') as app_member
+       from pg_proc p where p.oid='survey.read_inventory_highlight_evidence(uuid,uuid[])'::regprocedure`,
+    );
+    expect(metadata.rows).toEqual([
+      {
+        owner: 'fops_survey_evidence_reader_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+        owner_create: false,
+        app_member: false,
+      },
+    ]);
+    for (const table of [
+      'survey.highlight_response_bindings',
+      'survey.finding_response_bindings',
+    ]) {
+      await expect(app.pool.query(`select * from ${table} limit 1`)).rejects.toMatchObject({
+        code: '42501',
+      });
+    }
+    expect(
+      (
+        await app.pool.query(
+          'select * from survey.read_inventory_highlight_evidence($1,$2::uuid[])',
+          [WORKSPACE_ID, []],
+        )
+      ).rows,
+    ).toEqual([]);
+    await expect(
+      app.pool.query('select * from survey.read_inventory_highlight_evidence($1,$2::uuid[])', [
+        WORKSPACE_ID,
+        Array.from({ length: 101 }, () => randomUUID()),
+      ]),
+    ).rejects.toMatchObject({ code: '22023' });
+  });
 });

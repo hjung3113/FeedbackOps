@@ -21,6 +21,7 @@ import {
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
   readFindingHighlightEvidence,
+  readInventoryHighlightEvidence,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
   revokeApprovedExcerpt,
@@ -337,6 +338,29 @@ export async function resolveFindingSurveyHighlights(
   highlightIds: string[],
 ): Promise<Map<string, FindingHighlightEvidence>> {
   const rows = await readFindingHighlightEvidence(tx, actor.workspace_id, findingId, highlightIds);
+  const sourceDecisions = new Map<string, boolean>();
+  const permitted = new Map<string, FindingHighlightEvidence>();
+  for (const row of rows) {
+    let allowed = sourceDecisions.get(row.primary_managed_system_id);
+    if (allowed === undefined) {
+      allowed = (
+        await checkSurveyRead(deps.checkService, actor, row.primary_managed_system_id, { tx })
+      ).allow;
+      sourceDecisions.set(row.primary_managed_system_id, allowed);
+    }
+    if (allowed) permitted.set(row.highlight_id, row);
+  }
+  return permitted;
+}
+
+/** Every supplied parent is authorized by Findings in this bounded batch transaction. */
+export async function resolveInventorySurveyHighlights(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  highlightIds: string[],
+): Promise<Map<string, FindingHighlightEvidence>> {
+  const rows = await readInventoryHighlightEvidence(tx, actor.workspace_id, highlightIds);
   const sourceDecisions = new Map<string, boolean>();
   const permitted = new Map<string, FindingHighlightEvidence>();
   for (const row of rows) {
