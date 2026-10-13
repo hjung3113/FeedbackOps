@@ -1067,7 +1067,7 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
       payload: { approved_excerpt_id: randomUUID(), quote_or_summary: 'unapproved text' },
     });
     expect(strict.statusCode).toBe(422);
-    expect(strict.json().error.detail.fields).toEqual(
+    expect(strict.json().detail.fields).toEqual(
       expect.arrayContaining([expect.objectContaining({ path: [], code: 'unrecognized_keys' })]),
     );
     expect((await getHighlights(adminCookie, target.id)).json()).toEqual({ items: [] });
