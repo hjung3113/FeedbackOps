@@ -24,6 +24,7 @@ export function usePermissionGrantsConsole(): {
   actorNames: Record<string, string>;
   managedSystemNames: Record<string, string>;
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
+  discardReturnedGrant: (id: string) => void;
   handleCreatedGrant: (id: string) => void;
   isPending: boolean;
   isError: boolean;
@@ -41,12 +42,12 @@ export function usePermissionGrantsConsole(): {
     queryKey: permissionGrantsListKey,
     queryFn: async ({ signal }) => {
       const items = await fetchPermissionGrants(signal);
-      for (const [id] of returnedGrantCarry.current) {
-        if (items.some((item) => item.id === id)) returnedGrantCarry.current.delete(id);
-      }
       const missingReturnedItems = [...returnedGrantCarry.current.values()].filter(
-        (item) => !items.some((current) => current.id === item.id),
+        (item) =>
+          !items.some((current) => current.id === item.id) &&
+          (item.expires_at === null || Date.parse(item.expires_at) > Date.now()),
       );
+      returnedGrantCarry.current.clear();
       return [...missingReturnedItems, ...items];
     },
     retry: false,
@@ -90,6 +91,13 @@ export function usePermissionGrantsConsole(): {
       item,
       ...(current ?? []).filter((grant) => grant.id !== item.id),
     ]);
+  }
+
+  function discardReturnedGrant(id: string): void {
+    returnedGrantCarry.current.delete(id);
+    queryClient.setQueryData<PermissionGrantAdminItem[]>(permissionGrantsListKey, (current) =>
+      current?.filter((grant) => grant.id !== id),
+    );
   }
 
   function handleTabChange(next: PermissionGrantTab): void {
@@ -174,6 +182,7 @@ export function usePermissionGrantsConsole(): {
     actorNames,
     managedSystemNames,
     cacheReturnedGrant,
+    discardReturnedGrant,
     handleCreatedGrant,
     isPending: activeQuery.isPending,
     isError: activeQuery.isError,

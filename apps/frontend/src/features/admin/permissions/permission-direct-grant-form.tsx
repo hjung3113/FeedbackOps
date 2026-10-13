@@ -75,19 +75,29 @@ function minimumExpirationDate(): string {
     : new Date(now + 86_400_000).toISOString().slice(0, 10);
 }
 
-function conflictDestination(error: unknown): { href: string; label: string } | null {
+function conflictDestination(
+  error: unknown,
+): { href: string; label: string; closesDialog: boolean } | null {
   if (!(error instanceof ApiError) || !error.detail) return null;
   if (
     error.code === 'conflict.permission_request_duplicate' &&
     typeof error.detail.review_route === 'string'
   ) {
-    return { href: error.detail.review_route, label: DIRECT_GRANT_COPY.reviewLink };
+    return {
+      href: error.detail.review_route,
+      label: DIRECT_GRANT_COPY.reviewLink,
+      closesDialog: false,
+    };
   }
   if (
     error.code === 'conflict.capability_already_denied' &&
     typeof error.detail.lift_route === 'string'
   ) {
-    return { href: error.detail.lift_route, label: DIRECT_GRANT_COPY.denyLink };
+    return {
+      href: error.detail.lift_route,
+      label: DIRECT_GRANT_COPY.denyLink,
+      closesDialog: true,
+    };
   }
   return null;
 }
@@ -122,11 +132,10 @@ export function PermissionDirectGrantForm({
     open &&
     actorId !== '' &&
     !grantOptionsQuery.isPending &&
-    !grantOptionsQuery.isFetching &&
-    !grantOptionsQuery.isError &&
     grantOptionsQuery.data?.recipient.id === actorId
       ? grantOptionsQuery.data
       : undefined;
+  const optionsUnconfirmed = grantOptionsQuery.isFetching || grantOptionsQuery.isError;
 
   React.useEffect(() => {
     if (open) return;
@@ -219,7 +228,9 @@ export function PermissionDirectGrantForm({
                     options={grantOptions}
                     managedSystemNames={managedSystemNames}
                     selectionContext={selectionContext}
+                    optionsUnconfirmed={optionsUnconfirmed}
                     cacheReturnedGrant={cacheReturnedGrant}
+                    onClose={() => onOpenChange(false)}
                     onCreated={onCreated}
                     onPendingChange={setBusy}
                   />
@@ -242,14 +253,18 @@ function DirectGrantFields({
   options,
   managedSystemNames,
   selectionContext,
+  optionsUnconfirmed,
   cacheReturnedGrant,
+  onClose,
   onCreated,
   onPendingChange,
 }: {
   options: PermissionGrantOptions;
   managedSystemNames: Record<string, string>;
   selectionContext: string;
+  optionsUnconfirmed: boolean;
   cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
+  onClose: () => void;
   onCreated: (item: PermissionGrantAdminItem, submittedContext: string) => void;
   onPendingChange: (pending: boolean) => void;
 }) {
@@ -258,6 +273,7 @@ function DirectGrantFields({
   const [selectedCandidateKey, setSelectedCandidateKey] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [expirationDate, setExpirationDate] = React.useState('');
+  const [expirationDraftValid, setExpirationDraftValid] = React.useState(true);
   const [governanceConfirmed, setGovernanceConfirmed] = React.useState(false);
   const [policyCitation, setPolicyCitation] = React.useState('');
   const [peerReviewerAbsence, setPeerReviewerAbsence] = React.useState('');
@@ -291,7 +307,8 @@ function DirectGrantFields({
     (policyCitation.trim().length > 0 && peerReviewerAbsence.trim().length > 0);
   const governanceRequired = selectedCandidate?.governance_required ?? false;
   const expiration = expirationDate === '' ? undefined : toFutureExpiration(expirationDate);
-  const expirationInvalid = expirationDate !== '' && expiration === undefined;
+  const expirationInvalid =
+    !expirationDraftValid || (expirationDate !== '' && expiration === undefined);
   const expirationReady = expirationDate === '' || expiration !== undefined;
   const preflight = selectedCandidate?.preflight;
   const preflightBlocked = preflight !== undefined && preflight.state !== 'available';
@@ -308,6 +325,7 @@ function DirectGrantFields({
     selfEnvelopeReady &&
     (!governanceRequired || governanceConfirmed) &&
     !expirationInvalid &&
+    !optionsUnconfirmed &&
     !mutation.isPending;
   const submitErrorDestination = conflictDestination(mutation.error);
   const mappedError = mutation.isError ? mapUnknownError(mutation.error).message : null;
@@ -412,6 +430,7 @@ function DirectGrantFields({
           <InternalLink
             className="w-fit text-accent-primary underline underline-offset-2"
             href={selectedCandidate.preflight.lift_route}
+            onClick={onClose}
           >
             {DIRECT_GRANT_COPY.denyLink}
           </InternalLink>
@@ -435,18 +454,15 @@ function DirectGrantFields({
           aria-label={DIRECT_GRANT_COPY.expirationLabel}
           value={expirationDate}
           onChange={(value) => clearErrorAndUpdate(() => setExpirationDate(value ?? ''))}
+          onValidityChange={setExpirationDraftValid}
           min={minimumExpirationDate()}
           showValidation={expirationInvalid}
           aria-invalid={expirationInvalid}
           disabled={mutation.isPending}
         />
         <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.expirationHelp}</span>
+        <span className="text-xs text-text-muted">{DIRECT_GRANT_COPY.reissueHelp}</span>
       </label>
-      {expirationInvalid ? (
-        <p role="alert" className="-mt-3 text-xs text-accent-danger">
-          {DIRECT_GRANT_COPY.expirationError}
-        </p>
-      ) : null}
       {governanceRequired ? (
         <section className="flex flex-col gap-3 rounded-md border border-border-selected bg-surface-field p-3">
           <p className="text-xs leading-5 text-text-secondary">
@@ -517,6 +533,7 @@ function DirectGrantFields({
             <InternalLink
               className="w-fit text-accent-primary underline underline-offset-2"
               href={submitErrorDestination.href}
+              {...(submitErrorDestination.closesDialog ? { onClick: onClose } : {})}
             >
               {submitErrorDestination.label}
             </InternalLink>

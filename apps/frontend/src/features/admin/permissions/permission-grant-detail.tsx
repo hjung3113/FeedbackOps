@@ -16,12 +16,14 @@ export function PermissionGrantDetail({
   actorNames,
   managedSystemNames,
   onClose,
+  onGrantRevoked,
   onSuccess,
 }: {
   permission: ActivePermission;
   actorNames: Record<string, string>;
   managedSystemNames: Record<string, string>;
   onClose: () => void;
+  onGrantRevoked: (id: string) => void;
   onSuccess: () => void;
 }) {
   const { kind, item } = permission;
@@ -98,6 +100,7 @@ export function PermissionGrantDetail({
             kind={kind}
             id={item.id}
             actorId={item.actor_id}
+            onGrantRevoked={onGrantRevoked}
             onSuccess={onSuccess}
           />
         </div>

@@ -12,17 +12,19 @@ export function PermissionGrantActionForm({
   kind,
   id,
   actorId,
+  onGrantRevoked,
   onSuccess,
 }: {
   kind: 'grants' | 'denies';
   id: string;
   actorId: string;
+  onGrantRevoked: (id: string) => void;
   onSuccess: () => void;
 }) {
   const [reason, setReason] = useState('');
   const reasonId = useId();
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
-  const mutation = useRevokePermission();
+  const mutation = useRevokePermission(onGrantRevoked);
   const me = useMe();
   const workspaceSettings = useWorkspaceSettings();
   const submitLabel =

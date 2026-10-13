@@ -31,6 +31,7 @@ export function PermissionGrantsScreen() {
     actorNames,
     managedSystemNames,
     cacheReturnedGrant,
+    discardReturnedGrant,
     handleCreatedGrant,
     isPending,
     isError,
@@ -142,6 +143,7 @@ export function PermissionGrantsScreen() {
             actorNames={actorNames}
             managedSystemNames={managedSystemNames}
             onClose={handleClose}
+            onGrantRevoked={discardReturnedGrant}
             onSuccess={handleClose}
           />
         ) : undefined

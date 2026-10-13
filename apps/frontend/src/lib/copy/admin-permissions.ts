@@ -100,7 +100,7 @@ export const ADMIN_PERMISSIONS_COPY = {
     reasonPlaceholder: '권한을 부여하는 이유를 입력하세요.',
     expirationLabel: '만료일 · 선택',
     expirationHelp: '만료일을 입력하지 않으면 만료 없이 부여됩니다.',
-    expirationError: '만료일은 현재 시각보다 이후여야 합니다.',
+    reissueHelp: '만료된 권한을 다시 부여하면 이전 기록은 유지되고 새 권한 ID가 생성됩니다.',
     governanceDescription:
       '워크스페이스 관리자 권한은 명시적 거버넌스 확인이 필요합니다. Role Level은 변경되지 않습니다.',
     governanceConfirm: '워크스페이스 관리자 권한 부여를 확인합니다.',

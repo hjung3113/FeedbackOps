@@ -8,6 +8,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -409,6 +410,11 @@ async function openDirectGrantDialog() {
   return screen.findByRole('dialog', { name: '권한 부여' });
 }
 
+async function openDirectGrantDialogWithUser(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: '권한 부여' }));
+  return screen.findByRole('dialog', { name: '권한 부여' });
+}
+
 async function chooseSelectOption(label: string, optionName: string | RegExp) {
   fireEvent.click(screen.getByRole('combobox', { name: label }));
   fireEvent.click(await screen.findByRole('option', { name: optionName }));
@@ -423,6 +429,31 @@ async function selectDirectGrantTargetAndScope(
     expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent(actorName),
   );
   await chooseSelectOption('부여 권한 및 범위', scopeName);
+}
+
+async function chooseSelectOptionWithUser(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  downArrows = 0,
+) {
+  screen.getByRole('combobox', { name: label }).focus();
+  await user.keyboard(`{Enter}${'{ArrowDown}'.repeat(downArrows)}{Enter}`);
+}
+
+async function selectDirectGrantTargetAndScopeWithUser(
+  user: ReturnType<typeof userEvent.setup>,
+  actorName = 'Actor One',
+  scopeName: string | RegExp = /Finding 관리.*Payments/,
+) {
+  await chooseSelectOptionWithUser(user, '대상자', actorName === 'Admin One' ? 2 : 0);
+  await waitFor(() =>
+    expect(screen.getByTestId('direct-grant-recipient')).toHaveTextContent(actorName),
+  );
+  await chooseSelectOptionWithUser(
+    user,
+    '부여 권한 및 범위',
+    typeof scopeName === 'string' && scopeName.includes('워크스페이스') ? 1 : 0,
+  );
 }
 
 describe('/admin/permissions/grants screen', () => {
@@ -679,6 +710,208 @@ describe('/admin/permissions/grants screen', () => {
     expect(post?.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
+  test('blocks malformed expiration drafts from empty and previously valid dates', async () => {
+    const api = installApi();
+    const user = userEvent.setup();
+    renderScreen();
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await selectDirectGrantTargetAndScopeWithUser(user);
+    await user.type(within(dialog).getByLabelText('사유 · 필수'), '권한 만료를 설정합니다.');
+    const expiration = within(dialog).getByLabelText('만료일 · 선택');
+    const submit = within(dialog).getByTestId('direct-grant-submit');
+
+    await user.type(expiration, '2027-02-30');
+    expect(submit).toBeDisabled();
+    expect(
+      await within(dialog).findByText('날짜를 YYYY-MM-DD 형식으로 입력하세요.'),
+    ).toBeInTheDocument();
+    expect(expiration).toHaveAttribute('aria-invalid', 'true');
+    expect(api.requests.filter((request) => request.method === 'POST')).toHaveLength(0);
+
+    await user.clear(expiration);
+    await user.type(expiration, '2027-02-28');
+    expect(submit).toBeEnabled();
+    await user.clear(expiration);
+    await user.type(expiration, '2027-02-30');
+
+    expect(submit).toBeDisabled();
+    expect(
+      await within(dialog).findByText('날짜를 YYYY-MM-DD 형식으로 입력하세요.'),
+    ).toBeInTheDocument();
+    expect(expiration).toHaveAttribute('aria-invalid', 'true');
+    expect(api.requests.filter((request) => request.method === 'POST')).toHaveLength(0);
+
+    await user.clear(expiration);
+    await user.type(expiration, '2027-02-28');
+    await user.click(submit);
+    await waitFor(() =>
+      expect(api.requests.filter((request) => request.method === 'POST')).toHaveLength(1),
+    );
+    expect(
+      directPermissionGrantSchema.parse(
+        api.requests.find((request) => request.method === 'POST')?.body,
+      ).expires_at,
+    ).toBe('2027-02-28T23:59:59.000Z');
+  });
+
+  test('keeps a same-recipient draft and retry intent through delayed and failed option refreshes', async () => {
+    const api = installApi({
+      directGrantErrors: [{ status: 500, code: 'internal.unexpected' }, null],
+    });
+    const originalImplementation = apiRequestMock.getMockImplementation();
+    let optionReads = 0;
+    let releaseDelayedOptions: (() => void) | undefined;
+    const delayedOptions = new Promise<void>((resolve) => {
+      releaseDelayedOptions = resolve;
+    });
+    apiRequestMock.mockImplementation(async (method, path, parser, requestOptions) => {
+      if (method === 'GET' && path.startsWith('/permissions/grant-options?')) {
+        optionReads += 1;
+        if (optionReads === 2) await delayedOptions;
+        if (optionReads === 3) throw new Error('options refresh unavailable');
+      }
+      if (!originalImplementation) throw new Error('API mock was not installed');
+      return originalImplementation(method, path, parser, requestOptions);
+    });
+    const user = userEvent.setup();
+    const { queryClient } = renderScreen();
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await selectDirectGrantTargetAndScopeWithUser(user);
+    const reason = within(dialog).getByLabelText('사유 · 필수');
+    const submit = within(dialog).getByTestId('direct-grant-submit');
+    await user.type(reason, '같은 대상자의 권한 초안입니다.');
+    expect(reason).toHaveFocus();
+
+    let delayedRefresh: Promise<void> | undefined;
+    act(() => {
+      delayedRefresh = queryClient.invalidateQueries({
+        queryKey: ['permission-grant-options', RECIPIENT_ID],
+      });
+    });
+    await waitFor(() => expect(optionReads).toBe(2));
+    expect(within(dialog).getByLabelText('사유 · 필수')).toHaveValue(
+      '같은 대상자의 권한 초안입니다.',
+    );
+    expect(reason).toHaveFocus();
+    expect(submit).toBeDisabled();
+    await act(async () => {
+      releaseDelayedOptions?.();
+      await delayedRefresh;
+    });
+    await waitFor(() => expect(submit).toBeEnabled());
+
+    await user.click(submit);
+    await within(dialog).findByRole('alert');
+    const firstPost = api.requests.find((request) => request.method === 'POST');
+    expect(firstPost).toBeDefined();
+
+    await act(async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['permission-grant-options', RECIPIENT_ID],
+      });
+    });
+    await waitFor(() => expect(optionReads).toBe(3));
+    expect(within(dialog).getByLabelText('사유 · 필수')).toHaveValue(
+      '같은 대상자의 권한 초안입니다.',
+    );
+    expect(await within(dialog).findByText('권한 범위를 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(submit).toBeDisabled();
+
+    await user.click(within(dialog).getByRole('button', { name: '다시 확인' }));
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByText('권한 범위를 불러오지 못했습니다.'),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+    await waitFor(() =>
+      expect(api.requests.filter((request) => request.method === 'POST')).toHaveLength(2),
+    );
+    expect(api.requests.filter((request) => request.method === 'POST')[1]?.idempotencyKey).toBe(
+      firstPost?.idempotencyKey,
+    );
+  });
+
+  test('does not restore a returned grant after revoking it from a stale list', async () => {
+    const api = installApi({ initialGrants: [], deferGrantRefetch: true });
+    const user = userEvent.setup();
+    const { router } = renderScreen(`/admin/permissions/grants?tab=denies&selected=${DENY_ID}`);
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await selectDirectGrantTargetAndScopeWithUser(user);
+    await user.type(
+      within(dialog).getByLabelText('사유 · 필수'),
+      '새 담당자에게 권한을 부여합니다.',
+    );
+    await user.click(within(dialog).getByTestId('direct-grant-submit'));
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ selected: CREATED_GRANT_ID }),
+    );
+    await waitFor(() =>
+      expect(
+        api.requests.filter(
+          (request) => request.method === 'GET' && request.path === '/permissions/grants',
+        ),
+      ).toHaveLength(2),
+    );
+
+    const detail = await screen.findByTestId('permission-grants-detail-panel');
+    expect(within(detail).getByText('Finding 관리')).toBeInTheDocument();
+    await user.type(within(detail).getByLabelText('사유 · 필수'), '중복 부여를 취소합니다.');
+    await user.click(within(detail).getByRole('button', { name: '권한 취소' }));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.method === 'POST' &&
+            request.path === `/permissions/grants/${CREATED_GRANT_ID}/revoke`,
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('permission-grants-list')).queryByRole('button', {
+          name: /Actor One · Finding 관리/,
+        }),
+      ).not.toBeInTheDocument(),
+    );
+    await act(async () => api.releaseGrantRefetch());
+
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('selected'));
+    await waitFor(() =>
+      expect(
+        api.requests.filter(
+          (request) => request.method === 'GET' && request.path === '/permissions/grants',
+        ),
+      ).toHaveLength(3),
+    );
+    expect(
+      within(screen.getByTestId('permission-grants-list')).queryByRole('button', {
+        name: /Actor One · Finding 관리/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^권한\s*,\s*0$/ })).toBeInTheDocument();
+  });
+
+  test('explains expired-grant reissue in the visible grant form', async () => {
+    installApi({ initialGrants: [EXPIRED_MATCHING_GRANT] });
+    const user = userEvent.setup();
+    renderScreen();
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await chooseSelectOptionWithUser(user, '대상자');
+
+    expect(
+      await within(dialog).findByText(
+        '만료된 권한을 다시 부여하면 이전 기록은 유지되고 새 권한 ID가 생성됩니다.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   test('blocks forbidden self grants even when the options response does not request an envelope', async () => {
     const api = installApi({
       grantOptionsByActor: {
@@ -835,6 +1068,40 @@ describe('/admin/permissions/grants screen', () => {
     },
   );
 
+  test('closes before following a preflight deny-lift destination and preserves history', async () => {
+    installApi({
+      grantOptionsByActor: {
+        [RECIPIENT_ID]: grantOptionsFor(RECIPIENT_ID, {
+          candidates: [
+            {
+              ...DEFAULT_GRANT_CANDIDATE,
+              preflight: {
+                state: 'deny_lift',
+                deny_ids: [DENY_ID],
+                lift_route: `/admin/permissions/grants?tab=denies&selected=${DENY_ID}`,
+              },
+            },
+          ],
+        }),
+      },
+    });
+    const user = userEvent.setup();
+    const { router } = renderScreen(`/admin/permissions/grants?selected=${GRANT_ID}`);
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await selectDirectGrantTargetAndScopeWithUser(user);
+    const link = within(dialog).getByRole('link', { name: /차단 해제/ });
+    await user.click(link);
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ tab: 'denies', selected: DENY_ID }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    await act(async () => router.history.back());
+    await waitFor(() => expect(router.state.location.search).toEqual({ selected: GRANT_ID }));
+    expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull();
+  });
+
   test.each([
     {
       code: 'conflict.permission_request_duplicate',
@@ -878,6 +1145,38 @@ describe('/admin/permissions/grants screen', () => {
       ).toHaveLength(1);
     },
   );
+
+  test('closes before following a submit-time deny-lift destination', async () => {
+    installApi({
+      directGrantErrors: [
+        {
+          status: 409,
+          code: 'conflict.capability_already_denied',
+          detail: {
+            deny_ids: [DENY_ID],
+            lift_route: `/admin/permissions/grants?tab=denies&selected=${DENY_ID}`,
+          },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    const { router } = renderScreen(`/admin/permissions/grants?selected=${GRANT_ID}`);
+
+    const dialog = await openDirectGrantDialogWithUser(user);
+    await selectDirectGrantTargetAndScopeWithUser(user);
+    await user.type(within(dialog).getByLabelText('사유 · 필수'), '차단을 확인합니다.');
+    await user.click(within(dialog).getByTestId('direct-grant-submit'));
+    const link = await within(dialog).findByRole('link', { name: /차단 해제/ });
+    await user.click(link);
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ tab: 'denies', selected: DENY_ID }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull());
+    await act(async () => router.history.back());
+    await waitFor(() => expect(router.state.location.search).toEqual({ selected: GRANT_ID }));
+    expect(screen.queryByRole('dialog', { name: '권한 부여' })).toBeNull();
+  });
 
   test.each([
     { name: 'populated', initialGrants: GRANTS },
