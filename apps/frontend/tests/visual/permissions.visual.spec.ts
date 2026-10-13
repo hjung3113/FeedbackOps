@@ -43,11 +43,11 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const review = detail.getByTestId('permission-request-risk-review');
     await expect(review).toContainText('검토 시 확인할 사항');
     await expect(review).toContainText('개발자');
-    await expect(review).toContainText('현재 권한 판단');
+    await expect(review).toContainText('요청 범위의 현재 권한');
     await expect(review).toContainText('검토 권한');
     await expect(review).toContainText('요청한 권한: 워크스페이스 관리자 권한');
-    await expect(review).toContainText('요청 범위는 워크스페이스 전체입니다.');
-    await expect(review).toContainText('요청 만료일이 없습니다.');
+    await expect(review).toContainText('워크스페이스 전체 범위');
+    await expect(review).toContainText('요청 만료일 없음');
     await expect(review).toContainText('겹치는 활성 차단 2건');
     await expect(review).toContainText('차단 범위: 워크스페이스 전체');
     await expect(review).toContainText('차단 범위: Managed System (99999999)');
