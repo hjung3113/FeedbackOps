@@ -1,3 +1,4 @@
+import { adminDetailFixture } from '@/test/permission-details';
 // /admin/permissions/requests URL-state tests (issue #397).
 //
 // Tab + selection are URL state (docs/frontend/routes-and-layout.md §URL State
@@ -57,36 +58,44 @@ import { PermissionRequestsConsolePage, permissionRequestsSearchSchema } from '.
 const REQUESTS = [
   {
     id: '11111111-1111-4111-8111-111111111111',
-    requester_actor_id: 'actor-pending',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
     requested_capability: 'workspace.read',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'need access',
     status: 'pending',
     created_at: '2026-07-17T00:00:00.000Z',
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
-    requester_actor_id: 'actor-info',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
     requested_capability: 'workspace.write',
-    requested_managed_system_id: 'system-1',
+    requested_managed_system_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    revision: 7,
+    requested_expiration: null,
     reason: 'need detail',
     status: 'needs_more_info',
     created_at: '2026-07-16T00:00:00.000Z',
   },
   {
     id: '33333333-3333-4333-8333-333333333333',
-    requester_actor_id: 'actor-approved',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
     requested_capability: 'workspace.admin',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'done',
     status: 'approved',
     created_at: '2026-07-15T00:00:00.000Z',
   },
   {
     id: '44444444-4444-4444-8444-444444444444',
-    requester_actor_id: 'actor-rejected',
+    requester_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
     requested_capability: 'workspace.delete',
     requested_managed_system_id: null,
+    revision: 7,
+    requested_expiration: null,
     reason: 'no',
     status: 'rejected',
     created_at: '2026-07-14T00:00:00.000Z',
@@ -144,6 +153,10 @@ function installFetch() {
       });
     if (url === '/permissions/requests?status=all' && (!init?.method || init.method === 'GET')) {
       return response({ requests: REQUESTS, count: REQUESTS.length });
+    }
+    if (/^\/permissions\/requests\/[^/]+$/.test(url)) {
+      const row = REQUESTS.find((candidate) => url.endsWith(candidate.id));
+      if (row) return response(adminDetailFixture(row));
     }
     return response({ code: 'internal.unexpected', message: 'unmocked' }, 500);
   }) as typeof globalThis.fetch;
@@ -212,8 +225,10 @@ describe('/admin/permissions/requests URL state', () => {
         selected: APPROVED_ID,
       });
     });
-    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        'workspace.admin',
+      ),
     );
     expect(router.history.length).toBe(lengthBefore + 1);
   });
@@ -309,8 +324,10 @@ describe('/admin/permissions/requests URL state', () => {
     });
     // Replaced, not pushed: history did not grow.
     expect(router.history.length).toBe(1);
-    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
-      'workspace.admin',
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        'workspace.admin',
+      ),
     );
     expect(
       within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
@@ -358,6 +375,62 @@ describe('/admin/permissions/requests URL state', () => {
     expect(
       within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
     ).toBeInTheDocument();
+  });
+
+  test('a deferred old selected read never replaces the new URL selection or its draft', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let resolveOld: ((response: Response) => void) | undefined;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === `/permissions/requests/${PENDING_ID}`
+        ? new Promise<Response>((resolve) => {
+            resolveOld = resolve;
+          })
+        : base(input, init),
+    ) as typeof fetch;
+    const { router, queryClient } = buildHarness({ initialPath: '/admin/permissions/requests' });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('요청 상세를 불러오는 중입니다.');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^추가 정보 필요/ }));
+    await screen.findByText('need detail');
+    fireEvent.click(screen.getByRole('button', { name: '거절' }));
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: 'new selected draft' } });
+    await act(async () => {
+      resolveOld?.(response(adminDetailFixture(REQUESTS[0])));
+      await Promise.resolve();
+    });
+    expect(router.state.location.search).toEqual({
+      tab: 'needs_more_info',
+      selected: REQUESTS[1].id,
+    });
+    expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent('need detail');
+    expect(screen.getByLabelText(/^사유/)).toHaveValue('new selected draft');
+  });
+
+  test('failed selected detail retains URL selection and offers a retry without decisions', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input) === `/permissions/requests/${PENDING_ID}`
+        ? Promise.resolve(response({ code: 'internal.unexpected', message: 'failed read' }, 500))
+        : base(input, init),
+    ) as typeof fetch;
+    const { router, queryClient } = buildHarness({
+      initialPath: `/admin/permissions/requests?selected=${PENDING_ID}`,
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.');
+    expect(router.state.location.search).toEqual({ selected: PENDING_ID });
+    expect(screen.getByRole('button', { name: '다시 확인' })).toBeEnabled();
+    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
   });
 
   test('a failed list fetch does not clear a deep-linked selection', async () => {

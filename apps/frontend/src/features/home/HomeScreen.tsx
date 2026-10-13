@@ -15,7 +15,8 @@ import {
 } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
+import { OwnerPermissionRequestDialog } from './OwnerPermissionRequestDialog';
 
 import {
   type MinePermissionRequestRow,
@@ -192,9 +193,67 @@ export function HomeScreen({
 function OpenRequestsPanel({
   requests,
 }: { requests: MinePermissionRequestRow[] }): React.ReactElement {
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const rowRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const headingRef = React.useRef<HTMLHeadingElement>(null);
+  const openedIndex = React.useRef(0);
+  const [returnFocus, setReturnFocus] = React.useState<{
+    id: string;
+    removed: boolean;
+  } | null>(null);
+
+  function openRequest(id: string): void {
+    openedIndex.current = requests.findIndex((request) => request.id === id);
+    setReturnFocus(null);
+    setSelectedId(id);
+  }
+
+  // Every close path returns focus to the row that opened the dialog. A
+  // withdrawn row is gone by close time, so the row at its former index (or
+  // the heading when the list emptied) takes focus instead.
+  function closeDialog(closedId: string | null, removed = false): void {
+    if (closedId === null) {
+      setSelectedId(null);
+      return;
+    }
+    setReturnFocus({ id: closedId, removed });
+    setSelectedId(null);
+  }
+
+  React.useEffect(() => {
+    if (selectedId !== null || returnFocus === null) return;
+    setReturnFocus(null);
+    const row = returnFocus.removed ? undefined : rowRefs.current.get(returnFocus.id);
+    if (row) {
+      row.focus();
+      return;
+    }
+    // The removed row can still sit in a stale requests render; skip it before
+    // applying the captured open index.
+    const remaining = requests.filter((request) => request.id !== returnFocus.id);
+    const next = remaining[Math.min(openedIndex.current, remaining.length - 1)];
+    if (next) rowRefs.current.get(next.id)?.focus();
+    else headingRef.current?.focus();
+  }, [selectedId, returnFocus, requests]);
+
   return (
     <section>
-      <PanelHeading title={HOME_COPY.openRequests} />
+      {selectedId ? (
+        <OwnerPermissionRequestDialog
+          key={selectedId}
+          id={selectedId}
+          onClose={(options) => closeDialog(selectedId, options?.removed === true)}
+        />
+      ) : null}
+      <div className="mb-3 flex items-center justify-between">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-xs font-semibold uppercase tracking-wide text-text-muted outline-hidden"
+        >
+          {HOME_COPY.openRequests}
+        </h2>
+      </div>
       {requests.length === 0 ? (
         <div className="rounded-md border border-border-subtle bg-surface-card">
           <p className="px-4 py-5 text-sm text-text-muted">{HOME_COPY.noOpenRequests}</p>
@@ -205,17 +264,40 @@ function OpenRequestsPanel({
           data-testid="home-open-requests-list"
         >
           {requests.map((request) => (
-            <li
-              key={request.id}
-              className="border-b border-border-subtle px-4 py-3 last:border-b-0"
-            >
-              <p className="text-sm font-medium text-text-primary">
-                {getCapabilityDisplayLabel(request.requested_capability)}
-              </p>
-              <p className="text-xs text-text-muted">
-                {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]} ·{' '}
-                {formatRelativeTime(request.created_at)}
-              </p>
+            <li key={request.id} className="border-b border-border-subtle last:border-b-0">
+              <button
+                type="button"
+                data-testid={`home-open-request-${request.id}`}
+                ref={(node) => {
+                  if (node) rowRefs.current.set(request.id, node);
+                  else rowRefs.current.delete(request.id);
+                }}
+                onClick={() => openRequest(request.id)}
+                className="flex min-h-row-default w-full items-center gap-3 px-4 text-left hover:bg-surface-row-hover"
+              >
+                <span
+                  className={`h-4 w-row-accent shrink-0 rounded-pill ${
+                    request.status === 'needs_more_info' ? 'bg-accent-warn' : 'bg-accent-info'
+                  }`}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-text-primary">
+                    {getCapabilityDisplayLabel(request.requested_capability)}
+                  </span>
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
+                    {request.status === 'needs_more_info' ? (
+                      <span className="shrink-0 rounded bg-accent-warn/10 px-1.5 py-0.5 text-caption font-medium text-accent-warn">
+                        {MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]}
+                      </span>
+                    ) : (
+                      <span>{MY_PERMISSION_REQUEST_STATUS_LABELS[request.status]}</span>
+                    )}
+                    <span>·</span>
+                    <span className="truncate">{formatRelativeTime(request.created_at)}</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" />
+              </button>
             </li>
           ))}
         </ul>

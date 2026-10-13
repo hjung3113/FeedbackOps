@@ -7,11 +7,15 @@ import {
   revokePermissionBodySchema,
   revokePermissionResultSchema,
 } from '@fops/shared';
-import { permissionDecisionResultTemplates } from '../../fixtures/permissions';
+import {
+  permissionAdminDetailFixture,
+  permissionDecisionResultTemplates,
+} from '../../fixtures/permissions';
 import { json } from './shared';
 import type { MockApiHandler, MockApiPathMatch } from './shared';
 
 export function createPermissionRequestHandlers(): MockApiHandler[] {
+  let staleInjected = false;
   return [
     {
       method: 'GET',
@@ -21,6 +25,22 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
           requests: context.permissionRequests,
           count: context.permissionRequests.length,
         }),
+    },
+    {
+      method: 'GET',
+      path: /^\/permissions\/requests\/([^/]+)$/,
+      handle: async (route, context, _url, match) => {
+        const target = context.permissionRequests.find(
+          (row) => match !== true && row.id === match[1],
+        );
+        await json(
+          route,
+          target ? 200 : 404,
+          target
+            ? permissionAdminDetailFixture(target)
+            : { code: 'not_found.record', message: 'not found' },
+        );
+      },
     },
     {
       method: 'POST',
@@ -43,6 +63,22 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
         const target = context.permissionRequests.find((candidate) => candidate.id === requestId);
         if (!target)
           throw new Error(`No mutable permission request fixture for ${request.method()} ${url}`);
+        if (context.options.permissionScenario === 'stale-review' && !staleInjected) {
+          staleInjected = true;
+          target.revision += 1;
+          target.reason = '요청자가 검토 중에 사유를 수정했습니다.';
+        }
+        if (
+          (body as { expected_revision: number }).expected_revision !== target.revision ||
+          !['pending', 'needs_more_info'].includes(target.status)
+        ) {
+          await json(route, 409, {
+            code: 'conflict.stale_write',
+            message: 'stale',
+            detail: { current_revision: target.revision },
+          });
+          return;
+        }
         const template = permissionDecisionResultTemplates[action];
         target.status = template.status;
         target.revision += 1;

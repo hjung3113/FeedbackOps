@@ -35,6 +35,31 @@ test.describe('/admin/permissions/requests visual harness', () => {
     });
   }
 
+  test('stale review refetches the selected request and requires a fresh decision', async ({
+    page,
+  }) => {
+    const mock = await installMockApi(page, { permissionScenario: 'stale-review' });
+    await page.goto('/admin/permissions/requests');
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await detail.getByRole('button', { name: '거절', exact: true }).click();
+    await detail.getByLabel('사유 · 필수').fill('오래된 요청 검토');
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect(detail).toContainText('요청자가 검토 중에 사유를 수정했습니다.');
+    await expect(detail.getByLabel('사유 · 선택')).toHaveValue('');
+    await expect(detail.getByTestId('permission-decision-submit')).toBeDisabled();
+    await expectVisual(page, detail, 'permission-request-stale-fresh-review.png');
+    expect(mock.postedRequests).toHaveLength(1);
+  });
+
+  test('cancelled history retains selection with no decision controls', async ({ page }) => {
+    await installMockApi(page, { permissionScenario: 'cancelled-history' });
+    await page.goto(`/admin/permissions/requests?tab=all&selected=${PERMISSION_IDS.rejected}`);
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await expect(detail).toContainText('철회');
+    await expect(detail.getByTestId('permission-decision-section')).toHaveCount(0);
+    await expectVisual(page, detail, 'permission-request-cancelled-history.png');
+  });
+
   test('renders the populated permission review console with its first pending request selected', async ({
     page,
   }) => {

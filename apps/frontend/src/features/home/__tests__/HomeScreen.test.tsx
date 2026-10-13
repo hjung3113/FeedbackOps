@@ -1,3 +1,5 @@
+import { PermissionGate } from '@/features/admin/permissions/permission-gate';
+import { ownerDetailFixture } from '@/test/permission-details';
 import { DASHBOARD_HOP_ROUTES, dashboardSummarySchema } from '@fops/shared';
 import type { DashboardCoverageId } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,9 +11,13 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { AppSidebar } from '@/lib/layout/AppSidebar';
@@ -148,6 +154,8 @@ describe('HomeScreen route content', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    toast.success.mockReset();
+    toast.error.mockReset();
   });
 
   it('keeps zero queues in the compact strip and omits absent queue cards', async () => {
@@ -537,6 +545,10 @@ describe('HomeScreen route content', () => {
             requests: [
               {
                 id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                revision: 7,
+                requested_expiration: null,
+                updated_at: '2026-10-13T00:00:00.000Z',
+                return_route_intent: '/home',
                 requested_capability: 'workspace.admin',
                 requested_managed_system_id: null,
                 reason: 'Need admin',
@@ -550,6 +562,10 @@ describe('HomeScreen route content', () => {
               },
               {
                 id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                revision: 7,
+                requested_expiration: null,
+                updated_at: '2026-10-13T00:00:00.000Z',
+                return_route_intent: '/home',
                 requested_capability: 'finding.manage',
                 requested_managed_system_id: null,
                 reason: 'Need write',
@@ -576,11 +592,806 @@ describe('HomeScreen route content', () => {
     expect(requests.queryByText(/id:/i)).not.toBeInTheDocument();
     expect(requests.queryByText('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).not.toBeInTheDocument();
     expect(requests.queryByText('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).not.toBeInTheDocument();
-    expect(requests.getByText(/대기 중 ·/)).toBeInTheDocument();
-    expect(requests.getByText(/추가 정보 필요 ·/)).toBeInTheDocument();
-    expect(requests.getByText(/대기 중 · 3시간 전/)).toBeInTheDocument();
+    expect(requests.getByText('대기 중')).toBeInTheDocument();
+    expect(requests.getByText('추가 정보 필요')).toBeInTheDocument();
+    expect(requests.getAllByText('3시간 전')).toHaveLength(2);
     expect(requests.queryByText(/pending ·/)).not.toBeInTheDocument();
     expect(requests.queryByText(/needs_more_info ·/)).not.toBeInTheDocument();
+  });
+
+  it.each(['pending', 'needs_more_info'] as const)(
+    'updates the same %s request with latest question and explicit expiration clear',
+    async (status) => {
+      const detail = ownerDetailFixture(status);
+      const base = installFetch();
+      const writes: Array<{ url: string; body: unknown }> = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [detail] }));
+        if (url === `/permission-requests/${detail.id}` && init?.method !== 'PATCH')
+          return new Response(JSON.stringify(detail));
+        if (init?.method === 'PATCH' || url.endsWith('/submit-more-info')) {
+          writes.push({ url, body: JSON.parse(init?.body as string) });
+          return new Response(
+            JSON.stringify({
+              id: detail.id,
+              revision: 8,
+              status: 'pending',
+              updated_at: detail.updated_at,
+            }),
+          );
+        }
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      const dialog = await screen.findByTestId('owner-permission-request-dialog');
+      await within(dialog).findByDisplayValue('original reason');
+      if (status === 'needs_more_info')
+        expect(within(dialog).getByText('최신 질문입니다')).toBeInTheDocument();
+      fireEvent.change(within(dialog).getByLabelText('사유'), {
+        target: { value: '  updated reason  ' },
+      });
+      fireEvent.click(within(dialog).getByRole('radio', { name: '만료 없음' }));
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: status === 'pending' ? '수정' : '보완 제출' }),
+      );
+      await waitFor(() =>
+        expect(writes).toEqual([
+          {
+            url: `/permission-requests/${detail.id}${status === 'pending' ? '' : '/submit-more-info'}`,
+            body: { expected_revision: 7, reason: 'updated reason', requested_expiration: null },
+          },
+        ]),
+      );
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith(
+          status === 'pending' ? '요청이 수정되었습니다.' : '보완 답변이 제출되었습니다.',
+        ),
+      );
+      await waitFor(() =>
+        expect(screen.queryByTestId('owner-permission-request-dialog')).not.toBeInTheDocument(),
+      );
+    },
+  );
+
+  it.each([
+    { mode: '요청 만료일 유지', date: null, extra: {} },
+    {
+      mode: '만료일 변경',
+      date: '2099-12-30',
+      extra: { requested_expiration: '2099-12-30T23:59:59.000Z' },
+    },
+  ])(
+    'requester $mode preserves omitted fields and sends only supported scope changes',
+    async ({ mode, date, extra }) => {
+      const detail = ownerDetailFixture();
+      const base = installFetch();
+      const writes: unknown[] = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [detail] }));
+        if (init?.method === 'PATCH') {
+          writes.push(JSON.parse(init.body as string));
+          return new Response(
+            JSON.stringify({
+              id: detail.id,
+              revision: 8,
+              status: 'pending',
+              updated_at: detail.updated_at,
+            }),
+          );
+        }
+        if (url === `/permission-requests/${detail.id}`)
+          return new Response(JSON.stringify(detail));
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      await screen.findByDisplayValue('original reason');
+      fireEvent.keyDown(screen.getByRole('combobox', { name: '요청 범위' }), { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('option', { name: 'Managed System · cccccccc' }));
+      fireEvent.click(screen.getByRole('radio', { name: mode }));
+      if (date) fireEvent.change(screen.getByLabelText('새 만료일'), { target: { value: date } });
+      fireEvent.click(screen.getByRole('button', { name: '수정' }));
+      await waitFor(() =>
+        expect(writes).toEqual([
+          {
+            expected_revision: 7,
+            requested_managed_system_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            ...extra,
+          },
+        ]),
+      );
+    },
+  );
+
+  it('closing or Escape never withdraws; confirmed withdrawal removes only that row and reopening uses a fresh read', async () => {
+    let detail = ownerDetailFixture();
+    const other = {
+      ...detail,
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      requested_capability: 'voc.read',
+    };
+    let rows = [detail, other];
+    const base = installFetch();
+    const cancels: unknown[] = [];
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: rows }));
+      if (url === `/permission-requests/${detail.id}`) {
+        reads += 1;
+        return new Response(JSON.stringify(detail));
+      }
+      if (url.endsWith('/cancel')) {
+        cancels.push(JSON.parse(init?.body as string));
+        rows = [other];
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 9,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    fireEvent.click(screen.getByTestId('owner-request-close'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('owner-permission-request-dialog')).not.toBeInTheDocument(),
+    );
+    detail = { ...detail, revision: 8, reason: 'latest reason' };
+    fireEvent.click(screen.getByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('latest reason');
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByTestId('owner-permission-request-dialog')).not.toBeInTheDocument(),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(cancels).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('latest reason');
+    fireEvent.click(screen.getByRole('button', { name: '요청 철회' }));
+    const confirmation = screen.getByTestId('owner-withdraw-confirmation');
+    expect(cancels).toEqual([]);
+    fireEvent.change(within(confirmation).getByLabelText('철회 사유 · 선택'), {
+      target: { value: '  no longer needed  ' },
+    });
+    fireEvent.click(within(confirmation).getByRole('button', { name: '요청 철회' }));
+    await waitFor(() =>
+      expect(cancels).toEqual([{ expected_revision: 8, reason: 'no longer needed' }]),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Finding 관리/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /VOC 조회/ })).toBeInTheDocument();
+    expect(reads).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])(
+    'requester stale retains unsaved input/focus and requires explicit reconciliation (failed read: %s, terminal: %s)',
+    async (failedRead, terminal) => {
+      const original = ownerDetailFixture();
+      let reads = 0;
+      const writes: Array<{ body: unknown; key: string | null }> = [];
+      const base = installFetch();
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [original] }));
+        if (url === `/permission-requests/${original.id}` && init?.method === 'PATCH') {
+          writes.push({
+            body: JSON.parse(init.body as string),
+            key: new Headers(init.headers).get('Idempotency-Key'),
+          });
+          return new Response(
+            JSON.stringify({
+              code: 'conflict.stale_write',
+              message: 'stale',
+              detail: { current_revision: 8 },
+            }),
+            { status: 409 },
+          );
+        }
+        if (url === `/permission-requests/${original.id}`) {
+          reads += 1;
+          if (failedRead && reads > 1)
+            return new Response(
+              JSON.stringify({ code: 'internal.unexpected', message: 'failed read' }),
+              { status: 500 },
+            );
+          return new Response(
+            JSON.stringify(
+              reads === 1
+                ? original
+                : {
+                    ...original,
+                    revision: 8,
+                    reason: 'server edit',
+                    ...(terminal ? { status: 'approved', allowed_actions: [] } : {}),
+                  },
+            ),
+          );
+        }
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      const input = await screen.findByDisplayValue('original reason');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'unsaved input' } });
+      fireEvent.click(screen.getByRole('button', { name: '수정' }));
+      const staleNotice = await screen.findByText(
+        '요청이 변경되었습니다. 입력은 유지됩니다. 최신 내용과 비교한 뒤 다시 확인해 주세요.',
+      );
+      if (failedRead) await screen.findByText('요청을 불러오지 못했습니다.');
+      else await screen.findByText('최신 요청 사유 · server edit');
+      expect(input).toHaveValue('unsaved input');
+      // One stale message at a time: the generic conflict error line yields to
+      // the stale section, and focus moves to the stale notice.
+      expect(staleNotice).toHaveFocus();
+      expect(
+        screen.queryByText('요청 내용이 변경되었습니다. 최신 요청을 확인한 후 다시 시도해 주세요.'),
+      ).not.toBeInTheDocument();
+      if (!terminal) expect(screen.getByRole('button', { name: '수정' })).toBeDisabled();
+      else expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(writes).toHaveLength(1);
+      const reconcile = screen.getByRole('button', { name: '최신 요청 확인 · 입력 유지' });
+      if (failedRead) expect(reconcile).toBeDisabled();
+      else {
+        fireEvent.click(reconcile);
+        if (terminal) {
+          expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument();
+          expect(writes).toHaveLength(1);
+          return;
+        }
+        expect(input).toHaveFocus();
+        fireEvent.click(screen.getByRole('button', { name: '수정' }));
+        await waitFor(() => expect(writes).toHaveLength(2));
+        expect(writes[1]?.body).toEqual({ expected_revision: 8, reason: 'unsaved input' });
+        expect(writes[1]?.key).not.toBe(writes[0]?.key);
+      }
+    },
+  );
+
+  it('withdrawal refreshes a cached pending permission check so the capability can be requested again', async () => {
+    const detail = ownerDetailFixture();
+    let cancelled = false;
+    const base = installFetch();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/me/permissions/check'))
+        return new Response(
+          JSON.stringify({
+            state: cancelled ? 'request_access' : 'pending_request',
+            decision: { allow: false, reason: 'no_grant', requestable: null },
+          }),
+        );
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: cancelled ? [] : [detail] }));
+      if (url.endsWith('/cancel')) {
+        cancelled = true;
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 8,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    const { queryClient } = renderHome();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PermissionGate capability="finding.manage">
+          <span>protected</span>
+        </PermissionGate>
+      </QueryClientProvider>,
+    );
+    await screen.findByText('권한 요청 검토 중');
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    fireEvent.click(screen.getByRole('button', { name: '요청 철회' }));
+    fireEvent.click(
+      within(screen.getByTestId('owner-withdraw-confirmation')).getByRole('button', {
+        name: '요청 철회',
+      }),
+    );
+    await screen.findByRole('button', { name: '권한 요청' });
+    expect(screen.queryByText('권한 요청 검토 중')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Finding 관리/ })).not.toBeInTheDocument();
+  });
+
+  it('a validation failure preserves requester inputs and focuses the field without a second command', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH') {
+        writes += 1;
+        return new Response(JSON.stringify({ code: 'validation.failed', message: 'rejected' }), {
+          status: 422,
+        });
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    const input = await screen.findByDisplayValue('original reason');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'retained reason' } });
+    fireEvent.click(screen.getByRole('button', { name: '수정' }));
+    await screen.findByRole('alert');
+    expect(input).toHaveValue('retained reason');
+    expect(input).toHaveFocus();
+    expect(writes).toBe(1);
+  });
+
+  it.each(['pending', 'needs_more_info'] as const)(
+    'blocks a no-op %s command until the draft differs from the baseline',
+    async (status) => {
+      const detail = ownerDetailFixture(status);
+      const base = installFetch();
+      let writes = 0;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [detail] }));
+        if (init?.method === 'PATCH' || url.endsWith('/submit-more-info')) {
+          writes += 1;
+          return new Response(JSON.stringify({ id: detail.id, revision: 8, status: 'pending' }), {
+            status: 200,
+          });
+        }
+        if (url === `/permission-requests/${detail.id}`)
+          return new Response(JSON.stringify(detail));
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      await screen.findByDisplayValue('original reason');
+      const submit = screen.getByRole('button', {
+        name: status === 'pending' ? '수정' : '보완 제출',
+      });
+      expect(submit).toBeDisabled();
+      expect(screen.getByText('변경 사항이 없습니다.')).toBeInTheDocument();
+      fireEvent.click(submit);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(writes).toBe(0);
+      fireEvent.change(screen.getByLabelText('사유'), { target: { value: 'changed reason' } });
+      expect(submit).toBeEnabled();
+    },
+  );
+
+  it('client validation marks the invalid field, links the message and focuses it', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH') {
+        writes += 1;
+        return new Response(JSON.stringify({ id: detail.id, revision: 8, status: 'pending' }), {
+          status: 200,
+        });
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    const input = await screen.findByDisplayValue('original reason');
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '수정' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('사유를 입력하세요.');
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', 'owner-request-validation');
+    expect(alert).toHaveAttribute('id', 'owner-request-validation');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(0);
+  });
+
+  it.each([
+    { path: 'Escape', succeed: false },
+    { path: '닫기', succeed: false },
+    { path: 'a successful 수정', succeed: true },
+  ])('returns focus to the opening row after closing via $path', async ({ path, succeed }) => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH')
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 8,
+            status: 'pending',
+            updated_at: detail.updated_at,
+          }),
+          { status: 200 },
+        );
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const row = await screen.findByRole('button', { name: /Finding 관리/ });
+    fireEvent.click(row);
+    await screen.findByDisplayValue('original reason');
+    if (succeed) {
+      fireEvent.change(screen.getByLabelText('사유'), { target: { value: 'changed reason' } });
+      fireEvent.click(screen.getByRole('button', { name: '수정' }));
+    } else if (path === 'Escape') {
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+    } else {
+      fireEvent.click(screen.getByTestId('owner-request-close'));
+    }
+    await waitFor(() =>
+      expect(screen.queryByTestId('owner-permission-request-dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(row).toHaveFocus());
+  });
+
+  it('moves focus to the remaining row after withdrawal removes the opening row', async () => {
+    const detail = ownerDetailFixture();
+    const other = {
+      ...detail,
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      requested_capability: 'voc.read',
+    };
+    let rows = [detail, other];
+    const base = installFetch();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: rows }));
+      if (url.endsWith('/cancel')) {
+        rows = [other];
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 9,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    fireEvent.click(screen.getByRole('button', { name: '요청 철회' }));
+    fireEvent.click(
+      within(screen.getByTestId('owner-withdraw-confirmation')).getByRole('button', {
+        name: '요청 철회',
+      }),
+    );
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('요청이 철회되었습니다.'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /VOC 조회/ })).toHaveFocus());
+  });
+
+  it('withdrawal confirmation replaces the edit form and 취소 returns to it', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    expect(screen.getByLabelText('사유')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '요청 철회' }));
+    const confirmation = screen.getByTestId('owner-withdraw-confirmation');
+    const withdrawReason = within(confirmation).getByLabelText('철회 사유 · 선택');
+    expect(withdrawReason).toHaveFocus();
+    expect(screen.queryByLabelText('사유')).not.toBeInTheDocument();
+    expect(within(confirmation).getByRole('button', { name: '취소' })).toBeInTheDocument();
+    fireEvent.click(within(confirmation).getByRole('button', { name: '취소' }));
+    expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('사유')).toBeInTheDocument();
+  });
+
+  it('a stale withdrawal exits the confirmation and keeps focus through reconciliation', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url.endsWith('/cancel')) {
+        writes += 1;
+        return new Response(
+          JSON.stringify({
+            code: 'conflict.stale_write',
+            message: 'stale',
+            detail: { current_revision: 8 },
+          }),
+          { status: 409 },
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) {
+        reads += 1;
+        return new Response(
+          JSON.stringify(reads === 1 ? detail : { ...detail, revision: 8, reason: 'server edit' }),
+        );
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    await user.click(screen.getByRole('button', { name: '요청 철회' }));
+    await user.click(
+      within(screen.getByTestId('owner-withdraw-confirmation')).getByRole('button', {
+        name: '요청 철회',
+      }),
+    );
+    const staleNotice = await screen.findByText(
+      '요청이 변경되었습니다. 입력은 유지됩니다. 최신 내용과 비교한 뒤 다시 확인해 주세요.',
+    );
+    // The confirmation yields to the stale comparison instead of unmounting
+    // the fields 최신 요청 확인 needs for focus.
+    expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
+    expect(staleNotice).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: '최신 요청 확인 · 입력 유지' }));
+    expect(screen.getByLabelText('사유')).toHaveFocus();
+    // 입력 유지: the untouched draft survives reconciliation; the stale
+    // section above shows 최신 요청 사유 · server edit for comparison.
+    expect(screen.getByLabelText('사유')).toHaveValue('original reason');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(1);
+  });
+
+  it('returns focus to the scope select when a scope-only change is refused', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH') {
+        writes += 1;
+        return new Response(
+          JSON.stringify({ code: 'conflict.capability_already_granted', message: 'refused' }),
+          { status: 409 },
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    const trigger = await screen.findByRole('combobox', { name: '요청 범위' });
+    // A real pointer click focuses the trigger before the select opens; the
+    // tracked target is what the refused PATCH must return focus to.
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Managed System · cccccccc' }));
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('이미 권한이 부여되어 있습니다.');
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveFocus();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(1);
+  });
+
+  it.each(['요청 범위', '만료일'] as const)(
+    'blocks 보완 제출 when only %s changed until 사유 answers',
+    async (field) => {
+      const detail = ownerDetailFixture('needs_more_info');
+      const base = installFetch();
+      let writes = 0;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/permission-requests/mine')
+          return new Response(JSON.stringify({ requests: [detail] }));
+        if (init?.method === 'PATCH' || url.endsWith('/submit-more-info')) {
+          writes += 1;
+          return new Response(JSON.stringify({ id: detail.id, revision: 8, status: 'pending' }), {
+            status: 200,
+          });
+        }
+        if (url === `/permission-requests/${detail.id}`)
+          return new Response(JSON.stringify(detail));
+        return base(input, init);
+      }) as typeof fetch;
+      renderHome();
+      const user = userEvent.setup();
+      fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+      await screen.findByDisplayValue('original reason');
+      const submit = screen.getByRole('button', { name: '보완 제출' });
+      if (field === '요청 범위') {
+        const trigger = screen.getByRole('combobox', { name: '요청 범위' });
+        trigger.focus();
+        fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+        fireEvent.click(await screen.findByRole('option', { name: 'Managed System · cccccccc' }));
+      } else {
+        await user.click(screen.getByRole('radio', { name: '만료일 변경' }));
+        fireEvent.change(screen.getByLabelText('새 만료일'), { target: { value: '2099-12-30' } });
+      }
+      expect(submit).toBeDisabled();
+      await user.click(submit);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(writes).toBe(0);
+      await user.type(screen.getByLabelText('사유'), ' and my answer');
+      expect(submit).toBeEnabled();
+    },
+  );
+
+  it('취소 returns focus to the 요청 철회 button that opened the confirmation', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let writes = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url.endsWith('/cancel')) {
+        writes += 1;
+        return new Response(
+          JSON.stringify({
+            id: detail.id,
+            revision: 9,
+            status: 'cancelled',
+            updated_at: detail.updated_at,
+          }),
+        );
+      }
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    await user.click(screen.getByRole('button', { name: '요청 철회' }));
+    const confirmation = screen.getByTestId('owner-withdraw-confirmation');
+    expect(within(confirmation).getByLabelText('철회 사유 · 선택')).toHaveFocus();
+    await user.click(within(confirmation).getByRole('button', { name: '취소' }));
+    expect(screen.queryByTestId('owner-withdraw-confirmation')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '요청 철회' })).toHaveFocus();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(writes).toBe(0);
+  });
+
+  it('resolves Managed System names in the scope select and the stale comparison', async () => {
+    const detail = {
+      ...ownerDetailFixture(),
+      requested_managed_system_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    };
+    const base = installFetch();
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/managed-systems'))
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                name: 'Power BI',
+                archived_at: null,
+              },
+            ],
+            total: 1,
+          }),
+        );
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (url === `/permission-requests/${detail.id}` && init?.method !== 'PATCH') {
+        reads += 1;
+        return new Response(
+          JSON.stringify(reads === 1 ? detail : { ...detail, revision: 8, reason: 'server edit' }),
+        );
+      }
+      if (init?.method === 'PATCH')
+        return new Response(JSON.stringify({ code: 'conflict.stale_write', message: 'stale' }), {
+          status: 409,
+        });
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    await screen.findByDisplayValue('original reason');
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '요청 범위' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'Power BI' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /cccccccc/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Power BI' }));
+    fireEvent.change(screen.getByLabelText('사유'), { target: { value: 'dirty reason' } });
+    fireEvent.click(screen.getByRole('button', { name: '수정' }));
+    await screen.findByText(
+      '요청이 변경되었습니다. 입력은 유지됩니다. 최신 내용과 비교한 뒤 다시 확인해 주세요.',
+    );
+    expect(await screen.findByText('요청 범위 · Power BI')).toBeInTheDocument();
+  });
+
+  it('restores field focus after a delayed server error once pending clears', async () => {
+    const detail = ownerDetailFixture();
+    const base = installFetch();
+    let rejectPatch: ((reason?: unknown) => void) | undefined;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/permission-requests/mine')
+        return new Response(JSON.stringify({ requests: [detail] }));
+      if (init?.method === 'PATCH')
+        return new Promise<Response>((_resolve, reject) => {
+          rejectPatch = reject;
+        });
+      if (url === `/permission-requests/${detail.id}`) return new Response(JSON.stringify(detail));
+      return base(input, init);
+    }) as typeof fetch;
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: /Finding 관리/ }));
+    const input = await screen.findByDisplayValue('original reason');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'doomed reason' } });
+    const submit = screen.getByRole('button', { name: '수정' });
+    // A real pointer click transfers focus to the submit button; the delayed
+    // response leaves it there while the field is disabled.
+    submit.focus();
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.getByLabelText('사유')).toBeDisabled());
+    await act(async () => {
+      rejectPatch?.(new TypeError('network failure'));
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    expect(input).toBeEnabled();
+    expect(input).toHaveValue('doomed reason');
+    expect(input).toHaveFocus();
   });
 
   it('renders the empty state without the request list after the query resolves', async () => {

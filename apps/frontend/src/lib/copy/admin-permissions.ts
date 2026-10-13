@@ -1,4 +1,9 @@
 export const ADMIN_PERMISSIONS_COPY = {
+  approvalScope: '승인 범위',
+  reviewAgain: '요청이 변경되었습니다. 최신 요청을 확인하고 다시 결정하세요.',
+  detailLoading: '요청 상세를 불러오는 중입니다.',
+  detailError: '요청 상세를 불러오지 못했습니다. 다시 확인해 주세요.',
+  retry: '다시 확인',
   activeTitle: '활성 권한',
   listSubtitle: '부여된 권한과 차단을 확인하고 취소하거나 해제합니다.',
   grantsTab: '권한',

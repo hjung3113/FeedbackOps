@@ -398,18 +398,32 @@ Mobile < 768px:
 - Full page: use for complex builders such as Survey Builder.
 ```
 
-## Permission close-out composition (ADR-0066; proposed/new)
+## Permission close-out composition (ADR-0066)
 
 No new frontend route is required. `/home` own open-request rows open owner-scoped
 detail/dialog with edit, withdrawal or supplementation as permitted by the server.
 Do not send requesters to an Admin-only console. Preserve Home context on close;
-withdrawal confirmation is distinct from unsaved-form close.
+withdrawal confirmation is distinct from unsaved-form close. The feature-local
+`OwnerPermissionRequestDialog` uses owner detail and server actions/candidates.
+Reopening waits for a fresh selected read. Stale/error responses preserve inputs
+and focus; a stale request needs explicit reconciliation against latest values,
+and a failed refetch stays blocked. Edit/supplement omit unchanged fields and
+use explicit null to clear expiry; neither command changes capability/source/return intent.
 
 `/admin/permissions/requests` keeps `tab`/`selected` and Back/Forward restoration,
 but fetches selected detail rather than relying only on list rows. `cancelled`
 belongs in all-history with label `철회` and no decisions. Selection or revision
-changes clear decision/risk drafts; stale conflicts refetch and require fresh
-review. No client-side risk computation and no source/privacy bypass.
+changes clear decision/risk drafts; stale conflicts refetch, latch an inline
+review notice above the form until the Admin picks a new action, and require fresh
+review, never auto-submit. `selected-permission-request-detail.tsx` uses a per-ID selected query;
+loading/error has no decision controls and retains URL selection. Drafts, mutation
+state and intent keys start fresh on ID or revision change; an unchanged
+background refetch (same ID and revision) must preserve them. A successful review
+refreshes to a new revision, which starts the next draft fresh.
+Identical retries reuse a key; a changed reviewed body/revision uses a new key.
+Completion invalidates the submitted ID even if selection changed during the call.
+No client-side risk computation and no source/privacy bypass. Risk presentation
+and direct-grant composition below remain separate ADR-0066 implementation items.
 
 `/admin/permissions/grants` stays `ListShell` with its existing grants/denies tabs.
 Its `권한 부여` primary action opens a feature-local form; direct-grant success

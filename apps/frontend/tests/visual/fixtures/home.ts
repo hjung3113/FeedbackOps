@@ -1,4 +1,9 @@
-import { dashboardSummarySchema, taskDtoSchema, taskRequestDtoSchema } from '@fops/shared';
+import {
+  dashboardSummarySchema,
+  permissionRequestOwnerDetailSchema,
+  taskDtoSchema,
+  taskRequestDtoSchema,
+} from '@fops/shared';
 
 import type { MinePermissionRequestRow } from '@/lib/api/permissions';
 
@@ -179,9 +184,13 @@ export const homeMyWorkRequestsFixture = [
 
 export const homeOpenPermissionRequestsFixture = [
   {
-    id: 'permission-request-1',
+    id: '99999999-9999-4999-8999-999999999991',
     requested_capability: 'workspace.admin',
     requested_managed_system_id: null,
+    revision: 1,
+    requested_expiration: null,
+    updated_at: '2026-07-10T00:00:00.000Z',
+    return_route_intent: '/home',
     reason: 'Admin review is required.',
     requested_object_type: null,
     requested_object_id: null,
@@ -192,9 +201,13 @@ export const homeOpenPermissionRequestsFixture = [
     created_at: '2026-07-10T00:00:00.000Z',
   },
   {
-    id: 'permission-request-2',
+    id: '99999999-9999-4999-8999-999999999992',
     requested_capability: 'finding.manage',
     requested_managed_system_id: null,
+    revision: 1,
+    requested_expiration: '2026-12-31T23:59:59.000Z',
+    updated_at: '2026-07-11T00:00:00.000Z',
+    return_route_intent: '/findings',
     reason: 'Finding updates are needed.',
     requested_object_type: null,
     requested_object_id: null,
@@ -205,3 +218,20 @@ export const homeOpenPermissionRequestsFixture = [
     created_at: '2026-07-11T00:00:00.000Z',
   },
 ] satisfies MinePermissionRequestRow[];
+
+export const homeOwnerPermissionDetailsFixture = homeOpenPermissionRequestsFixture.map((row) =>
+  permissionRequestOwnerDetailSchema.parse({
+    ...row,
+    requester_actor_id: '22222222-2222-4222-8222-222222222222',
+    source_summary: null,
+    latest_admin_question:
+      row.status === 'needs_more_info'
+        ? {
+            note: '필요한 Finding 관리 범위와 기간을 알려 주세요.',
+            created_at: '2026-07-12T00:00:00.000Z',
+          }
+        : null,
+    editable_scope_candidates: [{ managed_system_id: null }],
+    allowed_actions: [row.status === 'pending' ? 'edit' : 'supplement', 'withdraw'],
+  }),
+);

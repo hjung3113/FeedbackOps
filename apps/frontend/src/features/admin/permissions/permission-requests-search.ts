@@ -18,7 +18,7 @@ export function validatePermissionRequestsSearch(raw: unknown) {
   return parseRouteSearch(permissionRequestsSearchSchema, raw);
 }
 
-export type ReviewTab = AdminPermissionRequestRow['status'] | 'all';
+export type ReviewTab = 'pending' | 'needs_more_info' | 'approved' | 'rejected' | 'all';
 
 export const permissionRequestTabs: Array<{ value: ReviewTab; label: string }> = [
   { value: 'pending', label: '대기 중' },
@@ -33,4 +33,7 @@ export const permissionRequestStatusLabel: Record<AdminPermissionRequestRow['sta
   needs_more_info: '추가 정보 필요',
   approved: '승인됨',
   rejected: '거절됨',
+  cancelled: '철회',
+  expired: '만료됨',
+  revoked: '취소됨',
 };

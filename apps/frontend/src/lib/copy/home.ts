@@ -132,3 +132,38 @@ export function homeSeverityLabel(
 ): string {
   return severity === 'urgent' ? '복구' : severity === 'warn' ? '후속 조치' : '검토';
 }
+
+export const HOME_PERMISSION_COPY = {
+  title: '내 권한 요청',
+  description: '요청 내용을 확인하고 수정하거나 철회합니다.',
+  loading: '요청을 불러오는 중입니다.',
+  loadError: '요청을 불러오지 못했습니다.',
+  retry: '다시 확인',
+  edit: '수정',
+  supplement: '보완 제출',
+  withdraw: '요청 철회',
+  withdrawReason: '철회 사유 · 선택',
+  withdrawConfirm: '요청을 철회할까요?',
+  withdrawDescription: '철회한 요청은 기록에 남으며 관리자 검토 대상에서 제외됩니다.',
+  close: '닫기',
+  question: '관리자의 최신 질문',
+  reason: '사유',
+  scope: '요청 범위',
+  expiration: '요청 만료일',
+  keep: '요청 만료일 유지',
+  change: '만료일 변경',
+  clear: '만료 없음',
+  newExpiration: '새 만료일',
+  stale: '요청이 변경되었습니다. 입력은 유지됩니다. 최신 내용과 비교한 뒤 다시 확인해 주세요.',
+  reconcile: '최신 요청 확인 · 입력 유지',
+  latestReason: '최신 요청 사유',
+  closedRequest: '이 요청은 이미 종료되었습니다.',
+  invalidReason: '사유를 입력하세요.',
+  invalidExpiration: '만료일은 현재 시각보다 이후여야 합니다.',
+  cancel: GLOSSARY.cancel,
+  noChanges: '변경 사항이 없습니다.',
+  questionHint: '답변은 사유에 작성한 뒤 보완 제출하세요.',
+  editSaved: '요청이 수정되었습니다.',
+  supplementSent: '보완 답변이 제출되었습니다.',
+  withdrawn: '요청이 철회되었습니다.',
+} as const;

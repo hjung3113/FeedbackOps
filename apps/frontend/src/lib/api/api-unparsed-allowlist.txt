@@ -40,7 +40,6 @@ features/voc/lib/triage-transport.ts 4
 lib/api/attachments.ts 3
 lib/api/client.ts 1
 lib/api/dashboard.ts 2
-lib/api/permissions.ts 2
 lib/api/saved-views.ts 4
 lib/api/task-requests.ts 5
 lib/api/tasks.ts 7
