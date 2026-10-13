@@ -49,9 +49,12 @@ export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, o
         });
       }
 
+      // Owner input keeps its forbidden-field slot ahead of display_id whenever the
+      // request would be rejected before the transactional owner check runs.
       const ownerInputNeedsPreflight =
         ('owner_user_id' in rawBody || 'owner_team_id' in rawBody) &&
-        !createVocRequestSchema.safeParse(rawBody).success;
+        (!createVocRequestSchema.safeParse(rawBody).success ||
+          FORBIDDEN_CREATE_FIELDS.some((f) => f !== 'severity' && f in rawBody));
 
       // 2. Other forbidden server-resolved fields → validation.unexpected_field.
       for (const f of FORBIDDEN_CREATE_FIELDS) {

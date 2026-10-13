@@ -720,6 +720,32 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     },
   );
 
+  it.each([null, '00000000-0000-4000-8000-000000000001'])(
+    'Reporter owner %j keeps the owner field ahead of a later forbidden display_id',
+    async (owner) => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-voc-owner-precedence', 'Owner MS');
+      const reporter = await loginAs(app, 'mock-user-1');
+      const response = await postVoc(
+        app,
+        reporter,
+        {
+          primary_managed_system_id: msId,
+          title: 'Intake',
+          description_rich_content: paragraphDoc('Intake'),
+          owner_user_id: owner,
+          display_id: 'VOC-9999',
+        },
+        randomUUID(),
+      );
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        code: 'validation.unexpected_field',
+        detail: { fields: [{ path: ['owner_user_id'], code: 'unexpected_field' }] },
+      });
+    },
+  );
+
   // ── 7. severity in body → dedicated code ──────────────────────────────
   it('severity in body → 422 voc.severity_not_user_settable', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
