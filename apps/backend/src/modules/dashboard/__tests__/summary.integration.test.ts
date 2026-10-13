@@ -1093,7 +1093,13 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       percent: 0,
       status: 'no_data',
     });
-    expect(coverage(body, 'released-update')).toBeUndefined();
+    // finding.manage makes released-update authorized; with no released Tasks it is no_data.
+    expect(coverage(body, 'released-update')).toMatchObject({
+      value: 0,
+      total: 0,
+      percent: 0,
+      status: 'no_data',
+    });
     expect(coverage(body, 'milestone-outcome')).toBeUndefined();
   });
 
