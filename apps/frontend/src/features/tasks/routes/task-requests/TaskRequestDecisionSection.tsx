@@ -1,5 +1,6 @@
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { TASK_REQUEST_REVIEW_DECISION_LABEL } from '@/lib/copy/task-requests';
+import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
 import type { TaskDto } from '@fops/shared';
 import { Button, InternalTaskBadge, ObjectRow, PanelSectionTitle, UnassignedBadge } from '@fops/ui';
 import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
@@ -19,6 +20,8 @@ export function TaskRequestDecisionSection({
   decision,
   conversion,
   link,
+  teamCandidates,
+  eligibleActors,
 }: {
   headingRef?: React.Ref<HTMLHeadingElement>;
   names: NameMaps;
@@ -26,6 +29,9 @@ export function TaskRequestDecisionSection({
   decision: UseTaskRequestDecisionResult;
   conversion: UseTaskRequestConversionResult;
   link: UseTaskRequestLinkResult;
+  /** Team ids already known in context, for the conversion form's team picker. */
+  teamCandidates: readonly string[];
+  eligibleActors: readonly WorkspaceActor[];
 }) {
   return (
     <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
@@ -166,7 +172,12 @@ export function TaskRequestDecisionSection({
           </div>
         )}
         {!resultingTask && conversion.open && (
-          <TaskRequestConversionForm conversion={conversion} names={names} />
+          <TaskRequestConversionForm
+            conversion={conversion}
+            names={names}
+            teamCandidates={teamCandidates}
+            eligibleActors={eligibleActors}
+          />
         )}
       </div>
     </section>

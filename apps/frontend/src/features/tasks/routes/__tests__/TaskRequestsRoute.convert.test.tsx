@@ -30,6 +30,14 @@ const api = vi.hoisted(() => ({
   convertTaskRequest: vi.fn(),
   fetchAnalyticsAreas: vi.fn(),
   useFindingDetail: vi.fn(),
+  // Options the conversion pickers read through useWorkspaceActors.
+  workspaceActors: [] as Array<{
+    id: string;
+    display_name: string;
+    email: string;
+    role_level: 'admin' | 'developer' | 'user';
+    actor_type: 'internal_member' | 'system';
+  }>,
 }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 const requestedOutcome225 = `핵심 결과 ${'x'.repeat(219)}`;
@@ -133,10 +141,11 @@ vi.mock('@/lib/api/managed-systems', () => ({
     items: [{ id: taskRequest.primary_managed_system_id, name: 'Billing Ops' }],
   })),
 }));
-// The reviewer picker's candidate read must not surface as an apiClient call
-// in this suite: it asserts submits make no API mutation at all.
+// The conversion pickers and the reviewer filter read their candidate actors
+// through useWorkspaceActors; mocking it keeps the suite's "no API mutation"
+// assertions free of candidate reads.
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
-  useWorkspaceActors: () => ({ actors: [] }),
+  useWorkspaceActors: () => ({ actors: api.workspaceActors }),
 }));
 vi.mock('@/lib/api', () => ({
   apiClient: api.apiClient,
@@ -184,6 +193,7 @@ beforeEach(() => {
     isSuccess: true,
     isError: false,
   });
+  api.workspaceActors = [];
   vi.mocked(listMilestones).mockReset();
   toast.success.mockReset();
   vi.mocked(listMilestones).mockImplementation(async (options) => ({
@@ -269,21 +279,41 @@ describe('TaskRequestsRoute conversion priority labels', () => {
     }
   });
 
-  it.each(['actor', 'team'] as const)('submits an explicit %s assignment with the other destination null', async (mode) => {
-    const id = '60000000-0000-0000-0000-000000000006';
-    vi.mocked(resolveActors).mockResolvedValueOnce({ actors: [{ id, display_name: '담당 운영자', email: 'operator@example.test' }], teams: [] });
-    api.convertTaskRequest.mockClear();
-    await openConvertForm();
-    await chooseOption('담당자', mode === 'actor' ? '사용자 지정' : '팀 지정');
-    expect(screen.getByTestId('task-request-convert-submit')).toBeDisabled();
-    if (mode === 'actor') await chooseOption('담당 사용자', '담당 운영자');
-    else fireEvent.change(screen.getByRole('textbox', { name: '팀 ID' }), { target: { value: id } });
-    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
-    await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
-    expect(api.convertTaskRequest.mock.calls[0]?.[1]).toMatchObject({
-      assignee_actor_id: mode === 'actor' ? id : null, assignee_team_id: mode === 'team' ? id : null,
-    });
-  });
+  it.each(['actor', 'team'] as const)(
+    'submits an explicit %s assignment with the other destination null',
+    async (mode) => {
+      const id = '60000000-0000-0000-0000-000000000006';
+      if (mode === 'actor') {
+        api.workspaceActors = [
+          {
+            id,
+            display_name: '담당 운영자',
+            email: 'operator@example.test',
+            role_level: 'admin',
+            actor_type: 'internal_member',
+          },
+        ];
+      } else {
+        // First call feeds the queue's known-team candidates, second the picker's name lookup.
+        const resolvedTeam = { actors: [], teams: [{ id, name: '담당팀' }] };
+        vi.mocked(resolveActors).mockResolvedValueOnce(resolvedTeam);
+        vi.mocked(resolveActors).mockResolvedValueOnce(resolvedTeam);
+      }
+      api.convertTaskRequest.mockClear();
+      await openConvertForm();
+      await chooseOption('담당자', mode === 'actor' ? '사용자 지정' : '팀 지정');
+      expect(screen.getByTestId('task-request-convert-submit')).toBeDisabled();
+      if (mode === 'actor') await chooseOption('담당 사용자', '담당 운영자');
+      else await chooseOption('팀 선택', '담당팀');
+      expect(screen.queryByRole('textbox', { name: '팀 ID' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+      await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
+      expect(api.convertTaskRequest.mock.calls[0]?.[1]).toMatchObject({
+        assignee_actor_id: mode === 'actor' ? id : null,
+        assignee_team_id: mode === 'team' ? id : null,
+      });
+    },
+  );
 
   it('submits the selected shared priority, due date, and milestone values unchanged', async () => {
     await openConvertForm();

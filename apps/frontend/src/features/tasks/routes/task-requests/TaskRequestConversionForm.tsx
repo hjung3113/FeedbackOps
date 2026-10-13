@@ -1,5 +1,7 @@
-import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
+import type { WorkspaceActor } from '@/lib/cross-system/useWorkspaceActors';
+import { shortId } from '@/lib/identity';
 import type { TaskPriority } from '@fops/shared';
 import {
   Button,
@@ -21,11 +23,19 @@ const ANALYTICS_AREA_HINT_ID = 'task-request-convert-analytics-area-hint';
 
 export function TaskRequestConversionForm({
   conversion,
+  teamCandidates,
   names,
+  eligibleActors,
 }: {
   conversion: UseTaskRequestConversionResult;
+  /** Team ids already known in context (Managed System defaults, queue teams). */
+  teamCandidates: readonly string[];
   names: NameMaps;
+  eligibleActors: readonly WorkspaceActor[];
 }) {
+  const candidateTeamIds = [
+    ...new Set([...teamCandidates, ...(conversion.teamId ? [conversion.teamId] : [])]),
+  ];
   const analyticsAreaValue =
     conversion.analyticsAreaSelection.kind === 'active'
       ? conversion.analyticsAreaSelection.id
@@ -137,7 +147,7 @@ export function TaskRequestConversionForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectActor}</SelectItem>
-              {Object.values(names.actorsById).map((actor) => (
+              {eligibleActors.map((actor) => (
                 <SelectItem key={actor.id} value={actor.id}>
                   {actor.display_name}
                 </SelectItem>
@@ -146,16 +156,22 @@ export function TaskRequestConversionForm({
           </Select>
         )}
         {conversion.responsibilityMode === 'team' && (
-          <>
-            <FieldLabel htmlFor="task-request-convert-team">
-              {RESPONSIBILITY_COPY.teamId}
-            </FieldLabel>
-            <input
-              id="task-request-convert-team"
-              value={conversion.teamId}
-              onChange={(event) => conversion.setTeamId(event.target.value)}
-            />
-          </>
+          <Select
+            value={conversion.teamId || NO_SELECTION}
+            onValueChange={(value) => conversion.setTeamId(value === NO_SELECTION ? '' : value)}
+          >
+            <SelectTrigger aria-label={RESPONSIBILITY_COPY.selectTeam}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectTeam}</SelectItem>
+              {candidateTeamIds.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {names.teamsById?.[id]?.name ?? `팀 ${shortId(id)}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
       <div className="flex flex-col gap-1">

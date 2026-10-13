@@ -4,7 +4,6 @@ import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { TASK_REQUEST_LINK_MISSING_MESSAGE } from '@/lib/copy/task-requests';
 import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
-import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import {
@@ -20,6 +19,7 @@ import { ListShell, ListToolbar, PermissionBlockedPanel, useListMotion } from '@
 import { useEffect, useState } from 'react';
 
 import { LinkTargetMissingNotice } from '../components/LinkTargetMissingNotice';
+import { useEligibleResponsibilityActors } from '../components/ResponsibilityEditor';
 import { useCloseFocusReturn } from '../hooks/useCloseFocusReturn';
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
 import { TaskRequestRow } from './task-requests/TaskRequestRow';
@@ -65,10 +65,7 @@ export function TaskRequestsRoute({
   });
   // The reviewer filter is fully controlled by the committed search state
   // (route props on history navigation), so Back/Forward always re-sync it.
-  const actorOptions = useWorkspaceActors();
-  const eligibleActors = (actorOptions.actors ?? []).filter(
-    (actor) => actor.actor_type === 'internal_member' && actor.role_level !== 'user',
-  );
+  const eligibleActors = useEligibleResponsibilityActors(true);
   const scopedSystem =
     managedSystem !== undefined && managedSystem !== 'all'
       ? queue.names.managedSystemsById[managedSystem]
@@ -283,6 +280,7 @@ export function TaskRequestsRoute({
             key={queue.selected.id}
             item={queue.selected}
             names={queue.names}
+            eligibleActors={eligibleActors}
             currentActorId={queue.currentActorId}
             currentRole={queue.currentRole}
             onClose={() => {

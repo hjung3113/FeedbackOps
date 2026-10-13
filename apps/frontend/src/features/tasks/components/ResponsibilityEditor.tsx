@@ -36,6 +36,19 @@ function useIdentityNames(actorId: string | null, teamIds: readonly string[]) {
   };
 }
 
+/**
+ * Eligible responsibility targets: authenticated internal people with an
+ * elevated role. Scoped grant checks stay server-side (ADR-0067 56-F). One
+ * source for the responsibility editor, the reviewer filter, and the Task
+ * Request conversion form.
+ */
+export function useEligibleResponsibilityActors(enabled: boolean) {
+  const actorOptions = useWorkspaceActors({ enabled });
+  return (actorOptions.actors ?? []).filter(
+    (actor) => actor.actor_type === 'internal_member' && actor.role_level !== 'user',
+  );
+}
+
 export function ResponsibilityEditor({
   actorId,
   teamId,
@@ -62,12 +75,7 @@ export function ResponsibilityEditor({
   const modeSelectRef = useRef<HTMLButtonElement | null>(null);
   const candidateTeamIds = [...new Set([...(teamCandidates ?? []), ...(teamId ? [teamId] : [])])];
   const identity = useIdentityNames(actorId, candidateTeamIds);
-  const actorOptions = useWorkspaceActors({ enabled: editing && canEdit });
-  // Eligible responsibility targets: authenticated internal people with an
-  // elevated role. Scoped grant checks stay server-side (ADR-0067 56-F).
-  const eligibleActors = (actorOptions.actors ?? []).filter(
-    (actor) => actor.actor_type === 'internal_member' && actor.role_level !== 'user',
-  );
+  const eligibleActors = useEligibleResponsibilityActors(editing && canEdit);
   const save = useMutation({
     mutationFn: () => {
       submissionKey.current ??= crypto.randomUUID();
