@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { RecoveryPresentationPatch } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -38,7 +39,8 @@ export async function captureOutcomeRecovery(
   responseId: string,
   surveyId: string,
 ): Promise<OutcomeRecoveryCapture> {
-  // Same first lock as the existing evidence-access/provenance seam.
+  await lockRecoveryCommand(tx, workspaceId);
+  // Response evidence lock follows workspace command serialization.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${responseId}::text,0))`);
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}),hashtext(${`outcome:${responseId}`}))`,
@@ -87,6 +89,7 @@ export async function captureFindingOutcomeRecovery(
   workspaceId: string,
   findingId: string,
 ) {
+  await lockRecoveryCommand(tx, workspaceId);
   await lockFindingRecoverySubjects(tx, workspaceId, [findingId]);
   const rows = (
     await tx.execute<{ response_id: string; survey_id: string }>(
@@ -136,6 +139,7 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
     input: RecoveryPresentationPatch,
   ) {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       const { subject } = await resolveSurveyResponseEvidenceAccess(
         deps,
         tx,
@@ -456,6 +460,7 @@ export async function observeOutcomeRecovery(
   surveyId: string,
   after?: string,
 ) {
+  await lockRecoveryCommand(tx, workspaceId);
   const rows = (
     await tx.execute<{
       response_id: string;

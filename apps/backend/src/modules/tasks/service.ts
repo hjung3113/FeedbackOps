@@ -18,6 +18,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { resolveTaskResponsibility } from './responsibility.js';
@@ -586,6 +587,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -756,6 +758,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -852,6 +855,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskDetailDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,

@@ -1,3 +1,4 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { RECOVERY_PERMISSION_ACTIVE_STATUSES } from './recovery-read.js';
 // Permission-request application service. Owns permission request commands and
@@ -323,6 +324,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       : undefined;
 
     return await db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       // Owner authorization precedes replay, including Admin callers.
       const owned = await tx
@@ -557,6 +559,7 @@ export function createRequestService(deps: RequestServiceDeps) {
     options: CreatePermissionRequestOptions = {},
   ): Promise<{ status: number; body: CancelPermissionRequestResult }> {
     return db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       await lockWorkspaceActor(tx, { workspaceId: actor.workspace_id, actorId: actor.actor_id });
       const owned = await tx
         .select()

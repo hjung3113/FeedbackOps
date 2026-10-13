@@ -452,6 +452,7 @@ export function createVocUpdateTriageCommands(deps: VocServiceDeps) {
       idempotencyKey,
       requestHash,
       status: 200,
+      recoveryWorkspaceId: actor.workspace_id,
       work: (tx) => updateVoc({ tx, actor, vocId, ifMatch, input }),
     });
   }

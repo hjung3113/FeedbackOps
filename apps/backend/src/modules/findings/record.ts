@@ -6,6 +6,7 @@ import {
   type PatchFindingRequest,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { HttpError } from '../../lib/errors.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
@@ -173,6 +174,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const { actor, findingId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
@@ -360,6 +362,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const { actor, findingId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,

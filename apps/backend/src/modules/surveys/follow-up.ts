@@ -1,3 +1,4 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { captureOutcomeRecovery, finishOutcomeRecovery } from './recovery-presentation.js';
 // Outcome follow-up decisions (ADR-0055, issue #510 part B). The surveys
 // module owns the mark-no-follow-up / reopen-follow-up commands; the
@@ -67,8 +68,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
   }): Promise<{ status: number; body: OutcomeFollowUpMarkedResult }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
     const reason = input.reason.trim();
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -160,8 +162,8 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             }),
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   async function reopenFollowUp(args: {
@@ -173,8 +175,9 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
   }): Promise<{ status: number; body: OutcomeFollowUpReopenedResult }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
     const reason = input.reason.trim();
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -265,8 +268,8 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             }),
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   // #510 part C read model (ADR-0055). Mirrors the results read path

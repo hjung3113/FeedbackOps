@@ -11,6 +11,7 @@ import type {
   TaskReporterSummary,
 } from '@fops/shared';
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 
 import type { Db } from '../../db/client.js';
@@ -613,6 +614,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
 
     const persist = async (tx: Tx) => {
+      if (!args.tx) await lockRecoveryCommand(tx, actor.workspace_id);
       const recovery = args.tx
         ? undefined
         : await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [source, target]);
@@ -880,6 +882,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     }
 
     const detached = await deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
         { type: link.source_type, id: link.source_id },
         { type: link.target_type, id: link.target_id },

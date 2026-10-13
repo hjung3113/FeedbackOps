@@ -164,11 +164,20 @@ VOC, Findings, Tasks, Permissions and Surveys, Entity Linking's `readRecoveryDep
 and VOC Clusters' `readClusterRecoveryMembers`. It never imports a source command factory
 through a runtime barrel or enforces the acting Actor's disclosure scope as transition truth.
 
-The shared lock order for recorder/status/link/approved-excerpt attachment paths is Finding
-rows (sorted UUIDs), then bound response advisory locks (sorted UUIDs), then recovery identities.
-Findings' leaf `lockFindingRecoverySubjects` owns the first step; Survey's
-`readSurveyRecoveryDependencies` applies it before locking bound responses and returns only
-Survey IDs. Capture remains before domain mutation and finish after the last link write;
+Recovery writers first acquire the transaction-scoped workspace advisory lock via
+`db/recovery-command-lock.ts` (`hashtextextended('recovery-command:' || workspaceId, 0)`),
+before idempotency, owner row, response or recovery identity locks. This includes source/status
+commands, ordinary link create/detach, Task Request creation, Cluster conversions/link/unlink,
+private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation.
+Under that serialization, owner Finding locks precede expanded Finding rows (sorted UUIDs),
+then bound response advisory locks (sorted UUIDs), then recovery identities. Response-addressed
+Survey commands can lock their response before inserting a new Finding; they hold the same
+workspace lock first. Findings' leaf `lockFindingRecoverySubjects` owns expanded row locking;
+Survey's `readSurveyRecoveryDependencies` applies it before locking bound responses and returns
+only Survey IDs. Captures may reacquire the workspace lock inside the same transaction.
+Read paths never acquire it. Recovery writers in one workspace serialize until commit/rollback,
+a deliberate throughput tradeoff for the single-workspace MVP (~5k VOCs/5k Tasks over five years).
+Capture remains before domain mutation and finish after the last link write;
 response IDs stay inside Survey.
 `surveys/recovery-presentation.ts` owns the private response recorder/reconciler and personal
 queue/presentation/history adapter. Findings' response-derived creation and status commands

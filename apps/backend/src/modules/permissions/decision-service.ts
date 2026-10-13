@@ -1,3 +1,4 @@
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // Permission-request decision application service. Decisions mint the actual
 // grant/deny rows consumed by check-service; they never execute the originally
@@ -85,6 +86,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
     });
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       // Gate before idempotency replay as well: a cached response never
       // bypasses the authoritative workspace.admin capability check.
       const admin = await deps.checkService.checkCapability(

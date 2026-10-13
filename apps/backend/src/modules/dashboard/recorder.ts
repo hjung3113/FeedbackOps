@@ -1,5 +1,6 @@
 import type { RecoveryCategory } from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { recoveryIdentity } from './identity.js';
 
@@ -50,6 +51,7 @@ export async function lockRecoveryIdentity(tx: Tx, workspaceId: string, token: s
 }
 export function createRecoveryRecorder(readers: RecoveryTruthReaders): RecoveryRecorder {
   async function capture(tx: Tx, workspaceId: string, subjects: RecoverySubject[]) {
+    await lockRecoveryCommand(tx, workspaceId);
     const affected = await readers.dependencies(tx, workspaceId, subjects);
     const expanded = [
       ...new Map([...subjects, ...affected].map((s) => [`${s.type}:${s.id}`, s])).values(),
@@ -126,6 +128,7 @@ export function createRecoveryRecorder(readers: RecoveryTruthReaders): RecoveryR
     }
   }
   async function discover(tx: Tx, workspaceId: string, subjects: RecoverySubject[]) {
+    await lockRecoveryCommand(tx, workspaceId);
     // Discovery walks every owner source; dependency expansion belongs to atomic commands.
     const initial = await readers.read(tx, workspaceId, subjects);
     for (const token of [

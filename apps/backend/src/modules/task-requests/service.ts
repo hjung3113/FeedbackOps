@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ListTaskRequestsResponse } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { resolveTaskResponsibility } from '../tasks/responsibility.js';
@@ -382,6 +383,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -440,6 +442,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -505,6 +508,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: TaskRequestDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,

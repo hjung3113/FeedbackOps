@@ -6,6 +6,7 @@ import {
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
@@ -58,6 +59,7 @@ export function createVocClusterConversion(
     requestHash: string;
   }) {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -257,6 +259,7 @@ export function createVocClusterConversion(
     body: NonNullable<VocClusterDto['linked_findings']>[number];
   }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,
@@ -418,6 +421,7 @@ export function createVocClusterConversion(
     requestHash: string;
   }): Promise<{ status: number; body: Record<string, never> }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         args.actor.actor_id,

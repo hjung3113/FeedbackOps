@@ -574,6 +574,7 @@ export function createConversationService(deps: {
       actorId: actor.actor_id,
       idempotencyKey,
       requestHash,
+      recoveryWorkspaceId: actor.workspace_id,
       work: (tx) => postPublicUpdate({ tx, actor, vocId, input }),
     });
   }

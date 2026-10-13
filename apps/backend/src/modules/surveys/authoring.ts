@@ -5,6 +5,7 @@ import {
   surveyCopySourceQuestionSchema,
 } from '@fops/shared';
 import { sql } from 'drizzle-orm';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
@@ -926,8 +927,9 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
     idempotencyKey: string;
     requestHash: string;
   }) {
-    return deps.db.transaction((tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, a.actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         a.actor.actor_id,
         a.idempotencyKey,
@@ -972,8 +974,8 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             await deps.recoveryRecorder?.finish(tx, recovery, a.actor.actor_id, 'transitionSurvey');
           return { status: 200, body: dto(updated) };
         },
-      ),
-    );
+      );
+    });
   }
   async function getSurvey(actor: SurveysActor, id: string) {
     const s = await findSurvey(deps.db, actor.workspace_id, id);

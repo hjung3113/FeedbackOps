@@ -4,6 +4,7 @@ import {
   type FindingDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import {
@@ -36,6 +37,7 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
     const { actor, vocId, input, idempotencyKey, requestHash } = args;
 
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
       return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
@@ -202,8 +204,9 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
     requestHash: string;
   }): Promise<{ status: number; body: FindingDto }> {
     const { actor, responseId, input, idempotencyKey, requestHash } = args;
-    return deps.db.transaction(async (tx) =>
-      deps.idempotencyService.runIdempotent(
+    return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, actor.workspace_id);
+      return deps.idempotencyService.runIdempotent(
         tx,
         actor.actor_id,
         idempotencyKey,
@@ -399,8 +402,8 @@ export function createFindingCreation(deps: FindingsServiceDeps) {
             body: { ...owner, ...toDto({ ...finding, evidence_count: safeExcerpts.length }) },
           };
         },
-      ),
-    );
+      );
+    });
   }
 
   return {

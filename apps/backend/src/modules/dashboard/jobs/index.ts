@@ -1,5 +1,6 @@
 import type { PgBoss } from 'pg-boss';
 import type { Db } from '../../../db/client.js';
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import { JOB_WORK_OPTIONS, type JobLog, withJobLogging } from '../../../lib/job-log.js';
 import { observeOutcomeRecovery } from '../../surveys/recovery-presentation.js';
 import { createOwnerRecoveryRecorder, readRecoveryDiscoveryPage } from '../truth.js';
@@ -13,6 +14,7 @@ export type RecoveryReconcilePayload = {
 };
 export async function reconcileRecoveryPage(deps: { db: Db }, payload: RecoveryReconcilePayload) {
   return deps.db.transaction(async (tx) => {
+    await lockRecoveryCommand(tx, payload.workspace_id);
     const page = await readRecoveryDiscoveryPage(tx, payload.workspace_id, payload.after);
     await createOwnerRecoveryRecorder().discover(tx, payload.workspace_id, page.subjects);
     return {

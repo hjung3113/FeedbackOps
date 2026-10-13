@@ -1,6 +1,7 @@
 import { type DashboardSummary, recoveryDetailSchema, recoveryHistorySchema, recoveryListSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { waitForRecoveryCommandWaiters } from '../../../test-support/recovery-command-barrier.js';
 import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { recoveryIdentity } from '../identity.js';
 import { reconcileRecoveryPage } from '../jobs/index.js';
@@ -1148,6 +1149,95 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(replay.json()).toEqual(first.json());
     expect((await history()).items).toEqual(repaired.items);
   });
+
+  it.each(['patch', 'evidence-link'] as const)(
+    'serializes two Findings sharing a VOC: PATCH vs %s without a lock cycle',
+    async (secondCommand) => {
+      const seed = await createDashboardScope();
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        seed.msA,
+        reporterActorId,
+        'Shared Finding evidence',
+      );
+      const findings = [];
+      for (const title of ['First shared Finding', 'Second shared Finding']) {
+        const finding = await insertFindingRow(migrateHandle, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: seed.msA,
+          sourceId: voc.id,
+          createdBy: adminActorId,
+          title,
+        });
+        const link = await app.inject({
+          method: 'POST',
+          url: `/findings/${finding.id}/link-evidence`,
+          headers: headers(seed.devCookie),
+          payload: { source_type: 'voc', source_id: voc.id },
+        });
+        expect(link.statusCode).toBe(201);
+        const read = await app.inject({
+          method: 'GET',
+          url: `/findings/${finding.id}`,
+          headers: headers(seed.devCookie),
+        });
+        expect(read.statusCode).toBe(200);
+        findings.push(read.json<{ id: string; updated_at: string }>());
+      }
+      const [firstFinding, secondFinding] = findings;
+      if (!firstFinding || !secondFinding) throw new Error('missing shared Finding fixtures');
+      const patch = (finding: { id: string; updated_at: string }) =>
+        app
+          .inject({
+            method: 'PATCH',
+            url: `/findings/${finding.id}`,
+            headers: {
+              ...headers(seed.devCookie),
+              'idempotency-key': randomUUID(),
+              'if-match': finding.updated_at,
+            },
+            payload: { status: 'active' },
+          })
+          .then((r) => r);
+      const blocker = await dbHandle.pool.connect();
+      let first: ReturnType<typeof patch> | undefined;
+      let second: ReturnType<typeof patch> | undefined;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('recovery-command:' || $1,0))",
+          [WORKSPACE_ID],
+        );
+        first = patch(firstFinding);
+        await waitForRecoveryCommandWaiters(migrateHandle, WORKSPACE_ID, 1, first);
+        second =
+          secondCommand === 'patch'
+            ? patch(secondFinding)
+            : app
+                .inject({
+                  method: 'POST',
+                  url: `/findings/${secondFinding.id}/link-evidence`,
+                  headers: headers(seed.devCookie),
+                  payload: { source_type: 'voc', source_id: voc.id },
+                })
+                .then((r) => r);
+        // Both are live and queued. Moving serialization after own-Finding locks
+        // makes each hold a different row here and deadlock when released.
+        await waitForRecoveryCommandWaiters(migrateHandle, WORKSPACE_ID, 2, second);
+        await blocker.query('COMMIT');
+        const [a, b] = await Promise.all([first, second]);
+        expect(a.body).not.toContain('40P01');
+        expect(b.body).not.toContain('40P01');
+        expect(a.statusCode).toBe(200);
+        expect(b.statusCode).toBe(secondCommand === 'patch' ? 200 : 201);
+      } finally {
+        await blocker.query('ROLLBACK');
+        blocker.release();
+        await Promise.allSettled([first, second].filter((p) => p !== undefined));
+      }
+    },
+  );
 
   it('records shipped evidence repair then detach reopens and clears prior hiding without a scan', async () => {
     const seed = await createDashboardScope();
