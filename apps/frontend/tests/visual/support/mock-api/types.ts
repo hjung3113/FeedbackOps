@@ -61,6 +61,14 @@ export interface InstallOptions {
   vocCreate?: boolean;
   /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
   findingDetail?: boolean;
+  findingSurveyEvidence?:
+    | 'visible'
+    | 'none'
+    | 'suppressed'
+    | 'empty'
+    | 'denied'
+    | 'retry'
+    | 'revoked';
   /**
    * #514 Milestone list surface: `true` serves the prototype-mirrored list,
    * `'empty'` serves an empty list; status-query params filter the fixture.

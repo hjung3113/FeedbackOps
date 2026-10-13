@@ -1,8 +1,12 @@
-import { type ApiError, apiClient } from '@/lib/api';
-import type {
-  AddEvidenceHighlightRequest,
-  EvidenceHighlightDto,
-  LinkEvidenceRequest,
+import { type ApiError, apiClient, apiRequest } from '@/lib/api';
+import { EVIDENCE_INVENTORY_QUERY_KEY } from '@/lib/query/evidence-inventory-key';
+import {
+  type AddEvidenceHighlightRequest,
+  type AttachSurveyEvidenceRequest,
+  type EvidenceHighlightDto,
+  type LinkEvidenceRequest,
+  attachSurveyEvidenceRequestSchema,
+  attachSurveyEvidenceResponseSchema,
 } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -75,5 +79,37 @@ export function useLinkEvidenceMutation(
       onSuccess?.(data);
     },
     ...(onError ? { onError } : {}),
+  });
+}
+
+// Metadata-only attachment; the authorized highlight query supplies content.
+export function useAttachSurveyEvidenceMutation(findingId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      body,
+      idempotencyKey,
+    }: { body: AttachSurveyEvidenceRequest; idempotencyKey: string }) =>
+      (
+        await apiRequest(
+          'POST',
+          `/findings/${findingId}/survey-evidence`,
+          attachSurveyEvidenceResponseSchema,
+          {
+            body: attachSurveyEvidenceRequestSchema.parse(body),
+            idempotencyKey,
+          },
+        )
+      ).data,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['finding', findingId], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['findings'], refetchType: 'all' }),
+        queryClient.invalidateQueries({
+          queryKey: EVIDENCE_INVENTORY_QUERY_KEY,
+          refetchType: 'all',
+        }),
+      ]);
+    },
   });
 }

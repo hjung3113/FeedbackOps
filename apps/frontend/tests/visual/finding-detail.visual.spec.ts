@@ -1,10 +1,13 @@
 import type { Page } from '@playwright/test';
+import { SURVEY_EVIDENCE_PICKER_COPY as SURVEY_COPY } from '../../src/lib/copy/survey-evidence-picker';
 
 import { expect, test } from './support/visual-test';
 
 import {
   EVIDENCE_QUOTES,
   FINDING_DETAIL_IDS,
+  SURVEY_EVIDENCE_IDS,
+  SURVEY_EVIDENCE_QUOTE,
   findingSourceVoc,
   linkedTask,
   populatedFinding,
@@ -178,4 +181,53 @@ test.describe('/findings/$findingId visual harness', () => {
 
     await expectVisual(page, page.locator('[data-shell="list"]'), 'findings-list-selected.png');
   });
+});
+
+// Desktop 1440×960 is set by playwright.config.ts; preserve the four captures above.
+test.describe('Finding Add Evidence approved Survey picker', () => {
+  for (const state of ['visible', 'suppressed', 'retry'] as const) {
+    test(`renders ${state} Survey attachment state`, async ({ page }) => {
+      const mock = await installMockApi(page, {
+        findingDetail: true,
+        findingSurveyEvidence: state,
+      });
+      await page.goto(`/findings/${FINDING_DETAIL_IDS.finding}`);
+      await expectBackgroundSettled(page);
+      await page.getByTestId('add-evidence-btn').click();
+      const modal = page.getByTestId('add-evidence-modal');
+      await modal.getByTestId('evidence-source-type-select').click();
+      await page.getByRole('option', { name: 'Survey', exact: true }).click();
+      await modal.getByRole('combobox', { name: SURVEY_COPY.survey }).click();
+      await page.getByRole('option', { name: /SRV-42/ }).click();
+      await expect(modal.getByTestId('evidence-source-id-input')).toHaveCount(0);
+      await expect(modal.getByTestId('evidence-quote-input')).toHaveCount(0);
+      if (state === 'suppressed') {
+        await expect(modal.getByText(SURVEY_COPY.below_threshold)).toBeVisible();
+        await expect(modal.getByTestId('add-evidence-submit')).toBeDisabled();
+      } else {
+        await modal.getByRole('radio', { name: /로그인 과정/ }).click();
+        await expect(modal.getByTestId('add-evidence-submit')).toBeEnabled();
+        if (state === 'retry') {
+          await modal.getByTestId('add-evidence-submit').click();
+          await expect(modal.getByText(SURVEY_COPY.attachError)).toBeVisible();
+          await expect(modal.getByRole('radio', { name: /로그인 과정/ })).toBeChecked();
+        }
+      }
+      await expectVisual(page, modal, `finding-add-evidence-survey-${state}.png`);
+      if (state !== 'suppressed') {
+        await modal.getByTestId('add-evidence-submit').click();
+        await expect(modal).toHaveCount(0);
+        await expect(page.getByText(SURVEY_EVIDENCE_QUOTE)).toBeVisible();
+        expect(mock.postedBodies.at(-1)).toEqual({
+          approved_excerpt_id: SURVEY_EVIDENCE_IDS.excerpt,
+          sentiment: null,
+          importance: null,
+        });
+        if (state === 'retry')
+          expect(mock.postedRequests[1]?.idempotencyKey).toBe(
+            mock.postedRequests[0]?.idempotencyKey,
+          );
+      }
+    });
+  }
 });
