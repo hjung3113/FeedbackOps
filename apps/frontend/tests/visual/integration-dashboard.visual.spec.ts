@@ -17,10 +17,16 @@ test.describe('/integration action dashboard visual harness', () => {
     await expect(page.getByRole('heading', { level: 1, name: '연동 액션 대시보드' })).toBeVisible();
     await expect(page.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     await expect(page.getByTestId('integration-managed-system-table')).toBeVisible();
+    await expect(page.getByTestId('integration-surface-evidence')).toHaveAttribute(
+      'href',
+      '/integration/evidence',
+    );
+    await expect(page.getByTestId('sidebar-nav-integration-evidence')).toBeVisible();
     await expect(page.getByTestId('sidebar-nav-integration-dashboard')).toHaveAttribute(
       'aria-current',
       'page',
     );
+    await expect(page.getByTestId('rail-admin')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), integrationDashboardVisualSnapshot);
   });
 
@@ -31,6 +37,7 @@ test.describe('/integration action dashboard visual harness', () => {
     await page.goto('/integration');
     await expect(page.getByText('이 범위에서 표시할 큐가 없습니다.')).toBeVisible();
     await expect(page.getByTestId('integration-surface-coverage-stat')).toHaveCount(0);
+    await expect(page.getByTestId('rail-admin')).toBeVisible();
     await expectVisual(
       page,
       page.locator('[data-app-frame]'),
@@ -46,6 +53,7 @@ test.describe('/integration action dashboard visual harness', () => {
     await expect(
       page.getByTestId('integration-dashboard-blocked').locator('[data-state="denied"]'),
     ).toBeVisible();
+    await expect(page.getByTestId('rail-admin')).toBeVisible();
     await expectVisual(
       page,
       page.locator('[data-app-frame]'),

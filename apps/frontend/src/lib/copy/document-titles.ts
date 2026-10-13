@@ -1,4 +1,5 @@
 import { ADMIN_PERMISSIONS_COPY } from './admin-permissions';
+import { EVIDENCE_COPY } from './evidence';
 import { GLOSSARY } from './glossary';
 import { ROUTER_FALLBACK_COPY } from './router';
 
@@ -25,6 +26,7 @@ export const DOCUMENT_TITLE_COPY = {
     dashboard: '연동 액션 대시보드',
     coverage: GLOSSARY.coverage,
     links: GLOSSARY.entityLinks,
+    evidence: EVIDENCE_COPY.title,
   },
   surveys: {
     list: 'Surveys',
@@ -69,6 +71,7 @@ export function getDocumentScreenTitle(pathname: string, search: RouteSearch): s
   if (pathname === '/integration') return DOCUMENT_TITLE_COPY.integration.dashboard;
   if (pathname === '/integration/coverage') return DOCUMENT_TITLE_COPY.integration.coverage;
   if (pathname === '/integration/links') return DOCUMENT_TITLE_COPY.integration.links;
+  if (pathname === '/integration/evidence') return DOCUMENT_TITLE_COPY.integration.evidence;
   if (pathname === '/surveys') return DOCUMENT_TITLE_COPY.surveys.list;
   if (/^\/surveys\/[^/]+\/results$/.test(pathname)) return DOCUMENT_TITLE_COPY.surveys.results;
   if (/^\/surveys\/[^/]+\/follow-up$/.test(pathname)) {

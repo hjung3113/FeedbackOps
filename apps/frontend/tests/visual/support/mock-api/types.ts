@@ -1,4 +1,5 @@
 import type { AdminSettingsVisualScenario } from '../../fixtures/admin-settings';
+import type { EvidenceVisualScenario } from '../../fixtures/evidence';
 import type { HomeVisualScenario } from '../../fixtures/home';
 import type { populatedInboxNotifications } from '../../fixtures/notifications';
 import type {
@@ -22,6 +23,7 @@ import type {
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
+  evidence?: EvidenceVisualScenario;
   permissionScenario?: PermissionScenarioName;
   /** Serves a grant-options candidate for the direct-grant form visual state. */
   permissionGrantsScenario?: PermissionGrantsScenarioName;

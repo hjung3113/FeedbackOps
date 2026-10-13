@@ -262,7 +262,10 @@ describe('integration action dashboard route', () => {
         'VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다.',
       ),
     ).toBeVisible();
-    expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
+    expect(surfaces.getByRole('link', { name: /Evidence/ })).toHaveAttribute(
+      'href',
+      '/integration/evidence',
+    );
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
     expect(surfaces.getByText('평균 커버리지')).toBeVisible();
     expect(surfaces.queryByText('active links')).toBeNull();
@@ -577,4 +580,12 @@ describe('integration action dashboard route', () => {
     expect(noDataStat.className).toContain('text-text-muted');
     expect(noDataStat.className).not.toContain('text-accent-danger');
   });
+});
+
+test('Evidence entry preserves Managed System without inventing a count (#1107)', async () => {
+  await renderDashboard(`/integration?managedSystem=${MS_A}`);
+  const card = await screen.findByTestId('integration-surface-evidence');
+  expect(card.getAttribute('href')).toBe(`/integration/evidence?managedSystem=${MS_A}`);
+  expect(within(card).getByText('Finding에 저장된 Evidence를 찾습니다.')).toBeVisible();
+  expect(screen.queryByTestId('integration-surface-evidence-stat')).toBeNull();
 });

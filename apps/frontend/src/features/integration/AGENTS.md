@@ -15,7 +15,7 @@ Code ownership and URL mount are not the same thing here:
 - Owns both code and URL for Links, at `/integration/links`.
 - Owns both code and URL for Coverage, at `/integration/coverage` (route file `apps/frontend/src/routes/_authed/integration/coverage.tsx`, screen `features/integration/routes/CoverageRoute.tsx`).
 - Owns the Integration Action Dashboard at `/integration` (route file `apps/frontend/src/routes/_authed/integration/index.tsx`, screen `features/integration/routes/IntegrationDashboardRoute.tsx`).
-- `/integration/evidence` is accepted, implementation pending (ADR-0065); no route is registered yet.
+- Owns Evidence at `/integration/evidence` (ADR-0065), a read-only ListShell with independent selected-detail reads.
 - Findings is mounted at top-level `/findings` and owned by `apps/frontend/src/features/findings/`
   (route files live in `apps/frontend/src/routes/_authed/findings/`). The direct
   `/findings/$findingId` URL redirects to `/findings?selected=:findingId`.
@@ -37,6 +37,9 @@ Code ownership and URL mount are not the same thing here:
 - `apps/frontend/src/routes/_authed/integration/index.tsx` — Integration dashboard route.
 - `apps/frontend/src/routes/_authed/integration/coverage.tsx` — Coverage route and URL search validation.
 - `apps/frontend/src/routes/_authed/integration/links.tsx` — Links route and URL filters.
+- `apps/frontend/src/routes/_authed/integration/evidence.tsx` — strict Evidence URL search validation.
+- `apps/frontend/src/features/integration/routes/EvidenceRoute.tsx` — Evidence inventory and safe detail reconciliation.
+- `apps/frontend/src/features/integration/api/evidence-inventory.ts` — parsed read clients and `evidenceInventoryQueryKey()`, which returns the shared `EVIDENCE_INVENTORY_QUERY_KEY` from `lib/query/evidence-inventory-key.ts` that Finding attachments (54-5) invalidate.
 - `apps/frontend/src/features/integration/routes/IntegrationDashboardRoute.tsx` — Integration action dashboard.
 - `apps/frontend/src/features/integration/routes/CoverageRoute.tsx` — coverage columns, labels, and coverage states.
 - `apps/frontend/src/features/integration/routes/LinksRoute.tsx` — Links list filters, tabs, and selected state.
@@ -71,10 +74,10 @@ Code ownership and URL mount are not the same thing here:
 - Operational positive counts link to exact typed source filters; repairs remain on owning source routes.
 - Add the secondary Area-tab link to the existing Integration Coverage card; no new Admin/rail surface.
 
-## Evidence inventory (ADR-0064/0065; accepted, implementation pending)
+## Evidence inventory (ADR-0064/0065; implemented by #1107)
 
-Proposed/new `/integration/evidence` is a read-only ListShell inventory of stored
-highlights across readable Findings. Findings owns proposed/new
+`/integration/evidence` is a read-only ListShell inventory of stored
+highlights across readable Findings. Findings owns
 `GET /evidence-highlights` and `GET /evidence-highlights/:id`; Survey owns the
 ADR-0064 safe projection. Integration renders only authorized DTOs, never raw
 links/private bindings/audit JSON or response URLs. See
@@ -86,5 +89,5 @@ and Back preserves Evidence context. Editing/attachment/execution remains in
 Finding detail, using #816's candidate/attach APIs. No standalone model, Unlinked
 tab or coverage KPI. Reuse Korean chrome/source labels and shipped shell density;
 prototype is a reference under ADR-0060. Verify desktop 1440, keyboard/focus,
-withheld/denied/empty/error and later-page selected detail during implementation.
+withheld/denied/empty/error and later-page selected detail before delivery by the conductor.
 Preserve ordinary Links/Coverage, VOC source/reporter rules and authored notes.

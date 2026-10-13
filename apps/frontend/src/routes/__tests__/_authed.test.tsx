@@ -289,3 +289,17 @@ describe('_authed sidebar current destination', () => {
     },
   );
 });
+
+describe('Evidence sidebar entry (#1107)', () => {
+  it('keeps Evidence reachable and activates it without activating the dashboard', () => {
+    const entry = NAV_TREE.integration.find((item) => item.id === 'integration-evidence');
+    expect(entry).toBeDefined();
+    if (!entry) throw new Error('Missing Evidence entry');
+    expect(entry.href).toBe('/integration/evidence');
+    expect(entry.label).toBe('Evidence');
+    expect(isSidebarEntryActive(entry, '/integration/evidence', '')).toBe(true);
+    const dashboard = NAV_TREE.integration[0];
+    if (!dashboard) throw new Error('Missing dashboard');
+    expect(isSidebarEntryActive(dashboard, '/integration/evidence', '')).toBe(false);
+  });
+});

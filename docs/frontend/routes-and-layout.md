@@ -33,6 +33,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /integration?managedSystem=:managedSystemId|all
 /findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
+/integration/evidence?managedSystem=:managedSystemId|all&source=voc|survey_response|note&q=:query&selected=:highlightId&cursor=:opaqueCursor
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all&status=active|stale|detached|revoked&type=related_to
 /admin/managed-systems
@@ -53,6 +54,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 | `/voc-clusters/:clusterId` | — | No search state; the cluster id is the path param and the cluster list stays as the list context |
 | `/tasks` | `view`, `param`, `managedSystem`, `public_update` | `view` for the backlog list; `param` when none is selected; `managedSystem` for the caller's effective scope union (`all` is also accepted); `public_update` unless filtering `view=board` to Tasks missing a public update (`missing` is the only value) |
 | `/integration` | `managedSystem` | `managedSystem` for the caller's effective scope union (`all` is also accepted) |
+| `/integration/evidence` | `managedSystem`, `source`, `q`, `selected`, `cursor` | omit unfiltered defaults; selection uses a local highlight UUID; cursor is opaque |
 | `/integration/links` | `managedSystem`, `status`, `type` | `managedSystem` for the caller's effective scope union; `status` and `type` when unfiltered |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
 | `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
@@ -63,7 +65,7 @@ Route naming rules:
 ```text
 - Home is the user-facing navigation label for `/home`; `/` is an entry-only redirect.
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
-- The Evidence route `/integration/evidence` is accepted, implementation pending (ADR-0065). Coverage and Links are the shipped routes under `/integration/*`.
+- Evidence, Coverage, and Links are shipped under `/integration/*` (ADR-0065).
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas, Permission Requests, and active grants/denies are Admin routes,
   not top-level work routes.
@@ -519,27 +521,38 @@ semantic preview alongside its recent-peer panel; candidate UUID navigation
 retains the unsaved-change blocker and never creates a relationship.
 `/admin/settings` owns the default-off suggestion-generation opt-in.
 
-## Evidence inventory (ADR-0065; accepted, implementation pending)
+## Evidence inventory (ADR-0065; implemented by #1107)
 
-Proposed/new `/integration/evidence` uses ListShell/ListToolbar, compact rows and
-RightDetailPanel. It is absent from the shipped route/search inventory above.
-Strict proposed/new URL keys: `managedSystem` (UUID or `all`), `source`
+`/integration/evidence` uses ListShell/ListToolbar, compact rows and the existing
+ListShell detail-panel slot. Strict URL keys: `managedSystem` (UUID or `all`), `source`
 (`voc|survey_response|note`), `q` (trimmed max 200 characters), `selected` (local
 highlight UUID), `cursor` (opaque). Omit unfiltered defaults; drop invalid keys
 independently. Clients map scope/source to `managed_system_id`/`source_type`.
 
-Refresh/Back/Forward restores filters, page and selected safe detail. Scope/source/
+Refresh/Back/Forward restores filters, page and selected safe detail. A later-page URL
+opened without a cached first-page chain offers compact `처음부터 보기` above the rows;
+it pushes the same filters and selection without `cursor`. Scope/source/
 search changes clear cursor and reconcile selection against safe detail/current
 filters. Resolve explicit selection directly via `GET /evidence-highlights/:id`;
 page absence alone never clears it. Missing/unreadable selection shows not-found
 and opens no substitute row. Close removes selection with replace, preserves list
 context and returns row focus where possible. Session/scope/permission changes
 clear stale content. Primary `Finding 보기` opens `/findings?selected=<findingId>`;
-Back restores Evidence context. Add sidebar/dashboard entry during implementation.
+Back restores Evidence context. Sidebar and dashboard entries preserve Managed System scope.
 
 Render loading, permission block, genuinely empty, filtered-empty, withheld,
 selected-not-found, first-page failure and load-more failure distinctly; retry
-load-more without discarding successful rows. Explain `Finding에 저장된 Evidence를 찾습니다.`
+load-more without discarding successful rows. A first-page `422` with cursor field
+code `invalid_cursor` removes `cursor` with replace and reloads the first page,
+retaining filters and selection. Manual refresh keeps current rows visible while
+reads are pending, then reconciles the authorized responses; session/scope and
+permission invalidation still clears stale content. Blocked lists explain the
+workspace administrator request path and disable source tabs, search and refresh.
+Rows use the default compact Integration density: snippet title plus one truncated
+metadata line containing Finding identity, source and classification. Withheld
+row titles and panel text are muted and italic. A readable VOC's panel source label
+links to its authorized `source.route` as a secondary action; notes and withheld
+sources have no source jump. Explain `Finding에 저장된 Evidence를 찾습니다.`
 No editing, standalone creation, Unlinked tab, count/coverage KPI or execution
 control. Use ADR-0060's prototype reference only for this new surface and shipped
 Integration patterns for density/copy/scroll; verify desktop 1440 and keyboard focus.
