@@ -1,4 +1,8 @@
-import { permissionDenyAdminItemSchema, permissionGrantAdminItemSchema } from '@fops/shared';
+import {
+  permissionDenyAdminItemSchema,
+  permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
+} from '@fops/shared';
 
 export const PERMISSION_GRANTS_IDS = {
   grant: '66666666-6666-4666-8666-666666666666',
@@ -32,7 +36,25 @@ export const permissionDenies = [
   }),
 ];
 
-export type PermissionGrantsScenarioName = 'populated' | 'empty';
+export const directGrantPermissionOptions = permissionGrantOptionsSchema.parse({
+  recipient: {
+    id: PERMISSION_GRANTS_IDS.actor,
+    display_name: 'Named Requester',
+    role_level: 'developer',
+  },
+  self_policy: 'allowed',
+  self_approval_required: false,
+  candidates: [
+    {
+      capability: 'workspace.admin',
+      managed_system_id: null,
+      governance_required: true,
+      preflight: { state: 'available' },
+    },
+  ],
+});
+
+export type PermissionGrantsScenarioName = 'populated' | 'empty' | 'direct-grant-form';
 
 export function createPermissionGrantsScenario(name: PermissionGrantsScenarioName = 'populated') {
   return {

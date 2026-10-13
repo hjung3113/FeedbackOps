@@ -1,5 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { ListShell, ListTabs, type ListToolbarTab, ObjectRow } from '@fops/ui';
+import type { PermissionGrantAdminItem } from '@fops/shared';
+import { Button, ListShell, ListTabs, type ListToolbarTab, ObjectRow } from '@fops/ui';
+import * as React from 'react';
 
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
@@ -8,6 +10,7 @@ import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
+import { PermissionDirectGrantForm } from './permission-direct-grant-form.js';
 import { PermissionGrantDetail } from './permission-grant-detail.js';
 import { permissionGrantTabs } from './permission-grants-search.js';
 import {
@@ -27,6 +30,8 @@ export function PermissionGrantsScreen() {
     selectedId,
     actorNames,
     managedSystemNames,
+    cacheReturnedGrant,
+    handleCreatedGrant,
     isPending,
     isError,
     grantCountKnown,
@@ -35,6 +40,31 @@ export function PermissionGrantsScreen() {
     handleSelect,
     handleClose,
   } = usePermissionGrantsConsole();
+  const [directGrantOpen, setDirectGrantOpen] = React.useState(false);
+  const selectionContext = `${activeTab}:${selectedId ?? ''}`;
+  const currentSelectionContext = React.useRef(selectionContext);
+  const screenMounted = React.useRef(false);
+  React.useLayoutEffect(() => {
+    currentSelectionContext.current = selectionContext;
+  }, [selectionContext]);
+
+  React.useEffect(() => {
+    screenMounted.current = true;
+    return () => {
+      screenMounted.current = false;
+    };
+  }, []);
+
+  function handleDirectGrantCreated(
+    item: PermissionGrantAdminItem,
+    submittedContext: string,
+  ): void {
+    if (screenMounted.current && currentSelectionContext.current === submittedContext) {
+      handleCreatedGrant(item.id);
+    }
+    setDirectGrantOpen(false);
+  }
+
   const tabs: ListToolbarTab[] = permissionGrantTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
@@ -49,6 +79,21 @@ export function PermissionGrantsScreen() {
       toolbar={{
         title: ADMIN_PERMISSIONS_COPY.activeTitle,
         subtitle: ADMIN_PERMISSIONS_COPY.listSubtitle,
+        actions: (
+          <>
+            <Button type="button" onClick={() => setDirectGrantOpen(true)}>
+              {ADMIN_PERMISSIONS_COPY.directGrant.action}
+            </Button>
+            <PermissionDirectGrantForm
+              open={directGrantOpen}
+              selectionContext={selectionContext}
+              managedSystemNames={managedSystemNames}
+              cacheReturnedGrant={cacheReturnedGrant}
+              onOpenChange={setDirectGrantOpen}
+              onCreated={handleDirectGrantCreated}
+            />
+          </>
+        ),
       }}
       tabs={
         <ListTabs

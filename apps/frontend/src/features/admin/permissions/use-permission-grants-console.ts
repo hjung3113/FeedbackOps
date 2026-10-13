@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
 
@@ -23,6 +23,8 @@ export function usePermissionGrantsConsole(): {
   selectedId: string | null;
   actorNames: Record<string, string>;
   managedSystemNames: Record<string, string>;
+  cacheReturnedGrant: (item: PermissionGrantAdminItem) => void;
+  handleCreatedGrant: (id: string) => void;
   isPending: boolean;
   isError: boolean;
   grantCountKnown: boolean;
@@ -33,9 +35,20 @@ export function usePermissionGrantsConsole(): {
 } {
   const search = useSearch({ strict: false }) as PermissionGrantsSearch;
   const navigate = useNavigate({ from: '/admin/permissions/grants' });
+  const queryClient = useQueryClient();
+  const returnedGrantCarry = React.useRef(new Map<string, PermissionGrantAdminItem>());
   const grantsQuery = useQuery({
     queryKey: permissionGrantsListKey,
-    queryFn: ({ signal }) => fetchPermissionGrants(signal),
+    queryFn: async ({ signal }) => {
+      const items = await fetchPermissionGrants(signal);
+      for (const [id] of returnedGrantCarry.current) {
+        if (items.some((item) => item.id === id)) returnedGrantCarry.current.delete(id);
+      }
+      const missingReturnedItems = [...returnedGrantCarry.current.values()].filter(
+        (item) => !items.some((current) => current.id === item.id),
+      );
+      return [...missingReturnedItems, ...items];
+    },
     retry: false,
   });
   const deniesQuery = useQuery({
@@ -71,6 +84,14 @@ export function usePermissionGrantsConsole(): {
   const selected = visiblePermissions.find(({ item }) => item.id === selectedId) ?? null;
   const initializedTabs = React.useRef(new Set<PermissionGrantTab>());
 
+  function cacheReturnedGrant(item: PermissionGrantAdminItem): void {
+    returnedGrantCarry.current.set(item.id, item);
+    queryClient.setQueryData<PermissionGrantAdminItem[]>(permissionGrantsListKey, (current) => [
+      item,
+      ...(current ?? []).filter((grant) => grant.id !== item.id),
+    ]);
+  }
+
   function handleTabChange(next: PermissionGrantTab): void {
     const nextVisible = next === 'grants' ? grants : denies;
     const selectionIsVisible =
@@ -93,6 +114,17 @@ export function usePermissionGrantsConsole(): {
     void navigate({
       to: '/admin/permissions/grants',
       search: (prev) => ({ ...prev, selected: id }),
+    });
+  }
+
+  function handleCreatedGrant(id: string): void {
+    initializedTabs.current.add('grants');
+    void navigate({
+      to: '/admin/permissions/grants',
+      search: (prev) => {
+        const { tab: _tab, selected: _selected, ...rest } = prev;
+        return { ...rest, selected: id };
+      },
     });
   }
 
@@ -141,6 +173,8 @@ export function usePermissionGrantsConsole(): {
     selectedId,
     actorNames,
     managedSystemNames,
+    cacheReturnedGrant,
+    handleCreatedGrant,
     isPending: activeQuery.isPending,
     isError: activeQuery.isError,
     grantCountKnown: grantsQuery.isSuccess && !grantsQuery.isError,

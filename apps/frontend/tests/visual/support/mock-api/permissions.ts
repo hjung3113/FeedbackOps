@@ -1,12 +1,19 @@
 import {
   approvePermissionRequestSchema,
   denyPermissionRequestSchema,
+  directPermissionGrantSchema,
   needMoreInfoPermissionRequestSchema,
   permissionDecisionResultSchema,
+  permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
   rejectPermissionRequestSchema,
   revokePermissionBodySchema,
   revokePermissionResultSchema,
 } from '@fops/shared';
+import {
+  PERMISSION_GRANTS_IDS,
+  directGrantPermissionOptions,
+} from '../../fixtures/permission-grants';
 import {
   permissionAdminDetailFixture,
   permissionDecisionResultTemplates,
@@ -103,8 +110,46 @@ export function createPermissionGrantHandlers(): MockApiHandler[] {
   return [
     {
       method: 'GET',
+      path: '/permissions/grant-options',
+      handle: (route, context, url) => {
+        const actorId = url.searchParams.get('actor_id');
+        if (
+          context.options.permissionGrantsScenario !== 'direct-grant-form' ||
+          actorId !== PERMISSION_GRANTS_IDS.actor
+        ) {
+          return json(route, 404, { code: 'not_found.record', message: 'actor not found' });
+        }
+        return json(route, 200, permissionGrantOptionsSchema.parse(directGrantPermissionOptions));
+      },
+    },
+    {
+      method: 'GET',
       path: '/permissions/grants',
       handle: (route, context) => json(route, 200, { items: context.permissionGrants.grants }),
+    },
+    {
+      method: 'POST',
+      path: '/permissions/grants',
+      handle: async (route, context) => {
+        const body = directPermissionGrantSchema.parse(route.request().postDataJSON());
+        context.postedBodies.push(body);
+        context.postedRequests.push({
+          body,
+          idempotencyKey: await route.request().headerValue('Idempotency-Key'),
+          pathname: '/permissions/grants',
+        });
+        const item = permissionGrantAdminItemSchema.parse({
+          id: '88888888-8888-4888-8888-888888888888',
+          actor_id: body.actor_id,
+          capability: body.capability,
+          managed_system_id: body.managed_system_id ?? null,
+          granted_by_actor_id: context.reporterActorId,
+          granted_at: '2026-07-22T09:00:00.000Z',
+          expires_at: body.expires_at ?? null,
+        });
+        context.permissionGrants.grants.unshift(item);
+        await json(route, 200, item);
+      },
     },
     {
       method: 'GET',

@@ -23,6 +23,7 @@ export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstallOptions {
   permissionScenario?: PermissionScenarioName;
+  /** Serves a grant-options candidate for the direct-grant form visual state. */
   permissionGrantsScenario?: PermissionGrantsScenarioName;
   role?: RoleLevel;
   scenario?: ScenarioName;

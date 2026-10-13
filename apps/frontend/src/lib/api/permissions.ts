@@ -6,14 +6,19 @@
 import {
   type ApprovePermissionRequest,
   type CancelPermissionRequest,
+  type DirectPermissionGrant,
   type EditPermissionRequest,
   type PermissionDecisionResult,
+  type PermissionGrantOptions,
   cancelPermissionRequestResultSchema,
   cancelPermissionRequestSchema,
+  directPermissionGrantSchema,
   editPermissionRequestSchema,
   listPermissionDeniesResponseSchema,
   listPermissionGrantsResponseSchema,
   permissionDecisionResultSchema,
+  permissionGrantAdminItemSchema,
+  permissionGrantOptionsSchema,
   permissionRequestAdminDetailSchema,
   permissionRequestOwnerDetailSchema,
   revokePermissionBodySchema,
@@ -49,9 +54,7 @@ export interface PermissionCheckResponse {
   decision: PermissionDecision;
 }
 
-export type CapabilityScope =
-  | { kind: 'all' }
-  | { kind: 'scoped'; managed_system_ids: string[] };
+export type CapabilityScope = { kind: 'all' } | { kind: 'scoped'; managed_system_ids: string[] };
 
 export async function fetchCapabilityScope(
   capability: string,
@@ -216,6 +219,35 @@ export async function revokePermission(
   return response.data;
 }
 
+export const permissionGrantOptionsKey = (actorId: string) =>
+  ['permission-grant-options', actorId] as const;
+
+export async function fetchPermissionGrantOptions(
+  actorId: string,
+  signal?: AbortSignal,
+): Promise<PermissionGrantOptions> {
+  const params = new URLSearchParams({ actor_id: actorId });
+  const response = await apiRequest(
+    'GET',
+    `/permissions/grant-options?${params.toString()}`,
+    permissionGrantOptionsSchema,
+    signal ? { signal } : {},
+  );
+  return response.data;
+}
+
+export async function createDirectPermissionGrant(
+  body: DirectPermissionGrant,
+  idempotencyKey: string,
+) {
+  const parsedBody = directPermissionGrantSchema.parse(body);
+  const response = await apiRequest('POST', '/permissions/grants', permissionGrantAdminItemSchema, {
+    body: parsedBody,
+    idempotencyKey,
+  });
+  return response.data;
+}
+
 export async function fetchPermissionRequestsAll(
   options?: { status?: PermissionRequestReviewStatus; signal?: AbortSignal } | AbortSignal,
 ): Promise<{ requests: AdminPermissionRequestRow[]; count: number }> {
@@ -258,7 +290,8 @@ export async function decidePermissionRequest(
           expected_revision: expectedRevision,
           ...(reason ? { reason } : {}),
           ...(action === 'approve' && grantedManagedSystemId !== undefined
-            ? { granted_managed_system_id: grantedManagedSystemId } : {}),
+            ? { granted_managed_system_id: grantedManagedSystemId }
+            : {}),
           ...(action === 'approve' && expiration !== undefined ? { expiration } : {}),
           ...(action === 'approve' && selfApproval !== undefined
             ? { self_approval: selfApproval }
