@@ -737,4 +737,33 @@ describe.skipIf(!runIntegration)('Survey response evidence access 0039/0040/0057
     );
     expect(crossWorkspace.rows).toEqual([]);
   });
+
+  it('#1109 selection resolver has only explicit app EXECUTE and the existing mutator owner', async () => {
+    const result = await migrateHandle.pool.query(`
+      select pg_get_userbyid(p.proowner) as owner, p.prosecdef, p.proconfig,
+        has_function_privilege('fops_app',p.oid,'EXECUTE') as app_execute,
+        exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          where a.grantee=0 and a.privilege_type='EXECUTE') as public_execute
+      from pg_proc p where p.oid='survey.lock_attachment_response(uuid,uuid)'::regprocedure
+    `);
+    expect(result.rows).toEqual([
+      {
+        owner: 'fops_survey_provenance_mutator_owner',
+        prosecdef: true,
+        proconfig: ['search_path=pg_catalog'],
+        app_execute: true,
+        public_execute: false,
+      },
+    ]);
+    const selected = await appHandle.pool.query(
+      'select * from survey.lock_attachment_response($1::uuid,$2::uuid)',
+      [workspaceId, activeApprovalId],
+    );
+    expect(selected.rows).toEqual([{ response_id: responseId }]);
+    const foreign = await appHandle.pool.query(
+      'select * from survey.lock_attachment_response($1::uuid,$2::uuid)',
+      [otherWorkspaceId, activeApprovalId],
+    );
+    expect(foreign.rows).toEqual([]);
+  });
 });

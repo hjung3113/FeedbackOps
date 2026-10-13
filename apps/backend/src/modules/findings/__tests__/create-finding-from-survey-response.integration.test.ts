@@ -6,6 +6,7 @@ import { waitForResponseEvidenceWaiters } from '../../../test-support/response-e
 import { randomUUID } from 'node:crypto';
 
 import {
+  attachSurveyEvidenceResponseSchema,
   entityLinkDtoSchema,
   evidenceHighlightDtoSchema,
   evidenceInventoryItemSchema,
@@ -22,6 +23,7 @@ import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { createAa, insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { createSurveyFindingLink } from '../../entity-links/index.js';
@@ -49,6 +51,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   let adminCookie: string;
   const foreignWorkspaceIds = new Set<string>();
   const teamIds: string[] = [];
+  const attachmentActors: Awaited<ReturnType<typeof actor>>[] = [];
+  let attachmentActorIndex = 0;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -66,6 +70,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   });
 
   beforeEach(async () => {
+    attachmentActorIndex = 0;
     await cleanup();
     await migrateHandle.pool.query('delete from core.rate_limits where key=$1', [
       `${WORKSPACE_ID}:${adminId}`,
@@ -73,6 +78,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
   });
   afterEach(async () => cleanup());
   afterAll(async () => {
+    attachmentActors.length = 0;
     await cleanup();
     await app?.close();
     await appHandle?.close();
@@ -149,16 +155,16 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       [WORKSPACE_ID, `${SLUG}-%`],
     );
     await migrateHandle.pool.query(
-      "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2)",
-      [WORKSPACE_ID, `${SLUG}-%`],
+      "delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2) and not (actor_id=any($3::uuid[]))",
+      [WORKSPACE_ID, `${SLUG}-%`, attachmentActors.map((actor) => actor.id)],
     );
     await migrateHandle.pool.query(
       `update core.managed_systems set default_owner_actor_id=null,default_owner_team_id=null where id in (${systems})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
-      "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2",
-      [WORKSPACE_ID, `${SLUG}-%`],
+      "delete from core.actors where workspace_id=$1 and external_id like 'mock-dev-read-' || $2 and not (id=any($3::uuid[]))",
+      [WORKSPACE_ID, `${SLUG}-%`, attachmentActors.map((actor) => actor.id)],
     );
     await migrateHandle.pool.query(
       `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
@@ -1503,4 +1509,679 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       pages,
     });
   }, 60_000);
+
+  // #1109 additions use the new existing-target route. Personal creation tests above stay intact.
+  async function attachmentActor() {
+    const index = attachmentActorIndex++;
+    const cached = attachmentActors[index];
+    if (cached) return cached;
+    const seeded = await actor();
+    attachmentActors[index] = seeded;
+    return seeded;
+  }
+  async function safeAttachmentSource(status: 'open' | 'draft' = 'open', answers = 5) {
+    const source = await seed(status);
+    for (let index = 1; index < 5; index++) {
+      const respondent = await insertDevActor(
+        migrateHandle,
+        WORKSPACE_ID,
+        `${SLUG}-${randomUUID()}`,
+      );
+      const response = await migrateHandle.pool.query<{ id: string }>(
+        `insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at)
+         values ($1,$2,$3,true,now()) returning id`,
+        [WORKSPACE_ID, source.surveyId, respondent.id],
+      );
+      if (index < answers)
+        await migrateHandle.pool.query(
+          `insert into survey.survey_response_answers (workspace_id,survey_id,response_id,question_id,answer_kind,answer_value)
+         values ($1,$2,$3,$4,'text',$5::jsonb)`,
+          [
+            WORKSPACE_ID,
+            source.surveyId,
+            response.rows[0]?.id,
+            source.questionId,
+            JSON.stringify(RAW_ANSWER),
+          ],
+        );
+    }
+    const approval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals
+       (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,$5,$6) returning id`,
+      [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, APPROVED, adminId],
+    );
+    return { ...source, approvalId: approval.rows[0]?.id };
+  }
+  async function attachmentTarget(msId: string, status: 'draft' | 'archived' = 'draft') {
+    return insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceId: randomUUID(),
+      createdBy: adminId,
+      status,
+    });
+  }
+  function attach(cookie: string, findingId: string, body: object, key: string = randomUUID()) {
+    return app.inject({
+      method: 'POST',
+      url: `/findings/${findingId}/survey-evidence`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: body,
+    });
+  }
+  async function attachmentResidue(findingId: string, actorId: string) {
+    const result = await migrateHandle.pool.query(
+      `select
+        (select evidence_count from finding.findings where id=$1::uuid) as counter,
+        (select count(*)::int from finding.evidence_highlights where finding_id=$1::uuid) as highlights,
+        (select count(*)::int from survey.highlight_response_bindings b join finding.evidence_highlights h on h.id=b.highlight_id where h.finding_id=$1::uuid) as bindings,
+        (select count(*)::int from core.entity_links where target_id=$1::uuid) as links,
+        (select count(*)::int from core.audit_log where actor_id=$2::uuid) as audits,
+        (select count(*)::int from core.idempotency_keys where actor_id=$2::uuid) as caches`,
+      [findingId, actorId],
+    );
+    return result.rows[0];
+  }
+
+  it('#1109 non-personal cross-system attach is atomic, metadata-only and duplicate-free on replay', async () => {
+    const source = await safeAttachmentSource();
+    const targetSystem = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      uid(SLUG),
+      'Target MS',
+    );
+    const target = await attachmentTarget(targetSystem);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', targetSystem);
+    const body = {
+      approved_excerpt_id: source.approvalId,
+      sentiment: 'negative',
+      importance: 'high',
+    };
+    const key = randomUUID();
+    const parentsBefore = await migrateHandle.pool.query(
+      `select (select count(*)::int from finding.findings where workspace_id=$1::uuid) as findings,
+        (select count(*)::int from voc.vocs where workspace_id=$1::uuid) as vocs`,
+      [WORKSPACE_ID],
+    );
+    const first = await attach(reader.cookie, target.id, body, key);
+    expect(first.statusCode).toBe(201);
+    const metadata = attachSurveyEvidenceResponseSchema.parse(first.json());
+    expect(metadata.finding_id).toBe(target.id);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual({
+      counter: 1,
+      highlights: 1,
+      bindings: 1,
+      links: 1,
+      audits: 2,
+      caches: 1,
+    });
+    expect((await attach(reader.cookie, target.id, body, key)).json()).toEqual(metadata);
+    expect(
+      (await attach(reader.cookie, target.id, { ...body, importance: 'low' }, key)).statusCode,
+    ).toBe(409);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual({
+      counter: 1,
+      highlights: 1,
+      bindings: 1,
+      links: 1,
+      audits: 2,
+      caches: 1,
+    });
+    const publicRows = await appHandle.pool.query(
+      'select source_id,approved_excerpt_id,quote_or_summary from finding.evidence_highlights where id=$1',
+      [metadata.evidence_highlight_id],
+    );
+    expect(publicRows.rows).toEqual([
+      { source_id: null, approved_excerpt_id: null, quote_or_summary: null },
+    ]);
+    const links = await migrateHandle.pool.query(
+      'select relation_type,visibility,source_id from core.entity_links where target_id=$1',
+      [target.id],
+    );
+    expect(links.rows).toEqual([
+      { relation_type: 'evidence_of', visibility: 'internal_only', source_id: source.responseId },
+    ]);
+    const audits = await migrateHandle.pool.query(
+      'select event_type,detail from core.audit_log where actor_id=$1',
+      [reader.id],
+    );
+    expect(audits.rows.map((row) => row.event_type).sort()).toEqual([
+      'entity_link.created',
+      'evidence_highlight_added',
+    ]);
+    expect(JSON.stringify(audits.rows)).not.toContain(APPROVED);
+    expect(JSON.stringify(audits.rows)).not.toContain(RAW_ANSWER);
+    const cached = await migrateHandle.pool.query(
+      'select response_body from core.idempotency_keys where actor_id=$1 and key=$2',
+      [reader.id, key],
+    );
+    expect(cached.rows[0]?.response_body).toEqual(metadata);
+    expect((await counts(source.responseId)).findings).toBe(0);
+    const parentsAfter = await migrateHandle.pool.query(
+      `select (select count(*)::int from finding.findings where workspace_id=$1::uuid) as findings,
+        (select count(*)::int from voc.vocs where workspace_id=$1::uuid) as vocs`,
+      [WORKSPACE_ID],
+    );
+    expect(parentsAfter.rows).toEqual(parentsBefore.rows);
+    const privateBinding = await migrateHandle.pool.query(
+      `select response_id, approved_excerpt_id, approved_excerpt_snapshot
+        from survey.highlight_response_bindings where highlight_id=$1`,
+      [metadata.evidence_highlight_id],
+    );
+    expect(privateBinding.rows).toEqual([
+      {
+        response_id: source.responseId,
+        approved_excerpt_id: source.approvalId,
+        approved_excerpt_snapshot: APPROVED,
+      },
+    ]);
+
+    await migrateHandle.pool.query(
+      'update survey.survey_response_excerpt_approvals set revoked_at=now() where id=$1',
+      [source.approvalId],
+    );
+    const revokedReplay = await attach(reader.cookie, target.id, body, key);
+    expect(revokedReplay.statusCode).toBe(201);
+    expect(revokedReplay.json()).toEqual(metadata);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual({
+      counter: 1,
+      highlights: 1,
+      bindings: 1,
+      links: 1,
+      audits: 2,
+      caches: 1,
+    });
+    const fresh = await app.inject({
+      method: 'GET',
+      url: `/findings/${target.id}/evidence-highlights`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(fresh.body).not.toContain(APPROVED);
+  });
+  it('#1109 two approvals of one response yield two highlights and one active evidence link', async () => {
+    const source = await safeAttachmentSource();
+    const second = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,'second redaction',$5) returning id`,
+      [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, adminId],
+    );
+    const target = await attachmentTarget(source.msId);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    for (const approved_excerpt_id of [source.approvalId, second.rows[0]?.id]) {
+      expect((await attach(reader.cookie, target.id, { approved_excerpt_id })).statusCode).toBe(
+        201,
+      );
+    }
+    expect(await attachmentResidue(target.id, reader.id)).toEqual({
+      counter: 2,
+      highlights: 2,
+      bindings: 2,
+      links: 1,
+      audits: 3,
+      caches: 2,
+    });
+  });
+
+  it.each([
+    ['target-denied/source-denied', 'deny_target', 403],
+    ['target-denied/unknown-selection', 'unknown_target_denied', 403],
+    ['source-denied/revoked', 'deny_source_revoked', 404],
+    ['unknown selection', 'unknown', 404],
+    ['revoked selection', 'revoked', 422],
+    ['question suppressed', 'suppressed', 422],
+    ['draft source', 'draft', 409],
+    ['archived target', 'archived', 409],
+  ] as const)('#1109 orders %s without mutation residue', async (_label, variant, status) => {
+    const source = await safeAttachmentSource(
+      variant === 'draft' ? 'draft' : 'open',
+      variant === 'suppressed' ? 1 : 5,
+    );
+    const target = await attachmentTarget(
+      source.msId,
+      variant === 'archived' ? 'archived' : 'draft',
+    );
+    const reader = await attachmentActor();
+    if (!['deny_target', 'unknown_target_denied'].includes(variant))
+      await grant(reader.id, 'finding.manage', source.msId);
+    if (!['deny_target', 'deny_source_revoked'].includes(variant))
+      await grant(reader.id, 'survey.read', source.msId);
+    if (['revoked', 'deny_source_revoked'].includes(variant))
+      await migrateHandle.pool.query(
+        'update survey.survey_response_excerpt_approvals set revoked_at=now() where id=$1',
+        [source.approvalId],
+      );
+    const before = await attachmentResidue(target.id, reader.id);
+    const result = await attach(reader.cookie, target.id, {
+      approved_excerpt_id: ['unknown', 'unknown_target_denied'].includes(variant)
+        ? randomUUID()
+        : source.approvalId,
+    });
+    expect(result.statusCode).toBe(status);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+    expect(JSON.stringify(result.json())).not.toContain(APPROVED);
+  });
+
+  it.each(['response_id', 'quote_or_summary', 'source_id', 'unknown'])(
+    '#1109 rejects strict body field %s before target access',
+    async (field) => {
+      const reader = await attachmentActor();
+      const result = await attach(reader.cookie, randomUUID(), {
+        approved_excerpt_id: randomUUID(),
+        [field]: randomUUID(),
+      });
+      expect(result.statusCode).toBe(422);
+      expect(result.json().code).toBe('validation.failed');
+    },
+  );
+
+  it('#1109 validates UUIDv4 header before target access', async () => {
+    const reader = await attachmentActor();
+    const result = await attach(
+      reader.cookie,
+      randomUUID(),
+      { approved_excerpt_id: randomUUID() },
+      'bad',
+    );
+    expect(result.statusCode).toBe(422);
+    expect(result.json().code).toBe('validation.malformed_idempotency_key');
+  });
+
+  it('#1109 adds multiple other responses without rewriting derived lineage or immutable history', async () => {
+    const origin = await seed();
+    const creator = await attachmentActor();
+    for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+      await grant(creator.id, permission, origin.msId);
+    const parent = await post(creator.cookie, origin.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [],
+    });
+    expect(parent.statusCode).toBe(201);
+    const findingId = parent.json().id;
+    const history = await migrateHandle.pool.query(
+      'select * from survey.finding_response_bindings where finding_id=$1',
+      [findingId],
+    );
+    const reader = await attachmentActor();
+    await grant(reader.id, 'finding.manage', origin.msId);
+    for (let index = 0; index < 2; index++) {
+      const source = await safeAttachmentSource();
+      await grant(reader.id, 'survey.read', source.msId);
+      expect(
+        (await attach(reader.cookie, findingId, { approved_excerpt_id: source.approvalId }))
+          .statusCode,
+      ).toBe(201);
+    }
+    const after = await migrateHandle.pool.query(
+      'select * from survey.finding_response_bindings where finding_id=$1',
+      [findingId],
+    );
+    expect(after.rows).toEqual(history.rows);
+    const links = await migrateHandle.pool.query(
+      'select relation_type,source_id from core.entity_links where target_id=$1 order by relation_type',
+      [findingId],
+    );
+    expect(links.rows.filter((row) => row.relation_type === 'generated_finding')).toEqual([
+      { relation_type: 'generated_finding', source_id: origin.responseId },
+    ]);
+    expect(links.rows.filter((row) => row.relation_type === 'evidence_of')).toHaveLength(2);
+    expect((await attachmentResidue(findingId, reader.id)).counter).toBe(2);
+  });
+
+  it('#1109 holder below-threshold attach remains safe while a non-holder Admin is suppressed', async () => {
+    const source = await seed();
+    const approval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,$5,$6) returning id`,
+      [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, APPROVED, adminId],
+    );
+    const target = await attachmentTarget(source.msId);
+    expect(
+      (await attach(adminCookie, target.id, { approved_excerpt_id: approval.rows[0]?.id }))
+        .statusCode,
+    ).toBe(422);
+    const reader = await attachmentActor();
+    for (const permission of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+      await grant(reader.id, permission, source.msId);
+    const result = await attach(reader.cookie, target.id, {
+      approved_excerpt_id: approval.rows[0]?.id,
+    });
+    expect(result.statusCode).toBe(201);
+    expect(attachSurveyEvidenceResponseSchema.safeParse(result.json()).success).toBe(true);
+    const audits = await migrateHandle.pool.query(
+      "select id from core.audit_log where actor_id=$1 and event_type='survey_response_personal_read'",
+      [reader.id],
+    );
+    expect(audits.rows).toEqual([]);
+  });
+
+  it('#1109 a source-granted Developer still needs an independent target-system grant', async () => {
+    const source = await safeAttachmentSource();
+    const otherSystem = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      uid(SLUG),
+      'Other target',
+    );
+    const target = await attachmentTarget(otherSystem);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    const before = await attachmentResidue(target.id, reader.id);
+    expect(
+      (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }))
+        .statusCode,
+    ).toBe(403);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+  });
+
+  it('#1109 denied Admin cannot distinguish draft/revoked source selections', async () => {
+    const source = await safeAttachmentSource('draft');
+    const target = await attachmentTarget(source.msId);
+    await migrateHandle.pool.query(
+      `insert into permission.permission_denies (workspace_id,actor_id,capability,managed_system_id,reason,created_by_actor_id)
+       values ($1,$2,'survey.read',$3,'source denied',$2)`,
+      [WORKSPACE_ID, adminId, source.msId],
+    );
+    expect(
+      (await attach(adminCookie, target.id, { approved_excerpt_id: source.approvalId })).statusCode,
+    ).toBe(404);
+  });
+
+  it('#1109 foreign approval cannot select local evidence', async () => {
+    const source = await safeAttachmentSource();
+    const target = await attachmentTarget(source.msId);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'finding.manage', source.msId);
+    const foreignResponse = await seedForeignResponse();
+    const question = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_questions (workspace_id,survey_id,kind,prompt,is_required,sort_order,branch_depth)
+       select workspace_id,survey_id,'text','Foreign question',false,0,0 from survey.survey_responses where id=$1 returning id`,
+      [foreignResponse],
+    );
+    const approval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       select workspace_id,survey_id,id,$2,'foreign approved',respondent_actor_id from survey.survey_responses where id=$1 returning id`,
+      [foreignResponse, question.rows[0]?.id],
+    );
+    try {
+      const before = await attachmentResidue(target.id, reader.id);
+      expect(
+        (await attach(reader.cookie, target.id, { approved_excerpt_id: approval.rows[0]?.id }))
+          .statusCode,
+      ).toBe(404);
+      expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+    } finally {
+      await migrateHandle.pool.query(
+        'delete from survey.survey_response_excerpt_approvals where id=$1',
+        [approval.rows[0]?.id],
+      );
+    }
+  });
+
+  it('#1109 invalid target classification and a late link failure leave no residue', async () => {
+    const source = await safeAttachmentSource();
+    const target = await attachmentTarget(source.msId);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    const wrongSystem = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      uid(SLUG),
+      'Wrong Area system',
+    );
+    const area = await createAa(app, adminCookie, {
+      managed_system_id: wrongSystem,
+      slug: uid(SLUG),
+      name: 'Wrong target Area',
+    });
+    const before = await attachmentResidue(target.id, reader.id);
+    expect(
+      (
+        await attach(reader.cookie, target.id, {
+          approved_excerpt_id: source.approvalId,
+          analytics_area_id: area,
+        })
+      ).statusCode,
+    ).toBe(422);
+    expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+    const operator = await migrateHandle.pool.connect();
+    try {
+      await operator.query('set role fops_entity_links_survey_mutator_owner');
+      await operator.query(
+        'revoke execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) from fops_app',
+      );
+      const privilege = await operator.query<{ can_execute: boolean }>(
+        "select has_function_privilege('fops_app', 'core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid)', 'EXECUTE') as can_execute",
+      );
+      expect(privilege.rows[0]?.can_execute).toBe(false);
+      expect(
+        (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }))
+          .statusCode,
+      ).toBe(500);
+    } finally {
+      try {
+        await operator.query(
+          'grant execute on function core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) to fops_app',
+        );
+      } finally {
+        try {
+          await operator.query('reset role');
+        } finally {
+          operator.release();
+        }
+      }
+    }
+    expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+  });
+
+  it.each(['attach-first', 'revoke-first'] as const)(
+    '#1109 response lock proves %s attachment/revoke serialization',
+    async (order) => {
+      const source = await safeAttachmentSource();
+      const target = await attachmentTarget(source.msId);
+      const reader = await attachmentActor();
+      await grant(reader.id, 'survey.read', source.msId);
+      await grant(reader.id, 'finding.manage', source.msId);
+      const revoker = await attachmentActor();
+      for (const permission of ['survey.read', 'survey.manage', 'survey.read_personal_responses'])
+        await grant(revoker.id, permission, source.msId);
+      const doAttach = () =>
+        attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId });
+      const revoke = () =>
+        app.inject({
+          method: 'DELETE',
+          url: `/survey-responses/${source.responseId}/approved-excerpts/${source.approvalId}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${revoker.cookie}` },
+        });
+      const blocker = await appHandle.pool.connect();
+      let first: ReturnType<typeof doAttach> | undefined;
+      let second: ReturnType<typeof doAttach> | undefined;
+      try {
+        await blocker.query('begin');
+        await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+          source.responseId,
+        ]);
+        first = (order === 'attach-first' ? doAttach() : revoke()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, first);
+        second = (order === 'attach-first' ? revoke() : doAttach()).then((r) => r);
+        await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 2, second);
+        await blocker.query('commit');
+        const [a, b] = await Promise.all([first, second]);
+        expect((order === 'attach-first' ? a : b).statusCode).toBe(
+          order === 'attach-first' ? 201 : 422,
+        );
+        expect((order === 'attach-first' ? b : a).statusCode).toBe(200);
+        expect((await attachmentResidue(target.id, reader.id)).highlights).toBe(
+          order === 'attach-first' ? 1 : 0,
+        );
+        const read = await app.inject({
+          method: 'GET',
+          url: `/findings/${target.id}/evidence-highlights`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        });
+        expect(read.body).not.toContain(APPROVED);
+      } finally {
+        await blocker.query('rollback');
+        blocker.release();
+        await Promise.allSettled([first, second].filter((p) => p !== undefined));
+      }
+    },
+  );
+
+  async function waitForSettingsWaiter(
+    blockerPid: number | undefined,
+    pending: Promise<{ statusCode: number }>,
+  ) {
+    if (blockerPid === undefined) throw new Error('settings blocker has no backend pid');
+    const deadline = Date.now() + 1500;
+    const completed = pending.then((r): never => {
+      throw new Error(`Request completed before settings barrier: ${r.statusCode}`);
+    });
+    while (Date.now() < deadline) {
+      const waiting = await Promise.race([
+        completed,
+        migrateHandle.pool.query<{ count: number }>(
+          `select count(*)::int as count from pg_stat_activity
+         where $1::int=any(pg_blocking_pids(pid))`,
+          [blockerPid],
+        ),
+      ]);
+      if ((waiting.rows[0]?.count ?? 0) > 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('No observed settings lock waiter');
+  }
+
+  it('#1109 threshold update committed ahead of waiting attachment rejects it with no residue', async () => {
+    const source = await safeAttachmentSource();
+    const target = await attachmentTarget(source.msId);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    const old = await migrateHandle.pool.query<{ survey_anonymity_threshold: number }>(
+      'select survey_anonymity_threshold from core.workspace_settings where workspace_id=$1',
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `insert into core.workspace_settings (workspace_id,survey_anonymity_threshold)
+      values ($1,5) on conflict (workspace_id) do update set survey_anonymity_threshold=5`,
+      [WORKSPACE_ID],
+    );
+    const blocker = await migrateHandle.pool.connect();
+    let pending: ReturnType<typeof attach> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query(
+        'update core.workspace_settings set survey_anonymity_threshold=6 where workspace_id=$1',
+        [WORKSPACE_ID],
+      );
+      const pid = (await blocker.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]
+        ?.pid;
+      const before = await attachmentResidue(target.id, reader.id);
+      pending = attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }).then(
+        (r) => r,
+      );
+      await waitForSettingsWaiter(pid, pending);
+      await blocker.query('commit');
+      expect((await pending).statusCode).toBe(422);
+      expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      await Promise.allSettled(pending ? [pending] : []);
+      if (old.rows[0])
+        await migrateHandle.pool.query(
+          'update core.workspace_settings set survey_anonymity_threshold=$2 where workspace_id=$1',
+          [WORKSPACE_ID, old.rows[0].survey_anonymity_threshold],
+        );
+      else
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id=$1',
+          [WORKSPACE_ID],
+        );
+    }
+  });
+
+  it('#1109 attachment holds threshold authorization until commit before a later threshold update', async () => {
+    const source = await safeAttachmentSource();
+    const target = await attachmentTarget(source.msId);
+    const reader = await attachmentActor();
+    await grant(reader.id, 'survey.read', source.msId);
+    await grant(reader.id, 'finding.manage', source.msId);
+    const old = await migrateHandle.pool.query<{ survey_anonymity_threshold: number }>(
+      'select survey_anonymity_threshold from core.workspace_settings where workspace_id=$1',
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `insert into core.workspace_settings (workspace_id,survey_anonymity_threshold)
+      values ($1,5) on conflict (workspace_id) do update set survey_anonymity_threshold=5`,
+      [WORKSPACE_ID],
+    );
+    const blocker = await appHandle.pool.connect();
+    let pending: ReturnType<typeof attach> | undefined;
+    let update: ReturnType<typeof attach> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [
+        source.responseId,
+      ]);
+      pending = attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }).then(
+        (r) => r,
+      );
+      await waitForResponseEvidenceWaiters(migrateHandle, source.responseId, 1, pending);
+      // The queued attachment has already acquired the settings singleton.
+      const holder = await migrateHandle.pool.query<{ pid: number }>(
+        `select pid from pg_locks where locktype='advisory' and not granted and objsubid=1
+          and classid=((hashtextextended($1,0)>>32)&4294967295)::oid
+          and objid=(hashtextextended($1,0)&4294967295)::oid`,
+        [source.responseId],
+      );
+      update = app
+        .inject({
+          method: 'PATCH',
+          url: '/workspace/settings',
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+            'content-type': 'application/json',
+          },
+          payload: { survey_anonymity_threshold: 6 },
+        })
+        .then((r) => r);
+      await waitForSettingsWaiter(holder.rows[0]?.pid, update);
+      await blocker.query('commit');
+      expect((await pending).statusCode).toBe(201);
+      expect((await update).statusCode).toBe(200);
+      const before = await attachmentResidue(target.id, reader.id);
+      expect(
+        (await attach(reader.cookie, target.id, { approved_excerpt_id: source.approvalId }))
+          .statusCode,
+      ).toBe(422);
+      expect(await attachmentResidue(target.id, reader.id)).toEqual(before);
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      await Promise.allSettled([pending, update].filter((p) => p !== undefined));
+      if (old.rows[0])
+        await migrateHandle.pool.query(
+          'update core.workspace_settings set survey_anonymity_threshold=$2 where workspace_id=$1',
+          [WORKSPACE_ID, old.rows[0].survey_anonymity_threshold],
+        );
+      else
+        await migrateHandle.pool.query(
+          'delete from core.workspace_settings where workspace_id=$1',
+          [WORKSPACE_ID],
+        );
+    }
+  });
 });

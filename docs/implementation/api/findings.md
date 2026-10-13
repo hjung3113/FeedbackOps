@@ -253,9 +253,10 @@ state; never emit private response/approval bindings or denied source detail.
 VOC quotes retain source/reporter checks; notes retain authored text. Preserve
 ordinary VOC/Cluster source IDs rather than revoke them globally.
 
-## POST /findings/:id/survey-evidence — proposed/new (#816, ADR-0064)
+## POST /findings/:id/survey-evidence — #1109 (ADR-0064)
 
-Accepted target contract; the existing generic raw Survey attachment stays rejected.
+Backend and shared schemas are implemented by #1109; real-role migration and integration
+verification remain conductor-owned. The existing generic raw Survey attachment stays rejected.
 
 - **Request:** strict `{ approved_excerpt_id, analytics_area_id?, sentiment?,
   importance? }` using existing classification validation, required UUIDv4
@@ -288,7 +289,7 @@ Accepted target contract; the existing generic raw Survey attachment stays rejec
   link is inserted, with identifier-only audit detail, in the same transaction.
   Denial writes no mutation audit. No new Dashboard resolution rule is introduced:
   `evidence_of` does not clear an Outcome follow-up gap (ADR-0055).
-- **Response (proposed/new):** `201 { evidence_highlight_id, finding_id }`, safe
+- **Response:** `201 { evidence_highlight_id, finding_id }`, safe
   local mutation metadata only. Fetch quotes through the fresh highlight read.
   Same Actor/key/body/target retries replay safely without duplicate highlights,
   links/counters/audits; changed reuse is `409 conflict.idempotency_key_reuse`.

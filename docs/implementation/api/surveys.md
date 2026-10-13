@@ -409,7 +409,7 @@ type/display ID and approved question metadata only, never excerpt text. Active 
 
 Same actor/key/body/source replays the original Finding with no duplicate side effects
 (subject to ADR-0015/ADR-0064 targeted legacy Survey cache sanitization); changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic raw survey-response highlight attachment remains rejected. ADR-0064
-accepts the separate proposed/new approval-selection command documented in
+uses the separate #1109 approval-selection command documented in
 `findings.md`, implemented in #816 after #739/#740.
 
 Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
@@ -525,7 +525,7 @@ ordinary filtered list add no personal-read fields or audits. Survey detail's ex
 commands retain fresh personal capability checks and the source's existing read/mutation audits.
 A personal-read holder still receives only Survey-grain report metrics.
 
-## GET /surveys/:id/evidence-candidates — proposed/new (#816, ADR-0064)
+## GET /surveys/:id/evidence-candidates — #1109 (ADR-0064)
 
 ADR-0065 selects this endpoint for Finding's approved-excerpt picker; no separate
 `evidence-excerpts` endpoint is added. The picker uses a separately authorized
@@ -538,7 +538,8 @@ in `findings.md`. Inventory uses the linked-highlight audience, not this picker
 suppression. Neither this selection read nor safe attachment fabricates personal
 read audits; actual personal source reads keep existing audits.
 
-Accepted target contract; no route/schema implementation is claimed here.
+Backend and shared schemas are implemented by #1109; real-role migration and integration
+verification remain conductor-owned. The frontend picker is a separate implementation item.
 
 - **Auth:** authenticated session Actor/workspace; lookup Survey in workspace,
   then `survey.read` on source Managed System. Missing/foreign/source-denied
@@ -548,10 +549,12 @@ Accepted target contract; no route/schema implementation is claimed here.
   result exceptions; role alone grants no personal access.
 - **Query:** strict `{ limit?: integer 1..100, cursor?: opaque string }`, default
   50; no arbitrary text/dimension filters. Stable bounded pages, with an opaque
-  cursor containing no response identity. Recheck source permissions, current
+  cursor containing no response identity. Pages order by approval UUID; the cursor
+  binds workspace, Actor and Survey plus the last approval UUID. Each page uses a
+  repeatable-read snapshot. Recheck source permissions, current
   approvals and result suppression on every page. Invalid ID/query/cursor uses
   existing `422 validation.failed` envelope.
-- **Response (proposed/new wire shape):** `{ response_state, items, page }`, with
+- **Response:** `{ response_state, items, page }`, with
   `response_state: none | below_threshold | visible`,
   `items: [{ approved_excerpt_id, redacted_excerpt, question_label, survey_type,
   survey_display_id, identity_protected }]`, and `page: { has_more, cursor? }`.

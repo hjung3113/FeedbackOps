@@ -284,4 +284,46 @@ describe.skipIf(!runIntegration)('ADR-0064 canonical read boundary', () => {
       ]),
     ).rejects.toMatchObject({ code: '22023' });
   });
+
+  it('#1109 pins the exact attachment link witness and consistency-check column grants', async () => {
+    for (const [owner, table, expected] of [
+      [
+        'fops_entity_links_survey_mutator_owner',
+        'survey.highlight_response_bindings',
+        ['highlight_id', 'response_id', 'workspace_id'],
+      ],
+      [
+        'fops_entity_links_survey_mutator_owner',
+        'finding.evidence_highlights',
+        ['finding_id', 'id', 'source_type', 'workspace_id'],
+      ],
+      [
+        'fops_survey_provenance_mutator_owner',
+        'core.entity_links',
+        [
+          'relation_type',
+          'source_id',
+          'source_type',
+          'status',
+          'target_id',
+          'target_type',
+          'visibility',
+          'workspace_id',
+        ],
+      ],
+    ] as const) {
+      const acl = await migrate.pool.query<{ column_name: string }>(
+        `select attname as column_name from pg_attribute where attrelid=$2::regclass and attnum>0 and not attisdropped
+          and has_column_privilege($1::name,attrelid,attname,'SELECT') order by attname`,
+        [owner, table],
+      );
+      expect(acl.rows.map((row) => row.column_name)).toEqual(expected);
+      const write = await migrate.pool.query(
+        `select has_any_column_privilege($1::name,$2::text,'INSERT,UPDATE') or
+          has_table_privilege($1::name,$2::text,'DELETE,TRUNCATE') as allowed`,
+        [owner, table],
+      );
+      expect(write.rows[0]?.allowed).toBe(false);
+    }
+  });
 });

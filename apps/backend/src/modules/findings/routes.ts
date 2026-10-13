@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import {
   addEvidenceHighlightRequestSchema,
+  attachSurveyEvidenceRequestSchema,
   createFindingCommentRequestSchema,
   evidenceInventoryDetailQuerySchema,
   linkEvidenceRequestSchema,
@@ -260,6 +261,45 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
     },
   });
 
+  app.route({
+    method: 'POST',
+    url: '/findings/:id/survey-evidence',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id))
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      const parsed = attachSurveyEvidenceRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success)
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const result = await findingsService.attachSurveyEvidence({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hashRequestBody({
+          body: parsed.data,
+          findingId: id,
+          route: 'finding.survey_evidence',
+        }),
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
   app.route({
     method: 'POST',
     url: '/findings/:id/evidence-highlights',

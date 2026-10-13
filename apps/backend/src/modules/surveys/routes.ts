@@ -1,6 +1,7 @@
 import {
   createFindingFromSurveyResponseRequestSchema,
   outcomeFollowUpDecisionRequestSchema,
+  surveyEvidenceCandidatesQuerySchema,
   surveyQuestionKindSchema,
   surveyResponseSubmissionSchema,
   surveyStartingPointSchema,
@@ -216,6 +217,19 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getRespondentForm(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/evidence-candidates',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const query = parse(surveyEvidenceCandidatesQuerySchema, req.query, reply);
+      if (!query) return;
+      return reply
+        .header('cache-control', 'private, no-store')
+        .send(await opts.surveysService.getEvidenceCandidates(actor(req), id, query));
+    },
+  );
   app.get('/surveys/:id/results', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');

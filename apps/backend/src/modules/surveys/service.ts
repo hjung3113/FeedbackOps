@@ -6,6 +6,7 @@ import type { CheckService } from '../permissions/check-service.js';
 import { createMyAnswerableSurveys } from './answerable-surveys.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
+import { createSurveyEvidenceCandidates } from './evidence-candidates.js';
 import { createSurveyFollowUp } from './follow-up.js';
 import { createMySurveyResponseHistory } from './response-history.js';
 import { createSurveyResults } from './results.js';
@@ -33,6 +34,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
   return {
     ...createSurveyAuthoring(deps),
     ...createSurveyResults(deps),
+    ...createSurveyEvidenceCandidates(deps),
     ...createSurveyEvidenceAccess(deps),
     ...createSurveyFollowUp(deps),
     ...createMySurveyResponseHistory(deps),

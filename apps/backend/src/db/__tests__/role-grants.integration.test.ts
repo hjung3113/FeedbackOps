@@ -251,6 +251,20 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
       `delete from core.audit_log where event_type = 'test.app_insert'`,
     );
   });
+
+  it('#1109 callable selection ACL contains only app and the existing mutator owner', async () => {
+    const acl = await migrateHandle.pool.query<{ principal: string; privilege: string }>(`
+      select coalesce(r.rolname,'PUBLIC') as principal,a.privilege_type as privilege
+      from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      left join pg_roles r on r.oid=a.grantee
+      where p.oid='survey.lock_attachment_response(uuid,uuid)'::regprocedure
+      order by principal,privilege
+    `);
+    expect(acl.rows).toEqual([
+      { principal: 'fops_app', privilege: 'EXECUTE' },
+      { principal: 'fops_survey_provenance_mutator_owner', privilege: 'EXECUTE' },
+    ]);
+  });
 });
 
 describe.skipIf(!runIntegration)('Index conventions (ADR-0015:55-61)', () => {

@@ -1045,4 +1045,31 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
     const search = await inventory(cookie, '?q=own source title');
     expect(search.json().items.map((row: { id: string }) => row.id)).toEqual([attached.json().id]);
   });
+
+  it('#1109 selection attachment stays separate from the shipped generic UUID/quote command', async () => {
+    const source = await seedSource('Existing generic source');
+    const target = await seedFinding({ managedSystemId: source.msId, sourceVocId: source.vocId });
+    const generic = await postHighlight(adminCookie, target.id, {
+      source_type: 'survey_response',
+      source_id: randomUUID(),
+      quote_or_summary: 'unapproved text',
+    });
+    expect(generic.statusCode).toBe(422);
+    expect(generic.json().code).toBe('validation.failed');
+    const strict = await app.inject({
+      method: 'POST',
+      url: `/findings/${target.id}/survey-evidence`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'idempotency-key': randomUUID(),
+        'content-type': 'application/json',
+      },
+      payload: { approved_excerpt_id: randomUUID(), quote_or_summary: 'unapproved text' },
+    });
+    expect(strict.statusCode).toBe(422);
+    expect(strict.json().detail.fields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: [], code: 'unrecognized_keys' })]),
+    );
+    expect((await getHighlights(adminCookie, target.id)).json()).toEqual({ items: [] });
+  });
 });

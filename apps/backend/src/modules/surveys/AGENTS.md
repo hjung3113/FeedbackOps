@@ -28,7 +28,10 @@ Survey owns Survey, Survey Response, Survey Result, survey-specific summaries, a
   Dashboard gets aggregate count/safe Survey navigation, no non-holder response enumeration.
 - Response-derived Finding responsibility is resolved by Findings after the personal source gate.
 
-## Provenance and safe reuse (ADR-0064; implementation pending)
+## Provenance and safe reuse (ADR-0064; #1109 backend/shared implemented)
+
+Backend/shared implementation is present; migration application and real-role
+integration verification remain conductor-owned. The frontend picker is separate.
 
 - Survey owns proposed/new protected Finding/highlight response/approval/text
   extensions and authorized batch read/write seams; Finding owns parent lifecycle
@@ -36,7 +39,7 @@ Survey owns Survey, Survey Response, Survey Result, survey-specific summaries, a
 - Safe highlight reads check source access and exact active approval in the same
   transaction snapshot with target Finding read. Preserve their existing audience
   separately from result-picker cohort/per-question suppression; omit denied/revoked quote.
-- Proposed/new #816 candidates allow result readers to reuse suppression-visible
+- The #1109 candidates allow result readers to reuse suppression-visible
   approved excerpts without a personal grant. The Finding command requires target
   `finding.manage`, rechecks source/result audience and approval on submit, and
   resolves response UUIDs internally. Existing response-addressed creation keeps

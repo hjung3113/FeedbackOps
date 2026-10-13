@@ -282,8 +282,9 @@ mutate sources or create report-specific assignment/resolution state.
 
 ## Survey provenance and Evidence composition (ADR-0064)
 
-Accepted target contract, implementation pending #739/#740: Finding retains
-Finding/highlight lifecycle and counters; Survey owns proposed/new protected
+Protected provenance is implemented by #739/#740, with #1109 attachment extensions:
+Finding retains
+Finding/highlight lifecycle and counters; Survey owns protected
 response/approval/text extensions and authorized batch projections. Foreign
 modules reach those bindings only through the Survey application seam. Entity
 Links owns canonical link mutation, including the narrow Survey definer; Core
@@ -324,3 +325,22 @@ observations through the explicit seam; they own eligibility, routing, permissio
 assignment writes. No runtime Core-to-source or Dashboard import is introduced. The
 Admin-authorized diagnostic read is specified in `api/core.md`; creation-time callers
 remain #1090/#1091. Diagnostic inputs carry no private candidate or source identity.
+
+### #1109 approved Survey excerpt selection and attachment
+
+Survey's `createSurveyEvidenceCandidates` exposes the safe candidate read through
+its service. `resolveSurveyAttachmentSelection` is the approved cross-module source
+resolution seam: callers first authorize their target, then Survey locks settings
+and the response and rechecks source read, active approval and result suppression.
+It returns the existing internal response evidence subject, never a public response
+identifier or personal result payload. `resolveExcerptResultAudience` shares actual
+response/question suppression between candidate preview and submit without audited
+personal Results calls.
+
+Finding's `attachSurveyEvidence` owns the transaction, target authorization, public
+null-body highlight, count, audit and metadata-only idempotency response. Survey's
+existing `recordSurveyHighlightBinding` owns the protected approval snapshot.
+Entity Links' existing `createSurveyFindingLink` owns the canonical active internal
+`evidence_of`; the 0066 extension verifies the private attachment witness. These
+seams do not grant source modules ownership of Finding writes or change inventory
+and personal Results/creation contracts.

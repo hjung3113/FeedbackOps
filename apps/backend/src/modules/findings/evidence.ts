@@ -1,5 +1,7 @@
 import type {
   AddEvidenceHighlightRequest,
+  AttachSurveyEvidenceRequest,
+  AttachSurveyEvidenceResponse,
   EvidenceHighlightDto,
   LinkEvidenceRequest,
   ListEvidenceHighlightsResponse,
@@ -7,8 +9,12 @@ import type {
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { resolveVocEndpoint } from '../entity-links/index.js';
-import { resolveFindingSurveyHighlights } from '../surveys/evidence-access.js';
+import { createSurveyFindingLink, resolveVocEndpoint } from '../entity-links/index.js';
+import {
+  recordSurveyHighlightBinding,
+  resolveFindingSurveyHighlights,
+  resolveSurveyAttachmentSelection,
+} from '../surveys/evidence-access.js';
 import { selectVocForUpdate } from '../voc/index.js';
 import { createEvidenceInventory } from './evidence-inventory.js';
 import { findFindingById } from './repo-read.js';
@@ -196,6 +202,111 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
     });
   }
 
+  async function attachSurveyEvidence(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: AttachSurveyEvidenceRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: AttachSurveyEvidenceResponse }> {
+    const { actor, findingId, input } = args;
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const finding = await lockFindingById(tx, { workspaceId: actor.workspace_id, findingId });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+          if (finding.status === 'archived')
+            throw new HttpError('conflict.parent_archived', 'finding archived');
+          if (!(await canManageFinding(deps, actor, finding.primary_managed_system_id, { tx })))
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          const subject = await resolveSurveyAttachmentSelection(
+            deps,
+            tx,
+            actor,
+            input.approved_excerpt_id,
+          );
+          if (input.analytics_area_id)
+            await assertActiveAnalyticsAreaForManagedSystem(
+              tx,
+              actor.workspace_id,
+              finding.primary_managed_system_id,
+              input.analytics_area_id,
+            );
+          const highlight = await insertEvidenceHighlight(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+            primaryManagedSystemId: finding.primary_managed_system_id,
+            sourceType: 'survey_response',
+            sourceId: null,
+            approvedExcerptId: null,
+            quoteOrSummary: null,
+            analyticsAreaId: input.analytics_area_id ?? null,
+            sentiment: input.sentiment ?? null,
+            importance: input.importance ?? null,
+            createdBy: actor.actor_id,
+          });
+          await recordSurveyHighlightBinding(
+            tx,
+            actor,
+            highlight.id,
+            subject.response_id,
+            input.approved_excerpt_id,
+          );
+          const link = await createSurveyFindingLink(tx, {
+            workspaceId: actor.workspace_id,
+            responseId: subject.response_id,
+            findingId: finding.id,
+            relationType: 'evidence_of',
+            managedSystemId: subject.primary_managed_system_id,
+            createdBy: actor.actor_id,
+          });
+          await incrementFindingEvidenceCount(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: actor.workspace_id,
+            actor_id: actor.actor_id,
+            event_type: 'evidence_highlight_added',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Evidence highlight added',
+            detail: {
+              finding_id: finding.id,
+              evidence_highlight_id: highlight.id,
+              source_type: 'survey_response',
+              source_id: subject.response_id,
+              primary_managed_system_id: finding.primary_managed_system_id,
+            },
+          });
+          if (link.inserted)
+            await deps.auditService.record(tx, {
+              workspace_id: actor.workspace_id,
+              actor_id: actor.actor_id,
+              event_type: 'entity_link.created',
+              subject_type: 'entity_link',
+              subject_id: link.id,
+              summary: 'Entity link created',
+              detail: {
+                link_id: link.id,
+                source: { type: 'survey_response', id: subject.response_id },
+                target: { type: 'finding', id: finding.id },
+                relation_type: 'evidence_of',
+                visibility: 'internal_only',
+              },
+            });
+          return {
+            status: 201,
+            body: { evidence_highlight_id: highlight.id, finding_id: finding.id },
+          };
+        },
+      ),
+    );
+  }
   async function canReadEvidenceHighlightSource(args: {
     actor: FindingsActor;
     row: EvidenceHighlightRow;
@@ -344,6 +455,7 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
   return {
     ...createEvidenceInventory(deps),
     addEvidenceHighlight,
+    attachSurveyEvidence,
     listEvidenceHighlights,
     linkEvidence,
   };

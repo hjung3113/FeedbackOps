@@ -441,4 +441,23 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
     ]);
     await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
   });
+
+  it('#1109 mutator witness extensions confer no raw-answer or owner-role access to app', async () => {
+    for (const role of [
+      'fops_survey_provenance_mutator_owner',
+      'fops_entity_links_survey_mutator_owner',
+    ]) {
+      const result = await migrateHandle.pool.query(
+        `
+        select pg_has_role('fops_app',$1::name,'MEMBER') as app_member,
+          has_any_column_privilege($1::name,'survey.survey_response_answers','SELECT,INSERT,UPDATE') as answers,
+          has_schema_privilege($1::name,'survey','CREATE') as survey_create,
+          has_schema_privilege($1::name,'core','CREATE') as core_create`,
+        [role],
+      );
+      expect(result.rows).toEqual([
+        { app_member: false, answers: false, survey_create: false, core_create: false },
+      ]);
+    }
+  });
 });

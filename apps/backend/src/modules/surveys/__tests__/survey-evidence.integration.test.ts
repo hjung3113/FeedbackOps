@@ -3,6 +3,7 @@ import { waitForResponseEvidenceWaiters } from '../../../test-support/response-e
 
 import {
   approvedExcerptDtoSchema,
+  surveyEvidenceCandidatesResponseSchema,
   surveyResponseExcerptCandidateDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
@@ -903,5 +904,27 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     expect(
       approvals.rows.find((approval) => approval.id === otherApproval.rows[0]?.id)?.revoked_at,
     ).toBeNull();
+  });
+  it('#1109 safe Survey picker read does not inherit the personal candidate audit', async () => {
+    const source = await seed();
+    const approvalId = await approveDirectly(source);
+    expectedSideEffects = {
+      audit: { count: 0, message: 'safe picker produces no personal read audit' },
+      approvals: { count: 1, message: 'safe picker preserves the active approval' },
+    };
+    const holder = await actor();
+    await grant(holder.id, 'survey.read', source.msId);
+    await grant(holder.id, 'survey.read_personal_responses', source.msId);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/surveys/${source.surveyId}/evidence-candidates`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${holder.cookie}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const result = surveyEvidenceCandidatesResponseSchema.parse(response.json());
+    expect(result.response_state).toBe('visible');
+    expect(result.items.map((item) => item.approved_excerpt_id)).toEqual([approvalId]);
+    expect(response.body).not.toContain(source.responseId);
+    expect(response.body).not.toContain('Raw private response text');
   });
 });

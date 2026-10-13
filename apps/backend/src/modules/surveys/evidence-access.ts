@@ -6,11 +6,13 @@ import {
 } from '@fops/shared';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import {
   checkSurveyManage,
   checkSurveyPersonalResponseRead,
   checkSurveyRead,
 } from './authorization.js';
+import { resolveExcerptResultAudience } from './evidence-candidates.js';
 import {
   type FindingHighlightEvidence,
   type SurveyResponseEvidenceSubject,
@@ -18,6 +20,7 @@ import {
   bindHighlightResponse,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
+  lockAttachmentResponse,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
   readFindingHighlightEvidence,
@@ -374,4 +377,43 @@ export async function resolveInventorySurveyHighlights(
     if (allowed) permitted.set(row.highlight_id, row);
   }
   return permitted;
+}
+
+/** Finding has already locked/authorized its target. Selection is never authority. */
+export async function resolveSurveyAttachmentSelection(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  approvalId: string,
+): Promise<SurveyResponseEvidenceSubject> {
+  // Hold the existing settings singleton through commit, including its no-row
+  // default, so a threshold update cannot race a successful authorization.
+  const settings = await getResolvedWorkspaceSettingsForUpdate(tx, actor.workspace_id);
+  const responseId = await lockAttachmentResponse(tx, actor.workspace_id, approvalId);
+  if (!responseId) throw new HttpError('not_found.record', 'survey excerpt not found');
+  const { subject } = await resolveSurveyResponseEvidenceAccess(
+    deps,
+    tx,
+    actor,
+    responseId,
+    'read_highlight',
+  );
+  if (subject.survey_status === 'draft')
+    throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
+  const approved = await readApprovedResponseExcerpts(tx, actor.workspace_id, responseId, [
+    approvalId,
+  ]);
+  const audience = await resolveExcerptResultAudience(
+    tx,
+    deps.checkService,
+    actor,
+    subject.survey_id,
+    subject.primary_managed_system_id,
+    settings.survey_anonymity_threshold,
+  );
+  if (!approved[0] || !audience.questionIds.includes(approved[0].question_id))
+    throw new HttpError('validation.failed', 'approved excerpt is unavailable', {
+      fields: [{ path: ['approved_excerpt_id'], code: 'invalid' }],
+    });
+  return subject;
 }
