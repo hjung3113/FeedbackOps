@@ -1230,7 +1230,8 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         expect(a.body).not.toContain('40P01');
         expect(b.body).not.toContain('40P01');
         expect(a.statusCode).toBe(200);
-        expect(b.statusCode).toBe(secondCommand === 'patch' ? 200 : 201);
+        // The evidence-link variant re-links an existing tuple, so the owner returns 200 (no-op).
+        expect(b.statusCode).toBe(200);
       } finally {
         await blocker.query('ROLLBACK');
         blocker.release();
