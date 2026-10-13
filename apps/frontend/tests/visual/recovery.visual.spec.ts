@@ -25,8 +25,17 @@ for (const area of ['integration', 'home'] as const) {
       await expect(page.getByTestId('recovery-queue')).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       await page.getByTestId('recovery-queue').scrollIntoViewIfNeeded();
-      if (params.has('selected')) await expect(page.getByTestId('recovery-panel')).toBeVisible();
-      else await expect(page.getByRole('button', { name: /VOC 담당자 배정이 필요/ })).toBeVisible();
+      if (params.has('selected')) {
+        const panel = page.getByTestId('recovery-panel');
+        await expect(panel).toBeVisible();
+        await expect(
+          panel.getByRole('heading', { name: '월간 리포트 다운로드 오류' }),
+        ).toBeVisible();
+        if (state === 'hidden') await expect(panel.getByText('이번 항목 숨김')).toBeVisible();
+        if (state === 'resolved')
+          await expect(panel.getByText('원본 화면에서 처리됨', { exact: false })).toBeVisible();
+      } else
+        await expect(page.getByRole('button', { name: /VOC 담당자 배정이 필요/ })).toBeVisible();
       await expectVisual(page, page.locator('[data-app-frame]'), `${area}-recovery-${state}.png`);
     });
   }

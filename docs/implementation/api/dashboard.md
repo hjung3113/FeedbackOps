@@ -145,6 +145,14 @@ route. An authorized safe Survey jump alone is never this action. No Dashboard r
 or duplicated source workflow is introduced.
 
 Source and affected summaries contain only independently readable IDs/display IDs/titles/routes.
+Recovery `source.route`, affected routes and action targets use mounted frontend selection URLs:
+VOC `/vocs?selected=:id`, Task `/tasks?param=:id`, Finding `/findings?selected=:id`,
+Permission Request `/admin/permissions/requests?selected=:id`, and Survey
+`/surveys/:id/follow-up`. VOC `triage` repair targets additionally carry
+`view=triage&managedSystem=:repairSystemId` so the owning scoped Triage workflow opens.
+VOC public-update intents select the readable VOC on `/vocs`; endpoint metadata is not a browser URL.
+Frontend jumps append a bounded internal queue `returnTo` and preserve browser history for Back.
+
 A Task gap may depend on restricted VOCs without exposing their identity, title, route,
 owner or action. Hints use persisted VOC/Finding owner, safely readable affected VOC owners
 and/or Task assignee, Survey operator or Admin queue. Actor/team hints carry safe source-owned

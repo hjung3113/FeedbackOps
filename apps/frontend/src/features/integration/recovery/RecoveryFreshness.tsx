@@ -1,34 +1,39 @@
 import { RECOVERY_COPY as COPY } from '@/lib/copy/recovery';
 
+export function formatRecoveryTime(value: string): string {
+  return value.replace('T', ' ').replace(/(?:\.\d+)?Z$/, ' UTC');
+}
+
 export function RecoveryFreshness({
   computedAt,
   failed,
   updatedAt,
-}: { computedAt: string | undefined; failed: boolean; updatedAt?: number }) {
-  if (!computedAt) return null;
+  pageComputedAt,
+}: {
+  computedAt: string | undefined;
+  failed: boolean;
+  updatedAt?: number;
+  pageComputedAt?: string | undefined;
+}) {
+  if (!computedAt || (!failed && computedAt === pageComputedAt)) return null;
   return (
-    <div
-      className="my-3 flex flex-col gap-1 text-xs text-text-muted"
-      data-testid="recovery-freshness"
-    >
-      <p>
-        {COPY.computed} ·{' '}
-        <time dateTime={computedAt}>
-          {computedAt.replace('T', ' ').replace(/(?:\.\d+)?Z$/, ' UTC')}
-        </time>
-      </p>
+    <p className="my-3 text-xs text-text-muted" data-testid="recovery-freshness">
+      {COPY.computed} · <time dateTime={computedAt}>{formatRecoveryTime(computedAt)}</time>
       {updatedAt !== undefined && updatedAt > 0 && (
-        <p>
-          {COPY.successful} ·{' '}
+        <>
+          {' '}
+          · {COPY.successful} ·{' '}
           <time dateTime={new Date(updatedAt).toISOString()}>
-            {new Date(updatedAt)
-              .toISOString()
-              .replace('T', ' ')
-              .replace(/\.\d+Z$/, ' UTC')}
+            {formatRecoveryTime(new Date(updatedAt).toISOString())}
           </time>
-        </p>
+        </>
       )}
-      {failed && <output>{COPY.stale}</output>}
-    </div>
+      {failed && (
+        <>
+          {' '}
+          · <output>{COPY.stale}</output>
+        </>
+      )}
+    </p>
   );
 }

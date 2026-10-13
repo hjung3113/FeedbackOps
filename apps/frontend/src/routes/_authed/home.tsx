@@ -1,3 +1,5 @@
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import type { RenderRecoveryAccess } from '@/features/integration/public';
 import { useRecoveryQueue } from '@/features/integration/public';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
@@ -29,12 +31,20 @@ export const Route = createFileRoute('/_authed/home')({
   component: HomeRouteSplit,
 });
 
+const renderRequestAccess: RenderRecoveryAccess = (permission, returnTo) => (
+  <RequestAccessButton
+    capability={permission.permission}
+    managedSystemId={permission.managed_system_id}
+    returnRouteIntent={returnTo}
+  />
+);
+
 export function HomeRoute(): React.ReactElement {
   const { managedSystem, tab } = useSearch({ strict: false }) as {
     managedSystem?: string;
     tab?: HomeTab;
   };
-  const recovery = useRecoveryQueue('actionable', tab !== 'inbox');
+  const recovery = useRecoveryQueue('actionable', tab !== 'inbox', renderRequestAccess);
   const navigate = useNavigate({ from: '/home' });
   const onTabChange = (nextTab: HomeTab): void => {
     void navigate({

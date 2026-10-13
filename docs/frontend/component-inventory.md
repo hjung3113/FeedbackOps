@@ -258,8 +258,8 @@ permission-blocked and initial-error screens do not render the control.
 | --- | --- | --- |
 | `useRecoveryQueue` | `apps/frontend/src/features/integration/recovery/useRecoveryQueue.tsx` | ObjectRow/ListToolbar/ListLoadMore composition; bounded operational/actionable reads, hidden/history tabs and URL selection. |
 | `RecoveryPanel` | `apps/frontend/src/features/integration/recovery/RecoveryPanel.tsx` | Existing PageShell detail slot; backend safe summaries/actions, personal presentation, independent loading/error/resolved states and keyboard close/focus. |
-| `RecoveryFreshness` | `apps/frontend/src/features/integration/recovery/RecoveryFreshness.tsx` | Server computation time, last successful refresh and stale marker; shared by Home, Integration and Coverage. |
-| Integration public seam | `apps/frontend/src/features/integration/public.ts` | Home consumes recovery composition/freshness only through this module. |
+| `RecoveryFreshness` | `apps/frontend/src/features/integration/recovery/RecoveryFreshness.tsx` | One line for server computation time, last successful refresh and stale marker; queue/detail suppress matching page timestamps unless stale. `formatRecoveryTime` also formats resolution and snooze timestamps. Shared by Home, Integration and Coverage. |
+| Integration public seam | `apps/frontend/src/features/integration/public.ts` | Home consumes recovery composition/freshness only through this module; Home/Integration routes inject `RenderRecoveryAccess` so Integration internals remain Admin-free. |
 | Recovery invalidation | `apps/frontend/src/lib/query/recovery.ts` | Neutral recovery/summary query prefixes; presentation also refreshes owning source caches. Source mutation hooks own their source invalidation. |
 
 The host retains PageShell ownership. Inbox unregisters Home's slot, resolved selections

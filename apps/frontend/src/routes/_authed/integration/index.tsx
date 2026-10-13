@@ -1,3 +1,5 @@
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import type { RenderRecoveryAccess } from '@/features/integration/public';
 import { IntegrationDashboardRoute } from '@/features/integration/routes/IntegrationDashboardRoute';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
@@ -25,6 +27,14 @@ export const Route = createFileRoute('/_authed/integration/')({
   component: IntegrationDashboardRouteShellSplit,
 });
 
+const renderRequestAccess: RenderRecoveryAccess = (permission, returnTo) => (
+  <RequestAccessButton
+    capability={permission.permission}
+    managedSystemId={permission.managed_system_id}
+    returnRouteIntent={returnTo}
+  />
+);
+
 export function IntegrationDashboardRouteShell() {
-  return <IntegrationDashboardRoute />;
+  return <IntegrationDashboardRoute renderRequestAccess={renderRequestAccess} />;
 }

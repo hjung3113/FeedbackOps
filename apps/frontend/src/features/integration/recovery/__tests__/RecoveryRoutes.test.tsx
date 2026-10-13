@@ -2,7 +2,10 @@ import { LinkTaskModal } from '@/features/findings/components/FindingDetail/Link
 import { CoverageRoute } from '@/features/integration/routes/CoverageRoute';
 import { IntegrationDashboardRoute } from '@/features/integration/routes/IntegrationDashboardRoute';
 import { HomeRoute, validateHomeSearch } from '@/routes/_authed/home';
-import { validateIntegrationDashboardSearch } from '@/routes/_authed/integration';
+import {
+  IntegrationDashboardRouteShell,
+  validateIntegrationDashboardSearch,
+} from '@/routes/_authed/integration';
 import type { FindingDto } from '@fops/shared';
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -69,14 +72,14 @@ function Host() {
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
 }
-async function mount(url: string) {
+async function mount(url: string, integrationComponent = IntegrationDashboardRoute) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute({ component: Host });
   const routes = [
     createRoute({
       getParentRoute: () => root,
       path: '/integration',
-      component: IntegrationDashboardRoute,
+      component: integrationComponent,
       validateSearch: validateIntegrationDashboardSearch,
     }),
     createRoute({
@@ -107,7 +110,7 @@ async function mount(url: string) {
   );
   return { client, router, history, ...rendered };
 }
-function install() {
+function install(blocked = false, role = 'admin') {
   let failed = false;
   let repaired = false;
   const requests: { path: string; body: unknown; method: string }[] = [];
@@ -122,7 +125,16 @@ function install() {
       title: '리포트 오류',
       route: `/findings?selected=${ID}`,
     },
-    next_actions: [],
+    next_actions: blocked
+      ? [
+          {
+            ...recoveryVisualDetail().next_actions[0],
+            availability: 'blocked_requestable',
+            blocked_reason: '권한 요청이 필요합니다.',
+            requestable_permission: { permission: 'voc.triage', managed_system_id: ID },
+          },
+        ]
+      : [],
     state: repaired ? 'resolved' : 'active',
     resolution: repaired
       ? {
@@ -144,12 +156,12 @@ function install() {
       const path = url.pathname;
       const method = init?.method ?? 'GET';
       requests.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : null });
-      if (path === '/me')
+      if (method === 'GET' && path === '/me')
         return response({
-          actor: { id: ID, role_level: 'admin', display_name: '지원' },
+          actor: { id: ID, role_level: role, display_name: '지원' },
           workspace_id: ID,
         });
-      if (path === '/dashboard/summary')
+      if (method === 'GET' && path === '/dashboard/summary')
         return failed
           ? response({ code: 'internal.unexpected' }, 500)
           : response({
@@ -171,14 +183,14 @@ function install() {
               coverage: [],
               by_managed_system: [],
             });
-      if (path === '/dashboard/recovery-items')
+      if (method === 'GET' && path === '/dashboard/recovery-items')
         return response({
           ...recoveryVisualList('active'),
           items: repaired ? [] : [listItem()],
           total: repaired ? 0 : 1,
           visible_total: repaired ? 0 : 1,
         });
-      if (path === '/dashboard/recovery-history')
+      if (method === 'GET' && path === '/dashboard/recovery-history')
         return response({
           ...recoveryVisualHistory(),
           items: repaired
@@ -198,22 +210,27 @@ function install() {
             : [],
           total: repaired ? 1 : 0,
         });
-      if (path.startsWith('/dashboard/recovery-items/')) return response(detail());
-      if (path === `/findings/${ID}/link-task`) {
+      if (method === 'GET' && path === `/dashboard/recovery-items/${RECOVERY_VISUAL_ID}`)
+        return response(detail());
+      if (method === 'POST' && path === `/findings/${ID}/link-task`) {
         repaired = true;
         return response(finding);
       }
-      if (path === '/tasks')
+      if (method === 'GET' && path === '/tasks')
         return response({
           items: [
             { id: ID, title: '실행 Task', display_id: 'TASK-1', primary_managed_system_id: ID },
           ],
         });
-      if (path === '/task-requests') return response({ items: [] });
-      if (path === '/permission-requests/mine') return response({ requests: [] });
-      if (path === '/notifications')
+      if (method === 'GET' && path === '/task-requests') return response({ items: [] });
+      if (method === 'GET' && path === '/permission-requests/mine')
+        return response({ requests: [] });
+      if (method === 'GET' && path === '/notifications')
         return response({ items: [], page: { has_more: false }, unread_count: 0 });
-      return response({ items: [], total: 0, page: { has_more: false } });
+      if (method === 'GET' && path === '/managed-systems') return response({ items: [] });
+      if (method === 'GET' && path === '/me/answerable-surveys')
+        return response({ items: [], page: { has_more: false } });
+      throw new Error(`Unexpected request: ${method} ${path}`);
     }),
   );
   return {
@@ -295,4 +312,33 @@ it('repairs in the shipped Finding link workflow then Back refreshes queue, summ
     { button: 0, ctrlKey: false },
   );
   await screen.findByText('1회차 · 해결됨');
+});
+
+it.each(['/home', '/integration'])(
+  'injects the request-access control from the %s route',
+  async (path) => {
+    const api = install(true);
+    await mount(`${path}?selected=${RECOVERY_VISUAL_ID}`, IntegrationDashboardRouteShell);
+    await screen.findByText('권한 요청이 필요합니다.');
+    fireEvent.click(screen.getByRole('button', { name: '권한 요청' }));
+    await screen.findByTestId('permission-request-dialog');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api.requests.filter((request) => request.method !== 'GET')).toEqual([]);
+  },
+);
+it('shows the authorized scoped Developer queue total', async () => {
+  install(false, 'developer');
+  await mount(`/integration?managedSystem=${ID}`);
+  await waitFor(() =>
+    expect(screen.getByTestId('integration-dashboard-gap-count')).toHaveTextContent('1'),
+  );
+});
+it('shows one freshness line when page, queue and detail have the same computation time', async () => {
+  install();
+  await mount(`/integration?selected=${RECOVERY_VISUAL_ID}`);
+  await screen.findByRole('button', { name: '내 화면에서 1일 숨기기' });
+  expect(screen.getAllByTestId('recovery-freshness')).toHaveLength(1);
+  expect(screen.queryByText('목록, 상세, 요약은 각각 계산됩니다.')).toBeNull();
 });

@@ -7,7 +7,7 @@ import { RECOVERY_COPY as COPY } from '@/lib/copy/recovery';
 import { RECOVERY_QUERY_KEY, invalidateRecovery } from '@/lib/query/recovery';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { type RecoverySearch, safeRecoveryReturnTo } from '@/lib/router/recovery-search';
-import { RECOVERY_CATEGORIES, type RecoveryCategory } from '@fops/shared';
+import { type DashboardSummary, RECOVERY_CATEGORIES, type RecoveryCategory } from '@fops/shared';
 import {
   Button,
   ListToolbar,
@@ -24,11 +24,15 @@ import {
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef } from 'react';
-import { RecoveryFreshness } from './RecoveryFreshness';
-import { RecoveryPanel } from './RecoveryPanel';
+import { RecoveryFreshness, formatRecoveryTime } from './RecoveryFreshness';
+import { RecoveryPanel, type RenderRecoveryAccess } from './RecoveryPanel';
 
 /** Integration's supported composition seam: caller's existing PageShell owns the slot. */
-export function useRecoveryQueue(view: 'operational' | 'actionable', active = true) {
+export function useRecoveryQueue(
+  view: 'operational' | 'actionable',
+  active = true,
+  renderRequestAccess?: RenderRecoveryAccess,
+) {
   const me = useMe();
   const client = useQueryClient();
   const search = useSearch({ strict: false }) as RecoverySearch;
@@ -74,14 +78,8 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
       contextRef.current = context;
       origin.current = undefined;
       cancelFocus();
-      if (search.cursor)
-        void navigate({
-          to: location.pathname,
-          replace: true,
-          search: (previous: Record<string, unknown>) => ({ ...previous, cursor: undefined }),
-        });
     }
-  }, [context, cancelFocus, search.cursor, navigate, location.pathname]);
+  }, [context, cancelFocus]);
   useEffect(() => cancelFocus, [cancelFocus]);
   useEffect(() => {
     if (search.selected) cancelFocus();
@@ -120,6 +118,8 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
     getNextPageParam: (page) => (page.page.has_more ? page.page.cursor : undefined),
     enabled: enabled && !search.history,
     retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
   const history = useInfiniteQuery({
     queryKey: [
@@ -137,6 +137,8 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
     getNextPageParam: (page) => (page.page.has_more ? page.page.cursor : undefined),
     enabled: enabled && !!search.history,
     retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
   const detail = useQuery({
     queryKey: [
@@ -150,6 +152,15 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
     queryFn: ({ signal }) => fetchRecoveryDetail(search.selected as string, signal),
     enabled: enabled && !!search.selected,
     retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const pageSummary = useQuery<DashboardSummary>({
+    queryKey: [
+      'dashboard-summary',
+      search.managedSystem === 'all' ? undefined : search.managedSystem,
+    ],
+    enabled: false,
   });
   const current = search.history ? history : list;
   const cursorError =
@@ -205,6 +216,10 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
           resolution: '',
         })),
       );
+  useEffect(() => {
+    if (active && selected && current.data)
+      rows.current.get(selected)?.scrollIntoView({ block: 'nearest' });
+  }, [active, selected, current.data]);
   const queue = (
     <section className="mt-9" data-testid="recovery-queue">
       <h2 ref={heading} tabIndex={-1} className="mb-3 text-sm font-semibold">
@@ -276,8 +291,8 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
         computedAt={first?.computed_at}
         failed={current.isError}
         updatedAt={current.dataUpdatedAt}
+        pageComputedAt={pageSummary.data?.computed_at}
       />
-      <p className="mb-3 text-xs text-text-muted">{COPY.independent}</p>
       {me.isPending || (current.isPending && enabled) ? (
         <Skeleton className="h-24" role="status" aria-label={COPY.loading} />
       ) : me.isError ? (
@@ -310,13 +325,27 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
                 title={row.item.reason}
                 meta={
                   <span>
-                    {row.item.source?.display_id} · {row.item.source?.title} ·{' '}
-                    {row.episode ? (
-                      <span>{row.episode}</span>
-                    ) : (
-                      row.item.responsible_actor_hint.label
+                    {[
+                      row.item.source?.display_id,
+                      row.item.source?.title,
+                      row.item.source?.type === 'permission_request' ? row.item.source.id : '',
+                      row.episode ? '' : row.item.responsible_actor_hint.label,
+                      row.resolution ? formatRecoveryTime(row.resolution) : '',
+                      !search.history && row.item.presentation.state === 'muted' ? COPY.muted : '',
+                      !search.history &&
+                      row.item.presentation.state === 'snoozed' &&
+                      row.item.presentation.snoozed_until
+                        ? COPY.snoozed(formatRecoveryTime(row.item.presentation.snoozed_until))
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    {row.episode && (
+                      <>
+                        {' '}
+                        · <span>{row.episode}</span>
+                      </>
                     )}
-                    {row.resolution && ` · ${row.resolution}`}
                   </span>
                 }
                 selected={selected === row.item.recovery_item_id}
@@ -339,7 +368,16 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
           />
         </>
       ) : (
-        <ListStateMessage variant="empty" title={COPY.empty} />
+        <ListStateMessage
+          variant="empty"
+          title={
+            search.history
+              ? COPY.emptyHistory
+              : search.presentation === 'hidden'
+                ? COPY.emptyHidden
+                : COPY.empty
+          }
+        />
       )}
     </section>
   );
@@ -347,11 +385,13 @@ export function useRecoveryQueue(view: 'operational' | 'actionable', active = tr
     active && selected ? (
       <RecoveryPanel
         key={`${context}:${selected}`}
+        {...(renderRequestAccess ? { renderRequestAccess } : {})}
         id={selected}
         item={detail.data}
         loading={detail.isPending}
         error={detail.error ?? me.error}
         updatedAt={detail.dataUpdatedAt}
+        pageComputedAt={pageSummary.data?.computed_at}
         onClose={close}
         onRetry={() => void detail.refetch()}
         returnTo={location.href}

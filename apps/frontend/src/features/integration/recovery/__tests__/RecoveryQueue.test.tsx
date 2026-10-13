@@ -1,7 +1,7 @@
 import { validateHomeSearch } from '@/routes/_authed/home';
 import { validateIntegrationDashboardSearch } from '@/routes/_authed/integration';
 import { DetailPanelFullscreenContext, DetailPanelSlotContext, PageShell } from '@fops/ui';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import {
   Outlet,
   RouterProvider,
@@ -61,11 +61,14 @@ function setup(
       const method = init?.method ?? 'GET';
       const body = init?.body ? JSON.parse(String(init.body)) : null;
       requests.push({ url, method, body });
-      if (url.pathname === '/me')
+      if (method === 'GET' && url.pathname === '/me')
         return response({ actor: { id: SOURCE, role_level: 'admin' }, workspace_id: SOURCE });
-      if (method === 'PATCH')
+      if (
+        method === 'PATCH' &&
+        [ID, SECOND].some((id) => url.pathname === `/dashboard/recovery-items/${id}/presentation`)
+      )
         return options.patch?.(body) ?? response({ ...item, computed_at: time });
-      if (url.pathname === '/dashboard/recovery-history')
+      if (method === 'GET' && url.pathname === '/dashboard/recovery-history')
         return (
           options.history?.() ??
           response({
@@ -88,7 +91,7 @@ function setup(
             ],
           })
         );
-      if (url.pathname === '/dashboard/recovery-items')
+      if (method === 'GET' && url.pathname === '/dashboard/recovery-items')
         return (
           options.list?.(url) ??
           response({
@@ -100,6 +103,11 @@ function setup(
             page: { has_more: false },
           })
         );
+      if (
+        method !== 'GET' ||
+        ![ID, SECOND].some((id) => url.pathname === `/dashboard/recovery-items/${id}`)
+      )
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
       return (
         options.detail?.() ??
         response({ ...item, recovery_item_id: url.pathname.split('/').at(-1), computed_at: time })
@@ -158,6 +166,7 @@ async function mount(url = '/integration', fullscreen = false) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  focusManager.setFocused(undefined);
 });
 it('restores independent detail on refresh and Back; keyboard close returns focus through the real slot', async () => {
   setup();
@@ -402,7 +411,7 @@ it('rechecks selected detail in a changed scope and drops incompatible cursors w
   await act(async () =>
     router.navigate({
       to: '/integration',
-      search: { selected: ID, managedSystem: SOURCE, cursor: 'old' },
+      search: { selected: ID, managedSystem: SOURCE },
     }),
   );
   await waitFor(() => expect(router.state.location.search.cursor).toBeUndefined());
@@ -427,7 +436,7 @@ it.each([403, 500])('separates list %s from an empty queue', async (status) => {
   expect(screen.queryByText('현재 표시할 항목이 없습니다.')).toBeNull();
 });
 it('renders backend blocked action reasons without executing endpoint metadata', async () => {
-  setup({
+  const requests = setup({
     detail: () =>
       response({
         ...item,
@@ -462,6 +471,10 @@ it('renders backend blocked action reasons without executing endpoint metadata',
   await mount(`/integration?selected=${ID}`);
   await screen.findByText('현재 권한으로 배정할 수 없습니다.');
   expect(screen.queryByRole('link', { name: 'VOC 배정' })).toBeNull();
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
 });
 
 it('returns focus to the clicked history occurrence when the same identity appears twice', async () => {
@@ -536,4 +549,170 @@ it('appends a bounded continuation without dropping loaded rows or selected deta
     { view: 'operational', presentation: 'visible', limit: '50', cursor: 'continuation' },
   ]);
   expect(screen.queryByRole('button', { name: '더 불러오기' })).toBeNull();
+});
+
+it('restores a non-first-page cursor with its filter on Back and Forward', async () => {
+  setup();
+  const { router, history } = await mount('/integration?category=unassigned-voc&cursor=page-two');
+  await screen.findByRole('button', { name: /VOC 담당자 배정이 필요/ });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: '내 화면에서 숨긴 항목' }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  await waitFor(() => expect(router.state.location.search.cursor).toBeUndefined());
+  await act(async () => history.back());
+  await waitFor(() =>
+    expect(router.state.location.search).toMatchObject({
+      category: 'unassigned-voc',
+      cursor: 'page-two',
+    }),
+  );
+  await act(async () => history.forward());
+  await waitFor(() => expect(router.state.location.search.presentation).toBe('hidden'));
+  expect(router.state.location.search.cursor).toBeUndefined();
+  await act(async () => history.back());
+  await waitFor(() => expect(router.state.location.search.cursor).toBe('page-two'));
+});
+
+it.each([false, true])(
+  'keeps recovery reads fresh across rapid remount and window focus, with history=%s',
+  async (historyView) => {
+    const requests = setup();
+    const { router, client } = await mount(
+      `/integration?selected=${ID}${historyView ? '&history=true' : ''}`,
+    );
+    await screen.findByRole('button', { name: '내 화면에서 1일 숨기기' });
+    await act(async () =>
+      router.navigate({ to: '/home', search: historyView ? { history: true } : {} }),
+    );
+    await screen.findByRole('heading', { name: '내가 처리할 수 있는 항목' });
+    const reads = () => requests.filter((r) => r.url.pathname.startsWith('/dashboard/recovery-'));
+    const before = reads().length;
+    await act(async () =>
+      router.navigate({
+        to: '/integration',
+        search: { selected: ID, ...(historyView ? { history: true } : {}) },
+      }),
+    );
+    await screen.findByRole('button', { name: '내 화면에서 1일 숨기기' });
+    expect(reads()).toHaveLength(before);
+    await act(async () =>
+      client.invalidateQueries({ queryKey: ['recovery'], refetchType: 'none' }),
+    );
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    expect(reads()).toHaveLength(before);
+    fireEvent.click(screen.getByRole('button', { name: '새로고침' }));
+    await waitFor(() => expect(reads().length).toBeGreaterThan(before));
+    focusManager.setFocused(undefined);
+  },
+);
+
+it.each([
+  ['muted', null, '이번 항목 숨김'],
+  ['snoozed', '2026-07-21T15:28:00.123456Z', '내 화면에서 숨김 · 2026-07-21 15:28:00 UTC까지'],
+] as const)(
+  'shows %s personal state on the hidden row and named detail',
+  async (state, until, label) => {
+    const hidden = { ...item, presentation: { state, snoozed_until: until } };
+    setup({
+      list: () =>
+        response({
+          computed_at: time,
+          items: [hidden],
+          total: 1,
+          visible_total: 0,
+          hidden_total: 1,
+          page: { has_more: false },
+        }),
+      detail: () => response({ ...hidden, computed_at: time }),
+    });
+    await mount(`/integration?presentation=hidden&selected=${ID}`);
+    await screen.findByRole('button', { name: '내 화면에 다시 표시' });
+    expect(screen.getByRole('heading', { name: '다운로드 오류' })).toBeVisible();
+    expect(screen.getAllByText(label, { exact: false })).toHaveLength(2);
+  },
+);
+
+it.each([
+  ['presentation=hidden', '내 화면에서 숨긴 항목이 없습니다.'],
+  ['history=true', '최근 3개월 처리 이력이 없습니다.'],
+])('uses view-specific empty copy for %s', async (search, label) => {
+  const empty = { computed_at: time, items: [], total: 0, page: { has_more: false } };
+  setup({
+    list: () => response({ ...empty, visible_total: 0, hidden_total: 0 }),
+    history: () => response({ ...empty, window_start: '2026-05-01T00:00:00.000Z' }),
+  });
+  await mount(`/integration?${search}`);
+  await screen.findByText(label);
+});
+
+it('formats microsecond resolution times and suppresses the hiding note on resolved detail', async () => {
+  const resolution = {
+    resolved_at: '2026-07-20T08:00:00.123456Z',
+    outcome: 'resolved',
+    evidence: 'command',
+    action: 'triage',
+  };
+  setup({
+    detail: () => response({ ...item, state: 'resolved', resolution, computed_at: time }),
+    history: () =>
+      response({
+        computed_at: time,
+        window_start: '2026-05-01T00:00:00.000Z',
+        total: 1,
+        page: { has_more: false },
+        items: [{ id: SOURCE, item, occurrence: 1, resolution }],
+      }),
+  });
+  await mount(`/integration?history=true&selected=${ID}`);
+  await screen.findByText('해결됨');
+  expect(screen.getAllByText(/2026-07-20 08:00:00 UTC/)).toHaveLength(2);
+  expect(screen.getByText(/원본 화면에서 처리됨/)).toBeVisible();
+  expect(screen.queryByText(/숨기기는 내 화면에만/)).toBeNull();
+  expect(screen.queryByText(/123456/)).toBeNull();
+});
+
+it('scrolls the URL-selected row into view after the queue loads', async () => {
+  setup();
+  const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+  await mount(`/integration?selected=${SECOND}`);
+  const row = await screen.findByRole('button', { name: /다른 VOC 담당자 배정/ });
+  await waitFor(() => expect(scroll.mock.instances).toContain(row));
+  scroll.mockRestore();
+});
+
+it('distinguishes Permission Request rows with the safe source identity and no empty separator', async () => {
+  setup({
+    list: () =>
+      response({
+        computed_at: time,
+        items: [
+          {
+            ...item,
+            category: 'permission-requests-pending',
+            reason_code: 'permission-requests-pending',
+            reason: 'Permission Request 검토가 필요합니다.',
+            source: {
+              type: 'permission_request',
+              id: SOURCE,
+              display_id: '',
+              title: 'Permission Request',
+              route: `/admin/permissions/requests?selected=${SOURCE}`,
+            },
+            responsible_actor_hint: { kind: 'admin_queue', label: 'Admin 검토 대기열' },
+          },
+        ],
+        total: 1,
+        visible_total: 1,
+        hidden_total: 0,
+        page: { has_more: false },
+      }),
+  });
+  await mount();
+  const row = await screen.findByRole('button', { name: /Permission Request 검토가 필요/ });
+  expect(row).toHaveTextContent(`Permission Request · ${SOURCE} · Admin 검토 대기열`);
+  expect(row.textContent).not.toContain('· Permission Request');
 });

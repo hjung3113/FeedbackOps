@@ -1,3 +1,4 @@
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { SurveyBuilder } from '@/features/surveys/components/builder/SurveyBuilder';
 import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
@@ -20,7 +21,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
-const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
+const searchSchema = z
+  .object({ builder: z.boolean().optional(), returnTo: recoverySearchFields.returnTo })
+  .strict();
 
 export function validateSurveyDetailSearch(raw: unknown) {
   return parseRouteSearch(searchSchema, raw);

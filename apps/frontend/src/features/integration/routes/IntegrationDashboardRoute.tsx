@@ -1,4 +1,5 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import type { DashboardSummary } from '@fops/shared';
 import {
@@ -14,6 +15,7 @@ import { useSearch } from '@tanstack/react-router';
 import { FileText, Layers, Link2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { RecoveryFreshness } from '../recovery/RecoveryFreshness';
+import type { RenderRecoveryAccess } from '../recovery/RecoveryPanel';
 import { useRecoveryQueue } from '../recovery/useRecoveryQueue';
 
 import { ListStateMessage } from '@/components/ListStateMessage';
@@ -39,8 +41,11 @@ function isPermissionError(error: unknown): boolean {
   );
 }
 
-export function IntegrationDashboardRoute(): React.ReactElement {
-  const recovery = useRecoveryQueue('operational');
+export function IntegrationDashboardRoute({
+  renderRequestAccess,
+}: { renderRequestAccess?: RenderRecoveryAccess } = {}): React.ReactElement {
+  const recovery = useRecoveryQueue('operational', true, renderRequestAccess);
+  const me = useMe();
   const search = useSearch({ strict: false }) as IntegrationDashboardSearch;
   const managedSystem = search.managedSystem;
   const managedSystemId =
@@ -101,7 +106,9 @@ export function IntegrationDashboardRoute(): React.ReactElement {
   }, [summary.data?.coverage, summary.isError]);
 
   const allQueuesPresent =
-    summary.isSuccess && queues.length === INTEGRATION_DASHBOARD_QUEUE_ORDER.length;
+    summary.isSuccess &&
+    (queues.length === INTEGRATION_DASHBOARD_QUEUE_ORDER.length ||
+      (me.data?.actor.role_level === 'developer' && queues.length > 0));
   const gapCount = allQueuesPresent
     ? queues.reduce((total, queue) => total + queue.count, 0)
     : undefined;

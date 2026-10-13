@@ -674,10 +674,17 @@ type SourceRow = {
   snoozed_until?: string | null;
   resolution?: RecoveryItem['resolution'];
 };
-function route(type: NonNullable<RecoveryItem['source']>['type'], id: string): string {
+function route(
+  type: NonNullable<RecoveryItem['source']>['type'],
+  id: string,
+  triageSystem?: string | null,
+): string {
   if (type === 'permission_request') return `/admin/permissions/requests?selected=${id}`;
   if (type === 'survey') return `/surveys/${id}/follow-up`;
-  return `/${type === 'voc' ? 'vocs' : type === 'finding' ? 'findings' : 'tasks'}/${id}`;
+  if (type === 'voc')
+    return `/vocs?selected=${id}${triageSystem ? `&view=triage&managedSystem=${triageSystem}` : ''}`;
+  if (type === 'task') return `/tasks?param=${id}`;
+  return `/findings?selected=${id}`;
 }
 function hint(keys: string[], adminQueue = false): RecoveryItem['responsible_actor_hint'] {
   if (adminQueue) return { kind: 'admin_queue', label: 'Admin 검토 대기열' };
@@ -848,7 +855,7 @@ function createRecoveryReader(deps: {
           target: {
             source_type: type,
             source_id: id,
-            route: route(type, id),
+            route: route(type, id, action === 'triage' ? row.repair_system_id : undefined),
             endpoint:
               action === 'triage'
                 ? `/vocs/${id}`

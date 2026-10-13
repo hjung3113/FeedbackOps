@@ -403,9 +403,11 @@ function AuthedShell() {
         to: location.pathname as never,
         search: (previous: Record<string, unknown>) => {
           const { managedSystem: _managedSystem, ...remaining } = previous;
-          // Evidence cursors are bound to scope; keep selection for safe-detail reconciliation.
+          // Evidence/recovery cursors are bound to scope; retain readable selection.
           const { cursor: _cursor, ...withoutCursor } = remaining;
-          const scopedSearch = location.pathname === '/integration/evidence' ? withoutCursor : remaining;
+          const scopedSearch = ['/integration/evidence', '/integration', '/home'].includes(location.pathname)
+            ? withoutCursor
+            : remaining;
           return managedSystemId === undefined
             ? scopedSearch
             : { ...scopedSearch, managedSystem: managedSystemId };

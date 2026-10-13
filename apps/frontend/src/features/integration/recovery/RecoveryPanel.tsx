@@ -1,20 +1,28 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { ApiError, patchRecoveryPresentation } from '@/lib/api';
+import { HOME_QUEUE_COPY } from '@/lib/copy/home';
 import { RECOVERY_COPY as COPY } from '@/lib/copy/recovery';
 import { invalidateRecovery, invalidateRecoverySource } from '@/lib/query/recovery';
 import { InternalLink } from '@/lib/router/InternalLink';
-import type { RecoveryDetail, RecoveryPresentationPatch } from '@fops/shared';
+import type { RecoveryAction, RecoveryDetail, RecoveryPresentationPatch } from '@fops/shared';
 import {
   Button,
   DetailPanelFullscreenContext,
   DetailPanelFullscreenToggle,
+  DetailPanelHeader,
+  FieldRow,
+  OutlineBadge,
   PermissionBlockedPanel,
   Skeleton,
 } from '@fops/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect } from 'react';
-import { RecoveryFreshness } from './RecoveryFreshness';
+import { type ReactNode, useContext, useEffect } from 'react';
+import { RecoveryFreshness, formatRecoveryTime } from './RecoveryFreshness';
+
+export type RenderRecoveryAccess = (
+  permission: NonNullable<RecoveryAction['requestable_permission']>,
+  returnTo: string,
+) => ReactNode;
 
 function sourceHref(route: string, returnTo: string) {
   const url = new URL(route, 'https://recovery.internal');
@@ -30,6 +38,8 @@ export function RecoveryPanel({
   onClose,
   onRetry,
   returnTo,
+  renderRequestAccess,
+  pageComputedAt,
 }: {
   id: string;
   item: RecoveryDetail | undefined;
@@ -39,6 +49,8 @@ export function RecoveryPanel({
   onClose: () => void;
   onRetry: () => void;
   returnTo: string;
+  renderRequestAccess?: RenderRecoveryAccess;
+  pageComputedAt: string | undefined;
 }) {
   const client = useQueryClient();
   const fullscreen = useContext(DetailPanelFullscreenContext);
@@ -73,17 +85,33 @@ export function RecoveryPanel({
       className="flex h-full min-h-0 flex-col"
       data-testid="recovery-panel"
     >
-      <header className="flex h-toolbar shrink-0 items-center justify-between border-b border-border-subtle px-4">
-        <h2 className="text-sm font-semibold">{COPY.title}</h2>
-        <div className="flex items-center gap-2">
-          <DetailPanelFullscreenToggle />
-          <Button variant="subtle" size="sm" aria-label={COPY.closePanel} onClick={onClose}>
-            {COPY.close}
-          </Button>
-        </div>
-      </header>
+      {item?.source && item.source.type !== 'permission_request' && !error ? (
+        <DetailPanelHeader
+          kind={item.source.type}
+          {...(item.source.display_id ? { id: item.source.display_id } : {})}
+          onClose={onClose}
+          extras={<h2 className="truncate text-sm font-semibold">{item.source.title}</h2>}
+        />
+      ) : (
+        <header className="flex h-toolbar shrink-0 items-center justify-between border-b border-border-subtle px-4">
+          <h2 className="text-sm font-semibold">
+            {!error && item ? item.source?.title || item.reason : COPY.title}
+          </h2>
+          <div className="flex items-center gap-2">
+            <DetailPanelFullscreenToggle />
+            <Button variant="subtle" size="sm" aria-label={COPY.closePanel} onClick={onClose}>
+              {COPY.close}
+            </Button>
+          </div>
+        </header>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <RecoveryFreshness computedAt={item?.computed_at} failed={!!error} updatedAt={updatedAt} />
+        <RecoveryFreshness
+          computedAt={item?.computed_at}
+          failed={!!error}
+          updatedAt={updatedAt}
+          pageComputedAt={pageComputedAt}
+        />
         {loading ? (
           <Skeleton className="h-32" role="status" aria-label={COPY.loading} />
         ) : error instanceof ApiError && error.status === 403 ? (
@@ -101,24 +129,50 @@ export function RecoveryPanel({
           />
         ) : item ? (
           <div className="flex flex-col gap-4">
-            <p>{item.reason}</p>
-            <p>
-              <span>{COPY.state[item.state]}</span> · {COPY.occurrence(item.occurrence)}
-            </p>
+            <div className="flex flex-wrap gap-2">
+              <OutlineBadge>{COPY.state[item.state]}</OutlineBadge>
+              <OutlineBadge>{HOME_QUEUE_COPY[item.category].title}</OutlineBadge>
+            </div>
+            <FieldRow label={COPY.reason} layout="property">
+              {item.reason}
+            </FieldRow>
+            <FieldRow label={COPY.occurrenceLabel} layout="property">
+              {COPY.occurrence(item.occurrence)}
+            </FieldRow>
             {item.resolution && (
-              <p>
-                {COPY.state[item.resolution.outcome]} · {item.resolution.resolved_at} ·{' '}
+              <FieldRow label={COPY.resolution} layout="property">
+                {formatRecoveryTime(item.resolution.resolved_at)} ·{' '}
                 {item.resolution.evidence === 'command' ? COPY.command : COPY.observation}
-              </p>
+              </FieldRow>
             )}
-            <p>
-              {COPY.responsibility} · {item.responsible_actor_hint.label}
-            </p>
-            {item.source && (
-              <InternalLink href={sourceHref(item.source.route, returnTo)}>
-                {item.source.display_id} · {item.source.title} · {COPY.source}
-              </InternalLink>
+            <FieldRow label={COPY.responsibility} layout="property">
+              {item.responsible_actor_hint.label}
+            </FieldRow>
+            {item.presentation.state !== 'visible' && (
+              <FieldRow label={COPY.presentation} layout="property">
+                {item.presentation.state === 'muted'
+                  ? COPY.muted
+                  : item.presentation.snoozed_until
+                    ? COPY.snoozed(formatRecoveryTime(item.presentation.snoozed_until))
+                    : COPY.hidden}
+              </FieldRow>
             )}
+            {item.source &&
+              !(
+                item.state === 'active' &&
+                item.next_actions.some(
+                  (action) =>
+                    action.availability === 'available' &&
+                    action.target.route === item.source?.route,
+                )
+              ) && (
+                <InternalLink
+                  className="text-accent-info underline"
+                  href={sourceHref(item.source.route, returnTo)}
+                >
+                  {item.source.display_id} · {item.source.title} · {COPY.source}
+                </InternalLink>
+              )}
             {item.affected.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h3>{COPY.affected}</h3>
@@ -146,24 +200,19 @@ export function RecoveryPanel({
                       <p>{action.blocked_reason}</p>
                       <PermissionBlockedPanel state="denied" category={COPY.title} />
                       {action.availability === 'blocked_requestable' &&
-                        action.requestable_permission && (
-                          <RequestAccessButton
-                            capability={action.requestable_permission.permission}
-                            managedSystemId={action.requestable_permission.managed_system_id}
-                            returnRouteIntent={returnTo}
-                          />
-                        )}
+                        action.requestable_permission &&
+                        renderRequestAccess?.(action.requestable_permission, returnTo)}
                     </>
                   )}
                 </div>
               ))}
-            <p className="text-xs text-text-muted">{COPY.personal}</p>
+            {item.state === 'active' && <p className="text-xs text-text-muted">{COPY.personal}</p>}
             {item.state === 'active' && (
               <div className="flex flex-wrap gap-2">
                 {item.presentation.state === 'visible' ? (
                   <>
                     <Button
-                      variant="subtle"
+                      variant="secondary"
                       size="sm"
                       disabled={mutation.isPending}
                       onClick={() => mutation.mutate({ action: 'snooze', days: 1 })}
@@ -171,7 +220,7 @@ export function RecoveryPanel({
                       {COPY.snooze1}
                     </Button>
                     <Button
-                      variant="subtle"
+                      variant="secondary"
                       size="sm"
                       disabled={mutation.isPending}
                       onClick={() => mutation.mutate({ action: 'snooze', days: 7 })}
@@ -179,7 +228,7 @@ export function RecoveryPanel({
                       {COPY.snooze7}
                     </Button>
                     <Button
-                      variant="subtle"
+                      variant="secondary"
                       size="sm"
                       disabled={mutation.isPending}
                       onClick={() => mutation.mutate({ action: 'mute' })}
@@ -189,7 +238,7 @@ export function RecoveryPanel({
                   </>
                 ) : (
                   <Button
-                    variant="subtle"
+                    variant="secondary"
                     size="sm"
                     disabled={mutation.isPending}
                     onClick={() => mutation.mutate({ action: 'restore' })}

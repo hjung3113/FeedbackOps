@@ -1,3 +1,4 @@
+import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
@@ -8,6 +9,7 @@ import { z } from 'zod';
 
 export const tasksSearchSchema = z
   .object({
+    returnTo: recoverySearchFields.returnTo,
     view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
