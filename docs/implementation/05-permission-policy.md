@@ -421,7 +421,8 @@ The backend decides which state applies.
 The rules above incorporating revision, withdrawal and narrowing replace older
 scope-copy/default-expiration text. #1080 implements versioned requester
 mutations, supported-scope validation and narrowed Admin decisions; #1081 adds
-selected owner/Admin reads and explained risk. Direct grants remain pending.
+selected owner/Admin reads and explained risk; #1085 adds the governed direct
+grant and audited expired reissue (BE). The direct-grant UI remains #1086.
 `api/permissions.md` owns exact bodies, reads, responses and errors.
 
 One Permission capability/scope policy supplies server candidates and validates
