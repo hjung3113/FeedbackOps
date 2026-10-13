@@ -22,11 +22,11 @@ consumer contract (ADR-0058) must deliver the foundation to every consumer uncha
 - Use exact `tw-animate-css@1.4.0`, shadcn's Tailwind v4 overlay mechanism, imported at the top
   of the existing `theme.css`. Export static overlay class constants from
   `packages/ui/src/utils/motion.ts` as the only overlay motion seam. Popper surfaces fade,
-  zoom 95, and slide 2 units from the trigger side (base/enter, fast/exit); dialogs and the
-  command palette fade and zoom without slide; scrims fade only; sheets slide from/to their
-  side (slow/enter, base/exit). Tooltip entry handles `delayed-open` and `instant-open` as
-  well as `open`. Select receives enter motion only because Radix Select has no exit
-  Presence; its lifecycle is unchanged.
+  zoom 95, and slide 2 units from the trigger side (base/enter); dialogs and the
+  command palette fade and zoom without slide; scrims fade only (base/enter); sheets slide from their
+  side (slow/enter). All overlays are enter-only (amended 2026-10-13, #1127). Tooltip entry
+  handles `delayed-open` and `instant-open` as well as `open`. Select shares the popper
+  entry motion; its lifecycle is unchanged.
 - Use `@formkit/auto-animate` behind a `useListMotion` hook for list continuity, implemented
   in #994 for bounded Triage, Task Request, recommendation, and Survey question lists.
   The exported `readMotionTiming` helper is the JS entry to the shared tokens. Board drag
@@ -35,7 +35,8 @@ consumer contract (ADR-0058) must deliver the foundation to every consumer uncha
 - Ship one global `prefers-reduced-motion: reduce` rule through the existing package CSS
   chain: on `*, ::before, ::after`, animation and transition duration are `0.01ms !important`,
   animation iteration count is `1 !important`, and scroll behavior is `auto !important`.
-  The nonzero animation duration preserves the `animationend` Radix needs to unmount exits.
+  The nonzero animation duration preserves animation completion events; overlays unmount
+  immediately on close (amended 2026-10-13, #1127).
   JS-driven motion reads the SSR/jsdom-safe `prefersReducedMotion()` helper at use time;
   explicit smooth-scroll calls select `auto` when reduction is requested.
 - Motion serves continuity when appearing, leaving, or moving feels broken without it.
@@ -73,3 +74,21 @@ first settles, then use `empty`/`rows`. Reset the settlement latch only when con
 including revisits, never for same-context fetching, invalidation or load-more. Removals
 with rows remaining and load-more preserve the boundary and scroll; the last-row removal
 renders the empty phase immediately.
+
+## Amended 2026-10-13 — enter-only overlays (#1127)
+
+Overlay exit motion is removed for popper surfaces, dialog and command palette content,
+scrims, and sheets. Their enter classes, durations, and easings stay unchanged. Closed
+content must unmount immediately: exit Presence keeps a closed DismissableLayer registered
+as the highest Radix layer, so it swallows Escape. In nested stacks, a closing tooltip or
+popover blocks the open dialog beneath it; a closing submenu can also own the root's Escape.
+Scrims close with their content rather than fading after the content disappears.
+
+Alternatives rejected:
+
+- A shared escape-owner helper cannot fix nested Radix stacks: only the highest registered
+  layer receives `onEscapeKeyDown` and `onDismiss`, so the open layer never receives Escape.
+- Patching Radix DismissableLayer requires maintaining patches across the two versions used
+  by FeedbackOps and analytics-platform and revisiting them on every upgrade.
+
+Decider: owner, 2026-10-13.

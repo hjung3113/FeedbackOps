@@ -971,26 +971,26 @@ so a caller can preserve focused content until a successful-close focus handoff 
 Without `forceMount`, existing open/close presence and animation behavior is unchanged.
 
 Existing transitions use fast/standard through the Tailwind default aliases. Overlay
-animations use `animation-duration-fast|base|slow` and `ease-enter|exit` with `tw-animate-css`.
+animations use `animation-duration-base|slow` and `ease-enter` with `tw-animate-css`.
+Overlays are enter-only: exit Presence keeps a closed Radix layer registered and swallowing Escape, including in nested stacks (ADR-0063, #1127).
 The exported constants in `packages/ui/src/utils/motion.ts` are the only overlay motion seam;
 wrappers and the command palette compose them without inline motion classes:
 
 - `POPPER_CONTENT_MOTION`: popover, dropdown (including sub-content), hover card, and tooltip;
-  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter; exit is fast/exit.
+  fade, zoom 95, and a 2-unit slide from the trigger side. Enter is base/enter.
   Enter covers `open`, `delayed-open`, and `instant-open` states.
-- `SELECT_CONTENT_MOTION`: the same enter motion only. Radix Select has no exit Presence;
+- `SELECT_CONTENT_MOTION`: the same enter-only popper motion;
   closing retains its existing lifecycle.
 - `DIALOG_CONTENT_MOTION`: dialog, alert dialog, and command palette content; fade and zoom 95
-  without slide, entering at base/enter and exiting at fast/exit.
-- `SCRIM_MOTION`: fade only, with the same base/enter and fast/exit timing.
-- `SHEET_CONTENT_MOTION`: slide from/to each sheet side, entering at slow/enter and exiting
-  at base/exit.
+  without slide, entering at base/enter.
+- `SCRIM_MOTION`: fade only, entering at base/enter.
+- `SHEET_CONTENT_MOTION`: slide from each sheet side, entering at slow/enter.
 
 The global `prefers-reduced-motion: reduce` rule in `compat.css` applies to `*, ::before,
 ::after`: animation and transition duration become `0.01ms !important`, animation iteration
 count becomes `1 !important`, and scroll behavior becomes `auto !important`. The nonzero
-animation duration still lets Radix exit unmounting finish through `animationend`. This also
-stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
+animation duration preserves animation completion events; overlays unmount immediately on close.
+This also stops spinner and skeleton motion. JS-driven scrolling reads `prefersReducedMotion()` at
 use time and selects `auto` rather than `smooth`, since explicit JS smooth scrolling is not
 controlled by the CSS rule. The helper returns false when `window` or `matchMedia` is absent.
 
