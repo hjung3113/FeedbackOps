@@ -1,6 +1,6 @@
 # #739 Survey provenance cutover contract
 
-ADR-0064 item 1 is implemented by `0058_survey_finding_provenance.sql`. Execution,
+ADR-0064 item 1 is implemented by `0059_survey_finding_provenance.sql`. Execution,
 real-role integration, rendered verification and coordinated #740 delivery remain
 conductor responsibilities. This migration alone does not close Slice 53.
 
@@ -85,7 +85,7 @@ public under their established authorization policies.
 
 ## Existing-database prerequisite and controlled rollout
 
-A privileged operator must run the following once before 0058; `fops_migrate` cannot
+A privileged operator must run the following once before 0059; `fops_migrate` cannot
 create roles. Empty databases use the updated `scripts/db/init.sql` bootstrap.
 
 ```sql
@@ -100,7 +100,7 @@ membership exists, or an owner has reverse membership in migrate.
 
 Stop incompatible old binaries during the coordinated #739/#740 rollout. Provision
 roles, deploy compatible binaries, apply both journaled migrations in the controlled
-window, then run combined grants/routes/history/gates. 0058 locks public parents,
+window, then run combined grants/routes/history/gates. 0059 locks public parents,
 Survey sources/approvals/questions and idempotency rows during cutover. It validates
 legacy orphan/workspace/approval-response consistency before moving history, then
 clears public copies and installs checks/functions/ACLs. IDs, timestamps, counters,
@@ -117,7 +117,7 @@ and `target_summary` with `type='finding'` and local Finding ID. Generic link-ev
 mutations return only `{id,relation_type}`; Task Request mutations cache authored
 Task Request DTOs, not generated Finding source summaries.
 
-0058 sanitizes only these named shapes whose local Finding ID resolves to a
+0059 sanitizes only these named shapes whose local Finding ID resolves to a
 workspace-qualified protected Survey parent in the cache Actor's workspace, including
 archived parents. Root DTOs also require their Survey classification/workspace; nested
 Task/provider copies require their known body context. Only generated title/summary
@@ -130,28 +130,17 @@ Normal post-cutover route suites run through the repository integration gate on 
 throwaway DB as real `fops_app`/`fops_migrate`; run the whole touched Findings, Surveys
 and DB modules. The worker does not execute these suites or the migration.
 
-Run the upgrade harness separately, on an **empty dedicated** database named
-`fops_739_upgrade_<suffix>` on a throwaway port other than 5434. Never run it through
-Vitest global setup. A privileged operator creates the DB owned by `fops_migrate`,
-installs `vector`, and provisions existing aggregate/reader owners plus the new
-mutator owner and one-way memberships as in bootstrap. Export dedicated connection
-URLs with real app/migrate usernames and the same database/host/port. The harness
-refuses an existing product schema or migration ledger.
-
-```sh
-export PATH=/opt/homebrew/opt/node@22/bin:$PATH
-# Set W739_UPGRADE_APP_URL and W739_UPGRADE_MIGRATE_URL to the provisioned throwaway.
-W739_UPGRADE_CONFIRM=throwaway pnpm --filter @fops/backend exec tsx src/test-support/survey-provenance-upgrade.ts
-```
-
-The standalone harness copies the journal's prefix through 0057 to its own temp
-folder, applies old history, seeds valid active/archived and zero-highlight parents,
-active/revoked approvals and exact snapshots, cache DTOs and unrelated control bodies.
-It proves rejected orphan/cross-workspace/approval-response history rolls back without
-partial cutover, applies the real journaled 0058, then checks public NULLs, exact
-private history, identifiers/timestamps/counters, cache headers/unrelated bodies,
-create/status/link route replays and unchanged link/audit side effects. Its temp
-folder is removed; the conductor owns disposal of the throwaway database/container.
+The previously named `apps/backend/src/test-support/survey-provenance-upgrade.ts`
+harness is absent. Its old command must not be treated as executable verification.
+The conductor must restore or replace a standalone real-role legacy upgrade/history
+check on an empty dedicated throwaway database, outside Vitest global setup. Cover
+active/archived and zero-highlight parents, active/revoked approvals, exact private
+history, named cached DTOs, unrelated cache controls, rejected inconsistent legacy
+history with rollback, and post-cutover command replay without duplicate links/audits.
+Use the journaled `0059_survey_finding_provenance.sql` and preserve the permission
+revision migration at 0058. Provision the #1060 owners first, stop incompatible old
+binaries, and coordinate the 0059/#740 deployment window. Until a replacement exists
+and executes, upgrade/history verification remains an explicit release gap.
 
 Concurrency tests use real app transactions and observed `pg_locks` wait queues for
 both read-before-revoke/revoke-before-read and create-before-revoke/revoke-before-create

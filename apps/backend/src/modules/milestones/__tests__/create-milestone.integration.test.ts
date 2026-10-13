@@ -205,7 +205,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     );
     expect(row.rows[0]?.status).toBe('planning');
 
-    const audits = await dbHandle.pool.query<{ event_type: string; detail: unknown }>(
+    const audits = await migrateHandle.pool.query<{ event_type: string; detail: unknown }>(
       `select event_type, detail
          from core.audit_log
         where workspace_id = $1 and subject_id = $2 and event_type = 'milestone_created'`,

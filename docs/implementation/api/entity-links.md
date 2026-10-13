@@ -56,15 +56,17 @@ status filter includes `status_counts` for all list-visible rows matching the
 relation type and Managed System filters. Status, relation type, and Managed
 System filters apply to every page.
 
-## ADR-0064 canonical-link access (accepted; #740 pending)
+## ADR-0064 canonical-link access (accepted; #740 cutover)
 
 Generic POST/GET/PATCH, all status filters, counts and cursors categorically
 exclude either `survey_response` endpoint. After cutover ordinary repositories
-read/write the proposed/new explicitly column-listed owner-backed
+read/write the explicitly column-listed owner-backed `core.entity_links_app`
 `security_barrier` updatable view with `WITH CHECK OPTION`; app raw canonical
 SELECT/INSERT/UPDATE (including surviving column ACLs) is revoked, no DELETE.
 Canonical UUIDs, tuple checks, active uniqueness and detach history remain intact.
-Verify actual ordinary conflict/RETURNING/UPDATE callers against the view.
+Ordinary creation serializes the tuple with a transaction advisory lock, looks up an
+active ordinary row, and uses INSERT RETURNING through the view. Detach uses UPDATE
+RETURNING. Real-role conflict/concurrency verification is required before deployment.
 
 Survey writes use Entity Links-owned narrow functions returning link ID/inserted
 state, not raw endpoint rows. Existing create-Finding writes `generated_finding`

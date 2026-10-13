@@ -264,7 +264,7 @@ export async function listCreatedFindingsForClusters(
       : sql`f.primary_managed_system_id = ANY(${sqlUuidArray(input.findingReadScope.managedSystemIds)})`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT l.source_id AS cluster_id, f.id, f.display_id, f.status
-    FROM core.entity_links l
+    FROM core.entity_links_app l
     JOIN finding.findings f
       ON f.id = l.target_id
       AND f.workspace_id = l.workspace_id

@@ -398,7 +398,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
     );
     expect(linked.rows[0]?.linked_task_id).toBe(taskId);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
@@ -413,7 +413,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       primary_managed_system_id: msId,
     });
 
-    const link = await dbHandle.pool.query<{ n: number }>(
+    const link = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.entity_links
         where workspace_id = $1
@@ -460,7 +460,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       detail: { fields: [{ path: ['linked_task_id'], code: 'already_linked' }] },
     });
 
-    const audits = await dbHandle.pool.query<{ n: number }>(
+    const audits = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.audit_log
         where workspace_id = $1

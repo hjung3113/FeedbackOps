@@ -22,7 +22,7 @@ import { buildServer } from '../../../server.js';
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -164,6 +164,7 @@ function postVoc(
 
 describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   let dbHandle: DbHandle;
+  let canonicalHistory: DbHandle;
   let app: FastifyInstance;
   let reporterActorId: string;
 
@@ -217,6 +218,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    canonicalHistory = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
 
@@ -236,6 +238,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     await cleanupAuditLog();
     await app?.close();
     await dbHandle?.close();
+    await canonicalHistory?.close();
   });
 
   beforeEach(async () => {
@@ -325,11 +328,11 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       description_rich_content: paragraphDoc('same'),
     };
     const r1 = await postVoc(app, reporter, body, key);
-    const auditBeforeReplay = await dbHandle.pool.query<{ n: number }>(
+    const auditBeforeReplay = await canonicalHistory.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
     );
     const r2 = await postVoc(app, reporter, body, key);
-    const auditAfterReplay = await dbHandle.pool.query<{ n: number }>(
+    const auditAfterReplay = await canonicalHistory.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
     );
     expect(r1.statusCode).toBe(201);

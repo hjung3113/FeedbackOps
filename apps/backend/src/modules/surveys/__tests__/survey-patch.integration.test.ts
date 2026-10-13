@@ -252,7 +252,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     const denied = await patch(actor.cookie, draft.id, { title: 'Denied' });
     expect(denied.statusCode).toBe(403);
     expect((await getSurvey(draft.id)).json<{ title: string }>().title).toBe('Before patch');
-    const deniedAudits = await appHandle.pool.query(
+    const deniedAudits = await migrateHandle.pool.query(
       `select 1 from core.audit_log where subject_id = $1 and event_type = 'survey_updated'`,
       [draft.id],
     );

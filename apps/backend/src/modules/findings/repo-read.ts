@@ -115,7 +115,7 @@ function listPredicates(input: ListInput) {
       ? sql`f.status = 'active'
           AND f.linked_task_id IS NULL
           AND NOT EXISTS (
-            SELECT 1 FROM core.entity_links el
+            SELECT 1 FROM core.entity_links_app el
             WHERE el.workspace_id = f.workspace_id
               AND el.status = 'active'
               AND el.source_type = 'finding'
@@ -191,7 +191,7 @@ export async function findCreatedFindingSourceLink(
 ): Promise<FindingSourceLinkRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT id AS link_id, source_type, source_id, relation_type
-    FROM core.entity_links
+    FROM core.entity_links_app
     WHERE workspace_id = ${input.workspaceId}
       AND target_type = 'finding'
       AND target_id = ${input.findingId}

@@ -415,14 +415,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(body.visibility_state).toBe('allowed');
     expect(body.managed_system_id).toBe(msA);
 
-    const linkRows = await dbHandle.pool.query<{ n: number }>(
+    const linkRows = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where id = $1 and status = 'active' and relation_type = 'related_to'`,
       [body.id],
     );
     expect(linkRows.rows[0]?.n).toBe(1);
 
-    const auditRows = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const auditRows = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail from core.audit_log
         where event_type = 'entity_link.created' and subject_id = $1`,
       [body.id],
@@ -484,13 +484,13 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(res.json<{ code: string; detail: { fields: Array<{ code: string }> } }>().code).toBe(
       'validation.failed',
     );
-    const rows = await dbHandle.pool.query<{ n: number }>(
+    const rows = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where workspace_id = $1 and source_id = $2 and target_id = $3`,
       [WORKSPACE_ID, sourceVoc.id, crossMsTarget.id],
     );
     expect(rows.rows[0]?.n).toBe(0);
-    const audits = await dbHandle.pool.query<{ n: number }>(
+    const audits = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log
         where workspace_id = $1 and event_type = 'entity_link.created'`,
       [WORKSPACE_ID],
@@ -551,7 +551,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(create.statusCode).toBe(422);
       expect(create.json()).toEqual(unsupportedTuple);
 
-      const insertedRows = await dbHandle.pool.query<{ n: number }>(
+      const insertedRows = await migrateHandle.pool.query<{ n: number }>(
         `select count(*)::int as n from core.entity_links
           where workspace_id = $1 and source_type = $2 and source_id = $3
             and target_type = $4 and target_id = $5 and relation_type = $6`,
@@ -693,7 +693,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
-    const rows = await dbHandle.pool.query<{ n: number }>(
+    const rows = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where workspace_id = $1 and source_type = 'voc' and source_id = $2
           and target_type = 'task' and target_id = $3
@@ -713,7 +713,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(second.statusCode).toBe(200);
     expect(second.json<{ id: string }>().id).toBe(firstId);
 
-    const count = await dbHandle.pool.query<{ n: number }>(
+    const count = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where source_id = $1 and target_id = $2 and status = 'active'`,
       [sourceVoc.id, targetVoc.id],
@@ -920,6 +920,105 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(privilegedCommandOnly.statusCode).toBe(404);
     expect(privilegedCommandOnly.body).toBe(absent.body);
   });
+
+  it.each(['active', 'stale', 'detached', 'revoked'] as const)(
+    'Survey %s rows never enter generic inventory counts/cursors or detach for any scope',
+    async (status) => {
+      const { msA, sourceVoc, targetVoc } = await seedVocPair();
+      const targetMs = await insertMsDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        uid(SLUG_PREFIX),
+        'Target MS',
+      );
+      const finding = await seedFindingDirectly({
+        managedSystemId: targetMs,
+        sourceVocId: sourceVoc.id,
+      });
+      const { responseId } = await seedSurveyResponse(msA);
+      const hiddenId = await seedEntityLinkDirectly({
+        sourceType: 'survey_response',
+        sourceId: responseId,
+        targetType: 'finding',
+        targetId: finding.id,
+        relationType: 'generated_finding',
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      });
+      await migrateHandle.pool.query('update core.entity_links set status = $2 where id = $1', [
+        hiddenId,
+        status,
+      ]);
+      const ordinary = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+      expect(ordinary.statusCode).toBe(201);
+      const cookies = [adminCookie, await loginAs(app, 'mock-user-1')];
+      for (const scope of ['source', 'target', 'denied', 'unrelated'] as const) {
+        const developer = await insertDevActor(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+        if (scope === 'source')
+          await grantCapability(
+            dbHandle,
+            WORKSPACE_ID,
+            developer.id,
+            'survey.read',
+            msA,
+            adminActorId,
+          );
+        if (scope === 'target')
+          await grantCapability(
+            dbHandle,
+            WORKSPACE_ID,
+            developer.id,
+            'finding.read',
+            targetMs,
+            adminActorId,
+          );
+        if (scope === 'denied')
+          await migrateHandle.pool.query(
+            `insert into permission.permission_denies (workspace_id,actor_id,capability,managed_system_id,reason,created_by_actor_id)
+           values ($1,$2,'survey.read',$3,'boundary test',$4)`,
+            [WORKSPACE_ID, developer.id, msA, adminActorId],
+          );
+        cookies.push(await loginAs(app, developer.externalId));
+      }
+      const before = await migrateHandle.pool.query(
+        'select id from core.audit_log where subject_id = $1',
+        [hiddenId],
+      );
+      for (const cookie of cookies) {
+        const inventory = await getEntityLinks(
+          cookie,
+          `?scope=workspace&managed_system_id=${msA}&limit=1`,
+        );
+        expect(inventory.statusCode).toBe(200);
+        expect(inventory.body).not.toContain(hiddenId);
+        expect(inventory.body).not.toContain(responseId);
+        expect(inventory.json().page).toMatchObject({
+          has_more: false,
+          status_counts: { active: 1, stale: 0, detached: 0, revoked: 0 },
+        });
+        expect(inventory.json().page.cursor).toBeUndefined();
+        const endpoint = await getEntityLinks(
+          cookie,
+          `?target_type=finding&target_id=${finding.id}`,
+        );
+        expect([200, 404]).toContain(endpoint.statusCode);
+        expect(endpoint.body).not.toContain(hiddenId);
+        expect(endpoint.body).not.toContain(responseId);
+        const detached = await patchEntityLink(cookie, hiddenId, { reason: 'Opaque probe' });
+        expect(detached.statusCode).toBe(404);
+      }
+      const after = await migrateHandle.pool.query(
+        'select id from core.audit_log where subject_id = $1',
+        [hiddenId],
+      );
+      expect(after.rows).toEqual(before.rows);
+      const history = await migrateHandle.pool.query(
+        'select source_id, status from core.entity_links where id = $1',
+        [hiddenId],
+      );
+      expect(history.rows).toEqual([{ source_id: responseId, status }]);
+    },
+  );
 
   it('generic surfaces reject and hide command-only Survey Response Finding links', async () => {
     const { msA, sourceVoc } = await seedVocPair();
@@ -1167,7 +1266,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(body).toMatchObject({ id: linkId, status: 'detached' });
     expect(body.detached_at).toEqual(expect.any(String));
 
-    const linkRows = await dbHandle.pool.query<{
+    const linkRows = await migrateHandle.pool.query<{
       status: string;
       detached_by: string | null;
       detach_reason: string | null;
@@ -1186,7 +1285,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
     expect(linkRows.rows[0]?.detached_at).toBeInstanceOf(Date);
 
-    const auditRows = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const auditRows = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail from core.audit_log
         where event_type = 'entity_link.detached' and subject_id = $1`,
       [linkId],
@@ -1310,7 +1409,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         where id = any($1::uuid[])`,
       [fixtureIds],
     );
-    const expectedRows = await dbHandle.pool.query<{ id: string }>(
+    const expectedRows = await migrateHandle.pool.query<{ id: string }>(
       `select id from core.entity_links
         where workspace_id = $1 and id = any($2::uuid[])
         order by created_at desc, id desc`,
@@ -2240,7 +2339,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const outOfScopeDevCookie = await loginAs(app, outOfScopeDevExternalId);
 
     const query = `?source_type=voc&source_id=${sourceVoc.id}`;
-    const auditBefore = await dbHandle.pool.query<{ id: string }>(
+    const auditBefore = await migrateHandle.pool.query<{ id: string }>(
       'select id from core.audit_log where workspace_id = $1 order by id',
       [WORKSPACE_ID],
     );
@@ -2290,7 +2389,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(reporterPayload).not.toContain(forbidden);
     }
 
-    const auditAfter = await dbHandle.pool.query<{ id: string }>(
+    const auditAfter = await migrateHandle.pool.query<{ id: string }>(
       'select id from core.audit_log where workspace_id = $1 order by id',
       [WORKSPACE_ID],
     );
@@ -2484,7 +2583,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       },
     });
 
-    const persisted = await dbHandle.pool.query<{
+    const persisted = await migrateHandle.pool.query<{
       status: string;
       task_status: string;
       link_count: number;
@@ -2595,7 +2694,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
     // The 404 must prove authorization, not a missing id: the row is still
     // active afterwards.
-    const linkRows = await dbHandle.pool.query<{ status: string }>(
+    const linkRows = await migrateHandle.pool.query<{ status: string }>(
       `select status from core.entity_links where id = $1`,
       [linkId],
     );
@@ -2629,7 +2728,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(second.statusCode).toBe(201);
     expect(second.json<{ id: string }>().id).not.toBe(firstId);
 
-    const count = await dbHandle.pool.query<{ active: number; detached: number }>(
+    const count = await migrateHandle.pool.query<{ active: number; detached: number }>(
       `select
           count(*) filter (where status = 'active')::int as active,
           count(*) filter (where status = 'detached')::int as detached

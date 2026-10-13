@@ -326,7 +326,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   // correlated by the request id (not via surviving task rows), and the task
   // request still approved.
   async function expectNoConversionSideEffects(taskRequestId: string): Promise<void> {
-    const counts = await dbHandle.pool.query<{ tasks: number; links: number; audits: number }>(
+    const counts = await migrateHandle.pool.query<{ tasks: number; links: number; audits: number }>(
       `select
           (select count(*)::int from task.tasks
             where workspace_id = $1 and source_task_request_id = $2) as tasks,
@@ -509,7 +509,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     expect(taskRequest.rows[0]?.status).toBe('converted');
 
-    const links = await dbHandle.pool.query<{ relation_type: string; id: string }>(
+    const links = await migrateHandle.pool.query<{ relation_type: string; id: string }>(
       `select id, relation_type
          from core.entity_links
         where workspace_id = $1
@@ -521,7 +521,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     expect(links.rows.map((row) => row.relation_type)).toEqual(['converted_to', 'requested_task']);
 
-    const audits = await dbHandle.pool.query<{
+    const audits = await migrateHandle.pool.query<{
       event_type: string;
       detail: Record<string, unknown>;
     }>(
@@ -675,7 +675,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     });
     expect(converted.statusCode).toBe(201);
     const taskId = converted.json<{ id: string }>().id;
-    const links = await dbHandle.pool.query<{
+    const links = await migrateHandle.pool.query<{
       workspace_id: string;
       source_type: string;
       source_id: string;
@@ -752,7 +752,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(converted.statusCode).toBe(201);
     expect(converted.json<{ id: string }>().id).toEqual(expect.any(String));
 
-    const findingLinks = await dbHandle.pool.query<{ n: number }>(
+    const findingLinks = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where workspace_id = $1 and target_type = 'task' and target_id = $2
           and source_type = 'finding' and relation_type = 'requested_task'`,
@@ -843,7 +843,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       );
 
       if (requestFindingId) {
-        const firstSourceLink = await dbHandle.pool.query<{ source_id: string }>(
+        const firstSourceLink = await migrateHandle.pool.query<{ source_id: string }>(
           `select source_id from core.entity_links
             where workspace_id = $1 and target_type = 'task_request' and target_id = $2
               and source_type = 'finding' and relation_type = 'requested_task' and status = 'active'
@@ -860,7 +860,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       expect(converted.statusCode).toBe(201);
       const taskId = converted.json<{ id: string }>().id;
 
-      const findingTaskLinks = await dbHandle.pool.query<{ source_id: string }>(
+      const findingTaskLinks = await migrateHandle.pool.query<{ source_id: string }>(
         `select source_id from core.entity_links
           where workspace_id = $1 and target_type = 'task' and target_id = $2
             and source_type = 'finding' and relation_type = 'requested_task' and status = 'active'`,
@@ -870,7 +870,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
         requestFindingId ? [requestFindingId] : [],
       );
 
-      const copiedEvidenceLinks = await dbHandle.pool.query<{ n: number }>(
+      const copiedEvidenceLinks = await migrateHandle.pool.query<{ n: number }>(
         `select count(*)::int as n from core.entity_links
           where workspace_id = $1 and source_type = 'voc' and source_id = $2
             and target_type = 'task' and target_id = $3
@@ -944,7 +944,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [request.findingId],
     );
     expect(finding.rows[0]?.linked_task_id).toBe(existingTaskId);
-    const history = await dbHandle.pool.query<{ n: number }>(
+    const history = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.entity_links
         where workspace_id = $1 and source_type = 'finding' and source_id = $2
           and target_type = 'task' and target_id = $3 and relation_type = 'requested_task'
@@ -1059,7 +1059,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
     const taskId = first.json<{ id: string }>().id;
-    const evidence = await dbHandle.pool.query<{ n: number; visibility: string }>(
+    const evidence = await migrateHandle.pool.query<{ n: number; visibility: string }>(
       `select count(*)::int as n, max(visibility) as visibility
          from core.entity_links
         where workspace_id = $1 and source_type = 'voc' and source_id = $2
@@ -1388,7 +1388,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     expect(taskRequest.rows[0]?.status).toBe('converted');
 
-    const link = await dbHandle.pool.query<{ n: number }>(
+    const link = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.entity_links
         where workspace_id = $1
@@ -1402,7 +1402,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     expect(link.rows[0]?.n).toBe(1);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1

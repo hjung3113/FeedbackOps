@@ -448,6 +448,27 @@ describe.skipIf(!runIntegration)('selected Permission request reads (ADR-0066)',
     },
   );
 
+  it('selected question excludes newer unrelated audit detail and unauthorized requesters', async () => {
+    const owner = await actor('user');
+    const stranger = await actor('user');
+    const { id } = await request({ owner: owner.id, status: 'needs_more_info' });
+    await migrate.pool.query(
+      `insert into core.audit_log (workspace_id, actor_id, event_type, subject_type, subject_id, summary, detail)
+       values ($1,$2,'permission_needs_more_info','permission_request',$3,'Question','{"note":"allowed question"}'::jsonb)`,
+      [WORKSPACE_ID, admin.id, id],
+    );
+    await migrate.pool.query(
+      `insert into core.audit_log (workspace_id, actor_id, event_type, subject_type, subject_id, summary, detail, created_at)
+       values ($1,$2,'permission_approved','permission_request',$3,'Other event','{"note":"private unrelated detail"}'::jsonb,now() + interval '1 second')`,
+      [WORKSPACE_ID, admin.id, id],
+    );
+    const visible = await get(`/permission-requests/${id}`, owner);
+    expect(visible.statusCode).toBe(200);
+    expect(visible.json().latest_admin_question.note).toBe('allowed question');
+    expect(visible.body).not.toContain('private unrelated detail');
+    expect((await get(`/permission-requests/${id}`, stranger)).statusCode).toBe(404);
+  });
+
   it('owner receives the latest nullable Admin question and immutable source/return intent', async () => {
     const owner = await actor('user');
     const { id } = await request({ owner: owner.id, status: 'needs_more_info' });

@@ -122,7 +122,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
   }
 
   async function auditCount(): Promise<number> {
-    const result = await appHandle.pool.query<{ count: string }>(
+    const result = await migrateHandle.pool.query<{ count: string }>(
       `select count(*)::text as count
          from core.audit_log
         where workspace_id = $1
@@ -161,7 +161,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       ...defaultBands,
       'voc-task': { good_min_percent: 80, warn_min_percent: 50 },
     });
-    const audit = await appHandle.pool.query<{ detail: unknown }>(
+    const audit = await migrateHandle.pool.query<{ detail: unknown }>(
       "select detail from core.audit_log where workspace_id = $1 and event_type = 'workspace_settings_updated'",
       [WORKSPACE_ID],
     );
@@ -369,7 +369,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
         'high-followup': { good_min_percent: 90, warn_min_percent: 60 },
       },
     });
-    const audits = await appHandle.pool.query<{ detail: unknown }>(
+    const audits = await migrateHandle.pool.query<{ detail: unknown }>(
       "select detail from core.audit_log where workspace_id = $1 and event_type = 'workspace_settings_updated'",
       [WORKSPACE_ID],
     );
@@ -437,7 +437,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 7,
     });
-    const audit = await appHandle.pool.query<{ event_type: string; detail: unknown }>(
+    const audit = await migrateHandle.pool.query<{ event_type: string; detail: unknown }>(
       `select event_type, detail from core.audit_log
         where workspace_id = $1 and event_type = 'workspace_settings_updated'`,
       [WORKSPACE_ID],
@@ -569,7 +569,7 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       permission_self_approval: 'forbidden',
       survey_anonymity_threshold: 5,
     });
-    const audit = await appHandle.pool.query<{ detail: unknown }>(
+    const audit = await migrateHandle.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log
         where workspace_id = $1 and event_type = 'workspace_settings_updated'`,
       [WORKSPACE_ID],

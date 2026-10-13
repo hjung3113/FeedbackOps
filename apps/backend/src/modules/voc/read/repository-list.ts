@@ -2,7 +2,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
-import { entityLinks } from '../../../db/schema/core.js';
+import { entityLinksApp } from '../../../db/schema/core.js';
 import { vocClusterMembers } from '../../../db/schema/voc-cluster.js';
 import { vocs } from '../../../db/schema/voc.js';
 import { sqlTextArray, sqlUuidArray } from '../../../db/sql-arrays.js';
@@ -120,7 +120,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
   else if (tab === 'no-task') {
     wheres.push(sql`NOT EXISTS (
-      SELECT 1 FROM ${entityLinks} el
+      SELECT 1 FROM ${entityLinksApp} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
         AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
         AND el.target_type = 'task'
@@ -136,7 +136,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     // filter (the create path links from draft clusters) and no membership
     // soft-delete column exists; a detached link simply is not active.
     wheres.push(sql`NOT EXISTS (
-      SELECT 1 FROM ${entityLinks} el
+      SELECT 1 FROM ${entityLinksApp} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
         AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
         AND el.target_type IN ('finding', 'task', 'task_request')
@@ -144,7 +144,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
       SELECT 1 FROM ${vocClusterMembers} vcm
       WHERE vcm.voc_id = ${vocs.id}
         AND EXISTS (
-          SELECT 1 FROM ${entityLinks} el
+          SELECT 1 FROM ${entityLinksApp} el
           WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
             AND el.source_type = 'voc_cluster' AND el.source_id = vcm.cluster_id
             AND el.target_type IN ('finding', 'task_request')
@@ -204,12 +204,12 @@ export async function countGroupedVocsForRead(
     return sql.join(wheres.slice(baseWheres.length), sql` AND `);
   };
   const hasTaskLink = sql`EXISTS (
-    SELECT 1 FROM ${entityLinks}
-    WHERE ${entityLinks.workspaceId} = ${vocs.workspaceId}
-      AND ${entityLinks.status} = 'active'
-      AND ${entityLinks.sourceType} = 'voc'
-      AND ${entityLinks.sourceId} = ${vocs.id}
-      AND ${entityLinks.targetType} = 'task'
+    SELECT 1 FROM ${entityLinksApp}
+    WHERE ${entityLinksApp.workspaceId} = ${vocs.workspaceId}
+      AND ${entityLinksApp.status} = 'active'
+      AND ${entityLinksApp.sourceType} = 'voc'
+      AND ${entityLinksApp.sourceId} = ${vocs.id}
+      AND ${entityLinksApp.targetType} = 'task'
   )`;
   const result = await (db as Db).execute<{
     managed_system_id: string;

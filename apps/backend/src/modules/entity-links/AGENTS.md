@@ -36,10 +36,10 @@ Each linkable module must provide `entity_type`, `assertExists`, `getPermissionS
   transitions in the same transaction, deduplicate/no-op/replay, and avoid command-barrel cycles.
   Dashboard must not write link/domain resolution decisions.
 
-## Survey read-boundary cutover (ADR-0064; #740 pending)
+## Survey read-boundary cutover (ADR-0064; #740 cutover)
 
 - Keep `core.entity_links` canonical with all statuses/history. Ordinary app SQL
-  uses the proposed/new filtered owner-backed view; exclude either Survey-response
+  uses the filtered owner-backed `core.entity_links_app` view; exclude either Survey-response
   endpoint in every status. Revoke raw app SELECT/INSERT/UPDATE and column ACLs,
   no DELETE. Verify real conflict/RETURNING/detach paths before cutover.
 - Entity Links owns narrow Survey link mutations returning local link ID/inserted

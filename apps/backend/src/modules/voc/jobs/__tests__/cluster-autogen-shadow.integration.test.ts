@@ -620,7 +620,7 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     );
     await seedPair(['[1,0]', '[0.8,0.6]'], managedSystemId, workspaceId, reporterId);
     const counts = async () =>
-      appHandle.pool.query<{
+      migrateHandle.pool.query<{
         clusters: number;
         members: number;
         decisions: number;

@@ -299,7 +299,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
         }),
       ]);
 
-      const audit = await dbHandle.pool.query(
+      const audit = await migrateHandle.pool.query(
         `select 1 from core.audit_log
           where workspace_id = $1 and event_type = $2 and subject_id = $3`,
         [WORKSPACE_ID, auditEventType, request.id],
@@ -356,7 +356,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('permission.denied');
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
@@ -382,7 +382,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ id: request.id, status: 'approved' });
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail
          from core.audit_log
         where workspace_id = $1
@@ -421,7 +421,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(second.json()).toEqual(first.json());
     expect(notifications.jobs).toHaveLength(1);
 
-    const auditCount = await dbHandle.pool.query<{ n: number }>(
+    const auditCount = await migrateHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
          from core.audit_log
         where workspace_id = $1

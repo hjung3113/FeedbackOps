@@ -183,7 +183,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     expect(requestRows.rows[0]?.status).toBe('pending');
     expect(requestRows.rows[0]?.requested_capability).toBe('survey.export');
 
-    const auditRows = await dbHandle.pool.query(
+    const auditRows = await migrateHandle.pool.query(
       `select event_type, subject_type, subject_id from core.audit_log
         where workspace_id = $1 and event_type = 'permission_requested'`,
       [WORKSPACE_ID],
@@ -362,7 +362,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       [WORKSPACE_ID],
     );
     expect(requestRows.rows[0]?.n).toBe(1);
-    const auditRows = await dbHandle.pool.query(
+    const auditRows = await migrateHandle.pool.query(
       `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission_requested'`,
       [WORKSPACE_ID],
     );
@@ -686,7 +686,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     ).toBe(0);
     expect(
       (
-        await dbHandle.pool.query(
+        await migrateHandle.pool.query(
           "select id from core.audit_log where event_type = 'permission_requested'",
         )
       ).rowCount,

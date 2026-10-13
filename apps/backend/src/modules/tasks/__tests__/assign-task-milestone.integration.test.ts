@@ -215,7 +215,7 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
   }
 
   async function milestoneAuditDetails(taskId: string): Promise<unknown[]> {
-    const rows = await dbHandle.pool.query<{ detail: unknown }>(
+    const rows = await migrateHandle.pool.query<{ detail: unknown }>(
       `select detail from core.audit_log
         where workspace_id = $1 and event_type = 'task_milestone_assigned' and subject_id = $2`,
       [WORKSPACE_ID, taskId],

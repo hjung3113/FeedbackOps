@@ -553,3 +553,20 @@ SELECT-only and `core.audit_log` immutable. Generated SQL/journal/snapshot ship 
 Workspace/active-team and Actor eligibility checks apply to explicit registry defaults;
 source-creation validation/routing remain #1090/#1091. The failure-input/read contract is
 `docs/implementation/api/core.md`.
+
+## ADR-0064 #740 canonical read cutover
+
+`core.entity_links` remains canonical and supplies FK/history identity. Runtime ordinary
+SQL uses `core.entity_links_app`, an explicitly column-listed owner-backed simple
+updatable security-barrier view with cascaded CHECK OPTION. Both Survey-response
+endpoints are excluded in all statuses. App SELECT/INSERT/UPDATE are granted only on
+the view; no DELETE. Raw table and column ACLs are revoked, including PUBLIC; the
+migration fails closed on inherited raw grants rather than changing memberships.
+App audit INSERT stays without RETURNING; raw audit SELECT is revoked, while controlled
+migrate/operator history retains Actor, subject and detail. The narrow scoped Core
+question/configuration projections replace the two existing audit readers.
+
+The coordinated rollout, new owner-role prerequisite, consumer inventory and conductor
+verification are recorded in `survey-link-audit-cutover-740.md`. Neither 0059 nor #740
+alone closes Slice 53. Trusted permitted-definer composition is the accepted limit;
+stolen-app-credential unlinkability is not claimed.

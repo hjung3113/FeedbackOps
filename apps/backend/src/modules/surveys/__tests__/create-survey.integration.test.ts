@@ -184,7 +184,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     const created = response.json<{ id: string; display_id: string; operator_actor_id: string }>();
     expect(created.display_id).toMatch(/^SRV-\d+$/);
     expect(created.operator_actor_id).toBe(operator.id);
-    const audit = await appHandle.pool.query<{
+    const audit = await migrateHandle.pool.query<{
       event_type: string;
       detail: { operator_resolution: string };
     }>(
@@ -327,7 +327,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     expect(replay.statusCode).toBe(201);
     expect(replay.json<{ id: string }>().id).toBe(first.json<{ id: string }>().id);
     const createdId = first.json<{ id: string }>().id;
-    const rows = await appHandle.pool.query<{ count: number; audits: number }>(
+    const rows = await migrateHandle.pool.query<{ count: number; audits: number }>(
       `select count(*)::int as count,
               (select count(*)::int from core.audit_log where subject_id = $1 and event_type = 'survey_created') as audits
          from survey.surveys where id = $1`,
@@ -699,7 +699,7 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
     });
   }
   async function creationAuditCount() {
-    const rows = await appHandle.pool.query<{ count: number }>(
+    const rows = await migrateHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from core.audit_log where workspace_id=$1
        and actor_id=any($2::uuid[]) and event_type in ('survey_created','survey_question_created')`,
       [WORKSPACE_ID, [adminId, developerId, userId]],
@@ -707,7 +707,7 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
     return rows.rows[0]?.count ?? 0;
   }
   async function expectNoWrites(keys = attemptKeys) {
-    const rows = await appHandle.pool.query(
+    const rows = await migrateHandle.pool.query(
       `select
        (select count(*)::int from survey.surveys where primary_managed_system_id=any($1::uuid[])) as surveys,
        (select count(*)::int from survey.survey_questions where survey_id in
@@ -798,7 +798,7 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
           branch_trigger_option_key: null,
         })),
       );
-      const audit = await appHandle.pool.query<{
+      const audit = await migrateHandle.pool.query<{
         event_type: string;
         subject_id: string;
         detail: Record<string, unknown>;
@@ -1032,7 +1032,7 @@ describe.skipIf(!runIntegration)('Survey built-in starting points (#1073)', () =
     );
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json()).toMatchObject({ code: 'conflict.idempotency_key_reuse' });
-    const rows = await appHandle.pool.query(
+    const rows = await migrateHandle.pool.query(
       `select
        (select count(*)::int from survey.surveys where primary_managed_system_id=$1) as surveys,
        (select count(*)::int from survey.survey_questions where survey_id=$2::uuid) as questions,

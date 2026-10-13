@@ -264,7 +264,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     const cookie = await loginAs(app, 'mock-user-1');
     storage.putBehavior = 'throw-unavailable';
     const beforeRows = await dbHandle.pool.query(`select count(*)::int as n from voc.voc_attachments`);
-    const beforeAudit = await dbHandle.pool.query(
+    const beforeAudit = await migrateHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
     );
     const res = await postAttachment(app, {
@@ -277,7 +277,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     expect(res.statusCode).toBe(502);
     expect(res.json().code).toBe('storage.unavailable');
     const afterRows = await dbHandle.pool.query(`select count(*)::int as n from voc.voc_attachments`);
-    const afterAudit = await dbHandle.pool.query(
+    const afterAudit = await migrateHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
     );
     expect(afterRows.rows[0].n).toBe(beforeRows.rows[0].n);
@@ -334,7 +334,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     });
     expect(res.statusCode).toBe(201);
     const body = res.json() as { id: string };
-    const audits = await dbHandle.pool.query<{
+    const audits = await migrateHandle.pool.query<{
       event_type: string;
       subject_id: string;
       detail: Record<string, unknown>;

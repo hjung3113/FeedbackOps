@@ -34,7 +34,7 @@ export async function countActiveFindingsWithoutExecution(
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
       AND f.linked_task_id IS NULL
-      AND NOT EXISTS (SELECT 1 FROM core.entity_links el WHERE el.workspace_id = f.workspace_id
+      AND NOT EXISTS (SELECT 1 FROM core.entity_links_app el WHERE el.workspace_id = f.workspace_id
         AND el.status = 'active' AND el.source_type = 'finding' AND el.source_id = f.id
         AND el.target_type = 'task_request' AND el.relation_type = 'requested_task')
   `,
@@ -66,7 +66,7 @@ export async function countActiveFindingsWithExecution(
     sql`SELECT count(*)::int AS count FROM finding.findings f
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
-      AND (f.linked_task_id IS NOT NULL OR EXISTS (SELECT 1 FROM core.entity_links el
+      AND (f.linked_task_id IS NOT NULL OR EXISTS (SELECT 1 FROM core.entity_links_app el
         WHERE el.workspace_id = f.workspace_id AND el.status = 'active' AND el.source_type = 'finding'
           AND el.source_id = f.id AND el.target_type = 'task_request' AND el.relation_type = 'requested_task'))`,
   );
@@ -114,7 +114,7 @@ export async function countReleasedTasksWithUnresolvedVoc(
       AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}
       AND EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -146,7 +146,7 @@ export async function countReleasedTasksWithPublicUpdate(
     SELECT
       count(*) FILTER (WHERE EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
@@ -168,7 +168,7 @@ export async function countReleasedTasksWithPublicUpdate(
       AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}
       AND EXISTS (
         SELECT 1
-        FROM core.entity_links link
+        FROM core.entity_links_app link
         JOIN voc.vocs voc
           ON voc.id = link.source_id
          AND voc.workspace_id = link.workspace_id
