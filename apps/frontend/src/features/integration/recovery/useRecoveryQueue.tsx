@@ -55,9 +55,11 @@ export function useRecoveryQueue(
   const rows = useRef(new Map<string, HTMLElement>());
   const heading = useRef<HTMLHeadingElement>(null);
   const focusFrame = useRef<number | undefined>(undefined);
+  const pendingFocus = useRef<(() => void) | undefined>(undefined);
   const cancelFocus = useCallback(() => {
     if (focusFrame.current !== undefined) cancelAnimationFrame(focusFrame.current);
     focusFrame.current = undefined;
+    pendingFocus.current = undefined;
   }, []);
   const update = useCallback(
     (values: Record<string, unknown>, reset = false) => {
@@ -194,8 +196,15 @@ export function useRecoveryQueue(
       target.focus();
       focusFrame.current = undefined;
     }
-    focus();
+    // Focus after the selection has cleared and the panel unmounted, so nothing restores focus later.
+    pendingFocus.current = focus;
   }, [search.selected, context, update]);
+  useEffect(() => {
+    const run = pendingFocus.current;
+    if (search.selected || !run) return;
+    pendingFocus.current = undefined;
+    focusFrame.current = requestAnimationFrame(run);
+  }, [search.selected]);
   const selected = search.selected;
   const first = current.data?.pages[0];
   const denied = current.error instanceof ApiError && [401, 403].includes(current.error.status);

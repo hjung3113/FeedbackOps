@@ -376,7 +376,10 @@ it('keeps loading distinct from empty and uses heading fallback if the origin ro
   });
   fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
   await waitFor(() => expect(screen.queryByTestId('recovery-panel')).toBeNull());
-  expect(screen.getByRole('heading', { name: '처리가 필요한 항목', level: 2 })).toHaveFocus();
+  // Focus return retries across animation frames until the shell reveals the target.
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: '처리가 필요한 항목', level: 2 })).toHaveFocus(),
+  );
 });
 it('respects nested overlay and defaultPrevented Escape', async () => {
   setup();
@@ -506,7 +509,7 @@ it('returns focus to the clicked history occurrence when the same identity appea
   await screen.findByTestId('recovery-panel');
   fireEvent.keyDown(document.body, { key: 'Escape' });
   await waitFor(() => expect(screen.queryByTestId('recovery-panel')).toBeNull());
-  expect(rows[0]).toHaveFocus();
+  await waitFor(() => expect(rows[0]).toHaveFocus());
 });
 
 it('leaves fullscreen Escape to the shell and permits explicit close', async () => {
