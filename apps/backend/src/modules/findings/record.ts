@@ -179,6 +179,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
         idempotencyKey,
         requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'finding', id: findingId },
+          ]);
+          const responseRecoveries = await deps.outcomeRecoveryRecorder?.captureFinding(
+            tx,
+            actor.workspace_id,
+            findingId,
+          );
           let finding = await lockFindingById(tx, {
             workspaceId: actor.workspace_id,
             findingId,
@@ -240,6 +248,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
               workspaceId: actor.workspace_id,
               findingId: finding.id,
             });
+            if (responseRecoveries)
+              await deps.outcomeRecoveryRecorder?.finish(
+                tx,
+                responseRecoveries,
+                actor.actor_id,
+                'patchFinding',
+              );
+          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -257,6 +273,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
           });
 
           if (input.status === finding.status) {
+            if (responseRecoveries)
+              await deps.outcomeRecoveryRecorder?.finish(
+                tx,
+                responseRecoveries,
+                actor.actor_id,
+                'patchFinding',
+              );
+          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
             return { status: 200, body: toDto(finding, source) };
           }
 
@@ -309,6 +333,14 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             detail,
           });
 
+          if (responseRecoveries)
+            await deps.outcomeRecoveryRecorder?.finish(
+              tx,
+              responseRecoveries,
+              actor.actor_id,
+              'patchFinding',
+            );
+          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'patchFinding');
           return { status: 200, body: toDto(updated, source) };
         },
       );
@@ -331,6 +363,10 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
         idempotencyKey,
         requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+            { type: 'finding', id: findingId },
+            { type: 'task', id: input.task_id },
+          ]);
           const finding = await lockFindingById(tx, {
             workspaceId: actor.workspace_id,
             findingId,
@@ -359,6 +395,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
                 workspaceId: actor.workspace_id,
                 findingId: finding.id,
               });
+              if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
               return { status: 200, body: toDto(finding, source) };
             }
             throw new HttpError('validation.failed', 'finding is already linked to a task', {
@@ -425,6 +462,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             },
           });
 
+          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkTask');
           return { status: 200, body: toDto(updated, source) };
         },
       );

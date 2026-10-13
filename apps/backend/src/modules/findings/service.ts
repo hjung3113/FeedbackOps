@@ -1,3 +1,5 @@
+import type { OutcomeRecoveryRecorder } from '../surveys/recovery-presentation.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type { Db } from '../../db/client.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -15,6 +17,8 @@ export interface FindingsActor {
 }
 
 export interface FindingsServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
+  outcomeRecoveryRecorder?: OutcomeRecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;

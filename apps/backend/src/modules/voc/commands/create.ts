@@ -181,6 +181,7 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       row.reporterFacingStatus as ReporterFacingStatus,
       tx,
     );
+    await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [{ type: 'voc', id: row.id }]);
     return {
       id: row.id,
       display_id: row.displayId,

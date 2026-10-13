@@ -650,12 +650,12 @@ Resolved missing row/keys default; PATCH accepts partial maps of complete pairs.
 Coverage DTO status adds `no_data` only for total zero; unreadable keys remain absent.
 Summary DTO adds server `computed_at`; it is not an atomic database snapshot time.
 
-Dashboard-owned proposed/new storage (logical contracts; physical table names are new
-implementation assets, not existing tables):
+Dashboard-owned 56-H storage (`dashboard.recovery_identities`, `recovery_history`,
+`recovery_presentations`; Survey response equivalents live under `survey.outcome_recovery_*`):
 
 - Stable identity: opaque `recovery_item_id`, workspace, category, source key; unique
   workspace/category/source, current occurrence and active/resolved/withdrawn projection.
-- Occurrence/history: identity + occurrence unique, resolution time/action/audit references
+- Occurrence/history: identity + occurrence unique, resolution time/action/evidence metadata
   and safe metadata, separate withdrawal/observation metadata; no raw body/private comment.
   Reopen increments occurrence, preserves earlier resolutions, resets personal hiding.
 - Personal presentation: workspace/session Actor/identity/occurrence unique, snooze until
@@ -663,7 +663,10 @@ implementation assets, not existing tables):
 
 Index active scope/category, history `(workspace_id, resolved_at, id)`, source identity,
 and Actor presentation keys. History reads are limited to three calendar months by
-resolution time and recheck current permissions; pruning preserves stable identities,
+resolution time: inclusive first instant of the current UTC month minus two whole months.
+Filter current permissions before count/LIMIT, order `(resolved_at DESC, id DESC)`, and bind
+cursors to the session Actor and current filters/scopes. Runtime history has no general
+UPDATE/DELETE grant; no pruning is implemented. Any later pruning preserves stable identities,
 current occurrence and indefinite `core.audit_log`. Initialize active identities without
 fabricating prior history. Source predicates remain authoritative and transition recording
 commits with source/link repairs; reconciliation marks observation time when exact evidence

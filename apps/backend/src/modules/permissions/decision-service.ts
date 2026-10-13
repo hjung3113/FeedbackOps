@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 // Permission-request decision application service. Decisions mint the actual
 // grant/deny rows consumed by check-service; they never execute the originally
 // blocked domain action.
@@ -34,6 +35,7 @@ import { writePermissionGrant } from './grant-command.js';
 import { validateRequestExpiration, validateSupportedScope } from './supported-scope-policy.js';
 
 export interface DecisionServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -112,6 +114,9 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         status: number;
         body: PermissionDecisionResult;
       }> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const rows = await tx
           .select()
           .from(permissionRequests)
@@ -128,11 +133,9 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           !DECIDABLE_STATUSES.includes(request.status as DecidableStatus) ||
           request.revision !== body.expected_revision
         ) {
-          throw new HttpError(
-            'conflict.stale_write',
-            'permission request status or revision changed',
-            { current_revision: request.revision },
-          );
+          throw new HttpError('conflict.stale_write', 'permission request status or revision changed', {
+            current_revision: request.revision,
+          });
         }
         if (!isCapability(request.requestedCapability)) {
           throw new HttpError('validation.unknown_capability', 'unknown capability', {
@@ -144,16 +147,10 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         const note = body.note?.trim();
         const isSelfApproval = action === 'approve' && request.requesterActorId === actor.actor_id;
         if (action === 'approve') {
-          const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(
-            tx,
-            actor.workspace_id,
-          );
+          const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(tx, actor.workspace_id);
           if (isSelfApproval) {
             if (workspaceSettings.permission_self_approval === 'forbidden') {
-              throw new HttpError(
-                'permission.denied',
-                'self-approval forbidden by workspace policy',
-              );
+              throw new HttpError('permission.denied', 'self-approval forbidden by workspace policy');
             }
             if (!body.self_approval) {
               throw new HttpError('validation.failed', 'self-approval envelope is required', {
@@ -190,7 +187,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
             ],
           });
         }
-
+      
         let grantedManagedSystemId = request.requestedManagedSystemId;
         if (action === 'approve') {
           await validateSupportedScope(
@@ -207,13 +204,9 @@ export function createDecisionService(deps: DecisionServiceDeps) {
               request.requestedManagedSystemId !== null &&
               request.requestedManagedSystemId !== body.granted_managed_system_id
             ) {
-              throw new HttpError(
-                'validation.failed',
-                'approval cannot move or widen requested scope',
-                {
-                  fields: [{ path: ['granted_managed_system_id'], code: 'custom' }],
-                },
-              );
+              throw new HttpError('validation.failed', 'approval cannot move or widen requested scope', {
+                fields: [{ path: ['granted_managed_system_id'], code: 'custom' }],
+              });
             }
             grantedManagedSystemId = body.granted_managed_system_id;
             await validateSupportedScope(
@@ -234,19 +227,15 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           } else {
             grantedExpiration = new Date(body.expiration);
             if (grantedExpiration.getTime() <= Date.now()) {
-              throw new HttpError(
-                'validation.failed',
-                'approval expiration must be in the future',
-                {
-                  fields: [{ path: ['expiration'], code: 'custom' }],
-                },
-              );
+              throw new HttpError('validation.failed', 'approval expiration must be in the future', {
+                fields: [{ path: ['expiration'], code: 'custom' }],
+              });
             }
           }
         }
-
+      
         if (action === 'approve') validateRequestExpiration(grantedExpiration, 'expiration');
-
+      
         let grantId: string | undefined;
         let previousGrantId: string | undefined;
         let denyId: string | undefined;
@@ -256,7 +245,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
             : action === 'need_more_info'
               ? 'needs_more_info'
               : 'rejected';
-
+      
         try {
           if (action === 'approve') {
             // Policy lock precedes the shared writer's grant-row lock for all approvals.
@@ -303,13 +292,13 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           }
           throw err;
         }
-
+      
         const updatedAt = new Date();
         await tx
           .update(permissionRequests)
           .set({ status, revision: request.revision + 1, updatedAt })
           .where(eq(permissionRequests.id, request.id));
-
+      
         const eventType: AuditEventType =
           action === 'approve'
             ? 'permission_approved'
@@ -347,7 +336,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           summary: `Permission request ${action.replaceAll('_', ' ')}`,
           detail,
         });
-
+      
         if (action === 'approve' || action === 'reject' || action === 'deny') {
           await deps.notify(tx, 'permission_request.decided', {
             workspace_id: actor.workspace_id,
@@ -358,26 +347,29 @@ export function createDecisionService(deps: DecisionServiceDeps) {
             params: { outcome: action === 'approve' ? 'approved' : 'rejected' },
           });
         }
-
-        return {
-          status: 200,
-          body: {
-            id: request.id,
-            revision: request.revision + 1,
-            updated_at: updatedAt.toISOString(),
-            ...(action === 'approve'
-              ? {
-                  requested_managed_system_id: request.requestedManagedSystemId,
-                  granted_managed_system_id: grantedManagedSystemId,
-                  requested_expiration: request.requestedExpiration?.toISOString() ?? null,
-                  granted_expiration: grantedExpiration?.toISOString() ?? null,
-                }
-              : {}),
-            status,
-            ...(grantId ? { grant_id: grantId } : {}),
-            ...(denyId ? { deny_id: denyId } : {}),
-          },
-        };
+      
+        {
+          if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'decide');
+          return {
+            status: 200,
+            body: {
+              id: request.id,
+              revision: request.revision + 1,
+              updated_at: updatedAt.toISOString(),
+              ...(action === 'approve'
+                ? {
+                    requested_managed_system_id: request.requestedManagedSystemId,
+                    granted_managed_system_id: grantedManagedSystemId,
+                    requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+                    granted_expiration: grantedExpiration?.toISOString() ?? null,
+                  }
+                : {}),
+              status,
+              ...(grantId ? { grant_id: grantId } : {}),
+              ...(denyId ? { deny_id: denyId } : {}),
+            },
+          };
+        }
       };
 
       if (!options.idempotencyKey) return run();

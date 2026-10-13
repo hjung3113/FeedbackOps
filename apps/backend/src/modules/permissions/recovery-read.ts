@@ -41,3 +41,10 @@ export async function countRecoveryPermissionRequests(
     AND ${permissionRecoveryPredicate()}`);
   return Number(result.rows[0]?.count ?? 0);
 }
+
+/** Actor-independent transition truth; no request detail or access decision is returned. */
+export function permissionRecoveryTruth(workspaceId: string, sourceId?: string): SQL {
+  return sql`SELECT p.id AS source_id,NULL::uuid AS system_id,
+    (${permissionRecoveryPredicate()}) AS active,p.status='cancelled' AS withdrawn
+    FROM permission.permission_requests p WHERE p.workspace_id=${workspaceId}::uuid AND ${sourceId ? sql`p.id=${sourceId}::uuid` : sql`true`}`;
+}

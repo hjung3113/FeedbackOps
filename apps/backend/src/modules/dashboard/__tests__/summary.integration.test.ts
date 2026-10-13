@@ -1,4 +1,6 @@
-import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema } from '@fops/shared';
+import { recoveryIdentity } from '../identity.js';
+import { reconcileRecoveryPage } from '../jobs/index.js';
+import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema, recoveryHistorySchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -101,6 +103,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   let adminCookie: string;
   let adminActorId: string;
   let reporterActorId: string;
+  let initialRecoveryTokens: string[] = [];
 
   const headers = (cookie: string) => ({ cookie: `${SESSION_COOKIE_NAME}=${cookie}` });
   const get = (cookie: string, selector = 'all') =>
@@ -114,7 +117,8 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle });
+    initialRecoveryTokens=(await migrateHandle.pool.query<{recovery_item_id:string}>('SELECT recovery_item_id FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid',[WORKSPACE_ID])).rows.map(r=>r.recovery_item_id);
+    app = await buildServer({ config: loadConfig(), dbHandle, recoveryClock: () => new Date('2026-10-13T12:00:00.000Z') });
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     const actors = await dbHandle.pool.query<{ id: string; external_id: string }>(
@@ -135,6 +139,9 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 
   afterAll(async () => {
     await cleanupFixtures();
+    for(const table of ['recovery_history','recovery_presentations','recovery_identities']) {
+      await migrateHandle.pool.query(`DELETE FROM dashboard.${table} WHERE workspace_id=$1::uuid AND NOT (recovery_item_id=ANY($2::text[]))`,[WORKSPACE_ID,initialRecoveryTokens]);
+    }
     await app?.close();
     await dbHandle?.close();
     await migrateHandle?.close();
@@ -147,6 +154,19 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         (select id from core.managed_systems where workspace_id=$1 and slug like $2)`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`]);
     const systems = 'select id from core.managed_systems where workspace_id = $1 and slug like $2';
+    for (const table of ['recovery_history','recovery_presentations','recovery_identities']) {
+      await migrateHandle.pool.query(`DELETE FROM dashboard.${table} p WHERE p.workspace_id=$1::uuid
+        AND p.recovery_item_id IN (SELECT i.recovery_item_id FROM dashboard.recovery_identities i
+          WHERE i.workspace_id=$1::uuid AND (i.managed_system_id IN (${systems}) OR
+          (i.category='permission-requests-pending' AND i.source_id IN (SELECT id FROM permission.permission_requests WHERE workspace_id=$1::uuid AND reason LIKE $2))))`,
+        [WORKSPACE_ID,`${SLUG_PREFIX}%`]);
+    }
+    for (const table of ['outcome_recovery_history','outcome_recovery_presentations','outcome_recovery_identities']) {
+      await migrateHandle.pool.query(`DELETE FROM survey.${table} WHERE workspace_id=$1::uuid AND outcome_recovery_item_id::uuid IN (
+        SELECT r.id FROM survey.survey_responses r JOIN survey.surveys s ON s.id=r.survey_id AND s.workspace_id=r.workspace_id
+        WHERE s.workspace_id=$1::uuid AND s.primary_managed_system_id IN (${systems}))`,[WORKSPACE_ID,`${SLUG_PREFIX}%`]);
+    }
+
     await migrateHandle.pool.query(
       `delete from core.entity_links where managed_system_id in (${systems})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -855,6 +875,313 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   const recoveryDetail = (cookie: string, id: string) =>
     app.inject({ method: 'GET', url: `/dashboard/recovery-items/${id}`, headers: headers(cookie) });
 
+  it('hides only for the session Actor before discovery without reducing operational totals', async () => {
+    const seed = await createDashboardScope();
+    const { id: vocId } = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'personal hiding');
+    const query = `category=unassigned-voc&managed_system_id=${seed.msA}`;
+    const before = await recoveryList(seed.devCookie, query);
+    const item = required(before.items.find((row) => row.source?.id === vocId));
+    expect(item.occurrence).toBeNull();
+    const sourceAudits=async()=>(await migrateHandle.pool.query('SELECT id FROM core.audit_log WHERE workspace_id=$1::uuid AND subject_id=$2::uuid ORDER BY id',[WORKSPACE_ID,vocId])).rows;
+    const auditsBefore=await sourceAudits();
+    const summary = (await get(adminCookie, seed.msA)).json<Summary>();
+    const otherBefore = await recoveryList(adminCookie, query);
+    for (const extra of [
+      { actor_id: adminActorId }, { owner_actor_id: adminActorId }, { resolution: 'resolved' },
+    ]) {
+      const rejected = await app.inject({ method: 'PATCH',
+        url: `/dashboard/recovery-items/${item.recovery_item_id}/presentation`,
+        headers: headers(seed.devCookie), payload: { action: 'mute', ...extra } });
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.json().code).toBe('validation.failed');
+    }
+    const querySpoof = await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${item.recovery_item_id}/presentation?actor_id=${adminActorId}`,headers:headers(seed.devCookie),payload:{action:'mute'}});
+    expect(querySpoof.statusCode).toBe(422);
+    expect(querySpoof.json().code).toBe('validation.failed');
+    expect((await dbHandle.pool.query('SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,item.recovery_item_id])).rows).toEqual([]);
+    expect((await recoveryList(seed.devCookie, query)).total).toBe(before.total);
+    const muted = await app.inject({ method: 'PATCH',
+      url: `/dashboard/recovery-items/${item.recovery_item_id}/presentation`,
+      headers: headers(seed.devCookie), payload: { action: 'mute' } });
+    expect(muted.statusCode).toBe(200);
+    const visible = await recoveryList(seed.devCookie, query);
+    const hidden = await recoveryList(seed.devCookie, `${query}&presentation=hidden`);
+    expect(visible.items.some((row) => row.source?.id === vocId)).toBe(false);
+    expect(hidden.items.map((row) => row.source?.id)).toContain(vocId);
+    expect(visible.visible_total + visible.hidden_total).toBe(before.total);
+    expect(visible.hidden_total).toBe(1);
+    expect((await recoveryList(adminCookie, query)).items).toEqual(otherBefore.items.map((row) =>
+      row.source?.id === vocId ? { ...row, occurrence: 1 } : row));
+    expectQueueDelta((await get(adminCookie, seed.msA)).json<Summary>(), summary, 'unassigned-voc', 0);
+    const restored = await app.inject({ method: 'PATCH',
+      url: `/dashboard/recovery-items/${item.recovery_item_id}/presentation`,
+      headers: headers(seed.devCookie), payload: { action: 'restore' } });
+    expect(restored.statusCode).toBe(200);
+    expect(await sourceAudits()).toEqual(auditsBefore);
+    expect((await recoveryList(seed.devCookie, query)).total).toBe(before.total);
+  });
+
+  it('fills visible pages after hidden leading rows and binds presentation into cursors', async () => {
+    const seed = await createDashboardScope();
+    for (const title of ['Page one', 'Page two', 'Page three'])
+      await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, title);
+    const query = `category=unassigned-voc&managed_system_id=${seed.msA}&limit=1`;
+    const first = await recoveryList(seed.devCookie, query);
+    const leading = required(first.items[0]);
+    expect(
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: `/dashboard/recovery-items/${leading.recovery_item_id}/presentation`,
+          headers: headers(seed.devCookie),
+          payload: { action: 'mute' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const visible = await recoveryList(seed.devCookie, query);
+    expect(visible.items).toHaveLength(1);
+    expect(visible.items[0]?.recovery_item_id).not.toBe(leading.recovery_item_id);
+    expect(visible).toMatchObject({
+      total: 2,
+      visible_total: 2,
+      hidden_total: 1,
+      page: { has_more: true },
+    });
+    const second = await recoveryList(seed.devCookie, `${query}&cursor=${visible.page.cursor}`);
+    expect(second.items).toHaveLength(1);
+    expect(second.page.has_more).toBe(false);
+    expect(new Set([...visible.items, ...second.items].map((r) => r.recovery_item_id)).size).toBe(2);
+    const incompatible = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-items?${query}&presentation=hidden&cursor=${visible.page.cursor}`,
+      headers: headers(seed.devCookie),
+    });
+    expect(incompatible.statusCode).toBe(422);
+    expect(incompatible.json().detail.fields).toContainEqual({
+      path: ['cursor'],
+      code: 'invalid_cursor',
+    });
+    const hidden = await recoveryList(seed.devCookie, `${query}&presentation=hidden`);
+    expect(hidden.total).toBe(1);
+    expect(hidden.items[0]?.recovery_item_id).toBe(leading.recovery_item_id);
+  });
+
+  it('records a first repair before discovery, replay/no-op and reopen without a scan', async () => {
+    const seed = await createDashboardScope();
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.triage',
+      seed.msA,
+      adminActorId,
+    );
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'transactional recovery',
+    );
+    const token = recoveryIdentity('unassigned-voc', voc.id);
+    const stamp = async () =>
+      new Date(
+        (
+          await migrateHandle.pool.query<{ updated_at: Date }>(
+            'SELECT updated_at FROM voc.vocs WHERE id=$1::uuid',
+            [voc.id],
+          )
+        ).rows[0]!.updated_at,
+      ).toISOString();
+    const patch = async (payload: Record<string, unknown>, key = randomUUID(), match?: string) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/vocs/${voc.id}`,
+        headers: {
+          ...headers(seed.devCookie),
+          'idempotency-key': key,
+          'if-match': match ?? (await stamp()),
+        },
+        payload,
+      });
+    const history = async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/dashboard/recovery-history?category=unassigned-voc&managed_system_id=${seed.msA}`,
+        headers: headers(seed.devCookie),
+      });
+      expect(response.statusCode).toBe(200);
+      return recoveryHistorySchema.parse(response.json());
+    };
+    const key = randomUUID(),
+      match = await stamp();
+    const repaired = await patch({ owner_user_id: adminActorId }, key, match);
+    expect(repaired.statusCode).toBe(200);
+    expect((await history()).items.map((h) => h.occurrence)).toEqual([1]);
+    expect((await patch({ owner_user_id: adminActorId }, key, match)).body).toBe(repaired.body);
+    expect((await patch({ owner_user_id: adminActorId })).statusCode).toBe(200);
+    expect((await history()).total).toBe(1);
+    expect((await patch({ owner_user_id: null })).statusCode).toBe(200);
+    for (const cookie of [seed.devCookie, adminCookie]) {
+      const hidden = await app.inject({
+        method: 'PATCH',
+        url: `/dashboard/recovery-items/${token}/presentation`,
+        headers: headers(cookie),
+        payload: { action: 'mute' },
+      });
+      expect(hidden.statusCode).toBe(200);
+      expect(hidden.json().occurrence).toBe(2);
+    }
+    expect((await patch({ owner_user_id: adminActorId })).statusCode).toBe(200);
+    expect((await patch({ owner_user_id: null })).statusCode).toBe(200);
+    for (const cookie of [seed.devCookie, adminCookie]) {
+      const detail = await recoveryDetail(cookie, token);
+      expect(detail.statusCode).toBe(200);
+      expect(detail.json()).toMatchObject({
+        state: 'active',
+        occurrence: 3,
+        presentation: { state: 'visible', snoozed_until: null },
+      });
+    }
+    expect((await history()).items.map((h) => h.occurrence)).toEqual([2, 1]);
+    const invalid = await patch({ owner_user_id: randomUUID() });
+    expect(invalid.statusCode).toBe(422);
+    expect((await history()).total).toBe(2);
+    const stale = await app.inject({
+      method: 'PATCH',
+      url: `/dashboard/recovery-items/${token}/presentation`,
+      headers: headers(seed.devCookie),
+      payload: { action: 'snooze', days: 7 },
+    });
+    expect(stale.statusCode).toBe(200);
+    const denied = await denyCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.read',
+      seed.msA,
+      adminActorId,
+    );
+    try {
+      expect((await recoveryDetail(seed.devCookie, token)).statusCode).toBe(404);
+      const deniedHistory = await history();
+      expect(deniedHistory.items).toEqual([]);
+      expect(deniedHistory.total).toBe(0);
+      expect(JSON.stringify(deniedHistory)).not.toContain(voc.id);
+      expect(JSON.stringify(deniedHistory)).not.toContain('transactional recovery');
+    } finally {
+      await migrateHandle.pool.query('DELETE FROM permission.permission_denies WHERE id=$1::uuid', [
+        denied,
+      ]);
+    }
+  });
+
+  it('serializes two first personal PATCHes with a real repair and reconciliation',async()=>{
+    const seed=await createDashboardScope();
+    await grantCapability(migrateHandle,WORKSPACE_ID,seed.devActorId,'voc.triage',seed.msA,adminActorId);
+    const voc=await insertVocDirectly(migrateHandle,WORKSPACE_ID,seed.msA,reporterActorId,'Concurrent recovery');
+    const token=recoveryIdentity('unassigned-voc',voc.id);
+    const changes=await Promise.all([seed.devCookie,adminCookie].map(cookie=>app.inject({method:'PATCH',url:`/dashboard/recovery-items/${token}/presentation`,headers:headers(cookie),payload:{action:'mute'}})));
+    expect(changes.map(r=>r.statusCode)).toEqual([200,200]);expect(changes.map(r=>r.json().occurrence)).toEqual([1,1]);
+    const stamp=(await migrateHandle.pool.query<{updated_at:Date}>('SELECT updated_at FROM voc.vocs WHERE id=$1::uuid',[voc.id])).rows[0]!.updated_at.toISOString();
+    const [repair]=await Promise.all([
+      app.inject({method:'PATCH',url:`/vocs/${voc.id}`,headers:{...headers(seed.devCookie),'idempotency-key':randomUUID(),'if-match':stamp},payload:{owner_user_id:adminActorId}}),
+      reconcileRecoveryPage({db:dbHandle.db},{workspace_id:WORKSPACE_ID,correlation_id:randomUUID()}),
+    ]);
+    expect(repair.statusCode).toBe(200);
+    const history = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=unassigned-voc&managed_system_id=${seed.msA}`,
+      headers: headers(seed.devCookie),
+    });
+    expect(recoveryHistorySchema.parse(history.json()).items.map(h=>h.occurrence)).toEqual([1]);
+    expect((await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${token}/presentation`,headers:headers(seed.devCookie),payload:{action:'mute'}})).statusCode).toBe(409);
+    const absent=await insertVocDirectly(migrateHandle,WORKSPACE_ID,seed.msA,reporterActorId,'Absent restore');
+    const address=recoveryIdentity('unassigned-voc',absent.id);
+    expect((await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${address}/presentation`,headers:headers(seed.devCookie),payload:{action:'restore'}})).json().occurrence).toBeNull();
+    const stored=await dbHandle.pool.query('SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,address]);
+    expect(stored.rows).toEqual([]);
+  });
+
+  it('uses an inclusive UTC calendar boundary before count/LIMIT and preserves append-only role grants', async () => {
+    const seed = await createDashboardScope();
+    for (const [time, title] of [
+      ['2026-08-01T00:00:00Z', 'included boundary'],
+      ['2026-08-01T00:00:00Z', 'included tie'],
+      ['2026-07-31T23:59:59.999999Z', 'excluded boundary'],
+    ] as const) {
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        seed.msA,
+        reporterActorId,
+        title,
+      );
+      const token = recoveryIdentity('unassigned-voc', voc.id);
+      await dbHandle.pool.query(
+        `INSERT INTO dashboard.recovery_identities(workspace_id,recovery_item_id,category,source_id,managed_system_id,occurrence,state)
+                VALUES($1::uuid,$2,'unassigned-voc',$3::uuid,$4::uuid,1,'resolved')`,
+        [WORKSPACE_ID, token, voc.id, seed.msA],
+      );
+      await dbHandle.pool.query(
+        `INSERT INTO dashboard.recovery_history(workspace_id,recovery_item_id,occurrence,resolved_at,outcome,evidence,action,actor_id)
+                VALUES($1::uuid,$2,1,$3::timestamptz,'resolved','command','fixture',$4::uuid)`,
+        [WORKSPACE_ID, token, time, adminActorId],
+      );
+    }
+    const response = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=unassigned-voc&managed_system_id=${seed.msA}&limit=1`,
+      headers: headers(seed.devCookie),
+    });
+    expect(response.statusCode).toBe(200);
+    const body = recoveryHistorySchema.parse(response.json());
+    expect(body.window_start).toBe('2026-08-01T00:00:00.000Z');
+    expect(body.total).toBe(2);
+    expect(body.page.has_more).toBe(true);
+    const second = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=unassigned-voc&managed_system_id=${seed.msA}&limit=1&cursor=${body.page.cursor}`,
+      headers: headers(seed.devCookie),
+    });
+    expect(second.statusCode).toBe(200);
+    const page2 = recoveryHistorySchema.parse(second.json());
+    expect(page2.total).toBe(2);
+    expect(page2.page.has_more).toBe(false);
+    expect(new Set([body.items[0]?.id, page2.items[0]?.id]).size).toBe(2);
+    expect([body.items[0]?.item.source?.title, page2.items[0]?.item.source?.title].sort()).toEqual([
+      'included boundary',
+      'included tie',
+    ]);
+    await expect(
+      dbHandle.pool.query(
+        'UPDATE dashboard.recovery_history SET action=action WHERE workspace_id=$1::uuid',
+        [WORKSPACE_ID],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      dbHandle.pool.query('DELETE FROM dashboard.recovery_history WHERE workspace_id=$1::uuid', [
+        WORKSPACE_ID,
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('reconciles idempotently across restart without inventing past repairs',async()=>{
+    const seed=await createDashboardScope();
+    const voc=await insertVocDirectly(migrateHandle,WORKSPACE_ID,seed.msA,reporterActorId,'discovery restart');
+    const token=recoveryIdentity('unassigned-voc',voc.id);
+    const run=async()=>{let after: {category:string;sourceId:string}|undefined;
+      do {after=(await reconcileRecoveryPage({db:dbHandle.db},{workspace_id:WORKSPACE_ID,correlation_id:randomUUID(),...(after?{after}:{})})).next;}while(after);
+    };
+    await run();expect((await recoveryDetail(seed.devCookie,token)).json().occurrence).toBe(1);
+    await migrateHandle.pool.query('UPDATE voc.vocs SET archived_at=now() WHERE id=$1::uuid',[voc.id]);
+    await run();await run();
+    const response=await app.inject({method:'GET',url:`/dashboard/recovery-history?category=unassigned-voc&managed_system_id=${seed.msA}`,headers:headers(seed.devCookie)});
+    expect(response.statusCode).toBe(200);const body=recoveryHistorySchema.parse(response.json());expect(body.total).toBe(1);
+    expect(body.items[0]?.resolution).toMatchObject({outcome:'withdrawn',evidence:'observation',action:null});
+    expect((await recoveryDetail(seed.devCookie,token)).json().state).toBe('withdrawn');
+  });
+
   it('uses owner grains for every operational category and the safe Survey exception', async () => {
     const seed = await createDashboardScope();
     await seedDashboard(seed);
@@ -927,6 +1254,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       'idempotency', (SELECT jsonb_agg(i ORDER BY actor_id, key) FROM core.idempotency_keys i WHERE actor_id IN (SELECT id FROM core.actors WHERE workspace_id = $1::uuid)),
       'public_updates', (SELECT jsonb_agg(u ORDER BY id) FROM voc.voc_public_updates u WHERE voc_id IN (SELECT id FROM voc.vocs WHERE workspace_id = $1::uuid)),
       'links', (SELECT jsonb_agg(l ORDER BY id) FROM core.entity_links l WHERE workspace_id = $1::uuid),
+      'recovery_identities', (SELECT jsonb_agg(i ORDER BY recovery_item_id) FROM dashboard.recovery_identities i WHERE workspace_id=$1::uuid),
+      'recovery_history', (SELECT jsonb_agg(h ORDER BY id) FROM dashboard.recovery_history h WHERE workspace_id=$1::uuid),
+      'recovery_presentations', (SELECT jsonb_agg(p ORDER BY recovery_item_id,actor_id,occurrence) FROM dashboard.recovery_presentations p WHERE workspace_id=$1::uuid),
+      'outcome_identities', (SELECT jsonb_agg(i ORDER BY outcome_recovery_item_id) FROM survey.outcome_recovery_identities i WHERE workspace_id=$1::uuid),
+      'outcome_history', (SELECT jsonb_agg(h ORDER BY id) FROM survey.outcome_recovery_history h WHERE workspace_id=$1::uuid),
+      'outcome_presentations', (SELECT jsonb_agg(p ORDER BY outcome_recovery_item_id,actor_id,occurrence) FROM survey.outcome_recovery_presentations p WHERE workspace_id=$1::uuid),
       'audit', (SELECT jsonb_agg(a ORDER BY id) FROM core.audit_log a WHERE workspace_id = $1::uuid)
     ) AS state`,
           [WORKSPACE_ID],
@@ -935,6 +1268,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const before = await snapshot();
     await recoveryList(seed.devCookie);
     expect((await recoveryDetail(seed.devCookie, item.recovery_item_id)).statusCode).toBe(200);
+    expect((await app.inject({method:'GET',url:'/dashboard/recovery-history',headers:headers(seed.devCookie)})).statusCode).toBe(200);
     expect(await snapshot()).toEqual(before); // infrastructure rate-limit writes excluded.
     const repaired = await app.inject({
       method: 'PATCH',
@@ -950,6 +1284,9 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const resolved = recoveryDetailSchema.parse(
       (await recoveryDetail(seed.devCookie, item.recovery_item_id)).json(),
     );
+    const afterRepair=await snapshot();
+    expect((await app.inject({method:'GET',url:'/dashboard/recovery-history',headers:headers(seed.devCookie)})).statusCode).toBe(200);
+    expect(await snapshot()).toEqual(afterRepair);
     expect(resolved.state).toBe('resolved');
     expect(resolved.next_actions).toEqual([]);
     expect((await recoveryList(seed.devCookie, 'category=unassigned-voc')).items).toEqual([]);
@@ -1053,6 +1390,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const userCookie = await loginAs(app, 'mock-user-1');
     expect((await recoveryList(userCookie)).items).toEqual([]);
     expect((await recoveryDetail(userCookie, id)).statusCode).toBe(404);
+    expect((await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${id}/presentation`,headers:headers(userCookie),payload:{action:'mute'}})).statusCode).toBe(404);
     await migrateHandle.pool.query(
       `INSERT INTO permission.permission_requests
       (workspace_id, requester_actor_id, requested_capability, reason, status)
@@ -1210,6 +1548,9 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
           code: 'not_found.record',
           message: 'recovery item not found',
         });
+        const patch = await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${token}/presentation`,headers:headers(seed.devCookie),payload:{action:'mute'}});
+        expect(patch.statusCode).toBe(404);
+        expect(patch.json().code).toBe('not_found.record');
       }
       // A compatible address can be resolved without proving a historical occurrence.
       expect((await recoveryDetail(seed.devCookie, address(2, voc.id))).json().state).toBe(
@@ -1367,12 +1708,10 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(body.total).toBe(queue(summary, 'unassigned-voc')?.count);
     expect(body.items).toHaveLength(2);
     expect(body.page.has_more).toBe(true);
-    const second = (
-      await read(`category=unassigned-voc&limit=2&cursor=${body.page.cursor}`)
-    ).json();
-    expect(
-      new Set([...body.items, ...second.items].map((item) => item.recovery_item_id)).size,
-    ).toBe(4);
+    const second = (await read(`category=unassigned-voc&limit=2&cursor=${body.page.cursor}`)).json();
+    expect(new Set([...body.items, ...second.items].map((item) => item.recovery_item_id)).size).toBe(
+      4,
+    );
     expect(second.page.has_more).toBe(false);
     const refresh = (await read('category=unassigned-voc&limit=2')).json();
     expect(refresh.items).toEqual(body.items);

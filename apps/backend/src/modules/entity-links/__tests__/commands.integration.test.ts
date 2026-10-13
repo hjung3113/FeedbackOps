@@ -9,6 +9,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { sql } from 'drizzle-orm';
+import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
@@ -49,6 +54,9 @@ describe.skipIf(!runIntegration)('entity-links command seam (#391)', () => {
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
     // FK-safe order: children before parents.
+    for (const table of ['finding.findings','voc.vocs']) {
+      await migrateHandle.pool.query(`DELETE FROM ${table} WHERE workspace_id=$1::uuid AND primary_managed_system_id IN (SELECT id FROM core.managed_systems WHERE workspace_id=$1::uuid AND slug LIKE $2::text)`,[WORKSPACE_ID,`${SLUG_PREFIX}%`]);
+    }
     await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
@@ -75,6 +83,28 @@ describe.skipIf(!runIntegration)('entity-links command seam (#391)', () => {
       }),
     ).rejects.toThrow(Rollback);
   }
+
+  it('records link repair/detach/recreate occurrences atomically at the owner seam',async()=>{
+    const msId=await insertMsDirectly(dbHandle,WORKSPACE_ID,uid(SLUG_PREFIX),'Recovery links MS');
+    const voc=await insertVocDirectly(migrateHandle,WORKSPACE_ID,msId,actorId,'High recovery VOC');
+    await migrateHandle.pool.query("UPDATE voc.vocs SET severity='high' WHERE id=$1::uuid",[voc.id]);
+    const finding=await insertFindingRow(dbHandle,{workspaceId:WORKSPACE_ID,primaryManagedSystemId:msId,sourceId:voc.id,createdBy:actorId});
+    const recorder=createOwnerRecoveryRecorder(),token=recoveryIdentity('high-severity-unlinked',voc.id);
+    await inRolledBackTx(async(tx)=>{
+      const input={workspaceId:WORKSPACE_ID,sourceType:'voc' as const,sourceId:voc.id,targetType:'finding' as const,targetId:finding.id,relationType:'created_finding' as const,managedSystemId:msId,createdBy:actorId,visibility:'internal_only' as const};
+      const subjects=[{type:'voc' as const,id:voc.id},{type:'finding' as const,id:finding.id}];
+      const before=await recorder.capture(tx,WORKSPACE_ID,subjects);
+      const link=await createEntityLink(tx,input);await recorder.finish(tx,before,actorId,'createLink');
+      const detach=await recorder.capture(tx,WORKSPACE_ID,subjects);
+      await detachEntityLink(tx,{workspaceId:WORKSPACE_ID,linkId:link.row.id,actorId,reason:'Reopen'});
+      await recorder.finish(tx,detach,actorId,'detachLink');
+      const reclose=await recorder.capture(tx,WORKSPACE_ID,subjects);
+      await createEntityLink(tx,input);await recorder.finish(tx,reclose,actorId,'createLink');
+      expect((await tx.execute(sql`SELECT occurrence,state FROM dashboard.recovery_identities WHERE workspace_id=${WORKSPACE_ID}::uuid AND recovery_item_id=${token}`)).rows).toEqual([{occurrence:2,state:'resolved'}]);
+      expect((await tx.execute(sql`SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=${WORKSPACE_ID}::uuid AND recovery_item_id=${token} ORDER BY occurrence`)).rows).toEqual([{occurrence:1},{occurrence:2}]);
+    });
+    expect((await dbHandle.pool.query('SELECT occurrence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,token])).rows).toEqual([]);
+  });
 
   it('concurrent ordinary creates return one canonical active ID and one inserted outcome', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Concurrent MS');

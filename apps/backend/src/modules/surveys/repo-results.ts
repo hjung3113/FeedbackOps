@@ -52,8 +52,9 @@ export type OutcomeFollowUpStateRow = {
 /**
  * Per-response follow-up classification through the ADR-0055 definer. Unlike
  * the aggregate readers above, this one is response-scoped: the surveys
- * module may call it only after the caller crossed the personal-response
- * authorization seam. It never returns answer values or respondent ids.
+ * module may call it for public payloads only after the caller crossed the personal-response
+ * authorization seam. The private transactional recorder/reconciler may reuse its boolean
+ * truth without disclosing a response payload. It never returns answer values or respondent ids.
  */
 export async function readOutcomeFollowUpState(
   db: Db,

@@ -12,6 +12,7 @@
 // only drizzle-kit and the seed script touch it (ADR-0008).
 
 import { loadConfig } from './config.js';
+import { registerDashboardJobs } from './modules/dashboard/jobs/index.js';
 import { createDb } from './db/client.js';
 import { RuntimeRoleError, assertRuntimeDbRole } from './db/runtime-role.js';
 import { toJobLog } from './lib/job-log.js';
@@ -32,6 +33,7 @@ import { registerVocJobs } from './modules/voc/index.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
+if (!config.WORKSPACE_ID) throw new Error('WORKSPACE_ID is required for recovery reconciliation');
 if (!config.DATABASE_URL) {
   console.error('DATABASE_URL is required to start the backend (fops_app role).');
   process.exit(1);
@@ -64,6 +66,7 @@ const logger = createRootLogger(config);
 const jobLog = toJobLog(logger);
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL, log: jobLog });
+await registerDashboardJobs(boss,{db:dbHandle.db,workspaceId:config.WORKSPACE_ID,log:jobLog});
 const notificationDispatcher = createPgBossNotificationDispatcher(boss);
 const notify = createNotificationNotifier(notificationDispatcher);
 await registerCoreJobs(boss, {

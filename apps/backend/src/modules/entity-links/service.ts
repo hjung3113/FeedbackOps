@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
@@ -38,6 +39,7 @@ import {
 export type { EntityLinksActor, ReporterSummaryResult } from './provider-types.js';
 
 export interface EntityLinksServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -611,6 +613,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
 
     const persist = async (tx: Tx) => {
+      const recovery = args.tx
+        ? undefined
+        : await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [source, target]);
       const inserted = await insertActiveEntityLink(tx, {
         workspaceId: actor.workspace_id,
         sourceType: source.type,
@@ -621,11 +626,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         managedSystemId: sourceRow.managed_system_id,
         createdBy: actor.actor_id,
         visibility,
-        ...(args.internalWritePath !== undefined
-          ? { internalWritePath: args.internalWritePath }
-          : {}),
+        ...(args.internalWritePath !== undefined ? { internalWritePath: args.internalWritePath } : {}),
       });
-
+    
       if (inserted.inserted) {
         await deps.auditService.record(tx, {
           workspace_id: actor.workspace_id,
@@ -643,7 +646,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
           },
         });
       }
-
+    
+      if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'createLink');
       return inserted;
     };
 
@@ -874,6 +878,10 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     }
 
     const detached = await deps.db.transaction(async (tx) => {
+      const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+        { type: link.source_type, id: link.source_id },
+        { type: link.target_type, id: link.target_id },
+      ]);
       const updated = await detachEntityLink(tx, {
         workspaceId: actor.workspace_id,
         linkId,
@@ -883,7 +891,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       if (!updated) {
         throw new HttpError('conflict.stale_write', 'entity link is no longer active');
       }
-
+    
       await deps.auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
@@ -899,7 +907,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
           reason,
         },
       });
-
+    
+      if (recovery) await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'detachLink');
       return updated;
     });
 

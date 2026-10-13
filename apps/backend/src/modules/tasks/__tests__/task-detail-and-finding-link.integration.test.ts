@@ -12,6 +12,8 @@ import { taskDetailDtoSchema } from '@fops/shared';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { cleanupSystemRecoveryFixtures } from '../../../test-support/recovery-fixtures.js';
+import { recoveryIdentity } from '../../dashboard/identity.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
@@ -72,6 +74,7 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await cleanupSystemRecoveryFixtures(migrateHandle,WORKSPACE_ID,`${SLUG_PREFIX}%`);
     await migrateHandle.pool.query(
       `delete from core.audit_log
         where workspace_id = $1
@@ -431,6 +434,9 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       [WORKSPACE_ID, findingId, taskId],
     );
     expect(link.rows[0]?.n).toBe(1);
+    const history=await dbHandle.pool.query('SELECT occurrence,outcome,evidence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,recoveryIdentity('actionable-finding-no-execution',findingId)]);
+    expect(history.rows).toEqual([{occurrence:1,outcome:'resolved',evidence:'command'}]);
+
   });
 
   it('POST /findings/:id/link-task denies a task from another Managed System', async () => {

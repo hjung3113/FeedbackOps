@@ -1,3 +1,4 @@
+import { recoveryHistoryWindowStart } from './history-window.js';
 import { createHash } from 'node:crypto';
 import { type SQL, sql } from 'drizzle-orm';
 import { HttpError } from '../../lib/errors.js';
@@ -49,6 +50,9 @@ import {
 } from '../surveys/authorization.js';
 import { getResolvedWorkspaceSettings } from '../workspace-settings/index.js';
 import * as repo from './repo.js';
+import { recoveryIdentity as identity, decodeRecoveryIdentity as decodeIdentity } from './identity.js';
+import { lockRecoveryIdentity } from './recorder.js';
+import { recoveryHistorySchema, type RecoveryHistoryQuery, type RecoveryPresentationPatch } from '@fops/shared';
 
 export interface DashboardActor {
   actor_id: string;
@@ -69,6 +73,7 @@ const ownerRecoveryReaders = {
 export type DashboardRecoveryReaders = typeof ownerRecoveryReaders;
 
 type DashboardDeps = {
+  recoveryClock?: () => Date;
   db: Db;
   recoveryReaders?: DashboardRecoveryReaders;
   checkService: CheckService;
@@ -563,7 +568,7 @@ export function createDashboardService(deps: DashboardDeps) {
     };
   }
   const recovery = createRecoveryReader(deps);
-  return { getSummary, listRecoveryItems: recovery.list, getRecoveryItem: recovery.detail };
+  return { getSummary, listRecoveryItems: recovery.list, getRecoveryItem: recovery.detail, patchRecoveryPresentation: recovery.patchPresentation, getRecoveryHistory: recovery.history };
 }
 
 export type DashboardService = ReturnType<typeof createDashboardService>;
@@ -608,24 +613,6 @@ const metadata = {
 } as const;
 const notFound = () => new HttpError('not_found.record', 'recovery item not found');
 
-/** Version 1: category code 1..6, then 16 UUID bytes. Clients must treat this as opaque. */
-function identity(category: RecoveryCategory, sourceId: string): string {
-  return `r1_${Buffer.concat([
-    Buffer.from([RECOVERY_CATEGORIES.indexOf(category) + 1]),
-    Buffer.from(sourceId.replaceAll('-', ''), 'hex'),
-  ]).toString('base64url')}`;
-}
-function decodeIdentity(token: string): { category: RecoveryCategory; sourceId: string } {
-  if (!/^r1_[A-Za-z0-9_-]{23}$/.test(token)) throw notFound();
-  const bytes = Buffer.from(token.slice(3), 'base64url');
-  const category = RECOVERY_CATEGORIES[(bytes[0] ?? 0) - 1];
-  if (bytes.length !== 17 || !category) throw notFound();
-  const hex = bytes.subarray(1).toString('hex');
-  const sourceId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-  if (!z.string().uuid().safeParse(sourceId).success || identity(category, sourceId) !== token)
-    throw notFound();
-  return { category, sourceId };
-}
 const cursorSchema = z
   .object({
     v: z.literal(1),
@@ -682,6 +669,10 @@ type SourceRow = {
   team_id: string | null;
   repair_id: string | null;
   repair_system_id: string | null;
+  occurrence?: number | null;
+  presentation_state?: 'visible' | 'snoozed' | 'muted';
+  snoozed_until?: string | null;
+  resolution?: RecoveryItem['resolution'];
 };
 function route(type: NonNullable<RecoveryItem['source']>['type'], id: string): string {
   if (type === 'permission_request') return `/admin/permissions/requests?selected=${id}`;
@@ -703,6 +694,7 @@ function ownerKeys(row: { actor_id: string | null; team_id: string | null }) {
 }
 
 function createRecoveryReader(deps: {
+  recoveryClock?: () => Date;
   db: Db;
   checkService: CheckService;
   recoveryReaders?: DashboardRecoveryReaders;
@@ -712,14 +704,20 @@ function createRecoveryReader(deps: {
     actor: DashboardActor,
     query: Pick<RecoveryListQuery, 'category' | 'managed_system_id'>,
     sourceId?: string,
+    db = deps.db,
+    includeInactive = false,
   ) {
+    const check: CheckService = db === deps.db ? deps.checkService : {
+      capabilityScope: (actor, capability, subject, options) => deps.checkService.capabilityScope(actor, capability, subject, { ...options, tx: db }),
+      checkCapability: (actor, capability, subject, options) => deps.checkService.checkCapability(actor, capability, subject, { ...options, tx: db }),
+    };
     const [vocRaw, findingRaw, taskRaw, surveyRaw, vocRepair, findingRepair] = await Promise.all([
-      actorScopeForCapability(deps.db, actor, 'voc.read'),
-      actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
-      actorScopeForCapability(deps.db, actor, 'finding.manage'),
-      actorSurveyRecoveryScope(deps.db, deps.checkService, actor),
-      readers.vocRecoveryRepairScope(deps.db, deps.checkService, actor),
-      readers.findingRecoveryRepairScope(deps.db, deps.checkService, actor),
+      actorScopeForCapability(db, actor, 'voc.read'),
+      actorFindingReadScope(db, actor, { requireElevatedRole: true }),
+      actorScopeForCapability(db, actor, 'finding.manage'),
+      actorSurveyRecoveryScope(db, check, actor),
+      readers.vocRecoveryRepairScope(db, check, actor),
+      readers.findingRecoveryRepairScope(db, check, actor),
     ]);
     const scopes = [vocRaw, findingRaw, taskRaw, surveyRaw].map((scope) =>
       selectScope(scope, query.managed_system_id),
@@ -758,17 +756,18 @@ function createRecoveryReader(deps: {
           });
         } else if (category === 'bad-outcome-no-followup') {
           const survey = await readers.surveyRecoveryProjection(
-            deps.db,
-            deps.checkService,
+            db,
+            check,
             actor,
             surveyScope,
             sourceId,
+            includeInactive,
           );
           projection = survey.query;
           surveyRepairSystems = survey.repairSystems;
         } else {
           const permission = await readers.permissionRecoveryProjection(
-            deps.checkService,
+            check,
             actor,
             sourceId,
           );
@@ -896,6 +895,9 @@ function createRecoveryReader(deps: {
       return {
         recovery_item_id: identity(row.category, row.source_id),
         category: row.category,
+        occurrence: row.occurrence ?? null,
+        presentation: { state: row.presentation_state ?? 'visible', snoozed_until: row.snoozed_until ?? null },
+        resolution: row.resolution ?? null,
         state: row.withdrawn ? 'withdrawn' : row.active ? 'active' : 'resolved',
         reason_code: row.category,
         reason: meta.reason,
@@ -926,6 +928,7 @@ function createRecoveryReader(deps: {
           category: query.category ?? null,
           selected: query.managed_system_id === 'all' ? null : (query.managed_system_id ?? null),
           view: query.view,
+          presentation: query.presentation,
           ...projection.binding,
         }),
       )
@@ -934,12 +937,21 @@ function createRecoveryReader(deps: {
     const after = cursor
       ? sql`(priority, category, source_id) > (${cursor.priority}::int, ${cursor.category}::text, ${cursor.sourceId}::uuid)`
       : sql`true`;
-    const result = await deps.db.execute<{ total: number; items: SourceRow[] }>(sql`
+    const result = await deps.db.execute<{ total: number; visible_total: number; hidden_total: number; items: SourceRow[] }>(sql`
       WITH sources AS (${projection.query}), matched AS MATERIALIZED (
-        SELECT * FROM sources WHERE active AND NOT withdrawn
+        SELECT source.*, CASE WHEN i.state='active' THEN i.occurrence END AS occurrence, ${presentationColumns()} FROM sources source
+        LEFT JOIN dashboard.recovery_identities i ON i.workspace_id=${actor.workspace_id}::uuid
+          AND i.category=source.category AND i.source_id=source.source_id
+        LEFT JOIN dashboard.recovery_presentations p ON p.workspace_id=i.workspace_id
+          AND p.recovery_item_id=i.recovery_item_id AND p.occurrence=i.occurrence AND i.state='active' AND p.actor_id=${actor.actor_id}::uuid
+        WHERE active AND NOT withdrawn
           AND ${query.view === 'actionable' ? sql`repair_id IS NOT NULL` : sql`true`}
-      ), page AS (SELECT * FROM matched WHERE ${after} ORDER BY priority, category, source_id LIMIT ${query.limit + 1})
-      SELECT (SELECT count(*)::int FROM matched) AS total,
+      ), selected AS MATERIALIZED (SELECT * FROM matched WHERE
+          ${query.presentation === 'hidden' ? sql`presentation_state <> 'visible'` : sql`presentation_state = 'visible'`}),
+        page AS (SELECT * FROM selected WHERE ${after} ORDER BY priority, category, source_id LIMIT ${query.limit + 1})
+      SELECT (SELECT count(*)::int FROM selected) AS total,
+        (SELECT count(*)::int FROM matched WHERE presentation_state='visible') AS visible_total,
+        (SELECT count(*)::int FROM matched WHERE presentation_state<>'visible') AS hidden_total,
         COALESCE((SELECT jsonb_agg(page ORDER BY priority, category, source_id) FROM page), '[]'::jsonb) AS items`);
     const data = result.rows[0];
     const rows = (data?.items ?? []).slice(0, query.limit);
@@ -949,6 +961,8 @@ function createRecoveryReader(deps: {
       computed_at: new Date().toISOString(),
       items: await hydrate(actor, rows, projection.vocScope),
       total: Number(data?.total ?? 0),
+      visible_total: Number(data?.visible_total ?? 0),
+      hidden_total: Number(data?.hidden_total ?? 0),
       page: {
         has_more: hasMore,
         ...(hasMore && last
@@ -973,9 +987,182 @@ function createRecoveryReader(deps: {
     );
     const row = result.rows[0];
     if (!row || row.title === null) throw notFound();
-    const item = (await hydrate(actor, [row], projection.vocScope))[0];
+    const enriched = await enrich(actor, row);
+    const item = (await hydrate(actor, [enriched], projection.vocScope))[0];
     if (!item) throw notFound();
     return recoveryDetailSchema.parse({ ...item, computed_at: new Date().toISOString() });
   }
-  return { list, detail };
+  function presentationColumns() {
+    return sql`CASE WHEN p.state='muted' THEN 'muted'
+          WHEN p.state='snoozed' AND p.snoozed_until > now() THEN 'snoozed' ELSE 'visible' END AS presentation_state,
+          CASE WHEN p.state='snoozed' AND p.snoozed_until > now() THEN to_char(p.snoozed_until AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS snoozed_until`;
+  }
+  async function enrich(actor: DashboardActor, row: SourceRow, db = deps.db): Promise<SourceRow> {
+    const token = identity(row.category, row.source_id);
+    const stored = (
+      await db.execute<
+        Pick<SourceRow, 'occurrence' | 'presentation_state' | 'snoozed_until' | 'resolution'> & {
+          state: string;
+        }
+      >(sql`
+          SELECT i.occurrence, i.state, ${presentationColumns()},
+            CASE WHEN h.id IS NOT NULL THEN jsonb_build_object('resolved_at',
+              to_char(h.resolved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+              'outcome',h.outcome,'evidence',h.evidence,'action',h.action) END AS resolution
+          FROM dashboard.recovery_identities i
+          LEFT JOIN dashboard.recovery_presentations p ON p.workspace_id=i.workspace_id AND p.recovery_item_id=i.recovery_item_id
+            AND p.occurrence=i.occurrence AND p.actor_id=${actor.actor_id}::uuid
+          LEFT JOIN dashboard.recovery_history h ON h.workspace_id=i.workspace_id AND h.recovery_item_id=i.recovery_item_id
+            AND h.occurrence=i.occurrence
+          WHERE i.workspace_id=${actor.workspace_id}::uuid AND i.recovery_item_id=${token}`)
+    ).rows[0];
+    const current = row.withdrawn ? 'withdrawn' : row.active ? 'active' : 'resolved';
+    return {
+      ...row,
+      ...stored,
+      ...(stored && (stored as { state?: string }).state !== current
+        ? {
+            occurrence: null,
+            presentation_state: 'visible' as const,
+            snoozed_until: null,
+            resolution: null,
+          }
+        : {}),
+    };
+  }
+  async function patchPresentation(
+    actor: DashboardActor,
+    token: string,
+    input: RecoveryPresentationPatch,
+  ) {
+    const { category, sourceId } = decodeIdentity(token);
+    await deps.db.transaction(async (tx) => {
+      await lockRecoveryIdentity(tx, actor.workspace_id, token);
+      const projection = await projections(actor, { category }, sourceId, tx);
+      const row = (
+        await tx.execute<SourceRow>(sql`SELECT * FROM (${projection.query}) source
+          WHERE source_id=${sourceId}::uuid LIMIT 1`)
+      ).rows[0];
+      if (!row || row.title === null) throw notFound();
+      if (input.action !== 'restore' && (!row.active || row.withdrawn))
+        throw new HttpError('conflict.stale_write', 'recovery item is no longer active', {
+          failure_code: 'recovery_item_resolved',
+        });
+      if (input.action !== 'restore')
+        await tx.execute(sql`INSERT INTO dashboard.recovery_identities
+          (workspace_id,recovery_item_id,category,source_id,managed_system_id,occurrence,state)
+          VALUES (${actor.workspace_id}::uuid,${token},${category},${sourceId}::uuid,${row.system_id}::uuid,1,'active')
+          ON CONFLICT (workspace_id,recovery_item_id) DO NOTHING`);
+      const stored = (
+        await tx.execute<{ occurrence: number; state: string }>(sql`SELECT occurrence,state
+          FROM dashboard.recovery_identities WHERE workspace_id=${actor.workspace_id}::uuid AND recovery_item_id=${token} FOR UPDATE`)
+      ).rows[0];
+      if (!stored) return; // Absent-row restore is an authorized no-op.
+      if (input.action !== 'restore' && stored.state !== 'active') {
+        await tx.execute(sql`UPDATE dashboard.recovery_identities SET state='active',occurrence=occurrence+1,observed_at=clock_timestamp()
+            WHERE workspace_id=${actor.workspace_id}::uuid AND recovery_item_id=${token}`);
+        stored.occurrence++;
+      }
+      const state =
+        input.action === 'mute' ? 'muted' : input.action === 'snooze' ? 'snoozed' : 'visible';
+      const until =
+        input.action === 'snooze'
+          ? sql`now() + ${input.days}::int * interval '1 day'`
+          : sql`NULL::timestamptz`;
+      await tx.execute(sql`INSERT INTO dashboard.recovery_presentations
+          (workspace_id,recovery_item_id,actor_id,occurrence,state,snoozed_until)
+          VALUES (${actor.workspace_id}::uuid,${token},${actor.actor_id}::uuid,${stored.occurrence},${state},${until})
+          ON CONFLICT (workspace_id,recovery_item_id,actor_id,occurrence)
+          DO UPDATE SET state=EXCLUDED.state,snoozed_until=EXCLUDED.snoozed_until`);
+    });
+    return detail(actor, token);
+  }
+  async function history(actor: DashboardActor, query: RecoveryHistoryQuery) {
+    const projection = await projections(actor, query, undefined, deps.db, true);
+    const bind = createHash('sha256')
+      .update(
+        JSON.stringify({
+          actor,
+          category: query.category,
+          selected: query.managed_system_id,
+          history: true,
+          ...projection.binding,
+        }),
+      )
+      .digest('hex');
+    const invalid = () =>
+      new HttpError('validation.failed', 'invalid cursor', {
+        fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+      });
+    const schema = z
+      .object({ bind: z.string(), at: z.string().datetime(), id: z.string().uuid() })
+      .strict();
+    let cursor: z.infer<typeof schema> | undefined;
+    if (query.cursor) {
+      try {
+        cursor = schema.parse(JSON.parse(Buffer.from(query.cursor, 'base64url').toString()));
+        if (
+          cursor.bind !== bind ||
+          Buffer.from(JSON.stringify(cursor)).toString('base64url') !== query.cursor
+        )
+          throw invalid();
+      } catch {
+        throw invalid();
+      }
+    }
+    const cutoff = sql`${recoveryHistoryWindowStart(deps.recoveryClock?.() ?? new Date()).toISOString()}::timestamptz`;
+    const data = (
+      await deps.db.execute<{
+        total: number;
+        window_start: string;
+        items: Array<
+          SourceRow & {
+            id: string;
+            history_occurrence: number;
+            history_resolution: NonNullable<RecoveryItem['resolution']>;
+          }
+        >;
+      }>(sql`WITH sources AS (${projection.query}), matched AS MATERIALIZED (
+        SELECT source.*, i.occurrence, ${presentationColumns()}, h.id, h.occurrence AS history_occurrence,
+          jsonb_build_object('resolved_at',to_char(h.resolved_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+            'outcome',h.outcome,'evidence',h.evidence,'action',h.action) AS history_resolution,h.resolved_at
+        FROM dashboard.recovery_history h JOIN dashboard.recovery_identities i
+          ON i.workspace_id=h.workspace_id AND i.recovery_item_id=h.recovery_item_id
+        JOIN sources source ON source.category=i.category AND source.source_id=i.source_id
+        LEFT JOIN dashboard.recovery_presentations p ON p.workspace_id=i.workspace_id AND p.recovery_item_id=i.recovery_item_id
+          AND p.occurrence=i.occurrence AND i.state='active' AND p.actor_id=${actor.actor_id}::uuid
+        WHERE h.workspace_id=${actor.workspace_id}::uuid AND h.resolved_at >= ${cutoff} AND source.title IS NOT NULL
+      ), page AS (SELECT * FROM matched WHERE ${cursor ? sql`(resolved_at,id)<(${cursor.at}::timestamptz,${cursor.id}::uuid)` : sql`true`}
+        ORDER BY resolved_at DESC,id DESC LIMIT ${query.limit + 1})
+        SELECT (SELECT count(*)::int FROM matched) AS total,
+          to_char(${cutoff} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS window_start,
+          COALESCE((SELECT jsonb_agg(page ORDER BY resolved_at DESC,id DESC) FROM page),'[]'::jsonb) AS items`)
+    ).rows[0];
+    const rows = (data?.items ?? []).slice(0, query.limit);
+    const hydrated = await hydrate(actor, rows, projection.vocScope);
+    const last = rows.at(-1);
+    const more = (data?.items.length ?? 0) > query.limit;
+    return recoveryHistorySchema.parse({
+      computed_at: new Date().toISOString(),
+      window_start: data?.window_start,
+      total: Number(data?.total ?? 0),
+      items: rows.map((row, index) => ({
+        id: row.id,
+        item: hydrated[index],
+        occurrence: row.history_occurrence,
+        resolution: row.history_resolution,
+      })),
+      page: {
+        has_more: more,
+        ...(more && last
+          ? {
+              cursor: Buffer.from(
+                JSON.stringify({ bind, at: last.history_resolution.resolved_at, id: last.id }),
+              ).toString('base64url'),
+            }
+          : {}),
+      },
+    });
+  }
+  return { list, detail, patchPresentation, history };
 }

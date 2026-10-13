@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type {
   AddVocClusterMemberRequest,
   ApplyVocClusterPublicUpdateRequest,
@@ -52,6 +53,7 @@ export interface VocClustersActor {
 }
 
 export interface VocClustersServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;

@@ -933,6 +933,9 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
         a.idempotencyKey,
         a.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, a.actor.workspace_id, [
+            { type: 'survey', id: a.surveyId },
+          ]);
           const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
           if (!s) throw new HttpError('not_found.record', 'survey not found');
           await requireManage(deps, tx, a.actor, s);
@@ -965,6 +968,8 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
                 ? { survey_id: s.id, display_id: s.display_id, question_count: qs.length }
                 : { survey_id: s.id, display_id: s.display_id },
           });
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, a.actor.actor_id, 'transitionSurvey');
           return { status: 200, body: dto(updated) };
         },
       ),

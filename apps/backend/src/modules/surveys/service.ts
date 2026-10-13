@@ -1,3 +1,5 @@
+import { createOutcomeRecoveryPresentation } from './recovery-presentation.js';
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import type { AuditService } from '../core/audit/audit-service.js';
@@ -20,6 +22,8 @@ export interface ResolvedSurveyWorkspaceSettings {
   survey_anonymity_threshold: number;
 }
 export interface SurveysServiceDeps {
+  recoveryClock?: () => Date;
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -32,6 +36,7 @@ export interface SurveysServiceDeps {
 
 export function createSurveysService(deps: SurveysServiceDeps) {
   return {
+    ...createOutcomeRecoveryPresentation(deps),
     ...createSurveyAuthoring(deps),
     ...createSurveyResults(deps),
     ...createSurveyEvidenceCandidates(deps),

@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { RECOVERY_PERMISSION_ACTIVE_STATUSES } from './recovery-read.js';
 // Permission-request application service. Owns permission request commands and
 // permission_requests read models per
@@ -85,6 +86,7 @@ export interface SubmitMoreInfoPermissionRequestResultEnvelope {
 }
 
 export interface RequestServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
@@ -246,6 +248,7 @@ export function createRequestService(deps: RequestServiceDeps) {
         throw err;
       }
 
+      await deps.recoveryRecorder?.discover(tx, actor.workspace_id, [{ type: 'permission_request', id: insertedId }]);
       // (4) Audit row, same transaction.
       await auditService.record(tx, {
         workspace_id: actor.workspace_id,
@@ -332,6 +335,9 @@ export function createRequestService(deps: RequestServiceDeps) {
         );
       if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
       const run = async (): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const requests = await tx
           .select()
           .from(permissionRequests)
@@ -351,18 +357,16 @@ export function createRequestService(deps: RequestServiceDeps) {
           request.status !== (action === 'edit' ? 'pending' : 'needs_more_info') ||
           request.revision !== body.expected_revision
         ) {
-          throw new HttpError(
-            'conflict.stale_write',
-            'permission request status or revision changed',
-            { current_revision: request.revision },
-          );
+          throw new HttpError('conflict.stale_write', 'permission request status or revision changed', {
+            current_revision: request.revision,
+          });
         }
         if (!isCapability(request.requestedCapability)) {
           throw new HttpError('validation.unknown_capability', 'unknown capability', {
             capability: request.requestedCapability,
           });
         }
-
+      
         const capability: Capability = request.requestedCapability;
         const sensitive = isSensitiveCapability(capability);
         const reason = body.reason === undefined ? request.reason : body.reason.trim();
@@ -378,7 +382,7 @@ export function createRequestService(deps: RequestServiceDeps) {
             fields: [{ path: ['reason'], code: 'too_small' }],
           });
         }
-
+      
         const requestedManagedSystemId =
           body.requested_managed_system_id === undefined
             ? request.requestedManagedSystemId
@@ -391,7 +395,7 @@ export function createRequestService(deps: RequestServiceDeps) {
             : body.requested_expiration === null
               ? null
               : new Date(body.requested_expiration);
-
+      
         await validateSupportedScope(
           tx,
           actor.workspace_id,
@@ -401,7 +405,7 @@ export function createRequestService(deps: RequestServiceDeps) {
           requestedObjectId,
         );
         validateRequestExpiration(requestedExpiration);
-
+      
         const scopeChanged =
           requestedManagedSystemId !== request.requestedManagedSystemId ||
           requestedObjectType !== request.requestedObjectType ||
@@ -425,7 +429,7 @@ export function createRequestService(deps: RequestServiceDeps) {
             );
           }
         }
-
+      
         let updatedAt: Date;
         try {
           const updatedRows = await tx
@@ -457,18 +461,15 @@ export function createRequestService(deps: RequestServiceDeps) {
           }
           throw err;
         }
-
+      
         await auditService.record(tx, {
           workspace_id: actor.workspace_id,
           actor_id: actor.actor_id,
-          event_type:
-            action === 'edit' ? 'permission_request_updated' : PERMISSION_MORE_INFO_SUBMITTED,
+          event_type: action === 'edit' ? 'permission_request_updated' : PERMISSION_MORE_INFO_SUBMITTED,
           subject_type: 'permission_request',
           subject_id: request.id,
           summary:
-            action === 'edit'
-              ? 'Permission request updated'
-              : 'Permission request more info submitted',
+            action === 'edit' ? 'Permission request updated' : 'Permission request more info submitted',
           detail:
             action === 'edit'
               ? {
@@ -511,16 +512,20 @@ export function createRequestService(deps: RequestServiceDeps) {
                   },
                 },
         });
-
-        return {
-          status: 200,
-          body: {
-            id: request.id,
-            status: 'pending',
-            revision: request.revision + 1,
-            updated_at: updatedAt.toISOString(),
-          },
-        };
+      
+        {
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'submitMoreInfoRequest');
+          return {
+            status: 200,
+            body: {
+              id: request.id,
+              status: 'pending',
+              revision: request.revision + 1,
+              updated_at: updatedAt.toISOString(),
+            },
+          };
+        }
       };
 
       if (!idempotency) return await run();
@@ -554,6 +559,9 @@ export function createRequestService(deps: RequestServiceDeps) {
         );
       if (!owned[0]) throw new HttpError('not_found.record', 'permission request not found');
       const run = async (): Promise<{ status: number; body: CancelPermissionRequestResult }> => {
+        const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+          { type: 'permission_request', id: requestId },
+        ]);
         const rows = await tx
           .select()
           .from(permissionRequests)
@@ -571,11 +579,9 @@ export function createRequestService(deps: RequestServiceDeps) {
           !ACTIVE_STATUSES.includes(request.status as 'pending' | 'needs_more_info') ||
           request.revision !== body.expected_revision
         ) {
-          throw new HttpError(
-            'conflict.stale_write',
-            'permission request status or revision changed',
-            { current_revision: request.revision },
-          );
+          throw new HttpError('conflict.stale_write', 'permission request status or revision changed', {
+            current_revision: request.revision,
+          });
         }
         const revision = request.revision + 1;
         const updated = await tx
@@ -584,8 +590,7 @@ export function createRequestService(deps: RequestServiceDeps) {
           .where(eq(permissionRequests.id, request.id))
           .returning({ updatedAt: permissionRequests.updatedAt });
         const row = updated[0];
-        if (!row)
-          throw new HttpError('internal.unexpected', 'permission request update returned no row');
+        if (!row) throw new HttpError('internal.unexpected', 'permission request update returned no row');
         const reason = body.reason?.trim();
         await auditService.record(tx, {
           workspace_id: actor.workspace_id,
@@ -606,15 +611,19 @@ export function createRequestService(deps: RequestServiceDeps) {
             ...(reason ? { reason } : {}),
           },
         });
-        return {
-          status: 200,
-          body: {
-            id: request.id,
-            status: 'cancelled',
-            revision,
-            updated_at: row.updatedAt.toISOString(),
-          },
-        };
+        {
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'cancelRequest');
+          return {
+            status: 200,
+            body: {
+              id: request.id,
+              status: 'cancelled',
+              revision,
+              updated_at: row.updatedAt.toISOString(),
+            },
+          };
+        }
       };
       if (!options.idempotencyKey) return run();
       return idempotencyService.runIdempotent(

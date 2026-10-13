@@ -64,9 +64,9 @@ released-update's non-skipped predicate, queue membership, and anonymity do not 
 
 ## Recovery queue, detail, presentation and history (ADR-0067)
 
-### 56-G: implemented live reads
+### Live reads (56-G, extended by 56-H)
 
-- `GET /dashboard/recovery-items?category=...&managed_system_id=...&view=operational|actionable&cursor=...&limit=...`
+- `GET /dashboard/recovery-items?category=...&managed_system_id=...&view=operational|actionable&presentation=visible|hidden&cursor=...&limit=...`
 - `GET /dashboard/recovery-items/:id`
 
 Both require the authenticated workspace session and the configured read rate tier; responses
@@ -75,7 +75,8 @@ category/view/scope/limit/cursor return `422 validation.failed`. Default view is
 default limit 50, maximum 100. `managed_system_id` is optional UUID or `all`; omitted/all resolves
 each category's own capability scope. Permission Requests remain workspace-level under
 `workspace.admin`, independent of a selected System; an explicit deny wins. No caller Actor,
-presentation or history selector is accepted in G.
+owner or resolution field is accepted. `presentation` defaults to `visible`; `hidden` selects
+only the session Actor's currently muted or unexpired snoozed occurrence.
 
 `view=actionable` is Home's explicit selector. Owner-computed executable repair eligibility
 is applied **before count and cursor LIMIT**, under independent source readability. Assignment,
@@ -87,17 +88,24 @@ Permission review uses current decision gates (a rejection intent grants no self
 Survey repair requires personal-response authority and `finding.manage`, described below.
 Source commands still recheck state, concurrency, permissions and required inputs on submit.
 
-List response is strict `{ computed_at, items, total, page: { has_more, cursor? } }`.
-`total` is before paging. Items and detail contain `recovery_item_id`, `category`, current
+List response is strict `{ computed_at, items, total, visible_total, hidden_total, page: { has_more, cursor? } }`.
+`visible_total + hidden_total` counts the same currently authorized category/System/view matched
+set before personal selection and paging. `total` is the selected presentation count before
+paging. Hiding is applied before cursor/LIMIT, preserving full pages and count parity. Summary
+operational totals remain unchanged; actionable membership remains capability-specific. Items and detail contain `recovery_item_id`, `category`, current
 `state`, backend `reason_code`/Korean `reason`, numeric `priority`, `severity`, nullable
 `managed_system_id`, nullable safe `source`, bounded safe `affected`, `next_actions` and derived
-`responsible_actor_hint`. Detail adds `computed_at`. No occurrence, resolution metadata,
-presentation or visible/hidden totals exist in G. Timestamp is computation time, not an
+`responsible_actor_hint`, nullable positive `occurrence`, `presentation: { state:
+visible|snoozed|muted, snoozed_until: ISO timestamp|null }`, and nullable `resolution: {
+resolved_at, outcome: resolved|withdrawn, evidence: command|observation, action: string|null }`.
+Detail adds `computed_at`. Before discovery, occurrence and resolution are null and presentation
+is visible; this does not claim prior history. A live/stored state mismatch also suppresses old
+occurrence hiding until a write or reconciliation aligns it. Timestamp is computation time, not an
 atomic database snapshot; independently refreshed summary/list/detail can observe changes.
 
 Order is ascending backend priority (10 urgent, 20 warn, 30 info), then category identifier,
 then source UUID. Cursor is opaque and versioned, bound to session Actor/workspace, effective
-read/repair scopes, category, selected System and view; incompatible or noncanonical cursors
+read/repair scopes, category, selected System, view and presentation; incompatible or noncanonical cursors
 fail with `fields[].path=[cursor]`, `code=invalid_cursor`. Changing filters/scopes starts paging
 again. Page hydration batches safe linked VOCs and bounds affected summaries to 100 per Task;
 responsibility considers all currently readable affected owners, including beyond that bound.
@@ -166,18 +174,65 @@ Personal disclosures continue on `/surveys/:surveyId/follow-up` via the existing
 `GET /surveys/:id/outcome-follow-up`: `survey.read`, then explicit
 `survey.read_personal_responses`, **no Admin bypass**, and unchanged per-response/question
 personal read audits. Generic reads never invoke that personal service. Response presentation
-and history remain Survey-owned in H.
+and history are Survey-owned in H, as specified below.
 
-### 56-H: proposed, not shipped by G
+### 56-H: personal presentation and calendar-month history
 
-`GET /dashboard/recovery-history` and `PATCH /dashboard/recovery-items/:id/presentation`,
-identity/occurrence/history/presentation storage, snooze/mute/restore, occurrence numbering,
-visible/hidden totals, safe resolution metadata, transactional recorder and pg-boss
-reconciliation are H work. H extends the strict G schemas; no placeholder fields ship now.
-Own-session 1-day/7-day snooze/current-occurrence mute never changes operational totals;
-reopen resets hiding. History covers three calendar months and rechecks current permissions.
-Record only real committed transitions, preserve rollback/no-op/replay semantics, never
-fabricate pre-rollout history, and never prune indefinite `core.audit_log`.
+`PATCH /dashboard/recovery-items/:id/presentation` uses the session Actor/workspace and the
+mutation rate tier. Strict bodies are exactly `{ action: 'snooze', days: 1|7 }`,
+`{ action: 'mute' }`, or `{ action: 'restore' }`; unknown Actor/owner/resolution fields,
+contradictory days and invalid actions return `422 validation.failed`. It returns current detail.
+It changes only personal projection state: no source command, source audit or summary count.
+
+The write locks the canonical workspace/token, then rechecks source compatibility, independent
+readability and active truth inside its transaction. A readable active gap without storage is
+seeded at occurrence 1 for snooze/mute. Resolved/withdrawn snooze/mute returns
+`409 conflict.stale_write`; absent-row restore is a successful no-op that creates no episode.
+Malformed, foreign, incompatible and unreadable tokens retain detail's indistinguishable 404.
+One/seven-day snooze expires at the stored timestamp. Mute applies to the current occurrence.
+Real resolve→reopen increments occurrence and resets every Actor's hiding, retaining history.
+
+`GET /dashboard/recovery-history` accepts strict category/System/limit/cursor filters (50
+by default, maximum 100), without view, presentation or caller authority. Response is
+`{ computed_at, window_start, items: [{ id, item, occurrence, resolution }], total,
+page: { has_more, cursor? } }`. `item` is a currently permission-filtered safe recovery summary;
+`occurrence` and `resolution` describe the historic episode. No raw body, private reason,
+respondent identity, deciding Actor or audit reference is disclosed. Every row rechecks current
+source visibility and permissions **before count and LIMIT**. Permission loss hides history,
+never records a repair. Withdrawal/archive is labelled `withdrawn`, distinct from `resolved`.
+
+The lower bound is inclusive: the first instant of the current UTC month minus two whole
+calendar months (`date_trunc('month', now() at time zone 'UTC') - interval '2 months'`).
+On 2026-10-13 it is 2026-08-01T00:00:00Z. There is no timezone setting, 90-day arithmetic,
+month-end clamping or database-session timezone dependency. Order is `(resolved_at DESC, id
+DESC)`; canonical cursors bind Actor/workspace/category/System/effective current scopes.
+Changing those starts paging again. Equality at the lower bound is included.
+
+Source/link idempotency miss paths capture independent owner truth before and after the final
+mutation in the same transaction. Shared deterministic identity locks serialize commands,
+personal PATCH and jobs. Rollback/no-op/replay adds no command transition. A known active
+pre-state records the first real repair even before discovery. Drift correction uses observation
+evidence and observation time with null Actor/action; it never fabricates pre-rollout cycles.
+GETs create no identities/history/preferences. The migration precreates
+`dashboard.recovery_reconcile` with retry limit 5, delay 30 and backoff. Boot registers a
+five-minute discovery schedule; source and private-response batches are at most 100 each,
+with resumable cursors. Runtime history grants are SELECT/INSERT only. No pruning is introduced;
+identity/current occurrence and indefinite `core.audit_log` are retained.
+
+Survey-owned personal endpoints are `GET|PATCH
+/survey-responses/:id/outcome-follow-up/presentation` and
+`GET /surveys/:id/outcome-follow-up/history` (the same limit/cursor and UTC window rules),
+plus `GET /surveys/:id/outcome-follow-up/recovery-items?presentation=visible|hidden`. The
+response-owned queue applies personal selection before count/paging and returns safe response
+IDs, occurrence/presentation, visible/hidden totals and a response-ID cursor; it does not change
+the existing outcome-follow-up DTO or its source decisions.
+They require `survey.read` then explicit `survey.read_personal_responses`, with no Admin bypass;
+foreign, unreadable and denied response access collapses to 404. PATCH uses the strict actions
+above and separate response/Actor/occurrence storage. History carries response IDs only within
+this gated adapter, safe resolution metadata and no private decision reason. Personal GETs
+retain the existing per-response/question disclosure audit. Both follow-up decisions and
+response-derived Finding creation record response transitions atomically. Generic Dashboard
+list/detail/history stay Survey-grain and never invoke this personal adapter.
 
 ### Performance acceptance
 

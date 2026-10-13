@@ -1,3 +1,4 @@
+import type { RecoveryRecorder } from '../dashboard/recorder.js';
 import { randomUUID } from 'node:crypto';
 import type { ListTaskRequestsResponse } from '@fops/shared';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
@@ -55,6 +56,7 @@ export interface TaskRequestsActor {
 }
 
 export interface TaskRequestsServiceDeps {
+  recoveryRecorder?: RecoveryRecorder;
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
@@ -386,6 +388,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'finding', id: args.findingId },
+          ]);
           const finding = await lockFindingById(tx, {
             workspaceId: args.actor.workspace_id,
             findingId: args.findingId,
@@ -405,6 +410,8 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromFinding');
           return {
             status: 201,
             body: await createFromSource({
@@ -436,6 +443,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc', id: args.vocId },
+          ]);
           const voc = await selectVocForUpdate(tx, args.actor.workspace_id, args.vocId);
           if (!voc || voc.archivedAt !== null) {
             throw new HttpError('not_found.record', 'voc not found');
@@ -467,6 +477,8 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVoc');
           return {
             status: 201,
             body: await createFromSource({
@@ -498,6 +510,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+            { type: 'voc_cluster', id: args.clusterId },
+          ]);
           const cluster = await lockVocClusterById(tx, {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
@@ -517,6 +532,8 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          if (recovery)
+            await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVocCluster');
           return {
             status: 201,
             body: await createFromSource({
