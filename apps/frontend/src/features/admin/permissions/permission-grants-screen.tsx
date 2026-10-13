@@ -1,5 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
-import { ListShell, ListTabs, type ListToolbarTab, ObjectRow } from '@fops/ui';
+import type { PermissionGrantAdminItem } from '@fops/shared';
+import { Button, ListShell, ListTabs, type ListToolbarTab, ObjectRow } from '@fops/ui';
+import * as React from 'react';
 
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
@@ -8,6 +10,7 @@ import { SCOPE_SELECTOR_COPY } from '@/lib/copy/managed-system-scope';
 import { formatDateOnly, formatDateTime } from '@/lib/format/datetime';
 import { shortId } from '@/lib/identity';
 
+import { PermissionDirectGrantForm } from './permission-direct-grant-form.js';
 import { PermissionGrantDetail } from './permission-grant-detail.js';
 import { permissionGrantTabs } from './permission-grants-search.js';
 import {
@@ -27,6 +30,9 @@ export function PermissionGrantsScreen() {
     selectedId,
     actorNames,
     managedSystemNames,
+    cacheReturnedGrant,
+    discardReturnedGrant,
+    handleCreatedGrant,
     isPending,
     isError,
     grantCountKnown,
@@ -35,6 +41,59 @@ export function PermissionGrantsScreen() {
     handleSelect,
     handleClose,
   } = usePermissionGrantsConsole();
+  const [directGrantOpen, setDirectGrantOpen] = React.useState(false);
+  const [focusGrantIdAfterClose, setFocusGrantIdAfterClose] = React.useState<{
+    id: string;
+    navigationAttempted: boolean;
+  } | null>(null);
+  const directGrantTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const selectionContext = `${activeTab}:${selectedId ?? ''}`;
+  const currentSelectionContext = React.useRef(selectionContext);
+  const screenMounted = React.useRef(false);
+  React.useLayoutEffect(() => {
+    currentSelectionContext.current = selectionContext;
+  }, [selectionContext]);
+
+  React.useEffect(() => {
+    screenMounted.current = true;
+    return () => {
+      screenMounted.current = false;
+    };
+  }, []);
+
+  function handleDirectGrantCreated(
+    item: PermissionGrantAdminItem,
+    submittedContext: string,
+  ): void {
+    const navigationAttempted =
+      screenMounted.current && currentSelectionContext.current === submittedContext;
+    if (navigationAttempted) {
+      handleCreatedGrant(item.id);
+    }
+    setFocusGrantIdAfterClose({ id: item.id, navigationAttempted });
+    setDirectGrantOpen(false);
+  }
+
+  React.useEffect(() => {
+    const pending = focusGrantIdAfterClose;
+    if (directGrantOpen || pending === null) return;
+    // The dialog has no Radix trigger (opened by a plain toolbar button), so the
+    // library has nothing to restore focus to. The navigation to the created
+    // grant settles asynchronously: wait for it, then return focus to the
+    // selected row, falling back to the trigger while no row is mounted.
+    const settled = pending.navigationAttempted ? pending.id === selectedId : true;
+    if (!settled) return;
+    setFocusGrantIdAfterClose(null);
+    const panel = document.getElementById(PERMISSION_GRANTS_PANEL_ID);
+    const selectedBar = panel?.querySelector('[data-testid="object-row-selected-bar"]');
+    const selectedRow = selectedBar?.closest<HTMLElement>('[role="button"]');
+    if (selectedRow) {
+      selectedRow.focus();
+      return;
+    }
+    directGrantTriggerRef.current?.focus();
+  }, [directGrantOpen, focusGrantIdAfterClose, selectedId]);
+
   const tabs: ListToolbarTab[] = permissionGrantTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
@@ -49,6 +108,27 @@ export function PermissionGrantsScreen() {
       toolbar={{
         title: ADMIN_PERMISSIONS_COPY.activeTitle,
         subtitle: ADMIN_PERMISSIONS_COPY.listSubtitle,
+        actions: (
+          <>
+            <Button
+              ref={directGrantTriggerRef}
+              type="button"
+              size="sm"
+              onClick={() => setDirectGrantOpen(true)}
+            >
+              {ADMIN_PERMISSIONS_COPY.directGrant.action}
+            </Button>
+            <PermissionDirectGrantForm
+              open={directGrantOpen}
+              selectionContext={selectionContext}
+              managedSystemNames={managedSystemNames}
+              activeGrants={grants}
+              cacheReturnedGrant={cacheReturnedGrant}
+              onOpenChange={setDirectGrantOpen}
+              onCreated={handleDirectGrantCreated}
+            />
+          </>
+        ),
       }}
       tabs={
         <ListTabs
@@ -97,6 +177,7 @@ export function PermissionGrantsScreen() {
             actorNames={actorNames}
             managedSystemNames={managedSystemNames}
             onClose={handleClose}
+            onGrantRevoked={discardReturnedGrant}
             onSuccess={handleClose}
           />
         ) : undefined
