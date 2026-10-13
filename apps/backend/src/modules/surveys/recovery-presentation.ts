@@ -1,15 +1,16 @@
-import { recoveryHistoryWindowStart } from '../dashboard/history-window.js';
+import { createHash } from 'node:crypto';
 import type { RecoveryPresentationPatch } from '@fops/shared';
 import { sql } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
-import { findSurvey } from './repo-read.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { readOutcomeFollowUpState } from './repo-results.js';
+import { recoveryHistoryWindowStart } from '../dashboard/history-window.js';
+import { lockFindingRecoverySubjects } from '../findings/recovery-read.js';
+import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
 import { resolveSurveyResponseEvidenceAccess } from './evidence-access.js';
+import { findSurvey } from './repo-read.js';
+import { readOutcomeFollowUpState } from './repo-results.js';
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
 
 export type OutcomeRecoveryCapture = {
@@ -86,6 +87,7 @@ export async function captureFindingOutcomeRecovery(
   workspaceId: string,
   findingId: string,
 ) {
+  await lockFindingRecoverySubjects(tx, workspaceId, [findingId]);
   const rows = (
     await tx.execute<{ response_id: string; survey_id: string }>(
       sql`SELECT * FROM survey.read_finding_recovery_subjects(${workspaceId}::uuid,${findingId}::uuid)`,
@@ -111,6 +113,8 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
       SELECT DISTINCT response_id,question_id FROM survey.read_outcome_follow_up_items_personal(${actor.workspace_id}::uuid,${surveyId}::uuid)
       WHERE response_id=ANY(${sqlUuidArray(responseIds)})`)
     ).rows;
+    if (new Set(rows.map((row) => row.response_id)).size !== new Set(responseIds).size)
+      throw new HttpError('not_found.record', 'survey response not found');
     for (const row of rows)
       await deps.auditService.record(tx, {
         workspace_id: actor.workspace_id,
@@ -394,7 +398,7 @@ export function createOutcomeRecoveryPresentation(deps: SurveysServiceDeps) {
             action: string | null;
           }>;
         }>(sql`
-        WITH permitted AS MATERIALIZED (SELECT response_id FROM survey.read_outcome_recovery_sources(${actor.workspace_id}::uuid,${surveyId}::uuid)),
+        WITH permitted AS MATERIALIZED (SELECT DISTINCT response_id FROM survey.read_outcome_follow_up_items_personal(${actor.workspace_id}::uuid,${surveyId}::uuid)),
         matched AS MATERIALIZED (SELECT h.* FROM survey.outcome_recovery_history h JOIN permitted p ON p.response_id=h.outcome_recovery_item_id::uuid
           WHERE h.workspace_id=${actor.workspace_id}::uuid AND h.resolved_at>=${cutoff}),
         page AS (SELECT * FROM matched WHERE ${cursor ? sql`(resolved_at,id)<(${cursor.at}::timestamptz,${cursor.id}::uuid)` : sql`true`}

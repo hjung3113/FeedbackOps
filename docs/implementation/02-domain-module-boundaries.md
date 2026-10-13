@@ -164,8 +164,12 @@ VOC, Findings, Tasks, Permissions and Surveys, Entity Linking's `readRecoveryDep
 and VOC Clusters' `readClusterRecoveryMembers`. It never imports a source command factory
 through a runtime barrel or enforces the acting Actor's disclosure scope as transition truth.
 
-Survey's `readSurveyRecoveryDependencies` locks existing bound response UUIDs in sorted order
-before Dashboard identity locks, and returns only Survey IDs. Response IDs stay inside Survey.
+The shared lock order for recorder/status/link/approved-excerpt attachment paths is Finding
+rows (sorted UUIDs), then bound response advisory locks (sorted UUIDs), then recovery identities.
+Findings' leaf `lockFindingRecoverySubjects` owns the first step; Survey's
+`readSurveyRecoveryDependencies` applies it before locking bound responses and returns only
+Survey IDs. Capture remains before domain mutation and finish after the last link write;
+response IDs stay inside Survey.
 `surveys/recovery-presentation.ts` owns the private response recorder/reconciler and personal
 queue/presentation/history adapter. Findings' response-derived creation and status commands
 use that transactional seam; public payloads still require the existing explicit personal gate.

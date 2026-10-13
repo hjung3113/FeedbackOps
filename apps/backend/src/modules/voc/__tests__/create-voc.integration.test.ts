@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // POST /vocs integration tests — Slice 3 #13 acceptance coverage.
 //
 // Mirrors the live harness pattern from
@@ -201,7 +202,10 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
           select id from core.managed_systems where slug like 'it-voc-%'
         )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-voc-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'it-voc-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
     await dbHandle.pool.query(

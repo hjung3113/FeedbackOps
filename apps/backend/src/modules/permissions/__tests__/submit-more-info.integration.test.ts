@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
@@ -90,9 +91,11 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
         [requestIds, actorIds],
       );
       if (managedSystemIds.length > 0) {
-        await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-          managedSystemIds,
-        ]);
+        await deleteRecoveryFixtureParents(
+          migrateDb,
+          'delete from core.managed_systems where id = any($1::uuid[])',
+          [managedSystemIds],
+        );
       }
       await migrateDb.pool.query(
         'delete from core.idempotency_keys where actor_id = any($1::uuid[])',
@@ -110,14 +113,18 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
       );
       await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [actorIds]);
     } else if (managedSystemIds.length > 0) {
-      await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-        managedSystemIds,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.managed_systems where id = any($1::uuid[])',
+        [managedSystemIds],
+      );
     }
     if (secondaryWorkspaceIds.length > 0) {
-      await migrateDb.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-        secondaryWorkspaceIds,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateDb,
+        'delete from core.workspaces where id = any($1::uuid[])',
+        [secondaryWorkspaceIds],
+      );
     }
   }
 

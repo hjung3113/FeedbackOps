@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
@@ -153,7 +154,7 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
       await ops.pool.query('delete from permission.permission_grants where actor_id=$1', [
         managerId,
       ]);
-      await ops.pool.query('delete from core.managed_systems where id=$1', [msId]);
+      await deleteRecoveryFixtureParents(ops, 'delete from core.managed_systems where id=$1', [msId]);
       await ops.pool.query('delete from core.sessions where actor_id=$1', [managerId]);
       await ops.pool.query('delete from core.actors where id=$1', [managerId]);
     }

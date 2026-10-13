@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 import type { NotificationDto, NotificationEventType } from '@fops/shared';
@@ -156,13 +157,13 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     await cleanupNotifications();
     await cleanupNotificationSubjects();
     if (subjectManagedSystemId) {
-      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
         subjectManagedSystemId,
       ]);
       subjectManagedSystemId = '';
     }
     if (foreignSubjectManagedSystemId) {
-      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
         foreignSubjectManagedSystemId,
       ]);
       foreignSubjectManagedSystemId = '';
@@ -174,12 +175,12 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     await cleanupNotificationSubjects();
     await app?.close();
     if (subjectManagedSystemId) {
-      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
         subjectManagedSystemId,
       ]);
     }
     if (foreignSubjectManagedSystemId) {
-      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
         foreignSubjectManagedSystemId,
       ]);
     }
@@ -195,9 +196,12 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
       await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [actorIds]);
     }
     if (workspaceIds.length > 0) {
-      await migrateDb?.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-        workspaceIds,
-      ]);
+      if (migrateDb)
+        await deleteRecoveryFixtureParents(
+          migrateDb,
+          'delete from core.workspaces where id = any($1::uuid[])',
+          [workspaceIds],
+        );
     }
     await appDb?.close();
     await migrateDb?.close();

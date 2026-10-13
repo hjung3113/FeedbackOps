@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #510 part B (ADR-0055): route-level contracts for the outcome follow-up
 // commands. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -149,12 +150,16 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
-    await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-      managedSystemIds,
-    ]);
-    await migrateDb.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-      secondaryWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.managed_systems where id = any($1::uuid[])',
+      [managedSystemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [secondaryWorkspaceIds],
+    );
     await app?.close();
     await db?.close();
     await migrateDb?.close();
@@ -420,8 +425,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
           { reason: privateReason },
           key,
         )
-      ).body,
-    ).toBe(repaired.body);
+      ).json(),
+    ).toEqual(repaired.json());
+    const auditsBeforeHistory = (await auditRows(subject.responseId, 'survey_response_personal_read'))
+      .length;
     const history = await get(historyUrl, holder);
     expect(history.statusCode).toBe(200);
     expect(history.json().total).toBe(1);
@@ -432,7 +439,58 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       outcome: 'resolved',
       evidence: 'command',
     });
-    expect(await auditRows(subject.responseId, 'survey_response_personal_read')).not.toHaveLength(0);
+    expect(
+      (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+        auditsBeforeHistory,
+    ).toBe(1);
+    const settings = (
+      await migrateDb.pool.query<{ survey_anonymity_threshold: number }>(
+        'SELECT survey_anonymity_threshold FROM core.workspace_settings WHERE workspace_id=$1::uuid',
+        [WORKSPACE_ID],
+      )
+    ).rows[0];
+    try {
+      await migrateDb.pool.query(
+        `INSERT INTO core.workspace_settings(workspace_id,survey_anonymity_threshold)
+          VALUES ($1::uuid,50) ON CONFLICT (workspace_id) DO UPDATE SET survey_anonymity_threshold=50`,
+        [WORKSPACE_ID],
+      );
+      const beforeWithdrawnHistory = (
+        await auditRows(subject.responseId, 'survey_response_personal_read')
+      ).length;
+      const withdrawnHistory = await get(historyUrl, holder);
+      expect(withdrawnHistory.statusCode).toBe(200);
+      expect(withdrawnHistory.json()).toMatchObject({ total: 0, items: [] });
+      expect(withdrawnHistory.body).not.toContain(subject.responseId);
+      expect(
+        (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+          beforeWithdrawnHistory,
+      ).toBe(0);
+      const beforeWithdrawnPoint = (
+        await auditRows(subject.responseId, 'survey_response_personal_read')
+      ).length;
+      const withdrawnPoint = await get(
+        `/survey-responses/${subject.responseId}/outcome-follow-up/presentation`,
+        holder,
+      );
+      expect(withdrawnPoint.statusCode).toBe(404);
+      expect(withdrawnPoint.body).not.toContain(subject.responseId);
+      expect(
+        (await auditRows(subject.responseId, 'survey_response_personal_read')).length -
+          beforeWithdrawnPoint,
+      ).toBe(0);
+    } finally {
+      if (settings)
+        await migrateDb.pool.query(
+          'UPDATE core.workspace_settings SET survey_anonymity_threshold=$2 WHERE workspace_id=$1::uuid',
+          [WORKSPACE_ID, settings.survey_anonymity_threshold],
+        );
+      else
+        await migrateDb.pool.query(
+          'DELETE FROM core.workspace_settings WHERE workspace_id=$1::uuid',
+          [WORKSPACE_ID],
+        );
+    }
     expect(
       (
         await post(`/survey-responses/${subject.responseId}/reopen-follow-up`, holder, {
@@ -498,8 +556,8 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     const finding = created.json<{ id: string; updated_at: string }>();
     findingIds.push(finding.id);
     expect(
-      (await post(`/survey-responses/${subject.responseId}/create-finding`, actor, input, key)).body,
-    ).toBe(created.body);
+      (await post(`/survey-responses/${subject.responseId}/create-finding`, actor, input, key)).json(),
+    ).toEqual(created.json());
     const history = await app.inject({
       method: 'GET',
       url: `/surveys/${subject.surveyId}/outcome-follow-up/history`,

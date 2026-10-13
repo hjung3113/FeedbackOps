@@ -179,6 +179,12 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
         idempotencyKey,
         requestHash,
         async () => {
+          let finding = await lockFindingById(tx, {
+            workspaceId: actor.workspace_id,
+            findingId,
+          });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
           const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
             { type: 'finding', id: findingId },
           ]);
@@ -187,12 +193,6 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
             actor.workspace_id,
             findingId,
           );
-          let finding = await lockFindingById(tx, {
-            workspaceId: actor.workspace_id,
-            findingId,
-          });
-          if (!finding) throw new HttpError('not_found.record', 'finding not found');
-
           const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
             tx,
           });

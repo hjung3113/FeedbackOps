@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // GET /vocs integration tests — Slice 3 #15 C4 acceptance coverage.
 //
 // Every AC bullet from issue #15 §list-vocs maps to at least one test here.
@@ -1117,10 +1118,14 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       await dbHandle.pool.query(`delete from core.actors where workspace_id = $1`, [
         secondWorkspaceId,
       ]);
-      await dbHandle.pool.query(`delete from core.managed_systems where workspace_id = $1`, [
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        `delete from core.managed_systems where workspace_id = $1`,
+        [secondWorkspaceId],
+      );
+      await deleteRecoveryFixtureParents(dbHandle, `delete from core.workspaces where id = $1`, [
         secondWorkspaceId,
       ]);
-      await dbHandle.pool.query(`delete from core.workspaces where id = $1`, [secondWorkspaceId]);
     }
   });
 

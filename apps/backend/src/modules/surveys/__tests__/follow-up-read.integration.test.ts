@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // #510 part C (ADR-0055): route-level contracts for the outcome follow-up
 // READ endpoint. Fixtures are seeded through the migrate handle; sessions are
 // seeded via SQL (submit-more-info pattern) so this suite never spends the
@@ -178,12 +179,16 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
       [...actorIds, ...secondaryActorIds],
     ]);
-    await migrateDb.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-      managedSystemIds,
-    ]);
-    await migrateDb.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
-      secondaryWorkspaceIds,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.managed_systems where id = any($1::uuid[])',
+      [managedSystemIds],
+    );
+    await deleteRecoveryFixtureParents(
+      migrateDb,
+      'delete from core.workspaces where id = any($1::uuid[])',
+      [secondaryWorkspaceIds],
+    );
     await app?.close();
     await db?.close();
     await migrateDb?.close();

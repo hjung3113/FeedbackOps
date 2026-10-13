@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // The ADR-0031 visibility rule, pinned once (#168).
 //
 // The rule — "a VOC is visible when its Managed System is in the actor's
@@ -175,7 +176,8 @@ describe.skipIf(!runIntegration)('ADR-0031 VOC visibility predicate (#168)', () 
          and actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
       [WORKSPACE_ID, `${EXTERNAL_ID_PREFIX}%`],
     );
-    await ops.pool.query(
+    await deleteRecoveryFixtureParents(
+      ops,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       args,
     );

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Task Requests application seam (#391) — lockTaskRequestForUpdate and
 // markTaskRequestConverted — exercised inside db.transaction directly (not
 // via HTTP).
@@ -61,7 +62,8 @@ describe.skipIf(!runIntegration)('task-requests command seam (#391)', () => {
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

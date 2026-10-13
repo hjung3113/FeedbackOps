@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 // #510 part B (ADR-0055): DB-level verification of the outcome follow-up
 // classifier and the replaced gap predicate.
 //
@@ -328,13 +329,17 @@ describe.skipIf(!runIntegration)('Outcome follow-up gap predicate (0052, ADR-005
     await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-      workspaceId,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      'delete from core.managed_systems where workspace_id = $1',
+      [workspaceId],
+    );
     await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+    await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
+      workspaceId,
+    ]);
     await appHandle?.close();
     await migrateHandle.close();
   });

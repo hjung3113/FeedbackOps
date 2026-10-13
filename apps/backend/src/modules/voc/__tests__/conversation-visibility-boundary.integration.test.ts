@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { cleanupSystemRecoveryFixtures } from '../../../test-support/recovery-fixtures.js';
+import { cleanupSystemRecoveryFixtures, deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
@@ -133,7 +133,8 @@ describe.skipIf(!runIntegration)('conversation visibility boundaries (#181)', ()
         )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

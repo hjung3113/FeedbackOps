@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import type { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -137,9 +138,11 @@ describe.skipIf(!runIntegration)('GET /me/permissions/scope', () => {
       [ids],
     );
     await migratePool.query('delete from core.audit_log where actor_id = any($1::uuid[])', [ids]);
-    await dbHandle.pool.query('delete from core.managed_systems where id = any($1::uuid[])', [
-      [A, B, C],
-    ]);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      'delete from core.managed_systems where id = any($1::uuid[])',
+      [[A, B, C]],
+    );
     await dbHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [ids]);
     await app.close();
     await dbHandle.close();

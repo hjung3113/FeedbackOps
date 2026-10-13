@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // POST /vocs/:id/create-finding + GET /findings integration tests.
 //
 // Gate: DATABASE_URL + DATABASE_URL_MIGRATE + WORKSPACE_ID. The migrate role is
@@ -144,7 +145,9 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     teamIds.length = 0;
     for (const id of foreignWorkspaceIds) {
       await migrateHandle.pool.query('delete from core.actors where workspace_id=$1', [id]);
-      await migrateHandle.pool.query('delete from core.workspaces where id=$1', [id]);
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
+        id,
+      ]);
     }
     foreignWorkspaceIds.length = 0;
   }

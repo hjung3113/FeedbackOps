@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Findings application seam (#391) — createFindingFromVocCluster,
 // lockFindingForUpdate, linkTaskToFinding — exercised inside db.transaction
 // directly (not via HTTP).
@@ -75,7 +76,8 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

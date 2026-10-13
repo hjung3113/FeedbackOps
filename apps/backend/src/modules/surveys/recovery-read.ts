@@ -2,6 +2,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
 import { checkFindingManage } from '../findings/authorization.js';
+import { lockFindingRecoverySubjects } from '../findings/recovery-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
@@ -70,7 +71,8 @@ export async function readSurveyRecoveryDependencies(
 ) {
   const findingIds = subjects.filter((s) => s.type === 'finding').map((s) => s.id);
   if (findingIds.length === 0) return [];
-  // Preserve the existing personal/provenance lock order before Dashboard identity locks.
+  await lockFindingRecoverySubjects(tx, workspaceId, findingIds);
+  // Finding rows first, sorted bound responses next, then recovery identities.
   // Response IDs remain internal to Survey; this recorder seam discloses only Survey IDs.
   const responses = (
     await tx.execute<{ response_id: string }>(sql`SELECT DISTINCT linked.response_id

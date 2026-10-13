@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Concurrent same-(actor, key) register race (S-001, Slice 3 prologue Task 3).
 //
 // Two concurrent first-time retries with the same `(actor_id,
@@ -69,7 +70,10 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
   });
 
   afterAll(async () => {
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'race-ms-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
       suiteStartAt,
     ]);
@@ -90,7 +94,10 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
     await dbHandle.pool.query(
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
+    await deleteRecoveryFixtureParents(
+      dbHandle,
+      `delete from core.managed_systems where slug like 'race-ms-%'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys where created_at >= $1', [
       suiteStartAt,
     ]);

@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { recoveryIdentity } from '../identity.js';
 import { reconcileRecoveryPage } from '../jobs/index.js';
 import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema, recoveryHistorySchema } from '@fops/shared';
@@ -259,7 +260,8 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       `delete from core.analytics_areas where managed_system_id in (${systems})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
@@ -1018,7 +1020,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     const repaired = await patch({ owner_user_id: adminActorId }, key, match);
     expect(repaired.statusCode).toBe(200);
     expect((await history()).items.map((h) => h.occurrence)).toEqual([1]);
-    expect((await patch({ owner_user_id: adminActorId }, key, match)).body).toBe(repaired.body);
+    expect((await patch({ owner_user_id: adminActorId }, key, match)).json()).toEqual(repaired.json());
     expect((await patch({ owner_user_id: adminActorId })).statusCode).toBe(200);
     expect((await history()).total).toBe(1);
     expect((await patch({ owner_user_id: null })).statusCode).toBe(200);
@@ -1101,6 +1103,111 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect((await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${address}/presentation`,headers:headers(seed.devCookie),payload:{action:'restore'}})).json().occurrence).toBeNull();
     const stored=await dbHandle.pool.query('SELECT occurrence FROM dashboard.recovery_identities WHERE workspace_id=$1::uuid AND recovery_item_id=$2',[WORKSPACE_ID,address]);
     expect(stored.rows).toEqual([]);
+  });
+
+  it('records Task Request repair immediately through createFromFinding HTTP and not on replay', async () => {
+    const seed = await createDashboardScope();
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      sourceId: randomUUID(),
+      createdBy: adminActorId,
+      status: 'active',
+    });
+    const key = randomUUID();
+    const command = () =>
+      app.inject({
+        method: 'POST',
+        url: `/findings/${finding.id}/request-task`,
+        headers: { ...headers(seed.devCookie), 'idempotency-key': key },
+        payload: {
+          evidence_summary: 'Evidence',
+          requested_outcome: 'Repair',
+          assigned_reviewer_actor_id: adminActorId,
+        },
+      });
+    const history = async () =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/dashboard/recovery-history?category=actionable-finding-no-execution&managed_system_id=${seed.msA}`,
+          headers: headers(seed.devCookie),
+        })
+      ).json();
+    const first = await command();
+    expect(first.statusCode).toBe(201);
+    const repaired = await history();
+    expect(repaired.total).toBe(1);
+    expect(repaired.items[0]).toMatchObject({
+      occurrence: 1,
+      resolution: { outcome: 'resolved', evidence: 'command', action: 'createFromFinding' },
+    });
+    expect(repaired.items[0].item.source.id).toBe(finding.id);
+    const replay = await command();
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json()).toEqual(first.json());
+    expect((await history()).items).toEqual(repaired.items);
+  });
+
+  it('records shipped evidence repair then detach reopens and clears prior hiding without a scan', async () => {
+    const seed = await createDashboardScope();
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'Evidence repair',
+    );
+    await migrateHandle.pool.query("UPDATE voc.vocs SET severity='high' WHERE id=$1::uuid", [voc.id]);
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      sourceId: randomUUID(),
+      createdBy: adminActorId,
+    });
+    const token = recoveryIdentity('high-severity-unlinked', voc.id);
+    const mute = await app.inject({
+      method: 'PATCH',
+      url: `/dashboard/recovery-items/${token}/presentation`,
+      headers: headers(seed.devCookie),
+      payload: { action: 'mute' },
+    });
+    expect(mute.statusCode).toBe(200);
+    const linked = await app.inject({
+      method: 'POST',
+      url: `/findings/${finding.id}/link-evidence`,
+      headers: headers(seed.devCookie),
+      payload: { source_type: 'voc', source_id: voc.id },
+    });
+    expect(linked.statusCode).toBe(201);
+    const history = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-history?category=high-severity-unlinked&managed_system_id=${seed.msA}`,
+      headers: headers(seed.devCookie),
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().total).toBe(1);
+    expect(history.json().items[0]).toMatchObject({
+      occurrence: 1,
+      resolution: { outcome: 'resolved', evidence: 'command', action: 'linkEvidence' },
+    });
+    const detached = await app.inject({
+      method: 'PATCH',
+      url: `/entity-links/${linked.json().id}`,
+      headers: headers(seed.devCookie),
+      payload: { reason: 'Reopen evidence gap' },
+    });
+    expect(detached.statusCode).toBe(200);
+    const reopened = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-items/${token}`,
+      headers: headers(seed.devCookie),
+    });
+    expect(reopened.statusCode).toBe(200);
+    expect(reopened.json()).toMatchObject({
+      occurrence: 2,
+      presentation: { state: 'visible', snoozed_until: null },
+    });
   });
 
   it('uses an inclusive UTC calendar boundary before count/LIMIT and preserves append-only role grants', async () => {
@@ -1574,16 +1681,20 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         [foreignWorkspace],
       );
       if (foreignMs)
-        await migrateHandle.pool.query('DELETE FROM core.managed_systems WHERE id = $1::uuid', [
-          foreignMs,
-        ]);
+        await deleteRecoveryFixtureParents(
+          migrateHandle,
+          'DELETE FROM core.managed_systems WHERE id = $1::uuid',
+          [foreignMs],
+        );
       if (foreignActor)
         await migrateHandle.pool.query('DELETE FROM core.actors WHERE id = $1::uuid', [
           foreignActor,
         ]);
-      await migrateHandle.pool.query('DELETE FROM core.workspaces WHERE id = $1::uuid', [
-        foreignWorkspace,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'DELETE FROM core.workspaces WHERE id = $1::uuid',
+        [foreignWorkspace],
+      );
     }
   });
 

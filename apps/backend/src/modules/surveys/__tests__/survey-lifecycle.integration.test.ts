@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { cleanupSystemRecoveryFixtures } from '../../../test-support/recovery-fixtures.js';
+import { cleanupSystemRecoveryFixtures, deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { recoveryIdentity } from '../../dashboard/identity.js';
 import { buildServer } from '../../../server.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
@@ -77,7 +77,8 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
       `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

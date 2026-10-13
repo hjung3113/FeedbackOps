@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
@@ -85,7 +86,7 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
       await migrateDb.pool.query('delete from permission.permission_grants where actor_id = $1', [
         reConfirmerId,
       ]);
-      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.managed_systems where id = $1', [
         managedSystemId,
       ]);
       await migrateDb.pool.query('delete from core.sessions where actor_id = $1', [reConfirmerId]);

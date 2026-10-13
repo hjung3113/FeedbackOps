@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Integration tests for POST /permission-requests (issue #5).
 //
 // Same skip-pattern as check-route.integration.test.ts — runs only when
@@ -589,7 +590,9 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     try {
       await opsCleanup.pool.query('delete from core.sessions where id = $1', [cookieValue]);
       await opsCleanup.pool.query('delete from core.actors where workspace_id = $1', [otherWs]);
-      await opsCleanup.pool.query('delete from core.workspaces where id = $1', [otherWs]);
+      await deleteRecoveryFixtureParents(opsCleanup, 'delete from core.workspaces where id = $1', [
+        otherWs,
+      ]);
     } finally {
       await opsCleanup.close();
     }

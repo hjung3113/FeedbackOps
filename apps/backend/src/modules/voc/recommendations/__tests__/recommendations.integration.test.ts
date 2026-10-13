@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // #168 step 4 — recommendation read model, dismissal state and confirmation
 // path (ADR-0034 D3/D4/D5/D6) against the real database.
 //
@@ -250,7 +251,8 @@ describe.skipIf(!runIntegration)('voc recommendations (#168)', () => {
          and actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
       [WORKSPACE_ID, `${EXTERNAL_ID_PREFIX}%`],
     );
-    await ops.pool.query(
+    await deleteRecoveryFixtureParents(
+      ops,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       args,
     );

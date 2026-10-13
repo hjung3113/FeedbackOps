@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Remaining blank rich-content route contracts (#344).
 
 import { randomUUID } from 'node:crypto';
@@ -141,9 +142,11 @@ describe.skipIf(!runIntegration)(
       await dbHandle.pool.query(
         `delete from core.actors where external_id like 'mock-%blank-rich%'`,
       );
-      await dbHandle.pool.query('delete from core.managed_systems where slug like $1', [
-        `${SLUG_PREFIX}%`,
-      ]);
+      await deleteRecoveryFixtureParents(
+        dbHandle,
+        'delete from core.managed_systems where slug like $1',
+        [`${SLUG_PREFIX}%`],
+      );
       await app?.close();
       await dbHandle?.close();
     });

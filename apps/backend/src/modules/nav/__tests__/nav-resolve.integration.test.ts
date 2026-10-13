@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -154,7 +155,8 @@ describe.skipIf(!runIntegration)('GET /nav/resolve (#731)', () => {
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in (${msSub})`,
       [foreignWorkspaceId, `${PREFIX}%`],
     );
-    await dbHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      dbHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [foreignWorkspaceId, `${PREFIX}%`],
     );

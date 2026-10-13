@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../../test-support/recovery-fixtures.js';
 // #168 step 3 — cron backfill (ADR-0034 D6) against the real corpus query.
 //
 // pg-boss is stubbed with a send-recorder: what matters here is *which* VOCs
@@ -82,7 +83,8 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
       `delete from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${scope}`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

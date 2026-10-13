@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../test-support/recovery-fixtures.js';
 // Integration tests for Slice 2 #9 schema (ADR-0017 + ADR-0018).
 //
 // Verifies the load-bearing constraints on managed_systems / analytics_areas
@@ -36,7 +37,10 @@ describe.skipIf(!runIntegration)('Slice 2 schema invariants', () => {
   // Each test cleans up its own rows; ms slugs are namespaced per test.
   beforeEach(async () => {
     await handle.pool.query(`delete from core.analytics_areas where slug like 'test-%'`);
-    await handle.pool.query(`delete from core.managed_systems where slug like 'test-%'`);
+    await deleteRecoveryFixtureParents(
+      handle,
+      `delete from core.managed_systems where slug like 'test-%'`,
+    );
     await handle.pool.query(`delete from core.teams where name like 'test-%'`);
   });
 

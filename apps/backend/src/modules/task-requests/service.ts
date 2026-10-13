@@ -410,20 +410,18 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'finding',
+            sourceId: finding.id,
+            analyticsAreaId: finding.analytics_area_id,
+            primaryManagedSystemId: finding.primary_managed_system_id,
+            input: args.input,
+          });
           if (recovery)
             await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromFinding');
-          return {
-            status: 201,
-            body: await createFromSource({
-              tx,
-              actor: args.actor,
-              sourceType: 'finding',
-              sourceId: finding.id,
-              analyticsAreaId: finding.analytics_area_id,
-              primaryManagedSystemId: finding.primary_managed_system_id,
-              input: args.input,
-            }),
-          };
+          return { status: 201, body };
         },
       );
     });
@@ -477,20 +475,18 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'voc',
+            sourceId: voc.id,
+            analyticsAreaId: voc.analyticsAreaId,
+            primaryManagedSystemId: voc.primaryManagedSystemId,
+            input: args.input,
+          });
           if (recovery)
             await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVoc');
-          return {
-            status: 201,
-            body: await createFromSource({
-              tx,
-              actor: args.actor,
-              sourceType: 'voc',
-              sourceId: voc.id,
-              analyticsAreaId: voc.analyticsAreaId,
-              primaryManagedSystemId: voc.primaryManagedSystemId,
-              input: args.input,
-            }),
-          };
+          return { status: 201, body };
         },
       );
     });
@@ -532,19 +528,17 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          const body = await createFromSource({
+            tx,
+            actor: args.actor,
+            sourceType: 'voc_cluster',
+            sourceId: cluster.id,
+            primaryManagedSystemId: cluster.primary_managed_system_id,
+            input: args.input,
+          });
           if (recovery)
             await deps.recoveryRecorder?.finish(tx, recovery, args.actor.actor_id, 'createFromVocCluster');
-          return {
-            status: 201,
-            body: await createFromSource({
-              tx,
-              actor: args.actor,
-              sourceType: 'voc_cluster',
-              sourceId: cluster.id,
-              primaryManagedSystemId: cluster.primary_managed_system_id,
-              input: args.input,
-            }),
-          };
+          return { status: 201, body };
         },
       );
     });

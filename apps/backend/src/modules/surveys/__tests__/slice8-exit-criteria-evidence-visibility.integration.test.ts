@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Slice 8 exit criteria: evidence derived from a protected Survey Response
 // keeps its internal provenance while exposing only the approved safe contract.
 
@@ -140,10 +141,11 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       `delete from core.responsibility_default_failures where managed_system_id in (${systems})`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
-    await migrateHandle.pool.query(`delete from core.managed_systems where id in (${systems})`, [
-      WORKSPACE_ID,
-      `${SLUG}%`,
-    ]);
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
+      `delete from core.managed_systems where id in (${systems})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query("delete from core.rate_limits where key like $1 || '%'", [
       WORKSPACE_ID,
     ]);

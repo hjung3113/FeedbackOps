@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // VOC application command integration tests — issue #392.
 //
 // The six VOC mutation commands (createVocCommand, updateVocCommand,
@@ -224,16 +225,20 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
         'delete from core.responsibility_default_failures where workspace_id=$1',
         [workspaceId],
       );
-      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
-        workspaceId,
-      ]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where workspace_id = $1',
+        [workspaceId],
+      );
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         workspaceId,
       ]);
       await migrateHandle.pool.query('delete from core.display_counters where workspace_id = $1', [
         workspaceId,
       ]);
-      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id = $1', [
+        workspaceId,
+      ]);
     }
     await dbHandle?.close();
     await migrateHandle?.close();
@@ -264,8 +269,8 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
   it('public reporter resolution records every linked released Task in the source transaction', async () => {
     const voc = await seedVoc('Recovery Task fanout');
     await migrateHandle.pool.query(
-      "UPDATE voc.vocs SET reporter_facing_status='reviewing' WHERE id=$1::uuid",
-      [voc.id],
+      "UPDATE voc.vocs SET reporter_facing_status='reviewing', owner_user_id=$2::uuid WHERE id=$1::uuid",
+      [voc.id, adminActorId],
     );
     const tasks = await Promise.all(
       [1, 2].map(() =>

@@ -429,6 +429,11 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
 
+      const recovery = await deps.recoveryRecorder?.capture(tx, actor.workspace_id, [
+        { type: 'finding', id: finding.id },
+        { type: 'voc', id: input.source_id },
+      ]);
+
       const result = await deps.entityLinksService
         .createLink({
           actor,
@@ -444,6 +449,9 @@ export function createFindingEvidence(deps: FindingsServiceDeps) {
           }
           throw err;
         });
+
+      if (recovery)
+        await deps.recoveryRecorder?.finish(tx, recovery, actor.actor_id, 'linkEvidence');
 
       return {
         status: result.status,

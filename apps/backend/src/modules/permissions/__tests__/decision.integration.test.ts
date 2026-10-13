@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
@@ -168,10 +169,11 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     await db.pool.query(`delete from core.actors where workspace_id = $1 and ${actorPattern}`, [
       WORKSPACE_ID,
     ]);
-    await db.pool.query(
+    await deleteRecoveryFixtureParents(
+      db,
       `delete from core.managed_systems
-        where workspace_id = $1
-          and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
+          where workspace_id = $1
+            and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
       [WORKSPACE_ID],
     );
   }
@@ -527,7 +529,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         'SELECT occurrence,outcome,evidence FROM dashboard.recovery_history WHERE workspace_id=$1::uuid AND recovery_item_id=$2',
         [WORKSPACE_ID, recoveryIdentity('permission-requests-pending', request)],
       );
-    expect((await decide(request, 'need-more-info', { reason: 'Explain the work' })).statusCode).toBe(
+    expect((await decide(request, 'need-more-info', { note: 'Explain the work' })).statusCode).toBe(
       200,
     );
     expect((await history()).rows).toEqual([]);
@@ -1743,7 +1745,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       ).toBe(0);
     } finally {
       await migrateDb.pool.query('delete from core.actors where id = $1', [foreign.id]);
-      await migrateDb.pool.query('delete from core.workspaces where id = $1', [foreignWorkspace]);
+      await deleteRecoveryFixtureParents(migrateDb, 'delete from core.workspaces where id = $1', [
+        foreignWorkspace,
+      ]);
     }
     const externalId = `perm-self-user-${randomUUID()}`;
     const user = await insertActorRow(db, {

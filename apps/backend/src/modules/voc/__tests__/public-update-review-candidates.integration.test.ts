@@ -1,3 +1,4 @@
+import { deleteRecoveryFixtureParents } from '../../../test-support/recovery-fixtures.js';
 // Released Task Public Update review candidate routes (#180).
 //
 // All route requests run through the low-privilege fops_app server handle.
@@ -123,7 +124,8 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
       `delete from core.actors where workspace_id = $1 and external_id like 'mock-dev-read-%'`,
       [WORKSPACE_ID],
     );
-    await migrateHandle.pool.query(
+    await deleteRecoveryFixtureParents(
+      migrateHandle,
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
