@@ -80,11 +80,11 @@ export async function lockWorkspaceActor(
   return { id: row.id, role_level: row.role_level, actor_type: row.actor_type };
 }
 
-/** Selected review identity projection. Never exposes the Actor email. */
+/** Selected review identity projection. Never exposes the Actor email or Actor type. */
 export async function findWorkspaceActorDisplay(
   db: Db | Tx,
   input: { workspaceId: string; actorId: string },
-): Promise<(WorkspaceActor & { display_name: string }) | null> {
+): Promise<(Omit<WorkspaceActor, 'actor_type'> & { display_name: string }) | null> {
   const rows = await db
     .select({
       id: actors.id,
@@ -103,10 +103,6 @@ export async function findWorkspaceActorDisplay(
   if (row.actor_type !== 'internal_member' && row.actor_type !== 'system') {
     throw new Error(`unexpected actor_type for actor ${row.id}: ${row.actor_type}`);
   }
-  return {
-    id: row.id,
-    role_level: row.role_level,
-    actor_type: row.actor_type,
-    display_name: row.display_name,
-  };
+  // Callers place this projection in strict DTOs: keep it to the shipped identity fields.
+  return { id: row.id, role_level: row.role_level, display_name: row.display_name };
 }
