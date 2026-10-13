@@ -26,6 +26,7 @@ import { HomeScreen } from '../HomeScreen';
 import { homeSidebarEntries } from '../homeNavigation';
 
 const response = {
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: { open_voc: 1 },
   action_queues: [
     {

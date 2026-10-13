@@ -1,4 +1,24 @@
+import { createHash } from 'node:crypto';
+import { type SQL, sql } from 'drizzle-orm';
+import { HttpError } from '../../lib/errors.js';
+import { findingRecoveryProjection, findingRecoveryRepairScope } from '../findings/index.js';
 import {
+  countRecoveryPermissionRequests,
+  permissionRecoveryProjection,
+} from '../permissions/index.js';
+import { surveyRecoveryProjection } from '../surveys/index.js';
+import { taskRecoveryProjection } from '../tasks/index.js';
+import {
+  type VocGroupedCountReader,
+  type VocGroupedCountRow,
+  readTaskRecoveryVocs,
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
+} from '../voc/index.js';
+
+import {
+  type CoverageMetricId,
+  type CoverageThresholdPair,
   DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
   DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
   DASHBOARD_OUTCOME_SURVEYS_ROUTE,
@@ -6,9 +26,14 @@ import {
   DASHBOARD_RELEASED_TASKS_ROUTE,
   DASHBOARD_UNASSIGNED_VOC_ROUTE,
   type DashboardSummary,
-  type CoverageThresholdPair,
-  type CoverageMetricId,
+  RECOVERY_CATEGORIES,
+  type RecoveryCategory,
+  type RecoveryItem,
+  type RecoveryListQuery,
+  recoveryDetailSchema,
+  recoveryListSchema,
 } from '@fops/shared';
+import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
@@ -17,8 +42,11 @@ import type { CheckService } from '../permissions/check-service.js';
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
-import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
-import type { VocGroupedCountReader, VocGroupedCountRow } from '../voc/index.js';
+import {
+  actorSurveyReadScope,
+  actorSurveyRecoveryScope,
+  checkSurveyRead,
+} from '../surveys/authorization.js';
 import { getResolvedWorkspaceSettings } from '../workspace-settings/index.js';
 import * as repo from './repo.js';
 
@@ -28,8 +56,21 @@ export interface DashboardActor {
   role_level: 'admin' | 'developer' | 'user';
 }
 
+const ownerRecoveryReaders = {
+  vocRecoveryProjection,
+  vocRecoveryRepairScope,
+  findingRecoveryProjection,
+  findingRecoveryRepairScope,
+  taskRecoveryProjection,
+  permissionRecoveryProjection,
+  surveyRecoveryProjection,
+  readTaskRecoveryVocs,
+};
+export type DashboardRecoveryReaders = typeof ownerRecoveryReaders;
+
 type DashboardDeps = {
   db: Db;
+  recoveryReaders?: DashboardRecoveryReaders;
   checkService: CheckService;
   requestService: Pick<RequestService, 'listAllActive'>;
   vocReadService: VocGroupedCountReader;
@@ -138,7 +179,7 @@ export function createDashboardService(deps: DashboardDeps) {
     // `all` is the public selector for no backing filter; repositories receive
     // undefined so they apply the actor's resolved scope rather than cast it as a UUID.
     const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
-    const [findingScopeRaw, taskScopeRaw, surveyScopeRaw, vocScopeRaw] = await Promise.all([
+    const [findingScopeRaw, taskScopeRaw, surveyReadScopeRaw, vocScopeRaw] = await Promise.all([
       actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
       actorScopeForCapability(deps.db, actor, 'finding.manage'),
       actorSurveyReadScope(deps.db, deps.checkService, actor),
@@ -181,18 +222,13 @@ export function createDashboardService(deps: DashboardDeps) {
     const totalHigh = sumGroupedVocCounts((row) => row.high_severity);
     const findingScope = inRequestedScope(findingScopeRaw, selectedManagedSystemId);
     const taskScope = inRequestedScope(taskScopeRaw, selectedManagedSystemId);
+    const surveyScopeRaw = actor.role_level === 'admin'
+      ? await actorSurveyRecoveryScope(deps.db, deps.checkService, actor) : surveyReadScopeRaw;
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);
     const vocScope = inRequestedScope(vocScopeRaw, selectedManagedSystemId);
-    const surveyScopeForDashboard =
-      surveyScope ?? (actor.role_level === 'admin' ? surveyScopeRaw : undefined);
-    // Survey read scope is data-derived for survey listing. Dashboard queue
-    // visibility is permission-derived: an Admin can truthfully see an empty
-    // outcome queue even when no survey exists to contribute an MS id.
-    const canSeeSurveyQueue =
-      actor.role_level === 'admin' ||
-      (surveyScopeForDashboard !== undefined &&
-        (surveyScopeForDashboard.kind === 'all' ||
-          surveyScopeForDashboard.managedSystemIds.length > 0));
+    const surveyScopeForDashboard = surveyScope;
+    const canSeeSurveyQueue = surveyScope !== undefined &&
+      (surveyScope.kind === 'all' || surveyScope.managedSystemIds.length > 0);
     const queues: DashboardSummary['action_queues'] = [];
     const coverage: DashboardSummary['coverage'] = [];
     const kpis: DashboardSummary['kpis'] = {};
@@ -346,14 +382,14 @@ export function createDashboardService(deps: DashboardDeps) {
     }
 
     const permissionRequests = await authorizationAbsent(() =>
-      deps.requestService.listAllActive(actor),
+      countRecoveryPermissionRequests(deps.db, deps.checkService, actor),
     );
     if (permissionRequests !== undefined) {
-      kpis.pending_request = (kpis.pending_request ?? 0) + permissionRequests.count;
+      kpis.pending_request = (kpis.pending_request ?? 0) + permissionRequests;
       queues.push({
         id: 'permission-requests-pending',
         severity: 'info',
-        count: permissionRequests.count,
+        count: permissionRequests,
         next_action: {
           label: 'Open Requests',
           route: DASHBOARD_PERMISSION_REQUESTS_ROUTE,
@@ -518,9 +554,428 @@ export function createDashboardService(deps: DashboardDeps) {
       if (Object.keys(rowKpis).length > 0) row.kpis = rowKpis;
       byManagedSystem.push(row);
     }
-    return { kpis, action_queues: queues, coverage, by_managed_system: byManagedSystem };
+    return {
+      computed_at: new Date().toISOString(),
+      kpis,
+      action_queues: queues,
+      coverage,
+      by_managed_system: byManagedSystem,
+    };
   }
-  return { getSummary };
+  const recovery = createRecoveryReader(deps);
+  return { getSummary, listRecoveryItems: recovery.list, getRecoveryItem: recovery.detail };
 }
 
 export type DashboardService = ReturnType<typeof createDashboardService>;
+
+const metadata = {
+  'unassigned-voc': {
+    priority: 10,
+    severity: 'urgent',
+    type: 'voc',
+    reason: 'VOC 담당자가 지정되지 않았습니다.',
+  },
+  'high-severity-unlinked': {
+    priority: 10,
+    severity: 'urgent',
+    type: 'voc',
+    reason: '심각도가 높은 VOC에 후속 작업이 연결되지 않았습니다.',
+  },
+  'actionable-finding-no-execution': {
+    priority: 20,
+    severity: 'warn',
+    type: 'finding',
+    reason: 'Active Finding에 실행 작업이 연결되지 않았습니다.',
+  },
+  'released-task-unresolved-voc': {
+    priority: 20,
+    severity: 'warn',
+    type: 'task',
+    reason: 'Released Task에 아직 해결되지 않은 VOC가 연결되어 있습니다.',
+  },
+  'bad-outcome-no-followup': {
+    priority: 10,
+    severity: 'urgent',
+    type: 'survey',
+    reason: 'Outcome Survey에 후속 판단이 필요합니다.',
+  },
+  'permission-requests-pending': {
+    priority: 30,
+    severity: 'info',
+    type: 'permission_request',
+    reason: 'Permission Request 검토가 필요합니다.',
+  },
+} as const;
+const notFound = () => new HttpError('not_found.record', 'recovery item not found');
+
+/** Version 1: category code 1..6, then 16 UUID bytes. Clients must treat this as opaque. */
+function identity(category: RecoveryCategory, sourceId: string): string {
+  return `r1_${Buffer.concat([
+    Buffer.from([RECOVERY_CATEGORIES.indexOf(category) + 1]),
+    Buffer.from(sourceId.replaceAll('-', ''), 'hex'),
+  ]).toString('base64url')}`;
+}
+function decodeIdentity(token: string): { category: RecoveryCategory; sourceId: string } {
+  if (!/^r1_[A-Za-z0-9_-]{23}$/.test(token)) throw notFound();
+  const bytes = Buffer.from(token.slice(3), 'base64url');
+  const category = RECOVERY_CATEGORIES[(bytes[0] ?? 0) - 1];
+  if (bytes.length !== 17 || !category) throw notFound();
+  const hex = bytes.subarray(1).toString('hex');
+  const sourceId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  if (!z.string().uuid().safeParse(sourceId).success || identity(category, sourceId) !== token)
+    throw notFound();
+  return { category, sourceId };
+}
+const cursorSchema = z
+  .object({
+    v: z.literal(1),
+    bind: z.string(),
+    priority: z.number().int(),
+    category: z.enum(RECOVERY_CATEGORIES),
+    sourceId: z.string().uuid(),
+  })
+  .strict();
+type Cursor = z.infer<typeof cursorSchema>;
+function encodeCursor(cursor: Cursor) {
+  return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+}
+function decodeCursor(raw: string, bind: string): Cursor {
+  const invalid = () =>
+    new HttpError('validation.failed', 'invalid cursor', {
+      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+    });
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(raw)) throw invalid();
+    const cursor = cursorSchema.parse(JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')));
+    if (
+      encodeCursor(cursor) !== raw ||
+      cursor.bind !== bind ||
+      cursor.priority !== metadata[cursor.category].priority
+    )
+      throw invalid();
+    return cursor;
+  } catch {
+    throw invalid();
+  }
+}
+function selectScope(scope: Scope, selected?: string): Scope {
+  if (!selected || selected === 'all') return scope;
+  return {
+    kind: 'scoped',
+    managedSystemIds:
+      scope.kind === 'all' || scope.managedSystemIds.includes(selected) ? [selected] : [],
+  };
+}
+function normalizedScope(scope: Scope) {
+  return scope.kind === 'all' ? 'all' : [...scope.managedSystemIds].sort();
+}
+type SourceRow = {
+  category: RecoveryCategory;
+  priority: number;
+  source_id: string;
+  system_id: string | null;
+  display_id: string | null;
+  title: string | null;
+  active: boolean;
+  withdrawn: boolean;
+  actor_id: string | null;
+  team_id: string | null;
+  repair_id: string | null;
+  repair_system_id: string | null;
+};
+function route(type: NonNullable<RecoveryItem['source']>['type'], id: string): string {
+  if (type === 'permission_request') return `/admin/permissions/requests?selected=${id}`;
+  if (type === 'survey') return `/surveys/${id}/follow-up`;
+  return `/${type === 'voc' ? 'vocs' : type === 'finding' ? 'findings' : 'tasks'}/${id}`;
+}
+function hint(keys: string[], adminQueue = false): RecoveryItem['responsible_actor_hint'] {
+  if (adminQueue) return { kind: 'admin_queue', label: 'Admin 검토 대기열' };
+  const owners = [...new Set(keys)];
+  if (owners.length > 1) return { kind: 'multiple', label: '여러 담당자' };
+  const owner = owners[0];
+  if (!owner) return { kind: 'unassigned', label: '미지정' };
+  return owner.startsWith('a:')
+    ? { kind: 'actor', label: '담당 Actor', actor_id: owner.slice(2) }
+    : { kind: 'team', label: '담당 팀', team_id: owner.slice(2) };
+}
+function ownerKeys(row: { actor_id: string | null; team_id: string | null }) {
+  return row.actor_id ? [`a:${row.actor_id}`] : row.team_id ? [`t:${row.team_id}`] : [];
+}
+
+function createRecoveryReader(deps: {
+  db: Db;
+  checkService: CheckService;
+  recoveryReaders?: DashboardRecoveryReaders;
+}) {
+  const readers = deps.recoveryReaders ?? ownerRecoveryReaders;
+  async function projections(
+    actor: DashboardActor,
+    query: Pick<RecoveryListQuery, 'category' | 'managed_system_id'>,
+    sourceId?: string,
+  ) {
+    const [vocRaw, findingRaw, taskRaw, surveyRaw, vocRepair, findingRepair] = await Promise.all([
+      actorScopeForCapability(deps.db, actor, 'voc.read'),
+      actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
+      actorScopeForCapability(deps.db, actor, 'finding.manage'),
+      actorSurveyRecoveryScope(deps.db, deps.checkService, actor),
+      readers.vocRecoveryRepairScope(deps.db, deps.checkService, actor),
+      readers.findingRecoveryRepairScope(deps.db, deps.checkService, actor),
+    ]);
+    const scopes = [vocRaw, findingRaw, taskRaw, surveyRaw].map((scope) =>
+      selectScope(scope, query.managed_system_id),
+    );
+    const [vocScope, findingScope, taskScope, surveyScope] = scopes as [Scope, Scope, Scope, Scope];
+    const categories = query.category ? [query.category] : [...RECOVERY_CATEGORIES];
+    let surveyRepairSystems: string[] = [];
+    let permissionAllowed = false;
+    const sources = await Promise.all(
+      categories.map(async (category) => {
+        let projection: SQL;
+        if (category === 'unassigned-voc' || category === 'high-severity-unlinked') {
+          projection = readers.vocRecoveryProjection(
+            actor.workspace_id,
+            vocScope,
+            category,
+            vocRepair,
+            sourceId,
+          );
+        } else if (category === 'actionable-finding-no-execution') {
+          projection = readers.findingRecoveryProjection(
+            actor.workspace_id,
+            findingScope,
+            findingRepair,
+            sourceId,
+          );
+        } else if (category === 'released-task-unresolved-voc') {
+          projection = readers.taskRecoveryProjection({
+            workspaceId: actor.workspace_id,
+            scope: taskScope,
+            vocReadScope: vocRaw,
+            vocRepairScope: vocRepair,
+            actorId: actor.actor_id,
+            roleLevel: actor.role_level,
+            ...(sourceId ? { sourceId } : {}),
+          });
+        } else if (category === 'bad-outcome-no-followup') {
+          const survey = await readers.surveyRecoveryProjection(
+            deps.db,
+            deps.checkService,
+            actor,
+            surveyScope,
+            sourceId,
+          );
+          projection = survey.query;
+          surveyRepairSystems = survey.repairSystems;
+        } else {
+          const permission = await readers.permissionRecoveryProjection(
+            deps.checkService,
+            actor,
+            sourceId,
+          );
+          projection = permission.query;
+          permissionAllowed = permission.allowed;
+        }
+        return sql`SELECT ${category}::text AS category, ${metadata[category].priority}::int AS priority, source.* FROM (${projection}) source`;
+      }),
+    );
+    return {
+      query: sql.join(sources, sql` UNION ALL `),
+      vocScope: vocRaw,
+      binding: {
+        permissionAllowed,
+        surveyRepairSystems: [...surveyRepairSystems].sort(),
+        scopes: scopes.map(normalizedScope),
+        vocRepair: normalizedScope(vocRepair),
+        findingRepair: normalizedScope(findingRepair),
+      },
+    };
+  }
+  async function hydrate(
+    actor: DashboardActor,
+    rows: SourceRow[],
+    vocScope: Scope,
+  ): Promise<RecoveryItem[]> {
+    const affected = await readers.readTaskRecoveryVocs(deps.db, {
+      workspaceId: actor.workspace_id,
+      actorId: actor.actor_id,
+      readScope: vocScope,
+      taskIds: rows
+        .filter((row) => row.category === 'released-task-unresolved-voc' && row.title !== null)
+        .map((row) => row.source_id),
+    });
+    return rows.map((row) => {
+      const meta = metadata[row.category];
+      const vocs = affected.filter((voc) => voc.task_id === row.source_id);
+      const keys = [...ownerKeys(row), ...vocs.flatMap((voc) => voc.owner_keys)];
+      const source =
+        row.title === null
+          ? null
+          : {
+              type: meta.type,
+              id: row.source_id,
+              display_id: row.display_id,
+              title: row.title,
+              route: route(meta.type, row.source_id),
+            };
+      const next_actions: RecoveryItem['next_actions'] = [];
+      if (row.active && !row.withdrawn && row.repair_id) {
+        const type = meta.type === 'task' ? 'voc' : meta.type;
+        const id = row.repair_id;
+        const action =
+          type === 'voc'
+            ? meta.type === 'task'
+              ? 'write_public_update'
+              : 'triage'
+            : type === 'finding'
+              ? 'plan_execution'
+              : type === 'survey'
+                ? 'create_finding'
+                : 'review_permission';
+        next_actions.push({
+          id: action,
+          label:
+            action === 'triage'
+              ? 'VOC 검토'
+              : action === 'write_public_update'
+                ? 'VOC 공개 업데이트'
+                : action === 'plan_execution'
+                  ? 'Task Request 생성'
+                  : action === 'create_finding'
+                    ? '후속 판단'
+                    : 'Permission Request 반려',
+          availability: 'available',
+          blocked_reason: null,
+          requestable_permission: null,
+          target: {
+            source_type: type,
+            source_id: id,
+            route: route(type, id),
+            endpoint:
+              action === 'triage'
+                ? `/vocs/${id}`
+                : action === 'write_public_update'
+                  ? `/vocs/${id}/public-updates`
+                  : action === 'plan_execution'
+                    ? `/findings/${id}/request-task`
+                    : action === 'review_permission'
+                      ? `/permissions/requests/${id}/reject`
+                      : null,
+            method: action === 'triage' ? 'PATCH' : action === 'create_finding' ? null : 'POST',
+            intent: action,
+          },
+          confirmation: {
+            required: action === 'write_public_update' || action === 'review_permission',
+            title:
+              action === 'write_public_update'
+                ? 'VOC 공개 업데이트 전송'
+                : action === 'review_permission'
+                  ? 'Permission Request 반려'
+                  : '후속 작업 검토',
+            body:
+              action === 'write_public_update'
+                ? '보고자에게 공개할 내용을 확인해 주세요.'
+                : action === 'review_permission'
+                  ? '반려 사유를 입력해 주세요.'
+                  : '연결된 화면에서 필요한 내용을 입력해 주세요.',
+            risk_level:
+              action === 'write_public_update' || action === 'review_permission' ? 'medium' : 'low',
+            reason_required: action === 'review_permission',
+            audit_event_intent:
+              action === 'write_public_update'
+                ? 'public_update_created'
+                : action === 'review_permission'
+                  ? 'permission_rejected'
+                  : action === 'plan_execution'
+                    ? 'task_request_created_from_finding'
+                    : action === 'create_finding'
+                      ? 'finding_created_from_survey_response'
+                      : null,
+          },
+        });
+      }
+      return {
+        recovery_item_id: identity(row.category, row.source_id),
+        category: row.category,
+        state: row.withdrawn ? 'withdrawn' : row.active ? 'active' : 'resolved',
+        reason_code: row.category,
+        reason: meta.reason,
+        priority: meta.priority,
+        severity: meta.severity,
+        managed_system_id: row.system_id,
+        source,
+        affected: vocs.map((voc) => ({
+          type: 'voc' as const,
+          id: voc.id,
+          display_id: voc.display_id,
+          title: voc.title,
+          route: route('voc', voc.id),
+        })),
+        next_actions,
+        responsible_actor_hint: hint(keys, meta.type === 'permission_request'),
+      };
+    });
+  }
+  async function list(actor: DashboardActor, query: RecoveryListQuery) {
+    const projection = await projections(actor, query);
+    const bind = createHash('sha256')
+      .update(
+        JSON.stringify({
+          workspace: actor.workspace_id,
+          actor: actor.actor_id,
+          role: actor.role_level,
+          category: query.category ?? null,
+          selected: query.managed_system_id === 'all' ? null : (query.managed_system_id ?? null),
+          view: query.view,
+          ...projection.binding,
+        }),
+      )
+      .digest('hex');
+    const cursor = query.cursor ? decodeCursor(query.cursor, bind) : null;
+    const after = cursor
+      ? sql`(priority, category, source_id) > (${cursor.priority}::int, ${cursor.category}::text, ${cursor.sourceId}::uuid)`
+      : sql`true`;
+    const result = await deps.db.execute<{ total: number; items: SourceRow[] }>(sql`
+      WITH sources AS (${projection.query}), matched AS MATERIALIZED (
+        SELECT * FROM sources WHERE active AND NOT withdrawn
+          AND ${query.view === 'actionable' ? sql`repair_id IS NOT NULL` : sql`true`}
+      ), page AS (SELECT * FROM matched WHERE ${after} ORDER BY priority, category, source_id LIMIT ${query.limit + 1})
+      SELECT (SELECT count(*)::int FROM matched) AS total,
+        COALESCE((SELECT jsonb_agg(page ORDER BY priority, category, source_id) FROM page), '[]'::jsonb) AS items`);
+    const data = result.rows[0];
+    const rows = (data?.items ?? []).slice(0, query.limit);
+    const hasMore = (data?.items.length ?? 0) > query.limit;
+    const last = rows.at(-1);
+    return recoveryListSchema.parse({
+      computed_at: new Date().toISOString(),
+      items: await hydrate(actor, rows, projection.vocScope),
+      total: Number(data?.total ?? 0),
+      page: {
+        has_more: hasMore,
+        ...(hasMore && last
+          ? {
+              cursor: encodeCursor({
+                v: 1,
+                bind,
+                priority: last.priority,
+                category: last.category,
+                sourceId: last.source_id,
+              }),
+            }
+          : {}),
+      },
+    });
+  }
+  async function detail(actor: DashboardActor, token: string) {
+    const { category, sourceId } = decodeIdentity(token);
+    const projection = await projections(actor, { category }, sourceId);
+    const result = await deps.db.execute<SourceRow>(
+      sql`SELECT * FROM (${projection.query}) source WHERE source_id = ${sourceId}::uuid LIMIT 1`,
+    );
+    const row = result.rows[0];
+    if (!row || row.title === null) throw notFound();
+    const item = (await hydrate(actor, [row], projection.vocScope))[0];
+    if (!item) throw notFound();
+    return recoveryDetailSchema.parse({ ...item, computed_at: new Date().toISOString() });
+  }
+  return { list, detail };
+}

@@ -1,4 +1,4 @@
-import type { DashboardSummary } from '@fops/shared';
+import { type DashboardSummary, recoveryDetailSchema, recoveryListSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -7,11 +7,11 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { HttpError } from '../../../lib/errors.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertActorRow, insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
-import { uid } from '../../../test-support/ids.js';
+import { randomUUID, uid } from '../../../test-support/ids.js';
 import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
@@ -221,6 +221,14 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     );
     await migrateHandle.pool.query(
       'delete from core.audit_log where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
+      [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
+    );
+    await migrateHandle.pool.query(
+      'delete from permission.permission_denies where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
+      [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
+    );
+    await migrateHandle.pool.query(
+      'delete from core.idempotency_keys where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)',
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
     );
     await migrateHandle.pool.query(
@@ -831,6 +839,654 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(rowB?.action_queues).not.toHaveProperty('bad-outcome-no-followup');
     expect(systemRow(body, seed.msA)?.action_queues?.['bad-outcome-no-followup']).toBe(0);
   });
+  function required<T>(value: T | undefined | null): T {
+    if (value == null) throw new Error('expected recovery fixture');
+    return value;
+  }
+  const recoveryList = async (cookie: string, query = '') => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/dashboard/recovery-items?${query}`,
+      headers: headers(cookie),
+    });
+    expect(response.statusCode).toBe(200);
+    return recoveryListSchema.parse(response.json());
+  };
+  const recoveryDetail = (cookie: string, id: string) =>
+    app.inject({ method: 'GET', url: `/dashboard/recovery-items/${id}`, headers: headers(cookie) });
+
+  it('uses owner grains for every operational category and the safe Survey exception', async () => {
+    const seed = await createDashboardScope();
+    await seedDashboard(seed);
+    const summary = (await get(adminCookie, seed.msA)).json<Summary>();
+    for (const category of [
+      'unassigned-voc',
+      'high-severity-unlinked',
+      'actionable-finding-no-execution',
+      'released-task-unresolved-voc',
+      'permission-requests-pending',
+    ] as const) {
+      const page = await recoveryList(
+        adminCookie,
+        `category=${category}&managed_system_id=${seed.msA}`,
+      );
+      expect(page.total, category).toBe(queue(summary, category)?.count);
+      expect(page.items).toHaveLength(page.total);
+      expect(new Set(page.items.map((item) => item.recovery_item_id)).size).toBe(page.total);
+    }
+    const surveys = await recoveryList(
+      adminCookie,
+      `category=bad-outcome-no-followup&managed_system_id=${seed.msA}`,
+    );
+    expect(queue(summary, 'bad-outcome-no-followup')?.count).toBe(4);
+    expect(surveys.total).toBe(1);
+    expect(surveys.items[0]?.source?.type).toBe('survey');
+    expect(surveys.items[0]?.next_actions).toEqual([]); // Admin has no personal grant.
+    expect(JSON.stringify(surveys)).not.toMatch(
+      /response_id|answer_value|respondent|response_count/,
+    );
+    const detail = await recoveryDetail(adminCookie, required(surveys.items[0]).recovery_item_id);
+    expect(detail.statusCode).toBe(200);
+    expect(recoveryDetailSchema.parse(detail.json()).next_actions).toEqual([]);
+  });
+
+  it('returns live resolved/withdrawn selections and rechecks revocation without GET writes', async () => {
+    const seed = await createDashboardScope();
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'recoverable VOC',
+    );
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.triage',
+      seed.msA,
+      adminActorId,
+    );
+    const list = await recoveryList(
+      seed.devCookie,
+      `category=unassigned-voc&managed_system_id=${seed.msA}&view=actionable`,
+    );
+    const item = required(list.items.find((row) => row.source?.id === voc.id));
+    expect(item.next_actions).toContainEqual(
+      expect.objectContaining({ availability: 'available', id: 'triage' }),
+    );
+    const snapshot = async () =>
+      (
+        await migrateHandle.pool.query(
+          `SELECT jsonb_build_object(
+      'voc', (SELECT jsonb_agg(v ORDER BY id) FROM voc.vocs v WHERE workspace_id = $1::uuid),
+      'finding', (SELECT jsonb_agg(f ORDER BY id) FROM finding.findings f WHERE workspace_id = $1::uuid),
+      'task', (SELECT jsonb_agg(t ORDER BY id) FROM task.tasks t WHERE workspace_id = $1::uuid),
+      'survey', (SELECT jsonb_agg(s ORDER BY id) FROM survey.surveys s WHERE workspace_id = $1::uuid),
+      'permission', (SELECT jsonb_agg(p ORDER BY id) FROM permission.permission_requests p WHERE workspace_id = $1::uuid),
+      'idempotency', (SELECT jsonb_agg(i ORDER BY actor_id, key) FROM core.idempotency_keys i WHERE actor_id IN (SELECT id FROM core.actors WHERE workspace_id = $1::uuid)),
+      'public_updates', (SELECT jsonb_agg(u ORDER BY id) FROM voc.voc_public_updates u WHERE voc_id IN (SELECT id FROM voc.vocs WHERE workspace_id = $1::uuid)),
+      'links', (SELECT jsonb_agg(l ORDER BY id) FROM core.entity_links l WHERE workspace_id = $1::uuid),
+      'audit', (SELECT jsonb_agg(a ORDER BY id) FROM core.audit_log a WHERE workspace_id = $1::uuid)
+    ) AS state`,
+          [WORKSPACE_ID],
+        )
+      ).rows[0]?.state;
+    const before = await snapshot();
+    await recoveryList(seed.devCookie);
+    expect((await recoveryDetail(seed.devCookie, item.recovery_item_id)).statusCode).toBe(200);
+    expect(await snapshot()).toEqual(before); // infrastructure rate-limit writes excluded.
+    const repaired = await app.inject({
+      method: 'PATCH',
+      url: `/vocs/${voc.id}`,
+      headers: {
+        ...headers(seed.devCookie),
+        'if-match': new Date(voc.updated_at).toISOString(),
+        'idempotency-key': randomUUID(),
+      },
+      payload: { owner_user_id: seed.devActorId },
+    });
+    expect(repaired.statusCode).toBe(200);
+    const resolved = recoveryDetailSchema.parse(
+      (await recoveryDetail(seed.devCookie, item.recovery_item_id)).json(),
+    );
+    expect(resolved.state).toBe('resolved');
+    expect(resolved.next_actions).toEqual([]);
+    expect((await recoveryList(seed.devCookie, 'category=unassigned-voc')).items).toEqual([]);
+    await migrateHandle.pool.query('UPDATE voc.vocs SET archived_at = now() WHERE id = $1::uuid', [
+      voc.id,
+    ]);
+    expect((await recoveryDetail(seed.devCookie, item.recovery_item_id)).json().state).toBe(
+      'withdrawn',
+    );
+    await migrateHandle.pool.query(
+      'UPDATE permission.permission_grants SET revoked_at = now() WHERE actor_id = $1::uuid AND capability = $2',
+      [seed.devActorId, 'voc.read'],
+    );
+    expect((await recoveryDetail(seed.devCookie, item.recovery_item_id)).statusCode).toBe(404);
+  });
+
+  it('keeps readable Task gaps while redacting restricted linked VOCs and their responsibility', async () => {
+    const seed = await createDashboardScope();
+    const hidden = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      reporterActorId,
+      'restricted secret title',
+      { ownerUserId: adminActorId },
+    );
+    const task = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      status: 'released',
+      createdBy: adminActorId,
+    });
+    await link('voc', hidden.id, 'task', task.id, 'evidence_of', seed.msA);
+    const list = await recoveryList(seed.devCookie, 'category=released-task-unresolved-voc');
+    expect(list.total).toBe(1);
+    const item = required(list.items[0]);
+    expect(item.affected).toEqual([]);
+    expect(item.next_actions).toEqual([]);
+    expect(item.responsible_actor_hint).toEqual({ kind: 'unassigned', label: '미지정' });
+    const detail = (await recoveryDetail(seed.devCookie, item.recovery_item_id)).json();
+    expect(JSON.stringify(detail)).not.toContain(hidden.id);
+    expect(JSON.stringify(detail)).not.toContain('restricted secret title');
+    expect(JSON.stringify(detail)).not.toContain(adminActorId);
+    expect(
+      (await recoveryList(seed.devCookie, 'category=released-task-unresolved-voc&view=actionable'))
+        .total,
+    ).toBe(0);
+    const visible = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'visible affected',
+      { ownerUserId: seed.devActorId },
+    );
+    await link('voc', visible.id, 'task', task.id, 'evidence_of', seed.msA);
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.triage',
+      seed.msA,
+      adminActorId,
+    );
+    const actionable = await recoveryList(
+      seed.devCookie,
+      'category=released-task-unresolved-voc&view=actionable&limit=1',
+    );
+    expect(actionable.total).toBe(1);
+    expect(actionable.items[0]?.next_actions[0]?.target.source_id).toBe(visible.id);
+    expect(actionable.items[0]?.responsible_actor_hint.actor_id).toBe(seed.devActorId);
+    const visibleOther = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'other responsible',
+      { ownerUserId: adminActorId },
+    );
+    await link('voc', visibleOther.id, 'task', task.id, 'evidence_of', seed.msA);
+    const multiple = await recoveryDetail(seed.devCookie, item.recovery_item_id);
+    expect(multiple.json().responsible_actor_hint).toEqual({
+      kind: 'multiple',
+      label: '여러 담당자',
+    });
+  });
+
+  it('does not enumerate gaps for no-scope Users or a workspace-admin denied Admin', async () => {
+    const seed = await createDashboardScope();
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      adminActorId,
+      'not the User own source',
+    );
+    const adminPage = await recoveryList(adminCookie, 'category=unassigned-voc');
+    const id = required(
+      adminPage.items.find((item) => item.source?.id === voc.id),
+    ).recovery_item_id;
+    const userCookie = await loginAs(app, 'mock-user-1');
+    expect((await recoveryList(userCookie)).items).toEqual([]);
+    expect((await recoveryDetail(userCookie, id)).statusCode).toBe(404);
+    await migrateHandle.pool.query(
+      `INSERT INTO permission.permission_requests
+      (workspace_id, requester_actor_id, requested_capability, reason, status)
+      VALUES ($1::uuid, $2::uuid, 'voc.read', $3::text, 'pending')`,
+      [WORKSPACE_ID, seed.devActorId, `${SLUG_PREFIX} recovery denied request`],
+    );
+    const permissionPage = await recoveryList(adminCookie, 'category=permission-requests-pending');
+    expect(permissionPage.total).toBeGreaterThan(0);
+    const permissionItem = required(permissionPage.items[0]);
+    expect(permissionItem.next_actions).toContainEqual(
+      expect.objectContaining({
+        id: 'review_permission',
+        target: expect.objectContaining({
+          endpoint: `/permissions/requests/${required(permissionItem.source).id}/reject`,
+        }),
+        confirmation: expect.objectContaining({
+          required: true,
+          reason_required: true,
+          audit_event_intent: 'permission_rejected',
+        }),
+      }),
+    );
+    // A new sensitive actor owns this burst; existing seed Admin is untouched.
+    await migrateHandle.pool.query(
+      "UPDATE core.actors SET role_level = 'admin' WHERE id = $1::uuid",
+      [seed.devActorId],
+    );
+    await denyCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'workspace.admin',
+      null,
+      adminActorId,
+    );
+    const deniedCookie = await loginAs(
+      app,
+      (
+        await migrateHandle.pool.query<{ external_id: string }>(
+          'SELECT external_id FROM core.actors WHERE id = $1::uuid',
+          [seed.devActorId],
+        )
+      ).rows[0]?.external_id ?? '',
+    );
+    expect((await recoveryList(deniedCookie, 'category=permission-requests-pending')).total).toBe(
+      0,
+    );
+    expect((await recoveryDetail(deniedCookie, permissionItem.recovery_item_id)).statusCode).toBe(
+      404,
+    );
+    await migrateHandle.pool.query(
+      "UPDATE permission.permission_requests SET status = 'cancelled' WHERE id = $1::uuid",
+      [required(permissionItem.source).id],
+    );
+    const withdrawn = recoveryDetailSchema.parse(
+      (await recoveryDetail(adminCookie, permissionItem.recovery_item_id)).json(),
+    );
+    expect(withdrawn.state).toBe('withdrawn');
+    expect(withdrawn.next_actions).toEqual([]);
+  });
+
+  it('keeps Task queue membership separate from a User source-role denial', async () => {
+    const seed = await createDashboardScope();
+    const hidden = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      adminActorId,
+      'role-protected VOC',
+    );
+    const task = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      status: 'released',
+      createdBy: adminActorId,
+    });
+    await link('voc', hidden.id, 'task', task.id, 'evidence_of', seed.msA);
+    await migrateHandle.pool.query(
+      "UPDATE core.actors SET role_level = 'user' WHERE id = $1::uuid",
+      [seed.devActorId],
+    );
+    const external = required(
+      (
+        await migrateHandle.pool.query<{ external_id: string }>(
+          'SELECT external_id FROM core.actors WHERE id = $1::uuid',
+          [seed.devActorId],
+        )
+      ).rows[0],
+    );
+    const cookie = await loginAs(app, external.external_id);
+    const page = await recoveryList(cookie, 'category=released-task-unresolved-voc');
+    expect(page.total).toBe(1);
+    const item = required(page.items[0]);
+    expect(item.source).toBeNull();
+    expect(item.affected).toEqual([]);
+    expect(item.next_actions).toEqual([]);
+    expect(JSON.stringify(page)).not.toContain('Seed task');
+    expect((await recoveryDetail(cookie, item.recovery_item_id)).statusCode).toBe(404);
+  });
+
+  it('collapses malformed, unknown, category-incompatible and foreign addresses into one 404', async () => {
+    const seed = await createDashboardScope();
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'compatible source',
+    );
+    const address = (code: number, id: string) =>
+      `r1_${Buffer.concat([Buffer.from([code]), Buffer.from(id.replaceAll('-', ''), 'hex')]).toString('base64url')}`;
+    const foreignWorkspace = randomUUID();
+    let foreignMs: string | undefined;
+    let foreignActor: string | undefined;
+    try {
+      await migrateHandle.pool.query(
+        'INSERT INTO core.workspaces (id, name) VALUES ($1::uuid, $2)',
+        [foreignWorkspace, 'recovery foreign workspace'],
+      );
+      foreignActor = (
+        await insertActorRow(migrateHandle, {
+          workspaceId: foreignWorkspace,
+          externalId: uid('recovery-foreign'),
+          roleLevel: 'admin',
+        })
+      ).id;
+      foreignMs = await insertMsDirectly(
+        migrateHandle,
+        foreignWorkspace,
+        uid('recovery-foreign-ms'),
+        'Foreign',
+      );
+      const foreignVoc = await insertVocDirectly(
+        migrateHandle,
+        foreignWorkspace,
+        foreignMs,
+        foreignActor,
+        'foreign secret',
+      );
+      const canonical = address(1, voc.id);
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      const noncanonical =
+        canonical.slice(0, -1) + alphabet[alphabet.indexOf(required(canonical.at(-1))) + 1];
+      for (const token of [
+        'malformed',
+        address(1, randomUUID()),
+        address(3, voc.id),
+        address(1, foreignVoc.id),
+        noncanonical,
+        address(7, voc.id),
+      ]) {
+        const response = await recoveryDetail(seed.devCookie, token);
+        expect(response.statusCode).toBe(404);
+        expect(response.json()).toEqual({
+          code: 'not_found.record',
+          message: 'recovery item not found',
+        });
+      }
+      // A compatible address can be resolved without proving a historical occurrence.
+      expect((await recoveryDetail(seed.devCookie, address(2, voc.id))).json().state).toBe(
+        'resolved',
+      );
+      const forgedQuery = await app.inject({
+        method: 'GET',
+        url: `/dashboard/recovery-items?actor_id=${adminActorId}`,
+        headers: headers(seed.devCookie),
+      });
+      expect(forgedQuery.statusCode).toBe(422);
+      expect(
+        (await app.inject({ method: 'GET', url: '/dashboard/recovery-items' })).statusCode,
+      ).toBe(401);
+    } finally {
+      await migrateHandle.pool.query('DELETE FROM voc.vocs WHERE workspace_id = $1::uuid', [
+        foreignWorkspace,
+      ]);
+      await migrateHandle.pool.query(
+        'DELETE FROM core.display_counters WHERE workspace_id = $1::uuid',
+        [foreignWorkspace],
+      );
+      if (foreignMs)
+        await migrateHandle.pool.query('DELETE FROM core.managed_systems WHERE id = $1::uuid', [
+          foreignMs,
+        ]);
+      if (foreignActor)
+        await migrateHandle.pool.query('DELETE FROM core.actors WHERE id = $1::uuid', [
+          foreignActor,
+        ]);
+      await migrateHandle.pool.query('DELETE FROM core.workspaces WHERE id = $1::uuid', [
+        foreignWorkspace,
+      ]);
+    }
+  });
+
+  it('filters executable owner repairs before count and cursor LIMIT', async () => {
+    const seed = await createDashboardScope();
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.read',
+      seed.msB,
+      adminActorId,
+    );
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.triage',
+      seed.msB,
+      adminActorId,
+    );
+    const blocked = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'read only',
+    );
+    const eligible = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      reporterActorId,
+      'executable',
+    );
+    await migrateHandle.pool.query('UPDATE voc.vocs SET id = $1::uuid WHERE id = $2::uuid', [
+      '00000000-0000-4000-8000-000000000001',
+      blocked.id,
+    ]);
+    const home = await recoveryList(
+      seed.devCookie,
+      'category=unassigned-voc&view=actionable&limit=1',
+    );
+    expect(home.total).toBe(1);
+    expect(home.items[0]?.source?.id).toBe(eligible.id);
+    expect(home.page.has_more).toBe(false);
+    const operational = await recoveryList(seed.devCookie, 'category=unassigned-voc&limit=1');
+    expect(operational.total).toBe(2);
+    expect(operational.items[0]?.next_actions).toEqual([]);
+    await migrateHandle.pool.query(
+      'UPDATE core.managed_systems SET archived_at = now() WHERE id = $1::uuid',
+      [seed.msB],
+    );
+    expect(
+      (await recoveryList(seed.devCookie, 'category=unassigned-voc&view=actionable')).total,
+    ).toBe(0);
+    expect((await recoveryList(seed.devCookie, 'category=unassigned-voc')).total).toBe(2);
+  });
+
+  it('keeps generic holder reads safe and preserves the personal Survey route audits', async () => {
+    const seed = await createDashboardScope();
+    await seedSurveyGaps(seed.msA, 2);
+    expect(
+      (await recoveryList(seed.devCookie, 'category=bad-outcome-no-followup&view=actionable'))
+        .total,
+    ).toBe(0);
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'survey.read_personal_responses',
+      seed.msA,
+      adminActorId,
+    );
+    const auditCount = async () =>
+      Number(
+        (
+          await migrateHandle.pool.query<{ count: string }>(
+            "SELECT count(*)::text AS count FROM core.audit_log WHERE actor_id = $1::uuid AND event_type = 'survey_response_personal_read'",
+            [seed.devActorId],
+          )
+        ).rows[0]?.count,
+      );
+    const before = await auditCount();
+    const list = await recoveryList(
+      seed.devCookie,
+      'category=bad-outcome-no-followup&view=actionable',
+    );
+    expect(list.total).toBe(1);
+    expect(list.items[0]?.next_actions[0]?.id).toBe('create_finding');
+    await recoveryDetail(seed.devCookie, required(list.items[0]).recovery_item_id);
+    expect(await auditCount()).toBe(before);
+    expect(JSON.stringify(list)).not.toMatch(/response_id|answer_value|respondent|response_count/);
+    const personal = await app.inject({
+      method: 'GET',
+      url: `/surveys/${required(list.items[0]).source?.id}/outcome-follow-up`,
+      headers: headers(seed.devCookie),
+    });
+    expect(personal.statusCode).toBe(200);
+    expect(personal.json().personal_access).toBe(true);
+    expect(await auditCount()).toBe(before + 2);
+    const outside = await recoveryList(
+      seed.devCookie,
+      `category=bad-outcome-no-followup&managed_system_id=${seed.msB}`,
+    );
+    expect(outside.total).toBe(0);
+  });
+
+  it('pages current recovery gaps with stable distinct identities and count parity', async () => {
+    const seed = await createDashboardScope();
+    await seedVocs(seed.msA, 4, 4, 3, 0);
+    const summary = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    const read = (query: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/dashboard/recovery-items?managed_system_id=${seed.msA}&${query}`,
+        headers: headers(seed.devCookie),
+      });
+    const first = await read('category=unassigned-voc&limit=2');
+    expect(first.statusCode).toBe(200);
+    const body = first.json();
+    expect(body.total).toBe(queue(summary, 'unassigned-voc')?.count);
+    expect(body.items).toHaveLength(2);
+    expect(body.page.has_more).toBe(true);
+    const second = (
+      await read(`category=unassigned-voc&limit=2&cursor=${body.page.cursor}`)
+    ).json();
+    expect(
+      new Set([...body.items, ...second.items].map((item) => item.recovery_item_id)).size,
+    ).toBe(4);
+    expect(second.page.has_more).toBe(false);
+    const refresh = (await read('category=unassigned-voc&limit=2')).json();
+    expect(refresh.items).toEqual(body.items);
+    const high = (await read('category=high-severity-unlinked')).json();
+    for (const item of high.items) {
+      const unassigned = [...body.items, ...second.items].find(
+        (row) => row.source?.id === item.source?.id,
+      );
+      expect(item.recovery_item_id).not.toBe(unassigned.recovery_item_id);
+    }
+    const home = (await read('view=actionable')).json();
+    // Read grants/assignment never confer voc.triage.
+    expect(home.items).toEqual([]);
+    expect(home.total).toBe(0);
+    expect(new Date(summary.computed_at).toISOString()).toBe(summary.computed_at);
+    const mixed = await read('limit=2');
+    let mixedBody = recoveryListSchema.parse(mixed.json());
+    const mixedItems = [...mixedBody.items];
+    while (mixedBody.page.has_more) {
+      mixedBody = recoveryListSchema.parse(
+        (await read(`limit=2&cursor=${required(mixedBody.page.cursor)}`)).json(),
+      );
+      mixedItems.push(...mixedBody.items);
+    }
+    expect(mixedItems).toHaveLength(7);
+    expect(new Set(mixedItems.map((item) => item.recovery_item_id)).size).toBe(7);
+    expect(mixedItems.map((item) => item.category)).toEqual([
+      ...Array(3).fill('high-severity-unlinked'),
+      ...Array(4).fill('unassigned-voc'),
+    ]);
+    expect(
+      (await read(`category=unassigned-voc&view=actionable&cursor=${body.page.cursor}`)).statusCode,
+    ).toBe(422);
+    const incompatible = await read(
+      `category=high-severity-unlinked&limit=2&cursor=${body.page.cursor}`,
+    );
+    expect(incompatible.statusCode).toBe(422);
+  });
+
+  it('fails closed when every Survey system is denied to an Admin', async () => {
+    const seed = await createDashboardScope();
+    await seedSurveyGaps(seed.msA, 2);
+    await seedSurveyGaps(seed.msB, 3);
+    // Prove the fixtures qualify for the aggregate before removing all Survey read scope.
+    const unrestricted = await get(adminCookie);
+    expect(unrestricted.statusCode).toBe(200);
+    expect(
+      queue(unrestricted.json<Summary>(), 'bad-outcome-no-followup')?.count,
+    ).toBeGreaterThanOrEqual(5);
+    for (const [systemId, count] of [
+      [seed.msA, 2],
+      [seed.msB, 3],
+    ] as const) {
+      const selected = await get(adminCookie, systemId);
+      expect(selected.statusCode).toBe(200);
+      expect(queue(selected.json<Summary>(), 'bad-outcome-no-followup')?.count).toBe(count);
+    }
+    const systems = await migrateHandle.pool.query<{ id: string }>(
+      'SELECT id FROM core.managed_systems WHERE workspace_id = $1::uuid',
+      [WORKSPACE_ID],
+    );
+    const denyIds: string[] = [];
+    try {
+      for (const { id: systemId } of systems.rows) {
+        denyIds.push(
+          await denyCapability(
+            migrateHandle,
+            WORKSPACE_ID,
+            adminActorId,
+            'survey.read',
+            systemId,
+            adminActorId,
+          ),
+        );
+      }
+      // An empty effective scope must never reach 0052's unrestricted [] branch.
+      // Check summary first so the regression fails independently of recovery routes.
+      for (const selector of ['all', seed.msA, seed.msB]) {
+        const response = await get(adminCookie, selector);
+        expect(response.statusCode).toBe(200);
+        const body = response.json<Summary>();
+        expect(queue(body, 'bad-outcome-no-followup')?.count ?? 0).toBe(0);
+        for (const row of systemRows(body)) {
+          expect(row.action_queues?.['bad-outcome-no-followup'] ?? 0).toBe(0);
+        }
+      }
+      const deniedList = await recoveryList(adminCookie, 'category=bad-outcome-no-followup');
+      expect(deniedList.total).toBe(0);
+      expect(
+        (
+          await recoveryList(
+            adminCookie,
+            `category=bad-outcome-no-followup&managed_system_id=${seed.msA}`,
+          )
+        ).total,
+      ).toBe(0);
+      const survey = required(
+        (
+          await migrateHandle.pool.query<{ id: string }>(
+            'SELECT id FROM survey.surveys WHERE primary_managed_system_id = $1::uuid',
+            [seed.msA],
+          )
+        ).rows[0],
+      );
+      const token = `r1_${Buffer.concat([Buffer.from([5]), Buffer.from(survey.id.replaceAll('-', ''), 'hex')]).toString('base64url')}`;
+      expect((await recoveryDetail(adminCookie, token)).statusCode).toBe(404);
+    } finally {
+      // Remove only this test's denies before fixture cleanup deletes systems/actors.
+      await migrateHandle.pool.query(
+        'DELETE FROM permission.permission_denies WHERE id = ANY($1::uuid[])',
+        [denyIds],
+      );
+    }
+  });
   it('limits a developer to their one Managed System and omits unavailable entries', async () => {
     const seed = await createDashboardScope();
     const before = (await get(seed.devCookie)).json<Summary>();
@@ -1288,6 +1944,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       action_queues: [],
       coverage: [],
       by_managed_system: [],
+      computed_at: expect.any(String),
     });
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
   });

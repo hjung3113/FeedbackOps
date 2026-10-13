@@ -2,7 +2,9 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
+import { findingRecoveryPredicate } from '../findings/index.js';
 import type { Scope } from '../permissions/scope-service.js';
+import { taskRecoveryPredicate } from '../tasks/index.js';
 
 function scopePredicate(
   column: string,
@@ -31,12 +33,9 @@ export async function countActiveFindingsWithoutExecution(
     db,
     sql`
     SELECT count(*)::int AS count FROM finding.findings f
-    WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
+    WHERE f.workspace_id = ${workspaceId}
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
-      AND f.linked_task_id IS NULL
-      AND NOT EXISTS (SELECT 1 FROM core.entity_links_app el WHERE el.workspace_id = f.workspace_id
-        AND el.status = 'active' AND el.source_type = 'finding' AND el.source_id = f.id
-        AND el.target_type = 'task_request' AND el.relation_type = 'requested_task')
+      AND ${findingRecoveryPredicate()}
   `,
   );
 }
@@ -110,23 +109,9 @@ export async function countReleasedTasksWithUnresolvedVoc(
     SELECT count(*)::int AS count
     FROM task.tasks t
     WHERE t.workspace_id = ${workspaceId}
-      AND t.status = 'released'
+
       AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}
-      AND EXISTS (
-        SELECT 1
-        FROM core.entity_links_app link
-        JOIN voc.vocs voc
-          ON voc.id = link.source_id
-         AND voc.workspace_id = link.workspace_id
-         AND voc.archived_at IS NULL
-        WHERE link.workspace_id = t.workspace_id
-          AND link.source_type = 'voc'
-          AND link.target_type = 'task'
-          AND link.target_id = t.id
-          AND link.relation_type = 'evidence_of'
-          AND link.status = 'active'
-          AND voc.reporter_facing_status NOT IN ('resolved', 'closed')
-      )
+      AND ${taskRecoveryPredicate(workspaceId)}
   `,
   );
 }
@@ -191,6 +176,13 @@ export async function countSurveyGaps(
   managedSystemId?: string,
 ) {
   const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
+  if (
+    scope.kind === 'scoped' &&
+    (scope.managedSystemIds.length === 0 ||
+      (selectedManagedSystemId !== undefined &&
+        !scope.managedSystemIds.includes(selectedManagedSystemId)))
+  )
+    return 0;
   const managedSystemIds =
     selectedManagedSystemId === undefined
       ? scope.kind === 'all'

@@ -14,7 +14,7 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 - Integration answers: Where is source evidence, synthesis, execution, or validation disconnected?
 ```
 
-The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; implementation is pending. `GET /dashboard/summary` is currently shipped. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
+The recovery-item model is accepted for close-out by ADR-0067, superseding ADR-0059 D3; 56-G implements summary freshness and live recovery list/detail. Presentation/history/occurrence tracking (56-H) and shared frontend navigation (56-I) remain pending. All six D3 capabilities are required within the bounded contract below, preserving ADR-0055.
 
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
@@ -376,7 +376,23 @@ Acceptance Criteria:
 - Export-heavy analytics
 ```
 
-## Close-out bounded recovery contract (ADR-0067; implementation pending)
+## Close-out bounded recovery contract (ADR-0067; staged G/H/I)
+
+56-G implements `GET /dashboard/recovery-items` (strict `view=operational|actionable`, default
+50/max 100) and `GET /dashboard/recovery-items/:id`, plus required server `computed_at` on
+summary/list/detail. Scope/category/current owner repair eligibility precede count and paging.
+G strict DTOs contain identity, state, reason/priority/severity, safe source/affected summaries,
+current repair intents and derived hints. They omit occurrence, presentation, hidden totals,
+resolution metadata and history. Deterministic opaque category/source addresses may return a
+readable resolved selection without proof of an earlier gap; they grant no access. Unknown,
+foreign, incompatible or unreadable addresses share 404. G's Survey list counts Surveys while
+summary retains response counts; this is the explicit parity exception. Empty Survey scopes
+fail closed, and generic holder/non-holder reads disclose no personal responses or audits.
+Wire format, compatibility and action fields: `docs/implementation/api/dashboard.md`.
+
+The following occurrence/presentation/history capabilities are 56-H target behavior; the
+rendered navigation, hiding controls and computation-time display are 56-I work. Only G's
+live reads are implemented in this chunk.
 
 The six emitted queue IDs/grains are `unassigned-voc` (VOC), `high-severity-unlinked`
 (VOC), `actionable-finding-no-execution` (Finding), `released-task-unresolved-voc`

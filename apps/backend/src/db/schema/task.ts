@@ -93,6 +93,9 @@ export const tasks = taskSchema.table(
       'tasks_responsibility_xor_check',
       sql`${t.assigneeActorId} IS NULL OR ${t.assigneeTeamId} IS NULL`,
     ),
+    recoveryReleasedIdx: index('tasks_recovery_released_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.status} = 'released'`),
     workspaceDisplayUq: uniqueIndex('tasks_workspace_display_id_uq').on(t.workspaceId, t.displayId),
     workspaceStatusIdx: index('tasks_workspace_status_idx').on(t.workspaceId, t.status),
     workspaceManagedSystemIdx: index('tasks_workspace_managed_system_idx').on(

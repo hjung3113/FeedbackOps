@@ -26,6 +26,7 @@ const AREA_A = '88888888-0000-0000-0000-0000000000a1';
 // row's high-severity queue); a permitted empty result renders the digit 0
 // (MS_A finding-execution 0/4, MS_A unassigned-voc 0, MS_B bad-outcome 0).
 const SUMMARY = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: { coverage_percent: 18 },
   action_queues: [
     {
@@ -86,6 +87,7 @@ const SUMMARY = dashboardSummarySchema.parse({
 // action_queues, and by_managed_system empty. The page must explain
 // availability, not render zeros.
 const EMPTY_SUMMARY = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {},
   action_queues: [],
   coverage: [],

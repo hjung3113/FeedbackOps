@@ -75,6 +75,7 @@ const dashboardCoverageCellSchema = z.object({
 }).strict();
 
 export const dashboardSummarySchema = z.object({
+  computed_at: z.string().datetime(),
   kpis: z.object({
     open_voc: z.number().int().nonnegative().optional(),
     active_finding: z.number().int().nonnegative().optional(),
@@ -172,3 +173,145 @@ export const DASHBOARD_HOP_ROUTES = {
   'bad-outcome-no-followup': DASHBOARD_OUTCOME_SURVEYS_ROUTE,
   'permission-requests-pending': DASHBOARD_PERMISSION_REQUESTS_ROUTE,
 } as const satisfies Record<DashboardHopId, string>;
+
+// 56-G only: no occurrence, presentation or history fields until 56-H.
+export const RECOVERY_CATEGORIES = [
+  'unassigned-voc',
+  'high-severity-unlinked',
+  'actionable-finding-no-execution',
+  'released-task-unresolved-voc',
+  'bad-outcome-no-followup',
+  'permission-requests-pending',
+] as const;
+export const recoveryCategorySchema = z.enum(RECOVERY_CATEGORIES);
+export type RecoveryCategory = z.infer<typeof recoveryCategorySchema>;
+export const recoveryListQuerySchema = z
+  .object({
+    category: recoveryCategorySchema.optional(),
+    managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    view: z.enum(['operational', 'actionable']).default('operational'),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().min(1).max(4096).optional(),
+  })
+  .strict();
+export type RecoveryListQuery = z.infer<typeof recoveryListQuerySchema>;
+const internalRouteSchema = z.string().regex(/^\/(?!\/)[^\\]*$/);
+export const recoveryActionSchema = z
+  .object({
+    id: z.enum([
+      'triage',
+      'plan_execution',
+      'write_public_update',
+      'review_permission',
+      'create_finding',
+    ]),
+    label: z.string(),
+    availability: z.enum(['available', 'blocked_requestable', 'blocked_not_requestable']),
+    blocked_reason: z.string().nullable(),
+    requestable_permission: z
+      .object({ permission: z.string(), managed_system_id: z.string().uuid() })
+      .strict()
+      .nullable(),
+    target: z
+      .object({
+        source_type: z.enum(['voc', 'finding', 'permission_request', 'survey']),
+        source_id: z.string().uuid(),
+        route: internalRouteSchema,
+        endpoint: internalRouteSchema.nullable(),
+        method: z.enum(['POST', 'PATCH']).nullable(),
+        intent: z.string(),
+      })
+      .strict(),
+    confirmation: z
+      .object({
+        required: z.boolean(),
+        title: z.string(),
+        body: z.string(),
+        risk_level: z.enum(['low', 'medium', 'high']),
+        reason_required: z.boolean(),
+        audit_event_intent: z.string().nullable(),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((action, context) => {
+    if (
+      action.availability === 'available' &&
+      (action.blocked_reason !== null || action.requestable_permission !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['availability'],
+        message: 'available action cannot be blocked',
+      });
+    }
+    if (action.availability !== 'available' && action.blocked_reason === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['blocked_reason'],
+        message: 'blocked action requires a reason',
+      });
+    }
+    if (action.availability === 'blocked_requestable' && action.requestable_permission === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['requestable_permission'],
+        message: 'requestable action requires a permission candidate',
+      });
+    }
+    if ((action.target.endpoint === null) !== (action.target.method === null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['target'],
+        message: 'endpoint and method must be specified together',
+      });
+    }
+  });
+export type RecoveryAction = z.infer<typeof recoveryActionSchema>;
+export const recoverySourceSchema = z
+  .object({
+    type: z.enum(['voc', 'finding', 'task', 'permission_request', 'survey']),
+    id: z.string().uuid(),
+    display_id: z.string().nullable(),
+    title: z.string(),
+    route: internalRouteSchema,
+  })
+  .strict();
+export const recoveryResponsibilitySchema = z
+  .object({
+    kind: z.enum(['actor', 'team', 'unassigned', 'multiple', 'admin_queue']),
+    label: z.string(),
+    actor_id: z.string().uuid().optional(),
+    team_id: z.string().uuid().optional(),
+  })
+  .strict();
+export const recoveryItemSchema = z
+  .object({
+    recovery_item_id: z.string().regex(/^r1_[A-Za-z0-9_-]{23}$/),
+    category: recoveryCategorySchema,
+    state: z.enum(['active', 'resolved', 'withdrawn']),
+    reason_code: recoveryCategorySchema,
+    reason: z.string(),
+    priority: z.number().int().nonnegative(),
+    severity: z.enum(['urgent', 'warn', 'info']),
+    managed_system_id: z.string().uuid().nullable(),
+    source: recoverySourceSchema.nullable(),
+    affected: z.array(recoverySourceSchema).max(100),
+    next_actions: z.array(recoveryActionSchema),
+    responsible_actor_hint: recoveryResponsibilitySchema,
+  })
+  .strict();
+export type RecoveryItem = z.infer<typeof recoveryItemSchema>;
+export const recoveryListSchema = z
+  .object({
+    computed_at: z.string().datetime(),
+    items: z.array(recoveryItemSchema).max(100),
+    total: z.number().int().nonnegative(),
+    page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
+  })
+  .strict();
+export type RecoveryList = z.infer<typeof recoveryListSchema>;
+export const recoveryDetailSchema = recoveryItemSchema
+  .extend({ computed_at: z.string().datetime() })
+  .strict();
+export type RecoveryDetail = z.infer<typeof recoveryDetailSchema>;

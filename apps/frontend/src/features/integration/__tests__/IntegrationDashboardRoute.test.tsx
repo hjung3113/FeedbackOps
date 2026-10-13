@@ -94,6 +94,7 @@ const queueFixtures = [
 ] as const;
 
 const SUMMARY = dashboardSummarySchema.parse({
+  computed_at: '2026-10-13T00:00:00.000Z',
   kpis: {},
   action_queues: queueFixtures,
   coverage: [

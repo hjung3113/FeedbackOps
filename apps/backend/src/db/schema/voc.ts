@@ -84,6 +84,14 @@ export const vocs = vocSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    recoveryUnassignedIdx: index('vocs_recovery_unassigned_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(
+        sql`${t.archivedAt} IS NULL AND ${t.ownerUserId} IS NULL AND ${t.ownerTeamId} IS NULL`,
+      ),
+    recoveryHighIdx: index('vocs_recovery_high_idx')
+      .on(t.workspaceId, t.primaryManagedSystemId, t.id)
+      .where(sql`${t.archivedAt} IS NULL AND ${t.severity} IN ('high', 'critical')`),
     workspaceDisplayUq: uniqueIndex('vocs_workspace_display_id_uq').on(t.workspaceId, t.displayId),
     inboxIdx: index('vocs_inbox_idx').on(
       t.workspaceId,
