@@ -156,7 +156,7 @@ export function TaskRequestsRoute({
             action={
               showReviewerFilter ? (
                 <Select value={filterValue} onValueChange={applyFilterValue}>
-                  <SelectTrigger aria-label="검토자 필터" className="h-8 w-44 text-xs">
+                  <SelectTrigger density="compact" aria-label="검토자 필터" className="w-44">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
