@@ -52,16 +52,13 @@ GRANT CREATE ON SCHEMA survey TO fops_survey_provenance_mutator_owner;
 --> statement-breakpoint
 ALTER FUNCTION survey.lock_attachment_response(uuid,uuid) OWNER TO fops_survey_provenance_mutator_owner;
 --> statement-breakpoint
-REVOKE CREATE ON SCHEMA survey FROM fops_survey_provenance_mutator_owner;
---> statement-breakpoint
 SET ROLE fops_survey_provenance_mutator_owner;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION survey.lock_attachment_response(uuid,uuid) FROM PUBLIC, fops_app;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION survey.lock_attachment_response(uuid,uuid) TO fops_app;
 --> statement-breakpoint
-RESET ROLE;
---> statement-breakpoint
+-- Replacing an owned definer requires its owner (fops_migrate does not inherit owner roles).
 CREATE OR REPLACE FUNCTION survey.check_finding_response_binding()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE parent_id uuid; parent_workspace uuid;
@@ -132,7 +129,15 @@ BEGIN
   THEN RAISE EXCEPTION 'Survey highlight requires a consistent private binding' USING ERRCODE='23514'; END IF;
   RETURN NULL;
 END $$;
+--> statement-breakpoint
+RESET ROLE;
+--> statement-breakpoint
+REVOKE CREATE ON SCHEMA survey FROM fops_survey_provenance_mutator_owner;
 
+--> statement-breakpoint
+GRANT CREATE ON SCHEMA core TO fops_entity_links_survey_mutator_owner;
+--> statement-breakpoint
+SET ROLE fops_entity_links_survey_mutator_owner;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION core.create_survey_finding_link(
   p_workspace uuid, p_response uuid, p_finding uuid, p_relation text,
@@ -179,10 +184,10 @@ END $$;
 --> statement-breakpoint
 -- CREATE OR REPLACE retains ownership/ACLs; explicitly reaffirm the changed
 -- Entity Links callable surface in the same migration transaction.
-SET ROLE fops_entity_links_survey_mutator_owner;
---> statement-breakpoint
 REVOKE ALL ON FUNCTION core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION core.create_survey_finding_link(uuid,uuid,uuid,text,uuid,uuid) TO fops_app;
 --> statement-breakpoint
 RESET ROLE;
+--> statement-breakpoint
+REVOKE CREATE ON SCHEMA core FROM fops_entity_links_survey_mutator_owner;
