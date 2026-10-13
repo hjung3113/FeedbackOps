@@ -90,8 +90,15 @@ export function HomeScreen({
     retry: false,
   });
   const pendingRequests = useQuery({
-    queryKey: ['home-pending-task-requests'] as const,
-    queryFn: ({ signal }) => fetchTaskRequests({ status: 'pending_review', signal }),
+    queryKey: ['home-pending-task-requests', me.data?.actor.id, managedSystemId] as const,
+    enabled: me.data?.actor.id !== undefined,
+    queryFn: ({ signal }) =>
+      fetchTaskRequests({
+        status: 'pending_review',
+        reviewer: 'me',
+        ...(managedSystemId === undefined ? {} : { managed_system_id: managedSystemId }),
+        signal,
+      }),
     retry: false,
   });
   const openPermissionRequests = useQuery({

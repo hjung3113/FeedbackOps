@@ -69,10 +69,12 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'task_request_self_approval_denied',
   'task_created_from_request',
   'task_linked_to_request',
+  'task_request_reviewer_assigned',
   'finding_task_linked',
   'task_status_changed',
   'task_comment_created',
   'task_milestone_assigned',
+  'task_responsibility_assigned',
   'milestone_created',
   'milestone_updated',
   'public_update_review_candidate_created',
@@ -103,7 +105,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(83);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(85);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

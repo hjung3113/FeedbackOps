@@ -175,6 +175,7 @@ export const milestoneTasksFixture: TaskDto[] = [
     // Prototype TASK-902 assignee is u-4 (data.js:382), not u-5; u5 stays on
     // the Notification Reliability milestone it actually owns.
     assignee_actor_id: MILESTONE_ACTOR_IDS.u4,
+    assignee_team_id: null,
     due_date: '2026-06-15',
     milestone_id: MILESTONE_IDS.sso,
     analytics_area_id: MILESTONE_ANALYTICS_AREA_IDS.product,

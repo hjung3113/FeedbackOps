@@ -1,3 +1,6 @@
+import { assignTaskRequestReviewer } from '@/lib/api/task-requests';
+import { GLOSSARY } from '@/lib/copy/glossary';
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { shortId } from '@/lib/identity';
 import type { TaskRequestDto } from '@fops/shared';
 import {
@@ -7,6 +10,7 @@ import {
   UnassignedBadge,
   UserChip,
 } from '@fops/ui';
+import { ResponsibilityEditor } from '../../components/ResponsibilityEditor';
 
 import type { NameMaps } from './TaskRequestRow';
 
@@ -14,7 +18,9 @@ export function TaskRequestPropertiesSection({
   item,
   names,
   reviewer,
+  canAssign,
 }: {
+  canAssign?: boolean;
   item: TaskRequestDto;
   names: NameMaps;
   reviewer: NameMaps['actorsById'][string] | undefined;
@@ -35,6 +41,36 @@ export function TaskRequestPropertiesSection({
             </span>
           )}
         </span>
+      </FieldRow>
+      <FieldRow label={RESPONSIBILITY_COPY.reviewer}>
+        {canAssign !== undefined ? (
+          <ResponsibilityEditor
+            key={`${item.id}:${item.updated_at}`}
+            label={RESPONSIBILITY_COPY.reviewer}
+            actorId={item.assigned_reviewer_actor_id}
+            teamId={item.assigned_reviewer_team_id}
+            canEdit={canAssign}
+            onSave={(actorId, teamId, key) =>
+              assignTaskRequestReviewer(
+                item.id,
+                {
+                  assigned_reviewer_actor_id: actorId,
+                  assigned_reviewer_team_id: teamId,
+                },
+                key,
+              )
+            }
+          />
+        ) : (
+          <span>
+            {item.assigned_reviewer_actor_id
+              ? (names.actorsById[item.assigned_reviewer_actor_id]?.display_name ??
+                GLOSSARY.unknownUser)
+              : item.assigned_reviewer_team_id
+                ? `팀 ${shortId(item.assigned_reviewer_team_id)}`
+                : '미배정'}
+          </span>
+        )}
       </FieldRow>
       <FieldRow label="검토자">
         {reviewer ? (

@@ -147,7 +147,14 @@ export function createHomeRequestHandlers(context: MockApiContext): MockApiHandl
       path: '/task-requests',
       handle: (route) =>
         json(route, 200, {
-          items: home === 'populated' || home === 'unscoped' ? homeMyWorkRequestsFixture : [],
+          items:
+            home === 'populated' || home === 'unscoped'
+              ? homeMyWorkRequestsFixture.filter(
+                  (item) =>
+                    new URL(route.request().url()).searchParams.get('reviewer') !== 'me' ||
+                    item.assigned_reviewer_actor_id === context.reporterActorId,
+                )
+              : [],
         }),
     },
     {

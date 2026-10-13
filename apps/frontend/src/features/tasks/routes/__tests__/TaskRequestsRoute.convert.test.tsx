@@ -1,3 +1,4 @@
+import { resolveActors } from '@/lib/api';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
@@ -52,6 +53,8 @@ const taskRequest = {
   requested_outcome: requestedOutcome225,
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'approved' as const,
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -244,6 +247,39 @@ describe('TaskRequestsRoute conversion priority labels', () => {
     },
   );
 
+  it.each([
+    ['자동 배정', {}],
+    ['미배정', { assignee_actor_id: null, assignee_team_id: null }],
+  ])('submits %s responsibility without conflating omission and null', async (label, expected) => {
+    api.convertTaskRequest.mockClear();
+    await openConvertForm();
+    await chooseOption('담당자', label as string);
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
+    const body = api.convertTaskRequest.mock.calls[0]?.[1];
+    expect(body).toMatchObject(expected);
+    if (label === '자동 배정') {
+      expect(body).not.toHaveProperty('assignee_actor_id');
+      expect(body).not.toHaveProperty('assignee_team_id');
+    }
+  });
+
+  it.each(['actor', 'team'] as const)('submits an explicit %s assignment with the other destination null', async (mode) => {
+    const id = '60000000-0000-0000-0000-000000000006';
+    vi.mocked(resolveActors).mockResolvedValueOnce({ actors: [{ id, display_name: '담당 운영자', email: 'operator@example.test' }], teams: [] });
+    api.convertTaskRequest.mockClear();
+    await openConvertForm();
+    await chooseOption('담당자', mode === 'actor' ? '사용자 지정' : '팀 지정');
+    expect(screen.getByTestId('task-request-convert-submit')).toBeDisabled();
+    if (mode === 'actor') await chooseOption('담당 사용자', '담당 운영자');
+    else fireEvent.change(screen.getByRole('textbox', { name: '팀 ID' }), { target: { value: id } });
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => expect(api.convertTaskRequest).toHaveBeenCalled());
+    expect(api.convertTaskRequest.mock.calls[0]?.[1]).toMatchObject({
+      assignee_actor_id: mode === 'actor' ? id : null, assignee_team_id: mode === 'team' ? id : null,
+    });
+  });
+
   it('submits the selected shared priority, due date, and milestone values unchanged', async () => {
     await openConvertForm();
     await chooseOption('우선순위', TASK_PRIORITY_LABELS.urgent);
@@ -259,7 +295,6 @@ describe('TaskRequestsRoute conversion priority labels', () => {
         {
           title: `${requestedOutcome225.slice(0, taskTitleMaxLength - truncationMarker.length)}${truncationMarker}`,
           priority: 'urgent',
-          assignee_actor_id: null,
           due_date: '2026-09-30',
           milestone_id: milestoneForRequestSystem.id,
           analytics_area_id: null,

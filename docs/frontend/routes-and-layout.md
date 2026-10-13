@@ -458,7 +458,7 @@ History is three calendar months, currently permission-filtered.
 Survey response selection/actions/history remain on `/surveys/:surveyId/follow-up` under
 ADR-0055's personal seam, never generic response-derived URL identities for non-holders.
 Home item queues require current action capability; operational summary counts stay scope-wide.
-Proposed/new Task Request URL `reviewer` (Actor UUID/`me`) and `reviewerTeam` (team UUID)
+Task Request URL `reviewer` (Actor UUID/`me`) and `reviewerTeam` (team UUID)
 map to backend assigned-reviewer filters in `view=requests`; omitted means full authorized
 review queue. Home's personal request panel sends `reviewer=me`; team membership is not
 inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.
@@ -536,3 +536,12 @@ Finding responsibility (#1090): the source-owned list uses persisted owner field
 owner display and `assignment=assigned|unassigned` URL filter. Owner-only detail edits preserve
 workflow status, refetch detail/list/Home/navigation counts after success, and keep the editor
 open on failure without retrying a mutation. The creator is displayed separately as provenance.
+
+Task responsibility UI (#1091) keeps assigned reviewers distinct from actual decision Actors.
+Task Request properties and Task detail edit the source Actor/team/null pair through their
+owned APIs; backend authority remains canonical. Conversion starts in automatic mode and
+omits both keys; deliberate unassignment sends both null, and Actor/team modes send only one
+non-null destination. Responsibility draft state resets with the existing conversion
+item/scope/form lifecycle. Team labels remain teams, including board grouping/filtering and
+unassigned counts; no personal member is selected. Reviewer URL changes preserve Managed
+System and other search context, clear the old selection and restore through browser history.

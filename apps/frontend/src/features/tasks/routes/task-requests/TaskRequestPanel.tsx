@@ -133,7 +133,7 @@ export function TaskRequestPanel({
           <TaskRequestSourceSection item={item} sourceFinding={sourceFindingQuery.data} />
         )}
 
-        <TaskRequestPropertiesSection item={item} names={names} reviewer={reviewer} />
+        <TaskRequestPropertiesSection item={item} names={names} reviewer={reviewer} {...(conversion.canAssign === undefined ? {} : { canAssign: conversion.canAssign })} />
 
         <section data-anchor="audit" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>이력</PanelSectionTitle>

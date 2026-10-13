@@ -31,6 +31,7 @@ const ALLOWED_LINK = {
     priority: 'high',
     primary_managed_system_id: '40000000-0000-0000-0000-000000000004',
     assignee_actor_id: null,
+    assignee_team_id: null,
     due_date: null,
   },
   relation_type: 'requested_task',

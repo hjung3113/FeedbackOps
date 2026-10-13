@@ -11,6 +11,7 @@ export const TASK_AUDIT_EVENT_TYPES = [
   'task_status_changed',
   'task_comment_created',
   'task_milestone_assigned',
+  'task_responsibility_assigned',
 ] as const;
 
 export const taskStatusChangedDetailSchema = z
@@ -38,8 +39,18 @@ export const taskMilestoneAssignedDetailSchema = z
   .strict();
 export type TaskMilestoneAssignedDetail = z.infer<typeof taskMilestoneAssignedDetailSchema>;
 
+export const taskResponsibilityAssignedDetailSchema = z
+  .object({
+    from_actor_id: z.string().uuid().nullable(),
+    from_team_id: z.string().uuid().nullable(),
+    to_actor_id: z.string().uuid().nullable(),
+    to_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
+
 export const TASK_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_status_changed: taskStatusChangedDetailSchema,
   task_comment_created: taskCommentCreatedDetailSchema,
   task_milestone_assigned: taskMilestoneAssignedDetailSchema,
+  task_responsibility_assigned: taskResponsibilityAssignedDetailSchema,
 } as const satisfies Record<(typeof TASK_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

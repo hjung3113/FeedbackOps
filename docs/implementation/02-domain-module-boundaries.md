@@ -344,3 +344,15 @@ Entity Links' existing `createSurveyFindingLink` owns the canonical active inter
 `evidence_of`; the 0066 extension verifies the private attachment witness. These
 seams do not grant source modules ownership of Finding writes or change inventory
 and personal Results/creation contracts.
+
+### Task responsibility routing inputs (#1091)
+
+Task Request and Task share the Task-owned `tasks/responsibility.ts` destination resolver.
+It consumes `managed-systems/index.ts` locked defaults/diagnostics, Auth's public Actor lock,
+Finding's public authorization and `analytics-areas/index.ts` locked owner-team input.
+Core's `core/read-projections.ts` exports `readResponsibilityTeam` for transaction-aware
+same-workspace active-team input; destinations retain eligibility and all assignment writes.
+The Analytics Area lock preserves its prior signature and adds `owner_team_id` for both
+source workers. Cluster has no direct Area and no member-derived rule. The conductor must
+check this shared reader against parallel #1090 at integration; this worker touches no
+VOC/Finding creation command.

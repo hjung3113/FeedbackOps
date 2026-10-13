@@ -171,6 +171,7 @@ describe('<VocDetailPanel>', () => {
       priority: 'critical',
       primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
       assignee_actor_id: OTHER_ACTOR_ID,
+      assignee_team_id: null,
       due_date: null,
     },
   };
@@ -183,6 +184,7 @@ describe('<VocDetailPanel>', () => {
     status: 'done',
     priority: 'urgent',
     assignee_actor_id: OTHER_ACTOR_ID,
+    assignee_team_id: null,
     due_date: '2026-07-31',
     milestone_id: null,
     analytics_area_id: null,

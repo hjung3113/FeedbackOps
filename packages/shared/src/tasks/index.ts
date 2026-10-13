@@ -21,6 +21,7 @@ export const taskDtoSchema = z
     status: taskStatusSchema,
     priority: taskPrioritySchema,
     assignee_actor_id: z.string().uuid().nullable(),
+    assignee_team_id: z.string().uuid().nullable(),
     due_date: isoDateSchema.nullable(),
     milestone_id: z.string().uuid().nullable(),
     analytics_area_id: z.string().uuid().nullable(),
@@ -28,6 +29,17 @@ export const taskDtoSchema = z
     created_by: z.string().uuid(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
+    default_resolved: z.boolean().optional(),
+    source_rule: z
+      .enum([
+        'explicit',
+        'explicit_null',
+        'managed_system_owner',
+        'analytics_area_owner',
+        'workspace_fallback_queue',
+      ])
+      .optional(),
+    managed_system_id: z.string().uuid().optional(),
   })
   .strict();
 export type TaskDto = z.infer<typeof taskDtoSchema>;
@@ -109,6 +121,7 @@ export const convertTaskRequestRequestSchema = z
     title: z.string().trim().min(1).max(200),
     priority: taskPrioritySchema.default('medium'),
     assignee_actor_id: z.string().uuid().nullable().optional(),
+    assignee_team_id: z.string().uuid().nullable().optional(),
     due_date: isoDateSchema.nullable().optional(),
     milestone_id: z.string().uuid().nullable().optional(),
     analytics_area_id: z.string().uuid().nullable().optional(),
@@ -127,6 +140,7 @@ export const listTasksQuerySchema = z
   .object({
     status: taskStatusSchema.optional(),
     assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
+    assignee_team_id: z.string().uuid().optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     public_update: z.literal('missing').optional(),
     milestone_id: z.string().uuid().optional(),
@@ -145,3 +159,11 @@ export const listTasksResponseSchema = z
   })
   .strict();
 export type ListTasksResponse = z.infer<typeof listTasksResponseSchema>;
+
+export const assignTaskResponsibilityRequestSchema = z
+  .object({
+    assignee_actor_id: z.string().uuid().nullable(),
+    assignee_team_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type AssignTaskResponsibilityRequest = z.infer<typeof assignTaskResponsibilityRequestSchema>;

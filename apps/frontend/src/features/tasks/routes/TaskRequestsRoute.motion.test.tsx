@@ -58,6 +58,8 @@ const rows: TaskRequestDto[] = [1, 2, 3].map((n) => ({
   requested_outcome: `Request ${n}`,
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,

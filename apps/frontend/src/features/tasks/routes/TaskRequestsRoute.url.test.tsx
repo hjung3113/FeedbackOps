@@ -68,6 +68,8 @@ const first: TaskRequestDto = {
   requested_outcome: 'Request A',
   requester_actor_id: 'actor',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -520,3 +522,25 @@ it.each(['row', 'scope+param'] as const)(
     replace.mockRestore();
   },
 );
+
+it('restores reviewer filters through URL navigation without changing scope or operational summary', async () => {
+  mockQueue([first, second]);
+  const mounted = mount(`${initial}&reviewer=me`);
+  await settledQueue(mounted);
+  expect(
+    vi
+      .mocked(fetchTaskRequests)
+      .mock.calls.some(
+        ([options]) => options?.reviewer === 'me' && options.managed_system_id === A,
+      ),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('combobox', { name: '검토자 필터' }));
+  fireEvent.click(await screen.findByRole('option', { name: '모든 검토자' }));
+  await waitFor(() => expect(mounted.router.state.location.search.reviewer).toBeUndefined());
+  expect(mounted.router.state.location.search.managedSystem).toBe(A);
+  await act(async () => {
+    mounted.history.back();
+  });
+  await waitFor(() => expect(mounted.router.state.location.search.reviewer).toBe('me'));
+  expect(screen.getByRole('combobox', { name: '검토자 필터' })).toHaveTextContent('내 검토 요청');
+});

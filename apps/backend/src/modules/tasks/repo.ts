@@ -16,6 +16,7 @@ export interface TaskRow {
   status: TaskStatus;
   priority: TaskPriority;
   assignee_actor_id: string | null;
+  assignee_team_id: string | null;
   due_date: string | null;
   milestone_id: string | null;
   analytics_area_id: string | null;
@@ -40,6 +41,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     status: row.status as TaskStatus,
     priority: row.priority as TaskPriority,
     assignee_actor_id: (row.assignee_actor_id as string | null) ?? null,
+    assignee_team_id: (row.assignee_team_id as string | null) ?? null,
     due_date: (row.due_date as string | null) ?? null,
     milestone_id: (row.milestone_id as string | null) ?? null,
     analytics_area_id: (row.analytics_area_id as string | null) ?? null,
@@ -81,7 +83,7 @@ function mapTaskCommentRow(row: Record<string, unknown>): TaskCommentRow {
 
 const TASK_SELECT = sql`
   id, workspace_id, display_id, primary_managed_system_id, title, status, priority,
-  assignee_actor_id, due_date::text AS due_date, milestone_id, analytics_area_id,
+  assignee_actor_id, assignee_team_id, due_date::text AS due_date, milestone_id, analytics_area_id,
   source_task_request_id, created_by, created_at, updated_at
 `;
 
@@ -93,6 +95,7 @@ export async function insertTask(
     title: string;
     priority: TaskPriority;
     assigneeActorId: string | null;
+    assigneeTeamId?: string | null;
     dueDate: string | null;
     milestoneId: string | null;
     analyticsAreaId: string | null;
@@ -111,12 +114,12 @@ export async function insertTask(
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO task.tasks (
       workspace_id, display_id, primary_managed_system_id, title, status, priority,
-      assignee_actor_id, due_date, milestone_id, analytics_area_id,
+      assignee_actor_id, assignee_team_id, due_date, milestone_id, analytics_area_id,
       source_task_request_id, created_by
     )
     VALUES (
       ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
-      'backlog', ${input.priority}, ${input.assigneeActorId}, ${input.dueDate},
+      'backlog', ${input.priority}, ${input.assigneeActorId}, ${input.assigneeTeamId ?? null}, ${input.dueDate},
       ${input.milestoneId}, ${input.analyticsAreaId}, ${input.sourceTaskRequestId},
       ${input.createdBy}
     )
@@ -281,6 +284,7 @@ interface ListInput {
   workspaceId: string;
   status?: TaskStatus;
   assigneeActorId?: string;
+  assigneeTeamId?: string;
   managedSystemId?: string;
   publicUpdate?: 'missing';
   milestoneId?: string;
@@ -292,6 +296,8 @@ interface ListInput {
 function listPredicates(input: ListInput) {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
   if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
+  if (input.assigneeTeamId !== undefined)
+    predicates.push(sql`assignee_team_id = ${input.assigneeTeamId}`);
   if (input.assigneeActorId !== undefined) {
     predicates.push(sql`assignee_actor_id = ${input.assigneeActorId}`);
   }
@@ -505,4 +511,22 @@ export async function resolveTaskSource(
         ? findingSourceId
         : null;
   return { source, vocId };
+}
+
+export async function updateTaskResponsibility(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    actorId: string | null;
+    teamId: string | null;
+  },
+): Promise<TaskRow> {
+  const rows = await tx.execute(sql`UPDATE task.tasks SET
+    assignee_actor_id = ${input.actorId}, assignee_team_id = ${input.teamId}, updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')
+    WHERE workspace_id = ${input.workspaceId} AND id = ${input.taskId}
+    RETURNING ${TASK_SELECT}`);
+  const row = rows.rows[0];
+  if (!row) throw new Error('updateTaskResponsibility returned no row');
+  return mapTaskRow(row);
 }

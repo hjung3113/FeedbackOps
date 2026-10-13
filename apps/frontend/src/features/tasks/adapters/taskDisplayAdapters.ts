@@ -1,4 +1,6 @@
+import { resolveActors } from '@/lib/api/actors';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { shortId } from '@/lib/identity';
 import type { TaskDto } from '@fops/shared';
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
@@ -36,4 +38,25 @@ export function resolveTaskAssignee(
 
 export function taskPriorityToSeverity(priority: TaskDto['priority']): TaskSeverity {
   return priority === 'urgent' ? 'critical' : priority;
+}
+
+/** Resolve only persisted team IDs; team membership never becomes personal assignment. */
+export function useTaskTeamNames(tasks: readonly TaskDto[]): ReadonlyMap<string, string> {
+  const ids = [
+    ...new Set(tasks.flatMap((task) => (task.assignee_team_id ? [task.assignee_team_id] : []))),
+  ].sort();
+  const query = useQuery({
+    queryKey: ['actors-resolve', [], ids],
+    enabled: ids.length > 0,
+    queryFn: ({ signal }) => resolveActors({ teamIds: ids }, signal),
+    staleTime: 60_000,
+  });
+  return React.useMemo(
+    () => new Map((query.data?.teams ?? []).map((team) => [team.id, team.name])),
+    [query.data],
+  );
+}
+
+export function taskTeamLabel(teamId: string, names: ReadonlyMap<string, string>): string {
+  return names.get(teamId) ?? `팀 ${shortId(teamId)}`;
 }

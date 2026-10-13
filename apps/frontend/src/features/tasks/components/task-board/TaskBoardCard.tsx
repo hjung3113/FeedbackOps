@@ -105,7 +105,9 @@ function TaskBoardCardContent({
           <span className="h-1.5 w-1.5 rounded-full bg-accent-info" />
           {managedSystemName}
         </span>
-        {assigneeName ? (
+        {task.assignee_team_id ? (
+          <span>{assigneeName}</span>
+        ) : assigneeName ? (
           <UserAvatar user={{ display_name: assigneeName }} size="sm" />
         ) : (
           <UnassignedBadge />

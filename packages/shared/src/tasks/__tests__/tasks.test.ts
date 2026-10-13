@@ -16,6 +16,7 @@ const baseTask = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: null,
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,

@@ -551,7 +551,8 @@ these columns; no table-wide privilege widening or bootstrap-role change is need
 The new Core diagnostic input table has runtime SELECT/INSERT only; `core.teams` stays
 SELECT-only and `core.audit_log` immutable. Generated SQL/journal/snapshot ship together.
 Workspace/active-team and Actor eligibility checks apply to explicit registry defaults;
-source-creation validation/routing remain #1090/#1091. The failure-input/read contract is
+Task Request creation and Task conversion/edit validation/routing are implemented by #1091;
+VOC/Finding creation remains #1090. No additional migration or grant widening is required. The failure-input/read contract is
 `docs/implementation/api/core.md`.
 
 ## ADR-0064 #740 canonical read cutover

@@ -1,3 +1,4 @@
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import type { TaskPriority } from '@fops/shared';
 import {
@@ -110,21 +111,52 @@ export function TaskRequestConversionForm({
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor="task-request-convert-assignee">담당자</FieldLabel>
         <Select
-          value={conversion.assigneeId || NO_SELECTION}
-          onValueChange={(value) => conversion.setAssigneeId(value === NO_SELECTION ? '' : value)}
+          value={conversion.responsibilityMode}
+          onValueChange={(value) =>
+            conversion.setResponsibilityMode(value as typeof conversion.responsibilityMode)
+          }
         >
           <SelectTrigger id="task-request-convert-assignee" aria-label="담당자">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NO_SELECTION}>미배정</SelectItem>
-            {Object.values(names.actorsById).map((actor) => (
-              <SelectItem key={actor.id} value={actor.id}>
-                {actor.display_name}
+            {Object.entries(RESPONSIBILITY_COPY.modes).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {conversion.responsibilityMode === 'actor' && (
+          <Select
+            value={conversion.assigneeId || NO_SELECTION}
+            onValueChange={(value) => conversion.setAssigneeId(value === NO_SELECTION ? '' : value)}
+          >
+            <SelectTrigger aria-label={RESPONSIBILITY_COPY.actor}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SELECTION}>{RESPONSIBILITY_COPY.selectActor}</SelectItem>
+              {Object.values(names.actorsById).map((actor) => (
+                <SelectItem key={actor.id} value={actor.id}>
+                  {actor.display_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {conversion.responsibilityMode === 'team' && (
+          <>
+            <FieldLabel htmlFor="task-request-convert-team">
+              {RESPONSIBILITY_COPY.teamId}
+            </FieldLabel>
+            <input
+              id="task-request-convert-team"
+              value={conversion.teamId}
+              onChange={(event) => conversion.setTeamId(event.target.value)}
+            />
+          </>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor="task-request-convert-analytics-area">Analytics Area</FieldLabel>

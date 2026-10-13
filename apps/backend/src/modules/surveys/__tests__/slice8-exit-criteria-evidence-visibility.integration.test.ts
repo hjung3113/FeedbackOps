@@ -349,6 +349,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
         'workspace_id',
       ],
       taskRequest: [
+        'assigned_reviewer_actor_id',
+        'assigned_reviewer_team_id',
         'created_at',
         'decision_reason',
         'decided_at',
@@ -369,6 +371,7 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       task: [
         'analytics_area_id',
         'assignee_actor_id',
+        'assignee_team_id',
         'created_at',
         'created_by',
         'display_id',

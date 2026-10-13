@@ -44,6 +44,8 @@ const taskRequest = {
   requested_outcome: 'Task 전환 검토',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,

@@ -47,6 +47,10 @@ export interface UseTaskRequestConversionResult {
   titleMaxLength: number;
   priority: TaskPriority;
   setPriority: (value: TaskPriority) => void;
+  responsibilityMode: 'automatic' | 'unassigned' | 'actor' | 'team';
+  setResponsibilityMode: (value: 'automatic' | 'unassigned' | 'actor' | 'team') => void;
+  teamId: string;
+  setTeamId: (value: string) => void;
   assigneeId: string;
   setAssigneeId: (value: string) => void;
   dueDate: string;
@@ -69,6 +73,7 @@ export interface UseTaskRequestConversionResult {
   /** Last conversion mutation's settled error, independent of toast state. */
   error: Error | null;
   canConvert: boolean;
+  canAssign: boolean;
   canSubmit: boolean;
   submit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
@@ -81,7 +86,9 @@ export function useTaskRequestConversion({
 }: UseTaskRequestConversionArgs): UseTaskRequestConversionResult {
   const queryClient = useQueryClient();
   const itemRef = React.useRef(item);
-  itemRef.current = item;
+  React.useEffect(() => {
+    itemRef.current = item;
+  }, [item]);
   const selectedRequestId = item.id;
   const lastResetRequestIdRef = React.useRef(selectedRequestId);
   const [convertOpen, setConvertOpen] = React.useState(false);
@@ -91,6 +98,10 @@ export function useTaskRequestConversion({
   const [convertTitleError, setConvertTitleError] = React.useState<string | null>(null);
   const convertTitleInputRef = React.useRef<HTMLInputElement>(null);
   const [convertPriority, setConvertPriority] = React.useState<TaskPriority>('medium');
+  const [responsibilityMode, setResponsibilityMode] = React.useState<
+    'automatic' | 'unassigned' | 'actor' | 'team'
+  >('automatic');
+  const [teamId, setTeamId] = React.useState('');
   const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
@@ -107,6 +118,8 @@ export function useTaskRequestConversion({
     setConvertTitleError(null);
     setConvertPriority('medium');
     setConvertAssigneeId('');
+    setResponsibilityMode('automatic');
+    setTeamId('');
     setConvertDueDate('');
     setConvertMilestoneId('');
     setConvertAnalyticsAreaSelection({ kind: 'none' });
@@ -248,7 +261,13 @@ export function useTaskRequestConversion({
         {
           title,
           priority: convertPriority,
-          assignee_actor_id: convertAssigneeId.trim() || null,
+          ...(responsibilityMode === 'automatic'
+            ? {}
+            : responsibilityMode === 'actor'
+              ? { assignee_actor_id: convertAssigneeId.trim(), assignee_team_id: null }
+              : responsibilityMode === 'team'
+                ? { assignee_actor_id: null, assignee_team_id: teamId.trim() }
+                : { assignee_actor_id: null, assignee_team_id: null }),
           due_date: convertDueDate.trim() || null,
           milestone_id: convertMilestoneId || null,
           analytics_area_id:
@@ -264,6 +283,8 @@ export function useTaskRequestConversion({
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
       toast.success(`Task ${task.display_id}로 전환했습니다.`);
       setConvertOpen(false);
     },
@@ -306,6 +327,14 @@ export function useTaskRequestConversion({
     titleMaxLength: TASK_TITLE_MAX_LENGTH,
     priority: convertPriority,
     setPriority: setConvertPriority,
+    responsibilityMode,
+    setResponsibilityMode: (value) => {
+      setResponsibilityMode(value);
+      setConvertAssigneeId('');
+      setTeamId('');
+    },
+    teamId,
+    setTeamId,
     assigneeId: convertAssigneeId,
     setAssigneeId: setConvertAssigneeId,
     dueDate: convertDueDate,
@@ -330,10 +359,13 @@ export function useTaskRequestConversion({
     isPending: convertMutation.isPending,
     result: convertMutation.data ?? null,
     error: convertMutation.error ?? null,
+    canAssign: canManage && (currentRole === 'admin' || currentRole === 'developer'),
     canConvert: canConvertTaskRequest(item.status) && canManage,
     canSubmit:
       canConvertTaskRequest(item.status) &&
       canManage &&
+      (responsibilityMode !== 'actor' || convertAssigneeId.trim() !== '') &&
+      (responsibilityMode !== 'team' || teamId.trim() !== '') &&
       analyticsAreaChoiceInitialized &&
       analyticsAreaSelection.kind !== 'unresolved' &&
       !selectedAnalyticsAreaUnavailable,

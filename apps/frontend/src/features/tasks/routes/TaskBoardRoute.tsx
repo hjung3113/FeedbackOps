@@ -30,7 +30,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
-import { resolveTaskAssignee, useTaskManagedSystemNames } from '../adapters/taskDisplayAdapters';
+import { resolveTaskAssignee, taskTeamLabel, useTaskManagedSystemNames, useTaskTeamNames } from '../adapters/taskDisplayAdapters';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
 import { TaskBoardCardPreview } from '../components/task-board/TaskBoardCard';
 import { TaskBoardColumn } from '../components/task-board/TaskBoardColumn';
@@ -94,7 +94,7 @@ type Filters = Record<string, string[]>;
 function groupValue(task: TaskDto, groupBy: TaskBoardGroupBy): string {
   if (groupBy === 'priority') return task.priority;
   if (groupBy === 'managedSystem') return task.primary_managed_system_id;
-  if (groupBy === 'assignee') return task.assignee_actor_id ?? '__unassigned';
+  if (groupBy === 'assignee') return task.assignee_actor_id ?? (task.assignee_team_id ? `team:${task.assignee_team_id}` : '__unassigned');
   return task.status;
 }
 
@@ -134,10 +134,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   );
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
   const items = tasksQuery.data?.items ?? EMPTY_TASKS;
+  const teamNames = useTaskTeamNames(items);
   React.useEffect(() => { if (selectedParam !== undefined) setSelectedId(selectedParam); }, [selectedParam]);
   const filtered = React.useMemo(() => items.filter((task) => {
     const priority = filters.priority; const milestone = filters.milestone; const assignee = filters.assignee;
-    return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || (task.assignee_actor_id === null ? assignee.includes('__unassigned') : assignee.includes(task.assignee_actor_id)));
+    return (!priority?.length || priority.includes(task.priority)) && (!milestone?.length || (milestone.includes('__any') && task.milestone_id !== null) || (milestone.includes('__none') && task.milestone_id === null)) && (!assignee?.length || assignee.includes(task.assignee_actor_id ?? (task.assignee_team_id ? `team:${task.assignee_team_id}` : '__unassigned')));
   }), [items, filters]);
   const focusScope = React.useMemo(
     () => ({ groupBy, managedSystem, publicUpdate }),
@@ -161,10 +162,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
       }));
     }
     if (groupBy === 'managedSystem') return [...systemNames].map(([key, label]) => ({ key, label }));
-    return [...new Set(filtered.map((t) => t.assignee_actor_id).filter((id): id is string => id !== null))].map((key) => ({ key, label: actorNames.get(key) ?? key })).concat({ key: '__unassigned', label: '미배정' });
-  }, [actorNames, filtered, groupBy, systemNames]);
+    return [...new Set(filtered.map((t) => t.assignee_actor_id ?? (t.assignee_team_id ? `team:${t.assignee_team_id}` : null)).filter((id): id is string => id !== null))].map((key) => ({ key, label: key.startsWith('team:') ? taskTeamLabel(key.slice(5), teamNames) : actorNames.get(key) ?? key })).concat({ key: '__unassigned', label: '미배정' });
+  }, [actorNames, teamNames, filtered, groupBy, systemNames]);
   const filterCategories = React.useMemo(() => {
-    const assigneeIds = [...new Set(items.map((task) => task.assignee_actor_id).filter((id): id is string => id !== null))];
+    const assigneeIds = [...new Set(items.map((task) => task.assignee_actor_id ?? (task.assignee_team_id ? `team:${task.assignee_team_id}` : null)).filter((id): id is string => id !== null))];
     return [
       {
         key: 'priority',
@@ -187,11 +188,11 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
         label: '담당자',
         options: [
           { value: '__unassigned', label: '미배정' },
-          ...assigneeIds.map((value) => ({ value, label: actorNames.get(value) ?? value })),
+          ...assigneeIds.map((value) => ({ value, label: value.startsWith('team:') ? taskTeamLabel(value.slice(5), teamNames) : actorNames.get(value) ?? value })),
         ],
       },
     ];
-  }, [actorNames, items]);
+  }, [actorNames, teamNames, items]);
   function boardSearch(param?: string): { view: 'board'; param?: string; public_update?: 'missing' } {
     return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
   }
@@ -354,7 +355,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
               <StatDivider />
               <StatBlock
                 label="미배정"
-                value={items.filter((task) => task.assignee_actor_id === null).length}
+                value={items.filter((task) => task.assignee_actor_id === null && task.assignee_team_id === null).length}
                 valueClassName="text-accent-warn"
               />
               <StatDivider />
@@ -409,7 +410,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                       groupBy={groupBy}
                       selectedId={selectedId}
                       selectTask={selectTask}
-                      names={{ systems: systemNames, actors: actorNames }}
+                      names={{ systems: systemNames, actors: actorNames, teams: teamNames }}
                       enabled={groupBy === 'status'}
                     />
                   ))}
@@ -423,7 +424,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
                         systemNames.get(activeTask.primary_managed_system_id) ?? 'Managed System'
                       }
                       assigneeName={
-                        activeAssignee?.kind === 'resolved' ? activeAssignee.displayName : undefined
+                        activeTask.assignee_team_id ? taskTeamLabel(activeTask.assignee_team_id, teamNames) : activeAssignee?.kind === 'resolved' ? activeAssignee.displayName : undefined
                       }
                     />
                   )}

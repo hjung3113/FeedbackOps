@@ -16,6 +16,8 @@ export interface TaskRequestRow {
   requested_outcome: string;
   requester_actor_id: string;
   status: 'pending_review' | 'approved' | 'rejected' | 'needs_more_evidence' | 'converted';
+  assigned_reviewer_actor_id: string | null;
+  assigned_reviewer_team_id: string | null;
   reviewer_actor_id: string | null;
   decision_reason: string | null;
   decided_at: Date | null;
@@ -44,6 +46,8 @@ function mapTaskRequestRow(row: Record<string, unknown>): TaskRequestRow {
     requested_outcome: row.requested_outcome as string,
     requester_actor_id: row.requester_actor_id as string,
     status: row.status as TaskRequestRow['status'],
+    assigned_reviewer_actor_id: (row.assigned_reviewer_actor_id as string | null) ?? null,
+    assigned_reviewer_team_id: (row.assigned_reviewer_team_id as string | null) ?? null,
     reviewer_actor_id: (row.reviewer_actor_id as string | null) ?? null,
     decision_reason: (row.decision_reason as string | null) ?? null,
     decided_at:
@@ -75,6 +79,8 @@ export async function insertTaskRequest(
     evidenceSummary: string;
     requestedOutcome: string;
     requesterActorId: string;
+    assignedReviewerActorId?: string | null;
+    assignedReviewerTeamId?: string | null;
   },
 ): Promise<TaskRequestRow> {
   const displayRows = await tx.execute<{ v: string }>(sql`
@@ -88,17 +94,18 @@ export async function insertTaskRequest(
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO task_request.task_requests (
       workspace_id, display_id, source_type, source_id, primary_managed_system_id,
-      evidence_summary, requested_outcome, requester_actor_id, status
+      evidence_summary, requested_outcome, requester_actor_id, status, assigned_reviewer_actor_id, assigned_reviewer_team_id
     )
     VALUES (
       ${input.workspaceId}, ${displayId}, ${input.sourceType}, ${input.sourceId},
       ${input.primaryManagedSystemId}, ${input.evidenceSummary},
-      ${input.requestedOutcome}, ${input.requesterActorId}, 'pending_review'
+      ${input.requestedOutcome}, ${input.requesterActorId}, 'pending_review',
+      ${input.assignedReviewerActorId ?? null}, ${input.assignedReviewerTeamId ?? null}
     )
     RETURNING
       id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
-      reviewer_actor_id, decision_reason, decided_at,
+      assigned_reviewer_actor_id, assigned_reviewer_team_id, reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
   `);
   const row = result.rows[0];
@@ -114,7 +121,7 @@ export async function findTaskRequestById(
     SELECT
       id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
-      reviewer_actor_id, decision_reason, decided_at,
+      assigned_reviewer_actor_id, assigned_reviewer_team_id, reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
     FROM task_request.task_requests
     WHERE id = ${input.taskRequestId}
@@ -155,7 +162,7 @@ export async function lockTaskRequestById(
     SELECT
       id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
-      reviewer_actor_id, decision_reason, decided_at,
+      assigned_reviewer_actor_id, assigned_reviewer_team_id, reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
     FROM task_request.task_requests
     WHERE id = ${input.taskRequestId}
@@ -175,10 +182,16 @@ interface ListInput {
   limit?: number;
   cursor?: ListCursor;
   taskRequestId?: string;
+  reviewerActorId?: string;
+  reviewerTeamId?: string;
 }
 
 function listPredicates(input: ListInput) {
   const predicates = [sql`tr.workspace_id = ${input.workspaceId}`];
+  if (input.reviewerActorId !== undefined)
+    predicates.push(sql`tr.assigned_reviewer_actor_id = ${input.reviewerActorId}`);
+  if (input.reviewerTeamId !== undefined)
+    predicates.push(sql`tr.assigned_reviewer_team_id = ${input.reviewerTeamId}`);
   if (input.status !== undefined) predicates.push(sql`tr.status = ${input.status}`);
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`tr.primary_managed_system_id = ${input.managedSystemId}`);
@@ -205,7 +218,7 @@ export async function listTaskRequestsByWorkspace(
       tr.created_at::text AS cursor_timestamp,
       tr.id, tr.workspace_id, tr.display_id, tr.source_type, tr.source_id,
       tr.primary_managed_system_id, tr.evidence_summary, tr.requested_outcome,
-      tr.requester_actor_id, tr.status, tr.reviewer_actor_id, tr.decision_reason,
+      tr.requester_actor_id, tr.status, tr.assigned_reviewer_actor_id, tr.assigned_reviewer_team_id, tr.reviewer_actor_id, tr.decision_reason,
       tr.decided_at, tr.created_at, tr.updated_at,
       COALESCE(f.display_id, v.display_id, c.display_id) AS source_display_id,
       COALESCE(f.title, v.title, c.title) AS source_title,
@@ -295,7 +308,7 @@ export async function updateTaskRequestDecision(
     RETURNING
       id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
-      reviewer_actor_id, decision_reason, decided_at,
+      assigned_reviewer_actor_id, assigned_reviewer_team_id, reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
   `);
   const row = result.rows[0];
@@ -315,4 +328,21 @@ export async function markTaskRequestConverted(
      WHERE id = ${input.taskRequestId}
        AND workspace_id = ${input.workspaceId}
   `);
+}
+
+export async function updateAssignedReviewer(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    taskRequestId: string;
+    actorId: string | null;
+    teamId: string | null;
+  },
+): Promise<TaskRequestRow> {
+  await tx.execute(sql`UPDATE task_request.task_requests SET
+    assigned_reviewer_actor_id = ${input.actorId}, assigned_reviewer_team_id = ${input.teamId}, updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')
+    WHERE workspace_id = ${input.workspaceId} AND id = ${input.taskRequestId}`);
+  const row = await findTaskRequestById(tx, input);
+  if (!row) throw new Error('updateAssignedReviewer returned no row');
+  return row;
 }

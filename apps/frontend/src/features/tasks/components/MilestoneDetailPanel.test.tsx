@@ -42,6 +42,7 @@ const childTask: TaskDto = {
   status: 'doing',
   priority: 'urgent',
   assignee_actor_id: ASSIGNEE_ID,
+  assignee_team_id: null,
   due_date: '2026-06-15',
   milestone_id: MILESTONE_ID,
   analytics_area_id: AREA_ID,

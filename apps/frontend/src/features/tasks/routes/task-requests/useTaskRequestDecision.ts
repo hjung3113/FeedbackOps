@@ -103,6 +103,8 @@ export function useTaskRequestDecision({
       invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['task-request'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-pending-task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-my-tasks'] });
       toast.success('Task Request가 처리되었습니다.');
     },
     onError: (err) => {

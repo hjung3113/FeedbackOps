@@ -3,6 +3,7 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { getTask } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { getMilestone } from '@/lib/api/milestones';
+import { assignTaskResponsibility } from '@/lib/api/tasks';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { TASK_PRIORITY_LABELS, TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
@@ -34,6 +35,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
+import { ResponsibilityEditor } from './ResponsibilityEditor';
 
 const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> =
   {
@@ -270,13 +272,27 @@ export function TaskDetailPanel({
             />
           </FieldRow>
           <FieldRow label="담당자">
-            {task.assignee_actor_id ? (
-              <span className="text-sm text-text-primary">
-                {actorNamesById.get(task.assignee_actor_id) ?? GLOSSARY.unknownUser}
-              </span>
-            ) : (
-              <UnassignedBadge />
-            )}
+            <ResponsibilityEditor
+              key={`${task.id}:${task.updated_at}`}
+              label="담당자"
+              actorId={task.assignee_actor_id}
+              teamId={task.assignee_team_id}
+              canEdit={
+                me?.actor.role_level === 'admin' ||
+                (me?.actor.role_level === 'developer' && canManageNotes)
+              }
+              onSave={(actorId, teamId, key) =>
+                assignTaskResponsibility(
+                  task.id,
+                  {
+                    assignee_actor_id: actorId,
+                    assignee_team_id: teamId,
+                  },
+                  key,
+                  task.updated_at,
+                )
+              }
+            />
           </FieldRow>
           <FieldRow label="마감일">
             {task.due_date ?? <span className="text-text-muted">-</span>}

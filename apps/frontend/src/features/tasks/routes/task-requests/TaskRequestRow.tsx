@@ -1,3 +1,4 @@
+import { RESPONSIBILITY_COPY } from '@/lib/copy/tasks';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import { ObjectRow, UnassignedBadge } from '@fops/ui';
 import { Fragment, type ReactNode } from 'react';
@@ -28,6 +29,7 @@ export function dot() {
 }
 
 export interface NameMaps {
+  teamsById?: Record<string, { name: string }>;
   actorsById: Record<string, { id: string; display_name: string; email?: string }>;
   managedSystemsById: Record<string, { name: string }>;
 }
@@ -127,6 +129,12 @@ export function TaskRequestRow({ item, selected, names, onSelect, rowRef }: Task
               </span>
             )}
           </span>
+          {(item.assigned_reviewer_actor_id || item.assigned_reviewer_team_id) && <span className="text-xs text-text-muted">
+            {RESPONSIBILITY_COPY.reviewer}{' · '}
+            <span>{item.assigned_reviewer_actor_id
+              ? names.actorsById[item.assigned_reviewer_actor_id]?.display_name ?? GLOSSARY.unknownUser
+              : names.teamsById?.[item.assigned_reviewer_team_id as string]?.name ?? `팀 ${shortId(item.assigned_reviewer_team_id as string)}`}</span>
+          </span>}
           {reviewer ? (
             <span className="rounded border border-border-subtle px-2 py-1 text-xs text-text-muted">
               {reviewer.display_name}

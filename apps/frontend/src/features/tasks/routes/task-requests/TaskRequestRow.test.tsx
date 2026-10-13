@@ -16,6 +16,8 @@ const REQUEST: TaskRequestDto = {
   requested_outcome: 'Task 전환 검토',
   requester_actor_id: '20000000-0000-0000-0000-000000000002',
   status: 'pending_review',
+  assigned_reviewer_actor_id: null,
+  assigned_reviewer_team_id: null,
   reviewer_actor_id: null,
   decision_reason: null,
   decided_at: null,
@@ -128,3 +130,33 @@ describe('TaskRequestRow identity', () => {
     },
   );
 });
+
+it.each(['actor', 'team'] as const)(
+  'displays assigned %s separately from the actual decision Actor',
+  (mode) => {
+    const id = '60000000-0000-0000-0000-000000000006';
+    const actual = '70000000-0000-0000-0000-000000000007';
+    render(
+      <TaskRequestRow
+        selected={false}
+        onSelect={() => undefined}
+        item={{
+          ...REQUEST,
+          assigned_reviewer_actor_id: mode === 'actor' ? id : null,
+          assigned_reviewer_team_id: mode === 'team' ? id : null,
+          reviewer_actor_id: actual,
+        }}
+        names={{
+          actorsById: {
+            [id]: { id, display_name: '배정 운영자' },
+            [actual]: { id: actual, display_name: '실제 검토자' },
+          },
+          teamsById: { [id]: { name: '검토팀' } },
+          managedSystemsById: {},
+        }}
+      />,
+    );
+    expect(screen.getByText(mode === 'actor' ? '배정 운영자' : '검토팀')).toBeInTheDocument();
+    expect(screen.getByText('실제 검토자')).toBeInTheDocument();
+  },
+);

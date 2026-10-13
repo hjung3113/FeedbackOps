@@ -62,6 +62,7 @@ const task: TaskDto = {
   status: 'backlog',
   priority: 'high',
   assignee_actor_id: '20000000-0000-0000-0000-000000000002',
+  assignee_team_id: null,
   due_date: null,
   milestone_id: null,
   analytics_area_id: null,

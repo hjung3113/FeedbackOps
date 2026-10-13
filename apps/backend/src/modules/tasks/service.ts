@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ListTasksResponse } from '@fops/shared';
 import {
   type AssignTaskMilestoneRequest,
+  type AssignTaskResponsibilityRequest,
   type ConvertTaskRequestRequest,
   type CreateTaskCommentRequest,
   type LinkExistingTaskRequest,
@@ -18,6 +19,7 @@ import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
+import { resolveTaskResponsibility } from './responsibility.js';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -30,7 +32,7 @@ import {
 } from '../../lib/rich-content/mentions.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { findWorkspaceActor, findWorkspaceActorIds } from '../auth/index.js';
+import { findWorkspaceActorIds } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -70,6 +72,7 @@ import {
   lockTaskById,
   resolveTaskSource,
   updateTaskMilestone,
+  updateTaskResponsibility,
   updateTaskStatus,
 } from './repo.js';
 
@@ -102,6 +105,7 @@ function taskToDto(row: TaskRow): TaskDto {
     status: row.status,
     priority: row.priority,
     assignee_actor_id: row.assignee_actor_id,
+    assignee_team_id: row.assignee_team_id,
     due_date: row.due_date,
     milestone_id: row.milestone_id,
     analytics_area_id: row.analytics_area_id,
@@ -634,23 +638,28 @@ export function createTasksService(deps: TasksServiceDeps) {
             }
           }
 
-          // #554 — reject unknown or foreign-workspace assignees before insertTask.
-          if (args.input.assignee_actor_id != null) {
-            const assignee = await findWorkspaceActor(tx, {
-              workspaceId: args.actor.workspace_id,
-              actorId: args.input.assignee_actor_id,
-            });
-            if (!assignee) {
-              throw new HttpError('not_found.record', 'assignee actor not found');
-            }
-          }
+          const responsibility = await resolveTaskResponsibility({
+            tx,
+            checkService: deps.checkService,
+            workspaceId: args.actor.workspace_id,
+            managedSystemId: taskRequest.primary_managed_system_id,
+            workflow: 'task',
+            analyticsAreaId: args.input.analytics_area_id ?? null,
+            ...(args.input.assignee_actor_id === undefined
+              ? {}
+              : { actorId: args.input.assignee_actor_id }),
+            ...(args.input.assignee_team_id === undefined
+              ? {}
+              : { teamId: args.input.assignee_team_id }),
+          });
 
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,
             primaryManagedSystemId: taskRequest.primary_managed_system_id,
             title: args.input.title,
             priority: args.input.priority,
-            assigneeActorId: args.input.assignee_actor_id ?? null,
+            assigneeActorId: responsibility.actorId,
+            assigneeTeamId: responsibility.teamId,
             dueDate: args.input.due_date ?? null,
             milestoneId: args.input.milestone_id ?? null,
             analyticsAreaId: args.input.analytics_area_id ?? null,
@@ -690,6 +699,11 @@ export function createTasksService(deps: TasksServiceDeps) {
               source_task_request_id: taskRequest.id,
               primary_managed_system_id: task.primary_managed_system_id,
               preserved_links: preservedLinks.map((link) => link.id),
+              default_resolved: responsibility.default_resolved,
+              source_rule: responsibility.source_rule,
+              managed_system_id: responsibility.managed_system_id,
+              assignee_actor_id: task.assignee_actor_id,
+              assignee_team_id: task.assignee_team_id,
             },
           });
 
@@ -708,7 +722,15 @@ export function createTasksService(deps: TasksServiceDeps) {
             });
           }
 
-          return { status: 201, body: taskToDto(task) };
+          return {
+            status: 201,
+            body: {
+              ...taskToDto(task),
+              default_resolved: responsibility.default_resolved,
+              source_rule: responsibility.source_rule,
+              managed_system_id: responsibility.managed_system_id,
+            },
+          };
         },
       );
     });
@@ -1038,6 +1060,9 @@ export function createTasksService(deps: TasksServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
+      ...(args.query.assignee_team_id === undefined
+        ? {}
+        : { assigneeTeamId: args.query.assignee_team_id }),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
       ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
       ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
@@ -1074,7 +1099,96 @@ export function createTasksService(deps: TasksServiceDeps) {
     };
   }
 
+  async function assignResponsibility(args: {
+    actor: TasksActor;
+    taskId: string;
+    input: AssignTaskResponsibilityRequest;
+    idempotencyKey: string;
+    requestHash: string;
+    ifMatch: string;
+  }): Promise<{ status: number; body: TaskDto }> {
+    return deps.db.transaction(async (tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const row = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!row) throw new HttpError('not_found.record', 'task not found');
+          const allowed = await checkFindingManage(
+            deps.checkService,
+            args.actor,
+            row.primary_managed_system_id,
+            { requireElevatedRole: true },
+            { tx },
+          );
+          if (!allowed.allow)
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          if (row.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
+              current_updated_at: row.updated_at.toISOString(),
+            });
+          }
+          const responsibility = await resolveTaskResponsibility({
+            tx,
+            checkService: deps.checkService,
+            workspaceId: args.actor.workspace_id,
+            managedSystemId: row.primary_managed_system_id,
+            workflow: 'task',
+            actorId: args.input.assignee_actor_id,
+            teamId: args.input.assignee_team_id,
+          });
+          if (
+            row.assignee_actor_id === responsibility.actorId &&
+            row.assignee_team_id === responsibility.teamId
+          ) {
+            return { status: 200, body: taskToDto(row) };
+          }
+          const updated = await updateTaskResponsibility(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: row.id,
+            actorId: responsibility.actorId,
+            teamId: responsibility.teamId,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_responsibility_assigned',
+            subject_type: 'task',
+            subject_id: row.id,
+            summary: 'Responsibility assigned',
+            detail: {
+              from_actor_id: row.assignee_actor_id,
+              from_team_id: row.assignee_team_id,
+              to_actor_id: updated.assignee_actor_id,
+              to_team_id: updated.assignee_team_id,
+            },
+          });
+          if (updated.assignee_actor_id && updated.assignee_actor_id !== row.assignee_actor_id) {
+            await deps.notify(tx, 'task.assigned_to_me', {
+              workspace_id: args.actor.workspace_id,
+              actor_ids: [updated.assignee_actor_id],
+              subject_id: updated.id,
+              correlation_id: randomUUID(),
+              detail: {
+                task_id: updated.id,
+                primary_managed_system_id: updated.primary_managed_system_id,
+              },
+              params: {},
+            });
+          }
+          return { status: 200, body: taskToDto(updated) };
+        },
+      ),
+    );
+  }
+
   return {
+    assignResponsibility,
     getTask,
     getTaskComments,
     createTaskComment,

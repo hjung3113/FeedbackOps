@@ -11,6 +11,8 @@ requirement_id: FOP-TASK-001
 request body:
   evidence_summary string required
   requested_outcome string required
+  assigned_reviewer_actor_id optional nullable uuid
+  assigned_reviewer_team_id optional nullable uuid (XOR-or-both-null)
 response body: TaskRequestDto
 auth and permission: authenticated Actor in workspace; finding.manage on the
   source Finding's primary_managed_system_id. Admin bypass follows the same
@@ -43,6 +45,8 @@ Task. VOC and VOC Cluster Task Request sources are implemented by
 requirement_id: FOP-TASK-002
 query:
   status optional pending_review|approved|rejected|needs_more_evidence|converted
+  reviewer optional Actor UUID or me (assigned reviewer, not decision Actor)
+  reviewer_team_id optional team UUID
   managed_system_id optional uuid or all
   cursor optional opaque string (used with limit)
   limit optional integer 1..100; list client sends 50, no server default
@@ -52,7 +56,8 @@ response body with limit: { items, page: { has_more, cursor?, total?, status_cou
   total only on the first page (no cursor), visible rows under the same filters
   status_counts only on the first page without a status filter; keys:
     pending_review, approved, rejected, needs_more_evidence, converted
-    values count visible rows under the same non-status filters, including zeros
+    values count visible rows under the workspace/Managed System authority scope,
+    ignoring personal reviewer filters, including zeros
 validation: invalid cursor -> 422 validation.failed,
   detail.fields: [{ path: ['cursor'], code: 'invalid_cursor' }]
   invalid limit -> 422 validation.failed (query-validation envelope)
@@ -137,6 +142,7 @@ request body:
   title string required min 1 max 200
   priority optional low|medium|high|urgent default medium
   assignee_actor_id optional nullable uuid
+  assignee_team_id optional nullable uuid (XOR-or-both-null)
   due_date optional nullable ISO date
   milestone_id optional nullable uuid
   analytics_area_id optional nullable uuid
@@ -151,7 +157,8 @@ validation errors:
   - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
   - unknown or cross-workspace Milestone: 404 not_found.record
   - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
-  - unknown or cross-workspace assignee_actor_id: 404 not_found.record
+  - invalid explicit Actor/team responsibility: 422 validation.failed (foreign_workspace,
+    archived_team, ineligible_actor, or mutually_exclusive on responsibility fields)
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
@@ -190,6 +197,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 query:
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
+  assignee_team_id optional team UUID
   milestone_id optional uuid
   managed_system_id optional uuid or all
   public_update optional: missing
@@ -252,6 +260,8 @@ requirement_id: FOP-TASK-001
 request body:
   evidence_summary string required
   requested_outcome string required
+  assigned_reviewer_actor_id optional nullable uuid
+  assigned_reviewer_team_id optional nullable uuid (XOR-or-both-null)
 response body: TaskRequestDto
 auth and permission:
   - VOC: authenticated Actor in workspace; source VOC readable under the same
@@ -461,19 +471,19 @@ Slice 6. It is created only through source transition routes:
 | Idempotency hash | Includes `taskId`, `ifMatch`, route identity `task.milestone_assign`, and request body. |
 | Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
 
-## Close-out responsibility (ADR-0067; implementation pending)
+## Close-out responsibility (ADR-0067; #1091)
 
-Task Request creation from Finding/VOC/Cluster gains proposed/new nullable
+Task Request creation from Finding/VOC/Cluster persists nullable
 `assigned_reviewer_actor_id` / `assigned_reviewer_team_id`, never prefilling actual
 `reviewer_actor_id`. Reviewer MS default → eligible general owner → same-system AA team →
 shared authorized queue, with explicit/null precedence and automatic-failure fallback.
 Request stays pending; other authorized reviewers/self-approval rules remain unchanged.
-Add proposed/new `reviewer` (Actor UUID or `me`) and `reviewer_team_id` filters for assigned
+The `reviewer` (Actor UUID or `me`) and `reviewer_team_id` filters select assigned
 routing without narrowing the unfiltered operational queue; Home requests `reviewer=me`.
 Source Analytics Area is read through its owner seam for routing; no new Task Request
 Analytics Area column is required.
 
-Conversion adds proposed/new nullable `assignee_team_id`; XOR with existing Actor field,
+Conversion persists nullable `assignee_team_id`; XOR with existing Actor field,
 authorized explicit null skips defaults, omission requests owner defaults. Invalid explicit
 responsibility now rejects `validation.failed` (superseding the older assignee-only 404
 validation above); automatic invalid targets skip. Keep Backlog, provenance/links, audits
@@ -528,3 +538,39 @@ requested outcomes or Task prose. Ordinary source links and their permissions
 remain unchanged; canonical relation reads use #740's filtered view. Inventory
 cached Task mutation DTOs with nested Finding summaries too; confirmed generated
 Survey copies follow ADR-0015's targeted legacy sanitization exception.
+
+## Source responsibility edits (#1091)
+
+`POST /task-requests/:id/reviewer` accepts both required nullable fields
+`assigned_reviewer_actor_id` and `assigned_reviewer_team_id`.
+`POST /tasks/:id/responsibility` accepts both required nullable fields
+`assignee_actor_id` and `assignee_team_id`, plus the existing ISO timestamp `If-Match`
+header. Both require `Idempotency-Key`, workspace ownership and Admin-or-scoped-Developer
+`finding.manage` (including the existing Admin bypass). Bodies are strict. XOR, active
+same-workspace team and current destination Actor authority are validated in the transaction;
+both null deliberately unassigns without consulting defaults. Unknown source records return
+`404 not_found.record`; denied writes return `403 permission.denied`; invalid destinations
+return `422 validation.failed`. Stale Task versions return `409 conflict.stale_write` with
+`current_updated_at`. Responses are `TaskRequestDto` / `TaskDto` with persisted responsibility.
+
+Effective edits append `task_request_reviewer_assigned` / `task_responsibility_assigned`
+with strict `{ from_actor_id, from_team_id, to_actor_id, to_team_id }` detail. No-op or replay
+adds no audit or notification. An effective Task edit to a different concrete Actor sends
+one existing `task.assigned_to_me` notification; teams have no member notifications.
+Workflow state, requester/created-by provenance, actual review attribution and links stay
+unchanged. Writes, audits and notifications roll back together.
+
+Creation/conversion responses and creation audits expose safe `default_resolved`,
+`source_rule`, `managed_system_id` and the actual responsibility pair. Automatic candidates
+are rechecked in the destination transaction. Each skipped MS reviewer/owner/AA rule adds
+one Core diagnostic; a fallback succeeds with null responsibility and
+`source_rule=workspace_fallback_queue`. Explicit input/null, rejected transactions and
+replay add no diagnostic. Ordinary reads return current assignments without reconstructing
+creation provenance. Cluster has no direct Analytics Area classification and uses MS then
+queue routing; no member-derived Area is inferred. Source commands consume the existing
+source-owned Finding/VOC locks and Core-owned `lockAnalyticsArea` owner-team input.
+
+Reviewer/assignee filters apply before list paging and matching total counts. Task Request
+status counts and the separate queue summary stay scope-wide. Home sends `reviewer=me`
+under Actor-and-scope cache keys and never treats team membership as personal assignment.
+Assignment, decision and conversion refresh source detail/list and personal Home caches.
