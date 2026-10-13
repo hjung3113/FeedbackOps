@@ -53,6 +53,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
     linkTaskOpen,
     setLinkTaskOpen,
     actorsById,
+    eligibleOwners,
     managedSystemsById,
     analyticsAreasById,
     linkedVocTitle,
@@ -106,6 +107,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               finding={finding}
               canManage={canManage}
               actorsById={actorsById}
+              eligibleOwners={eligibleOwners}
             />
             <FieldRow label="생성자" inset="none">
               <UserChip

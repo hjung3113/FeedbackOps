@@ -27,6 +27,8 @@ export interface FindingDetailController {
   linkTaskOpen: boolean;
   setLinkTaskOpen: (open: boolean) => void;
   actorsById: Map<string, string>;
+  /** Owner-picker candidates: Admin/Developer actors only, never User-level or the System audit actor. */
+  eligibleOwners: Array<{ id: string; name: string }>;
   managedSystemsById: Map<string, string>;
   analyticsAreasById: Map<string, string>;
   linkedVocTitle: string | null;
@@ -48,6 +50,13 @@ export const DETAIL_SECTIONS = [
   { id: 'notes', label: '진행 메모' },
 ];
 
+// The workspace audit identity (backend seed: actor_type 'system', audit
+// authorship only, never an interactive login) must never be offered as an
+// owner. The shipped GET /actors read exposes role_level but not actor_type,
+// so the FE excludes it by its reserved provisioning email; the PATCH 422
+// (ineligible_actor) stays authoritative if one slips through.
+const SYSTEM_ACTOR_EMAIL = 'system@feedbackops.local';
+
 export function useFindingDetailController(finding: FindingDto): FindingDetailController {
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
@@ -56,6 +65,13 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
   const { actors } = useWorkspaceActors();
   const actorsById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
+    [actors],
+  );
+  const eligibleOwners = React.useMemo(
+    () =>
+      (actors ?? [])
+        .filter((actor) => actor.role_level !== 'user' && actor.email !== SYSTEM_ACTOR_EMAIL)
+        .map((actor) => ({ id: actor.id, name: actor.display_name })),
     [actors],
   );
   const managedSystemsQuery = useQuery({
@@ -141,6 +157,7 @@ export function useFindingDetailController(finding: FindingDto): FindingDetailCo
     linkTaskOpen,
     setLinkTaskOpen,
     actorsById,
+    eligibleOwners,
     managedSystemsById,
     analyticsAreasById,
     linkedVocTitle,

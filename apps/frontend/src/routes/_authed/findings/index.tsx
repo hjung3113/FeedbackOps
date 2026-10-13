@@ -7,6 +7,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import { useFindingsPages, useFindingsTotal } from '@/features/findings/hooks/useFindingsList';
+import { resolveActors } from '@/lib/api/actors';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import {
   FINDING_CONFIDENCE_LABELS,
@@ -194,6 +195,27 @@ function FindingsListShell({
     }
     return map;
   }, [actors]);
+  // Team owners resolve by name for the visible page (same source as the
+  // detail panel's owner field); `팀 · <short id>` stays the fallback while
+  // unresolved.
+  const teamIds = React.useMemo(
+    () => [
+      ...new Set(
+        findings.map((finding) => finding.owner_team_id).filter((id): id is string => id !== null),
+      ),
+    ],
+    [findings],
+  );
+  const teamsQuery = useQuery({
+    queryKey: ['actors-resolve', [], teamIds],
+    enabled: teamIds.length > 0,
+    queryFn: ({ signal }) => resolveActors({ teamIds }, signal),
+    retry: false,
+  });
+  const teamNamesById = React.useMemo(
+    () => new Map((teamsQuery.data?.teams ?? []).map((team) => [team.id, team.name])),
+    [teamsQuery.data],
+  );
 
   React.useEffect(() => {
     if (!listQuery.isSuccess || listQuery.isFetching || selectedId === null) return;
@@ -256,7 +278,8 @@ function FindingsListShell({
               });
             }}
           >
-            <SelectTrigger aria-label={OWNER_COPY.filter}>
+            <SelectTrigger density="compact" className="w-fit gap-1" aria-label={OWNER_COPY.filter}>
+              <span className="text-text-muted">{GLOSSARY.owner}:</span>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -280,6 +303,7 @@ function FindingsListShell({
             assignmentFiltered={assignment !== undefined}
             selectedId={selectedId}
             actorsById={actorsById}
+            teamNamesById={teamNamesById}
             onSelect={onSelect}
             onRetry={retryList}
             onResetFilters={onResetFilters}
@@ -361,6 +385,7 @@ function FindingsListBody({
   assignmentFiltered,
   selectedId,
   actorsById,
+  teamNamesById,
   onSelect,
   onRetry,
   onResetFilters,
@@ -375,6 +400,7 @@ function FindingsListBody({
   assignmentFiltered: boolean;
   selectedId: string | null;
   actorsById: Map<string, AvatarUser>;
+  teamNamesById: Map<string, string>;
   onSelect: (id: string) => void;
   onRetry: () => void;
   onResetFilters: () => void;
@@ -447,6 +473,9 @@ function FindingsListBody({
               owner={
                 finding.owner_actor_id ? (actorsById.get(finding.owner_actor_id) ?? null) : null
               }
+              teamName={
+                finding.owner_team_id ? (teamNamesById.get(finding.owner_team_id) ?? null) : null
+              }
               onClick={() => onSelect(finding.id)}
             />
           ))}
@@ -460,11 +489,13 @@ function FindingRow({
   finding,
   selected,
   owner,
+  teamName,
   onClick,
 }: {
   finding: FindingDto;
   selected: boolean;
   owner: AvatarUser | null;
+  teamName: string | null;
   onClick: () => void;
 }): React.ReactElement {
   return (
@@ -493,7 +524,7 @@ function FindingRow({
             {finding.owner_actor_id
               ? (owner?.display_name ?? GLOSSARY.unknownUser)
               : finding.owner_team_id
-                ? `${OWNER_COPY.team} · ${finding.owner_team_id.slice(0, 8)}`
+                ? (teamName ?? `${OWNER_COPY.team} · ${finding.owner_team_id.slice(0, 8)}`)
                 : GLOSSARY.unassigned}
           </span>
           {dot()}
