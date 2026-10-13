@@ -1,0 +1,137 @@
+import type { AdminPermissionRequestRow } from '@/lib/api';
+import { adminDetailFixture } from '@/test/permission-details';
+import type { PermissionRiskIndicator } from '@fops/shared';
+import { render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../permission-request-decision-form.js', () => ({
+  PermissionRequestDecisionForm: () => null,
+}));
+
+import { PermissionRequestDetail } from '../permission-request-detail.js';
+
+const REQUEST: AdminPermissionRequestRow = {
+  id: '10000000-0000-0000-0000-000000000001',
+  requester_actor_id: '20000000-0000-0000-0000-000000000002',
+  requested_capability: 'workspace.admin',
+  requested_managed_system_id: null,
+  reason: 'Workspace administration is needed for review.',
+  status: 'pending',
+  revision: 1,
+  requested_expiration: null,
+  created_at: '2026-07-10T00:00:00.000Z',
+};
+
+const CURRENT_SYSTEM_ID = '30000000-0000-0000-0000-000000000003';
+const SECOND_SYSTEM_ID = '40000000-0000-0000-0000-000000000004';
+const UNKNOWN_SYSTEM_ID = '50000000-0000-0000-0000-000000000005';
+
+const SENSITIVE_SIGNAL: PermissionRiskIndicator = {
+  code: 'sensitive_capability',
+  evidence: { capability: 'workspace.admin' },
+};
+
+const RISK_INDICATORS: PermissionRiskIndicator[] = [
+  SENSITIVE_SIGNAL,
+  { code: 'workspace_scope', evidence: { managed_system_id: null } },
+  { code: 'no_expiration', evidence: { requested_expiration: null } },
+  {
+    code: 'active_deny',
+    evidence: {
+      denies: [
+        { id: '60000000-0000-0000-0000-000000000006', managed_system_id: null },
+        { id: '70000000-0000-0000-0000-000000000007', managed_system_id: UNKNOWN_SYSTEM_ID },
+      ],
+    },
+  },
+];
+
+describe('permission request risk review', () => {
+  it('explains each supplied signal with requester, effective access, and authority facts', () => {
+    const request = adminDetailFixture(REQUEST, false, 'forbidden', {
+      requester: {
+        id: REQUEST.requester_actor_id,
+        display_name: 'Requester',
+        role_level: 'developer',
+      },
+      effective_access: {
+        decision: {
+          allow: true,
+          via: 'direct_grant',
+          grant_id: '80000000-0000-0000-0000-000000000008',
+        },
+        scope: { kind: 'scoped', managed_system_ids: [CURRENT_SYSTEM_ID, SECOND_SYSTEM_ID] },
+        expires_at: '2099-12-31T23:59:59.000Z',
+        granted_managed_system_id: CURRENT_SYSTEM_ID,
+      },
+      administrative_authority: {
+        capability: 'workspace.admin',
+        allowed: true,
+        is_requester: false,
+        permission_self_approval: 'forbidden',
+        self_approval_required: true,
+      },
+      risk_indicators: RISK_INDICATORS,
+    });
+
+    render(
+      <PermissionRequestDetail
+        request={request}
+        managedSystemNames={{
+          [CURRENT_SYSTEM_ID]: 'Payments Ops',
+          [SECOND_SYSTEM_ID]: 'Analytics Ops',
+        }}
+        onClose={() => undefined}
+      />,
+    );
+
+    const review = screen.getByTestId('permission-request-risk-review');
+    expect(review).toHaveTextContent('검토 시 확인할 사항');
+    expect(review).toHaveTextContent('요청자 역할');
+    expect(review).toHaveTextContent('개발자');
+    expect(review).toHaveTextContent('현재 권한 판단');
+    expect(review).toHaveTextContent('허용 · 직접 부여');
+    expect(review).toHaveTextContent('현재 유효 범위');
+    expect(review).toHaveTextContent('Payments Ops · Analytics Ops');
+    expect(review).toHaveTextContent('현재 권한 만료일');
+    expect(review).toHaveTextContent(/2100/);
+    expect(review).toHaveTextContent('검토 권한');
+    expect(review).toHaveTextContent('워크스페이스 관리자 권한');
+    expect(review).toHaveTextContent('본인 요청');
+    expect(review).toHaveTextContent('아니요');
+    expect(review).toHaveTextContent('본인 승인 정책');
+    expect(review).toHaveTextContent('금지');
+    expect(review).toHaveTextContent('동료 검토 필요');
+    expect(review).toHaveTextContent('예');
+
+    const requestInfo = screen.getByText('요청 정보').closest('section');
+    expect(requestInfo).toHaveTextContent('요청 만료일');
+    expect(requestInfo).toHaveTextContent('만료 없음');
+    expect(review).toHaveTextContent('민감한 권한');
+    expect(review).toHaveTextContent('요청한 권한: 워크스페이스 관리자 권한');
+    expect(review).toHaveTextContent('워크스페이스 전체 범위');
+    expect(review).toHaveTextContent('요청 범위는 워크스페이스 전체입니다.');
+    expect(review).toHaveTextContent('요청 만료일 없음');
+    expect(review).toHaveTextContent('요청 만료일이 없습니다.');
+    expect(review).toHaveTextContent('겹치는 활성 차단 2건');
+    expect(review).toHaveTextContent('차단 범위: 워크스페이스 전체');
+    expect(review).toHaveTextContent('차단 범위: Managed System (50000000)');
+  });
+
+  it('keeps server risk visible on a terminal request without decision controls', () => {
+    const request = adminDetailFixture({ ...REQUEST, status: 'approved' }, false, 'allowed', {
+      risk_indicators: [SENSITIVE_SIGNAL],
+      allowed_actions: [],
+    });
+
+    render(<PermissionRequestDetail request={request} onClose={() => undefined} />);
+
+    expect(screen.getByTestId('permission-request-risk-review')).toHaveTextContent(
+      '요청한 권한: 워크스페이스 관리자 권한',
+    );
+    const requestInfo = screen.getByText('요청 정보').closest('section');
+    if (!requestInfo) throw new Error('Request info section is missing');
+    expect(within(requestInfo).getByText('승인됨')).toBeInTheDocument();
+    expect(screen.queryByTestId('permission-decision-section')).not.toBeInTheDocument();
+  });
+});

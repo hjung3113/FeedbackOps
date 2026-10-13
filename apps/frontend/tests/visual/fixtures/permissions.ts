@@ -161,6 +161,7 @@ export const permissionDecisionResultTemplates = {
 export type PermissionScenarioName =
   | 'stale-review'
   | 'cancelled-history'
+  | 'risk-signals'
   | 'populated'
   | 'empty'
   | 'permission-request-detail-named'
@@ -188,7 +189,10 @@ export function createPermissionRequestsScenario(
   return requests;
 }
 
-export function permissionAdminDetailFixture(row: AdminPermissionRequestRow) {
+export function permissionAdminDetailFixture(
+  row: AdminPermissionRequestRow,
+  includeRiskSignals = false,
+) {
   return permissionRequestAdminDetailSchema.parse({
     ...row,
     updated_at: row.created_at,
@@ -204,7 +208,7 @@ export function permissionAdminDetailFixture(row: AdminPermissionRequestRow) {
       display_name:
         workspaceActorsFixture.actors.find((actor) => actor.id === row.requester_actor_id)
           ?.display_name ?? '',
-      role_level: 'user',
+      role_level: includeRiskSignals ? 'developer' : 'user',
     },
     effective_access: {
       decision: { allow: false, reason: 'no_grant', requestable: null },
@@ -221,7 +225,28 @@ export function permissionAdminDetailFixture(row: AdminPermissionRequestRow) {
     },
     approval_scope_candidates: [{ managed_system_id: row.requested_managed_system_id }],
     matching_denies: [],
-    risk_indicators: [],
+    risk_indicators: includeRiskSignals
+      ? [
+          { code: 'sensitive_capability', evidence: { capability: 'workspace.admin' } },
+          { code: 'workspace_scope', evidence: { managed_system_id: null } },
+          { code: 'no_expiration', evidence: { requested_expiration: null } },
+          {
+            code: 'active_deny',
+            evidence: {
+              denies: [
+                {
+                  id: '77777777-7777-4777-8777-777777777777',
+                  managed_system_id: null,
+                },
+                {
+                  id: '88888888-8888-4888-8888-888888888888',
+                  managed_system_id: '99999999-9999-4999-8999-999999999999',
+                },
+              ],
+            },
+          },
+        ]
+      : [],
     allowed_actions:
       row.status === 'pending' || row.status === 'needs_more_info'
         ? ['approve', 'reject', 'need_more_info', 'deny']

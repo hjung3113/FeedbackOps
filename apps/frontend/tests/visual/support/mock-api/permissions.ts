@@ -37,7 +37,10 @@ export function createPermissionRequestHandlers(): MockApiHandler[] {
           route,
           target ? 200 : 404,
           target
-            ? permissionAdminDetailFixture(target)
+            ? permissionAdminDetailFixture(
+                target,
+                context.options.permissionScenario === 'risk-signals',
+              )
             : { code: 'not_found.record', message: 'not found' },
         );
       },

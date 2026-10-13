@@ -3,6 +3,19 @@ import {
   permissionRequestAdminDetailSchema,
   permissionRequestOwnerDetailSchema,
 } from '@fops/shared';
+import type { PermissionRequestAdminDetail } from '@fops/shared';
+
+export type AdminDetailFixtureOverrides = Partial<
+  Pick<
+    PermissionRequestAdminDetail,
+    | 'requester'
+    | 'effective_access'
+    | 'administrative_authority'
+    | 'matching_denies'
+    | 'risk_indicators'
+    | 'allowed_actions'
+  >
+>;
 
 const selectedFields = {
   requested_object_type: null,
@@ -19,6 +32,7 @@ export function adminDetailFixture(
   row: AdminPermissionRequestRow,
   isRequester = false,
   policy: 'allowed' | 'forbidden' = 'allowed',
+  overrides: AdminDetailFixtureOverrides = {},
 ) {
   return permissionRequestAdminDetailSchema.parse({
     ...selectedFields,
@@ -44,6 +58,7 @@ export function adminDetailFixture(
       row.status === 'pending' || row.status === 'needs_more_info'
         ? ['approve', 'reject', 'need_more_info', 'deny']
         : [],
+    ...overrides,
   });
 }
 

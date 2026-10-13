@@ -50,6 +50,7 @@ export function SelectedPermissionRequestDetail({
       key={`${id}:${detail.revision}`}
       request={detail}
       actorName={detail.requester.display_name || actorNames[detail.requester_actor_id]}
+      managedSystemNames={managedSystemNames}
       managedSystemName={
         detail.requested_managed_system_id
           ? managedSystemNames[detail.requested_managed_system_id]
