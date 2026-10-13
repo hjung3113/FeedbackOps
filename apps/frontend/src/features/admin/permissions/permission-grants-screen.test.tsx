@@ -1531,6 +1531,8 @@ describe('/admin/permissions/grants screen', () => {
 
     const link = within(dialog).getByRole('link', { name: /VOC Triage.*기존 권한 보기/ });
     expect(link).toHaveAttribute('href', `/admin/permissions/grants?selected=${GRANT_ID}`);
+    fireEvent.click(link);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   test('filters the system actor from recipients and shows emails for same names', async () => {

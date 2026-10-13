@@ -446,6 +446,7 @@ function DirectGrantFields({
                 key={grant.id}
                 className="w-fit text-accent-primary underline underline-offset-2"
                 href={`/admin/permissions/grants?selected=${grant.id}`}
+                onClick={onClose}
               >
                 {candidateLabel(candidate, managedSystemNames)} ·{' '}
                 {DIRECT_GRANT_COPY.alreadyGrantedLink}
