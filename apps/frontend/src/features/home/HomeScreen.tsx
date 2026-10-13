@@ -148,11 +148,13 @@ export function HomeScreen({
               </Button>
             </div>
           </header>
-          <RecoveryFreshness
-            computedAt={summary.data?.computed_at}
-            failed={summary.isError}
-            updatedAt={summary.dataUpdatedAt}
-          />
+          {activeTab === 'dashboard' && (
+            <RecoveryFreshness
+              computedAt={summary.data?.computed_at}
+              failed={summary.isError}
+              updatedAt={summary.dataUpdatedAt}
+            />
+          )}
           <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
             {/* oxlint-disable-next-line shadcn/no-restyle -- the Inbox tab keeps an 8px gap before its unread-count badge */}

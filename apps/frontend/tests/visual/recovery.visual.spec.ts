@@ -36,6 +36,13 @@ for (const area of ['integration', 'home'] as const) {
           await expect(panel.getByText('원본 화면에서 처리됨', { exact: false })).toBeVisible();
       } else
         await expect(page.getByRole('button', { name: /VOC 담당자 배정이 필요/ })).toBeVisible();
+      // The queue scrolls its selected row into view once data lands; settle on one final position.
+      await page
+        .getByTestId('recovery-queue')
+        .evaluate((el) => el.scrollIntoView({ block: 'end', behavior: 'instant' }));
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
       await expectVisual(page, page.locator('[data-app-frame]'), `${area}-recovery-${state}.png`);
     });
   }
