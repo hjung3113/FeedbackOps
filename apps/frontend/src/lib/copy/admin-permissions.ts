@@ -98,6 +98,7 @@ export const ADMIN_PERMISSIONS_COPY = {
     alreadyGranted: '이미 부여됨',
     alreadyGrantedNote: '이미 부여된 권한은 다시 선택할 수 없습니다.',
     alreadyGrantedLink: '기존 권한 보기',
+    adminRoleNote: 'Admin은 이미 모든 권한을 가지고 있어서 이 부여로 바뀌는 권한은 없습니다.',
     retry: '다시 확인',
     reasonLabel: '사유 · 필수',
     reasonPlaceholder: '권한을 부여하는 이유를 입력하세요.',

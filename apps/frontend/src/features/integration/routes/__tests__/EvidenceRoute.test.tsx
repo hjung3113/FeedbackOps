@@ -534,6 +534,57 @@ it.each([false, true])('shows true-empty versus filtered-empty (filtered=%s)', a
   );
   expect(screen.queryByText('0')).toBeNull();
 });
+it.each(['q-only', 'source-only'] as const)(
+  'offers no all-source search without both a source and a query (%s)',
+  async (state) => {
+    installFetch(() => response({ items: [], page: { has_more: false } }));
+    await mount(
+      state === 'q-only' ? '/integration/evidence?q=없음' : '/integration/evidence?source=voc',
+    );
+    await screen.findByText('조건에 맞는 Evidence가 없습니다.');
+    expect(screen.queryByRole('button', { name: '전체에서 검색' })).toBeNull();
+    expect(screen.getByRole('button', { name: '조건 초기화' })).toBeVisible();
+  },
+);
+it('widens a source-scoped empty result to all sources and keeps the query and scope', async () => {
+  const requests: URL[] = [];
+  installFetch((url) => {
+    requests.push(url);
+    return url.searchParams.has('source_type')
+      ? response({ items: [], page: { has_more: false } })
+      : response(
+          listEvidenceInventoryResponseSchema.parse({ items: [item], page: { has_more: false } }),
+        );
+  });
+  const { router } = await mount(`/integration/evidence?managedSystem=${MS}&source=voc&q=다운로드`);
+  fireEvent.click(await screen.findByRole('button', { name: '전체에서 검색' }));
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  expect(router.state.location.search).toEqual({ managedSystem: MS, q: '다운로드' });
+  const wide = requests.at(-1);
+  expect(wide?.searchParams.get('q')).toBe('다운로드');
+  expect(wide?.searchParams.get('managed_system_id')).toBe(MS);
+  expect(wide?.searchParams.has('source_type')).toBe(false);
+  expect(wide?.searchParams.has('cursor')).toBe(false);
+  expect(screen.queryByRole('button', { name: '전체에서 검색' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '조건 초기화' })).toBeNull();
+});
+it('restores the scoped empty result when going Back after the all-source search', async () => {
+  installFetch((url) =>
+    url.searchParams.has('source_type')
+      ? response({ items: [], page: { has_more: false } })
+      : response(
+          listEvidenceInventoryResponseSchema.parse({ items: [item], page: { has_more: false } }),
+        ),
+  );
+  const { router, history } = await mount('/integration/evidence?source=voc&q=다운로드');
+  fireEvent.click(await screen.findByRole('button', { name: '전체에서 검색' }));
+  await screen.findByRole('button', { name: /월간 다운로드/ });
+  expect(router.state.location.search).toEqual({ q: '다운로드' });
+  await act(async () => history.back());
+  expect(router.state.location.search).toEqual({ source: 'voc', q: '다운로드' });
+  await screen.findByText('조건에 맞는 Evidence가 없습니다.');
+  expect(screen.getByRole('button', { name: '전체에서 검색' })).toBeVisible();
+});
 it('retries first-page failure into a real successful inventory', async () => {
   let fail = true;
   installFetch(() =>

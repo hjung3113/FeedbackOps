@@ -23,4 +23,5 @@ export const EVIDENCE_COPY = {
   startOver: '처음부터 보기',
   parent: 'Finding 보기',
   clear: '조건 초기화',
+  searchAll: '전체에서 검색',
 } as const;

@@ -65,4 +65,24 @@ test.describe('/admin/permissions/grants visual harness', () => {
     ).not.toBeChecked();
     await expectVisual(page, dialog, 'direct-permission-grant-governance.png');
   });
+
+  test('shows the Admin-recipient note for a direct grant', async ({ page }) => {
+    await installMockApi(page, { permissionGrantsScenario: 'direct-grant-admin-form' });
+    await page.goto('/admin/permissions/grants');
+
+    await page.getByRole('button', { name: '권한 부여' }).click();
+    const dialog = page.getByRole('dialog', { name: '권한 부여' });
+    await dialog.getByRole('combobox', { name: '대상자' }).click();
+    await page.getByRole('option', { name: 'Admin Two' }).click();
+    await dialog.getByRole('combobox', { name: '부여 권한 및 범위' }).click();
+    await page
+      .getByRole('option', { name: '워크스페이스 관리자 권한 · 워크스페이스 전체' })
+      .click();
+
+    await expect(
+      dialog.getByTestId('direct-grant-admin-note').getByText(/Admin은 이미 모든 권한을/),
+    ).toBeVisible();
+    await expect(dialog).toContainText('Role Level은 변경되지 않습니다.');
+    await expectVisual(page, dialog, 'direct-permission-grant-admin-recipient.png');
+  });
 });

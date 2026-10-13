@@ -10,6 +10,8 @@ export const PERMISSION_GRANTS_IDS = {
   actor: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   denyActor: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   admin: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  /** Admin Two from `workspaceActorsFixture`; the Admin-recipient grant-options fixture. */
+  adminRecipient: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 } as const;
 
 export const permissionGrants = [
@@ -54,7 +56,22 @@ export const directGrantPermissionOptions = permissionGrantOptionsSchema.parse({
   ],
 });
 
-export type PermissionGrantsScenarioName = 'populated' | 'empty' | 'direct-grant-form';
+export const adminDirectGrantPermissionOptions = permissionGrantOptionsSchema.parse({
+  recipient: {
+    id: PERMISSION_GRANTS_IDS.adminRecipient,
+    display_name: 'Admin Two',
+    role_level: 'admin',
+  },
+  self_policy: 'allowed',
+  self_approval_required: false,
+  candidates: directGrantPermissionOptions.candidates,
+});
+
+export type PermissionGrantsScenarioName =
+  | 'populated'
+  | 'empty'
+  | 'direct-grant-form'
+  | 'direct-grant-admin-form';
 
 export function createPermissionGrantsScenario(name: PermissionGrantsScenarioName = 'populated') {
   return {
