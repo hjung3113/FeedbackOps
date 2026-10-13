@@ -67,6 +67,8 @@ export const populatedFinding: FindingDto = findingDtoSchema.parse({
   analytics_area_id: FINDING_DETAIL_IDS.analyticsArea,
   linked_task_id: FINDING_DETAIL_IDS.task,
   linked_milestone_id: null,
+  owner_actor_id: null,
+  owner_team_id: null,
   created_by: FINDING_DETAIL_IDS.actor,
   created_at: dates.findingCreated,
   updated_at: dates.findingUpdated,
