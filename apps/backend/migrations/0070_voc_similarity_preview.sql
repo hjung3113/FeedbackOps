@@ -63,7 +63,7 @@ CREATE FUNCTION voc.guard_similarity_preview_budget_delete() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $$
 BEGIN
   IF current_user = 'fops_app' AND OLD.window_start +
-      CASE OLD.period WHEN 'minute' THEN interval '1 minute' ELSE interval '1 day' END > statement_timestamp() THEN
+      (CASE OLD.period WHEN 'minute' THEN interval '1 minute' ELSE interval '1 day' END) > statement_timestamp() THEN
     RAISE EXCEPTION 'only ended preview budget windows may be reclaimed' USING ERRCODE = '23514';
   END IF;
   RETURN OLD;
