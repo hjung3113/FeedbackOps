@@ -75,6 +75,6 @@ REVOKE ALL ON FUNCTION voc.guard_similarity_preview_budget_delete() FROM PUBLIC;
 CREATE TRIGGER similarity_preview_budget_retention BEFORE DELETE ON voc.voc_similarity_preview_budgets
 FOR EACH ROW EXECUTE FUNCTION voc.guard_similarity_preview_budget_delete();
 --> statement-breakpoint
-INSERT INTO pgboss.queue (name, policy, retry_limit, retry_delay, retry_backoff, expire_seconds, retention_seconds, deletion_seconds)
-VALUES ('voc.similarity_preview_cleanup', 'standard', 5, 30, true, 900, 1209600, 604800)
+INSERT INTO pgboss.queue (name, policy, retry_limit, retry_delay, retry_backoff, retry_delay_max, expire_seconds, retention_seconds, deletion_seconds, warning_queued, dead_letter, partition, table_name, heartbeat_seconds)
+VALUES ('voc.similarity_preview_cleanup', 'standard', 5, 30, true, NULL, 900, 1209600, 604800, 0, NULL, false, 'job_common', NULL)
 ON CONFLICT DO NOTHING;
