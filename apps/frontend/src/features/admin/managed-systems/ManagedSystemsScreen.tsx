@@ -205,7 +205,7 @@ function ManagedSystemsBody({
                     {warning.origin === 'configuration'
                       ? MANAGED_SYSTEM_COPY.currentConfiguration
                       : `${MANAGED_SYSTEM_COPY.creationFailure(warning.count)} · ${MANAGED_SYSTEM_COPY.lastFailure} ${warning.last_failed_at ? formatDateTime(warning.last_failed_at) : '—'}`}
-                  </span>
+                  </span>{' '}
                   <Button
                     variant="subtle"
                     size="sm"
