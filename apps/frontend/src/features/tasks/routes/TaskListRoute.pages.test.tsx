@@ -1,3 +1,4 @@
+import { TasksRouteView } from '@/routes/_authed/tasks';
 import { type TaskDto, listTasksQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -117,11 +118,19 @@ describe('Task list paging and independent selection', () => {
                   primary_managed_system_id: '30000000-0000-0000-0000-000000000099',
                 });
           if (url.pathname === `/tasks/${task.id}`) return response(task);
-          listTasksQuerySchema.parse(Object.fromEntries(url.searchParams));
+          expect(
+            listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)).public_update,
+          ).toBe('missing');
           return response({ items: [task], page: { total: 1, has_more: false } });
         }),
       );
-      mount(<TaskListRoute selectedParam={second.id} managedSystem={ms} />);
+      mount(
+        <TaskListRoute
+          selectedParam={second.id}
+          managedSystem={ms}
+          filters={{ public_update: 'missing' }}
+        />,
+      );
       await waitFor(() =>
         expect(navigate).toHaveBeenCalledWith({
           to: '/tasks',
@@ -160,4 +169,80 @@ describe('Task list paging and independent selection', () => {
     expect(queries[0]?.limit).toBeUndefined();
     expect(queries[0]?.cursor).toBeUndefined();
   });
+});
+
+it.each(['backlog', 'my'] as const)(
+  'sends intersecting report filters from %s on every page',
+  async (view) => {
+    const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname === `/tasks/${task.id}`) return response(task);
+        if (url.pathname === `/tasks/${second.id}`) return response(second);
+        queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+        return response({
+          items: queries.length === 1 ? [task] : [second],
+          page: { total: 2, has_more: queries.length === 1, cursor: 'next' },
+        });
+      }),
+    );
+    mount(
+      <TaskListRoute
+        view={view}
+        managedSystem={ms}
+        filters={{
+          'filter.analytics_area': 'unset',
+          status: 'doing',
+          status_group: 'in-flight',
+          overdue: true,
+          public_update: 'missing',
+          reporter_update: 'needed',
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '더 불러오기' }));
+    await waitFor(() => expect(queries).toHaveLength(2));
+    for (const query of queries)
+      expect(query).toMatchObject({
+        managed_system_id: ms,
+        analytics_area_id: 'unset',
+        status: 'doing',
+        status_group: 'in-flight',
+        overdue: 'true',
+        public_update: 'missing',
+        reporter_update: 'needed',
+        ...(view === 'my' ? { assignee: 'me' } : {}),
+      });
+    expect(queries[1]?.cursor).toBe('next');
+  },
+);
+
+it('keeps board requests limited to the existing public_update filter', async () => {
+  const queries: Array<ReturnType<typeof listTasksQuerySchema.parse>> = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      queries.push(listTasksQuerySchema.parse(Object.fromEntries(url.searchParams)));
+      return response({ items: [task] });
+    }),
+  );
+  mount(
+    <TasksRouteView
+      search={{
+        view: 'board',
+        managedSystem: ms,
+        'filter.analytics_area': 'unset',
+        status: 'doing',
+        status_group: 'in-flight',
+        overdue: true,
+        public_update: 'missing',
+        reporter_update: 'needed',
+      }}
+    />,
+  );
+  await screen.findByText('TASK-1');
+  expect(queries[0]).toEqual({ managed_system_id: ms, public_update: 'missing' });
 });

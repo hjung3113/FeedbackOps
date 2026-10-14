@@ -3,12 +3,13 @@
 // malformed cases so the error assertions cannot pass vacuously.
 
 import { ApiParseError } from '@/lib/api/types';
+import { listSurveysQuerySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
-import { useSurvey, useSurveys } from '../useSurveys';
+import { surveyKeys, useSurvey, useSurveys } from '../useSurveys';
 
 const originalFetch = global.fetch;
 
@@ -124,3 +125,63 @@ describe('useSurvey (detail)', () => {
     expect(result.current.error).toBeInstanceOf(ApiParseError);
   });
 });
+
+it('sends intersecting Survey report filters and refetches when they change', async () => {
+  const queries: Array<ReturnType<typeof listSurveysQuerySchema.parse>> = [];
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    queries.push(
+      listSurveysQuerySchema.parse(
+        Object.fromEntries(new URL(String(input), 'http://localhost').searchParams),
+      ),
+    );
+    return new Response(JSON.stringify([SURVEY]), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  let filters: { analytics_area_id?: string; status?: 'open'; follow_up?: 'needed' } = {
+    analytics_area_id: 'unset',
+    status: 'open',
+    follow_up: 'needed',
+  };
+  const { result, rerender } = renderHookWithClient(() =>
+    useSurveys(SURVEY.primary_managed_system_id, filters),
+  );
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(queries[0]).toEqual({
+    managed_system_id: SURVEY.primary_managed_system_id,
+    analytics_area_id: 'unset',
+    status: 'open',
+    follow_up: 'needed',
+  });
+  filters = { analytics_area_id: SURVEY.id };
+  rerender();
+  await waitFor(() => expect(queries).toHaveLength(2));
+  expect(queries[1]).toEqual({
+    managed_system_id: SURVEY.primary_managed_system_id,
+    analytics_area_id: SURVEY.id,
+  });
+});
+
+it.each([undefined, SURVEY.primary_managed_system_id])(
+  'reuses the existing unfiltered Survey cache for scope %s',
+  async (managedSystemId) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+    });
+    client.setQueryData(
+      managedSystemId ? surveyKeys.listScoped(managedSystemId) : surveyKeys.list,
+      [SURVEY],
+    );
+    global.fetch = vi.fn(async () => {
+      throw new Error('Unfiltered cache should serve this request');
+    });
+    const { result } = renderHook(() => useSurveys(managedSystemId), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current.data).toEqual([SURVEY]));
+    expect(global.fetch).not.toHaveBeenCalled();
+  },
+);

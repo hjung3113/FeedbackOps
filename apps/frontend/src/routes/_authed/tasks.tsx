@@ -4,6 +4,7 @@ import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
 import { recoverySearchFields } from '@/lib/router/recovery-search';
 import { parseRouteSearch } from '@/lib/router/search';
+import { taskStatusSchema } from '@fops/shared';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -13,6 +14,12 @@ export const tasksSearchSchema = z
     view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: taskStatusSchema.optional(),
+    status_group: z.literal('in-flight').optional(),
+    // TanStack decodes a hand-written ?overdue=true as the boolean true.
+    overdue: z.preprocess((value) => (value === 'true' ? true : value), z.literal(true).optional()),
+    reporter_update: z.literal('needed').optional(),
     public_update: z.literal('missing').optional(),
     reviewer: z.union([z.string().uuid(), z.literal('me')]).optional(),
     reviewerTeam: z.string().uuid().optional(),
@@ -57,7 +64,9 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
     return <MilestonesRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   const view = search.view === 'my' ? 'my' : 'backlog';
-  return <TaskListRoute view={view} {...managedSystemProps} {...selectedParamProps} />;
+  return (
+    <TaskListRoute view={view} {...managedSystemProps} {...selectedParamProps} filters={search} />
+  );
 }
 
 function TasksRouteShell() {

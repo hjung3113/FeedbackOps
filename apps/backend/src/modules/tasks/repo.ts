@@ -5,6 +5,7 @@ import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { releasedTaskUnresolvedVocPredicate } from '../voc/index.js';
 
 export interface TaskRow {
   cursor_timestamp?: string;
@@ -286,6 +287,10 @@ interface ListInput {
   assigneeActorId?: string;
   assigneeTeamId?: string;
   managedSystemId?: string;
+  analyticsAreaId?: string;
+  statusGroup?: 'in-flight';
+  overdue?: 'true';
+  reporterUpdate?: 'needed';
   publicUpdate?: 'missing';
   milestoneId?: string;
   allowedSystemIds?: string[];
@@ -304,6 +309,22 @@ function listPredicates(input: ListInput) {
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
   }
+  if (input.analyticsAreaId !== undefined) {
+    predicates.push(
+      input.analyticsAreaId === 'unset'
+        ? sql`analytics_area_id IS NULL`
+        : sql`analytics_area_id = ${input.analyticsAreaId}::uuid`,
+    );
+  }
+  if (input.statusGroup === 'in-flight')
+    predicates.push(sql`status IN ('todo', 'doing', 'review')`);
+  if (input.overdue === 'true')
+    predicates.push(sql`status IN ('backlog', 'todo', 'doing', 'review', 'reopened')
+      AND due_date IS NOT NULL AND due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date`);
+  if (input.reporterUpdate === 'needed')
+    predicates.push(
+      sql`status = 'released' AND ${releasedTaskUnresolvedVocPredicate(input.workspaceId, sql`task.tasks.id`)}`,
+    );
   // Gap side of countReleasedTasksWithPublicUpdate (dashboard/repo.ts):
   // released, in that denominator, and not in that numerator. Do not import it.
   if (input.publicUpdate === 'missing') {

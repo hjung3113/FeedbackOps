@@ -1108,6 +1108,14 @@ export function createTasksService(deps: TasksServiceDeps) {
         ? {}
         : { assigneeTeamId: args.query.assignee_team_id }),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+      ...(args.query.analytics_area_id === undefined
+        ? {}
+        : { analyticsAreaId: args.query.analytics_area_id }),
+      ...(args.query.status_group === undefined ? {} : { statusGroup: args.query.status_group }),
+      ...(args.query.overdue === undefined ? {} : { overdue: args.query.overdue }),
+      ...(args.query.reporter_update === undefined
+        ? {}
+        : { reporterUpdate: args.query.reporter_update }),
       ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
       ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
       ...(allowedSystemIds === undefined ? {} : { allowedSystemIds }),

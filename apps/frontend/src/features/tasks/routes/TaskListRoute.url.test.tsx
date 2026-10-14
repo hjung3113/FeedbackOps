@@ -184,6 +184,8 @@ it.each(['backlog', 'my'] as const)(
     );
     expect(mounted.history.length).toBe(2);
     expect(screen.getByTestId('detail')).toHaveTextContent(second.id);
+    const { signal: _signal, ...sent } = vi.mocked(listTasks).mock.calls.at(-1)?.[0] ?? {};
+    expect(listTasksQuerySchema.parse(sent).public_update).toBe('missing');
   },
 );
 it('closes with replace and keeps scope, stays closed through refetch, and reopens on row selection', async () => {
@@ -198,6 +200,8 @@ it('closes with replace and keeps scope, stays closed through refetch, and reope
     }),
   );
   expect(mounted.history.length).toBe(1);
+  const { signal: _signal, ...sent } = vi.mocked(listTasks).mock.calls.at(-1)?.[0] ?? {};
+  expect(listTasksQuerySchema.parse(sent).public_update).toBe('missing');
   expectNoSelectedRow();
   await settle(mounted);
   expectNoSelectedRow();

@@ -494,7 +494,8 @@ endpoint is introduced by this ADR.
 
 ## Analytics Area report destination extension (ADR-0069)
 
-These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+The wire query keys, browser search, typed frontend forwarding and rendered filters are
+**implemented by #1077 (backend + shared + frontend)**. Keep existing unfiltered,
 legacy and paging behavior. Apply workspace and source authorization before Area filtering,
 counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
 `unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields

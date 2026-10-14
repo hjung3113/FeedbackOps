@@ -3,15 +3,20 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { getTask, listTasks } from '@/lib/api';
 import { ApiError, isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
-import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
-import { TASK_LINK_MISSING_MESSAGE } from '@/lib/copy/tasks';
+import {
+  TASK_REPORT_FILTER_COPY as FILTER_COPY,
+  TASK_LINK_MISSING_MESSAGE,
+} from '@/lib/copy/tasks';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatCount } from '@/lib/format/count';
 import { formatShortDateTime } from '@/lib/format/datetime';
-import type { ListTasksResponse } from '@fops/shared';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
+import type { ListTasksResponse, TaskStatus } from '@fops/shared';
 import {
+  ActiveFilterBar,
   InternalTaskBadge,
   ListShell,
   ObjectRow,
@@ -35,6 +40,23 @@ import { useCloseFocusReturn } from '../hooks/useCloseFocusReturn';
 import { useTaskPanelSelection } from '../hooks/useTaskPanelSelection';
 
 const PAGE_SIZE = 50;
+const FILTER_KEYS = [
+  'filter.analytics_area',
+  'status',
+  'status_group',
+  'overdue',
+  'public_update',
+  'reporter_update',
+] as const;
+
+export type TaskListFilters = {
+  'filter.analytics_area'?: string | undefined;
+  status?: TaskStatus | undefined;
+  status_group?: 'in-flight' | undefined;
+  overdue?: true | undefined;
+  public_update?: 'missing' | undefined;
+  reporter_update?: 'needed' | undefined;
+};
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
@@ -44,10 +66,12 @@ export function TaskListRoute({
   view = 'backlog',
   selectedParam,
   managedSystem,
+  filters = {},
 }: {
   view?: 'my' | 'backlog';
   selectedParam?: string | undefined;
   managedSystem?: string;
+  filters?: TaskListFilters;
 }) {
   const navigate = useNavigate();
   const { rowRef, returnFocus, cancel } = useCloseFocusReturn(
@@ -67,8 +91,43 @@ export function TaskListRoute({
     },
     [navigate, view],
   );
+  const wireFilters = {
+    ...(filters['filter.analytics_area'] === undefined
+      ? {}
+      : { analytics_area_id: filters['filter.analytics_area'] }),
+    ...(filters.status === undefined ? {} : { status: filters.status }),
+    ...(filters.status_group === undefined ? {} : { status_group: filters.status_group }),
+    ...(filters.overdue === undefined ? {} : { overdue: 'true' as const }),
+    ...(filters.public_update === undefined ? {} : { public_update: filters.public_update }),
+    ...(filters.reporter_update === undefined ? {} : { reporter_update: filters.reporter_update }),
+  };
+  const areaLabel = useAnalyticsAreaFilterLabel(filters['filter.analytics_area'], managedSystem);
+  const removeFilters = (keys: readonly (keyof TaskListFilters)[]) => {
+    void navigate({
+      to: '/tasks',
+      search: (previous) => {
+        const next = { ...previous };
+        for (const key of keys) delete next[key];
+        return next;
+      },
+    });
+  };
+  const labels = {
+    'filter.analytics_area': areaLabel,
+    status:
+      filters.status === undefined ? '' : FILTER_COPY.status(TASK_STATUS_LABELS[filters.status]),
+    status_group: FILTER_COPY.inFlight,
+    overdue: FILTER_COPY.overdue,
+    public_update: FILTER_COPY.publicUpdate,
+    reporter_update: FILTER_COPY.reporterUpdate,
+  };
+  const activeFilters = FILTER_KEYS.flatMap((key) =>
+    filters[key] === undefined
+      ? []
+      : [{ key, label: labels[key], onRemove: () => removeFilters([key]) }],
+  );
   const tasksQuery = useInfiniteQuery({
-    queryKey: ['tasks', view, managedSystem, 'pages'] as const,
+    queryKey: ['tasks', view, managedSystem, 'pages', wireFilters] as const,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: ListTasksResponse) =>
       last.page?.has_more ? last.page.cursor : undefined,
@@ -76,6 +135,7 @@ export function TaskListRoute({
       listTasks({
         signal,
         limit: PAGE_SIZE,
+        ...wireFilters,
         ...(pageParam === undefined ? {} : { cursor: pageParam }),
         ...(view === 'my' ? { assignee: 'me' } : {}),
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
@@ -93,7 +153,7 @@ export function TaskListRoute({
     {
       selectedParam,
       items,
-      context: [view, managedSystem],
+      context: [view, JSON.stringify([managedSystem, wireFilters])],
       onSelectionChange,
     },
   );
@@ -182,6 +242,11 @@ export function TaskListRoute({
       }}
       list={
         <>
+          <ActiveFilterBar
+            items={activeFilters}
+            onClearAll={() => removeFilters(FILTER_KEYS)}
+            className="mx-5 my-2"
+          />
           {items.map((task) => {
             const assignee = resolveTaskAssignee(task.assignee_actor_id, actorNamesById);
             return (
@@ -231,7 +296,13 @@ export function TaskListRoute({
             onLoadMore={() => void tasksQuery.fetchNextPage()}
           />
           {items.length === 0 &&
-            (view === 'my' ? (
+            (activeFilters.length > 0 ? (
+              <ListStateMessage
+                variant="filtered"
+                title={FILTER_COPY.empty}
+                body={activeFilters.map((filter) => filter.label).join(' · ')}
+              />
+            ) : view === 'my' ? (
               <ListStateMessage variant="empty" title="나에게 배정된 Task가 없습니다." />
             ) : (
               <ListStateMessage

@@ -62,6 +62,8 @@ const links = [
     ...Object.values(DASHBOARD_HOP_ROUTES),
     ...ALL_SIDEBAR_ENTRIES.map((entry) => entry.href),
     HOME_COVERAGE_HREF,
+    '/tasks?view=backlog&public_update=missing',
+    '/surveys?follow_up=needed',
   ]),
 ];
 

@@ -509,9 +509,10 @@ history is retained; each disclosed pair on an eligible read still audits in tha
 
 ## Analytics Area report destination extension (ADR-0069)
 
-These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
-legacy and paging behavior. Apply workspace and source authorization before Area filtering,
-counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
+The wire query keys, browser search, typed frontend forwarding and rendered filters are
+**implemented by #1077 (backend + shared + frontend)**. Keep existing unfiltered
+and legacy behavior; this list remains unpaged. Apply workspace and source authorization before
+Area filtering and classifier evaluation. A UUID matches only the source's own current `analytics_area_id`;
 `unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
 an empty authorized result, without catalog existence disclosure. Archived referenced Areas
 remain filterable; they are not selectable as new classifications. Browser key is
@@ -521,7 +522,9 @@ cross-source availability rules; hidden links are not absent links. These ordina
 no source records or domain audit events. Source repair commands keep their existing gates/audits.
 
 `GET /surveys` gains wire `analytics_area_id=<uuid|unset>`, `status=open`, and `follow_up=needed`.
-The existing Survey list response remains an authorized Survey DTO array.
+The existing Survey list response remains an authorized Survey DTO array. The shared query
+schema is strict: unknown keys or invalid values return `422 validation.failed`. All filters
+intersect, including `status=open&follow_up=needed`, which returns `[]`.
 `follow_up=needed` uses the Survey-owned boolean from the ADR-0055 threshold-gated closed Outcome
 classifier: at least one currently poor response has resolution `open`. Count/list each Survey once,
 regardless of the number of poor responses. Open/draft, below-threshold and no-poor-answer Surveys

@@ -5,6 +5,8 @@ import { CAPABILITY_LABELS } from '@/lib/copy/capabilities';
 import { SURVEY_STATUS_LABELS, SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { GLOSSARY } from '@/lib/copy/glossary';
 import {
+  ActiveFilterBar,
+  type ActiveFilterBarProps,
   Button,
   Input,
   ListToolbar,
@@ -27,6 +29,8 @@ const SURVEY_LIST_PANEL_ID = 'survey-list-panel';
 
 export interface SurveyListProps {
   surveys: Survey[];
+  urlFilters?: ActiveFilterBarProps['items'];
+  onClearUrlFilters?: () => void;
   isLoading: boolean;
   error: Error | null;
   selectedId?: string | null;
@@ -41,6 +45,8 @@ export interface SurveyListProps {
 
 export function SurveyList({
   surveys,
+  urlFilters = [],
+  onClearUrlFilters,
   isLoading,
   error,
   selectedId,
@@ -78,10 +84,13 @@ export function SurveyList({
       </div>
     );
   const activeConditions = [
+    ...urlFilters.map((filter) => filter.label),
     ...(status !== 'all' ? [`상태: ${surveyStatusLabel(status)}`] : []),
     ...(search.length > 0 ? [`검색어: ${search}`] : []),
   ];
-  const isFilteredEmpty = surveys.length > 0 && visible.length === 0 && activeConditions.length > 0;
+  const hasUrlFilters = urlFilters.length > 0;
+  const isFilteredEmpty =
+    visible.length === 0 && activeConditions.length > 0 && (hasUrlFilters || surveys.length > 0);
   const toolbarTabs: ListToolbarTab[] = tabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
@@ -142,6 +151,17 @@ export function SurveyList({
           </div>
         }
       />
+      {hasUrlFilters && onClearUrlFilters && (
+        <ActiveFilterBar
+          items={urlFilters}
+          onClearAll={() => {
+            setStatus('all');
+            setSearch('');
+            onClearUrlFilters();
+          }}
+          className="mx-5 my-2"
+        />
+      )}
       <div id={SURVEY_LIST_PANEL_ID} role="tabpanel" aria-labelledby={`survey-tab-${status}`}>
         {visible.length === 0 ? (
           isFilteredEmpty ? (
@@ -149,13 +169,17 @@ export function SurveyList({
               variant="filtered"
               title="현재 조건에 맞는 Survey가 없습니다"
               body={activeConditions.join(' · ')}
-              action={{
-                label: '필터 초기화',
-                onClick: () => {
-                  setStatus('all');
-                  setSearch('');
-                },
-              }}
+              {...(hasUrlFilters
+                ? {}
+                : {
+                    action: {
+                      label: '필터 초기화',
+                      onClick: () => {
+                        setStatus('all');
+                        setSearch('');
+                      },
+                    },
+                  })}
             />
           ) : (
             <ListStateMessage

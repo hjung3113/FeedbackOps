@@ -1,5 +1,6 @@
 import {
   createFindingFromSurveyResponseRequestSchema,
+  listSurveysQuerySchema,
   outcomeFollowUpDecisionRequestSchema,
   recoveryPresentationPatchSchema,
   surveyEvidenceCandidatesQuerySchema,
@@ -149,9 +150,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     );
   });
   app.get('/surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
-    const q = z
-      .object({ managed_system_id: z.union([uuid, z.literal('all')]).optional() })
-      .safeParse(req.query);
+    const q = listSurveysQuerySchema.safeParse(req.query);
     if (!q.success)
       return sendError(reply, 'validation.failed', 'invalid query parameters', {
         fields: fieldsFromZodIssues(q.error.issues),
@@ -160,6 +159,7 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       await opts.surveysService.listSurvey(
         actor(req),
         q.data.managed_system_id === 'all' ? undefined : q.data.managed_system_id,
+        q.data,
       ),
     );
   });
