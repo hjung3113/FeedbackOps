@@ -74,6 +74,7 @@ export async function resolveOwner(
       managed_system_id: ms.id,
     };
   }
+  const missingFailures: ResponsibilityDefaultFailure[] = [];
   for (const candidate of [
     {
       rule: 'managed_system_owner' as const,
@@ -94,15 +95,19 @@ export async function resolveOwner(
         source_rule: candidate.rule,
         managed_system_id: ms.id,
       };
-    await recordResponsibilityDefaultFailure(tx, {
+    const diagnostic: ResponsibilityDefaultFailure = {
       workspace_id: workspaceId,
       managed_system_id: ms.id,
       workflow: 'voc',
       responsibility: 'owner',
       rule: candidate.rule,
       category: failure,
-    });
+    };
+    if (failure === 'missing') missingFailures.push(diagnostic);
+    else await recordResponsibilityDefaultFailure(tx, diagnostic);
   }
+  for (const diagnostic of missingFailures)
+    await recordResponsibilityDefaultFailure(tx, diagnostic);
   return {
     owner_user_id: null,
     owner_team_id: null,

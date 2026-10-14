@@ -473,7 +473,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
             [msId],
           );
           expect(failures.rows).toHaveLength(
-            variant === 'actor' || variant === 'null' ? 0 : variant === 'aa_team' ? 1 : 2,
+            variant === 'actor' || variant === 'null' ? 0 : variant === 'aa_team' ? 0 : 2,
           );
           if (variant === 'denied_admin')
             expect(failures.rows).toContainEqual({

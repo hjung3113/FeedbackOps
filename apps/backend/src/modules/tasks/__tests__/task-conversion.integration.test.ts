@@ -662,7 +662,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           'select rule from core.responsibility_default_failures where managed_system_id = $1',
           [request.msId],
         );
-        expect(diagnostics.rows).toHaveLength(mode === 'aa' ? 1 : 0);
+        expect(diagnostics.rows).toHaveLength(0);
       }
       expect(notifications.jobs).toHaveLength(0);
     },

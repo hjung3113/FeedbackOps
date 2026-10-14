@@ -28,6 +28,26 @@ test.describe('permission request composition and Managed System owner', () => {
     await expectVisual(page, dialog, 'permission-request-compose.png');
   });
 
+  test('ms-registry-diagnostics', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await installMockApi(page, { managedSystemDiagnostics: true, role: 'admin' });
+    await page.goto('/admin/managed-systems');
+    await expect(page.getByText('현재 설정', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('생성 시 기본 배정 실패 12건 · 마지막 2026. 7. 20. 오후 5:45', {
+        exact: true,
+      }),
+    ).toHaveCount(3);
+    await expect(
+      page.getByRole('button', { name: 'Analytics Operations Managed System 설정 열기' }),
+    ).toHaveCount(4);
+    await expectVisual(
+      page,
+      page.getByTestId('managed-systems-registry'),
+      'ms-registry-diagnostics.png',
+    );
+  });
+
   test('ms-register-with-owner', async ({ page }) => {
     await installMockApi(page, { managedSystemOwner: true, role: 'admin' });
     await page.goto('/admin/managed-systems');

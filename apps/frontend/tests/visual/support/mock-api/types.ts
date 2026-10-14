@@ -60,6 +60,8 @@ export interface InstallOptions {
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
   managedSystemOwner?: boolean;
+  /** Populated registry configuration and creation-failure diagnostics. */
+  managedSystemDiagnostics?: boolean;
   /** Triage Analytics Area wiring and Finding inheritance states. */
   triageAreaScenario?: TriageAreaVisualScenario;
   /** VOC creation with a selected Managed System and pre-submit peers. */

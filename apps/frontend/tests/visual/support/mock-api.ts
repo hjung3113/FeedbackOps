@@ -105,7 +105,7 @@ export async function installMockApi(
     ...createPermissionGrantHandlers(),
     ...createVocClusterListHandlers(),
     ...createSurveyManagedSystemHandlers(context),
-    ...createManagedSystemHandlers(),
+    ...createManagedSystemHandlers(context),
     ...createFindingListFallbackHandlers(),
     ...createCommentHandlers(),
     ...createVocClusterDetailHandlers(),

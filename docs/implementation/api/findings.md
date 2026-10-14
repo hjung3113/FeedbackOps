@@ -205,8 +205,10 @@ automatic candidates skip with safe audit metadata/Admin warning. Preserve sourc
 entity links, creation state, rollback/idempotent replay, and no provenance backfill.
 Creation responses and audits include the persisted owner pair, `default_resolved`,
 `source_rule` (`explicit`, `managed_system_owner`, `analytics_area_owner`,
-`workspace_fallback_queue`), and `managed_system_id`. Skipped-rule categories append through
-Core diagnostics in the same transaction, never on replay/rejection. Normal reads use the
+`workspace_fallback_queue`), and `managed_system_id`. Configured-but-invalid skipped
+candidates append through Core diagnostics regardless of the final outcome; empty (`missing`)
+skipped candidates append only when creation ends at `workspace_fallback_queue`, in the same
+transaction, never on replay/rejection. Normal reads use the
 persisted pair; no default-edit backfill or provenance inference occurs. The source-owned
 Finding detail displays/edits responsibility and the list persists its assignment filter in
 URL state. No team candidate catalog or team membership administration is introduced.

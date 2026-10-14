@@ -1,3 +1,4 @@
+import type { ManagedSystemDefaultDiagnostics } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -60,12 +61,14 @@ function response(body: unknown, status = 200) {
 function installFetch(
   options: {
     diagnosticsError?: boolean;
+    diagnostics?: ManagedSystemDefaultDiagnostics['items'];
     mutationError?: boolean;
     reviewerTeam?: boolean;
     fieldError?: 'owner' | 'reviewer';
     revokedActor?: boolean;
     candidateError?: boolean;
     ownerOnly?: boolean;
+    sameName?: boolean;
   } = {},
 ) {
   let saved = false;
@@ -109,7 +112,7 @@ function installFetch(
       return response({
         items: saved
           ? []
-          : [
+          : (options.diagnostics ?? [
               {
                 managed_system_id: TEAM_OWNER_SYSTEM_ID,
                 workflow: 'task_request',
@@ -120,13 +123,14 @@ function installFetch(
                 count: 2,
                 last_failed_at: '2026-10-13T00:00:00.000Z',
               },
-            ],
+            ]),
       });
     }
     if (url.pathname === '/managed-systems')
       return response({
         items: systems.map((system) => ({
           ...system,
+          ...(options.sameName ? { name: 'Team Owned System' } : {}),
           default_reviewer_actor_id: options.revokedActor ? ACTOR_ID : null,
           default_reviewer_team_id: options.reviewerTeam ? TEAM_ID : null,
         })),
@@ -418,12 +422,94 @@ describe('Managed System default owner', () => {
     ).toHaveAttribute('aria-disabled', 'true');
   });
 
+  test('diagnostics distinguish current configuration and skipped rules without claiming unassignment', async () => {
+    const common = {
+      managed_system_id: TEAM_OWNER_SYSTEM_ID,
+      workflow: 'task_request' as const,
+      responsibility: 'reviewer' as const,
+      category: 'ineligible_actor' as const,
+    };
+    installFetch({
+      diagnostics: [
+        {
+          ...common,
+          rule: 'managed_system_reviewer',
+          origin: 'configuration',
+          count: 1,
+          last_failed_at: null,
+        },
+        {
+          ...common,
+          rule: 'managed_system_reviewer',
+          origin: 'creation_failure',
+          count: 2,
+          last_failed_at: '2026-10-13T00:00:00.000Z',
+        },
+        {
+          ...common,
+          rule: 'managed_system_owner',
+          origin: 'creation_failure',
+          count: 2,
+          last_failed_at: '2026-10-13T00:00:00.000Z',
+        },
+      ],
+    });
+    renderPage();
+    const current = await screen.findByText('현재 설정');
+    const row = current.closest('li');
+    if (!row) throw new Error('Configuration row missing');
+    expect(row).toHaveTextContent(
+      'Team Owned System · 기본 검토자 · 배정에 필요한 권한이 없습니다. · 현재 설정',
+    );
+    expect(row).not.toHaveTextContent('Task Request');
+    const failures = screen.getAllByText(
+      '생성 시 기본 배정 실패 2건 · 마지막 2026. 10. 13. 오전 9:00',
+    );
+    expect(failures).toHaveLength(2);
+    const lines = [row.textContent, ...failures.map((item) => item.closest('li')?.textContent)];
+    expect(new Set(lines).size).toBe(3);
+    expect(failures[0]?.closest('li')).toHaveTextContent(
+      'Task Request · Managed System 기본 검토자',
+    );
+    expect(failures[1]?.closest('li')).toHaveTextContent(
+      'Task Request · Managed System 기본 담당자',
+    );
+    expect(screen.queryByText(/생성 시 미배정/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Team Owned System 설정 열기' })).toHaveLength(3);
+  });
+
+  test('diagnostics tell same-name systems apart by slug', async () => {
+    const warning = {
+      workflow: 'voc' as const,
+      responsibility: 'owner' as const,
+      rule: 'managed_system_owner' as const,
+      category: 'missing' as const,
+      origin: 'configuration' as const,
+      count: 1,
+      last_failed_at: null,
+    };
+    installFetch({
+      sameName: true,
+      diagnostics: [
+        { ...warning, managed_system_id: UNKNOWN_OWNER_SYSTEM_ID },
+        { ...warning, managed_system_id: TEAM_OWNER_SYSTEM_ID },
+      ],
+    });
+    renderPage();
+    expect(
+      await screen.findByRole('button', { name: 'Team Owned System (owner-unknown) 설정 열기' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Team Owned System (team-owned) 설정 열기' }),
+    ).toBeInTheDocument();
+  });
+
   test('FIX1 warning explains repair, marks its row and opens that system settings', async () => {
     installFetch();
     renderPage();
     expect(
       await screen.findByText(
-        '해당 기본값으로는 자동 배정되지 않습니다. 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+        '현재 설정 문제와 생성 시 기본 배정 실패 기록을 확인하고 필요하면 설정에서 기본 담당자/검토자를 다시 지정하세요.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -469,7 +555,7 @@ describe('Managed System default owner', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(
       await screen.findByText(
-        '해당 기본값으로는 자동 배정되지 않습니다. 설정에서 기본 담당자/검토자를 다시 지정하세요.',
+        '현재 설정 문제와 생성 시 기본 배정 실패 기록을 확인하고 필요하면 설정에서 기본 담당자/검토자를 다시 지정하세요.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('설정 경고를 확인하지 못했습니다.')).not.toBeInTheDocument();

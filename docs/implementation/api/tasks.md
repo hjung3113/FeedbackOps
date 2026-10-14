@@ -562,8 +562,10 @@ unchanged. Writes, audits and notifications roll back together.
 
 Creation/conversion responses and creation audits expose safe `default_resolved`,
 `source_rule`, `managed_system_id` and the actual responsibility pair. Automatic candidates
-are rechecked in the destination transaction. Each skipped MS reviewer/owner/AA rule adds
-one Core diagnostic; a fallback succeeds with null responsibility and
+are rechecked in the destination transaction. Each configured-but-invalid skipped MS
+reviewer/owner/AA candidate adds one Core diagnostic regardless of the final outcome;
+empty (`missing`) skipped candidates add diagnostics only when creation ends at
+`workspace_fallback_queue`. A fallback succeeds with null responsibility and
 `source_rule=workspace_fallback_queue`. Explicit input/null, rejected transactions and
 replay add no diagnostic. Ordinary reads return current assignments without reconstructing
 creation provenance. Cluster has no direct Analytics Area classification and uses MS then

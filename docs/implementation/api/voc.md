@@ -59,8 +59,10 @@ then active same-system Analytics Area owner team, then null fallback. Creation 
 `untriaged`, with null severity and `received` reporter status. The response and
 `voc_created` audit carry the persisted pair, `default_resolved`, `source_rule`
 (`explicit`, `managed_system_owner`, `analytics_area_owner`, `workspace_fallback_queue`),
-and `managed_system_id`. Skipped rules append safe diagnostics within the same transaction;
-replays and rejected creation append nothing. Actor eligibility uses current `voc.triage`
+and `managed_system_id`. Configured-but-invalid skipped candidates append safe diagnostics
+regardless of the final outcome; empty (`missing`) skipped candidates append only when
+creation ends at `workspace_fallback_queue`, within the same transaction. Replays and
+rejected creation append nothing. Actor eligibility uses current `voc.triage`
 including explicit denies, expiry and revocation. Teams must be active and same-workspace.
 
 Reporter is derived from the authenticated Actor. Severity is assigned during

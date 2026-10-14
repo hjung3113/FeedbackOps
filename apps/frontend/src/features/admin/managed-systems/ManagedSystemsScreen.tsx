@@ -31,6 +31,7 @@ import { useState } from 'react';
 
 import { GLOSSARY } from '@/lib/copy/glossary';
 import { MANAGED_SYSTEM_COPY } from '@/lib/copy/managed-systems';
+import { formatDateTime } from '@/lib/format/datetime';
 import type { AnalyticsAreaDto, ManagedSystemDto, ResolveActorsResponse } from '../../../lib/api';
 import { envelopeMessage } from '../lib/envelopeMessage.js';
 import { scopeMark } from '../lib/scopeMark.js';
@@ -174,34 +175,50 @@ function ManagedSystemsBody({
         <Callout tone="amber" title={MANAGED_SYSTEM_COPY.diagnostics}>
           <p className="mb-2">{MANAGED_SYSTEM_COPY.diagnosticsHint}</p>
           <ul className="flex flex-col gap-2">
-            {diagnosticsQuery.data.items.map((warning) => (
-              <li
-                key={`${warning.managed_system_id}-${warning.workflow}-${warning.rule}-${warning.category}-${warning.origin}`}
-              >
-                {systems.find((system) => system.id === warning.managed_system_id)?.name ??
-                  'Managed System'}
-                {' · '}
-                {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
-                {' · '}
-                {MANAGED_SYSTEM_COPY.roles[warning.responsibility]}
-                {' · '}
-                <span>{MANAGED_SYSTEM_COPY.categories[warning.category]}</span>
-                {warning.origin === 'creation_failure' ? ` (${warning.count})` : ''}
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => {
-                    const target = systems.find(
-                      (system) => system.id === warning.managed_system_id,
-                    );
-                    if (target) setEditTarget(target);
-                  }}
-                  aria-label={`${systems.find((system) => system.id === warning.managed_system_id)?.name ?? 'Managed System'} 설정 열기`}
+            {diagnosticsQuery.data.items.map((warning) => {
+              const target = systems.find((system) => system.id === warning.managed_system_id);
+              // Names are not unique (ADR-0017); the slug tells same-name systems apart.
+              const systemLabel = target
+                ? systems.some((system) => system.id !== target.id && system.name === target.name)
+                  ? `${target.name} (${target.slug})`
+                  : target.name
+                : 'Managed System';
+              return (
+                <li
+                  key={`${warning.managed_system_id}-${warning.workflow}-${warning.rule}-${warning.category}-${warning.origin}`}
                 >
-                  설정
-                </Button>
-              </li>
-            ))}
+                  {systemLabel}
+                  {' · '}
+                  {warning.origin === 'configuration' ? (
+                    MANAGED_SYSTEM_COPY.roles[warning.responsibility]
+                  ) : (
+                    <>
+                      {MANAGED_SYSTEM_COPY.workflows[warning.workflow]}
+                      {' · '}
+                      {MANAGED_SYSTEM_COPY.rules[warning.rule]}
+                    </>
+                  )}
+                  {' · '}
+                  <span>{MANAGED_SYSTEM_COPY.categories[warning.category]}</span>
+                  {' · '}
+                  <span>
+                    {warning.origin === 'configuration'
+                      ? MANAGED_SYSTEM_COPY.currentConfiguration
+                      : `${MANAGED_SYSTEM_COPY.creationFailure(warning.count)} · ${MANAGED_SYSTEM_COPY.lastFailure} ${warning.last_failed_at ? formatDateTime(warning.last_failed_at) : '—'}`}
+                  </span>{' '}
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => {
+                      if (target) setEditTarget(target);
+                    }}
+                    aria-label={`${systemLabel} 설정 열기`}
+                  >
+                    설정
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         </Callout>
       ) : null}
