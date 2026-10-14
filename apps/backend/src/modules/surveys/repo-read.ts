@@ -382,4 +382,3 @@ export async function countGroupedSurveysForReport(
   `);
   return result.rows;
 }
-

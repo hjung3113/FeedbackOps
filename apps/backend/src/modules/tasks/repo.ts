@@ -363,7 +363,9 @@ function listPredicates(input: ListInput) {
       sql`status = 'released' AND ${releasedTaskUnresolvedVocPredicate(input.workspaceId, sql`task.tasks.id`)}`,
     );
   if (input.publicUpdate === 'missing') {
-    predicates.push(sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`);
+    predicates.push(
+      sql`${releasedWithVocPredicate()} AND NOT (${releasedWithPublicUpdatePredicate()})`,
+    );
   }
   if (input.milestoneId !== undefined) {
     predicates.push(sql`milestone_id = ${input.milestoneId}`);
@@ -608,4 +610,3 @@ export async function countGroupedTasksForReport(
   if (!row) throw new Error('Task report clock missing');
   return { as_of_date: row.as_of_date, rows: row.groups };
 }
-

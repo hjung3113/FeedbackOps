@@ -1085,12 +1085,7 @@ export function createTasksService(deps: TasksServiceDeps) {
         : undefined;
     const cursor =
       args.query.cursor === undefined ? undefined : decodeListCursor(args.query.cursor);
-    const scope = await actorTaskListScope(
-      deps.db,
-      deps.checkService,
-      args.actor,
-      managedSystemId,
-    );
+    const scope = await actorTaskListScope(deps.db, deps.checkService, args.actor, managedSystemId);
     const allowedSystemIds = scope.kind === 'all' ? undefined : scope.managedSystemIds;
     const input = {
       workspaceId: args.actor.workspace_id,

@@ -331,4 +331,3 @@ export async function countGroupedFindingsForReport(
   `);
   return result.rows;
 }
-
