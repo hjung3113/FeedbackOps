@@ -31,10 +31,6 @@ export async function actorSurveyReadScope(
   return actorScopeForCapability(db, actor, 'survey.read');
 }
 
-export function isSurveyInReadScope(scope: Scope, managedSystemId: string): boolean {
-  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
-}
-
 const denied: Decision = { allow: false, reason: 'no_grant', requestable: null };
 
 export async function checkSurveyRead(

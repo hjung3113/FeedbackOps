@@ -45,7 +45,7 @@ Dashboard is not a passive reporting helper.
   Rendered consumer compatibility is #1088-owned; deliver atomically.
   Measure bounded API/UI and recorder fanout against ADR-0067's budget.
 
-## Analytics Area report (ADR-0069; accepted, implementation pending)
+## Analytics Area report (ADR-0069; implemented by #1078)
 
 - Compose authorized grouped owner reads and batch catalog metadata, not foreign repositories or per-Area service calls.
 - Attribute each VOC/Finding/Task/Survey to its own current nullable Area UUID; keep null/archived context.

@@ -531,7 +531,7 @@ regardless of the number of poor responses. Open/draft, below-threshold and no-p
 never match; a qualifying current Finding or no-follow-up decision clears the corresponding response,
 and a Survey clears only when no unresolved poor response remains. Do not compute the filter by
 calling personal readers in a loop or exposing a response count/ID or answer-derived filter.
-The Survey owner provides a proposed/new grouped safe batch projection for Dashboard composition.
+The Survey owner provides the grouped safe batch projection `countGroupedSurveysForReport` for Dashboard composition (#1078).
 
 `survey.read` and explicit denies apply, including an explicit deny for an Admin. The report and
 ordinary filtered list add no personal-read fields or audits. Survey detail's existing
