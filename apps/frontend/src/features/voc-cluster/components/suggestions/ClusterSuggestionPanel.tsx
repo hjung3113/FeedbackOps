@@ -8,11 +8,13 @@ import {
   RichContentRenderer,
   type TipTapDoc,
 } from '@fops/ui';
-import { useCallback } from 'react';
+import { type RefObject, useEffect, useRef } from 'react';
 
 export function ClusterSuggestionPanel({
   item,
   notice,
+  noticeId,
+  fallbackRef,
   pending,
   blocked,
   onConfirm,
@@ -22,6 +24,8 @@ export function ClusterSuggestionPanel({
 }: {
   item: VocClusterSuggestionItem | null;
   notice: string | null;
+  noticeId: number;
+  fallbackRef: RefObject<HTMLDivElement | null>;
   pending: boolean;
   blocked: boolean;
   onConfirm: () => void;
@@ -29,15 +33,18 @@ export function ClusterSuggestionPanel({
   onClose: () => void;
   onReload: () => void;
 }) {
-  const focusNotice = useCallback((node: HTMLDivElement | null) => {
-    node?.focus();
-  }, []);
+  const noticeNode = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!noticeId) return;
+    const target = noticeNode.current?.isConnected ? noticeNode.current : fallbackRef.current;
+    if (target?.isConnected) target.focus();
+  }, [noticeId, fallbackRef]);
   return (
     <div data-testid="cluster-suggestion-panel">
       <DetailPanelHeader kind="cluster" extras={<h2>{COPY.tab}</h2>} onClose={onClose} />
       <div className="flex flex-col gap-5 p-5">
         {notice && (
-          <div key={notice} role="alert" tabIndex={-1} ref={focusNotice}>
+          <div role="alert" tabIndex={-1} ref={noticeNode}>
             <p>{notice}</p>
             <Button variant="secondary" size="sm" onClick={onReload}>
               {COPY.reload}

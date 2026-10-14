@@ -6,7 +6,9 @@ import {
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { clusterSuggestionsKey, useClusterSuggestions } from '../../hooks/useClusterSuggestions';
 import { ClusterSuggestionSession } from './ClusterSuggestionSession';
 
 const pair = vocClusterSuggestionItemSchema.parse({
@@ -494,3 +496,256 @@ it('expires while restore is pending and uses a bounded focus fallback if the re
   });
   expect(screen.getByLabelText('Cluster 제안')).toHaveFocus();
 });
+
+it.each([403, 404])(
+  'evicts a denied pair after tab exit before a delayed corrective read (%i)',
+  async (status) => {
+    const actorContext = 'workspace:actor:admin';
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function Host({ active }: { active: boolean }) {
+      const query = useClusterSuggestions(undefined, actorContext);
+      return (
+        <>
+          <span data-testid="badge">{query.data?.items.length}</span>
+          {active && (
+            <ClusterSuggestionSession actorContext={actorContext}>
+              {({ list, panel, count }) => (
+                <>
+                  <span data-testid="count">{count}</span>
+                  {list}
+                  {panel}
+                </>
+              )}
+            </ClusterSuggestionSession>
+          )}
+        </>
+      );
+    }
+    const view = (active: boolean) => (
+      <QueryClientProvider client={client}>
+        <Host active={active} />
+      </QueryClientProvider>
+    );
+    let release!: (response: Response) => void;
+    postResponse = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const { rerender } = render(view(true));
+    fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+    fireEvent.click(screen.getByRole('button', { name: '확인 후 Cluster 생성' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    rerender(view(false));
+    const reads: Array<(response: Response) => void> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            reads.push(resolve);
+          }),
+      ),
+    );
+    await act(async () => {
+      release(
+        json(
+          { code: status === 403 ? 'permission.denied' : 'not_found.record', message: 'safe' },
+          status,
+        ),
+      );
+    });
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    rerender(view(true));
+    expect(screen.queryByRole('button', { name: /VOC-12/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('첫 번째 본문')).not.toBeInTheDocument();
+    expect(screen.queryByText('두 번째 본문')).not.toBeInTheDocument();
+    expect(screen.getByTestId('badge')).toHaveTextContent('0');
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
+    await act(async () => {
+      for (const resolve of reads) resolve(json({ available: true, items: [] }));
+    });
+    client.clear();
+  },
+);
+
+it.each(
+  [403, 404].flatMap((status) =>
+    ['confirm', 'discard', 'restore'].map((action) => ({ status, action })),
+  ),
+)(
+  'evicts every captured actor scope and cancels obsolete reads before scope switch ($action $status)',
+  async ({ status, action }) => {
+    const actorContext = 'workspace:actor:admin';
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    for (const scope of [undefined, pair.primary_managed_system_id, 'other-ms']) {
+      client.setQueryData(clusterSuggestionsKey(scope, actorContext), {
+        available: true,
+        items: [pair],
+      });
+    }
+    client.setQueryData(clusterSuggestionsKey(undefined, 'other-workspace:actor:admin'), {
+      available: true,
+      items: [pair],
+    });
+    function Host({ scope }: { scope: string | undefined }) {
+      return (
+        <ClusterSuggestionSession
+          key={scope ?? 'all'}
+          managedSystemId={scope}
+          actorContext={actorContext}
+        >
+          {({ list, panel, count }) => (
+            <>
+              <span data-testid="count">{count}</span>
+              {list}
+              {panel}
+            </>
+          )}
+        </ClusterSuggestionSession>
+      );
+    }
+    const view = (scope: string | undefined) => (
+      <QueryClientProvider client={client}>
+        <Host scope={scope} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(pair.primary_managed_system_id));
+    fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+    if (action === 'restore') {
+      postResponse = async () => {
+        items = [];
+        return json({
+          id: pair.id,
+          revision: 4,
+          discarded_at: new Date().toISOString(),
+          undo_until: new Date(Date.now() + 300000).toISOString(),
+        });
+      };
+      fireEvent.click(screen.getByRole('button', { name: '기각' }));
+      await screen.findByRole('button', { name: '되돌리기' });
+    }
+    const obsolete: Array<{ resolve: (response: Response) => void; signal: AbortSignal }> = [];
+    const originalFetch = globalThis.fetch;
+    let delayReads = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string, init: RequestInit) => {
+        if (delayReads && init.method === 'GET')
+          return new Promise<Response>((resolve) => {
+            obsolete.push({ resolve, signal: init.signal as AbortSignal });
+          });
+        return originalFetch(path, init);
+      }),
+    );
+    delayReads = true;
+    // Start reads that still contain the old pair in every cached scope before denial.
+    const pendingReads = [undefined, pair.primary_managed_system_id, 'other-ms'].map((scope) =>
+      client.fetchQuery({
+        queryKey: clusterSuggestionsKey(scope, actorContext),
+        queryFn: async ({ signal }) =>
+          await fetch('/voc-cluster-suggestions', { method: 'GET', signal }).then((r) => r.json()),
+      }),
+    );
+    const settledReads = Promise.allSettled(pendingReads);
+    const oldReads = [...obsolete];
+    postResponse = async () =>
+      json(
+        { code: status === 403 ? 'permission.denied' : 'not_found.record', message: 'safe' },
+        status,
+      );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name:
+          action === 'restore'
+            ? '되돌리기'
+            : action === 'discard'
+              ? '기각'
+              : '확인 후 Cluster 생성',
+      }),
+    );
+    await screen.findByRole('alert');
+    rerender(view(undefined));
+    expect(screen.queryByRole('button', { name: /VOC-12/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('첫 번째 본문')).not.toBeInTheDocument();
+    expect(screen.queryByText('두 번째 본문')).not.toBeInTheDocument();
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
+    expect(oldReads.every(({ signal }) => signal.aborted)).toBe(true);
+    await act(async () => {
+      for (const { resolve } of oldReads) resolve(json({ available: true, items: [pair] }));
+      await settledReads;
+    });
+    for (const scope of [undefined, pair.primary_managed_system_id, 'other-ms']) {
+      rerender(view(scope));
+      expect(screen.queryByRole('button', { name: /VOC-12/ })).not.toBeInTheDocument();
+      expect(screen.getByTestId('count')).toHaveTextContent('0');
+    }
+    expect(
+      client.getQueryData(clusterSuggestionsKey(undefined, 'other-workspace:actor:admin')),
+    ).toEqual({ available: true, items: [pair] });
+    await act(async () => {
+      for (const { resolve } of obsolete) resolve(json({ available: true, items: [] }));
+    });
+    client.clear();
+  },
+);
+
+it.each([403, 404, 409])(
+  'focuses each identical restore notice after two keyboard undo activations (%i)',
+  async (status) => {
+    const second = {
+      ...pair,
+      id: '55555555-5555-4555-8555-555555555555',
+      vocs: [
+        { ...pair.vocs[0], id: '66666666-6666-4666-8666-666666666666', display_id: 'VOC-56' },
+        { ...pair.vocs[1], id: '77777777-7777-4777-8777-777777777777', display_id: 'VOC-78' },
+      ] as typeof pair.vocs,
+    };
+    items = [pair, second];
+    mount();
+    postResponse = async (path) => {
+      const id = path.split('/')[2];
+      if (path.endsWith('/discard')) {
+        items = items.filter((entry) => entry.id !== id);
+        return json({
+          id,
+          revision: 4,
+          discarded_at: new Date().toISOString(),
+          undo_until: new Date(Date.now() + 300000).toISOString(),
+        });
+      }
+      return json(
+        {
+          code:
+            status === 409
+              ? 'conflict.stale_write'
+              : status === 404
+                ? 'not_found.record'
+                : 'permission.denied',
+          message: 'same safe failure',
+        },
+        status,
+      );
+    };
+    for (const name of [/VOC-12/, /VOC-56/]) {
+      fireEvent.click(await screen.findByRole('button', { name }));
+      fireEvent.click(screen.getByRole('button', { name: '기각' }));
+      await waitFor(() =>
+        expect(screen.getAllByRole('button', { name: '되돌리기' })).toHaveLength(
+          name.source === 'VOC-12' ? 1 : 2,
+        ),
+      );
+    }
+    const user = userEvent.setup();
+    for (const remaining of [1, 0]) {
+      const undo = screen.getAllByRole('button', { name: '되돌리기' })[0];
+      if (!undo) throw new Error('Undo missing');
+      undo.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(screen.queryAllByRole('button', { name: '되돌리기' })).toHaveLength(remaining),
+      );
+      expect(screen.getByRole('alert')).toHaveFocus();
+      expect(document.activeElement?.isConnected).toBe(true);
+    }
+  },
+);

@@ -4,12 +4,14 @@ import {
   discardVocClusterSuggestionResponseSchema,
 } from '@fops/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { evictDeniedClusterSuggestion } from './evictDeniedClusterSuggestion';
 
 export function useDiscardClusterSuggestion() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (intent: {
       id: string;
+      actorContext?: string | undefined;
       body: DiscardVocClusterSuggestionRequest;
       idempotencyKey: string;
     }) =>
@@ -24,6 +26,7 @@ export function useDiscardClusterSuggestion() {
           },
         )
       ).data,
+    onError: (error, intent) => evictDeniedClusterSuggestion(client, error, intent),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['voc-cluster-suggestions'] });
     },

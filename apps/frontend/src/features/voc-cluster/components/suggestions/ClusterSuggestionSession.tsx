@@ -68,7 +68,16 @@ export function ClusterSuggestionSession({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [undos, setUndos] = useState<UndoRecord[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState<string | null>(null);
+  const [{ message: notice, eventId: noticeId }, setNoticeEvent] = useState<{
+    message: string | null;
+    eventId: number;
+  }>({ message: null, eventId: 0 });
+  const setNotice = useCallback((message: string | null) => {
+    setNoticeEvent((current) => ({
+      message,
+      eventId: current.eventId + (message === null ? 0 : 1),
+    }));
+  }, []);
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState<FocusTarget | null>(null);
@@ -107,7 +116,7 @@ export function ClusterSuggestionSession({
     setSelectedId(null);
     setNotice(mapUnknownError(query.error).message);
     intents.current.clear();
-  }, [readDenied, query.error]);
+  }, [readDenied, query.error, setNotice]);
   useEffect(() => {
     if (
       query.isSuccess &&
@@ -198,7 +207,7 @@ export function ClusterSuggestionSession({
       intents.current.set(captured.id, { fingerprint, key });
       const position = rows.findIndex((entry) => entry.item.id === captured.id);
       try {
-        const intent = { id: captured.id, idempotencyKey: key };
+        const intent = { id: captured.id, idempotencyKey: key, actorContext };
         if (action === 'confirm') {
           const result = await confirmSuggestion({ ...intent, body: reviewedBody(captured) });
           if (!alive.current) return;
@@ -269,7 +278,6 @@ export function ClusterSuggestionSession({
         if (denied(error)) {
           removePair(captured.id);
           setSelectedId(null);
-          void refetch();
         }
         if (
           action === 'restore' &&
@@ -292,6 +300,7 @@ export function ClusterSuggestionSession({
     },
     [
       readError,
+      actorContext,
       blocked,
       rows,
       items,
@@ -300,6 +309,7 @@ export function ClusterSuggestionSession({
       restoreSuggestion,
       removePair,
       refetch,
+      setNotice,
     ],
   );
 
@@ -384,6 +394,8 @@ export function ClusterSuggestionSession({
         <ClusterSuggestionPanel
           item={readDenied ? null : item}
           notice={notice}
+          noticeId={noticeId}
+          fallbackRef={listNode}
           pending={item ? pending.has(item.id) : false}
           blocked={readError || (item ? blocked.has(reviewedFingerprint(item)) : false)}
           onConfirm={() => {
@@ -395,11 +407,12 @@ export function ClusterSuggestionSession({
           onClose={() => {
             setSelectedId(null);
             setNotice(null);
+            setFocus({ kind: 'list', id: '' });
           }}
           onReload={() => void refetch()}
         />
       ) : null,
-    [item, notice, readDenied, pending, blocked, readError, actOn, refetch],
+    [item, notice, noticeId, readDenied, pending, blocked, readError, actOn, refetch, setNotice],
   );
   const count = query.isSuccess
     ? items.filter((entry) => !undos.some((undo) => undo.item.id === entry.id)).length

@@ -6,12 +6,14 @@ import {
   confirmVocClusterSuggestionResponseSchema,
 } from '@fops/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { evictDeniedClusterSuggestion } from './evictDeniedClusterSuggestion';
 
 export function useConfirmClusterSuggestion() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (intent: {
       id: string;
+      actorContext?: string | undefined;
       body: ConfirmVocClusterSuggestionRequest;
       idempotencyKey: string;
     }) =>
@@ -26,6 +28,7 @@ export function useConfirmClusterSuggestion() {
           },
         )
       ).data,
+    onError: (error, intent) => evictDeniedClusterSuggestion(client, error, intent),
     onSuccess: async () => {
       invalidateNavCounts(client);
       await Promise.all([

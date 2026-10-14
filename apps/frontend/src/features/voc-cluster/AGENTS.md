@@ -70,3 +70,9 @@ The mounted suggestion session resets on tab/route exit or MS/workspace/actor ch
 Cluster panel drafts reset on conditional unmount. Undo records survive query replacement
 until their absolute server deadline; settlement after exit still invalidates caches but
 never restores local prose/focus. Stale/revoked notices contain no copied VOC text.
+
+Denied suggestion mutations (403/404) evict that id from every cached MS/all scope
+for the captured workspace/actor context, cancel obsolete reads, and invalidate
+those scopes even after session exit. Corrective reads never delay safe local
+notice handling. Each notice event moves focus after commit, including identical
+messages; closing its panel returns focus to the connected list.
