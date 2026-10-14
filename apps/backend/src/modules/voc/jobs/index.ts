@@ -8,10 +8,10 @@ import type { Db } from '../../../db/client.js';
 import type { JobLog } from '../../../lib/job-log.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import type { PublicUpdateReviewCandidatesService } from '../public-update-review-candidates/service.js';
+import { registerSimilarityPreviewCleanup } from '../similarity-preview/cleanup.js';
 import { registerVocClusterAutogenShadow } from './cluster-autogen-shadow.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
-import { registerSimilarityPreviewCleanup } from '../similarity-preview/cleanup.js';
 import { registerReleasedReviewCandidates } from './released-review-candidates.js';
 
 export interface VocJobDeps {

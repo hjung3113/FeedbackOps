@@ -104,7 +104,14 @@ await registerNotificationJobs(boss, {
   log: jobLog,
 });
 
-const app = await buildServer({ config, dbHandle, boss, logger, notificationDispatcher, embeddingProvider });
+const app = await buildServer({
+  config,
+  dbHandle,
+  boss,
+  logger,
+  notificationDispatcher,
+  embeddingProvider,
+});
 
 // Single-shot shutdown handler. Multiple signals (e.g. SIGTERM then SIGINT)
 // short-circuit through the `shuttingDown` flag so we don't try to close pools
