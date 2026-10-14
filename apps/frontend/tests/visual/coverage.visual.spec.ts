@@ -45,3 +45,18 @@ test('retains the last successful server computation time after refresh fails', 
   await expect(page.getByText('새로고침 실패 · 마지막 성공한 결과입니다.')).toBeVisible();
   await expectVisual(page, page.locator('[data-app-frame]'), 'coverage-stale-summary.png');
 });
+
+for (const scenario of ['populated', 'unclassified', 'denied'] as const) {
+  test(`renders Analytics Area report ${scenario}`, async ({ page }) => {
+    await installMockApi(page, { coverage: 'populated', areaReport: scenario });
+    await page.goto('/integration/coverage?view=areas');
+    await expect(page.getByRole('tab', { name: 'Analytics Area별 현황' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    if (scenario === 'denied')
+      await expect(page.getByRole('heading', { name: 'Analytics Area별 현황' })).toBeVisible();
+    else await expect(page.getByTestId('analytics-area-report')).toBeVisible();
+    await expectVisual(page, page.locator('[data-app-frame]'), `coverage-areas-${scenario}.png`);
+  });
+}

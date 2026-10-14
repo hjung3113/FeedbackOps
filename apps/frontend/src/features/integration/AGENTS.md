@@ -67,13 +67,13 @@ Code ownership and URL mount are not the same thing here:
   rules. Server `computed_at`, last successful refresh and stale display are implemented on
   Coverage, Home and Integration; queue/detail clocks are independent.
 
-## Analytics Area report (ADR-0069; accepted, implementation pending)
+## Analytics Area report (ADR-0069; shipped by #1079)
 
-- Extend Coverage's PageShell with URL-backed `view=areas`; default overview omits `view`.
+- Coverage's PageShell is extended with URL-backed `view=areas`; default overview omits `view`.
 - Keep Managed System/Area/paging state and source destinations per `docs/frontend/routes-and-layout.md`.
 - Render unavailable, zero, zero-denominator, loading/error/denial separately; no stale prior-scope counts.
 - Operational positive counts link to exact typed source filters; repairs remain on owning source routes.
-- Add the secondary Area-tab link to the existing Integration Coverage card; no new Admin/rail surface.
+- The secondary Area-tab link is shipped on the existing Integration Coverage card; no new Admin/rail surface.
 
 ## Evidence inventory (ADR-0064/0065; implemented by #1107)
 

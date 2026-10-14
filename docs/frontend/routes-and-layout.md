@@ -508,7 +508,7 @@ inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
 The `/vocs`, `/findings`, `/tasks` and `/surveys` destination filters and active-filter controls are
-implemented by #1077 (parts a/b). Coverage extensions below remain **proposed/new**. FR-DASH-002 in
+implemented by #1077 (parts a/b). Coverage extensions below are implemented by #1079. FR-DASH-002 in
 `docs/design/08-dashboard-system.md` owns metric meanings and UI acceptance.
 
 - `/integration/coverage`: existing PageShell; overview is the default (omit `view`),
@@ -517,7 +517,7 @@ implemented by #1077 (parts a/b). Coverage extensions below remain **proposed/ne
   Omitted scope means the actor's effective scope union. Default report page size is 50.
   Scope changes clear incompatible Area and pagination; Area changes clear pagination.
   Back/Forward/refresh restore tab, filters and page. No new rail or Admin report route.
-- Integration's Coverage card gets a secondary link to `view=areas` preserving Managed System;
+- Implemented: Integration's Coverage card has a secondary link to `view=areas` preserving Managed System;
   Home's existing Coverage entry still reaches the same page. Catalog administration remains separate.
 - Implemented: `/vocs`, `/findings`, `/tasks` and `/surveys` accept `filter.analytics_area=<uuid|unset>` in their
   strict browser schemas and typed clients. VOC forwards the same dot key; the other clients map

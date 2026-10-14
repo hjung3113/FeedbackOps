@@ -135,6 +135,7 @@ export interface IntegrationJumpCardProps {
   statLabel?: string;
   statMuted?: boolean;
   testId: string;
+  secondaryLink?: { href: string; label: string };
 }
 
 export function IntegrationJumpCard({
@@ -146,10 +147,15 @@ export function IntegrationJumpCard({
   statLabel,
   statMuted,
   testId,
+  secondaryLink,
 }: IntegrationJumpCardProps): React.ReactElement {
-  return (
+  const primary = (
     <InternalLink
-      className="flex min-h-32 flex-col gap-3 rounded-md border border-border-subtle bg-surface-card p-4 hover:bg-surface-row-hover"
+      className={
+        secondaryLink
+          ? 'flex min-h-32 flex-1 flex-col gap-3 rounded-md p-4 hover:bg-surface-row-hover'
+          : 'flex min-h-32 flex-col gap-3 rounded-md border border-border-subtle bg-surface-card p-4 hover:bg-surface-row-hover'
+      }
       data-testid={testId}
       href={href}
     >
@@ -181,5 +187,18 @@ export function IntegrationJumpCard({
         열기 <ArrowRight className="h-3 w-3" aria-hidden="true" />
       </span>
     </InternalLink>
+  );
+  if (!secondaryLink) return primary;
+  return (
+    <div className="relative flex flex-col rounded-md border border-border-subtle bg-surface-card">
+      {primary}
+      <InternalLink
+        href={secondaryLink.href}
+        className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-xs text-accent-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
+      >
+        {secondaryLink.label}
+        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+      </InternalLink>
+    </div>
   );
 }

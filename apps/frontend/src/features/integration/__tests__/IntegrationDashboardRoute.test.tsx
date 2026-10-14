@@ -590,3 +590,20 @@ test('Evidence entry preserves Managed System without inventing a count (#1107)'
   expect(within(card).getByText('Finding에 저장된 Evidence를 찾습니다.')).toBeVisible();
   expect(screen.queryByTestId('integration-surface-evidence-stat')).toBeNull();
 });
+
+test.each(['', `?managedSystem=${MS_A}`])(
+  'Coverage secondary entry keeps scope %s',
+  async (scope) => {
+    await renderDashboard(`/integration${scope}`);
+    const link = await screen.findByRole('link', { name: 'Analytics Area별 현황' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/integration/coverage?view=areas${scope.replace('?', '&')}`,
+    );
+    expect(screen.getByTestId('integration-surface-coverage')).toHaveAttribute(
+      'href',
+      `/integration/coverage${scope}`,
+    );
+    expect(screen.getByTestId('integration-surface-coverage').contains(link)).toBe(false);
+  },
+);

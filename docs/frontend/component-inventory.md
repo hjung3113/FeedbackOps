@@ -113,6 +113,7 @@ Names in the primitive table and the composed list above are design-time names. 
 | ConversationComposer | feature-local `ComposerSection` + `ComposerTabs` hosting `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` | `apps/frontend/src/features/voc/components/detail/` |
 | Evidence inventory | feature-local `EvidenceContent`, `EvidenceMetadata`, `EvidenceRow`, `EvidencePanel` | `apps/frontend/src/features/integration/components/` |
 | EvidenceHighlight | feature-local `EvidenceHighlights` | `apps/frontend/src/features/findings/components/FindingDetail/` |
+| Integration destination card | feature-local `IntegrationJumpCard`; optional secondary link is a sibling of the primary anchor (Coverage Area tab) | `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
 | ActionQueueRow | feature-local `ActionQueueRow` (Home); `IntegrationDashboardCards` (Integration) | `apps/frontend/src/features/home/HomeScreen.tsx`, `apps/frontend/src/features/integration/components/IntegrationDashboardCards.tsx` |
 | CommandMenu | `CommandPalette` with local `CommandPaletteItemIcon` | `apps/frontend/src/lib/layout/command-palette/` |
 | UserPicker | feature-local `OwnerPicker` (VOC Triage owner) | `apps/frontend/src/features/voc/components/triage/OwnerPicker.tsx` |

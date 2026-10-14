@@ -14,7 +14,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { COVERAGE_METRIC_IDS, COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import {
   IntegrationCoverageRouteShell,
-  integrationCoverageSearchSchema,
+  validateIntegrationCoverageSearch,
 } from '../../../routes/_authed/integration/coverage';
 
 const MS_A = '77777777-0000-0000-0000-0000000000a1';
@@ -131,7 +131,7 @@ function buildHarness(initialPath: string) {
   const route = createRoute({
     getParentRoute: () => rootRoute,
     path: '/integration/coverage',
-    validateSearch: (raw) => integrationCoverageSearchSchema.parse(raw),
+    validateSearch: validateIntegrationCoverageSearch,
     component: IntegrationCoverageRouteShell,
   });
   const router = createRouter({
