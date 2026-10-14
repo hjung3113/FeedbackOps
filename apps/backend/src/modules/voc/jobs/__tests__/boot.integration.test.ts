@@ -65,7 +65,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
     const schedules = await boss.getSchedules(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
     expect(schedules.find(s => s.name === VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE)?.cron).toBe(VOC_SIMILARITY_PREVIEW_CLEANUP_CRON);
     const queues = await boss.getQueues([VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE]);
-    expect(queues).toHaveLength(1);
+    expect(queues.map(q => q.name)).toContain(VOC_SIMILARITY_PREVIEW_CLEANUP_QUEUE);
   });
 
   it('registers the backfill cron in pgboss.schedule', async () => {
