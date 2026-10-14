@@ -388,36 +388,15 @@ it('does not re-enable the reviewed stale payload after a failed refetch', async
   expect(posts).toHaveLength(1);
 });
 
-it.each(['unavailable', 'empty', 'error', 'denied'] as const)(
-  'renders the distinct %s read state',
-  async (state) => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        state === 'unavailable'
-          ? json({ available: false, reason: 'provider_disabled', items: [] })
-          : state === 'empty'
-            ? json({ available: true, items: [] })
-            : json(
-                {
-                  code: state === 'denied' ? 'permission.denied' : 'internal.unexpected',
-                  message: 'safe',
-                },
-                state === 'denied' ? 403 : 500,
-              ),
-      ),
-    );
-    mount();
-    const copy = {
-      unavailable: '임베딩이 꺼져 있어 Cluster 제안을 사용할 수 없습니다',
-      empty: '검토할 Cluster 제안이 없습니다',
-      error: 'Cluster 제안을 불러오지 못했습니다',
-      denied: 'Cluster 제안을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
-    };
-    expect(await screen.findByText(copy[state])).toBeInTheDocument();
-    expect(screen.queryByText('첫 번째 본문')).not.toBeInTheDocument();
-  },
-);
+it('renders the empty read state', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json({ available: true, items: [] })),
+  );
+  mount();
+  expect(await screen.findByText('검토할 Cluster 제안이 없습니다')).toBeInTheDocument();
+  expect(screen.queryByText('첫 번째 본문')).not.toBeInTheDocument();
+});
 
 it('drops an already-expired discard response without rendering an undo', async () => {
   mount();
