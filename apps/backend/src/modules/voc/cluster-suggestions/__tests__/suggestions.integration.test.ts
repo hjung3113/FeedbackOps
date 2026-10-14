@@ -417,8 +417,14 @@ describe.skipIf(!runIntegration)(
       expect(await rows()).toHaveLength(5);
       await run();
       expect(await rows()).toHaveLength(5);
+      // Admission identity is immutable (0062 trigger): move the bucket to the previous hour by delete + insert.
       await ops.pool.query(
-        "update voc.voc_cluster_suggestion_admissions set window_start=window_start-interval '1 hour' where workspace_id=$1",
+        `with old as (
+           delete from voc.voc_cluster_suggestion_admissions where workspace_id=$1
+           returning workspace_id, primary_managed_system_id, window_start, new_admissions)
+         insert into voc.voc_cluster_suggestion_admissions
+           (workspace_id, primary_managed_system_id, window_start, new_admissions)
+         select workspace_id, primary_managed_system_id, window_start - interval '1 hour', new_admissions from old`,
         [ws],
       );
       await run();
