@@ -72,6 +72,8 @@ pnpm dev --env-mode=loose   # frontend on :3010, backend on :3011
 
 `--env-mode=loose` is needed because Turborepo runs in strict env mode and would otherwise hide the exported `.env` variables from the backend. The backend port comes from `PORT` (`.env.example` sets `3011`; the code default is `3001`), and the Vite proxy targets `3011`.
 
+`turbo.json` passes `VITEST_MAX_FORKS`/`VITEST_MIN_FORKS` (and the `_THREADS`/`_WORKERS` variants) through strict mode, so exporting them caps `pnpm test` workers on a memory-constrained machine. Set each MAX/MIN pair together: vitest 2.x rejects a max below its default min (ncpu − 1) with `minThreads and maxThreads must not conflict`.
+
 `routeTree.gen.ts` is gitignored and generated deterministically by `pnpm gen:routes`; frontend typecheck and test scripts run it first.
 
 Sign in from `/login`. Authentication is mock in local development; pick a persona by its external id (`mock-admin-1`, `mock-developer-1`, `mock-user-1`, …).
