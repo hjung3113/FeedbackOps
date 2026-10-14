@@ -720,3 +720,26 @@ it('distinguishes Permission Request rows with the safe source identity and no e
   expect(row.textContent).not.toContain(SOURCE);
   expect(row.textContent).not.toContain('· Permission Request');
 });
+
+it('labels the Permission Request panel header with its domain noun and requester', async () => {
+  setup({
+    detail: () =>
+      response({
+        ...item,
+        category: 'permission-requests-pending',
+        reason_code: 'permission-requests-pending',
+        source: {
+          type: 'permission_request',
+          id: SOURCE,
+          display_id: '',
+          title: '요청자 이름',
+          route: `/admin/permissions/requests?selected=${SOURCE}`,
+        },
+        computed_at: time,
+      }),
+  });
+  await mount(`/integration?selected=${ID}`);
+  expect(
+    await screen.findByRole('heading', { name: 'Permission Request · 요청자 이름' }),
+  ).toBeVisible();
+});

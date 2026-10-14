@@ -95,7 +95,11 @@ export function RecoveryPanel({
       ) : (
         <header className="flex h-toolbar shrink-0 items-center justify-between border-b border-border-subtle px-4">
           <h2 className="text-sm font-semibold">
-            {!error && item ? item.source?.title || item.reason : COPY.title}
+            {!error && item
+              ? item.source?.type === 'permission_request'
+                ? `Permission Request · ${item.source.title}`
+                : item.source?.title || item.reason
+              : COPY.title}
           </h2>
           <div className="flex items-center gap-2">
             <DetailPanelFullscreenToggle />

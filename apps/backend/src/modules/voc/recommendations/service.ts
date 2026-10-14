@@ -4,6 +4,7 @@
 // (GET /vocs/:id/recommendations, confirm, dismiss).
 
 import type { Db } from '../../../db/client.js';
+import { lockRecoveryCommand } from '../../../db/recovery-command-lock.js';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
@@ -252,6 +253,7 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
     candidateVocId: string;
   }): Promise<{ status: 200; body: { voc_cluster_id: string; cluster_created: boolean } }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       const { source, candidate, readScope } = await loadPair(
         tx,
         args.actor,
