@@ -466,8 +466,14 @@ describe.skipIf(!workspaceId || !appUrl || !migrateUrl)('paid draft preview rout
         adminId,
         kind === 'below-cut' ? [0.6, 0.8, 0] : [1, 0, 0],
       );
-      if (kind === 'archived')
+      if (kind === 'archived') {
         await ops.pool.query('update voc.vocs set archived_at=now() where id=$1', [excluded]);
+        // Archiving touches the VOC watermark; refresh the embedding so archive is the only disqualifier.
+        await ops.pool.query(
+          'update voc.voc_embeddings e set updated_at=v.updated_at from voc.vocs v where v.id=e.voc_id and e.voc_id=$1',
+          [excluded],
+        );
+      }
       if (kind === 'stale watermark')
         await ops.pool.query(
           "update voc.voc_embeddings set updated_at=updated_at-interval '1 second' where voc_id=$1",
