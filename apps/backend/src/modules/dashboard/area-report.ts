@@ -57,7 +57,10 @@ export function createAreaReportReader(deps: {
     if (!hasElevatedFindingRole(actor))
       throw new HttpError('permission.denied', 'elevated role required');
     const check = memoizeCapabilityChecks(deps.checkService);
-    const managedSystemId = query.managed_system_id === 'all' ? undefined : query.managed_system_id;
+    const managedSystemId =
+      query.managed_system_id === 'all' ? undefined : query.managed_system_id?.toLowerCase();
+    const analyticsAreaId =
+      query.analytics_area_id === 'unset' ? 'unset' : query.analytics_area_id?.toLowerCase();
     const [vocScope, findingScope, taskScope, surveyScope] = await Promise.all([
       actorScopeForCapability(deps.db, actor, 'voc.read'),
       actorFindingListScope(deps.db, check, actor, managedSystemId),
@@ -101,7 +104,7 @@ export function createAreaReportReader(deps: {
           actor: actor.actor_id,
           role: actor.role_level,
           system: managedSystemId ?? 'all',
-          area: query.analytics_area_id ?? 'all',
+          area: analyticsAreaId ?? 'all',
           scopes: [
             vocScope,
             findingScope,
@@ -162,9 +165,8 @@ export function createAreaReportReader(deps: {
       .sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
       .filter(
         (row) =>
-          query.analytics_area_id === undefined ||
-          row.analytics_area_id ===
-            (query.analytics_area_id === 'unset' ? null : query.analytics_area_id),
+          analyticsAreaId === undefined ||
+          row.analytics_area_id === (analyticsAreaId === 'unset' ? null : analyticsAreaId),
       )
       .filter((row) => after === undefined || key(row) > after);
     const hasMore = ordered.length > query.limit;

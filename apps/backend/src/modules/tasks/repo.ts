@@ -586,7 +586,35 @@ export async function countGroupedTasksForReport(
   const filter = (extra: Partial<ListInput>) =>
     sql.join(listPredicates({ ...base, ...extra }), sql` AND `);
   const result = await db.execute<{ as_of_date: string; groups: TaskReportGroup[] }>(sql`
-    WITH grouped AS (
+    WITH report_tasks AS MATERIALIZED (
+      SELECT id, workspace_id, primary_managed_system_id, analytics_area_id, status, due_date
+      FROM task.tasks WHERE ${filter({})}
+    ), released_voc_links AS MATERIALIZED (
+      SELECT link.target_id AS task_id, voc.id AS voc_id, voc.reporter_facing_status
+      FROM report_tasks
+      JOIN core.entity_links_app link
+        ON link.workspace_id = report_tasks.workspace_id
+       AND link.target_id = report_tasks.id
+       AND link.source_type = 'voc'
+       AND link.target_type = 'task'
+       AND link.relation_type = 'evidence_of'
+       AND link.status = 'active'
+      JOIN voc.vocs voc
+        ON voc.id = link.source_id
+       AND voc.workspace_id = link.workspace_id
+       AND voc.archived_at IS NULL
+      WHERE report_tasks.status = 'released'
+    ), released_vocs AS (
+      SELECT task_id,
+        bool_or(reporter_facing_status NOT IN ('resolved', 'closed')) AS unresolved
+      FROM released_voc_links GROUP BY task_id
+    ), released_updates AS (
+      SELECT DISTINCT link.task_id
+      FROM released_voc_links link
+      JOIN voc.voc_public_updates public_update
+        ON public_update.voc_id = link.voc_id
+       AND public_update.skip_public_update = false
+    ), grouped AS (
       SELECT primary_managed_system_id AS managed_system_id, analytics_area_id, count(*)::int AS total,
         count(*) FILTER (WHERE status='backlog')::int AS backlog,
         count(*) FILTER (WHERE status='todo')::int AS todo,
@@ -597,11 +625,13 @@ export async function countGroupedTasksForReport(
         count(*) FILTER (WHERE status='reopened')::int AS reopened,
         count(*) FILTER (WHERE ${filter({ statusGroup: 'in-flight' })})::int AS in_flight,
         count(*) FILTER (WHERE ${filter({ overdue: 'true' })})::int AS overdue,
-        count(*) FILTER (WHERE ${releasedWithVocPredicate()})::int AS released_total,
-        count(*) FILTER (WHERE ${releasedWithVocPredicate()} AND ${releasedWithPublicUpdatePredicate()})::int AS released_updated,
-        count(*) FILTER (WHERE ${filter({ publicUpdate: 'missing' })})::int AS public_update_missing,
-        count(*) FILTER (WHERE ${filter({ reporterUpdate: 'needed' })})::int AS reporter_update_needed
-      FROM task.tasks WHERE ${filter({})}
+        count(*) FILTER (WHERE released_vocs.task_id IS NOT NULL)::int AS released_total,
+        count(*) FILTER (WHERE released_updates.task_id IS NOT NULL)::int AS released_updated,
+        count(*) FILTER (WHERE released_vocs.task_id IS NOT NULL AND released_updates.task_id IS NULL)::int AS public_update_missing,
+        count(*) FILTER (WHERE released_vocs.unresolved)::int AS reporter_update_needed
+      FROM report_tasks
+      LEFT JOIN released_vocs ON released_vocs.task_id = report_tasks.id
+      LEFT JOIN released_updates ON released_updates.task_id = report_tasks.id
       GROUP BY primary_managed_system_id, analytics_area_id
     ) SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS as_of_date,
       coalesce(jsonb_agg(grouped), '[]'::jsonb) AS groups FROM grouped

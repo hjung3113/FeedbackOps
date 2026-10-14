@@ -378,6 +378,38 @@ describe.skipIf(!(APP_URL && MIGRATE_URL && WORKSPACE))('GET /dashboard/analytic
       },
     });
   });
+  it.each(['area', 'system', 'both'] as const)(
+    'normalizes uppercase %s UUID filters for rows, context and cursor binding',
+    async (uppercase) => {
+      const ms = await system();
+      const aa = await area(ms);
+      for (const analyticsAreaId of [aa, null])
+        await insertTaskRow(migrate, {
+          workspaceId: WORKSPACE,
+          primaryManagedSystemId: ms,
+          createdBy: actor,
+          analyticsAreaId,
+        });
+      const canonical = await report(admin, `managed_system_id=${ms}&analytics_area_id=${aa}`);
+      const systemId = uppercase === 'area' ? ms : ms.toUpperCase();
+      const areaId = uppercase === 'system' ? aa : aa.toUpperCase();
+      const selected = await report(
+        admin,
+        `managed_system_id=${systemId}&analytics_area_id=${areaId}`,
+      );
+      expect(selected.items).toEqual(canonical.items);
+      expect(selected.classification_context).toEqual(canonical.classification_context);
+      const first = await report(admin, `managed_system_id=${ms.toUpperCase()}&limit=1`);
+      const second = await report(
+        admin,
+        `managed_system_id=${ms}&limit=1&cursor=${first.page.cursor}`,
+      );
+      expect(first.items).toEqual(canonical.items);
+      expect(second.items.map((row) => row.analytics_area_id)).toEqual([null]);
+      expect(second.classification_context).toEqual(canonical.classification_context);
+      expect(second.page.has_more).toBe(false);
+    },
+  );
   it('reconciles every positive metric with its actual destination, deduplicates links and moves only reclassified sources', async () => {
     const ms = await system();
     const aa = await area(ms);
