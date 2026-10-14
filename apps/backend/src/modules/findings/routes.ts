@@ -109,6 +109,10 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
           ? { managedSystemId: parsed.data.managed_system_id }
           : {}),
         ...(parsed.data.execution !== undefined ? { execution: parsed.data.execution } : {}),
+        ...(parsed.data.analytics_area_id === undefined
+          ? {}
+          : { analyticsAreaId: parsed.data.analytics_area_id }),
+        ...(parsed.data.status === undefined ? {} : { status: parsed.data.status }),
         ...(parsed.data.owner_actor_id === undefined
           ? {}
           : { ownerActorId: parsed.data.owner_actor_id }),

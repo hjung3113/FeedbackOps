@@ -787,21 +787,201 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     expect(ids).not.toContain(createdB.json<{ id: string }>().id);
   });
 
+  it('1077: Area/status filters intersect authorized scope in full and paged reads without writes', async () => {
+    const { msId } = await seedSource();
+    const { msId: otherMs } = await seedSource();
+    const area = await createAa(app, adminCookie, {
+      managed_system_id: msId,
+      slug: uid(SLUG_PREFIX),
+      name: 'Report Area',
+    });
+    const gap = await createFindingOn(msId, 'Area active gap');
+    const draft = await createFindingOn(msId, 'Area draft');
+    const unset = await createFindingOn(msId, 'Unclassified active');
+    await dbHandle.pool.query(
+      'update finding.findings set analytics_area_id=$1 where id=any($2::uuid[])',
+      [area, [gap, draft]],
+    );
+    await dbHandle.pool.query(
+      "update finding.findings set status='active' where id=any($1::uuid[])",
+      [[gap, unset]],
+    );
+    const devA = await insertDevActor(dbHandle, WORKSPACE_ID, uid('area-finding-a'));
+    const devB = await insertDevActor(dbHandle, WORKSPACE_ID, uid('area-finding-b'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devA.id, 'finding.read', msId, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, devB.id, 'finding.read', otherMs, adminActorId);
+    const otherArea = await createAa(app, adminCookie, {
+      managed_system_id: otherMs,
+      slug: uid(SLUG_PREFIX),
+      name: 'Report Area',
+    });
+    const otherFinding = await createFindingOn(otherMs, 'Other system');
+    await dbHandle.pool.query('update finding.findings set analytics_area_id=$1 where id=$2', [
+      otherArea,
+      otherFinding,
+    ]);
+    await migrateHandle.pool.query(
+      'update core.analytics_areas set archived_at=now(), archived_by_actor_id=$1 where id=$2',
+      [adminActorId, area],
+    );
+    const cookieA = await loginAs(app, devA.externalId);
+    const cookieB = await loginAs(app, devB.externalId);
+    const read = (cookie: string, query: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/findings?${query}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+      });
+    const snapshot = async () =>
+      (
+        await migrateHandle.pool.query(
+          `select
+      (select jsonb_agg(to_jsonb(f) order by id) from finding.findings f where workspace_id=$1) as findings,
+      (select jsonb_agg(to_jsonb(v) order by id) from voc.vocs v where workspace_id=$1) as vocs,
+      (select jsonb_agg(to_jsonb(e) order by id) from core.entity_links e where workspace_id=$1) as links,
+      (select jsonb_agg(to_jsonb(c) order by id) from core.analytics_areas c where workspace_id=$1) as areas,
+      (select jsonb_agg(to_jsonb(t) order by id) from task.tasks t where workspace_id=$1) as tasks,
+      (select jsonb_agg(to_jsonb(r) order by id) from task_request.task_requests r where workspace_id=$1) as requests,
+      (select jsonb_agg(to_jsonb(s) order by id) from survey.surveys s where workspace_id=$1) as surveys,
+      (select jsonb_agg(to_jsonb(a) order by id) from core.audit_log a where workspace_id=$1) as audit`,
+          [WORKSPACE_ID],
+        )
+      ).rows;
+    const before = await snapshot();
+    const ordinary = await read(adminCookie, `analytics_area_id=${area}&status=active&limit=1`);
+    expect(ordinary.statusCode).toBe(200);
+    expect(ordinary.json().items.map((item: { id: string }) => item.id)).toEqual([gap]);
+    expect(ordinary.json().page.total).toBe(1);
+    expect(await snapshot()).toEqual(before);
+    const gapOnly = await read(
+      adminCookie,
+      `analytics_area_id=${area}&status=active&execution=none&limit=1`,
+    );
+    expect(gapOnly.statusCode).toBe(200);
+    expect(gapOnly.json().items.map((item: { id: string }) => item.id)).toEqual([gap]);
+    expect(gapOnly.json().page.total).toBe(1);
+    const areaOnly = await read(adminCookie, `analytics_area_id=${area}`);
+    expect(areaOnly.statusCode).toBe(200);
+    expect(
+      areaOnly
+        .json()
+        .items.map((item: { id: string }) => item.id)
+        .sort(),
+    ).toEqual([gap, draft].sort());
+    const areaPage = await read(adminCookie, `analytics_area_id=${area}&limit=1`);
+    expect(areaPage.statusCode).toBe(200);
+    expect(areaPage.json().page).toMatchObject({ total: 2, has_more: true });
+    const continuation = await read(
+      adminCookie,
+      `analytics_area_id=${area}&limit=1&cursor=${encodeURIComponent(areaPage.json().page.cursor)}`,
+    );
+    expect(continuation.statusCode).toBe(200);
+    expect(
+      [...areaPage.json().items, ...continuation.json().items]
+        .map((item: { id: string }) => item.id)
+        .sort(),
+    ).toEqual([gap, draft].sort());
+    const incompatible = await read(
+      adminCookie,
+      `analytics_area_id=${area}&managed_system_id=${otherMs}&limit=1`,
+    );
+    expect(incompatible.statusCode).toBe(200);
+    expect(incompatible.json()).toMatchObject({ items: [], page: { total: 0 } });
+    for (const cookie of [adminCookie, cookieA]) {
+      for (const paging of ['', '&limit=1']) {
+        const response = await read(cookie, `analytics_area_id=${area}&status=active${paging}`);
+        expect(response.statusCode).toBe(200);
+        expect(response.json().items.map((item: { id: string }) => item.id)).toEqual([gap]);
+        if (paging) expect(response.json().page.total).toBe(1);
+        const nullArea = await read(
+          cookie,
+          `managed_system_id=${msId}&analytics_area_id=unset&status=active${paging}`,
+        );
+        expect(nullArea.statusCode).toBe(200);
+        expect(nullArea.json().items.map((item: { id: string }) => item.id)).toEqual([unset]);
+        if (paging) expect(nullArea.json().page.total).toBe(1);
+      }
+    }
+    for (const query of [
+      `analytics_area_id=${area}`,
+      `analytics_area_id=${area}&managed_system_id=${otherMs}`,
+      `analytics_area_id=${randomUUID()}`,
+    ]) {
+      const response = await read(cookieB, `${query}&limit=1`);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ items: [], page: { total: 0, has_more: false } });
+    }
+    expect((await read(reporterCookie, `analytics_area_id=${area}`)).statusCode).toBe(403);
+  });
+
+  it('1077: foreign-workspace Area does not disclose catalog existence', async () => {
+    const ws = randomUUID();
+    await migrateHandle.pool.query('insert into core.workspaces (id,name) values ($1,$2)', [
+      ws,
+      uid('Finding foreign Area'),
+    ]);
+    const ms = await insertMsDirectly(migrateHandle, ws, uid('foreign-area'), 'Foreign');
+    const area = randomUUID();
+    try {
+      await migrateHandle.pool.query(
+        'insert into core.analytics_areas (id,workspace_id,managed_system_id,slug,name) values ($1,$2,$3,$4,$5)',
+        [area, ws, ms, uid('foreign'), 'Report Area'],
+      );
+      for (const paging of ['', '&limit=1']) {
+        const response = await app.inject({
+          method: 'GET',
+          url: `/findings?analytics_area_id=${area}${paging}`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().items).toEqual([]);
+        if (paging) expect(response.json().page.total).toBe(0);
+      }
+    } finally {
+      await migrateHandle.pool.query('delete from core.analytics_areas where id=$1', [area]);
+      await deleteRecoveryFixtureParents(
+        migrateHandle,
+        'delete from core.managed_systems where id=$1',
+        [ms],
+      );
+      await deleteRecoveryFixtureParents(migrateHandle, 'delete from core.workspaces where id=$1', [
+        ws,
+      ]);
+    }
+  });
+
   it('filters findings without execution when execution=none and leaves the unfiltered list unchanged', async () => {
     const { msId } = await seedSource();
     const gap = await createFindingOn(msId, 'Gap finding');
     const linked = await createFindingOn(msId, 'Linked task finding');
     const requested = await createFindingOn(msId, 'Requested task finding');
     const draft = await createFindingOn(msId, 'Draft finding');
+    const inactive = await createFindingOn(msId, 'Inactive links with Task column');
+    await dbHandle.pool.query(
+      "update finding.findings set status='active', linked_task_id=$1 where id=$2",
+      [randomUUID(), inactive],
+    );
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,managed_system_id,created_by,status)
+       values ($1,'finding',$2,'task',$3,'requested_task',$4,$5,'detached')`,
+      [WORKSPACE_ID, inactive, randomUUID(), msId, adminActorId],
+    );
+    const excluded: string[] = [draft];
+    for (const status of ['not_actionable', 'converted', 'archived']) {
+      const id = await createFindingOn(msId, `Excluded ${status}`);
+      await dbHandle.pool.query('update finding.findings set status=$1 where id=$2', [status, id]);
+      excluded.push(id);
+    }
 
     await dbHandle.pool.query(
       `update finding.findings set status = 'active' where id = any($1::uuid[])`,
       [[gap, linked, requested]],
     );
-    await dbHandle.pool.query('update finding.findings set linked_task_id = $1 where id = $2', [
-      randomUUID(),
-      linked,
-    ]);
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,managed_system_id,created_by)
+       values ($1,'finding',$2,'task',$3,'requested_task',$4,$5)`,
+      [WORKSPACE_ID, linked, randomUUID(), msId, adminActorId],
+    );
     await migrateHandle.pool.query(
       `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,
@@ -821,6 +1001,8 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
       .json<{ items: Array<{ id: string }> }>()
       .items.map((item) => item.id);
     expect(filteredIds).toContain(gap);
+    expect(filteredIds).toContain(inactive);
+    for (const id of excluded) expect(filteredIds).not.toContain(id);
     expect(filteredIds).not.toContain(linked);
     expect(filteredIds).not.toContain(requested);
     expect(filteredIds).not.toContain(draft);

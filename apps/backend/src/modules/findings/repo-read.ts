@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import { findingRecoveryPredicate } from './recovery-read.js';
 
 import type { Db } from '../../db/client.js';
 import { findings } from '../../db/schema/finding.js';
@@ -102,6 +103,8 @@ interface ListInput {
   workspaceId: string;
   managedSystemId?: string;
   execution?: 'none';
+  analyticsAreaId?: string;
+  status?: 'active';
   ownerActorId?: string;
   ownerTeamId?: string;
   assignment?: 'assigned' | 'unassigned';
@@ -115,27 +118,16 @@ function listPredicates(input: ListInput) {
     input.managedSystemId === undefined
       ? sql`TRUE`
       : sql`f.primary_managed_system_id = ${input.managedSystemId}`;
-  // Same three conditions as countActiveFindingsWithoutExecution (dashboard/repo.ts).
-  // Do not import that function: dashboard must not become a findings dependency.
-  const executionPredicate =
-    input.execution === 'none'
-      ? sql`f.status = 'active'
-          AND f.linked_task_id IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM core.entity_links_app el
-            WHERE el.workspace_id = f.workspace_id
-              AND el.status = 'active'
-              AND el.source_type = 'finding'
-              AND el.source_id = f.id
-              AND el.target_type = 'task_request'
-              AND el.relation_type = 'requested_task'
-          )`
-      : sql`TRUE`;
+  const executionPredicate = input.execution === 'none' ? findingRecoveryPredicate() : sql`TRUE`;
   const predicates = [
     sql`f.workspace_id = ${input.workspaceId}`,
     managedSystemPredicate,
     executionPredicate,
   ];
+  if (input.analyticsAreaId === 'unset') predicates.push(sql`f.analytics_area_id IS NULL`);
+  else if (input.analyticsAreaId !== undefined)
+    predicates.push(sql`f.analytics_area_id = ${input.analyticsAreaId}::uuid`);
+  if (input.status !== undefined) predicates.push(sql`f.status = ${input.status}`);
   if (input.ownerActorId !== undefined)
     predicates.push(sql`f.owner_actor_id = ${input.ownerActorId}`);
   if (input.ownerTeamId !== undefined) predicates.push(sql`f.owner_team_id = ${input.ownerTeamId}`);

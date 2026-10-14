@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { sqlUuidArray } from '../../db/sql-arrays.js';
-import { findingRecoveryPredicate } from '../findings/index.js';
+import { findingExecutionPredicate, findingRecoveryPredicate } from '../findings/index.js';
 import type { Scope } from '../permissions/scope-service.js';
 import { taskRecoveryPredicate } from '../tasks/index.js';
 
@@ -65,9 +65,7 @@ export async function countActiveFindingsWithExecution(
     sql`SELECT count(*)::int AS count FROM finding.findings f
     WHERE f.workspace_id = ${workspaceId} AND f.status = 'active'
       AND ${scopePredicate('f.primary_managed_system_id', scope, managedSystemId)}
-      AND (f.linked_task_id IS NOT NULL OR EXISTS (SELECT 1 FROM core.entity_links_app el
-        WHERE el.workspace_id = f.workspace_id AND el.status = 'active' AND el.source_type = 'finding'
-          AND el.source_id = f.id AND el.target_type = 'task_request' AND el.relation_type = 'requested_task'))`,
+      AND ${findingExecutionPredicate()}`,
   );
 }
 

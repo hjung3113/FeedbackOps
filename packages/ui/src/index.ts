@@ -129,6 +129,7 @@ export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/Us
 export { UserChip, type UserChipProps } from './identity/UserChip';
 
 // Toolbar primitives (Slice 3 #20)
+export { ActiveFilterBar, type ActiveFilterBarProps } from './toolbar/ActiveFilterBar.js';
 export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
 export { ListTabs, type ListTabsProps } from './toolbar/ListTabs';
 export {
