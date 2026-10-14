@@ -269,7 +269,7 @@ Acceptance Criteria:
 ### Analytics Area operational report — FR-DASH-002 (MUST)
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
-Implementation is pending; ADR-0069 records the attribution, audience and safe metric-grain decision.
+Implemented in Slice 59 (#1077, #1078, #1079); ADR-0069 records the attribution, audience and safe metric-grain decision.
 Endpoint authority: `docs/implementation/api/dashboard.md`; source list filters are in the owning API contracts.
 
 Purpose: an Admin or same-scope Developer can identify the Analytics Area needing attention and open the exact work that explains each number. It is a current operational snapshot, with supporting partial-integration ratios, not a funnel or an improvement-success score.
@@ -285,7 +285,7 @@ Purpose: an Admin or same-scope Developer can identify the Analytics Area needin
 
 #### Metric definitions
 
-All counts are distinct source objects within their own authorized scope. The destination filters below are accepted **proposed/new** contract extensions, not shipped support.
+All counts are distinct source objects within their own authorized scope. The destination filters below are implemented (#1077); their wire contracts are the ADR-0069 sections of `docs/implementation/api/{voc,findings,tasks,surveys}.md`.
 
 | Signal / decision supported | Definition per Area | Next action / destination contract |
 | --- | --- | --- |

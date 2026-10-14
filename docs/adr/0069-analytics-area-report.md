@@ -4,7 +4,8 @@
 
 Accepted 2026-10-13 by the owner (MVP close-out decisions)
 
-Implementation pending. Numbers 0064–0068 are reserved for other close-out slices.
+Implemented in Slice 59 (2026-10-15): I1 → #1077 (PRs #1161, #1162), I2 → #1078 (PR #1163),
+I3 → #1079 (PR #1164). Numbers 0064–0068 are reserved for other close-out slices.
 Amends ADR-0055 only for the new Area report's output grain; its response classifier,
 commands, source review, storage and existing summary queue remain unchanged.
 
@@ -37,7 +38,7 @@ of saved links, reports and authorization across four owners.
    Analytics Areas owns batch catalog metadata, and Entity Linking owns relation/visibility meaning.
    Public owner seams preserve trustworthy numbers without a second command or permission system.
    FE composition stays in `features/integration`; repair happens through owning source commands.
-2. Add proposed/new authenticated `GET /dashboard/analytics-areas`, retaining `/dashboard/summary`
+2. Add authenticated `GET /dashboard/analytics-areas` (implemented by #1078), retaining `/dashboard/summary`
    and its Home contract. An elevated-role entry gate plus independent source gates prevents
    a new report from widening visibility. The exact query/response is in `docs/implementation/api/dashboard.md`.
 3. Attribute each object to its own current nullable Area UUID; linked objects never change that
@@ -82,11 +83,12 @@ after release. Extensions needing a new decision are recorded in the post-MVP ba
 
 ## Implementation issues
 
-Conductor files the following ordered chunks. #1071 supplies the spec/ADR before dispatch;
-these are implementation briefs, not filed issue numbers or claims of delivery.
-The separately scheduled recovery issue number must be resolved by the conductor before dispatch.
+Historical planning text (#1071). The chunks below were filed and shipped as #1077 (PRs #1161,
+#1162), #1078 (PR #1163) and #1079 (PR #1164). The recovery dependency resolved to #1045
+(ADR-0059 D3), which shipped no VOC no-follow-up resolution storage; VOC `tab=high-no-link` keeps
+the list predicate the Dashboard recovery queue already uses.
 
-Implement in this order; each issue includes affected canonical docs and tests, not a separate copy-only round. The report route, added query keys and grouped read projections are proposed/new and not implemented by this docs-only issue.
+Implement in this order; each issue includes affected canonical docs and tests, not a separate copy-only round. When #1071 was written, the report route, query keys and grouped read projections did not exist; they shipped in the PRs above.
 
 ### I1 — Give source lists exact Analytics Area and report-gap filters
 
@@ -100,7 +102,7 @@ Implement in this order; each issue includes affected canonical docs and tests, 
 
 - **BE + shared; `impl-complex`.** Touch `apps/backend/src/modules/dashboard/{routes,service,repo,index}.ts`, approved grouped readers in the source modules, Analytics Area batch metadata seam, and `packages/shared/src/dashboard.ts`. Survey projection stays Survey-owned; a protected batch-reader migration, if needed, must register in `apps/backend/migrations/meta/_journal.json`.
 - Dependencies: I1 predicates; canonical recovery resolution interface from ADR-0059 D3. Do not copy classifiers or add report-specific decisions/assignments.
-- Acceptance through the real proposed report route: Admin; Developer with VOC-only, Finding-only, Task-only, and Survey-only scopes; mixed scopes; User; foreign workspace; Survey explicit deny including Admin. Inspect the wire payload for absent groups, truthful zeros, no hidden counts/labels/endpoints, and zero source mutations/report-read audit writes.
+- Acceptance through the real report route: Admin; Developer with VOC-only, Finding-only, Task-only, and Survey-only scopes; mixed scopes; User; foreign workspace; Survey explicit deny including Admin. Inspect the wire payload for absent groups, truthful zeros, no hidden counts/labels/endpoints, and zero source mutations/report-read audit writes.
 - Fixture assertions: Area with only Task/Finding/Survey data appears; all-unclassified works; archived UUID/name and slug reuse remain distinct; source reclassification moves only that source; multiple links count once; all Area pages plus unset reconcile to their own domain totals under identical scopes. Context totals remain independent of Area selection/page length. No ratio is computed from unrelated populations or page lengths.
 - Survey acceptance: below-threshold closed outcome, open outcome, no poor answer, qualifying Finding, not_actionable Finding, and current no-follow-up resolution follow ADR-0055. Multiple poor responses in one Survey still yield one Survey signal. Neither Admin nor personal-read grants add raw/per-response fields; direct personal-table reads remain forbidden.
 - Performance acceptance: seed about 5k VOCs/5k Tasks with many Areas and links; verify query plans and request/render timings. A fixed set of grouped queries plus batch metadata reads must replace per-Area/per-record/per-Survey service fanout; paginate report rows and bound response size. Measure before adding an index; do not preemptively add a materialized cache.

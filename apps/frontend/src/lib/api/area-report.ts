@@ -9,7 +9,9 @@ export async function fetchAnalyticsAreaReport(
   const parsed = dashboardAreaReportQuerySchema.parse(query);
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(parsed)) {
-    if (value !== undefined && key !== 'limit') search.set(key, String(value));
+    // `limit` has a schema default; send it only when the caller chose one.
+    if (value === undefined || (key === 'limit' && query.limit === undefined)) continue;
+    search.set(key, String(value));
   }
   return (
     await apiRequest('GET', `/dashboard/analytics-areas?${search}`, dashboardAreaReportSchema, {
