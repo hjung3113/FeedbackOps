@@ -94,7 +94,7 @@ const subtitle =
   '권한 정책 · 익명성 임계값 · Managed System 간 연결 정책 등 워크스페이스 전역 동작을 정하는 설정입니다.';
 
 const settingLabels: Record<EditableKey, string> = {
-  voc_cluster_suggestions_enabled: SUGGESTIONS.tab,
+  voc_cluster_suggestions_enabled: SUGGESTIONS.optInLabel,
   coverage_thresholds: WORKSPACE_SETTINGS_COVERAGE_COPY.sectionTitle,
   permission_self_approval: '권한 요청 직접 승인',
   survey_anonymity_threshold: '익명성 임계값',

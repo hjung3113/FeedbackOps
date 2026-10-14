@@ -101,3 +101,35 @@ it('omits the opt-in for unavailable embeddings and never patches an untouched s
   fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
   await waitFor(() => expect(patches).toEqual([{ survey_anonymity_threshold: 12 }]));
 });
+
+it('names the edited suggestion row in the save bar', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (path) =>
+        new Response(
+          JSON.stringify(
+            path === '/me'
+              ? { actor: { id: 'admin', role_level: 'admin' }, workspace_id: 'workspace' }
+              : { available: true, items: [] },
+          ),
+          { status: 200 },
+        ),
+    ),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <WorkspaceSettingsForm initialSettings={initialSettings} />
+    </QueryClientProvider>,
+  );
+  const section = (await screen.findByRole('heading', { name: 'Cluster 제안' })).closest('section');
+  if (!section) throw new Error('Suggestion section missing');
+  fireEvent.click(within(section).getByRole('button', { name: '편집' }));
+  fireEvent.click(screen.getByRole('combobox', { name: 'Cluster 제안 생성' }));
+  fireEvent.click(await screen.findByRole('option', { name: /^사용$/ }));
+  expect(
+    within(screen.getByTestId('workspace-settings-save-bar')).getByText('Cluster 제안 생성', {
+      exact: true,
+    }),
+  ).toBeInTheDocument();
+});

@@ -5,6 +5,13 @@ import {
   vocClusterSuggestionItemSchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  RouterContextProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -749,3 +756,113 @@ it.each([403, 404, 409])(
     }
   },
 );
+
+function mountWithRouter() {
+  const root = createRootRoute();
+  const vocs = createRoute({ getParentRoute: () => root, path: '/vocs' });
+  const router = createRouter({
+    routeTree: root.addChildren([vocs]),
+    history: createMemoryHistory({ initialEntries: ['/vocs'] }),
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <RouterContextProvider router={router}>
+        <ClusterSuggestionSession>
+          {({ list, panel, count }) => (
+            <>
+              <span data-testid="count">{count}</span>
+              {list}
+              {panel}
+            </>
+          )}
+        </ClusterSuggestionSession>
+      </RouterContextProvider>
+    </QueryClientProvider>,
+  );
+  return { client, ...view };
+}
+
+it('announces the inline discard confirmation while undo receives focus', async () => {
+  mountWithRouter();
+  postResponse = async () => {
+    items = [];
+    return json({
+      id: pair.id,
+      revision: 4,
+      discarded_at: new Date().toISOString(),
+      undo_until: new Date(Date.now() + 300000).toISOString(),
+    });
+  };
+  fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+  fireEvent.click(screen.getByRole('button', { name: '기각' }));
+  expect(await screen.findByRole('button', { name: '되돌리기' })).toHaveFocus();
+  expect(screen.getByRole('status')).toHaveTextContent('제안을 기각했습니다');
+});
+
+it('does not replay a dismissed notice when another pair is keyboard-opened', async () => {
+  const second = { ...pair, id: '55555555-5555-4555-8555-555555555555' };
+  items = [pair, second];
+  mountWithRouter();
+  postResponse = async () => {
+    items = [second];
+    return json({ code: 'permission.denied', message: 'safe failure' }, 403);
+  };
+  const first = (await screen.findAllByRole('button', { name: /VOC-12/ }))[0];
+  if (!first) throw new Error('First suggestion missing');
+  fireEvent.click(first);
+  fireEvent.click(screen.getByRole('button', { name: '확인 후 Cluster 생성' }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
+  fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+  const row = await screen.findByRole('button', { name: /VOC-12/ });
+  row.focus();
+  await userEvent.setup().keyboard('{Enter}');
+  expect(screen.getByTestId('cluster-suggestion-panel')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(row).toHaveFocus();
+});
+
+it('keeps focus on the toast Cluster link after confirming the last pair', async () => {
+  const { client } = mountWithRouter();
+  fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+  vi.useFakeTimers();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: '확인 후 Cluster 생성' }));
+    await vi.advanceTimersByTimeAsync(50);
+  });
+  expect(toastSuccess).toHaveBeenCalled();
+  render(toastSuccess.mock.calls[0]?.[1].description);
+  const link = screen.getByRole('link', { name: 'Cluster 보기' });
+  expect(link).toHaveFocus();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1001);
+  });
+  expect(link).toHaveFocus();
+  client.clear();
+});
+
+it('shows an explicit description fallback for an empty TipTap doc', async () => {
+  items = [
+    {
+      ...pair,
+      vocs: [
+        { ...pair.vocs[0], description_rich_content: { type: 'doc', content: [] } },
+        pair.vocs[1],
+      ],
+    },
+  ];
+  mountWithRouter();
+  fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+  expect(screen.getByText('설명 없음')).toBeInTheDocument();
+  expect(screen.getByText('두 번째 본문')).toBeInTheDocument();
+});
+
+it('places the suggestion title beside the kind chip in the panel identity group', async () => {
+  mountWithRouter();
+  fireEvent.click(await screen.findByRole('button', { name: /VOC-12/ }));
+  const header = screen.getByTestId('detail-panel-header-content');
+  expect(header.firstElementChild).toHaveTextContent('Cluster 제안');
+  expect(header.firstElementChild).toHaveTextContent('Cluster');
+});

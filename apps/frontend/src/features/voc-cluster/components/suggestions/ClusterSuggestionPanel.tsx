@@ -1,6 +1,5 @@
 import { CLUSTER_SUGGESTION_COPY as COPY } from '@/lib/copy/voc-cluster';
-import { InternalLink } from '@/lib/router/InternalLink';
-import type { VocClusterSuggestionItem } from '@fops/shared';
+import { type VocClusterSuggestionItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -8,6 +7,7 @@ import {
   RichContentRenderer,
   type TipTapDoc,
 } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import { type RefObject, useEffect, useRef } from 'react';
 
 export function ClusterSuggestionPanel({
@@ -35,13 +35,13 @@ export function ClusterSuggestionPanel({
 }) {
   const noticeNode = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!noticeId) return;
+    if (!notice || !noticeId) return;
     const target = noticeNode.current?.isConnected ? noticeNode.current : fallbackRef.current;
     if (target?.isConnected) target.focus();
-  }, [noticeId, fallbackRef]);
+  }, [notice, noticeId, fallbackRef]);
   return (
     <div data-testid="cluster-suggestion-panel">
-      <DetailPanelHeader kind="cluster" extras={<h2>{COPY.tab}</h2>} onClose={onClose} />
+      <DetailPanelHeader kind="cluster" id={COPY.tab} onClose={onClose} />
       <div className="flex flex-col gap-5 p-5">
         {notice && (
           <div role="alert" tabIndex={-1} ref={noticeNode}>
@@ -56,10 +56,16 @@ export function ClusterSuggestionPanel({
             {item.vocs.map((voc) => (
               <section key={voc.id} className="flex flex-col gap-3">
                 <PanelSectionTitle>
-                  <InternalLink href={`/vocs/${voc.id}`}>{voc.display_id}</InternalLink>
+                  <Link
+                    to="/vocs"
+                    search={{ view: 'inbox', selected: voc.id }}
+                    className="text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+                  >
+                    {voc.display_id}
+                  </Link>
                 </PanelSectionTitle>
                 <h3 className="text-sm font-medium text-text-primary">{voc.title}</h3>
-                {voc.description_rich_content ? (
+                {!isTipTapDocStructurallyEmpty(voc.description_rich_content) ? (
                   <RichContentRenderer
                     doc={voc.description_rich_content as TipTapDoc}
                     mode="internal"

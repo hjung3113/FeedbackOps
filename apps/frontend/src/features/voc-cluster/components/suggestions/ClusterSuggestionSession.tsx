@@ -214,7 +214,8 @@ export function ClusterSuggestionSession({
           removePair(captured.id);
           setSelectedId(null);
           setNotice(null);
-          setFocus({ kind: 'row', id: items.find((entry) => entry.id !== captured.id)?.id ?? '' });
+          const nextId = items.find((entry) => entry.id !== captured.id)?.id;
+          setFocus(nextId ? { kind: 'row', id: nextId } : null);
           toast.success(COPY.created, {
             description: (
               <InternalLink
@@ -342,7 +343,7 @@ export function ClusterSuggestionSession({
               key={row.item.id}
               className="flex items-center gap-3 border-b border-border-subtle px-5 py-3"
             >
-              <span className="text-sm text-text-muted">{COPY.discarded}</span>
+              <output className="text-sm text-text-muted">{COPY.discarded}</output>
               <Button
                 variant="secondary"
                 size="sm"
