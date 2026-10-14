@@ -13,6 +13,7 @@ import { adminSettingsFixtureSchema } from './admin-settings';
 // Admin-settings scenarios retain their explicit forbidden fixture instead.
 export const permissionSettingsFixture = adminSettingsFixtureSchema.parse({
   coverage_thresholds: resolveCoverageThresholds(),
+  voc_cluster_suggestions_enabled: false,
   permission_self_approval: 'allowed',
   survey_anonymity_threshold: 9,
 });

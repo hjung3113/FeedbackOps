@@ -538,7 +538,7 @@ and search inventory above remains the current implementation. FR-DASH-002 in
   No eager source detail/personal Survey reads. Tab and positive-count links support keyboard
   operation and visible focus. Source actions remain on source routes with fresh permissions.
 
-## Close-out assistance (ADR-0068; proposed/new)
+## Close-out assistance (ADR-0068; Cluster review shipped #1098, preview pending)
 
 No new domain route/shell is added. The existing `/voc-clusters` ListShell owns a
 separate suggestion review section with feature-local selection, not a fake
@@ -552,7 +552,17 @@ disclosure. Actual text/MS changes clear and cancel the check; unchanged values
 and unrelated rerenders preserve it. Candidate UUID navigation retains the
 unsaved-change blocker and never creates a relationship. Preview states never
 block submit or send automatic requests.
-`/admin/settings` owns the default-off suggestion-generation opt-in.
+`/admin/settings` owns the default-off suggestion-generation opt-in. Both suggestion
+surfaces are omitted until the existing suggestion read succeeds with `available:true`;
+loading/errors/provider-disabled responses preserve existing layout. The fourth tab is
+Admin/Developer-only; its selection, undo and notices end on tab/route/context exit.
+Existing Cluster selection/default reconciliation pauses while the fourth tab is active.
+Availability loss returns to the default tab without writing Cluster URL state;
+automatic fallback keeps reconciliation/defaulting paused until a user selects a
+Cluster or changes an ordinary filter.
+Confirm stays on the tab and offers a Cluster link; discard has an inline five-minute
+server-deadline undo independent of refetched pending rows. Cluster panel drafts reset
+when switching to the suggestion panel.
 
 ## Evidence inventory (ADR-0065; implemented by #1107)
 

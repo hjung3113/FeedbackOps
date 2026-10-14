@@ -1,10 +1,16 @@
+import { useMe } from '@/lib/auth/useMe';
 import { ADMIN_PERMISSIONS_COPY } from '@/lib/copy/admin-permissions';
 import { COVERAGE_METRIC_LABELS } from '@/lib/copy/coverage';
 import { GLOSSARY } from '@/lib/copy/glossary';
+import { CLUSTER_SUGGESTION_COPY as SUGGESTIONS } from '@/lib/copy/voc-cluster';
 import {
   WORKSPACE_SETTINGS_COVERAGE_COPY,
   coverageBandFieldLabel,
 } from '@/lib/copy/workspace-settings';
+import {
+  clusterSuggestionActorContext,
+  useClusterSuggestions,
+} from '../../voc-cluster/hooks/useClusterSuggestions';
 
 import {
   Button,
@@ -88,6 +94,7 @@ const subtitle =
   '권한 정책 · 익명성 임계값 · Managed System 간 연결 정책 등 워크스페이스 전역 동작을 정하는 설정입니다.';
 
 const settingLabels: Record<EditableKey, string> = {
+  voc_cluster_suggestions_enabled: SUGGESTIONS.optInLabel,
   coverage_thresholds: WORKSPACE_SETTINGS_COVERAGE_COPY.sectionTitle,
   permission_self_approval: '권한 요청 직접 승인',
   survey_anonymity_threshold: '익명성 임계값',
@@ -98,6 +105,9 @@ function changedFields(
   draft: WorkspaceSettings,
 ): UpdateWorkspaceSettings {
   const patch: UpdateWorkspaceSettings = {};
+  if (saved.voc_cluster_suggestions_enabled !== draft.voc_cluster_suggestions_enabled) {
+    patch.voc_cluster_suggestions_enabled = draft.voc_cluster_suggestions_enabled;
+  }
   if (saved.permission_self_approval !== draft.permission_self_approval) {
     patch.permission_self_approval = draft.permission_self_approval;
   }
@@ -195,6 +205,14 @@ export function WorkspaceSettingsScreen() {
 
 export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: WorkspaceSettings }) {
   const updateMutation = useUpdateWorkspaceSettings();
+  const { data: me } = useMe();
+  const suggestionsQuery = useClusterSuggestions(
+    undefined,
+    clusterSuggestionActorContext(me),
+    !!me?.actor,
+  );
+  const suggestionsAvailable =
+    suggestionsQuery.isSuccess && suggestionsQuery.data?.available === true;
   const [saved, setSaved] = useState(initialSettings);
   const [draft, setDraft] = useState(initialSettings);
   const [editing, setEditing] = useState<EditableKey | CoverageMetricId | null>(null);
@@ -417,6 +435,30 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
         </div>
       </section>
 
+      {suggestionsAvailable && (
+        <section data-testid="cluster-suggestions-setting">
+          <PanelSectionTitle>{SUGGESTIONS.tab}</PanelSectionTitle>
+          <div className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
+            <EditableOptionRow
+              editing={editing === 'voc_cluster_suggestions_enabled'}
+              isDirty={dirtyKeys.includes('voc_cluster_suggestions_enabled')}
+              label={SUGGESTIONS.optInLabel}
+              description={SUGGESTIONS.optInHelp}
+              value={String(draft.voc_cluster_suggestions_enabled)}
+              savedValue={String(saved.voc_cluster_suggestions_enabled)}
+              choices={[
+                { value: 'true', label: SUGGESTIONS.enabled },
+                { value: 'false', label: SUGGESTIONS.disabled },
+              ]}
+              fieldLabel={SUGGESTIONS.optInLabel}
+              onChange={(value) => updateDraft('voc_cluster_suggestions_enabled', value === 'true')}
+              onEdit={() => setEditing('voc_cluster_suggestions_enabled')}
+              onDone={() => setEditing(null)}
+            />
+          </div>
+        </section>
+      )}
+
       {barKeys.length > 0 && (
         <div
           className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-md border border-border-strong bg-surface-popover px-4 py-3 shadow-lg"
@@ -489,7 +531,7 @@ function SettingRow({
   );
 }
 
-function EditableOptionRow({
+function EditableOptionRow<Value extends string = PermissionSelfApproval>({
   editing,
   isDirty,
   label,
@@ -499,14 +541,21 @@ function EditableOptionRow({
   onChange,
   onEdit,
   onDone,
+  choices = [
+    { value: 'allowed', label: '허용' },
+    { value: 'forbidden', label: '금지' },
+  ],
+  fieldLabel = '직접 승인',
 }: {
   editing: boolean;
   isDirty: boolean;
   label: string;
   description: string;
-  value: PermissionSelfApproval;
-  savedValue: PermissionSelfApproval;
-  onChange: (value: PermissionSelfApproval) => void;
+  value: Value;
+  savedValue: Value;
+  choices?: Array<{ value: string; label: string }>;
+  fieldLabel?: string;
+  onChange: (value: Value) => void;
   onEdit: () => void;
   onDone: () => void;
 }) {
@@ -515,25 +564,25 @@ function EditableOptionRow({
       label={label}
       description={description}
       dirty={isDirty}
-      previousValue={savedValue === 'allowed' ? '허용' : '금지'}
+      previousValue={choices.find((choice) => choice.value === savedValue)?.label}
     >
       <div className="flex items-start justify-end">
         {editing ? (
-          <Select
-            value={value}
-            onValueChange={(nextValue) => onChange(nextValue as PermissionSelfApproval)}
-          >
-            <SelectTrigger aria-label="직접 승인">
+          <Select value={value} onValueChange={(nextValue) => onChange(nextValue as Value)}>
+            <SelectTrigger aria-label={fieldLabel}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="allowed">허용</SelectItem>
-              <SelectItem value="forbidden">금지</SelectItem>
+              {choices.map((choice) => (
+                <SelectItem key={choice.value} value={choice.value}>
+                  {choice.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         ) : (
           <span className="text-sm font-medium text-text-primary">
-            {value === 'allowed' ? '허용' : '금지'}
+            {choices.find((choice) => choice.value === value)?.label}
           </span>
         )}
       </div>

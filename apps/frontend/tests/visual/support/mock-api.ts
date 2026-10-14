@@ -10,6 +10,7 @@ import { VOC_REPORTER_TASK_SUMMARY_IDS } from '../fixtures/voc-reporter-task-sum
 import { createScenario } from '../scenarios';
 import { createPermissionContextHandlers } from './mock-api/access';
 import { createAdminMutationHandlers, createWorkspaceSettingHandlers } from './mock-api/admin';
+import { createClusterSuggestionHandlers } from './mock-api/cluster-suggestions';
 import { createCommonHandlers, createDefaultActorHandlers } from './mock-api/common';
 import { createDashboardHandlers } from './mock-api/dashboard';
 import { createEvidenceHandlers } from './mock-api/evidence';
@@ -104,6 +105,7 @@ export async function installMockApi(
     ...createPermissionRequestHandlers(),
     ...createPermissionGrantHandlers(),
     ...createVocClusterListHandlers(),
+    ...createClusterSuggestionHandlers(context),
     ...createSurveyManagedSystemHandlers(context),
     ...createManagedSystemHandlers(context),
     ...createFindingListFallbackHandlers(),

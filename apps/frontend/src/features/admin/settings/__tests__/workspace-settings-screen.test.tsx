@@ -16,6 +16,7 @@ import { WorkspaceSettingsForm } from '../WorkspaceSettingsScreen.js';
 beforeEach(() => {
   mutateAsync.mockReset().mockResolvedValue({
     coverage_thresholds: resolveCoverageThresholds(),
+    voc_cluster_suggestions_enabled: false,
     permission_self_approval: 'forbidden',
     survey_anonymity_threshold: 5,
   });
@@ -28,6 +29,7 @@ describe('WorkspaceSettingsForm', () => {
         <WorkspaceSettingsForm
           initialSettings={{
             coverage_thresholds: resolveCoverageThresholds(),
+            voc_cluster_suggestions_enabled: false,
             permission_self_approval: 'allowed',
             survey_anonymity_threshold: 5,
           }}
@@ -49,6 +51,7 @@ describe('WorkspaceSettingsForm', () => {
         <WorkspaceSettingsForm
           initialSettings={{
             coverage_thresholds: resolveCoverageThresholds(),
+            voc_cluster_suggestions_enabled: false,
             permission_self_approval: 'allowed',
             survey_anonymity_threshold: 5,
           }}

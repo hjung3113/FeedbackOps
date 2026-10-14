@@ -36,6 +36,7 @@ const savedCoverage: CoverageThresholds = resolveCoverageThresholds();
 function settingsWith(overrides: Partial<WorkspaceSettings> = {}): WorkspaceSettings {
   return {
     coverage_thresholds: savedCoverage,
+    voc_cluster_suggestions_enabled: false,
     permission_self_approval: 'allowed',
     survey_anonymity_threshold: 5,
     ...overrides,

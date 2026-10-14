@@ -7,6 +7,7 @@ import {
 } from '@fops/shared';
 
 export const adminSettingsFixtureSchema = z.object({
+  voc_cluster_suggestions_enabled: z.boolean(),
   coverage_thresholds: coverageThresholdsSchema,
   permission_self_approval: z.enum(['allowed', 'forbidden']),
   survey_anonymity_threshold: z.number().int().min(5).max(50),
@@ -51,6 +52,7 @@ export const adminSettingsVisualScenarios = z
 
 export const adminSettingsFixture = adminSettingsFixtureSchema.parse({
   coverage_thresholds: resolveCoverageThresholds(),
+  voc_cluster_suggestions_enabled: false,
   permission_self_approval: 'forbidden',
   survey_anonymity_threshold: 9,
 });

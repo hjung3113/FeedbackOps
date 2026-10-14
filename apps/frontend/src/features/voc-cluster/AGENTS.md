@@ -52,13 +52,27 @@ It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Tas
   results follow destination commands; Cluster never invents target ownership/permissions.
   Preserve same-system/source visibility, pending/error states and atomic provenance.
 
-## Cluster suggestion review (ADR-0068; proposed/new)
+## Cluster suggestion review (ADR-0068; shipped #1098)
 
 Own the separate `Cluster 제안` section on the existing `/voc-clusters` ListShell,
 feature-local selection/panel/hooks and `lib/copy/voc-cluster.ts` wording. Review
 two currently authorized VOC texts, then `확인 후 Cluster 생성`, `기각`, or contextual
 `되돌리기`. A suggestion is not Cluster detail or a fake CLU ID, and offers no
 Finding/Task Request/member/bulk/link operations. Confirm creates a human-confirmed
-Cluster, invalidating suggestions and Cluster list; discard/restore invalidate
+Cluster, invalidating suggestions, Cluster list, nav counts and Recovery/Dashboard; discard/restore invalidate
 suggestions. Preserve existing Cluster URL state/manual flows. Hide a complete
 pair/count when either VOC is unreadable; never infer permission from labels.
+
+The fourth tab is shown only for Admin/Developer after the shared suggestion read
+returns `available:true`. Loading, errors and provider-disabled reads add no chrome.
+Availability loss returns to the default tab without changing Cluster URL state.
+The mounted suggestion session resets on tab/route exit or MS/workspace/actor change;
+Cluster panel drafts reset on conditional unmount. Undo records survive query replacement
+until their absolute server deadline; settlement after exit still invalidates caches but
+never restores local prose/focus. Stale/revoked notices contain no copied VOC text.
+
+Denied suggestion mutations (403/404) evict that id from every cached MS/all scope
+for the captured workspace/actor context, cancel obsolete reads, and invalidate
+those scopes even after session exit. Corrective reads never delay safe local
+notice handling. Each notice event moves focus after commit, including identical
+messages; closing its panel returns focus to the connected list.

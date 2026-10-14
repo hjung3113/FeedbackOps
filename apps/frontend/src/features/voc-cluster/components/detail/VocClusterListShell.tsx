@@ -6,7 +6,9 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
 import { isPermissionDenied } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { CLUSTER_SUGGESTION_COPY } from '@/lib/copy/voc-cluster';
 import { formatShortDate } from '@/lib/format/datetime';
 import {
   ListShell,
@@ -18,6 +20,11 @@ import {
 } from '@fops/ui';
 import * as React from 'react';
 import { useState } from 'react';
+import {
+  clusterSuggestionActorContext,
+  useClusterSuggestions,
+} from '../../hooks/useClusterSuggestions';
+import { ClusterSuggestionSession } from '../suggestions/ClusterSuggestionSession';
 
 import { ClusterStatusBadge } from '../../lib/presentation';
 import type { VocClusterListPresentation } from '../types';
@@ -30,6 +37,7 @@ export function VocClusterListShell({
   onCloseDetail,
   defaultToFirst = false,
   managedSystemId,
+  onSuggestionModeChange,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -39,10 +47,48 @@ export function VocClusterListShell({
   defaultToFirst?: boolean;
   /** Optional scope from the list route's `managedSystem` URL param (undefined = caller's scope union). */
   managedSystemId?: string | undefined;
+  onSuggestionModeChange?: (active: boolean, options?: { preserveSelection: boolean }) => void;
 }): React.ReactElement {
   const listQuery = useVocClusterList(managedSystemId);
   const clusters = listQuery.data?.items ?? [];
-  const [activeTab, setActiveTab] = useState<'all' | 'confirmed' | 'no-finding'>('all');
+  const { data: me } = useMe();
+  const eligible = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const actorContext = clusterSuggestionActorContext(me);
+  const suggestionsQuery = useClusterSuggestions(managedSystemId, actorContext, eligible);
+  const suggestionsAvailable =
+    suggestionsQuery.isSuccess && suggestionsQuery.data?.available === true;
+  const sessionContext = `${managedSystemId ?? 'all'}:${actorContext}`;
+  const [activeTab, setActiveTab] = useState<ClusterTab>('all');
+  const [selectionPaused, setSelectionPaused] = useState(false);
+  const suggestionMode = eligible && suggestionsAvailable && activeTab === 'suggestions';
+  const [suggestionSlots, setSuggestionSlots] = useState<{
+    panel: React.ReactNode;
+    count: number | undefined;
+    context: string;
+  }>({ panel: null, count: undefined, context: '' });
+  const automaticExit = activeTab === 'suggestions' && !suggestionMode;
+  const pauseClusterSelection = suggestionMode || automaticExit || selectionPaused;
+  React.useEffect(() => {
+    if (automaticExit) {
+      setActiveTab('all');
+      setSelectionPaused(true);
+    }
+    onSuggestionModeChange?.(suggestionMode, {
+      preserveSelection: automaticExit || selectionPaused,
+    });
+  }, [automaticExit, selectionPaused, suggestionMode, onSuggestionModeChange]);
+  const receiveSuggestionSlots = React.useCallback(
+    (slots: { panel: React.ReactNode; count: number | undefined }) => {
+      setSuggestionSlots({ ...slots, context: sessionContext });
+    },
+    [sessionContext],
+  );
+  function changeTab(tab: ClusterTab) {
+    setSelectionPaused(false);
+    onSuggestionModeChange?.(tab === 'suggestions', { preserveSelection: false });
+    setActiveTab(tab);
+  }
+
   const visibleClusters = clusters.filter((cluster) => {
     if (activeTab === 'confirmed') return cluster.status === 'confirmed';
     if (activeTab === 'no-finding') return (cluster.linked_findings ?? []).length === 0;
@@ -50,19 +96,20 @@ export function VocClusterListShell({
   });
 
   React.useEffect(() => {
-    if (defaultToFirst && selectedId === null && visibleClusters[0])
+    if (!pauseClusterSelection && defaultToFirst && selectedId === null && visibleClusters[0])
       onSelect(visibleClusters[0].id);
-  }, [defaultToFirst, onSelect, selectedId, visibleClusters]);
+  }, [pauseClusterSelection, defaultToFirst, onSelect, selectedId, visibleClusters]);
 
   React.useEffect(() => {
     if (
+      !pauseClusterSelection &&
       listQuery.isSuccess &&
       selectedId !== null &&
       !visibleClusters.some((cluster) => cluster.id === selectedId)
     ) {
       onCloseDetail({ reconcile: true });
     }
-  }, [listQuery.isSuccess, onCloseDetail, selectedId, visibleClusters]);
+  }, [pauseClusterSelection, listQuery.isSuccess, onCloseDetail, selectedId, visibleClusters]);
 
   return (
     <ListShell
@@ -80,13 +127,41 @@ export function VocClusterListShell({
           error={listQuery.error}
           onRetry={() => void listQuery.refetch()}
           selectedId={selectedId}
-          onSelect={onSelect}
+          onSelect={(id) => {
+            setSelectionPaused(false);
+            onSuggestionModeChange?.(false, { preserveSelection: false });
+            onSelect(id);
+          }}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={changeTab}
+          suggestionEligible={eligible && suggestionsAvailable}
+          suggestionCount={
+            suggestionMode && suggestionSlots.context === sessionContext
+              ? suggestionSlots.count
+              : suggestionsAvailable
+                ? suggestionsQuery.data?.items.length
+                : undefined
+          }
+          suggestionList={
+            suggestionMode ? (
+              <ClusterSuggestionSession
+                key={`${managedSystemId ?? 'all'}:${actorContext}`}
+                managedSystemId={managedSystemId}
+                actorContext={actorContext}
+                onSlots={receiveSuggestionSlots}
+              >
+                {({ list }) => list}
+              </ClusterSuggestionSession>
+            ) : undefined
+          }
         />
       }
       detailPanel={
-        selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId) ? (
+        suggestionMode ? (
+          suggestionSlots.context === sessionContext ? (
+            suggestionSlots.panel
+          ) : null
+        ) : selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId) ? (
           <VocClusterDetailPanel
             key={selectedId}
             clusterId={selectedId}
@@ -97,6 +172,8 @@ export function VocClusterListShell({
     />
   );
 }
+
+type ClusterTab = 'all' | 'confirmed' | 'no-finding' | 'suggestions';
 
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
@@ -113,6 +190,9 @@ function ClusterListBody({
   onSelect,
   activeTab,
   onTabChange,
+  suggestionEligible,
+  suggestionCount,
+  suggestionList,
 }: {
   clusters: VocClusterListPresentation[];
   allClusters: VocClusterListPresentation[];
@@ -122,8 +202,11 @@ function ClusterListBody({
   onRetry: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  activeTab: 'all' | 'confirmed' | 'no-finding';
-  onTabChange: (tab: 'all' | 'confirmed' | 'no-finding') => void;
+  activeTab: ClusterTab;
+  onTabChange: (tab: ClusterTab) => void;
+  suggestionEligible: boolean;
+  suggestionCount: number | undefined;
+  suggestionList: React.ReactNode;
 }): React.ReactElement {
   // #706 — counts are unknown until the list read succeeds (covers pending,
   // error, and refetch-after-error without data); unknown must never render
@@ -163,6 +246,15 @@ function ClusterListBody({
       testId: 'cluster-tab-no-finding',
     },
   ];
+  if (suggestionEligible)
+    tabs.push({
+      value: 'suggestions',
+      label: CLUSTER_SUGGESTION_COPY.tab,
+      ...(suggestionCount !== undefined ? { badgeCount: suggestionCount } : {}),
+      id: 'cluster-tab-suggestions',
+      controlsId: 'cluster-list-panel',
+      testId: 'cluster-tab-suggestions',
+    });
   const isReadDenied = isError && isPermissionDenied(error);
 
   return (
@@ -173,7 +265,11 @@ function ClusterListBody({
           activeTab={activeTab}
           onTabChange={(next) => onTabChange(next as typeof activeTab)}
           tabsAriaLabel="Cluster 필터"
-          action={<span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>}
+          action={
+            activeTab === 'suggestions' ? undefined : (
+              <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
+            )
+          }
         />
       ) : null}
 
@@ -183,7 +279,9 @@ function ClusterListBody({
           ? { role: 'tabpanel', 'aria-labelledby': `cluster-tab-${activeTab}` }
           : {})}
       >
-        {isPending ? (
+        {activeTab === 'suggestions' && suggestionList ? (
+          suggestionList
+        ) : isPending ? (
           <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
             <SkeletonRows count={3} size="compact" />
           </div>
