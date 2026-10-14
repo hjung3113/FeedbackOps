@@ -19,8 +19,8 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { recoveryIdentity } from '../../dashboard/identity.js';
-import { createEntityLink } from '../../entity-links/index.js';
 import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
+import { createEntityLink } from '../../entity-links/index.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import {
   createFindingFromVocCluster,

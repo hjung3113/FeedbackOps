@@ -171,7 +171,6 @@ describe('nav resolve task intents survive the tasks search schema', () => {
   );
 });
 
-
 describe('ADR-0069 exact Area destinations', () => {
   it.each([ID, 'unset'])('preserves %s on both strict list routes', (area) => {
     expect(validateVocSearch({ view: 'inbox', 'filter.analytics_area': area })).toEqual({

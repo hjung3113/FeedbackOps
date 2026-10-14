@@ -25,7 +25,8 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
     const areaFilter = query['filter.analytics_area'];
-    const analyticsAreaId = areaFilter === 'unset' ? undefined : (areaFilter ?? query.analyticsAreaId);
+    const analyticsAreaId =
+      areaFilter === 'unset' ? undefined : (areaFilter ?? query.analyticsAreaId);
     if (tab === 'waiting' && view !== 'triage') {
       throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
         fields: [{ path: ['tab'], code: 'invalid_for_view' }],
