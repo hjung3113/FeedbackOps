@@ -71,7 +71,7 @@ keep the zero-paid-call `같은 Managed System의 최근 VOC` panel separate. On
 `POST /vocs/similarity-preview` route. Typing/refocus/render/automatic retries never
 do; actual text/MS changes clear pending/results/errors, abort and ignore late
 responses. Unchanged values and unrelated rerenders preserve the check; each explicit click gets a fresh key.
-Disable checking while loading (including double-clicks); enable it again after settlement when the draft is valid.
+While loading, keep the mounted check button focusable with `aria-disabled="true"` and the shared Button disabled styling; the synchronous in-flight guard blocks clicks and Enter/Space. Use native `disabled` only for an invalid draft; enable checking again after settlement when the draft is valid.
 Distinguish quota/provider/empty states, leave submit usable, and preserve UUID navigation's unsaved-change blocker.
 No draft VOC, dismiss/confirm/join or extra continue step. Use existing copy module
 and shared similarity-preview schemas with typed `apiRequest`. Saved recommendation

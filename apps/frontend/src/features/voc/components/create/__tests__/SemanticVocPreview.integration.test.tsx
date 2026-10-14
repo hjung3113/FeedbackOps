@@ -265,7 +265,13 @@ test('double-click sends one preview POST and disables checking only until it se
     fireEvent.click(checkButton());
   });
   expect(previewRequests()).toHaveLength(1);
-  expect(checkButton()).toBeDisabled();
+  expect(checkButton()).toHaveAttribute('aria-disabled', 'true');
+  expect(checkButton()).toBeEnabled();
+  await act(async () => {
+    fireEvent.click(checkButton());
+    await Promise.resolve();
+  });
+  expect(previewRequests()).toHaveLength(1);
   expect(semanticPanel().getByText('확인 중…')).toHaveClass('text-text-secondary');
   expect(screen.getByRole('button', { name: 'VOC 제출' })).toBeEnabled();
   await act(async () => {
@@ -273,6 +279,7 @@ test('double-click sends one preview POST and disables checking only until it se
   });
   expect(semanticPanel().getAllByRole('link')).toHaveLength(3);
   expect(checkButton()).toBeEnabled();
+  expect(checkButton()).not.toHaveAttribute('aria-disabled', 'true');
 });
 
 test('preview enablement is local and requires a valid MS, trimmed title and non-blank description', async () => {
@@ -651,6 +658,10 @@ test('Tab reaches the check button and each candidate; completing a check keeps 
   await user.keyboard('{Enter}');
   expect(previewRequests()).toHaveLength(1);
   expect(checkButton()).toHaveFocus();
+  expect(checkButton()).toHaveAttribute('aria-disabled', 'true');
+  expect(checkButton()).toBeEnabled();
+  await user.keyboard('{Enter} ');
+  expect(previewRequests()).toHaveLength(1);
   await act(async () => {
     pending.resolve(json(result));
   });

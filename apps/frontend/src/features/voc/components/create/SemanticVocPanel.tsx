@@ -44,7 +44,10 @@ export function SemanticVocPanel({ form }: { form: UseFormReturn<CreateVocReques
             type="button"
             variant="secondary"
             size="sm"
-            disabled={!canCheck || loading}
+            disabled={!canCheck}
+            aria-disabled={loading}
+            // oxlint-disable-next-line shadcn/no-restyle -- Reuse Button disabled classes for loading without native disabled dropping focus (#1100).
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
             aria-describedby={canCheck ? undefined : hintId}
             onClick={() => void check()}
           >
