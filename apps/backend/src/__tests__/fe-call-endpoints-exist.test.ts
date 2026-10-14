@@ -45,9 +45,10 @@ const BE_SRC = path.join(REPO_ROOT, 'apps/backend/src');
 // Walk server.ts + every top-level `routes.ts` / `*-routes.ts` in each module
 // (the latter so file naming variants — e.g. `list-actors-routes.ts` — are not
 // silently missed), plus the direct `*.ts` children of `modules/<name>/routes/`
-// when a module splits its routes into a directory (e.g. `voc/routes/`). No
-// recursion: nested plugin files (e.g. `voc/recommendations/routes.ts`) and
-// `modules/core/health/routes.ts` stay out of this walker.
+// when a module splits its routes into a directory (e.g. `voc/routes/`), plus
+// the `routes.ts` of each direct sub-module directory (e.g.
+// `voc/cluster-suggestions/routes.ts`, which owns the root prefix
+// `/voc-cluster-suggestions`; #1098). Only one level deep, no recursion.
 //
 // Fastify accepts two registration forms and this repo uses both: the object
 // form `app.route({ url: '/x' })` (71 declarations) and the method shorthand
@@ -85,6 +86,14 @@ function collectBackendRoutes(): Set<string> {
       // Match routes.ts AND list-actors-routes.ts / foo-routes.ts variants.
       if (!fileEntry.name.endsWith('routes.ts')) continue;
       urls.push(...extractRouteUrls(fs.readFileSync(path.join(moduleDir, fileEntry.name), 'utf8')));
+    }
+    // Sub-module plugins (e.g. voc/cluster-suggestions/routes.ts) may own a
+    // root prefix of their own; read each direct child directory's routes.ts.
+    for (const subEntry of fs.readdirSync(moduleDir, { withFileTypes: true })) {
+      if (!subEntry.isDirectory() || subEntry.name === 'routes') continue;
+      const subRoutes = path.join(moduleDir, subEntry.name, 'routes.ts');
+      if (fs.existsSync(subRoutes))
+        urls.push(...extractRouteUrls(fs.readFileSync(subRoutes, 'utf8')));
     }
     // Split modules keep their routes in a routes/ directory (e.g.
     // voc/routes/{index,crud,conversation,conversion,public-updates}.ts);
@@ -171,9 +180,7 @@ describe('FE→BE reverse drift (post-#21)', () => {
         "map.get('/looks-like-a-path-but-is-not-fastify');",
       ].join('\n'),
     );
-    expect(new Set(urls)).toEqual(
-      new Set(['/object-form', '/shorthand', '/shorthand/:id/nested']),
-    );
+    expect(new Set(urls)).toEqual(new Set(['/object-form', '/shorthand', '/shorthand/:id/nested']));
   });
 
   it('discovers the shorthand-registered routes in the real backend source', () => {
