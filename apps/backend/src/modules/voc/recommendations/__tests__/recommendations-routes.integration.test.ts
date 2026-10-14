@@ -260,6 +260,69 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     });
   });
 
+  it('waits for recovery before locking the Managed System on new-cluster confirmation', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const blocker = await appDb.pool.connect();
+    const probe = await appDb.pool.connect();
+    let confirm: Promise<{ statusCode: number; body: string; json: () => unknown }> | undefined;
+    try {
+      await blocker.query('begin');
+      await blocker.query(
+        "select pg_advisory_xact_lock(hashtextextended('recovery-command:' || $1,0))",
+        [WORKSPACE_ID],
+      );
+      const pid = await blocker.query<{ pid: number }>('select pg_backend_pid() as pid');
+      confirm = app
+        .inject({
+          method: 'POST',
+          url: `/vocs/${sourceId}/recommendations/${candidateId}/confirm`,
+          headers: headers(cookie),
+        })
+        .then((response) => response);
+      const deadline = Date.now() + 1500;
+      let waiting = false;
+      while (Date.now() < deadline) {
+        const locks = await ops.pool.query<{ found: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM pg_locks
+            WHERE locktype='advisory' AND NOT granted AND objsubid=1
+              AND classid=((hashtextextended('recovery-command:' || $1,0)>>32)&4294967295)::oid
+              AND objid=(hashtextextended('recovery-command:' || $1,0)&4294967295)::oid
+              AND $2::int=ANY(pg_blocking_pids(pid))) AS found`,
+          [WORKSPACE_ID, pid.rows[0]?.pid],
+        );
+        if (locks.rows[0]?.found) {
+          waiting = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(waiting, 'confirmation must wait on the workspace recovery lock').toBe(true);
+      // Before FIX1 this rejects with lock_not_available: confirmation already holds the row.
+      await expect(
+        probe.query('select id from core.managed_systems where id=$1 for update nowait', [
+          managedSystemId,
+        ]),
+      ).resolves.toMatchObject({ rows: [{ id: managedSystemId }] });
+      await blocker.query('commit');
+      const response = await confirm;
+      expect(response.body).not.toContain('40P01');
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ cluster_created: true });
+    } finally {
+      await blocker.query('rollback');
+      blocker.release();
+      probe.release();
+      await Promise.allSettled(confirm ? [confirm] : []);
+      await ops.pool.query(
+        `delete from core.audit_log where workspace_id=$1 and subject_type='voc_cluster'
+          and subject_id in (select id from voc_cluster.voc_clusters
+            where workspace_id=$1 and primary_managed_system_id=$2)`,
+        [WORKSPACE_ID, managedSystemId],
+      );
+      await cleanup();
+    }
+  });
+
   it('rejects malformed identifiers before the service and missing sessions in middleware', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
     const malformed = await app.inject({

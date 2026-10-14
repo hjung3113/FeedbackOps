@@ -337,7 +337,6 @@ export function useRecoveryQueue(
                     {[
                       row.item.source?.display_id,
                       row.item.source?.title,
-                      row.item.source?.type === 'permission_request' ? row.item.source.id : '',
                       row.episode ? '' : row.item.responsible_actor_hint.label,
                       row.resolution ? formatRecoveryTime(row.resolution) : '',
                       !search.history && row.item.presentation.state === 'muted' ? COPY.muted : '',

@@ -1,9 +1,10 @@
 // useRemoveClusterMember — DELETE /voc-clusters/:id/vocs/:vocId.
 // Invalidates the cluster detail query on success.
 
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { apiClient, type ApiError } from '@/lib/api';
+import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface RemoveClusterMemberVariables {
   clusterId: string;
@@ -21,6 +22,7 @@ export function useRemoveClusterMember(): UseMutationResult<
       await apiClient('DELETE', `/voc-clusters/${clusterId}/vocs/${vocId}`);
     },
     onSuccess: async (_data, { clusterId }) => {
+      invalidateRecovery(qc);
       invalidateNavCounts(qc);
       await qc.invalidateQueries({ queryKey: ['voc-cluster', clusterId] });
     },

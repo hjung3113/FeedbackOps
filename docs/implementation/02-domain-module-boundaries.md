@@ -169,7 +169,7 @@ Recovery writers first acquire the transaction-scoped workspace advisory lock vi
 before idempotency, owner row, response or recovery identity locks. This includes source/status
 commands, ordinary link create/detach, Task Request creation, Cluster conversions/link/unlink,
 private Survey outcome commands, approved-excerpt attachment and discovery/reconciliation. It also covers VOC
-creation, Permission Request creation and each per-VOC transaction of a Cluster bulk public update.
+creation, saved-recommendation confirmation, Permission Request creation and each per-VOC transaction of a Cluster bulk public update.
 Nested recorder seams call `requireRecoveryCommandLock`, which fails the test run when the owning
 command reached the recorder without holding the lock; production still acquires it.
 Under that serialization, owner Finding locks precede expanded Finding rows (sorted UUIDs),
@@ -284,6 +284,10 @@ VOC and Task export `permissionVocSourceSummary` and
 and explicit metadata allowlists stay inside those owners. Opaque Survey sources
 have no summary and cause no response reads. Permission owns active-deny overlap
 and selected risk calculation; collection reads do not invoke selected projections.
+Admin-only Permission Request recovery sources use
+Auth's public `workspaceActorDisplayNameSql` bounded workspace-matched display-name projection;
+it exposes no email/Role Level and adds no per-row application lookup. Actor-independent
+Permission recovery truth and discovery do not invoke that display projection.
 
 ## Responsibility and recovery seams (ADR-0067; implemented)
 

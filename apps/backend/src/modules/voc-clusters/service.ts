@@ -522,6 +522,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     input: AddVocClusterMemberRequest;
   }): Promise<{ status: number; body: VocClusterMemberDto }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       const cluster = await lockVocClusterById(tx, {
         workspaceId: args.actor.workspace_id,
         clusterId: args.clusterId,
@@ -558,6 +559,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         });
       }
 
+      const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+        { type: 'voc', id: voc.id },
+      ]);
       const result = await insertVocClusterMember(tx, {
         clusterId: cluster.id,
         vocId: voc.id,
@@ -580,6 +584,13 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         });
       }
 
+      if (recovery)
+        await deps.recoveryRecorder?.finish(
+          tx,
+          recovery,
+          args.actor.actor_id,
+          'voc_cluster_member_added',
+        );
       return { status: result.inserted ? 201 : 200, body: memberToDto(result.row) };
     });
   }
@@ -590,6 +601,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     vocId: string;
   }): Promise<{ status: 204; body: null }> {
     return deps.db.transaction(async (tx) => {
+      await lockRecoveryCommand(tx, args.actor.workspace_id);
       const cluster = await lockVocClusterById(tx, {
         workspaceId: args.actor.workspace_id,
         clusterId: args.clusterId,
@@ -622,6 +634,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         throw new HttpError('not_found.record', 'voc cluster member not found');
       }
 
+      const recovery = await deps.recoveryRecorder?.capture(tx, args.actor.workspace_id, [
+        { type: 'voc', id: args.vocId },
+      ]);
       const deleted = await deleteVocClusterMember(tx, {
         clusterId: cluster.id,
         vocId: args.vocId,
@@ -642,6 +657,13 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         },
       });
 
+      if (recovery)
+        await deps.recoveryRecorder?.finish(
+          tx,
+          recovery,
+          args.actor.actor_id,
+          'voc_cluster_member_removed',
+        );
       return { status: 204, body: null };
     });
   }

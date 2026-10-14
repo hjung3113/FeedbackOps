@@ -1615,15 +1615,34 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect((await recoveryList(userCookie)).items).toEqual([]);
     expect((await recoveryDetail(userCookie, id)).statusCode).toBe(404);
     expect((await app.inject({method:'PATCH',url:`/dashboard/recovery-items/${id}/presentation`,headers:headers(userCookie),payload:{action:'mute'}})).statusCode).toBe(404);
-    await migrateHandle.pool.query(
+    const request = await migrateHandle.pool.query<{ id: string }>(
       `INSERT INTO permission.permission_requests
       (workspace_id, requester_actor_id, requested_capability, reason, status)
-      VALUES ($1::uuid, $2::uuid, 'voc.read', $3::text, 'pending')`,
+      VALUES ($1::uuid, $2::uuid, 'voc.read', $3::text, 'pending') RETURNING id`,
       [WORKSPACE_ID, seed.devActorId, `${SLUG_PREFIX} recovery denied request`],
     );
     const permissionPage = await recoveryList(adminCookie, 'category=permission-requests-pending');
     expect(permissionPage.total).toBeGreaterThan(0);
-    const permissionItem = required(permissionPage.items[0]);
+    const permissionItem = required(
+      permissionPage.items.find((item) => item.source?.id === required(request.rows[0]).id),
+    );
+    const requester = required(
+      (await migrateHandle.pool.query<{ display_name: string }>(
+        'SELECT display_name FROM core.actors WHERE workspace_id=$1::uuid AND id=$2::uuid',
+        [WORKSPACE_ID, seed.devActorId],
+      )).rows[0],
+    );
+    expect(permissionItem.source).toMatchObject({ title: requester.display_name, display_id: null });
+    const permissionDetail = await recoveryDetail(adminCookie, permissionItem.recovery_item_id);
+    expect(permissionDetail.statusCode).toBe(200);
+    expect(recoveryDetailSchema.parse(permissionDetail.json()).source).toMatchObject({
+      title: requester.display_name,
+      display_id: null,
+    });
+    expect(
+      (await recoveryList(seed.devCookie, 'category=permission-requests-pending')).items,
+    ).toEqual([]);
+    expect((await recoveryDetail(seed.devCookie, permissionItem.recovery_item_id)).statusCode).toBe(404);
     expect(permissionItem.next_actions).toContainEqual(
       expect.objectContaining({
         id: 'review_permission',
@@ -1676,6 +1695,33 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(withdrawn.next_actions).toEqual([]);
   });
 
+  it.each(['', '   '])(
+    'uses Permission Request fallback for an empty requester name (%j) in Admin list/detail',
+    async (displayName) => {
+      const seed = await createDashboardScope();
+      await migrateHandle.pool.query(
+        'UPDATE core.actors SET display_name=$1::text WHERE id=$2::uuid',
+        [displayName, seed.devActorId],
+      );
+      const request = await migrateHandle.pool.query<{ id: string }>(
+        `INSERT INTO permission.permission_requests (workspace_id,requester_actor_id,requested_capability,reason,status)
+      VALUES ($1::uuid,$2::uuid,'voc.read',$3::text,'pending') RETURNING id`,
+        [WORKSPACE_ID, seed.devActorId, `${SLUG_PREFIX} empty requester name`],
+      );
+      const sourceId = required(request.rows[0]).id;
+      const page = await recoveryList(adminCookie, 'category=permission-requests-pending');
+      const item = required(page.items.find((row) => row.source?.id === sourceId));
+      expect(item.source).toMatchObject({
+        id: sourceId,
+        display_id: null,
+        title: 'Permission Request',
+        route: `/admin/permissions/requests?selected=${sourceId}`,
+      });
+      const detail = await recoveryDetail(adminCookie, item.recovery_item_id);
+      expect(detail.statusCode).toBe(200);
+      expect(recoveryDetailSchema.parse(detail.json()).source).toEqual(item.source);
+    },
+  );
   it('keeps Task queue membership separate from a User source-role denial', async () => {
     const seed = await createDashboardScope();
     const hidden = await insertVocDirectly(

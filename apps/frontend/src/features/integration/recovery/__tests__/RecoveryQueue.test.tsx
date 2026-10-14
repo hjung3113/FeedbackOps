@@ -702,7 +702,7 @@ it('distinguishes Permission Request rows with the safe source identity and no e
               type: 'permission_request',
               id: SOURCE,
               display_id: '',
-              title: 'Permission Request',
+              title: '요청자 이름',
               route: `/admin/permissions/requests?selected=${SOURCE}`,
             },
             responsible_actor_hint: { kind: 'admin_queue', label: 'Admin 검토 대기열' },
@@ -716,6 +716,30 @@ it('distinguishes Permission Request rows with the safe source identity and no e
   });
   await mount();
   const row = await screen.findByRole('button', { name: /Permission Request 검토가 필요/ });
-  expect(row).toHaveTextContent(`Permission Request · ${SOURCE} · Admin 검토 대기열`);
+  expect(row).toHaveTextContent('요청자 이름 · Admin 검토 대기열');
+  expect(row.textContent).not.toContain(SOURCE);
   expect(row.textContent).not.toContain('· Permission Request');
+});
+
+it('labels the Permission Request panel header with its domain noun and requester', async () => {
+  setup({
+    detail: () =>
+      response({
+        ...item,
+        category: 'permission-requests-pending',
+        reason_code: 'permission-requests-pending',
+        source: {
+          type: 'permission_request',
+          id: SOURCE,
+          display_id: '',
+          title: '요청자 이름',
+          route: `/admin/permissions/requests?selected=${SOURCE}`,
+        },
+        computed_at: time,
+      }),
+  });
+  await mount(`/integration?selected=${ID}`);
+  expect(
+    await screen.findByRole('heading', { name: 'Permission Request · 요청자 이름' }),
+  ).toBeVisible();
 });

@@ -1,10 +1,11 @@
 // useCreateFindingFromCluster — POST /voc-clusters/:id/create-finding.
 // Mirrors useCreateFindingFromVocMutation shape; apiClient auto-mints Idempotency-Key.
 
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { apiClient, type ApiError } from '@/lib/api';
-import type { CreateFindingRequest, FindingDto } from '@fops/shared';
+import { type ApiError, apiClient } from '@/lib/api';
 import { invalidateNavCounts } from '@/lib/query/navCounts';
+import { invalidateRecovery } from '@/lib/query/recovery';
+import type { CreateFindingRequest, FindingDto } from '@fops/shared';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface CreateFindingFromClusterVariables {
   clusterId: string;
@@ -29,6 +30,7 @@ export function useCreateFindingFromCluster(args?: {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['findings'] });
+      invalidateRecovery(queryClient);
       invalidateNavCounts(queryClient);
     },
   });
