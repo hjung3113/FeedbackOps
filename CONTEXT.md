@@ -139,7 +139,7 @@ The single **Managed System** that owns the scope, permissions, defaults, and da
 _Avoid_: Multi-system ownership
 
 **Default Owner**:
-The **Actor** or team used as the creation-time responsibility default for **VOC**, **Finding**, or **Task** in a **Managed System**. Assignment does not complete triage or start execution. ADR-0067 accepts this close-out behavior; implementation is pending.
+The **Actor** or team used as the creation-time responsibility default for **VOC**, **Finding**, or **Task** in a **Managed System**. Assignment does not complete triage or start execution. ADR-0067 accepts this close-out behavior; it is implemented.
 _Avoid_: Final assignee, triage decision
 
 **Default Reviewer**:

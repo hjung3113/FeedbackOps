@@ -441,16 +441,16 @@ the old CHECK/unique predicate blindly is unsafe. Rollback requires explicit dat
 handling preserving history or a forward fix; document irreversible state in the
 implementation migration plan and test audit-failure rollback of reissue.
 
-## Close-out storage (ADR-0067; proposed/new, not applied)
+## Close-out storage (ADR-0067; applied)
 
 The new responsibility fields/settings and logical Dashboard projection shapes are in
-`docs/design/15-data-contracts.md`. Add nullable Finding owner, Task Request assigned-reviewer,
+`docs/design/15-data-contracts.md`. Shipped nullable Finding owner, Task Request assigned-reviewer,
 Task team-assignee, Managed System reviewer pairs and Coverage thresholds with registered
 SQL/generated metadata/grants in implementation chunks. Preserve existing null assignments,
 completed reviewer attribution and Survey operator behavior; no provenance/assignment backfill.
 XOR-or-both-null constraints and service workspace/active-team/Actor eligibility apply.
 
-56-H registers `dashboard.recovery_identities`, `dashboard.recovery_history` and
+56-H registered `dashboard.recovery_identities`, `dashboard.recovery_history` and
 `dashboard.recovery_presentations`, plus Survey-owned `survey.outcome_recovery_identities`,
 `survey.outcome_recovery_history` and `survey.outcome_recovery_presentations`. Runtime identity
 and presentation grants are SELECT/INSERT/UPDATE; histories are SELECT/INSERT only. The

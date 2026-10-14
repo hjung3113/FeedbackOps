@@ -85,7 +85,7 @@ export const coverageSummaryFixture = dashboardSummarySchema.parse({
   ],
   coverage: [
     { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' },
-    { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'warn' },
+    { id: 'finding-execution', value: 0, total: 0, percent: 0, status: 'no_data' },
     { id: 'high-followup', value: 41, total: 47, percent: 87, status: 'good' },
     { id: 'released-update', value: 12, total: 17, percent: 70, status: 'warn' },
     { id: 'analytics-area', value: 412, total: 612, percent: 67, status: 'warn' },

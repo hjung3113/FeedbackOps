@@ -133,7 +133,7 @@ Resolved recovery item responses should include resolution metadata such as
 `resolution_source_id`, and `resolved_by_actor_id` when actor visibility allows.
 When actor identity is not visible, return a safe actor label or omit the actor.
 
-## Recovery consumers (ADR-0067; proposed/new)
+## Recovery consumers (ADR-0067; implemented)
 
 Dashboard queue/detail consumes source-owned action eligibility, never derives it from
 assignment, personal hiding, or link presence. Source visibility and gap visibility are

@@ -55,14 +55,14 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 - Direct workspace.admin grants require explicit governance mode/confirmation; self grants follow permission_self_approval. Server scope candidates, required reason, open-ask review and explicit deny-lift guidance are authoritative. Capability grants never imply Role Level promotion.
 - No client scores, email or restricted source text. Zero risk signals are shown only after successful calculation.
 
-## Close-out contract (ADR-0067; Coverage editor shipped #1088, defaults pending)
+## Close-out contract (ADR-0067; Coverage editor shipped #1088, defaults shipped #1089–#1091)
 
 - Shipped (#1088): the five Coverage band rows at `/admin/settings` (75/40 defaults,
   integer `0 <= warn < good <= 100` validation, save/discard/error/retry) and all-scope
   `dashboard-summary` invalidation after save; on a failed refetch Home and Coverage keep
   cached rows under an explicit error indication, while Integration shows its own explicit
   error state (system overview hidden, average stat omitted). Distinct Managed System
-  reviewer Actor/team defaults are registry/storage in #1089; creation routing remains
+  reviewer Actor/team defaults are registry/storage in #1089; creation routing shipped in
   #1090/#1091. Respect server gates, audit and no-op semantics.
 - Surface safe automatic-default configuration warnings. Known teams may render; no team
   CRUD/candidate listing or automatic reassignment is introduced.

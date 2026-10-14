@@ -317,7 +317,7 @@ export function CoverageRoute(): React.ReactElement {
                       className={`grid grid-cols-(--coverage-row-columns) items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
                       style={
                         {
-                          '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 56px',
+                          '--coverage-row-columns': 'minmax(0, 1fr) 110px minmax(0, 1fr) 88px',
                         } as React.CSSProperties
                       }
                     >

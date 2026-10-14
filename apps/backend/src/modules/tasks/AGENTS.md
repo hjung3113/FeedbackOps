@@ -26,9 +26,9 @@ Managed System Registry belongs to Core. Task may consume Managed System scope a
 
 - Test request approval, conversion, release review candidates, reopened flows, and source evidence visibility when touched.
 
-## Close-out contract (ADR-0067; implementation pending)
+## Close-out contract (ADR-0067; implemented)
 
-- ADR-0067 accepts proposed/new Task Request assigned-reviewer Actor/team fields distinct
+- ADR-0067 accepts Task Request assigned-reviewer Actor/team fields distinct
   from actual `reviewer_actor_id`, plus Task `assignee_team_id`. Default changes never reassign.
 - Task Request reviewer default precedes eligible owner/AA team/scoped queue; conversion uses
   owner defaults. Invalid explicit rejects, invalid automatic skips, authorized null opts out.
