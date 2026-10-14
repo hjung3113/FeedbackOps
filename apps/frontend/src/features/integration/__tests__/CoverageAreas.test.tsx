@@ -116,7 +116,7 @@ it('requests only on tab entry, restores URL paging and filters with history, an
   const { router } = await mount();
   expect(requests.filter((url) => url.pathname === '/dashboard/analytics-areas')).toHaveLength(0);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Analytics Area별 현황' }));
-  await screen.findByRole('link', { name: '인증 VOC 전체 10건' });
+  await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
   await act(() =>
     router.navigate({
       to: '/integration/coverage',
@@ -176,13 +176,13 @@ it('requests only on tab entry, restores URL paging and filters with history, an
     expect(screen.getByRole('tab', { name: '개요' })).toHaveAttribute('aria-selected', 'true'),
   );
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Analytics Area별 현황' }));
-  await screen.findByRole('link', { name: '인증 VOC 전체 10건' });
+  await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
 });
 it('removes prior scope counts while a new report is delayed', async () => {
   const { router, qc } = await mount(
     `/integration/coverage?view=areas&managedSystem=${IDS.systemA}`,
   );
-  await screen.findByRole('link', { name: '인증 VOC 전체 10건' });
+  await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
   let resolve!: (value: Response) => void;
   reportResponse = () =>
     new Promise<Response>((done) => {
@@ -200,7 +200,7 @@ it('removes prior scope counts while a new report is delayed', async () => {
     }),
   );
   await screen.findByTestId('area-report-pending');
-  expect(screen.queryByRole('link', { name: '인증 VOC 전체 10건' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' })).toBeNull();
   await waitFor(() =>
     expect(
       requests
@@ -291,7 +291,7 @@ it.each([IDS.areaA, 'unset'])(
     const { router } = await mount('/integration/coverage?view=areas', false, report);
     fireEvent.click(
       await screen.findByRole('link', {
-        name: `${area === 'unset' ? '미지정' : '인증'} Task 기한 지남 2건`,
+        name: `Identity Platform · ${area === 'unset' ? '미지정' : '인증'} Task 기한 지남 2건`,
       }),
     );
     await waitFor(() => expect(router.state.location.pathname).toBe('/tasks'));
@@ -319,7 +319,7 @@ it.each(['permission.denied', 'permission.scope_required', 'internal.unexpected'
   'renders %s without fabricated counts and retries errors',
   async (code) => {
     const { qc } = await mount('/integration/coverage?view=areas');
-    await screen.findByRole('link', { name: '인증 VOC 전체 10건' });
+    await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
     reportResponse = () =>
       code === 'empty'
         ? json({ ...areaReportFixture, items: [] })
@@ -328,7 +328,9 @@ it.each(['permission.denied', 'permission.scope_required', 'internal.unexpected'
       await qc.invalidateQueries({ queryKey: ['dashboard-area-report'] });
     });
     await waitFor(() =>
-      expect(screen.queryByRole('link', { name: '인증 VOC 전체 10건' })).toBeNull(),
+      expect(
+        screen.queryByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' }),
+      ).toBeNull(),
     );
     if (code === 'empty')
       expect(await screen.findByText('표시할 Analytics Area 현황이 없습니다')).toBeVisible();
@@ -337,7 +339,9 @@ it.each(['permission.denied', 'permission.scope_required', 'internal.unexpected'
     else {
       reportResponse = () => json(areaReportFixture);
       fireEvent.click(await screen.findByRole('button', { name: '다시 시도' }));
-      expect(await screen.findByRole('link', { name: '인증 VOC 전체 10건' })).toBeVisible();
+      expect(
+        await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' }),
+      ).toBeVisible();
     }
   },
 );
@@ -346,7 +350,7 @@ it('a late old-scope response cannot replace the current scope', async () => {
   const { router, qc } = await mount(
     `/integration/coverage?view=areas&managedSystem=${IDS.systemA}`,
   );
-  await screen.findByRole('link', { name: '인증 VOC 전체 10건' });
+  await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' });
   let resolveOld!: (value: Response) => void;
   let resolveNew!: (value: Response) => void;
   reportResponse = (url) =>
@@ -363,7 +367,7 @@ it('a late old-scope response cannot replace the current scope', async () => {
     }),
   );
   await screen.findByTestId('area-report-pending');
-  expect(screen.queryByRole('link', { name: '인증 VOC 전체 10건' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' })).toBeNull();
   await waitFor(() => expect(resolveNew).toBeDefined());
   await act(async () => resolveNew(json({ ...areaReportFixture, items: [] })));
   await screen.findByText('표시할 Analytics Area 현황이 없습니다');
@@ -372,7 +376,7 @@ it('a late old-scope response cannot replace the current scope', async () => {
     await refresh;
   });
   expect(screen.getByText('표시할 Analytics Area 현황이 없습니다')).toBeVisible();
-  expect(screen.queryByRole('link', { name: '인증 VOC 전체 10건' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' })).toBeNull();
 });
 
 it('walks the scoped archived Area catalog, selects an Area and clears paging', async () => {
@@ -446,5 +450,17 @@ it('waits for the current actor before requesting a report', async () => {
       }),
     ),
   );
-  expect(await screen.findByRole('link', { name: '인증 VOC 전체 10건' })).toBeVisible();
+  expect(
+    await screen.findByRole('link', { name: 'Identity Platform · 인증 VOC 전체 10건' }),
+  ).toBeVisible();
+});
+
+it('renders both paging actions as visible secondary controls', async () => {
+  await mount('/integration/coverage?view=areas&cursor=page-2');
+  for (const name of ['다음', '처음으로']) {
+    expect(await screen.findByRole('button', { name })).toHaveClass(
+      'bg-surface-raised',
+      'border-border-subtle',
+    );
+  }
 });

@@ -595,7 +595,7 @@ test.each(['', `?managedSystem=${MS_A}`])(
   'Coverage secondary entry keeps scope %s',
   async (scope) => {
     await renderDashboard(`/integration${scope}`);
-    const link = await screen.findByRole('link', { name: 'Analytics Area별 현황 →' });
+    const link = await screen.findByRole('link', { name: 'Analytics Area별 현황' });
     expect(link).toHaveAttribute(
       'href',
       `/integration/coverage?view=areas${scope.replace('?', '&')}`,

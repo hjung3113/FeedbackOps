@@ -12,13 +12,20 @@ function href(link: AreaReportLink) {
   return `${link.pathname}?${new URLSearchParams(link.search).toString()}`;
 }
 function Unavailable() {
-  return <span aria-label={COPY.unavailable}>—</span>;
+  return (
+    <span title={COPY.unavailable}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{COPY.unavailable}</span>
+    </span>
+  );
 }
 function CountLine({
+  systemName,
+  domain,
   area,
   label,
   metric,
-}: { area: string; label: string; metric: Count | undefined }) {
+}: { systemName: string; domain: string; area: string; label: string; metric: Count | undefined }) {
   if (!metric)
     return (
       <div>
@@ -30,8 +37,8 @@ function CountLine({
       {metric.count > 0 && metric.link ? (
         <InternalLink
           href={href(metric.link)}
-          className={focus}
-          aria-label={`${area} ${label} ${metric.count}건`}
+          className={`text-accent-primary ${focus}`}
+          aria-label={`${systemName} · ${area} ${domain} ${label} ${metric.count}건`}
         >
           {label} {metric.count}
         </InternalLink>
@@ -44,10 +51,12 @@ function CountLine({
   );
 }
 function RatioLine({
+  systemName,
+  domain,
   area,
   label,
   metric,
-}: { area: string; label: string; metric: Ratio | undefined }) {
+}: { systemName: string; domain: string; area: string; label: string; metric: Ratio | undefined }) {
   if (!metric)
     return (
       <div className="text-xs text-text-muted">
@@ -58,7 +67,11 @@ function RatioLine({
   return (
     <div className="text-xs text-text-muted">
       {metric.total > 0 && metric.link ? (
-        <InternalLink href={href(metric.link)} className={focus} aria-label={`${area} ${text}`}>
+        <InternalLink
+          href={href(metric.link)}
+          className={`text-accent-primary ${focus}`}
+          aria-label={`${systemName} · ${area} ${domain} ${text}`}
+        >
           {text}
         </InternalLink>
       ) : (
@@ -70,11 +83,23 @@ function RatioLine({
 function Cells({ row }: { row: Row }) {
   const area = row.analytics_area_name ?? COPY.unset;
   const cell = 'px-3 py-3 align-top text-sm text-text-primary';
-  const count = (label: string, metric: Count | undefined) => (
-    <CountLine area={area} label={label} metric={metric} />
+  const count = (domain: string, label: string, metric: Count | undefined) => (
+    <CountLine
+      systemName={row.managed_system_name}
+      domain={domain}
+      area={area}
+      label={label}
+      metric={metric}
+    />
   );
-  const ratio = (label: string, metric: Ratio | undefined) => (
-    <RatioLine area={area} label={label} metric={metric} />
+  const ratio = (domain: string, label: string, metric: Ratio | undefined) => (
+    <RatioLine
+      systemName={row.managed_system_name}
+      domain={domain}
+      area={area}
+      label={label}
+      metric={metric}
+    />
   );
   const m = COPY.metrics;
   return (
@@ -82,10 +107,10 @@ function Cells({ row }: { row: Row }) {
       <td className={cell}>
         {row.voc ? (
           <>
-            {count(m.total, row.voc.total)}
-            {count(m.unassigned, row.voc.unassigned)}
-            {count(m.high_no_followup, row.voc.high_no_followup)}
-            {ratio(m.task_link, row.voc.task_link)}
+            {count('VOC', m.total, row.voc.total)}
+            {count('VOC', m.unassigned, row.voc.unassigned)}
+            {count('VOC', m.high_no_followup, row.voc.high_no_followup)}
+            {ratio('VOC', m.task_link, row.voc.task_link)}
           </>
         ) : (
           <Unavailable />
@@ -94,9 +119,9 @@ function Cells({ row }: { row: Row }) {
       <td className={cell}>
         {row.finding ? (
           <>
-            {count(m.active, row.finding.active)}
-            {count(m.no_execution, row.finding.no_execution)}
-            {ratio(m.execution, row.finding.execution)}
+            {count('Finding', m.active, row.finding.active)}
+            {count('Finding', m.no_execution, row.finding.no_execution)}
+            {ratio('Finding', m.execution, row.finding.execution)}
           </>
         ) : (
           <Unavailable />
@@ -105,15 +130,17 @@ function Cells({ row }: { row: Row }) {
       <td className={cell}>
         {row.task ? (
           <>
-            {count(`Task ${m.in_flight}`, row.task.in_flight)}
-            {count(`Task ${m.overdue}`, row.task.overdue)}
-            {count(m.public_update_missing, row.task.public_update_missing)}
-            {count(m.reporter_update_needed, row.task.reporter_update_needed)}
-            {ratio(m.released_update, row.task.released_update)}
+            {count('Task', m.in_flight, row.task.in_flight)}
+            {count('Task', m.overdue, row.task.overdue)}
+            {count('Task', m.public_update_missing, row.task.public_update_missing)}
+            {count('Task', m.reporter_update_needed, row.task.reporter_update_needed)}
+            {ratio('Task', m.released_update, row.task.released_update)}
             <div className="mt-1 flex flex-wrap gap-x-2 text-xs text-text-muted">
               {Object.entries(row.task.by_status).map(([status, metric]) => (
                 <CountLine
                   key={status}
+                  domain="Task"
+                  systemName={row.managed_system_name}
                   area={area}
                   label={status[0]?.toUpperCase() + status.slice(1)}
                   metric={metric}
@@ -128,14 +155,25 @@ function Cells({ row }: { row: Row }) {
       <td className={cell}>
         {row.survey ? (
           <>
-            {count(`Survey ${m.open}`, row.survey.open)}
-            {count(m.follow_up_needed, row.survey.follow_up_needed)}
+            {count('Survey', m.open, row.survey.open)}
+            {count('Survey', m.follow_up_needed, row.survey.follow_up_needed)}
           </>
         ) : (
           <Unavailable />
         )}
       </td>
     </>
+  );
+}
+function ReportColumns() {
+  return (
+    <colgroup>
+      <col className="w-[14%]" />
+      <col className="w-[20%]" />
+      <col className="w-[16%]" />
+      <col className="w-[34%]" />
+      <col className="w-[16%]" />
+    </colgroup>
   );
 }
 export function AnalyticsAreaReportTable({ report }: { report: DashboardAreaReport }) {
@@ -189,11 +227,12 @@ export function AnalyticsAreaReportTable({ report }: { report: DashboardAreaRepo
                 className={`text-xs text-accent-primary ${focus}`}
                 href={`/tasks?view=requests&managedSystem=${id}`}
               >
-                {COPY.review} · {COPY.reviewScope}
+                {COPY.review} · {first?.managed_system_name} {COPY.reviewScope}
               </InternalLink>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
+              <table className="w-full table-fixed border-collapse text-left">
+                <ReportColumns />
                 <thead>
                   <tr className="border-b border-border-subtle bg-surface-raised">
                     {['Analytics Area', 'VOC', 'Finding', 'Task', 'Survey'].map((name) => (

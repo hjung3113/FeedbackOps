@@ -190,16 +190,15 @@ export function IntegrationJumpCard({
   );
   if (!secondaryLink) return primary;
   return (
-    <div className="flex flex-col rounded-md border border-border-subtle bg-surface-card">
+    <div className="relative flex flex-col rounded-md border border-border-subtle bg-surface-card">
       {primary}
-      <div className="px-4 pb-3">
-        <InternalLink
-          href={secondaryLink.href}
-          className="text-xs text-accent-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
-        >
-          {secondaryLink.label}
-        </InternalLink>
-      </div>
+      <InternalLink
+        href={secondaryLink.href}
+        className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-xs text-accent-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus-ring"
+      >
+        {secondaryLink.label}
+        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+      </InternalLink>
     </div>
   );
 }

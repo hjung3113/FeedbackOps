@@ -65,12 +65,12 @@ export function AnalyticsAreaReportPanel({
       )}
       <div className="flex justify-end gap-2">
         {cursor && (
-          <Button variant="subtle" size="sm" onClick={() => onPage(undefined)}>
+          <Button variant="secondary" size="sm" onClick={() => onPage(undefined)}>
             {COPY.first}
           </Button>
         )}
         {query.data.page.has_more && query.data.page.cursor && (
-          <Button variant="subtle" size="sm" onClick={() => onPage(query.data.page.cursor)}>
+          <Button variant="secondary" size="sm" onClick={() => onPage(query.data.page.cursor)}>
             {COPY.next}
           </Button>
         )}
