@@ -22,8 +22,10 @@ import { formatCount } from '@/lib/format/count';
 import { formatShortDate } from '@/lib/format/datetime';
 import { InternalLink } from '@/lib/router/InternalLink';
 import { parseRouteSearch } from '@/lib/router/search';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import type { FindingDto } from '@fops/shared';
 import {
+  ActiveFilterBar,
   type AvatarUser,
   ListShell,
   ObjectRow,
@@ -52,6 +54,8 @@ import { vocSearchSchema } from '../vocs';
 // Absent execution stays unfiltered.
 export const findingsSearchSchema = z
   .object({
+    'filter.analytics_area': z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    status: z.literal('active').optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
     execution: z.literal('none').optional(),
@@ -105,13 +109,21 @@ export function FindingsListPage(): React.ReactElement {
   const resetFilters = React.useCallback((): void => {
     void navigate({
       to: '/findings',
-      search: ({ execution: _execution, assignment: _assignment, ...rest }) => rest,
+      search: ({
+        execution: _execution,
+        assignment: _assignment,
+        'filter.analytics_area': _area,
+        status: _status,
+        ...rest
+      }) => rest,
     });
   }, [navigate]);
 
   return (
     <FindingsListShell
       managedSystemId={managedSystemId}
+      analyticsAreaId={search['filter.analytics_area']}
+      status={search.status}
       execution={execution}
       assignment={search.assignment}
       selectedId={selectedId}
@@ -124,6 +136,8 @@ export function FindingsListPage(): React.ReactElement {
 }
 
 function FindingsListShell({
+  analyticsAreaId,
+  status,
   managedSystemId,
   execution,
   assignment,
@@ -133,6 +147,8 @@ function FindingsListShell({
   onSelectionReconciled,
   onResetFilters,
 }: {
+  analyticsAreaId: string | undefined;
+  status: 'active' | undefined;
   managedSystemId: string | undefined;
   execution: 'none' | undefined;
   assignment: 'assigned' | 'unassigned' | undefined;
@@ -144,7 +160,41 @@ function FindingsListShell({
 }): React.ReactElement {
   const navigate = useNavigate({ from: '/findings/' });
   const safeReturnTo = getSafeVocReturnTo(returnTo);
-  const listQuery = useFindingsPages(managedSystemId, execution, assignment);
+  const areaLabel = useAnalyticsAreaFilterLabel(analyticsAreaId, managedSystemId);
+  const removeFilter = (key: 'filter.analytics_area' | 'status' | 'execution') => {
+    void navigate({
+      to: '/findings',
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      },
+    });
+  };
+  const activeFilters = [
+    ...(analyticsAreaId === undefined
+      ? []
+      : [{ key: 'area', label: areaLabel, onRemove: () => removeFilter('filter.analytics_area') }]),
+    ...(status === undefined
+      ? []
+      : [
+          {
+            key: 'status',
+            label: `상태: ${FINDING_STATUS_LABELS.active}`,
+            onRemove: () => removeFilter('status'),
+          },
+        ]),
+    ...(execution === undefined
+      ? []
+      : [{ key: 'execution', label: '실행 연결 없음', onRemove: () => removeFilter('execution') }]),
+  ];
+  const listQuery = useFindingsPages(
+    managedSystemId,
+    execution,
+    assignment,
+    analyticsAreaId,
+    status,
+  );
   const findings = React.useMemo(
     () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [listQuery.data],
@@ -161,7 +211,10 @@ function FindingsListShell({
       !findings.some((item) => item.id === selectedId),
   });
   const checkUnfiltered =
-    (execution === 'none' || assignment !== undefined) &&
+    (execution === 'none' ||
+      assignment !== undefined ||
+      analyticsAreaId !== undefined ||
+      status !== undefined) &&
     listQuery.isSuccess &&
     findings.length === 0;
   const unfilteredQuery = useFindingsTotal(managedSystemId, checkUnfiltered);
@@ -228,15 +281,19 @@ function FindingsListShell({
         (assignment === 'assigned' &&
           item.owner_actor_id === null &&
           item.owner_team_id === null) ||
+        (status !== undefined && item.status !== status) ||
+        (analyticsAreaId !== undefined &&
+          (analyticsAreaId === 'unset'
+            ? item.analytics_area_id !== null
+            : item.analytics_area_id !== analyticsAreaId)) ||
         (execution === 'none' &&
           (item.status !== 'active' ||
-            item.linked_task_id !== null ||
             selectedLinks.data?.items.some(
               (link) =>
                 link.source_type === 'finding' &&
-                'source_id' in link &&
-                link.source_id === item.id &&
-                link.target_type === 'task_request' &&
+                // This read is source-scoped; restricted stubs omit endpoint IDs.
+                (!('source_id' in link) || link.source_id === item.id) &&
+                (link.target_type === 'task_request' || link.target_type === 'task') &&
                 link.relation_type === 'requested_task' &&
                 link.status === 'active',
             ))));
@@ -253,6 +310,8 @@ function FindingsListShell({
     selectedQuery.error,
     selectedLinks.data,
     managedSystemId,
+    analyticsAreaId,
+    status,
     execution,
     assignment,
     onSelectionReconciled,
@@ -265,7 +324,7 @@ function FindingsListShell({
         subtitle: 'VOC Evidence에서 실행 후보로 승격된 Finding을 검토합니다.',
       }}
       tabs={
-        <div className="px-5 py-2">
+        <div className="mx-5 my-2">
           <Select
             value={assignment ?? 'all'}
             onValueChange={(value) => {
@@ -301,6 +360,24 @@ function FindingsListShell({
             error={stateError}
             isFilteredEmpty={isFilteredEmpty}
             assignmentFiltered={assignment !== undefined}
+            filterBar={
+              <ActiveFilterBar
+                items={activeFilters}
+                onClearAll={onResetFilters}
+                className="mx-5 my-2"
+              />
+            }
+            hasFilterBar={activeFilters.length > 0}
+            filterDescription={
+              analyticsAreaId !== undefined || status !== undefined
+                ? [
+                    ...activeFilters.map((filter) => filter.label),
+                    ...(assignment === undefined
+                      ? []
+                      : [assignment === 'assigned' ? OWNER_COPY.assigned : OWNER_COPY.unassigned]),
+                  ].join(', ')
+                : undefined
+            }
             selectedId={selectedId}
             actorsById={actorsById}
             teamNamesById={teamNamesById}
@@ -383,6 +460,9 @@ function FindingsListBody({
   error,
   isFilteredEmpty,
   assignmentFiltered,
+  filterBar,
+  hasFilterBar,
+  filterDescription,
   selectedId,
   actorsById,
   teamNamesById,
@@ -398,6 +478,9 @@ function FindingsListBody({
   error: unknown;
   isFilteredEmpty: boolean;
   assignmentFiltered: boolean;
+  filterBar: React.ReactNode;
+  hasFilterBar: boolean;
+  filterDescription: string | undefined;
   selectedId: string | null;
   actorsById: Map<string, AvatarUser>;
   teamNamesById: Map<string, string>;
@@ -422,6 +505,7 @@ function FindingsListBody({
         </div>
       ) : null}
 
+      {filterBar}
       {isPending ? (
         <div className="space-y-2 p-4" data-testid="finding-list-skeleton">
           <SkeletonRows count={3} size="compact" />
@@ -448,11 +532,13 @@ function FindingsListBody({
             variant="filtered"
             title="현재 조건에 맞는 Finding이 없습니다"
             body={
-              assignmentFiltered
-                ? OWNER_COPY.filteredEmpty
-                : '실행과 연결되지 않은 Finding만 표시 중입니다.'
+              filterDescription
+                ? `${filterDescription} 조건으로 표시 중입니다.`
+                : assignmentFiltered
+                  ? OWNER_COPY.filteredEmpty
+                  : '실행과 연결되지 않은 Finding만 표시 중입니다.'
             }
-            action={{ label: '필터 초기화', onClick: onResetFilters }}
+            {...(hasFilterBar ? {} : { action: { label: '필터 초기화', onClick: onResetFilters } })}
           />
         </div>
       ) : findings.length === 0 ? (

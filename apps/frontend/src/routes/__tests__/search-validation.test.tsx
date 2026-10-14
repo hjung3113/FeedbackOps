@@ -170,3 +170,28 @@ describe('nav resolve task intents survive the tasks search schema', () => {
     },
   );
 });
+
+describe('ADR-0069 exact Area destinations', () => {
+  it.each([ID, 'unset'])('preserves %s on both strict list routes', (area) => {
+    expect(validateVocSearch({ view: 'inbox', 'filter.analytics_area': area })).toEqual({
+      view: 'inbox',
+      'filter.analytics_area': area,
+    });
+    expect(validateFindingsSearch({ 'filter.analytics_area': area, status: 'active' })).toEqual({
+      'filter.analytics_area': area,
+      status: 'active',
+    });
+  });
+  it('drops invalid Area and status without losing valid list context', () => {
+    expect(validateVocSearch({ view: 'inbox', 'filter.analytics_area': 'garbage' })).toEqual({
+      view: 'inbox',
+    });
+    expect(
+      validateFindingsSearch({
+        managedSystem: ID,
+        'filter.analytics_area': 'garbage',
+        status: 'draft',
+      }),
+    ).toEqual({ managedSystem: ID });
+  });
+});

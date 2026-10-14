@@ -101,6 +101,7 @@ Names in the primitive table and the composed list above are design-time names. 
 | RoleLevelAwareSidebar | `AppRail` + `AppSidebar` | `apps/frontend/src/lib/layout/` |
 | ManagedSystemScopeSwitcher | scope selector inside `AppSidebar` (`ManagedSystemScopeOption`) | `apps/frontend/src/lib/layout/AppSidebar.tsx` |
 | ObjectList, ListRow | `ObjectRow` + `ListToolbar` / `ListTabs` + `ListStateMessage` | `packages/ui/src/data/ObjectRow.tsx`, `packages/ui/src/toolbar/`, `apps/frontend/src/components/ListStateMessage.tsx` |
+| Active filters | `ActiveFilterBar` — presentational chips with visible labels, tooltip-backed remove buttons, and one clear-all control; empty items render nothing | `packages/ui/src/toolbar/ActiveFilterBar.tsx` |
 | FilterViewTabs, Toolbar | `ListTabs` composed by `ListToolbar`, with `ListFilterButton` and `ListSortButton` | `packages/ui/src/toolbar/` |
 | LoadingState, ErrorState | `Skeleton` rows; `ListStateMessage` `error` variant | `packages/ui/src/components/shadcn/skeleton.tsx`, `apps/frontend/src/components/ListStateMessage.tsx` |
 | BulkActionBar | internal `BulkActionBar` of the VOC list (actions disabled by design) | `apps/frontend/src/features/voc/components/list/VocList.tsx` |

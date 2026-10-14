@@ -20,6 +20,7 @@ import { uid } from '../../../test-support/ids.js';
 import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { recoveryIdentity } from '../../dashboard/identity.js';
 import { createOwnerRecoveryRecorder } from '../../dashboard/truth.js';
+import { createEntityLink } from '../../entity-links/index.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import {
   createFindingFromVocCluster,
@@ -128,6 +129,18 @@ describe.skipIf(!runIntegration)('findings command seam (#391)', () => {
         workspaceId: WORKSPACE_ID,
         findingId: finding.id,
         taskId: task.id,
+      });
+      // ADR-0069: execution is the canonical requested_task link, as the link-task command writes.
+      await createEntityLink(tx, {
+        workspaceId: WORKSPACE_ID,
+        sourceType: 'finding',
+        sourceId: finding.id,
+        targetType: 'task',
+        targetId: task.id,
+        relationType: 'requested_task',
+        managedSystemId: msId,
+        createdBy: actorId,
+        visibility: 'internal_only',
       });
       await recorder.finish(tx, before, actorId, 'linkTask');
       expect(

@@ -98,6 +98,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     actor: FindingsActor;
     managedSystemId?: string;
     execution?: 'none';
+    analyticsAreaId?: string;
+    status?: 'active';
     ownerActorId?: string;
     ownerTeamId?: string;
     assignment?: 'assigned' | 'unassigned';
@@ -128,6 +130,8 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
       ...(args.execution !== undefined ? { execution: args.execution } : {}),
+      ...(args.analyticsAreaId === undefined ? {} : { analyticsAreaId: args.analyticsAreaId }),
+      ...(args.status === undefined ? {} : { status: args.status }),
       ...(args.ownerActorId === undefined ? {} : { ownerActorId: args.ownerActorId }),
       ...(args.ownerTeamId === undefined ? {} : { ownerTeamId: args.ownerTeamId }),
       ...(args.assignment === undefined ? {} : { assignment: args.assignment }),

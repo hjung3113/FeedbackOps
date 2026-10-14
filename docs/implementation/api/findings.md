@@ -73,9 +73,10 @@ Admin sees the workspace population. Developer visibility uses the existing
 point `finding.read` checks once per distinct Primary Managed System, including
 explicit denies, before the SQL page limit and counts. Empty allowed scope
 returns no rows and a first-page total of zero. The same SQL visibility
-predicate applies in full-set mode. `execution=none` currently keeps the active, no-linked-Task, no-active-requested-Task-Request
-predicate. Its convenience-column test is superseded for implementation by the accepted ADR-0069
-canonical-link predicate in the extension below (implementation pending).
+predicate applies in full-set mode. `execution=none` keeps active Findings with no active
+canonical `(finding, task_request, requested_task)` or `(finding, task, requested_task)` link.
+This implemented ADR-0069 complement ignores the convenience `linked_task_id` column;
+inactive links do not count as execution. See the destination extension below.
 
 Saved Finding views reject both `cursor` and `limit`; paging is transient list
 state and is never persisted as a saved filter.
@@ -215,7 +216,7 @@ URL state. No team candidate catalog or team membership administration is introd
 
 ## Analytics Area report destination extension (ADR-0069)
 
-These keys are accepted **proposed/new**, not implemented by #1071. Keep existing unfiltered,
+These destination keys are implemented by #1077 (VOC/Finding part). Keep existing unfiltered,
 legacy and paging behavior. Apply workspace and source authorization before Area filtering,
 counts and page limits. A UUID matches only the source's own current `analytics_area_id`;
 `unset` matches null. A syntactically valid unknown, foreign or System-incompatible Area yields
@@ -226,7 +227,7 @@ Grouped report counts and exact list membership must share the owner predicate, 
 cross-source availability rules; hidden links are not absent links. These ordinary reads write
 no source records or domain audit events. Source repair commands keep their existing gates/audits.
 
-`GET /findings` gains wire `analytics_area_id=<uuid|unset>` and `status=active`.
+`GET /findings` supports wire `analytics_area_id=<uuid|unset>` and `status=active`.
 For report handoff metrics and the existing `execution=none` filter, execution is present only with
 an active canonical `(finding, task_request, requested_task)` or `(finding, task, requested_task)`
 link. `linked_task_id` is a convenience reference and is not the predicate's truth.

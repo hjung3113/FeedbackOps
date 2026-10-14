@@ -19,3 +19,5 @@ export {
   findingRecoveryProjection,
   findingRecoveryRepairScope,
 } from './recovery-read.js';
+
+export { findingExecutionPredicate } from './execution-predicate.js';

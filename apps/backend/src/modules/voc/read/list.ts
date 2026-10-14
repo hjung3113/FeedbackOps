@@ -24,7 +24,9 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
     const filterSeverity = query['filter.severity'];
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
-    const analyticsAreaId = query.analyticsAreaId;
+    const areaFilter = query['filter.analytics_area'];
+    const analyticsAreaId =
+      areaFilter === 'unset' ? undefined : (areaFilter ?? query.analyticsAreaId);
     if (tab === 'waiting' && view !== 'triage') {
       throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
         fields: [{ path: ['tab'], code: 'invalid_for_view' }],
@@ -50,6 +52,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
       ...(filterOwner !== undefined ? { filterOwner } : {}),
       ...(analyticsAreaId !== undefined ? { analyticsAreaId } : {}),
+      ...(areaFilter === 'unset' ? { filterAnalyticsAreaUnset: true } : {}),
     });
   }
 
@@ -182,6 +185,8 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
     if (filterOwner !== undefined) repoArgs.filterOwner = filterOwner;
     if (filterAnalyticsAreaUnset) repoArgs.filterAnalyticsAreaUnset = true;
+    else if (query['filter.analytics_area'] !== undefined)
+      repoArgs.analyticsAreaId = query['filter.analytics_area'];
     // #821: q only rides the list path — counts, nav counts, the pinned-row
     // select, and out_of_scope_summary deliberately never see it.
     if (q !== undefined) repoArgs.q = q;

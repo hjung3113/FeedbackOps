@@ -415,21 +415,19 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
         createdBy: adminActorId,
         title: `dashboard finding ${msId} ${index}`,
       });
-      if (index < executed)
+      if (index < executed) {
+        const task = await insertTaskRow(migrateHandle, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: msId,
+          status: 'done',
+          createdBy: adminActorId,
+        });
         await migrateHandle.pool.query(
-          'update finding.findings set linked_task_id = $1 where id = $2',
-          [
-            (
-              await insertTaskRow(migrateHandle, {
-                workspaceId: WORKSPACE_ID,
-                primaryManagedSystemId: msId,
-                status: 'done',
-                createdBy: adminActorId,
-              })
-            ).id,
-            finding.id,
-          ],
+          'update finding.findings set linked_task_id=$1 where id=$2',
+          [task.id, finding.id],
         );
+        await link('finding', finding.id, 'task', task.id, 'requested_task', msId);
+      }
     }
   }
 
@@ -877,6 +875,71 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   };
   const recoveryDetail = (cookie: string, id: string) =>
     app.inject({ method: 'GET', url: `/dashboard/recovery-items/${id}`, headers: headers(cookie) });
+
+  it('1077: canonical Task/Task Request links agree across list, recovery and summary despite the Task projection', async () => {
+    const seed = await createDashboardScope();
+    const before = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    const insertFinding = (title: string) =>
+      insertFindingRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: seed.msA,
+        sourceId: randomUUID(),
+        createdBy: adminActorId,
+        status: 'active',
+        title,
+      });
+    const direct = await insertFinding('Direct active Task, null column');
+    const task = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      status: 'done',
+      createdBy: adminActorId,
+    });
+    await link('finding', direct.id, 'task', task.id, 'requested_task', seed.msA);
+    // Assert before the column-only fixture can cancel the old predicate's error.
+    const afterDirect = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    expectQueueDelta(afterDirect, before, 'actionable-finding-no-execution', 0);
+    expectCoverageDelta(afterDirect, before, 'finding-execution', 1, 1);
+    expect(systemRow(afterDirect, seed.msA)?.coverage?.['finding-execution']).toMatchObject({
+      value: 1,
+      total: 1,
+    });
+
+    const request = await insertFinding('Active Task Request');
+    const gap = await insertFinding('Inactive Task, column set');
+    await link('finding', request.id, 'task_request', randomUUID(), 'requested_task', seed.msA);
+    await link('finding', gap.id, 'task', task.id, 'requested_task', seed.msA);
+    await migrateHandle.pool.query(
+      "update core.entity_links set status='detached' where source_type='finding' and source_id=$1 and relation_type='requested_task'",
+      [gap.id],
+    );
+    await migrateHandle.pool.query('update finding.findings set linked_task_id=$1 where id=$2', [
+      task.id,
+      gap.id,
+    ]);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/findings?managed_system_id=${seed.msA}&execution=none&limit=50`,
+      headers: headers(seed.devCookie),
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().items.map((item: { id: string }) => item.id)).toEqual([gap.id]);
+    expect(list.json().page.total).toBe(1);
+    const recovery = await recoveryList(
+      seed.devCookie,
+      `managed_system_id=${seed.msA}&category=actionable-finding-no-execution`,
+    );
+    expect(recovery.total).toBe(1);
+    expect(recovery.items.map((item) => item.source?.id)).toEqual([gap.id]);
+    const after = (await get(seed.devCookie, seed.msA)).json<Summary>();
+    expectQueueDelta(after, before, 'actionable-finding-no-execution', 1);
+    expectCoverageDelta(after, before, 'finding-execution', 2, 3);
+    expect(systemRow(after, seed.msA)?.coverage?.['finding-execution']).toMatchObject({
+      value: 2,
+      total: 3,
+    });
+  });
 
   it('hides only for the session Actor before discovery without reducing operational totals', async () => {
     const seed = await createDashboardScope();

@@ -8,7 +8,9 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { GLOSSARY, createLabel } from '@/lib/copy/glossary';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { VOC_INBOX_NO_LINK_TAB_LABEL } from '@/lib/copy/voc-views';
+import { useAnalyticsAreaFilterLabel } from '@/lib/useAnalyticsAreaFilterLabel';
 import {
+  ActiveFilterBar,
   Button,
   type FilterCategory,
   ListFilterButton,
@@ -58,7 +60,7 @@ interface InboxSearch {
   'filter.severity'?: string;
   'filter.reporterStatus'?: string;
   'filter.owner'?: string;
-  'filter.analytics_area'?: 'unset';
+  'filter.analytics_area'?: string;
   sort?: InboxSort;
   selected?: string;
 }
@@ -185,7 +187,15 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
-  const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
+  const area = search['filter.analytics_area'];
+  const areaLabel = useAnalyticsAreaFilterLabel(area, search.managedSystem);
+  const removeArea = () => {
+    void navigate({
+      to: '/vocs',
+      search: ({ 'filter.analytics_area': _area, ...rest }) => rest,
+    });
+  };
+  const hasAnalyticsAreaFilter = area !== undefined;
   // #821: the URL q is the source of truth for the fetch; the box keeps a
   // local draft so keystrokes do not navigate on every character.
   const urlQ = search.q ?? '';
@@ -196,10 +206,10 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const searchingAllTabs = view === 'inbox' && urlQ !== '' && search.tab === undefined;
   const activeTab = searchingAllTabs
     ? ''
-    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged'));
+    : (search.tab ?? (hasAnalyticsAreaFilter ? '' : 'untriaged'));
   const apiTab = searchingAllTabs
     ? undefined
-    : (search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged'));
+    : (search.tab ?? (hasAnalyticsAreaFilter ? undefined : 'untriaged'));
   const currentSort = search.sort ?? DEFAULT_SORT;
   // The tab the current search started from, restored when the search is cleared.
   const tabBeforeSearchRef = React.useRef<InboxTab | undefined>(undefined);
@@ -258,7 +268,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   const apiFilters = React.useMemo(() => {
     const analyticsArea = search['filter.analytics_area'];
-    return analyticsArea === 'unset'
+    return analyticsArea !== undefined
       ? { ...currentFilters, 'filter.analytics_area': [analyticsArea] }
       : currentFilters;
   }, [currentFilters, search['filter.analytics_area']]);
@@ -399,6 +409,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           </div>
         }
       />
+      <ActiveFilterBar
+        items={area === undefined ? [] : [{ key: 'area', label: areaLabel, onRemove: removeArea }]}
+        onClearAll={removeArea}
+        className="mx-4 my-2"
+      />
       {outOfScopeBanner}
       {isPermissionDenied(vocList.error) ? (
         <div className="m-4 space-y-3">
@@ -467,6 +482,8 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           onSelect={handleRowSelect}
           view={view}
           searching={isSearching}
+          areaFiltered={view === 'inbox' && area !== undefined}
+          areaLabel={areaLabel}
           onRetry={() => {
             void vocList.refetch();
           }}

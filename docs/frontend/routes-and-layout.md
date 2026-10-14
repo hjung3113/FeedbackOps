@@ -31,7 +31,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=board&managedSystem=:managedSystemId|all&param=:taskId&public_update=missing
 /tasks?view=milestones&managedSystem=:managedSystemId|all&param=:milestoneId
 /integration?managedSystem=:managedSystemId|all
-/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&returnTo=:encodedVocUrl
+/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&assignment=assigned|unassigned&filter.analytics_area=:areaId|unset&status=active&returnTo=:encodedVocUrl
 /findings/:findingId (redirects to /findings?selected=:findingId)
 /integration/evidence?managedSystem=:managedSystemId|all&source=voc|survey_response|note&q=:query&selected=:highlightId&cursor=:opaqueCursor
 /integration/coverage?managedSystem=:managedSystemId|all
@@ -45,7 +45,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 | Deep-link route | Search keys | Omitted defaults |
 |---|---|---|
-| `/findings` | `managedSystem`, `selected`, `execution`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
+| `/findings` | `managedSystem`, `selected`, `execution`, `assignment`, `filter.analytics_area`, `status`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution`, `assignment`, `filter.analytics_area` and `status` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/findings/:findingId` | `returnTo` | Redirects to `/findings?selected=:findingId`, preserving `returnTo` when supplied |
 | `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/surveys/:surveyId/follow-up` | `returnTo` | `returnTo` unless opened from a recovery queue |
@@ -507,8 +507,8 @@ inferred. Source assignment display/edit/filter stays VOC/Finding/Tasks-owned.
 ## Coverage Analytics Area tab and report destinations (ADR-0069)
 
 Status: Accepted 2026-10-13 by the owner (MVP close-out decisions).
-The extensions in this section are **proposed/new**, not registered by #1071; the shipped route
-and search inventory above remains the current implementation. FR-DASH-002 in
+The `/vocs` and `/findings` destination filters and active-filter controls are implemented by
+#1077 (part a). Coverage, `/tasks` and `/surveys` extensions below remain **proposed/new**. FR-DASH-002 in
 `docs/design/08-dashboard-system.md` owns metric meanings and UI acceptance.
 
 - `/integration/coverage`: existing PageShell; overview is the default (omit `view`),
@@ -519,16 +519,22 @@ and search inventory above remains the current implementation. FR-DASH-002 in
   Back/Forward/refresh restore tab, filters and page. No new rail or Admin report route.
 - Integration's Coverage card gets a secondary link to `view=areas` preserving Managed System;
   Home's existing Coverage entry still reaches the same page. Catalog administration remains separate.
-- `/vocs`, `/findings`, `/tasks`, `/surveys` accept `filter.analytics_area=<uuid|unset>` in their
+- Implemented: `/vocs` and `/findings` accept `filter.analytics_area=<uuid|unset>` in their
   strict browser schemas and typed clients. VOC forwards the same dot key; the other clients map
-  it to backend `analytics_area_id`. Report links always retain the row's Managed System UUID.
+  it to backend `analytics_area_id`. The same `/tasks` and `/surveys` support remains proposed.
+  Report links always retain the row's Managed System UUID.
+  For these destinations, switching to a specific Managed System clears a UUID
+  `filter.analytics_area`; switching to all/unscoped keeps it. `unset` always remains.
 - VOC total/unassigned/high-follow-up/unlinked inspection use `view=inbox`, with omitted tab,
   `tab=unassigned`, `tab=high-no-link`, or `tab=no-task` respectively.
-- Finding links carry `status=active` or existing `execution=none`; Task links carry `view=backlog`
+- Implemented Finding links carry `status=active` or `execution=none`. Proposed Task links carry `view=backlog`
   plus single `status`, `status_group=in-flight`, `overdue=true`, `public_update=missing`, or
   `reporter_update=needed`; Survey links carry `status=open` or `follow_up=needed`.
   These are source membership filters, not `action=` intents. All combinations intersect.
-- Show active filters with explicit clear actions. Selection and panel close preserve them;
+- VOC/Finding render `ActiveFilterBar` below the list toolbar. Area UUID labels resolve through
+  the paged authorized catalog including archived Areas; unresolved labels disclose no existence.
+  VOC removal/reset drops only Area; Finding reset drops Area/status/execution/assignment.
+  Show active filters with explicit clear actions. Selection and panel close preserve them;
   restore them with navigation history. Counts reevaluate on arrival and after owning repair.
   A count must not link to a destination that drops its filter during strict validation.
 - Task Request review is `/tasks?view=requests&managedSystem=<system>` only, labeled

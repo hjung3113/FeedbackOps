@@ -6,13 +6,12 @@ import { managedSystemIsLiveSql } from '../managed-systems/read-projections.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { checkFindingManage } from './authorization.js';
+import { findingExecutionPredicate } from './execution-predicate.js';
 
 export function findingRecoveryPredicate(): SQL {
-  return sql`f.status = 'active' AND f.linked_task_id IS NULL
-    AND NOT EXISTS (SELECT 1 FROM core.entity_links_app el WHERE el.workspace_id = f.workspace_id
-      AND el.status = 'active' AND el.source_type = 'finding' AND el.source_id = f.id
-      AND el.target_type = 'task_request' AND el.relation_type = 'requested_task')`;
+  return sql`f.status = 'active' AND NOT (${findingExecutionPredicate()})`;
 }
+
 export async function findingRecoveryRepairScope(
   db: Db,
   check: CheckService,

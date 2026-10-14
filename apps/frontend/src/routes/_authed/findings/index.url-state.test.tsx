@@ -212,6 +212,215 @@ describe('/findings URL state', () => {
     vi.restoreAllMocks();
   });
 
+  test('restores report filters, sends the strict wire query, and preserves selection through chip history', async () => {
+    const c: FetchCase = { requested: [] };
+    const router = renderUrlState(
+      c,
+      `/findings?managedSystem=${MS_1}&filter.analytics_area=unset&status=active&execution=none&assignment=unassigned`,
+    );
+    expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Analytics Area: 미지정 필터 제거' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '상태: 진행 중 필터 제거' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '실행 연결 없음 필터 제거' })).toBeInTheDocument();
+    const request = c.requested.find((url) => url.startsWith('/findings?'));
+    if (request === undefined) throw new Error('Finding list request missing');
+    const query = listFindingsQuerySchema.parse(
+      Object.fromEntries(new URL(request, 'http://localhost').searchParams),
+    );
+    expect(query).toMatchObject({
+      analytics_area_id: 'unset',
+      status: 'active',
+      execution: 'none',
+      assignment: 'unassigned',
+      managed_system_id: MS_1,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /FND-101/ }));
+    await waitFor(() => expect(router.state.location.search.selected).toBe(F1_ID));
+    expect(router.state.location.search['filter.analytics_area']).toBe('unset');
+    fireEvent.click(screen.getByRole('button', { name: '상태: 진행 중 필터 제거' }));
+    await waitFor(() => expect(router.state.location.search.status).toBeUndefined());
+    expect(router.state.location.search.execution).toBe('none');
+    await act(async () => router.history.back());
+    await waitFor(() => expect(router.state.location.search.status).toBe('active'));
+    await act(async () => router.history.forward());
+    await waitFor(() => expect(router.state.location.search.status).toBeUndefined());
+    fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ managedSystem: MS_1, selected: F1_ID }),
+    );
+  });
+
+  test('keeps a selected active Finding with only inactive links and a convenience Task column', async () => {
+    const router = renderUrlState({ requested: [] }, `/findings?execution=none&selected=${F1_ID}`);
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/findings')
+        return jsonResponse({
+          items: [FINDINGS[1]],
+          page: { has_more: true, total: 2, cursor: 'next' },
+        });
+      if (url.pathname === `/findings/${F1_ID}`)
+        return jsonResponse({ ...F1, linked_task_id: F2_ID });
+      if (url.pathname === '/entity-links')
+        return jsonResponse({
+          items: [
+            {
+              id: STALE_ID,
+              source_type: 'finding',
+              source_id: F1_ID,
+              target_type: 'task',
+              target_id: F2_ID,
+              relation_type: 'requested_task',
+              status: 'detached',
+              visibility: 'internal_only',
+              visibility_state: 'allowed',
+              managed_system_id: MS_1,
+              created_by: F1.created_by,
+              created_at: F1.created_at,
+              updated_at: null,
+            },
+          ],
+        });
+      if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+      return jsonResponse({ code: 'not_found.record' }, 404);
+    });
+    expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(`finding:${F1_ID}`),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    expect(router.state.location.search.selected).toBe(F1_ID);
+  });
+
+  test.each(['hidden', 'denied'] as const)(
+    'reconciles a selected Finding with an active %s direct Task stub',
+    async (visibilityState) => {
+      const requested: string[] = [];
+      const router = renderUrlState({ requested }, `/findings?execution=none&selected=${F1_ID}`);
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        requested.push(String(input));
+        if (url.pathname === '/findings')
+          return jsonResponse({
+            items: [FINDINGS[1]],
+            page: { has_more: true, total: 2, cursor: 'next' },
+          });
+        if (url.pathname === `/findings/${F1_ID}`) return jsonResponse(F1);
+        if (url.pathname === '/entity-links')
+          return jsonResponse({
+            items: [
+              {
+                id: STALE_ID,
+                source_type: 'finding',
+                target_type: 'task',
+                relation_type: 'requested_task',
+                status: 'active',
+                visibility_state: visibilityState,
+                managed_system_id: MS_1,
+                created_by: F1.created_by,
+                created_at: F1.created_at,
+                updated_at: null,
+              },
+            ],
+          });
+        if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+        return jsonResponse({ code: 'not_found.record' }, 404);
+      });
+      expect(await screen.findByRole('button', { name: /FND-102/ })).toBeInTheDocument();
+      await waitFor(() => expect(router.state.location.search.selected).toBeUndefined());
+      expect(
+        requested.some((raw) => {
+          const url = new URL(raw, 'http://localhost');
+          return url.pathname === '/entity-links' && url.searchParams.get('source_id') === F1_ID;
+        }),
+      ).toBe(true);
+      expect(router.state.location.search.execution).toBe('none');
+      expect(screen.queryByTestId('finding-detail-panel')).not.toBeInTheDocument();
+    },
+  );
+
+  test.each(['task', 'task_request'] as const)(
+    'reconciles a later-page selection with an active canonical %s link',
+    async (targetType) => {
+      const requested: string[] = [];
+      const router = renderUrlState({ requested }, `/findings?execution=none&selected=${F1_ID}`);
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        requested.push(String(input));
+        if (url.pathname === '/findings')
+          return jsonResponse({
+            items: [FINDINGS[1]],
+            page: { has_more: true, total: 2, cursor: 'next' },
+          });
+        if (url.pathname === `/findings/${F1_ID}`) return jsonResponse(F1);
+        if (url.pathname === '/entity-links')
+          return jsonResponse({
+            items: [
+              {
+                id: STALE_ID,
+                source_type: 'finding',
+                source_id: F1_ID,
+                target_type: targetType,
+                target_id: F2_ID,
+                relation_type: 'requested_task',
+                status: 'active',
+                visibility: 'internal_only',
+                visibility_state: 'allowed',
+                managed_system_id: MS_1,
+                created_by: F1.created_by,
+                created_at: F1.created_at,
+                updated_at: null,
+              },
+            ],
+          });
+        if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+        return jsonResponse({ code: 'not_found.record' }, 404);
+      });
+      await waitFor(() => expect(router.state.location.search.selected).toBeUndefined());
+      expect(requested.some((url) => url.startsWith('/entity-links?'))).toBe(true);
+      expect(router.state.location.search.execution).toBe('none');
+    },
+  );
+
+  test.each([`filter.analytics_area=${MS_2}`, 'status=active'])(
+    'reconciles selected detail outside %s using its own fields',
+    async (filter) => {
+      const router = renderUrlState({ requested: [] }, `/findings?${filter}&selected=${F2_ID}`);
+      await waitFor(() => expect(router.state.location.search.selected).toBeUndefined());
+    },
+  );
+
+  test.each(['filter.analytics_area=unset', 'status=active'])(
+    'shows a single reset for a filtered miss with %s',
+    async (filter) => {
+      const router = renderUrlState({ requested: [] }, `/findings?${filter}`);
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost');
+        if (url.pathname === '/findings') {
+          const query = listFindingsQuerySchema.parse(Object.fromEntries(url.searchParams));
+          return jsonResponse(
+            query.analytics_area_id || query.status
+              ? { items: [], page: { total: 0, has_more: false } }
+              : { items: [F1], page: { total: 1, has_more: false } },
+          );
+        }
+        if (url.pathname === '/actors') return jsonResponse({ actors: [] });
+        return jsonResponse({ code: 'not_found.record' }, 404);
+      });
+      expect(await screen.findByTestId('finding-filtered-empty-state')).toHaveTextContent(
+        filter.startsWith('status') ? '상태: 진행 중' : 'Analytics Area: 미지정',
+      );
+      expect(screen.getAllByRole('button', { name: '필터 초기화' })).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+      await waitFor(() => expect(router.state.location.search).toEqual({}));
+      expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+    },
+  );
+
   test('restores assignment in the URL and sends the owner predicate while keeping the source return URL', async () => {
     const requested: string[] = [];
     const returnTo = '/vocs?view=my';
