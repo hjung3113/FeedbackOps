@@ -503,6 +503,18 @@ Cluster/member/link/audit work, and affect no Dashboard/coverage queues.
 
 ## Draft Similar-VOC Preview (ADR-0068; shipped by #1099)
 
+`GET /vocs/similarity-preview/availability` uses the POST's session/workspace
+preHandlers for every role and the normal read rate tier. No request body or
+Idempotency-Key is required. It returns strict `200 {available:true}` when
+`VOC_SIMILARITY_PREVIEW=enabled` and `isEmbeddingEnabled` is true, otherwise
+`200 {available:false, reason:'provider_disabled'}`. Cache control is
+`private, no-cache`; unauthenticated requests return 401. This config-only read
+performs no provider calls, paid ledger/budget writes, domain audit, Entity Link
+or dashboard side effects. The normal read-tier abuse bucket remains in effect.
+The create screen renders the semantic card only after `available:true`, with
+no placeholder while loading, on error or when unavailable (ADR-0068 amendment,
+2026-10-14). A POST `provider_disabled` outcome also hides the card.
+
 Requirement: FOP-VOC-001/004, #340. `POST /vocs/similarity-preview`; strict body
 `{ primary_managed_system_id:uuid, title, description_rich_content }`, existing
 VOC title/rich-content validation, required UUIDv4 `Idempotency-Key`. Same

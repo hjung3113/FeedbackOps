@@ -18,6 +18,25 @@ backend (#1099) are implemented. The suggestion and preview UI remain
 proposed/new here; implementation of item 2
 is not activation evidence. Generation remains default off pending #1152.
 
+## Amendment — 2026-10-14: provider-free MVP
+
+MVP runs without an embedding provider (`EMBEDDING_PROVIDER=disabled`); preview
+and suggestion surfaces are not rendered while the provider is unavailable
+(hiding an unconfigured capability is not the silent empty state ADR-0034 D2
+forbids). Real-provider evidence (#1101/#1152) is post-MVP, reopened when an
+internal embedding API is approved. The 58-5 two-week allowance review is also
+post-MVP, after two weeks of actual use following that approval. These deferrals
+and the reopen condition `internal embedding/LLM API approved` are recorded in
+`docs/design/14-post-mvp-backlog.md`; they do not block the provider-free MVP.
+
+The create screen uses the authenticated, config-only
+`GET /vocs/similarity-preview/availability` read. Only `available:true` renders the
+semantic card; loading, errors and unavailability render nothing. A click-time
+`provider_disabled` response also hides it. Hooks remain unconditional. Available
+checks disable the button while loading, including double-clicks; settlement
+allows another check when the draft is valid. The disclosure is:
+`버튼을 누르면 제목과 설명이 AI 임베딩 서비스로 전송됩니다. 첨부파일은 전송되지 않습니다.`
+
 ## Context
 
 The owner scheduled these capabilities for MVP close-out on 2026-10-13. The
@@ -49,7 +68,7 @@ not empirical conclusions.
 | 58-2 / O2 | Admin opt-in, default off, for suggestion generation. Disable stops new suggestions; pending suggestions remain reviewable. | Teams deliberately own their review queue. |
 | 58-3 / O3 | Disjoint pairs only; a human-rejected suggestion pair is never automatically proposed again, including after a model/version change. | Small comparisons and respect for rejection reduce repeated triage work. |
 | 58-4 / O4 | Undo only an accidental suggestion discard, server grace five minutes, with fresh validation. | Correct a slip without promising to reverse accepted work. |
-| 58-5 / O5 | All roles: actor 2 paid attempts/minute and 20/UTC day; workspace 10/minute and 100/UTC day across all callers/pods. Review after two weeks of use. | Bound spend and keep one actor from exhausting the team allowance. |
+| 58-5 / O5 | All roles: actor 2 paid attempts/minute and 20/UTC day; workspace 10/minute and 100/UTC day across all callers/pods. Post-MVP review after two weeks of use, once an internal embedding/LLM API is approved. | Bound spend and keep one actor from exhausting the team allowance. |
 | 58-6 / O6 | Only an optional `유사 VOC 확인` button sends draft prose; concise disclosure says it goes to the embedding provider. Typing sends nothing and preview never blocks submit. | An intentional duplicate check with predictable cost and transmission. |
 
 ### Cluster suggestions: memo C1–C10 adapted to choice (b)
@@ -287,8 +306,8 @@ outside MVP. Deferrals and reopen conditions are in
 
 This ADR is the prerequisite for implementation briefs, not a delivery claim.
 No real provider calibration is attached; generation remains off. The initial
-preview allowance is an approved ceiling, reviewed after two weeks of actual
-use for exhaustion frequency and latency; changes need a recorded decision,
+preview allowance is an approved ceiling, reviewed post-MVP after two weeks of actual
+use following internal embedding/LLM API approval for exhaustion frequency and latency; changes need a recorded decision,
 not an automatic increase. Offline arithmetic/fake-vector checks cannot prove
 semantic usefulness. The conductor owns provider measurement, throwaway-DB
 integration, root gates, 1440 rendered/visual review and Release Value Gate.
@@ -351,17 +370,17 @@ existing coverage; no mock internal-call assertions substitute for public seams.
    without retry; TTL and revocation/in-flight config rechecks; honest quota,
    provider and empty states; no VOC/Cluster/decision/domain-audit writes.
    Hand-authored vectors verify cut/rank/filter; fake hashes do not prove value.
-5. **Optional semantic check on VOC create — FE.** Depends on 4. Existing seams:
+5. **Optional semantic check on VOC create — FE (implemented by #1100).** Depends on 4. Existing seams:
    `apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx`,
    `apps/frontend/src/features/voc/components/create/SimilarVocPanel.tsx`,
    `apps/frontend/src/lib/copy/voc.ts`, `apps/frontend/tests/visual/`.
-   Proposed feature-local semantic panel/hook. Acceptance: explicit button alone
+   Shipped feature-local `SemanticVocPanel`/`useVocSimilarityPreview`. Acceptance: explicit button alone
    calls preview; edits clear results and late replies cannot resurrect them;
    recent/semantic headings and quota/provider/empty states remain distinct;
    submit stays usable; UUID navigation preserves dirty-form guard and sends no
    create/join/dismiss/confirm request. Verify 1440 keyboard/focus and visual diff.
-6. **Calibration, value and 5k-corpus activation evidence — BE/FE acceptance.**
-   Depends on 2–5. Existing integration suites under
+6. **Post-MVP calibration, value and 5k-corpus activation evidence (#1101/#1152).**
+   Reopen when an internal embedding/LLM API is approved; depends on 2–5. Existing integration suites under
    `apps/backend/src/modules/voc/` and `apps/backend/src/modules/voc-clusters/`,
    and `apps/frontend/tests/visual/`; conductor-owned authorized real-provider
    samples and throwaway DB. Acceptance: seven-day successful summaries,
@@ -371,4 +390,5 @@ existing coverage; no mock internal-call assertions substitute for public seams.
    control absent, unreadable duplicate absent; triager accepts/discards useful
    pair without extra workflow. Suggestions do not affect execution/coverage/
    recovery. Amend pins with evidence and enable only after FE review ships.
-   Record two-week preview quota review; offline green alone cannot pass value.
+   Record the post-MVP 58-5 two-week preview quota review after actual use;
+   offline green alone cannot pass semantic value. None blocks the provider-free MVP.

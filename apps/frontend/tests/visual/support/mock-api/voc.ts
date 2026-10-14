@@ -8,7 +8,12 @@ import {
   triageAreaReviewCandidates,
   triageAreaTriageVoc,
 } from '../../fixtures/triage-analytics-area';
-import { vocCreateAnalyticsAreas, vocCreatePeersByManagedSystem } from '../../fixtures/voc-create';
+import {
+  vocCreateAnalyticsAreas,
+  vocCreatePeersByManagedSystem,
+  vocCreatePreviewAvailability,
+  vocCreateSimilarityPreview,
+} from '../../fixtures/voc-create';
 import {
   VOC_REVIEW_IDS,
   populatedReviewCandidates,
@@ -115,6 +120,16 @@ export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
 
   if (options.vocCreate) {
     handlers.push(
+      {
+        method: 'GET',
+        path: '/vocs/similarity-preview/availability',
+        handle: (route) => json(route, 200, vocCreatePreviewAvailability),
+      },
+      {
+        method: 'POST',
+        path: '/vocs/similarity-preview',
+        handle: (route) => json(route, 200, vocCreateSimilarityPreview),
+      },
       {
         method: 'GET',
         path: '/analytics-areas',

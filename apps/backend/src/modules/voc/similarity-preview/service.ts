@@ -1,4 +1,8 @@
-import type { SimilarityPreviewRequest, SimilarityPreviewResponse } from '@fops/shared';
+import type {
+  SimilarityPreviewAvailabilityResponse,
+  SimilarityPreviewRequest,
+  SimilarityPreviewResponse,
+} from '@fops/shared';
 import type { AppConfig } from '../../../config.js';
 import type { Db } from '../../../db/client.js';
 import { HttpError } from '../../../lib/errors.js';
@@ -46,6 +50,9 @@ export function createSimilarityPreviewService(deps: {
   });
   const enabled = () =>
     deps.config.VOC_SIMILARITY_PREVIEW === 'enabled' && isEmbeddingEnabled(deps.config);
+  function availability(): SimilarityPreviewAvailabilityResponse {
+    return enabled() ? { available: true } : { available: false, reason: 'provider_disabled' };
+  }
   async function preview(args: {
     actor: ActorContextLite;
     key: string;
@@ -187,6 +194,6 @@ export function createSimilarityPreviewService(deps: {
     if (vectorExpiresAt <= now()) return unavailable('preview_expired');
     return candidates(deps.db, await candidateArgs(identity()), vector);
   }
-  return { preview };
+  return { preview, availability };
 }
 export type SimilarityPreviewService = ReturnType<typeof createSimilarityPreviewService>;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { similarityPreviewBudgetDetailSchema } from '../../errors/codes.js';
+import { similarityPreviewAvailabilityResponseSchema } from '../../index.js';
 import {
   similarityPreviewRequestSchema,
   similarityPreviewResponseSchema,
@@ -57,5 +58,21 @@ describe('draft preview wire boundary', () => {
       similarityPreviewResponseSchema.safeParse({ available: true, items: [{ ...item, score: 1 }] })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('preview availability wire boundary', () => {
+  it.each([{ available: true }, { available: false, reason: 'provider_disabled' }])(
+    'accepts the availability response %j',
+    (response) =>
+      expect(similarityPreviewAvailabilityResponseSchema.parse(response)).toEqual(response),
+  );
+  it.each([
+    { available: true, reason: 'provider_disabled' },
+    { available: false },
+    { available: false, reason: 'provider_failed' },
+    { available: true, items: [] },
+  ])('rejects non-contract availability %j', (response) => {
+    expect(similarityPreviewAvailabilityResponseSchema.safeParse(response).success).toBe(false);
   });
 });

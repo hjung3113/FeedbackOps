@@ -20,6 +20,7 @@ import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
 import { SimilarVocPanel } from './SimilarVocPanel';
+import { SemanticVocPanel } from './SemanticVocPanel';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
 import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
@@ -242,6 +243,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           {/* Right column */}
           <div className="flex flex-col gap-3 lg:col-span-3">
             <ReporterCard />
+            <SemanticVocPanel form={form} />
             <SimilarVocPanel managedSystemId={selectedMs} />
             <SeverityDisclaimerCard />
           </div>

@@ -543,9 +543,15 @@ and search inventory above remains the current implementation. FR-DASH-002 in
 No new domain route/shell is added. The existing `/voc-clusters` ListShell owns a
 separate suggestion review section with feature-local selection, not a fake
 `selected` Cluster ID or `/voc-clusters/:clusterId` detail. Preserve existing
-Cluster URL/search restoration. `/vocs` create owns the optional explicit-click
-semantic preview alongside its recent-peer panel; candidate UUID navigation
-retains the unsaved-change blocker and never creates a relationship.
+Cluster URL/search restoration. `/vocs` create ships the optional explicit-click
+semantic preview (#1100) above its separate recent-peer panel only after
+`GET /vocs/similarity-preview/availability` returns `available:true`; otherwise
+no card or placeholder renders (provider-free MVP, ADR-0068 amendment 2026-10-14). Only `유사 VOC 확인`
+sends the merged `POST /vocs/similarity-preview` (#1099), after transmission
+disclosure. Actual text/MS changes clear and cancel the check; unchanged values
+and unrelated rerenders preserve it. Candidate UUID navigation retains the
+unsaved-change blocker and never creates a relationship. Preview states never
+block submit or send automatic requests.
 `/admin/settings` owns the default-off suggestion-generation opt-in.
 
 ## Evidence inventory (ADR-0065; implemented by #1107)
