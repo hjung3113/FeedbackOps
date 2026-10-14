@@ -68,6 +68,10 @@ Read these before judging. Project authority beats generic taste.
    - Run browser commands in the foreground and wait for each to finish. A background command still running after
      you write the report keeps the run alive (s70: six runs lingered 1–9 minutes).
    - **Never navigate outside the two preview origins.**
+   - **Hang budget:** when a screenshot or native input call (`page.click`, `keyboard.press`, `page.goto`) times out
+     twice, stop retrying it. Continue with DOM evidence (`page.evaluate` reads, `el.click()`, dispatched events,
+     `location.assign`) and list every check that lacks a real screenshot or real keyboard input under "could not
+     check". Do not restart Ego Lite; other sessions share it. (s78: both UX runs lost screenshots and native input.)
 4. **Order:** run every scenario on **branch** first. Re-run on **develop** only the scenarios where you found a
    defect, so you can mark it `new` or `pre-existing`.
 5. **For each scenario, check:**

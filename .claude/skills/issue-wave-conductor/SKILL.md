@@ -48,7 +48,9 @@ Close a completed worker's terminal immediately; retain its state JSON for the r
 ## Slice start
 
 Before the first brief, read every candidate issue for the slice and collect each decision only the owner can make
-(product behaviour, copy, test deletion, scope). Ask them in one `AskUserQuestion` round, each with a recommended
+(product behaviour, copy, test deletion, scope). Include deployment constraints for any external service the slice
+would call (s78: a paid embedding API was designed in before the owner said the in-house MVP allows no external AI
+API; memory `project_no_external_ai_api`). Ask them in one `AskUserQuestion` round, each with a recommended
 option, and record the answers on the issues. In sessions 63–65 five such questions arrived one by one mid-slice
 (#920, #940, F4, #908, #902) and each paused the wave. A decision that surfaces later still gets asked at once, but
 plan for none. **Mid-wave, ask in plain text, never `AskUserQuestion`:** it blocks the conductor until the owner
@@ -108,8 +110,9 @@ blocker or an owner request.
    tool's `run_in_background`: the harness wakes the conductor when it exits. Never poll in the foreground or with
    `until`/`sleep` loops; sessions 63–65 spent 319 foreground waits (about 6.4 h), each re-reading the whole
    conversation. `scripts/wave-status.py` (or the `/wave` pane) shows every worker at a glance.
-   For several workers, pass repeated `--state` options and `--any`, then remove the returned finished worker
-   from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
+   For several workers, pass repeated `--state` options and `--any`, then read the returned `name` before acting
+   (s78: a still-running brief-check terminal was closed because the result belonged to another worker) and remove
+   that worker from the pending set before waiting again. Act on both its final JSON result and exit code: `0` done → verify
    on the host and close any terminal immediately; `10` failed → read the result's `log_tail` first, then the report/log, and write a repair brief;
    `11` quota (including a grok API 402) → stop the stalled worker, then relaunch in the same worktree with shared `worker-launch.sh
    --role impl-luna` (not `launch-worker.sh`, which creates a new worktree) and a task that says the worktree holds
@@ -121,8 +124,9 @@ blocker or an owner request.
      `visual.sh` (for the main-checkout copy: `cd <worktree> && "$FOPS_MAIN/.claude/skills/issue-wave-conductor/scripts/visual.sh" run [filter...]`).
      It puts Node 22 on `PATH` and chooses a free `PW_PORT`; use `stable <filter...> --runs 3` for the final
      no-update baseline check.
-   - BE: start the shared throwaway database once with `scripts/verify-db.sh up`, then
-     `scripts/verify-db.sh create <n> --migrate-from <worktree>` before `scripts/verify-be.sh <worktree> <n> [module filters]` — full
+   - BE: start the shared throwaway database once with `scripts/verify-db.sh up`, then, as soon as the worker
+     finishes, `scripts/verify-db.sh create <n> --migrate-from <worktree>` (worker-written migration SQL first runs
+     here) before `scripts/verify-be.sh <worktree> <n> [module filters]` — full
      integration once per BE issue, touched modules after small fix rounds. Use `reset-rate-limits <n>` only
      when needed; drop the issue database after merge and run `down` at wave end.
    - Lint gate after committing: `pnpm gate:fe-lint --base origin/develop`; classify each NEW with
@@ -197,7 +201,9 @@ blocker or an owner request.
    - Run `verify-db.sh reset-rate-limits <n>` first. The API rate limit is per actor and stored in the shared
      throwaway DB.
    - `scripts/nav-perf.sh --base develop=<url> --base branch=<url> --targets <rail and touched hrefs> --out
-     <worktree>/.review/<n>-perf/nav-perf.json`. Each base logs in as its own admin (`mock-admin-1`, `mock-admin-2`),
+     <worktree>/.review/<n>-perf/nav-perf.json`. Targets must be rail hrefs, which the harness clicks:
+     `/home,/vocs?view=inbox,/vocs?view=triage,/findings,/tasks?view=board,/surveys/participate` plus touched rail
+     links; `/`, `/vocs` or `?action=create` yield no samples (s63, s78). Each base logs in as its own admin (`mock-admin-1`, `mock-admin-2`),
      and samples that saw a 429 are kept out of the medians. Stdout is a plain-text table (`nav-perf-summary.py`)
      ending in `breach: none|<hrefs>`; it is not JSON, so read numbers from the `--out` file.
    - **Breach:** for any target, the median `branch.readyMs > develop × 1.2 + 50`, a new `reloaded`, `apiCalls` +2,

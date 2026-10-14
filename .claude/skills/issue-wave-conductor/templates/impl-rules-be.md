@@ -13,3 +13,7 @@
 5. Shared seed helpers live in `apps/backend/src/test-support/`; reuse them instead of new ad-hoc seeds.
 6. You may run `pnpm --filter @fops/backend exec tsc --noEmit` and unit tests that need no DB; never `git`, DB
    commands or the integration suite (the conductor runs those on a throwaway DB).
+7. Hand-written migration SQL is only executed by the conductor, so copy proven patterns (s78: two errors surfaced
+   only at migrate time): a pg-boss queue insert lists every `pgboss.queue` column as in
+   `0051_voc_cluster_autogen_shadow.sql`; inside a plpgsql `IF … THEN`, wrap any `CASE … THEN … END` in parentheses
+   (plpgsql ends the IF condition at the first `THEN`).

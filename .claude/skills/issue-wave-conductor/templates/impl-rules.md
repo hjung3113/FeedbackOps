@@ -5,7 +5,7 @@ agents and do not ask who dispatches; if something is ambiguous, make the smalle
 in your report.
 
 1. **Run the narrowest checks yourself before you report** (Node 22: `export PATH=/opt/homebrew/opt/node@22/bin:$PATH`):
-   frontend — `cd apps/frontend && npx vitest run --maxWorkers=2 --minWorkers=1 <the test files you touched or added>` and, from the repo root,
+   frontend — `cd apps/frontend && npx vitest run <the test files you touched or added>` and, from the repo root,
    `pnpm gate:fe-typecheck` (run `node scripts/generate-routes.mjs` first if the route tree is missing); backend —
    `pnpm --filter @fops/backend exec tsc --noEmit`. Fix what fails. Put the commands and results in your report.
    Still **never** run git (commit, stash, reset, checkout, restore), DB commands, integration suites, the visual
@@ -14,8 +14,8 @@ in your report.
    uncommitted — the conductor commits and runs the full gates.
    In React lifecycle code, never write refs or read the DOM during render; use event handlers, effects, or
    render-phase state adjustment.
-   Test runs stay in the foreground and finish: always `vitest run` (never watch mode), always `--maxWorkers=2 --minWorkers=1` (vitest 2.x runs no tests with `--maxWorkers` alone)
-   (several workers share one machine; each pool child holds 2–3 GB), never a trailing `&` or `nohup`. A runner
+   Test runs stay in the foreground and finish: always `vitest run` (never watch mode), and no worker-count flags: the `VITEST_*` env caps
+   (`~/.zshenv`, passed through `turbo.json`) own the count (several workers share one machine; each pool child holds 2–3 GB), never a trailing `&` or `nohup`. A runner
    that is killed leaves its pool children orphaned (~18 GB on 2026-10-13); the conductor's tooling reaps them.
 2. **Formatting: biome only** (`biome.json`: lineWidth 100, 2-space indent, single quotes). Never run Prettier
    and never reformat a whole file — touch only the lines you change.
