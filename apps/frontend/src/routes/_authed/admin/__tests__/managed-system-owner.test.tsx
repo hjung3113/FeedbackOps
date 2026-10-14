@@ -68,6 +68,7 @@ function installFetch(
     revokedActor?: boolean;
     candidateError?: boolean;
     ownerOnly?: boolean;
+    sameName?: boolean;
   } = {},
 ) {
   let saved = false;
@@ -129,6 +130,7 @@ function installFetch(
       return response({
         items: systems.map((system) => ({
           ...system,
+          ...(options.sameName ? { name: 'Team Owned System' } : {}),
           default_reviewer_actor_id: options.revokedActor ? ACTOR_ID : null,
           default_reviewer_team_id: options.reviewerTeam ? TEAM_ID : null,
         })),
@@ -474,6 +476,32 @@ describe('Managed System default owner', () => {
     );
     expect(screen.queryByText(/생성 시 미배정/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Team Owned System 설정 열기' })).toHaveLength(3);
+  });
+
+  test('diagnostics tell same-name systems apart by slug', async () => {
+    const warning = {
+      workflow: 'voc' as const,
+      responsibility: 'owner' as const,
+      rule: 'managed_system_owner' as const,
+      category: 'missing' as const,
+      origin: 'configuration' as const,
+      count: 1,
+      last_failed_at: null,
+    };
+    installFetch({
+      sameName: true,
+      diagnostics: [
+        { ...warning, managed_system_id: UNKNOWN_OWNER_SYSTEM_ID },
+        { ...warning, managed_system_id: TEAM_OWNER_SYSTEM_ID },
+      ],
+    });
+    renderPage();
+    expect(
+      await screen.findByRole('button', { name: 'Team Owned System (owner-unknown) 설정 열기' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Team Owned System (team-owned) 설정 열기' }),
+    ).toBeInTheDocument();
   });
 
   test('FIX1 warning explains repair, marks its row and opens that system settings', async () => {
