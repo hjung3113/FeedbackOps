@@ -21,3 +21,6 @@ export {
 } from './recovery-read.js';
 
 export { findingExecutionPredicate } from './execution-predicate.js';
+
+export { actorFindingListScope } from './list-scope.js';
+export { countGroupedFindingsForReport } from './repo-read.js';

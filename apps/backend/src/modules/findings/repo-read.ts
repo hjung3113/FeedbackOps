@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { ListCursor } from '../../lib/list-cursor.js';
+import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
+import { findingExecutionPredicate } from './execution-predicate.js';
 import { findingRecoveryPredicate } from './recovery-read.js';
 
 import type { Db } from '../../db/client.js';
@@ -300,4 +302,32 @@ export async function readEvidenceInventoryBatch(
     ORDER BY h.created_at DESC,h.id DESC LIMIT ${input.limit}
   `);
   return result.rows.map((row) => ({ ...row, created_at: toDate(row.created_at) }));
+}
+
+export async function countGroupedFindingsForReport(
+  db: Db,
+  args: { actor: ScopeActorContext; readScope: Scope; managedSystemId?: string },
+) {
+  const base: ListInput = {
+    workspaceId: args.actor.workspace_id,
+    ...(args.managedSystemId === undefined ? {} : { managedSystemId: args.managedSystemId }),
+    ...(args.readScope.kind === 'all' ? {} : { allowedSystemIds: args.readScope.managedSystemIds }),
+  };
+  const result = await db.execute<{
+    managed_system_id: string;
+    analytics_area_id: string | null;
+    total: number;
+    active: number;
+    execution: number;
+    no_execution: number;
+  }>(sql`
+    SELECT f.primary_managed_system_id AS managed_system_id, f.analytics_area_id,
+      count(*)::int AS total,
+      count(*) FILTER (WHERE f.status = 'active')::int AS active,
+      count(*) FILTER (WHERE f.status = 'active' AND ${findingExecutionPredicate()})::int AS execution,
+      count(*) FILTER (WHERE ${findingRecoveryPredicate()})::int AS no_execution
+    FROM finding.findings f WHERE ${sql.join(listPredicates(base), sql` AND `)}
+    GROUP BY f.primary_managed_system_id, f.analytics_area_id
+  `);
+  return result.rows;
 }

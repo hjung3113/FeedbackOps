@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { lockRecoveryCommand } from '../../db/recovery-command-lock.js';
 import { decodeListCursor, encodeListCursor } from '../../lib/list-cursor.js';
 import type { RecoveryRecorder } from '../dashboard/recorder.js';
+import { actorTaskListScope } from './list-scope.js';
 import { resolveTaskResponsibility } from './responsibility.js';
 
 import type { Db } from '../../db/client.js';
@@ -49,7 +50,7 @@ import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import { lockMilestone } from '../milestones/index.js';
 import type { NotificationNotifier } from '../notifications/index.js';
-import { type CheckService, memoizeCapabilityChecks } from '../permissions/index.js';
+import type { CheckService } from '../permissions/index.js';
 import {
   type TaskRequestRow,
   lockTaskRequestForUpdate,
@@ -68,7 +69,6 @@ import {
   findTaskIdByDisplayId,
   insertTask,
   insertTaskComment,
-  listPrimaryManagedSystemIds,
   listTaskComments as listTaskCommentRows,
   listTasksByWorkspace,
   lockTaskById,
@@ -1085,21 +1085,8 @@ export function createTasksService(deps: TasksServiceDeps) {
         : undefined;
     const cursor =
       args.query.cursor === undefined ? undefined : decodeListCursor(args.query.cursor);
-    const memo = memoizeCapabilityChecks(deps.checkService);
-    const systems =
-      args.actor.role_level === 'admin'
-        ? undefined
-        : await listPrimaryManagedSystemIds(deps.db, {
-            workspaceId: args.actor.workspace_id,
-            ...(managedSystemId === undefined ? {} : { managedSystemId }),
-          });
-    const allowedSystemIds: string[] | undefined = systems === undefined ? undefined : [];
-    for (const systemId of systems ?? []) {
-      if (
-        (await checkFindingManage(memo, args.actor, systemId, { requireElevatedRole: true })).allow
-      )
-        allowedSystemIds?.push(systemId);
-    }
+    const scope = await actorTaskListScope(deps.db, deps.checkService, args.actor, managedSystemId);
+    const allowedSystemIds = scope.kind === 'all' ? undefined : scope.managedSystemIds;
     const input = {
       workspaceId: args.actor.workspace_id,
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),

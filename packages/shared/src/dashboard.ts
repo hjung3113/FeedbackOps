@@ -365,3 +365,149 @@ export const recoveryHistorySchema = z.object({
   page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
 }).strict();
 export type RecoveryHistory = z.infer<typeof recoveryHistorySchema>;
+
+// ADR-0069: the report and Coverage consumer share exact destination search keys.
+const areaReportDestinations = {
+  'voc.total': ['/vocs', { view: 'inbox' }],
+  'voc.unassigned': ['/vocs', { view: 'inbox', tab: 'unassigned' }],
+  'voc.high_no_followup': ['/vocs', { view: 'inbox', tab: 'high-no-link' }],
+  'voc.task_link': ['/vocs', { view: 'inbox', tab: 'no-task' }],
+  'finding.active': ['/findings', { status: 'active' }],
+  'finding.execution': ['/findings', { execution: 'none' }],
+  'finding.no_execution': ['/findings', { execution: 'none' }],
+  'task.backlog': ['/tasks', { view: 'backlog', status: 'backlog' }],
+  'task.todo': ['/tasks', { view: 'backlog', status: 'todo' }],
+  'task.doing': ['/tasks', { view: 'backlog', status: 'doing' }],
+  'task.review': ['/tasks', { view: 'backlog', status: 'review' }],
+  'task.done': ['/tasks', { view: 'backlog', status: 'done' }],
+  'task.released': ['/tasks', { view: 'backlog', status: 'released' }],
+  'task.reopened': ['/tasks', { view: 'backlog', status: 'reopened' }],
+  'task.in_flight': ['/tasks', { view: 'backlog', status_group: 'in-flight' }],
+  'task.overdue': ['/tasks', { view: 'backlog', overdue: 'true' }],
+  'task.released_update': ['/tasks', { view: 'backlog', public_update: 'missing' }],
+  'task.public_update_missing': ['/tasks', { view: 'backlog', public_update: 'missing' }],
+  'task.reporter_update_needed': ['/tasks', { view: 'backlog', reporter_update: 'needed' }],
+  'survey.open': ['/surveys', { status: 'open' }],
+  'survey.follow_up_needed': ['/surveys', { follow_up: 'needed' }],
+} as const;
+export type AreaReportMetric = keyof typeof areaReportDestinations;
+export const areaReportLinkSchema = z
+  .object({
+    pathname: z.enum(['/vocs', '/findings', '/tasks', '/surveys']),
+    search: z.record(z.string()),
+  })
+  .strict();
+export type AreaReportLink = z.infer<typeof areaReportLinkSchema>;
+export function areaReportLink(
+  metric: AreaReportMetric,
+  managedSystemId: string,
+  analyticsAreaId: string | null,
+): AreaReportLink {
+  const [pathname, search] = areaReportDestinations[metric];
+  return {
+    pathname,
+    search: {
+      managedSystem: managedSystemId,
+      'filter.analytics_area': analyticsAreaId ?? 'unset',
+      ...search,
+    },
+  };
+}
+export const dashboardAreaReportQuerySchema = z
+  .object({
+    managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    analytics_area_id: z.union([z.string().uuid(), z.literal('unset')]).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().min(1).max(4096).optional(),
+  })
+  .strict();
+export type DashboardAreaReportQuery = z.infer<typeof dashboardAreaReportQuerySchema>;
+const areaCountSchema = z
+  .object({ count: z.number().int().nonnegative(), link: areaReportLinkSchema.optional() })
+  .strict();
+const areaRatioSchema = z
+  .object({
+    value: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    link: areaReportLinkSchema.optional(),
+  })
+  .strict();
+const areaClassificationSchema = z
+  .object({ classified: z.number().int().nonnegative(), total: z.number().int().nonnegative() })
+  .strict();
+export const dashboardAreaReportSchema = z
+  .object({
+    computed_at: z.string().datetime(),
+    as_of_date: z.string().date(),
+    items: z
+      .array(
+        z
+          .object({
+            managed_system_id: z.string().uuid(),
+            managed_system_name: z.string(),
+            managed_system_archived: z.boolean(),
+            analytics_area_id: z.string().uuid().nullable(),
+            analytics_area_name: z.string().nullable(),
+            analytics_area_archived: z.boolean(),
+            voc: z
+              .object({
+                total: areaCountSchema,
+                unassigned: areaCountSchema,
+                high_no_followup: areaCountSchema,
+                task_link: areaRatioSchema,
+              })
+              .strict()
+              .optional(),
+            finding: z
+              .object({
+                active: areaCountSchema,
+                execution: areaRatioSchema,
+                no_execution: areaCountSchema,
+              })
+              .strict()
+              .optional(),
+            task: z
+              .object({
+                by_status: z
+                  .object({
+                    backlog: areaCountSchema,
+                    todo: areaCountSchema,
+                    doing: areaCountSchema,
+                    review: areaCountSchema,
+                    done: areaCountSchema,
+                    released: areaCountSchema,
+                    reopened: areaCountSchema,
+                  })
+                  .strict(),
+                in_flight: areaCountSchema,
+                overdue: areaCountSchema,
+                released_update: areaRatioSchema.optional(),
+                public_update_missing: areaCountSchema.optional(),
+                reporter_update_needed: areaCountSchema.optional(),
+              })
+              .strict()
+              .optional(),
+            survey: z
+              .object({ open: areaCountSchema, follow_up_needed: areaCountSchema })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .max(100),
+    page: z.object({ has_more: z.boolean(), cursor: z.string().optional() }).strict(),
+    classification_context: z.array(
+      z
+        .object({
+          managed_system_id: z.string().uuid(),
+          voc: areaClassificationSchema.optional(),
+          finding: areaClassificationSchema.optional(),
+          task: areaClassificationSchema.optional(),
+          survey: areaClassificationSchema.optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type DashboardAreaReport = z.infer<typeof dashboardAreaReportSchema>;
+

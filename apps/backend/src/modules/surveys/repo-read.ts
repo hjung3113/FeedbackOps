@@ -291,14 +291,12 @@ export async function findSurvey(db: Db | Tx, workspaceId: string, id: string) {
   );
   return x.rows[0] ? mapSurvey(x.rows[0]) : null;
 }
-export async function listSurveys(
-  db: Db | Tx,
+function surveyListPredicates(
   workspaceId: string,
   scope: Scope,
   managedSystemId?: string,
   filters: ListSurveysQuery = {},
 ) {
-  if (scope.kind === 'scoped' && scope.managedSystemIds.length === 0) return [];
   const predicates = [sql`workspace_id = ${workspaceId}::uuid`];
   if (scope.kind === 'scoped')
     predicates.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scope.managedSystemIds)})`);
@@ -312,6 +310,18 @@ export async function listSurveys(
     );
   if (filters.status !== undefined) predicates.push(sql`status = ${filters.status}`);
   if (filters.follow_up === 'needed') predicates.push(sql`type = 'outcome' AND status = 'closed'`);
+  return predicates;
+}
+
+export async function listSurveys(
+  db: Db | Tx,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+  filters: ListSurveysQuery = {},
+) {
+  if (scope.kind === 'scoped' && scope.managedSystemIds.length === 0) return [];
+  const predicates = surveyListPredicates(workspaceId, scope, managedSystemId, filters);
   // Fence authorized rows before invoking the privileged aggregate-only classifier.
   const x = await db.execute<Record<string, unknown>>(sql`
     WITH authorized AS MATERIALIZED (
@@ -339,4 +349,36 @@ export async function listQuestions(db: Db | Tx, workspaceId: string, surveyId: 
     sql`select id,workspace_id,survey_id,kind,prompt,is_required,options,rating_min,rating_max,rating_low_label,rating_high_label,sort_order,branch_depth,branch_parent_question_id,branch_parent_depth,branch_trigger_option_key,created_at,updated_at from survey.survey_questions where workspace_id=${workspaceId} and survey_id=${surveyId} order by sort_order,id`,
   );
   return x.rows.map(mapQuestion);
+}
+
+export async function countGroupedSurveysForReport(
+  db: Db,
+  args: {
+    actor: import('../permissions/scope-service.js').ScopeActorContext;
+    readScope: Scope;
+    managedSystemId?: string;
+  },
+) {
+  const result = await db.execute<{
+    managed_system_id: string;
+    analytics_area_id: string | null;
+    total: number;
+    open: number;
+    follow_up_needed: number;
+  }>(sql`
+    WITH authorized AS MATERIALIZED (
+      SELECT id, primary_managed_system_id, analytics_area_id, type, status FROM survey.surveys
+      WHERE ${sql.join(surveyListPredicates(args.actor.workspace_id, args.readScope, args.managedSystemId), sql` AND `)}
+    ), follow_up AS MATERIALIZED (
+      SELECT s.id FROM authorized s
+      ${surveyFollowUpStateLateral(args.actor.workspace_id, sql`s.id`)}
+      WHERE s.type = 'outcome' AND s.status = 'closed' AND state.follow_up_needed
+    )
+    SELECT s.primary_managed_system_id AS managed_system_id, s.analytics_area_id,
+      count(*)::int AS total, count(*) FILTER (WHERE s.status = 'open')::int AS open,
+      count(*) FILTER (WHERE f.id IS NOT NULL)::int AS follow_up_needed
+    FROM authorized s LEFT JOIN follow_up f ON f.id = s.id
+    GROUP BY s.primary_managed_system_id, s.analytics_area_id
+  `);
+  return result.rows;
 }

@@ -1,3 +1,4 @@
+import { createAreaReportReader } from './area-report.js';
 import { recoveryHistoryWindowStart } from './history-window.js';
 import { createHash } from 'node:crypto';
 import { type SQL, sql } from 'drizzle-orm';
@@ -568,7 +569,7 @@ export function createDashboardService(deps: DashboardDeps) {
     };
   }
   const recovery = createRecoveryReader(deps);
-  return { getSummary, listRecoveryItems: recovery.list, getRecoveryItem: recovery.detail, patchRecoveryPresentation: recovery.patchPresentation, getRecoveryHistory: recovery.history };
+  return { getAreaReport: createAreaReportReader(deps), getSummary, listRecoveryItems: recovery.list, getRecoveryItem: recovery.detail, patchRecoveryPresentation: recovery.patchPresentation, getRecoveryHistory: recovery.history };
 }
 
 export type DashboardService = ReturnType<typeof createDashboardService>;

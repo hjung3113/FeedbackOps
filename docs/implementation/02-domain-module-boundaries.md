@@ -308,15 +308,34 @@ Survey owns response decisions and personal-gated presentation/history adapter; 
 may reference it without bypassing privacy or duplicating decision state. Integration owns
 the shared recovery UI/public seam consumed by Home; full workflows remain on sources.
 
-## Analytics Area report composition (ADR-0069; implementation pending)
+## Analytics Area report composition (ADR-0069; backend/shared #1078)
 
-Dashboard owns the proposed/new Area report read composition. VOC/Finding/Task/Survey own authorized
+Dashboard owns the Area report read composition. VOC/Finding/Task/Survey own authorized
 source-list and grouped count predicates; Survey owns its safe Survey-level follow-up batch projection.
 Analytics Areas and Managed Systems own batch metadata lookup for authorized referenced UUIDs including
-archives. New read exports are proposed/new owner seams, not foreign repository/table bypasses.
+archives. Read exports are owner seams, not foreign repository/table bypasses.
 Integration owns the Coverage Area tab; Admin owns catalog maintenance only. Source repair commands,
 entity-link visibility and canonical recovery resolution keep their existing owners. Report reads never
 mutate sources or create report-specific assignment/resolution state.
+
+Owner barrel exports added by #1078:
+
+- Findings: `actorFindingListScope` (the same elevated role + per-system `canReadFinding` decisions
+  used by `/findings`), `countGroupedFindingsForReport` (canonical execution/recovery predicates).
+- Tasks: `actorTaskListScope` (the same elevated role + per-system `checkFindingManage` decisions
+  used by `/tasks`), `countGroupedTasksForReport` (list predicates and DB UTC `as_of_date`).
+- Surveys: `countGroupedSurveysForReport` (authorized MATERIALIZED fence and the existing
+  aggregate-only `surveyFollowUpStateLateral`; Survey-grain, no personal audit).
+- VOC: existing `VocGroupedCountReader.countGroupedVocs`; no new projection or predicate.
+- Analytics Areas: `readAnalyticsAreaMetadata(db, workspaceId, ids)` returns
+  `{ id, managed_system_id, name, archived }`, including archived referenced UUIDs, without locks.
+- Managed Systems: `readManagedSystemMetadata(db, workspaceId, ids)` returns
+  `{ id, name, archived }`, including archived referenced UUIDs, without locks.
+
+The report calls one grouped query per domain and two batch metadata queries, with no Area argument
+or per-record read. Owner list-scope enumeration and memoized point checks are bounded by Managed
+Systems; availability is checked across the union even when an owner has no records in a System.
+Metadata inputs come only from authorized grouped results, never catalog enumeration.
 
 ## Survey provenance and Evidence composition (ADR-0064)
 
