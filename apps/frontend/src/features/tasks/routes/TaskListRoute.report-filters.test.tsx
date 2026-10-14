@@ -105,11 +105,11 @@ const filters = {
   'filter.analytics_area': 'unset',
   status: 'backlog',
   status_group: 'in-flight',
-  overdue: 'true',
+  overdue: true,
   public_update: 'missing',
   reporter_update: 'needed',
 } as const;
-const initial = `/tasks?view=backlog&managedSystem=${A}&${new URLSearchParams(filters)}`;
+const initial = `/tasks?view=backlog&managedSystem=${A}&${new URLSearchParams({ ...filters, overdue: 'true' })}`;
 function mockTasks(records: TaskDetailDto[] = [first, sameScope], offPage: string[] = []) {
   vi.mocked(listTasks).mockImplementation(async ({ signal: _signal, ...raw } = {}) => {
     const query = listTasksQuerySchema.parse(raw);
@@ -156,6 +156,15 @@ beforeEach(() => {
   mockTasks();
 });
 afterEach(cleanup);
+
+it('keeps overdue=true in the address and sends the wire string', async () => {
+  const mounted = mount('/tasks?view=backlog&overdue=true');
+  await screen.findByTestId('detail');
+  expect(mounted.router.state.location.search).toEqual({ view: 'backlog', overdue: true });
+  expect(mounted.router.state.location.searchStr).toBe('?view=backlog&overdue=true');
+  const { signal: _signal, ...sent } = vi.mocked(listTasks).mock.calls.at(-1)?.[0] ?? {};
+  expect(listTasksQuerySchema.parse(sent)).toEqual({ limit: 50, overdue: 'true' });
+});
 
 it.each(['backlog', 'my'] as const)(
   'keeps all report filters on selection and close in %s',
@@ -205,7 +214,7 @@ it('removes a single key, restores it with Back/Forward, then clears all filters
   await act(async () => {
     mounted.history.back();
   });
-  await waitFor(() => expect(mounted.router.state.location.search.overdue).toBe('true'));
+  await waitFor(() => expect(mounted.router.state.location.search.overdue).toBe(true));
   expect(await screen.findByRole('button', { name: '기한 지남 필터 제거' })).toBeInTheDocument();
   await act(async () => {
     mounted.history.forward();

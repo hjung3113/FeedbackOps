@@ -18,10 +18,7 @@ export const tasksSearchSchema = z
     status: taskStatusSchema.optional(),
     status_group: z.literal('in-flight').optional(),
     // TanStack decodes a hand-written ?overdue=true as the boolean true.
-    overdue: z.preprocess(
-      (value) => (value === true ? 'true' : value),
-      z.literal('true').optional(),
-    ),
+    overdue: z.preprocess((value) => (value === 'true' ? true : value), z.literal(true).optional()),
     reporter_update: z.literal('needed').optional(),
     public_update: z.literal('missing').optional(),
     reviewer: z.union([z.string().uuid(), z.literal('me')]).optional(),

@@ -53,7 +53,7 @@ export type TaskListFilters = {
   'filter.analytics_area'?: string | undefined;
   status?: TaskStatus | undefined;
   status_group?: 'in-flight' | undefined;
-  overdue?: 'true' | undefined;
+  overdue?: true | undefined;
   public_update?: 'missing' | undefined;
   reporter_update?: 'needed' | undefined;
 };
@@ -97,7 +97,7 @@ export function TaskListRoute({
       : { analytics_area_id: filters['filter.analytics_area'] }),
     ...(filters.status === undefined ? {} : { status: filters.status }),
     ...(filters.status_group === undefined ? {} : { status_group: filters.status_group }),
-    ...(filters.overdue === undefined ? {} : { overdue: filters.overdue }),
+    ...(filters.overdue === undefined ? {} : { overdue: 'true' as const }),
     ...(filters.public_update === undefined ? {} : { public_update: filters.public_update }),
     ...(filters.reporter_update === undefined ? {} : { reporter_update: filters.reporter_update }),
   };

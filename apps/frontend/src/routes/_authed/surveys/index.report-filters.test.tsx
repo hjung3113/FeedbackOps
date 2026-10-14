@@ -298,6 +298,24 @@ test('URL filters intersect local tabs/search without adding another reset', asy
   expect(screen.getAllByRole('button', { name: '필터 초기화' })).toHaveLength(1);
 });
 
+test('one reset clears URL Area, local search and status tab', async () => {
+  const router = renderUrlState(
+    { requested: [] },
+    `/surveys?managedSystem=${MS_1}&filter.analytics_area=unset`,
+  );
+  await screen.findByTestId(`survey-row-${S1_ID}`);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: /^종료됨/ }));
+  const search = screen.getByRole('textbox', { name: 'Survey 검색' });
+  fireEvent.change(search, { target: { value: 'zzz' } });
+  expect(screen.getByText('현재 조건에 맞는 Survey가 없습니다')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+  await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
+  expect(await screen.findByTestId(`survey-row-${S1_ID}`)).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Survey 검색' })).toHaveValue('');
+  expect(screen.getByRole('tab', { name: /^전체/ })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+});
+
 test('local-only search keeps its existing filtered-empty reset', async () => {
   renderUrlState({ requested: [] }, '/surveys');
   await screen.findByTestId(`survey-row-${S1_ID}`);

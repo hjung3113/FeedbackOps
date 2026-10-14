@@ -205,7 +205,7 @@ describe('Task and Survey report destination validation', () => {
       'filter.analytics_area': area,
       status: 'doing',
       status_group: 'in-flight',
-      overdue: 'true',
+      overdue: true,
       public_update: 'missing',
       reporter_update: 'needed',
     };
@@ -251,7 +251,12 @@ describe('Task and Survey report destination validation', () => {
     const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
     expect(validateTasksSearch(router.options.parseSearch('?view=backlog&overdue=true'))).toEqual({
       view: 'backlog',
-      overdue: 'true',
+      overdue: true,
     });
+    expect(
+      router.options.stringifySearch(
+        validateTasksSearch(router.options.parseSearch('?view=backlog&overdue=true')),
+      ),
+    ).toBe('?view=backlog&overdue=true');
   });
 });

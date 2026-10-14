@@ -152,7 +152,15 @@ export function SurveyList({
         }
       />
       {hasUrlFilters && onClearUrlFilters && (
-        <ActiveFilterBar items={urlFilters} onClearAll={onClearUrlFilters} className="mx-5 my-2" />
+        <ActiveFilterBar
+          items={urlFilters}
+          onClearAll={() => {
+            setStatus('all');
+            setSearch('');
+            onClearUrlFilters();
+          }}
+          className="mx-5 my-2"
+        />
       )}
       <div id={SURVEY_LIST_PANEL_ID} role="tabpanel" aria-labelledby={`survey-tab-${status}`}>
         {visible.length === 0 ? (

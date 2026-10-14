@@ -536,7 +536,8 @@ implemented by #1077 (parts a/b). Coverage extensions below remain **proposed/ne
   the paged authorized catalog including archived Areas; unresolved labels disclose no existence.
   VOC removal/reset drops only Area; Finding reset drops Area/status/execution/assignment.
   Task reset drops Area/status/status_group/overdue/public_update/reporter_update;
-  Survey reset drops Area/status/follow_up. Each chip removes its own key; resets keep
+  Survey reset drops Area/status/follow_up and clears the local status tab and search text.
+  Each chip removes its own URL key; resets keep
   scope, view and selection. Survey's local status/search filters intersect the server
   filters and tab counts use the fetched array. URL-filtered empty states name active
   conditions and use the filter bar as the sole reset control.

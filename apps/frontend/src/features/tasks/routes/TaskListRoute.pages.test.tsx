@@ -196,7 +196,7 @@ it.each(['backlog', 'my'] as const)(
           'filter.analytics_area': 'unset',
           status: 'doing',
           status_group: 'in-flight',
-          overdue: 'true',
+          overdue: true,
           public_update: 'missing',
           reporter_update: 'needed',
         }}
@@ -237,7 +237,7 @@ it('keeps board requests limited to the existing public_update filter', async ()
         'filter.analytics_area': 'unset',
         status: 'doing',
         status_group: 'in-flight',
-        overdue: 'true',
+        overdue: true,
         public_update: 'missing',
         reporter_update: 'needed',
       }}
