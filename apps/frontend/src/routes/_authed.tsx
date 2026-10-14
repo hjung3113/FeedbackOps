@@ -406,9 +406,14 @@ function AuthedShell() {
           const { 'filter.analytics_area': area, ...withoutArea } = remaining;
           const areaSearch =
             managedSystemId !== undefined && area !== 'unset' ? withoutArea : remaining;
-          // Evidence/recovery cursors are bound to scope; retain readable selection.
+          // Evidence/recovery/report cursors are bound to scope; retain readable selection.
           const { cursor: _cursor, ...withoutCursor } = areaSearch;
-          const scopedSearch = ['/integration/evidence', '/integration', '/home'].includes(location.pathname)
+          const scopedSearch = [
+            '/integration/evidence',
+            '/integration/coverage',
+            '/integration',
+            '/home',
+          ].includes(location.pathname)
             ? withoutCursor
             : areaSearch;
           return managedSystemId === undefined

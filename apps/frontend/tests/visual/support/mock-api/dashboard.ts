@@ -1,4 +1,5 @@
 import {
+  dashboardAreaReportQuerySchema,
   dashboardSummarySchema,
   recoveryDetailSchema,
   recoveryHistoryQuerySchema,
@@ -7,6 +8,7 @@ import {
   recoveryListSchema,
   recoveryPresentationPatchSchema,
 } from '@fops/shared';
+import { areaReportFixture, unclassifiedAreaReportFixture } from '../../fixtures/area-report';
 import {
   coverageAnalyticsAreasFixture,
   coverageEmptySummaryFixture,
@@ -32,6 +34,24 @@ import type { MockApiContext } from './types';
 export function createDashboardHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
   const handlers: MockApiHandler[] = [];
+
+  if (options.areaReport)
+    handlers.push({
+      method: 'GET',
+      path: '/dashboard/analytics-areas',
+      handle: (route, _context, url) => {
+        dashboardAreaReportQuerySchema.parse(Object.fromEntries(url.searchParams));
+        return options.areaReport === 'denied'
+          ? json(route, 403, { code: 'permission.denied', message: 'denied' })
+          : json(
+              route,
+              200,
+              options.areaReport === 'unclassified'
+                ? unclassifiedAreaReportFixture
+                : areaReportFixture,
+            );
+      },
+    });
 
   let detail = recoveryVisualDetail(options.recovery);
   handlers.push(

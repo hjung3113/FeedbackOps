@@ -55,6 +55,7 @@ export interface InstallOptions {
   notifications?: 'populated' | 'subject-references';
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
+  areaReport?: 'populated' | 'unclassified' | 'denied';
   /** #532 Integration Action Dashboard summary and Managed System fixtures. */
   integrationDashboard?: IntegrationDashboardVisualScenario;
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */

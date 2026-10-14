@@ -1,6 +1,7 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
 import { mapUnknownError } from '@/lib/api/errorMapper';
 import { useMe } from '@/lib/auth/useMe';
+import { AREA_REPORT_COPY } from '@/lib/copy/area-report';
 import type { DashboardSummary } from '@fops/shared';
 import {
   Button,
@@ -212,6 +213,10 @@ export function IntegrationDashboardRoute({
               description="VOC→Task · Finding→실행 · Milestone→성과 같이 워크플로 단절을 임계값으로 추적합니다."
               icon={<Layers className="h-3.5 w-3.5" aria-hidden="true" />}
               testId="integration-surface-coverage"
+              secondaryLink={{
+                href: `/integration/coverage?view=areas${surfaceScopeSearch.replace('?', '&')}`,
+                label: AREA_REPORT_COPY.secondary,
+              }}
               {...(coverageNoData
                 ? {
                     stat: `${INTEGRATION_AVERAGE_COVERAGE_LABEL} · ${COVERAGE_NO_DATA_LABEL}`,
