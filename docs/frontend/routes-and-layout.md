@@ -538,7 +538,7 @@ and search inventory above remains the current implementation. FR-DASH-002 in
   No eager source detail/personal Survey reads. Tab and positive-count links support keyboard
   operation and visible focus. Source actions remain on source routes with fresh permissions.
 
-## Close-out assistance (ADR-0068; Cluster review shipped #1098, preview pending)
+## Close-out assistance (ADR-0068; Cluster review shipped #1098, preview shipped #1100)
 
 No new domain route/shell is added. The existing `/voc-clusters` ListShell owns a
 separate suggestion review section with feature-local selection, not a fake
