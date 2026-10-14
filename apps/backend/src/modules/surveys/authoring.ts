@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  type ListSurveysQuery,
   type SurveyStartingPoint,
   type SurveyType,
   surveyCopySourceQuestionSchema,
@@ -10,12 +11,7 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
-import {
-  actorSurveyReadScope,
-  checkSurveyManage,
-  checkSurveyRead,
-  isSurveyInReadScope,
-} from './authorization.js';
+import { actorSurveyReadScope, checkSurveyManage, checkSurveyRead } from './authorization.js';
 import {
   type CopySourcesQuery,
   decodeCopySourceCursor,
@@ -1082,12 +1078,17 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
       ),
     );
   }
-  async function listSurvey(actor: SurveysActor, managedSystemId?: string) {
+  async function listSurvey(
+    actor: SurveysActor,
+    managedSystemId?: string,
+    filters: ListSurveysQuery = {},
+  ) {
     const scope = await actorSurveyReadScope(deps.db, deps.checkService, actor);
-    return (await listSurveys(deps.db, actor.workspace_id, managedSystemId))
-      .filter((s) => isSurveyInReadScope(scope, s.primary_managed_system_id))
-      .map((s) => dto(s));
+    return (await listSurveys(deps.db, actor.workspace_id, scope, managedSystemId, filters)).map(
+      (s) => dto(s),
+    );
   }
+
   return {
     createSurvey,
     getSurveyTemplates,

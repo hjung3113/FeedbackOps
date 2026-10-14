@@ -1,10 +1,13 @@
-import type { SurveyQuestionKind, SurveyType } from '@fops/shared';
+import type { ListSurveysQuery, SurveyQuestionKind, SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
+import type { Scope } from '../permissions/scope-service.js';
+import { surveyFollowUpStateLateral } from './follow-up-sql.js';
 
 const postgresTimestampCursorSchema = z
   .string()
@@ -288,13 +291,43 @@ export async function findSurvey(db: Db | Tx, workspaceId: string, id: string) {
   );
   return x.rows[0] ? mapSurvey(x.rows[0]) : null;
 }
-export async function listSurveys(db: Db | Tx, workspaceId: string, managedSystemId?: string) {
-  const p = managedSystemId ? sql`and primary_managed_system_id=${managedSystemId}` : sql``;
-  const x = await db.execute<Record<string, unknown>>(
-    sql`select ${surveyCols} from survey.surveys where workspace_id=${workspaceId} ${p} order by created_at desc,id desc`,
-  );
+export async function listSurveys(
+  db: Db | Tx,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+  filters: ListSurveysQuery = {},
+) {
+  if (scope.kind === 'scoped' && scope.managedSystemIds.length === 0) return [];
+  const predicates = [sql`workspace_id = ${workspaceId}::uuid`];
+  if (scope.kind === 'scoped')
+    predicates.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scope.managedSystemIds)})`);
+  if (managedSystemId !== undefined)
+    predicates.push(sql`primary_managed_system_id = ${managedSystemId}::uuid`);
+  if (filters.analytics_area_id !== undefined)
+    predicates.push(
+      filters.analytics_area_id === 'unset'
+        ? sql`analytics_area_id IS NULL`
+        : sql`analytics_area_id = ${filters.analytics_area_id}::uuid`,
+    );
+  if (filters.status !== undefined) predicates.push(sql`status = ${filters.status}`);
+  if (filters.follow_up === 'needed') predicates.push(sql`type = 'outcome' AND status = 'closed'`);
+  // Fence authorized rows before invoking the privileged aggregate-only classifier.
+  const x = await db.execute<Record<string, unknown>>(sql`
+    WITH authorized AS MATERIALIZED (
+      SELECT ${surveyCols} FROM survey.surveys
+      WHERE ${sql.join(predicates, sql` AND `)}
+    ) SELECT s.* FROM authorized s
+    ${
+      filters.follow_up === 'needed'
+        ? sql`${surveyFollowUpStateLateral(workspaceId, sql`s.id`)} WHERE state.follow_up_needed`
+        : sql``
+    }
+    ORDER BY s.created_at DESC, s.id DESC
+  `);
   return x.rows.map(mapSurvey);
 }
+
 export async function listSurveyManagedSystemIds(db: Db | Tx, workspaceId: string) {
   const x = await db.execute<{ primary_managed_system_id: string }>(
     sql`select distinct primary_managed_system_id from survey.surveys where workspace_id=${workspaceId}`,

@@ -6,6 +6,7 @@ import { lockFindingRecoverySubjects } from '../findings/recovery-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
+import { surveyFollowUpStateLateral } from './follow-up-sql.js';
 
 /** Safe Survey-grain batch adapter; never calls the personal reader or exposes responses. */
 export async function surveyRecoveryProjection(
@@ -50,8 +51,7 @@ export async function surveyRecoveryProjection(
     s.operator_actor_id AS actor_id, NULL::uuid AS team_id,
     CASE WHEN state.follow_up_needed AND s.primary_managed_system_id = ANY(${sqlUuidArray(repairIds)}) THEN s.id END AS repair_id,
     s.primary_managed_system_id AS repair_system_id
-    FROM authorized s CROSS JOIN LATERAL survey.read_outcome_follow_up_survey_state(
-      ${actor.workspace_id}::uuid, s.id) state`,
+    FROM authorized s ${surveyFollowUpStateLateral(actor.workspace_id, sql`s.id`)}`,
   };
 }
 
