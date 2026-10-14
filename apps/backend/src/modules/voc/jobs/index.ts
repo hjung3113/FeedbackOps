@@ -10,6 +10,7 @@ import type { EmbeddingProvider } from '../embedding/port.js';
 import type { PublicUpdateReviewCandidatesService } from '../public-update-review-candidates/service.js';
 import { registerSimilarityPreviewCleanup } from '../similarity-preview/cleanup.js';
 import { registerVocClusterAutogenShadow } from './cluster-autogen-shadow.js';
+import { registerVocClusterSuggestions } from './cluster-suggestions.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
 import { registerReleasedReviewCandidates } from './released-review-candidates.js';
@@ -40,6 +41,12 @@ export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<v
     log: deps.log,
   });
   await registerVocClusterAutogenShadow(boss, {
+    db: deps.db,
+    embeddingVersion: deps.embeddingVersion,
+    embeddingEnabled: deps.embeddingEnabled,
+    log: deps.log,
+  });
+  await registerVocClusterSuggestions(boss, {
     db: deps.db,
     embeddingVersion: deps.embeddingVersion,
     embeddingEnabled: deps.embeddingEnabled,
@@ -78,3 +85,10 @@ export {
   registerVocEmbeddingBackfill,
   type VocEmbeddingBackfillResult,
 } from './embedding-backfill.js';
+
+export {
+  VOC_CLUSTER_SUGGESTIONS_QUEUE,
+  VOC_CLUSTER_SUGGESTIONS_CRON,
+  runVocClusterSuggestions,
+  registerVocClusterSuggestions,
+} from './cluster-suggestions.js';

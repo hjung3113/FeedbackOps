@@ -498,6 +498,13 @@
       "when": 1791967228726,
       "tag": "0070_voc_similarity_preview",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791969982986,
+      "tag": "0071_voc_cluster_suggestion_generation",
+      "breakpoints": true
     }
   ]
 }

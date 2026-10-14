@@ -1,3 +1,5 @@
+import { createVocClusterSuggestionsService } from './modules/voc/cluster-suggestions/service.js';
+import { vocClusterSuggestionsRoutes } from './modules/voc/cluster-suggestions/routes.js';
 import { createOutcomeRecoveryRecorder } from './modules/surveys/recovery-presentation.js';
 import { createOwnerRecoveryRecorder } from './modules/dashboard/truth.js';
 import type { NotificationSubjectReference } from '@fops/shared';
@@ -815,6 +817,29 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(vocRecommendationsRoutes, {
     sessionService,
     vocRecommendationsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
+  const clusterSuggestionsService = createVocClusterSuggestionsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    embeddingVersion: config.EMBEDDING_VERSION,
+    embeddingEnabled: isEmbeddingEnabled(config),
+    createClustersService: (db) =>
+      createVocClustersService({
+        db,
+        auditService,
+        checkService,
+        idempotencyService,
+        recoveryRecorder,
+        postPublicUpdate: conversationService.postPublicUpdate,
+      }),
+  });
+  await app.register(vocClusterSuggestionsRoutes, {
+    service: clusterSuggestionsService,
+    sessionService,
     workspaceId,
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });

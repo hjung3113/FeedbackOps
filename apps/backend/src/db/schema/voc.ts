@@ -155,6 +155,12 @@ export const vocEmbeddings = vocSchema.table(
       t.workspaceId,
       t.embeddingVersion,
     ),
+    workspaceWatermarkIdx: index('voc_embeddings_workspace_watermark_idx').on(
+      t.workspaceId,
+      t.embeddingVersion,
+      t.updatedAt,
+      t.vocId,
+    ),
     dimensionsPositive: check('voc_embeddings_dimensions_positive', sql`${t.dimensions} > 0`),
     versionPositive: check('voc_embeddings_version_positive', sql`${t.embeddingVersion} > 0`),
   }),
