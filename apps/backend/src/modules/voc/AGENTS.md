@@ -46,6 +46,7 @@ cleanup. Keep shadow measurement and saved recommendations separate. Automatic
 pairs write no Cluster/member/decision/domain-audit rows; human confirmation uses
 VOC Clusters' exported commands in the same transaction. Do not add a system
 actor or foreign repo access. Follow ADR-0068's coordinated admission lock order.
+Paid preview is implemented by #1099; Cluster suggestion additions remain proposed.
 Preview is explicit-click, bounded, zero automatic retries, with atomic four-budget
 Postgres reservation and fresh visibility on completion/replay. API authority:
-`docs/implementation/api/voc.md`; proposed fields: `docs/design/15-data-contracts.md`.
+`docs/implementation/api/voc.md`; preview storage shipped, suggestion fields proposed: `docs/design/15-data-contracts.md`.

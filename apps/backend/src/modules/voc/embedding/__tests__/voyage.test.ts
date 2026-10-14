@@ -13,6 +13,20 @@ function response(status: number, body: unknown) {
 }
 
 describe('VoyageEmbeddingProvider', () => {
+  it('forwards cancellation through the paid fetch and response read', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn(async (_url, init) => {
+      expect(init.signal).toBe(controller.signal);
+      return response(200, { data: [{ embedding: [1, 0, 0] }] });
+    });
+    const provider = createVoyageEmbeddingProvider({
+      apiKey: API_KEY, dimensions: 3, embeddingVersion: 1, fetch,
+    });
+    expect(provider.identity()).toEqual({ provider: 'voyage', model: 'voyage-3', dimensions: 3 });
+    await provider.embed(['draft'], { signal: controller.signal });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('maps a successful response with its batch metadata', async () => {
     const fetch = vi.fn().mockResolvedValue(
       response(200, { data: [{ embedding: [0.1, 0.2, 0.3] }, { embedding: [0.4, 0.5, 0.6] }] }),

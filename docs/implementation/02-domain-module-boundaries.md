@@ -338,9 +338,10 @@ access to safe result readers.
 ## Cluster suggestion and draft-preview ownership (ADR-0068; proposed/new)
 
 VOC owns the non-domain suggestion lifecycle, generation job/cursor/caps and
-paid-preview ledger/budgets/cleanup; proposed subdirectories are
+paid-preview ledger/budgets/cleanup (#1099 implemented); subdirectories are
 `apps/backend/src/modules/voc/cluster-suggestions/` and
-`apps/backend/src/modules/voc/similarity-preview/`. They are not a generic Core
+`apps/backend/src/modules/voc/similarity-preview/` (shipped #1099). Cluster suggestions
+remain proposed. They are not a generic Core
 AI service. VOC Clusters alone writes its existing Cluster/member tables through
 exported application commands, called only on human suggestion confirmation.
 Automatic generation calls no Cluster mutation service. Saved recommendations
@@ -392,3 +393,10 @@ Core's `core/read-projections.ts` exports `readResponsibilityTeam` for transacti
 same-workspace active-team input; destinations retain eligibility and all assignment writes.
 The Analytics Area lock preserves its prior signature and adds `owner_team_id` for both
 source workers. Cluster has no direct Area and no member-derived rule.
+
+### Managed System preview parent projection (#1099)
+
+`managed-systems/index.ts` exports `readManagedSystemState(db, workspaceId, id)`:
+non-locking ID/archive state within the workspace, solely for draft-preview parent
+validation. It grants no candidate read permission; VOC resolves scope via
+`actorReadScope` and uses `similarVocVisibilityPredicate` for every candidate read.

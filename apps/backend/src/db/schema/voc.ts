@@ -659,3 +659,78 @@ export const vocClusterSuggestionCursors = vocSchema.table(
     ),
   }),
 );
+
+// ADR-0068 paid draft preview: operational state only, never draft prose or response bodies.
+export const vocSimilarityPreviewRequests = vocSchema.table(
+  'voc_similarity_preview_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    idempotencyKey: uuid('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    embeddingVersion: integer('embedding_version').notNull(),
+    outcome: text('outcome').notNull().default('reserved'),
+    reservedAt: timestamp('reserved_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    vector: vector('vector'),
+    vectorExpiresAt: timestamp('vector_expires_at', { withTimezone: true }),
+  },
+  (t) => ({
+    key: uniqueIndex('voc_similarity_preview_requests_key_uq').on(
+      t.workspaceId,
+      t.actorId,
+      t.idempotencyKey,
+    ),
+    expiry: index('voc_similarity_preview_requests_expiry_idx').on(t.expiresAt),
+    outcome: check(
+      'voc_similarity_preview_requests_outcome_ck',
+      sql`${t.outcome} IN ('reserved','succeeded','failed','timed_out','outcome_unknown')`,
+    ),
+    dimensions: check(
+      'voc_similarity_preview_requests_dimensions_ck',
+      sql`${t.dimensions} > 0 AND ${t.embeddingVersion} > 0`,
+    ),
+    ttl: check(
+      'voc_similarity_preview_requests_ttl_ck',
+      sql`${t.expiresAt} <= ${t.reservedAt} + interval '24 hours' AND (${t.vectorExpiresAt} IS NULL OR ${t.vectorExpiresAt} <= ${t.reservedAt} + interval '10 minutes')`,
+    ),
+  }),
+);
+export const vocSimilarityPreviewBudgets = vocSchema.table(
+  'voc_similarity_preview_budgets',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    scope: text('scope').notNull(),
+    actorId: uuid('actor_id').references(() => actors.id),
+    scopeKey: text('scope_key').notNull(),
+    period: text('period').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    usedAttempts: integer('used_attempts').notNull(),
+  },
+  (t) => ({
+    key: primaryKey({
+      columns: [t.workspaceId, t.scopeKey, t.period, t.windowStart],
+      name: 'voc_similarity_preview_budgets_pk',
+    }),
+    scope: check(
+      'voc_similarity_preview_budgets_scope_ck',
+      sql`(${t.scope}='workspace' AND ${t.actorId} IS NULL AND ${t.scopeKey}='workspace') OR (${t.scope}='actor' AND ${t.actorId} IS NOT NULL AND ${t.scopeKey}=${t.actorId}::text)`,
+    ),
+    period: check('voc_similarity_preview_budgets_period_ck', sql`${t.period} IN ('minute','day')`),
+    attempts: check('voc_similarity_preview_budgets_attempts_ck', sql`${t.usedAttempts} >= 0`),
+  }),
+);

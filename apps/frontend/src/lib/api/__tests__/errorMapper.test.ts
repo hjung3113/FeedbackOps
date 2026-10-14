@@ -45,6 +45,18 @@ function isSlice3OwnerCode(code: ErrorCode): boolean {
 }
 
 describe('errorMapper — ERROR_CODES coverage', () => {
+  it.each([
+    ['rate_limited.actor', 'day', '오늘 유사 VOC 조회 한도를 사용했습니다'],
+    ['rate_limited.workspace', 'day', '이 워크스페이스의 유사 VOC 조회 한도를 사용했습니다'],
+    ['rate_limited.actor', 'minute', '요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+    ['rate_limited.workspace', 'minute', '이 워크스페이스의 유사 VOC 조회 요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+    ['rate_limited.actor', undefined, '요청이 너무 많습니다. 30초 후 다시 시도해 주세요.'],
+  ] as const)('maps %s %s budgets', (code, period, message) => {
+    expect(errorMapper({ code: code as ErrorCode, message: '', detail: {
+      ...(period ? { budget_period: period } : {}), retry_after_seconds: 30,
+    } }).message).toBe(message);
+  });
+
   it('AC-2 classifies every shared code in the catalog or explicit server-only exclusions', () => {
     expect(findUnclassifiedCodes(ERROR_CODES)).toEqual([]);
   });

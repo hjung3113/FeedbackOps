@@ -521,7 +521,7 @@ Execution and combined #739/#740 verification are still required.
 - This closes direct-table paths, not SQL-level unlinkability against stolen app
   credentials: permitted definers remain trusted application tools.
 
-## Close-out assistance storage (ADR-0068; inert suggestions #1096, preview pending)
+## Close-out assistance storage (ADR-0068; inert suggestions #1096, preview shipped #1099)
 
 Generated migration `0062_cluster_suggestion_storage.sql` (journal + snapshot) adds
 `voc.voc_cluster_suggestions`, the three VOC-owned counter/cursor tables in
@@ -547,12 +547,15 @@ the existing settings singleton, preserve Coverage/other settings, audit boolean
 effective diffs only and never spend counters or advance cursors. The conductor
 owns migration numbering/reconciliation and actual app/migrate throwaway-DB checks.
 
-Paid preview requests/budgets remain proposed: no raw prose or cached candidate IDs/
-titles, vectors at most ten minutes, tombstones 24h, budget buckets until UTC window
-expiry. A future VOC cleanup job may receive narrowly scoped DELETE only on preview
-operational rows/ended counters, never Cluster, member or audit tables. No preview
-storage or cleanup registration ships in #1096. Future provider I/O remains outside
-short reservation/completion transactions.
+Paid preview requests/budgets ship in `0070_voc_similarity_preview.sql` (#1099):
+no raw prose or cached candidate IDs/titles, vectors at most ten minutes,
+tombstones 24h, budget buckets until UTC window expiry. Non-null scope keys
+make workspace bucket conflicts atomic. The precreated VOC cleanup queue runs
+every ten minutes unconditionally; UPDATE nulls expired vectors without changing
+vector expiry, and invoker retention triggers restrict app DELETE to expired
+24h tombstones/ended counters. SELECT/INSERT/UPDATE/DELETE is granted only on
+these two operational tables, never Cluster, member or audit tables. Provider
+I/O remains outside short reservation/completion transactions.
 
 ## Responsibility storage (#1089 / ADR-0067 56-D)
 

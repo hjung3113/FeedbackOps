@@ -39,10 +39,11 @@ function countingProvider(inner: EmbeddingProvider): CountingProvider {
   const texts: string[][] = [];
   return {
     provider: {
-      async embed(input) {
+      identity: () => inner.identity(),
+      async embed(input, options) {
         calls += 1;
         texts.push(input);
-        return inner.embed(input);
+        return inner.embed(input, options);
       },
     },
     calls: () => calls,
@@ -238,6 +239,7 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
     });
     const inner = fake(ACTIVE_VERSION);
     const stalling: EmbeddingProvider = {
+      identity: () => fake(1).identity(),
       async embed(texts) {
         await gate;
         return inner.embed(texts);

@@ -11,3 +11,4 @@ export { managedSystemsRoutes, type ManagedSystemsRoutesOptions } from './routes
 export { lockManagedSystem, type LockedManagedSystem } from './repo.js';
 
 export { recordResponsibilityDefaultFailure } from './default-diagnostics.js';
+export { readManagedSystemState } from './repo.js';

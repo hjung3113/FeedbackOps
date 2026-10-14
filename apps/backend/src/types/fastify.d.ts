@@ -26,6 +26,7 @@ declare module 'fastify' {
      */
     boss?: PgBoss;
     rateLimitConfig: {
+      similarityPreview: Record<string, unknown>;
       mutation: Record<string, unknown>;
       sensitive: Record<string, unknown>;
       read: Record<string, unknown>;

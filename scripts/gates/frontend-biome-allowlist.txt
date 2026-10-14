@@ -470,3 +470,6 @@ apps/backend/src/modules/voc-clusters/__tests__/create-cluster-display-id.integr
 apps/backend/src/modules/voc-clusters/__tests__/create-cluster-display-id.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
 apps/backend/src/modules/voc/recommendations/__tests__/recommendations.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
 apps/backend/src/modules/voc/recommendations/__tests__/recommendations.integration.test.ts format -- pre-existing on develop (measured 2026-10-13); #1093 changes only fixture teardown in this file
+apps/backend/src/modules/voc/embedding/voyage.ts format -- pre-existing on develop (measured 2026-10-14); #1099 adds identity() and the abort signal only
+apps/backend/migrations/meta/0070_snapshot.json format -- drizzle-kit generated snapshot; never hand-formatted (#1099, 2026-10-14)
+apps/backend/src/modules/voc/embedding/__tests__/voyage.test.ts format -- pre-existing on develop (measured 2026-10-14); #1099 adds identity and signal cases

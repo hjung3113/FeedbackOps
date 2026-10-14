@@ -10,6 +10,7 @@ export class EmbeddingUnavailableError extends Error {
 /** Used only when embedding has not been configured for this environment. */
 export function createDisabledEmbeddingProvider(): EmbeddingProvider {
   return {
+    identity: () => ({ provider: 'disabled', model: 'disabled', dimensions: 1024 }),
     async embed(): Promise<never> {
       // D2 requires callers to distinguish unavailability from a legitimate
       // empty recommendation result, so this cannot quietly return [].

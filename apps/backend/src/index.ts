@@ -85,9 +85,10 @@ await registerCoreJobs(boss, {
 // #168 (ADR-0034 D6). Registered even when the provider is disabled: the
 // backfill cron row must exist so enabling a provider is a config change, not
 // a queue-registration change. Both handlers no-op while disabled.
+const embeddingProvider = createEmbeddingProvider(config);
 await registerVocJobs(boss, {
   db: dbHandle.db,
-  provider: createEmbeddingProvider(config),
+  provider: embeddingProvider,
   embeddingVersion: config.EMBEDDING_VERSION,
   embeddingEnabled: isEmbeddingEnabled(config),
   publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
@@ -103,7 +104,14 @@ await registerNotificationJobs(boss, {
   log: jobLog,
 });
 
-const app = await buildServer({ config, dbHandle, boss, logger, notificationDispatcher });
+const app = await buildServer({
+  config,
+  dbHandle,
+  boss,
+  logger,
+  notificationDispatcher,
+  embeddingProvider,
+});
 
 // Single-shot shutdown handler. Multiple signals (e.g. SIGTERM then SIGINT)
 // short-circuit through the `shuttingDown` flag so we don't try to close pools

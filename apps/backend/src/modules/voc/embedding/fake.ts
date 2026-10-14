@@ -41,6 +41,7 @@ export function createFakeEmbeddingProvider(
   }
 
   return {
+    identity: () => ({ provider: 'fake', model: FAKE_MODEL, dimensions: options.dimensions }),
     async embed(texts: string[]): Promise<EmbeddingResult> {
       return {
         vectors: texts.map((text) => vectorFor(text, options.dimensions)),
